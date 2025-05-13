@@ -113,6 +113,7 @@ Contributions welcome! Discuss significant changes in Issues first. Submit PRs f
 Nabla is licensed under the [Apache-2.0 license with LLVM Exeptions](https://github.com/nabla-ml/nabla/blob/main/LICENSE).
 
 ---
+
 <p align="center" style="margin-top: 3em; margin-bottom: 2em;"><em>Thank you for checking out Nabla!</em></p>
 
 <p align="center">Follow us on <a href="https://twitter.com/nablaml"><strong>X</strong></a> for updates.
