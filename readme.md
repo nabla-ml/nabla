@@ -6,7 +6,7 @@ Nabla brings JIT-accelerated **Automatic Differentiation (AD)** to the Mojo prog
 While Mojo already offers extensive support for NVIDIA/AMD GPUs, Nabla is still limited to CPU execution; our plan is to achieve full GPU integration by Q3 2025. **Note**: Nabla is a research preview - expect further development of the API and rough edges.
 
 <p align="center">
-  <a href="https://nabla.dev/Nabla">Nabla API</a> •
+  <a href="https://nablaml.com/docs/get_started">Nabla API</a> •
   <a href="https://docs.modular.com/stable/max/">MAX</a> •
   <a href="https://github.com/nabla-ml/nabla/issues">Report Bug</a>
 </p>
