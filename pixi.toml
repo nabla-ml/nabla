@@ -1,0 +1,11 @@
+[project]
+authors = ["TilliFe"]
+channels = ["https://conda.modular.com/max", "https://repo.prefix.dev/modular-community", "conda-forge"]
+name = "Nabla"
+platforms = ["osx-arm64"]
+version = "25.3.0"
+
+[tasks]
+
+[dependencies]
+max = ">=25.3.0,<26"
