@@ -17,7 +17,7 @@ from collections import Optional
 from nabla.core.device_array import DeviceArray
 from nabla.api.utils import ExecutionContext
 from nabla.core.utils import ShapeType
-import ..core.device_array as devar
+import nabla.core.device_array as devarr
 
 
 @value
@@ -273,7 +273,7 @@ fn ones(
     requires_grad: Bool = False,
     execution_context: Optional[ExecutionContext] = None,
 ) raises -> Array:
-    return Array(devar.ones(shape, dtype, requires_grad, execution_context))
+    return Array(devarr.ones(shape, dtype, requires_grad, execution_context))
 
 
 fn ones_like(
@@ -283,7 +283,7 @@ fn ones_like(
     execution_context: Optional[ExecutionContext] = None,
 ) raises -> Array:
     return Array(
-        devar.ones_like(
+        devarr.ones_like(
             array.device_array[], dtype, requires_pullback, execution_context
         )
     )
@@ -297,7 +297,7 @@ fn full(
     execution_context: Optional[ExecutionContext] = None,
 ) raises -> Array:
     return Array(
-        devar.full(
+        devarr.full(
             shape, fill_value, dtype, requires_pullback, execution_context
         )
     )
@@ -312,7 +312,7 @@ fn arange(
     execution_context: Optional[ExecutionContext] = None,
 ) raises -> Array:
     return Array(
-        devar.arange(
+        devarr.arange(
             start, end, step, dtype, requires_pullback, execution_context
         )
     )
@@ -324,7 +324,7 @@ fn arange(
     requires_grad: Bool = False,
     execution_context: Optional[ExecutionContext] = None,
 ) raises -> Array:
-    return Array(devar.arange(shape, dtype, requires_grad, execution_context))
+    return Array(devarr.arange(shape, dtype, requires_grad, execution_context))
 
 
 fn zeros(
@@ -333,7 +333,7 @@ fn zeros(
     requires_grad: Bool = False,
     execution_context: Optional[ExecutionContext] = None,
 ) raises -> Array:
-    return Array(devar.zeros(shape, dtype, requires_grad, execution_context))
+    return Array(devarr.zeros(shape, dtype, requires_grad, execution_context))
 
 
 fn zeros_like(
@@ -343,7 +343,7 @@ fn zeros_like(
     execution_context: Optional[ExecutionContext] = None,
 ) raises -> Array:
     return Array(
-        devar.zeros_like(
+        devarr.zeros_like(
             array.device_array[], dtype, requires_pullback, execution_context
         )
     )
@@ -359,7 +359,7 @@ fn randn(
     variance: Float64 = Float64(1.0),
 ) raises -> Array:
     return Array(
-        devar.randn(
+        devarr.randn(
             shape,
             dtype,
             requires_grad,
@@ -381,7 +381,7 @@ fn rand(
     max: Float64 = Float64(1.0),
 ) raises -> Array:
     return Array(
-        devar.rand(
+        devarr.rand(
             shape, dtype, requires_grad, execution_context, seed, min, max
         )
     )
@@ -395,5 +395,5 @@ fn he_normal(
     seed: Optional[Int] = None,
 ) raises -> Array:
     return Array(
-        devar.he_normal(shape, dtype, requires_grad, execution_context, seed)
+        devarr.he_normal(shape, dtype, requires_grad, execution_context, seed)
     )
