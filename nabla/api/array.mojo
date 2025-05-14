@@ -24,10 +24,6 @@ import ..core.device_array as devar
 struct Array(Copyable, Movable, Writable, Stringable):
     var device_array: ArcPointer[DeviceArray]
 
-    fn __init__(out self, device_array: ArcPointer[DeviceArray]) raises:
-        self.device_array = device_array
-        self.device_array[].not_to_be_materialized_(False)
-
     fn __init__(out self, read device_array: DeviceArray) raises:
         self.device_array = ArcPointer(device_array)
         self.device_array[].not_to_be_materialized_(False)
