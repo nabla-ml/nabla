@@ -11,12 +11,13 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
+
 from examples import *
 
 
 def main():
-    # print("\033[1;94m\nEAGER MODE\033[0m")
-    # test_eager_mode()
+    print("\033[1;94m\nEAGER MODE\033[0m")
+    test_eager_mode()
 
     print("\033[1;95m\nBACKWARD EAGER MODE\033[0m")
     test_backward_eager_mode()
