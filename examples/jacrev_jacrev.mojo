@@ -21,7 +21,9 @@ fn test_jacrev_jacrev() raises:
     def foo(args: List[nabla.Array]) -> List[nabla.Array]:
         var x = args[0]
         var y = args[1]
-        return List(nabla.sin(x) + x**2 + y**2, nabla.sin(x) + x**2 + y**2)
+        return List(
+            nabla.sin(x) + x**2 + y**2, nabla.sin(x) + x**2 + y**2
+        )
 
     var jacobian = nabla.jacrev(foo)
     var jac_res = jacobian(List(x, y))

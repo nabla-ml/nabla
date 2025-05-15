@@ -30,7 +30,9 @@ fn test_vmap() raises:
         return res
 
     fn batched_matmul(args: List[nabla.Array]) raises -> List[nabla.Array]:
-        var res = nabla.vmap(mm_prod, List(0, nabla.none))(List(args[0], args[1]))[0]
+        var res = nabla.vmap(mm_prod, List(0, nabla.none))(
+            List(args[0], args[1])
+        )[0]
         return List(res)
 
     var batch_a = nabla.arange((2, 3, 4), DType.float32)

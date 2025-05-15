@@ -39,9 +39,7 @@ alias FULL_TARGET_SHAPE = 3
 # general permute transform function
 struct Permute:
     @staticmethod
-    fn maxpr(
-        args: List[Symbol], array: DeviceArray
-    ) raises -> Symbol:
+    fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
         var batch_dim_ctr = array.impl[].runtime_info[BATCH_DIM_CTR][0]
         var perm = array.impl[].runtime_info[PERM]
 
@@ -127,9 +125,7 @@ fn transpose(arg: DeviceArray, x: Int, y: Int) raises -> DeviceArray:
 
 struct Reshape:
     @staticmethod
-    fn maxpr(
-        args: List[Symbol], array: DeviceArray
-    ) raises -> Symbol:
+    fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
         var dims = List[Dim]()
         for s in array.shape():
             dims.append(Dim(s[]))
@@ -197,9 +193,7 @@ alias FULL_TARGET_shape = TARGET_shape
 
 struct BroadcastTo:
     @staticmethod
-    fn maxpr(
-        args: List[Symbol], array: DeviceArray
-    ) raises -> Symbol:
+    fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
         var runtime_info = array.impl[].runtime_info
         var full_target_shape = runtime_info[FULL_TARGET_shape]
         var pre_shape = array.shape()[: -len(full_target_shape)]
@@ -314,9 +308,7 @@ alias RED_SLICES = 2
 
 struct ArraySlice:
     @staticmethod
-    fn maxpr(
-        args: List[Symbol], array: DeviceArray
-    ) raises -> Symbol:
+    fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
         var list_slices = array.impl[].runtime_info[SLICES]
 
         var slices = List[Slice]()
@@ -339,9 +331,7 @@ struct ArraySlice:
         elif len(slices) == 2:
             return ops.slice(args[0], slices[0], slices[1])
         elif len(slices) == 3:
-            return ops.slice(
-                args[0], slices[0], slices[1], slices[2]
-            )
+            return ops.slice(args[0], slices[0], slices[1], slices[2])
         elif len(slices) == 4:
             return ops.slice(
                 args[0], slices[0], slices[1], slices[2], slices[3]
@@ -562,9 +552,7 @@ alias SIZES = 2
 
 struct Stack:
     @staticmethod
-    fn maxpr(
-        args: List[Symbol], array: DeviceArray
-    ) raises -> Symbol:
+    fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
         var batch_dim_ctr = array.impl[].runtime_info[BATCH_DIM_CTR][0]
         var axis = array.impl[].runtime_info[AXIS][0] + batch_dim_ctr
         return ops.stack(args, axis)
@@ -623,9 +611,7 @@ fn stack(args: List[DeviceArray], axis: Int = 0) raises -> DeviceArray:
 
 struct Concat:
     @staticmethod
-    fn maxpr(
-        args: List[Symbol], array: DeviceArray
-    ) raises -> Symbol:
+    fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
         var batch_dim_ctr = array.impl[].runtime_info[BATCH_DIM_CTR][0]
         var axis = array.impl[].runtime_info[AXIS][0] + batch_dim_ctr
         return ops.concat(args, axis)
@@ -701,9 +687,7 @@ fn split(
 
 struct Squeeze:
     @staticmethod
-    fn maxpr(
-        args: List[Symbol], array: DeviceArray
-    ) raises -> Symbol:
+    fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
         var axes = array.impl[].runtime_info[AXIS]
         if len(axes) > 1:
             raise "Squeeze only supports a single axis at the moment"
@@ -796,9 +780,7 @@ fn squeeze(
 
 struct Unsqueeze:
     @staticmethod
-    fn maxpr(
-        args: List[Symbol], array: DeviceArray
-    ) raises -> Symbol:
+    fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
         var axes = array.impl[].runtime_info[AXIS]
         var symbol = args[0]
 

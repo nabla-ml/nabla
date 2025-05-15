@@ -43,7 +43,9 @@ fn test_jvp_jvp() raises -> None:
         var primals = args[: len(args) // 2]
         var tangents = args[len(args) // 2 :]
         # return nabla.jvp(grad_fn, primals, tangents)[1]
-        return nabla.jvp(nabla.vmap(grad_fn, List(nabla.none, 0)), primals, tangents)[
+        return nabla.jvp(
+            nabla.vmap(grad_fn, List(nabla.none, 0)), primals, tangents
+        )[
             1
         ]  # JVP on gradient computes H(x)·v
 

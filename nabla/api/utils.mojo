@@ -30,9 +30,7 @@ struct ExecutionContext(Copyable, Movable):
     fn __getitem__(self, key: Int) raises -> ArcPointer[Model]:
         return self.dict[][key]
 
-    fn __setitem__(
-        mut self, key: Int, value: ArcPointer[Model]
-    ) -> None:
+    fn __setitem__(mut self, key: Int, value: ArcPointer[Model]) -> None:
         if key in self.dict[]:
             print("Warning: key-value pair alrey present in model cache.")
             return

@@ -276,11 +276,7 @@ struct Executor(Copyable, Movable, Stringable, Writable):
             var shape = input[].impl[].spec.shape
             for i in range(input[].impl[].spec.rank()):
                 shape_dim.append(Dim(shape[i]))
-            in_types.append(
-                Type(
-                    TensorType(input[].dtype(), shape_dim)
-                )
-            )
+            in_types.append(Type(TensorType(input[].dtype(), shape_dim)))
         var graph = Graph(in_types)
 
         for i in range(len(self.inputs)):

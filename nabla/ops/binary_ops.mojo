@@ -30,9 +30,7 @@ from nabla.compiler.graph import ops
 
 struct Add:
     @staticmethod
-    fn maxpr(
-        args: List[Symbol], array: DeviceArray
-    ) raises -> Symbol:
+    fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
         return ops.add(args[0], args[1])
 
     @staticmethod
@@ -62,9 +60,7 @@ fn add(arg0: DeviceArray, arg1: DeviceArray) raises -> DeviceArray:
 
 struct Mul:
     @staticmethod
-    fn maxpr(
-        args: List[Symbol], array: DeviceArray
-    ) raises -> Symbol:
+    fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
         var _arg0 = args[0]
         var _arg1 = args[1]
 
@@ -107,9 +103,7 @@ fn mul(arg0: DeviceArray, arg1: DeviceArray) raises -> DeviceArray:
 
 struct Sub:
     @staticmethod
-    fn maxpr(
-        args: List[Symbol], array: DeviceArray
-    ) raises -> Symbol:
+    fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
         return ops.sub(args[0], args[1])
 
     @staticmethod
@@ -139,9 +133,7 @@ fn sub(arg0: DeviceArray, arg1: DeviceArray) raises -> DeviceArray:
 
 struct Div:
     @staticmethod
-    fn maxpr(
-        args: List[Symbol], array: DeviceArray
-    ) raises -> Symbol:
+    fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
         return ops.div(args[0], args[1])
 
     @staticmethod
@@ -177,9 +169,7 @@ fn div(arg0: DeviceArray, arg1: DeviceArray) raises -> DeviceArray:
 
 struct Matmul:
     @staticmethod
-    fn maxpr(
-        args: List[Symbol], array: DeviceArray
-    ) raises -> Symbol:
+    fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
         return ops.matmul(args[0], args[1])
 
     @staticmethod
@@ -241,9 +231,7 @@ fn matmul(_arg0: DeviceArray, _arg1: DeviceArray) raises -> DeviceArray:
 
 struct GreaterThan:
     @staticmethod
-    fn maxpr(
-        args: List[Symbol], array: DeviceArray
-    ) raises -> Symbol:
+    fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
         return ops.greater(args[0], args[1])
 
     @staticmethod
@@ -276,9 +264,7 @@ fn gt(arg0: DeviceArray, arg1: DeviceArray) raises -> DeviceArray:
 
 struct Pow:
     @staticmethod
-    fn maxpr(
-        args: List[Symbol], array: DeviceArray
-    ) raises -> Symbol:
+    fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
         return ops.pow(args[0], args[1])
 
     @staticmethod

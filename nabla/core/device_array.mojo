@@ -105,11 +105,7 @@ struct ArrayImpl(Copyable, Movable):
     var _max_symbol: Optional[Symbol]
     var _diffable: Bool
     var _not_to_be_materialized: Bool
-    var _maxpr: Optional[
-        fn (
-            List[Symbol], DeviceArray
-        ) raises -> Symbol
-    ]
+    var _maxpr: Optional[fn (List[Symbol], DeviceArray) raises -> Symbol]
     var _vjp: Optional[
         fn (
             List[DeviceArray], DeviceArray, DeviceArray
@@ -137,9 +133,7 @@ struct ArrayImpl(Copyable, Movable):
         execution_context: Optional[ExecutionContext],
         owned ptr: UnsafePointer[Scalar[DType.uint8]],
         _maxpr: Optional[
-            fn (
-                List[Symbol], DeviceArray
-            ) raises -> Symbol
+            fn (List[Symbol], DeviceArray) raises -> Symbol
         ] = None,
         name: String = "",
     ) raises:
@@ -263,9 +257,7 @@ struct DeviceArray(Copyable, Movable, Writable, Stringable):
             Scalar[DType.uint8]
         ](),
         _maxpr: Optional[
-            fn (
-                List[Symbol], DeviceArray
-            ) raises -> Symbol
+            fn (List[Symbol], DeviceArray) raises -> Symbol
         ] = None,
         name: String = "",
     ) raises:

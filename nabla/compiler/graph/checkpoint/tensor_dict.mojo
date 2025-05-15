@@ -96,7 +96,6 @@ struct TensorDict(Sized, Writable):
         self._items = Dict[String, _CheckpointTensor]()
 
     fn __setitem__[T: DType](mut self, key: String, value: Tensor[T]):
-
         self._items._insert(key, _CheckpointTensor.from_tensor(value))
 
     fn set[T: DType](mut self, key: String, value: Tensor[T]):

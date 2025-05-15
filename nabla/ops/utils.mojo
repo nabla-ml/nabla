@@ -20,6 +20,7 @@ from nabla.api.utils import ExecutionContext
 from nabla.api.utils import none
 from nabla.compiler.graph import Symbol
 
+
 fn generic_setup(args: List[DeviceArray], name: String) raises -> DeviceArray:
     var dtype = args[0].impl[].spec.dtype()
     var diffable = False
@@ -53,9 +54,7 @@ fn generic_setup(args: List[DeviceArray], name: String) raises -> DeviceArray:
 
 
 fn register_any_op[
-    maxpr: fn (
-        List[Symbol], DeviceArray
-    ) raises -> Symbol,
+    maxpr: fn (List[Symbol], DeviceArray) raises -> Symbol,
     vjp: fn (List[DeviceArray], DeviceArray, DeviceArray) raises -> List[
         DeviceArray
     ],
@@ -164,9 +163,7 @@ fn get_broadcastedshape(
 
 
 fn register_binary_op[
-    maxpr: fn (
-        List[Symbol], DeviceArray
-    ) raises -> Symbol,
+    maxpr: fn (List[Symbol], DeviceArray) raises -> Symbol,
     vjp: fn (List[DeviceArray], DeviceArray, DeviceArray) raises -> List[
         DeviceArray
     ],
@@ -213,9 +210,7 @@ fn register_binary_op[
 
 
 fn register_unary_op[
-    maxpr: fn (
-        List[Symbol], DeviceArray
-    ) raises -> Symbol,
+    maxpr: fn (List[Symbol], DeviceArray) raises -> Symbol,
     vjp: fn (List[DeviceArray], DeviceArray, DeviceArray) raises -> List[
         DeviceArray
     ],

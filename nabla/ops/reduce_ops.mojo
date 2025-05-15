@@ -30,9 +30,7 @@ alias ACT_ON_BATCH_DIMS = 6
 
 struct Sum:
     @staticmethod
-    fn maxpr(
-        args: List[Symbol], array: DeviceArray
-    ) raises -> Symbol:
+    fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
         var axes = array.impl[].runtime_info[AXES]
         var originalshape = array.impl[].runtime_info[ORIGINALshape]
         var symbol = args[0]

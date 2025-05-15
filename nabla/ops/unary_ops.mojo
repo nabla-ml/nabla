@@ -20,11 +20,10 @@ from nabla.ops.binary_ops import mul, div
 from nabla.compiler.graph import Symbol
 from nabla.compiler.graph import ops
 
+
 struct Sin:
     @staticmethod
-    fn maxpr(
-        args: List[Symbol], array: DeviceArray
-    ) raises -> Symbol:
+    fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
         return ops.sin(args[0])
 
     @staticmethod
@@ -54,9 +53,7 @@ fn sin(arg: DeviceArray) raises -> DeviceArray:
 
 struct Cast:
     @staticmethod
-    fn maxpr(
-        args: List[Symbol], array: DeviceArray
-    ) raises -> Symbol:
+    fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
         return ops.cast(args[0], array.dtype())
 
     @staticmethod
@@ -86,9 +83,7 @@ fn cast(arg: DeviceArray, dtype: DType) raises -> DeviceArray:
 
 struct Negate:
     @staticmethod
-    fn maxpr(
-        args: List[Symbol], array: DeviceArray
-    ) raises -> Symbol:
+    fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
         return -args[0]
 
     @staticmethod
@@ -118,9 +113,7 @@ fn negate(arg: DeviceArray) raises -> DeviceArray:
 
 struct Cos:
     @staticmethod
-    fn maxpr(
-        args: List[Symbol], array: DeviceArray
-    ) raises -> Symbol:
+    fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
         return ops.cos(args[0])
 
     @staticmethod
@@ -150,9 +143,7 @@ fn cos(arg: DeviceArray) raises -> DeviceArray:
 
 struct ReLU:
     @staticmethod
-    fn maxpr(
-        args: List[Symbol], array: DeviceArray
-    ) raises -> Symbol:
+    fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
         return ops.relu(args[0])
 
     @staticmethod
@@ -184,9 +175,7 @@ fn relu(arg: DeviceArray) raises -> DeviceArray:
 
 struct Log:
     @staticmethod
-    fn maxpr(
-        args: List[Symbol], array: DeviceArray
-    ) raises -> Symbol:
+    fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
         return ops.log(args[0])
 
     @staticmethod
@@ -216,9 +205,7 @@ fn log(arg: DeviceArray) raises -> DeviceArray:
 
 struct GreaterThanZero:
     @staticmethod
-    fn maxpr(
-        args: List[Symbol], array: DeviceArray
-    ) raises -> Symbol:
+    fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
         var zeros = args[0] - args[0]
         return ops.greater(args[0], zeros)
 
@@ -252,9 +239,7 @@ fn gt_zero(arg: DeviceArray) raises -> DeviceArray:
 
 struct IncrBatchDimCtr:
     @staticmethod
-    fn maxpr(
-        args: List[Symbol], array: DeviceArray
-    ) raises -> Symbol:
+    fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
         return args[0]
 
     @staticmethod
@@ -295,9 +280,7 @@ fn incr_batch_dim_ctr(arg: DeviceArray) raises -> DeviceArray:
 
 struct DecrBatchDimCtr:
     @staticmethod
-    fn maxpr(
-        args: List[Symbol], array: DeviceArray
-    ) raises -> Symbol:
+    fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
         return args[0]
 
     @staticmethod
