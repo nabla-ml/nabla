@@ -14,6 +14,7 @@
 from memory import memset_zero, ArcPointer, UnsafePointer, memcpy
 from collections import Dict, Optional
 from nabla.compiler.graph import Symbol
+from nabla.compiler.tensor import TensorSpec, Tensor
 import random
 import math
 from utils import Variant
@@ -89,7 +90,7 @@ fn default_eagerxpr(
 struct ArrayImpl(Copyable, Movable):
     var id: Int
     var name: String
-    var spec: compiler.tensor.TensorSpec
+    var spec: TensorSpec
     var tangents: List[ArcPointer[Self]]
     var cotangent: List[ArcPointer[Self]]
     var requires_pullback: Bool
@@ -138,7 +139,7 @@ struct ArrayImpl(Copyable, Movable):
         name: String = "",
     ) raises:
         self.id = -1
-        self.spec = compiler.tensor.TensorSpec(dtype, shape)
+        self.spec = TensorSpec(dtype, shape)
         self.runtime_info = List[List[Int]]()
         if ptr != UnsafePointer[Scalar[DType.uint8]]():
             self._data = ptr
@@ -335,10 +336,10 @@ struct DeviceArray(Copyable, Movable, Writable, Stringable):
     fn has_cotangent(self) -> Bool:
         return len(self.impl[].cotangent) == 1
 
-    fn to_max[dtype: DType](self) raises -> compiler.tensor.Tensor[dtype]:
+    fn to_max[dtype: DType](self) raises -> Tensor[dtype]:
         var s = self
         s.realize()
-        var max_array = compiler.tensor.Tensor[dtype](self.impl[].spec)
+        var max_array = Tensor[dtype](self.impl[].spec)
         var max_array_ptr = max_array.unsafe_uint8_ptr()
         memcpy(max_array_ptr, self.impl[]._data, self.impl[].spec.bytecount())
         return max_array

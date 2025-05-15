@@ -32,9 +32,6 @@ struct Array(Copyable, Movable, Writable, Stringable):
         if self.device_array.count() == 1:
             self.device_array[].not_to_be_materialized_(True)
 
-    fn to_max[dtype: DType](self) raises -> compiler.tensor.Tensor[dtype]:
-        return self.device_array[].to_max[dtype]()
-
     fn tangent(self) raises -> Array:
         return Array(self.device_array[].tangent())
 
@@ -262,9 +259,6 @@ struct Array(Copyable, Movable, Writable, Stringable):
 
     fn __rpow__(self, exp: Int) raises -> Array:
         return Array(exp ** self.device_array[])
-
-
-alias Tensor = Array
 
 
 fn ones(

@@ -15,7 +15,8 @@
 from memory import ArcPointer
 from collections import Dict
 from nabla.compiler.graph import Symbol, Graph, Type, Dim, TensorType
-from nabla.compiler.engine import InferenceSession
+from nabla.compiler.engine import InferenceSession, Model, TensorMap
+from nabla.compiler.tensor import TensorSpec
 from memory import ArcPointer
 from utils import Variant
 from nabla.core.device_array import DeviceArray
@@ -118,7 +119,7 @@ struct Executor(Copyable, Movable, Stringable, Writable):
 
     fn setup_output[
         dtype: DType
-    ](mut self, i: Int, max_outputs: compiler.engine.TensorMap) raises:
+    ](mut self, i: Int, max_outputs: TensorMap) raises:
         var max_output = max_outputs.get[dtype]("output" + String(i))
         self.outputs[i].impl[]._data.free()
         var shape = List[Int]()
@@ -126,7 +127,7 @@ struct Executor(Copyable, Movable, Stringable, Writable):
             var dim = max_output.shape()[i]
             shape.append(dim)
         var ptr = max_output._take_data_ptr().bitcast[Scalar[DType.uint8]]()
-        var spec = compiler.tensor.TensorSpec(dtype, shape)
+        var spec = TensorSpec(dtype, shape)
         self.outputs[i].impl[]._data = ptr
         self.outputs[i].impl[].spec = spec
         self.outputs[i].dtype_(dtype)
@@ -138,7 +139,7 @@ struct Executor(Copyable, Movable, Stringable, Writable):
         self,
         input: DeviceArray,
         name: String,
-        array_map: compiler.engine.TensorMap,
+        array_map: TensorMap,
     ) raises -> None:
         var ptr = input.impl[]._data.bitcast[SIMD[dtype, 1]]()
         array_map.borrow[dtype](
@@ -149,9 +150,9 @@ struct Executor(Copyable, Movable, Stringable, Writable):
 
     fn execute_trace(
         mut self,
-        read max_model: compiler.engine.Model,
+        read max_model: Model,
     ) raises -> None:
-        var array_map = compiler.engine.TensorMap(
+        var array_map = TensorMap(
             max_model._ctx,
             max_model._lib,
             max_model._session,
@@ -269,7 +270,7 @@ struct Executor(Copyable, Movable, Stringable, Writable):
         var max_model = self.execution_context[key]
         self.execute_trace(max_model[])
 
-    fn create_model(self) raises -> ArcPointer[compiler.engine.Model]:
+    fn create_model(self) raises -> ArcPointer[Model]:
         var in_types = List[Type]()
         for input in self.inputs:
             var shape_dim = List[Dim]()
