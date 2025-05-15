@@ -1,3 +1,3 @@
 # Nabla Tests (WIP)
 
-Currently under construction.
+Under construction. Currently more like a dumpster for tmp. stuff.

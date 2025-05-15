@@ -11,14 +11,14 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-import nabla.compiler
+
 from collections import Dict, Optional
 from nabla.core.device_array import DeviceArray, ArrayImpl
 from nabla.ops.view_ops import broadcast_to, unsqueeze
 from nabla.ops.unary_ops import incr_batch_dim_ctr, decr_batch_dim_ctr
 from nabla.api.utils import ExecutionContext
 from nabla.api.utils import none
-
+from nabla.compiler.graph import Symbol
 
 fn generic_setup(args: List[DeviceArray], name: String) raises -> DeviceArray:
     var dtype = args[0].impl[].spec.dtype()
@@ -54,8 +54,8 @@ fn generic_setup(args: List[DeviceArray], name: String) raises -> DeviceArray:
 
 fn register_any_op[
     maxpr: fn (
-        List[compiler.graph.Symbol], DeviceArray
-    ) raises -> compiler.graph.Symbol,
+        List[Symbol], DeviceArray
+    ) raises -> Symbol,
     vjp: fn (List[DeviceArray], DeviceArray, DeviceArray) raises -> List[
         DeviceArray
     ],
@@ -165,8 +165,8 @@ fn get_broadcastedshape(
 
 fn register_binary_op[
     maxpr: fn (
-        List[compiler.graph.Symbol], DeviceArray
-    ) raises -> compiler.graph.Symbol,
+        List[Symbol], DeviceArray
+    ) raises -> Symbol,
     vjp: fn (List[DeviceArray], DeviceArray, DeviceArray) raises -> List[
         DeviceArray
     ],
@@ -214,8 +214,8 @@ fn register_binary_op[
 
 fn register_unary_op[
     maxpr: fn (
-        List[compiler.graph.Symbol], DeviceArray
-    ) raises -> compiler.graph.Symbol,
+        List[Symbol], DeviceArray
+    ) raises -> Symbol,
     vjp: fn (List[DeviceArray], DeviceArray, DeviceArray) raises -> List[
         DeviceArray
     ],

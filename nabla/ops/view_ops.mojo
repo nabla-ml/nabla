@@ -11,16 +11,17 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-import nabla.compiler
+
 from collections import Dict
 
 from nabla.core.device_array import DeviceArray, ArrayImpl, zeros
 from nabla.core.utils import getshape, ShapeType
-
 from nabla.ops.unary_ops import incr_batch_dim_ctr, decr_batch_dim_ctr
 from nabla.ops.utils import get_broadcasted_axis, register_any_op, RuntimeInfo
 from nabla.api.utils import ExecutionContext, none
 from nabla.ops.reduce_ops import sum
+from nabla.compiler.graph import Symbol
+from nabla.compiler.graph import ops, Dim
 
 
 ####################################################################################################
@@ -39,8 +40,8 @@ alias FULL_TARGET_SHAPE = 3
 struct Permute:
     @staticmethod
     fn maxpr(
-        args: List[compiler.graph.Symbol], array: DeviceArray
-    ) raises -> compiler.graph.Symbol:
+        args: List[Symbol], array: DeviceArray
+    ) raises -> Symbol:
         var batch_dim_ctr = array.impl[].runtime_info[BATCH_DIM_CTR][0]
         var perm = array.impl[].runtime_info[PERM]
 
@@ -63,7 +64,7 @@ struct Permute:
             if x == y:
                 continue
 
-            out_symbol = compiler.graph.ops.transpose(out_symbol, x, y)
+            out_symbol = ops.transpose(out_symbol, x, y)
             current_axis_order[x] = y
             current_axis_order[y] = x
 
@@ -127,12 +128,12 @@ fn transpose(arg: DeviceArray, x: Int, y: Int) raises -> DeviceArray:
 struct Reshape:
     @staticmethod
     fn maxpr(
-        args: List[compiler.graph.Symbol], array: DeviceArray
-    ) raises -> compiler.graph.Symbol:
-        var dims = List[compiler.graph.Dim]()
+        args: List[Symbol], array: DeviceArray
+    ) raises -> Symbol:
+        var dims = List[Dim]()
         for s in array.shape():
-            dims.append(compiler.graph.Dim(s[]))
-        return compiler.graph.ops.reshape(args[0], dims)
+            dims.append(Dim(s[]))
+        return ops.reshape(args[0], dims)
 
     @staticmethod
     fn eagerxpr(mut curr: DeviceArray, args: List[DeviceArray]) raises -> None:
@@ -197,16 +198,16 @@ alias FULL_TARGET_shape = TARGET_shape
 struct BroadcastTo:
     @staticmethod
     fn maxpr(
-        args: List[compiler.graph.Symbol], array: DeviceArray
-    ) raises -> compiler.graph.Symbol:
+        args: List[Symbol], array: DeviceArray
+    ) raises -> Symbol:
         var runtime_info = array.impl[].runtime_info
         var full_target_shape = runtime_info[FULL_TARGET_shape]
         var pre_shape = array.shape()[: -len(full_target_shape)]
-        var dims = List[compiler.graph.Dim]()
+        var dims = List[Dim]()
         for s in pre_shape + full_target_shape:
-            dims.append(compiler.graph.Dim(s[]))
+            dims.append(Dim(s[]))
 
-        return compiler.graph.ops.broadcast_to(args[0], dims)
+        return ops.broadcast_to(args[0], dims)
 
     @staticmethod
     fn eagerxpr(mut curr: DeviceArray, args: List[DeviceArray]) raises -> None:
@@ -314,8 +315,8 @@ alias RED_SLICES = 2
 struct ArraySlice:
     @staticmethod
     fn maxpr(
-        args: List[compiler.graph.Symbol], array: DeviceArray
-    ) raises -> compiler.graph.Symbol:
+        args: List[Symbol], array: DeviceArray
+    ) raises -> Symbol:
         var list_slices = array.impl[].runtime_info[SLICES]
 
         var slices = List[Slice]()
@@ -334,23 +335,23 @@ struct ArraySlice:
         # print("target_shape:", array.shape().__str__())
 
         if len(slices) == 1:
-            return compiler.graph.ops.slice(args[0], slices[0])
+            return ops.slice(args[0], slices[0])
         elif len(slices) == 2:
-            return compiler.graph.ops.slice(args[0], slices[0], slices[1])
+            return ops.slice(args[0], slices[0], slices[1])
         elif len(slices) == 3:
-            return compiler.graph.ops.slice(
+            return ops.slice(
                 args[0], slices[0], slices[1], slices[2]
             )
         elif len(slices) == 4:
-            return compiler.graph.ops.slice(
+            return ops.slice(
                 args[0], slices[0], slices[1], slices[2], slices[3]
             )
         elif len(slices) == 5:
-            return compiler.graph.ops.slice(
+            return ops.slice(
                 args[0], slices[0], slices[1], slices[2], slices[3], slices[4]
             )
         elif len(slices) == 6:
-            return compiler.graph.ops.slice(
+            return ops.slice(
                 args[0],
                 slices[0],
                 slices[1],
@@ -360,7 +361,7 @@ struct ArraySlice:
                 slices[5],
             )
         elif len(slices) == 7:
-            return compiler.graph.ops.slice(
+            return ops.slice(
                 args[0],
                 slices[0],
                 slices[1],
@@ -371,7 +372,7 @@ struct ArraySlice:
                 slices[6],
             )
         elif len(slices) == 8:
-            return compiler.graph.ops.slice(
+            return ops.slice(
                 args[0],
                 slices[0],
                 slices[1],
@@ -383,7 +384,7 @@ struct ArraySlice:
                 slices[7],
             )
         elif len(slices) == 9:
-            return compiler.graph.ops.slice(
+            return ops.slice(
                 args[0],
                 slices[0],
                 slices[1],
@@ -396,7 +397,7 @@ struct ArraySlice:
                 slices[8],
             )
         elif len(slices) == 10:
-            return compiler.graph.ops.slice(
+            return ops.slice(
                 args[0],
                 slices[0],
                 slices[1],
@@ -562,11 +563,11 @@ alias SIZES = 2
 struct Stack:
     @staticmethod
     fn maxpr(
-        args: List[compiler.graph.Symbol], array: DeviceArray
-    ) raises -> compiler.graph.Symbol:
+        args: List[Symbol], array: DeviceArray
+    ) raises -> Symbol:
         var batch_dim_ctr = array.impl[].runtime_info[BATCH_DIM_CTR][0]
         var axis = array.impl[].runtime_info[AXIS][0] + batch_dim_ctr
-        return compiler.graph.ops.stack(args, axis)
+        return ops.stack(args, axis)
 
     @staticmethod
     fn eagerxpr(mut curr: DeviceArray, args: List[DeviceArray]) raises -> None:
@@ -623,11 +624,11 @@ fn stack(args: List[DeviceArray], axis: Int = 0) raises -> DeviceArray:
 struct Concat:
     @staticmethod
     fn maxpr(
-        args: List[compiler.graph.Symbol], array: DeviceArray
-    ) raises -> compiler.graph.Symbol:
+        args: List[Symbol], array: DeviceArray
+    ) raises -> Symbol:
         var batch_dim_ctr = array.impl[].runtime_info[BATCH_DIM_CTR][0]
         var axis = array.impl[].runtime_info[AXIS][0] + batch_dim_ctr
-        return compiler.graph.ops.concat(args, axis)
+        return ops.concat(args, axis)
 
     @staticmethod
     fn eagerxpr(mut curr: DeviceArray, args: List[DeviceArray]) raises -> None:
@@ -701,13 +702,13 @@ fn split(
 struct Squeeze:
     @staticmethod
     fn maxpr(
-        args: List[compiler.graph.Symbol], array: DeviceArray
-    ) raises -> compiler.graph.Symbol:
+        args: List[Symbol], array: DeviceArray
+    ) raises -> Symbol:
         var axes = array.impl[].runtime_info[AXIS]
         if len(axes) > 1:
             raise "Squeeze only supports a single axis at the moment"
 
-        var symbol = compiler.graph.ops.squeeze(args[0], axes[0])
+        var symbol = ops.squeeze(args[0], axes[0])
         return symbol
 
     @staticmethod
@@ -796,13 +797,13 @@ fn squeeze(
 struct Unsqueeze:
     @staticmethod
     fn maxpr(
-        args: List[compiler.graph.Symbol], array: DeviceArray
-    ) raises -> compiler.graph.Symbol:
+        args: List[Symbol], array: DeviceArray
+    ) raises -> Symbol:
         var axes = array.impl[].runtime_info[AXIS]
         var symbol = args[0]
 
         for i in range(len(axes)):
-            symbol = compiler.graph.ops.unsqueeze(symbol, axes[i])
+            symbol = ops.unsqueeze(symbol, axes[i])
 
         return symbol
 

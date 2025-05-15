@@ -11,7 +11,7 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-import nabla.compiler
+# 
 from memory import ArcPointer
 from collections import Optional
 from nabla.core.device_array import DeviceArray

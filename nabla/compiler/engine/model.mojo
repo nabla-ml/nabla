@@ -305,7 +305,7 @@ struct Model:
         input_map.borrow(name3, EngineNumpyView(input3))
         return self.execute(input_map)
 
-    fn execute(self, owned *inputs: AnyMemory) raises -> List[AnyMemory]:
+    fn execute(self, owned inputs: List[AnyMemory]) raises -> List[AnyMemory]:
         """Execute model with the given inputs.
 
         Arguments:

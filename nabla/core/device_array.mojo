@@ -13,7 +13,7 @@
 
 from memory import memset_zero, ArcPointer, UnsafePointer, memcpy
 from collections import Dict, Optional
-import nabla.compiler
+from nabla.compiler.graph import Symbol
 import random
 import math
 from utils import Variant
@@ -102,13 +102,13 @@ struct ArrayImpl(Copyable, Movable):
     var _args: List[ArcPointer[Self]]
     var _data: UnsafePointer[Scalar[DType.uint8]]
     var _visited: Bool
-    var _max_symbol: Optional[compiler.graph.Symbol]
+    var _max_symbol: Optional[Symbol]
     var _diffable: Bool
     var _not_to_be_materialized: Bool
     var _maxpr: Optional[
         fn (
-            List[compiler.graph.Symbol], DeviceArray
-        ) raises -> compiler.graph.Symbol
+            List[Symbol], DeviceArray
+        ) raises -> Symbol
     ]
     var _vjp: Optional[
         fn (
@@ -138,8 +138,8 @@ struct ArrayImpl(Copyable, Movable):
         owned ptr: UnsafePointer[Scalar[DType.uint8]],
         _maxpr: Optional[
             fn (
-                List[compiler.graph.Symbol], DeviceArray
-            ) raises -> compiler.graph.Symbol
+                List[Symbol], DeviceArray
+            ) raises -> Symbol
         ] = None,
         name: String = "",
     ) raises:
@@ -264,8 +264,8 @@ struct DeviceArray(Copyable, Movable, Writable, Stringable):
         ](),
         _maxpr: Optional[
             fn (
-                List[compiler.graph.Symbol], DeviceArray
-            ) raises -> compiler.graph.Symbol
+                List[Symbol], DeviceArray
+            ) raises -> Symbol
         ] = None,
         name: String = "",
     ) raises:

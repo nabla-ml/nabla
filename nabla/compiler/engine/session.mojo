@@ -10,10 +10,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
-"""
-Defines the `InferenceSession` type that serves as an entry point to
-MAX Engine.
-"""
+# """
+# Defines the `InferenceSession` type that serves as an entry point to
+# MAX Engine.
+# """
 
 from collections import List
 from collections.optional import Optional

@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
-"""Core graph primitives."""
+# """Core graph primitives."""
 
 from collections import Optional, Set
 from os import abort

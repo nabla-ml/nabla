@@ -11,12 +11,14 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-import nabla.compiler
+
 from collections import Dict
 
 from nabla.core.device_array import DeviceArray, ArrayImpl
 from nabla.ops.utils import register_any_op, RuntimeInfo
 from nabla.ops.view_ops import squeeze, broadcast_to
+from nabla.compiler.graph import Symbol
+from nabla.compiler.graph import ops
 
 alias BATCH_DIM_CTR = 0
 alias ORIGINALshape = 2
@@ -29,15 +31,15 @@ alias ACT_ON_BATCH_DIMS = 6
 struct Sum:
     @staticmethod
     fn maxpr(
-        args: List[compiler.graph.Symbol], array: DeviceArray
-    ) raises -> compiler.graph.Symbol:
+        args: List[Symbol], array: DeviceArray
+    ) raises -> Symbol:
         var axes = array.impl[].runtime_info[AXES]
         var originalshape = array.impl[].runtime_info[ORIGINALshape]
         var symbol = args[0]
 
         for i in range(len(axes)):
             var axis = axes[i]
-            symbol = compiler.graph.ops.mean(symbol, axis) * originalshape[axis]
+            symbol = ops.mean(symbol, axis) * originalshape[axis]
 
         return symbol
 

@@ -11,10 +11,11 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-import nabla.compiler
+
 from memory import ArcPointer
 from collections import Dict
-
+from nabla.compiler.graph import Symbol, Graph, Type, Dim, TensorType
+from nabla.compiler.engine import InferenceSession
 from memory import ArcPointer
 from utils import Variant
 from nabla.core.device_array import DeviceArray
@@ -269,18 +270,18 @@ struct Executor(Copyable, Movable, Stringable, Writable):
         self.execute_trace(max_model[])
 
     fn create_model(self) raises -> ArcPointer[compiler.engine.Model]:
-        var in_types = List[compiler.graph.Type]()
+        var in_types = List[Type]()
         for input in self.inputs:
-            var shape_dim = List[compiler.graph.Dim]()
+            var shape_dim = List[Dim]()
             var shape = input[].impl[].spec.shape
             for i in range(input[].impl[].spec.rank()):
-                shape_dim.append(compiler.graph.Dim(shape[i]))
+                shape_dim.append(Dim(shape[i]))
             in_types.append(
-                compiler.graph.Type(
-                    compiler.graph.TensorType(input[].dtype(), shape_dim)
+                Type(
+                    TensorType(input[].dtype(), shape_dim)
                 )
             )
-        var graph = compiler.graph.Graph(in_types)
+        var graph = Graph(in_types)
 
         for i in range(len(self.inputs)):
             var input = self.inputs[i]
@@ -295,7 +296,7 @@ struct Executor(Copyable, Movable, Stringable, Writable):
             if array[].impl[]._max_symbol:
                 continue
             else:
-                var _args__max_symbol = List[compiler.graph.Symbol]()
+                var _args__max_symbol = List[Symbol]()
                 for arg in array[].args():
                     if arg[].impl[]._max_symbol:
                         _args__max_symbol.append(
@@ -316,7 +317,7 @@ struct Executor(Copyable, Movable, Stringable, Writable):
                         array[].id()
                     )
 
-        var output_arrays = List[compiler.graph.Symbol]()
+        var output_arrays = List[Symbol]()
         for output in self.outputs:
             if output[].impl[]._max_symbol:
                 output_arrays.append(output[].impl[]._max_symbol.value())
@@ -328,7 +329,7 @@ struct Executor(Copyable, Movable, Stringable, Writable):
         graph.output(output_arrays)
         graph.verify()
 
-        var session = compiler.engine.InferenceSession()
+        var session = InferenceSession()
         max_model = ArcPointer(session.load(graph))
 
         for array in self.trace:

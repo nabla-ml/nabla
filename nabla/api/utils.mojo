@@ -13,8 +13,8 @@
 
 from memory import ArcPointer
 from collections import Dict
-import nabla.compiler
 from nabla.engine.utils import TrafoMeta, GraphRepr, Callable
+from nabla.compiler.engine import Model
 
 
 alias none: Int = -55555
@@ -22,16 +22,16 @@ alias none: Int = -55555
 
 @value
 struct ExecutionContext(Copyable, Movable):
-    var dict: ArcPointer[Dict[Int, ArcPointer[compiler.engine.Model]]]
+    var dict: ArcPointer[Dict[Int, ArcPointer[Model]]]
 
     fn __init__(out self):
-        self.dict = ArcPointer(Dict[Int, ArcPointer[compiler.engine.Model]]())
+        self.dict = ArcPointer(Dict[Int, ArcPointer[Model]]())
 
-    fn __getitem__(self, key: Int) raises -> ArcPointer[compiler.engine.Model]:
+    fn __getitem__(self, key: Int) raises -> ArcPointer[Model]:
         return self.dict[][key]
 
     fn __setitem__(
-        mut self, key: Int, value: ArcPointer[compiler.engine.Model]
+        mut self, key: Int, value: ArcPointer[Model]
     ) -> None:
         if key in self.dict[]:
             print("Warning: key-value pair alrey present in model cache.")

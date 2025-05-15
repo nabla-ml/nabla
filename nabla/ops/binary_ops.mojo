@@ -11,7 +11,7 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-import nabla.compiler
+
 from collections import Dict
 
 from nabla.core.device_array import DeviceArray, ArrayImpl, zeros
@@ -24,14 +24,16 @@ from nabla.ops.utils import (
 from nabla.api.utils import none
 from nabla.ops.unary_ops import negate, log
 from nabla.ops.view_ops import transpose
+from nabla.compiler.graph import Symbol
+from nabla.compiler.graph import ops
 
 
 struct Add:
     @staticmethod
     fn maxpr(
-        args: List[compiler.graph.Symbol], array: DeviceArray
-    ) raises -> compiler.graph.Symbol:
-        return compiler.graph.ops.add(args[0], args[1])
+        args: List[Symbol], array: DeviceArray
+    ) raises -> Symbol:
+        return ops.add(args[0], args[1])
 
     @staticmethod
     fn eagerxpr(mut curr: DeviceArray, args: List[DeviceArray]) raises -> None:
@@ -61,22 +63,22 @@ fn add(arg0: DeviceArray, arg1: DeviceArray) raises -> DeviceArray:
 struct Mul:
     @staticmethod
     fn maxpr(
-        args: List[compiler.graph.Symbol], array: DeviceArray
-    ) raises -> compiler.graph.Symbol:
+        args: List[Symbol], array: DeviceArray
+    ) raises -> Symbol:
         var _arg0 = args[0]
         var _arg1 = args[1]
 
         # !!! OPTIONAL: Handle NaN values, has teh following effect: NaN * 0 = 0, MAX usual behavior: NaN * 0 = NaN
-        # mask = compiler.graph.ops.is_nan(_arg0)
+        # mask = ops.is_nan(_arg0)
         # zeros = _arg1 - _arg1
-        # mask = compiler.graph.ops.equal(mask, zeros)
-        # _arg0 = compiler.graph.ops.select(mask, _arg0, zeros)
-        # mask = compiler.graph.ops.is_nan(_arg1)
+        # mask = ops.equal(mask, zeros)
+        # _arg0 = ops.select(mask, _arg0, zeros)
+        # mask = ops.is_nan(_arg1)
         # zeros = _arg0 - _arg0
-        # mask = compiler.graph.ops.equal(mask, zeros)
-        # _arg1 = compiler.graph.ops.select(mask, _arg1, zeros)
+        # mask = ops.equal(mask, zeros)
+        # _arg1 = ops.select(mask, _arg1, zeros)
 
-        return compiler.graph.ops.mul(_arg0, _arg1)
+        return ops.mul(_arg0, _arg1)
 
     @staticmethod
     fn eagerxpr(mut curr: DeviceArray, args: List[DeviceArray]) raises -> None:
@@ -106,9 +108,9 @@ fn mul(arg0: DeviceArray, arg1: DeviceArray) raises -> DeviceArray:
 struct Sub:
     @staticmethod
     fn maxpr(
-        args: List[compiler.graph.Symbol], array: DeviceArray
-    ) raises -> compiler.graph.Symbol:
-        return compiler.graph.ops.sub(args[0], args[1])
+        args: List[Symbol], array: DeviceArray
+    ) raises -> Symbol:
+        return ops.sub(args[0], args[1])
 
     @staticmethod
     fn eagerxpr(mut curr: DeviceArray, args: List[DeviceArray]) raises -> None:
@@ -138,9 +140,9 @@ fn sub(arg0: DeviceArray, arg1: DeviceArray) raises -> DeviceArray:
 struct Div:
     @staticmethod
     fn maxpr(
-        args: List[compiler.graph.Symbol], array: DeviceArray
-    ) raises -> compiler.graph.Symbol:
-        return compiler.graph.ops.div(args[0], args[1])
+        args: List[Symbol], array: DeviceArray
+    ) raises -> Symbol:
+        return ops.div(args[0], args[1])
 
     @staticmethod
     fn eagerxpr(mut curr: DeviceArray, args: List[DeviceArray]) raises -> None:
@@ -176,9 +178,9 @@ fn div(arg0: DeviceArray, arg1: DeviceArray) raises -> DeviceArray:
 struct Matmul:
     @staticmethod
     fn maxpr(
-        args: List[compiler.graph.Symbol], array: DeviceArray
-    ) raises -> compiler.graph.Symbol:
-        return compiler.graph.ops.matmul(args[0], args[1])
+        args: List[Symbol], array: DeviceArray
+    ) raises -> Symbol:
+        return ops.matmul(args[0], args[1])
 
     @staticmethod
     fn eagerxpr(mut curr: DeviceArray, args: List[DeviceArray]) raises -> None:
@@ -240,9 +242,9 @@ fn matmul(_arg0: DeviceArray, _arg1: DeviceArray) raises -> DeviceArray:
 struct GreaterThan:
     @staticmethod
     fn maxpr(
-        args: List[compiler.graph.Symbol], array: DeviceArray
-    ) raises -> compiler.graph.Symbol:
-        return compiler.graph.ops.greater(args[0], args[1])
+        args: List[Symbol], array: DeviceArray
+    ) raises -> Symbol:
+        return ops.greater(args[0], args[1])
 
     @staticmethod
     fn eagerxpr(mut curr: DeviceArray, args: List[DeviceArray]) raises -> None:
@@ -275,9 +277,9 @@ fn gt(arg0: DeviceArray, arg1: DeviceArray) raises -> DeviceArray:
 struct Pow:
     @staticmethod
     fn maxpr(
-        args: List[compiler.graph.Symbol], array: DeviceArray
-    ) raises -> compiler.graph.Symbol:
-        return compiler.graph.ops.pow(args[0], args[1])
+        args: List[Symbol], array: DeviceArray
+    ) raises -> Symbol:
+        return ops.pow(args[0], args[1])
 
     @staticmethod
     fn eagerxpr(mut curr: DeviceArray, args: List[DeviceArray]) raises -> None:

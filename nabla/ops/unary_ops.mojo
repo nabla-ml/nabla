@@ -11,20 +11,21 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-import nabla.compiler
+
 from collections import Dict
 
 from nabla.core.device_array import DeviceArray, ArrayImpl
 from nabla.ops.utils import register_unary_op, RuntimeInfo
 from nabla.ops.binary_ops import mul, div
-
+from nabla.compiler.graph import Symbol
+from nabla.compiler.graph import ops
 
 struct Sin:
     @staticmethod
     fn maxpr(
-        args: List[compiler.graph.Symbol], array: DeviceArray
-    ) raises -> compiler.graph.Symbol:
-        return compiler.graph.ops.sin(args[0])
+        args: List[Symbol], array: DeviceArray
+    ) raises -> Symbol:
+        return ops.sin(args[0])
 
     @staticmethod
     fn eagerxpr(mut curr: DeviceArray, args: List[DeviceArray]) raises -> None:
@@ -54,9 +55,9 @@ fn sin(arg: DeviceArray) raises -> DeviceArray:
 struct Cast:
     @staticmethod
     fn maxpr(
-        args: List[compiler.graph.Symbol], array: DeviceArray
-    ) raises -> compiler.graph.Symbol:
-        return compiler.graph.ops.cast(args[0], array.dtype())
+        args: List[Symbol], array: DeviceArray
+    ) raises -> Symbol:
+        return ops.cast(args[0], array.dtype())
 
     @staticmethod
     fn eagerxpr(mut curr: DeviceArray, args: List[DeviceArray]) raises -> None:
@@ -86,8 +87,8 @@ fn cast(arg: DeviceArray, dtype: DType) raises -> DeviceArray:
 struct Negate:
     @staticmethod
     fn maxpr(
-        args: List[compiler.graph.Symbol], array: DeviceArray
-    ) raises -> compiler.graph.Symbol:
+        args: List[Symbol], array: DeviceArray
+    ) raises -> Symbol:
         return -args[0]
 
     @staticmethod
@@ -118,9 +119,9 @@ fn negate(arg: DeviceArray) raises -> DeviceArray:
 struct Cos:
     @staticmethod
     fn maxpr(
-        args: List[compiler.graph.Symbol], array: DeviceArray
-    ) raises -> compiler.graph.Symbol:
-        return compiler.graph.ops.cos(args[0])
+        args: List[Symbol], array: DeviceArray
+    ) raises -> Symbol:
+        return ops.cos(args[0])
 
     @staticmethod
     fn eagerxpr(mut curr: DeviceArray, args: List[DeviceArray]) raises -> None:
@@ -150,9 +151,9 @@ fn cos(arg: DeviceArray) raises -> DeviceArray:
 struct ReLU:
     @staticmethod
     fn maxpr(
-        args: List[compiler.graph.Symbol], array: DeviceArray
-    ) raises -> compiler.graph.Symbol:
-        return compiler.graph.ops.relu(args[0])
+        args: List[Symbol], array: DeviceArray
+    ) raises -> Symbol:
+        return ops.relu(args[0])
 
     @staticmethod
     fn eagerxpr(mut curr: DeviceArray, args: List[DeviceArray]) raises -> None:
@@ -184,9 +185,9 @@ fn relu(arg: DeviceArray) raises -> DeviceArray:
 struct Log:
     @staticmethod
     fn maxpr(
-        args: List[compiler.graph.Symbol], array: DeviceArray
-    ) raises -> compiler.graph.Symbol:
-        return compiler.graph.ops.log(args[0])
+        args: List[Symbol], array: DeviceArray
+    ) raises -> Symbol:
+        return ops.log(args[0])
 
     @staticmethod
     fn eagerxpr(mut curr: DeviceArray, args: List[DeviceArray]) raises -> None:
@@ -216,10 +217,10 @@ fn log(arg: DeviceArray) raises -> DeviceArray:
 struct GreaterThanZero:
     @staticmethod
     fn maxpr(
-        args: List[compiler.graph.Symbol], array: DeviceArray
-    ) raises -> compiler.graph.Symbol:
+        args: List[Symbol], array: DeviceArray
+    ) raises -> Symbol:
         var zeros = args[0] - args[0]
-        return compiler.graph.ops.greater(args[0], zeros)
+        return ops.greater(args[0], zeros)
 
     @staticmethod
     fn eagerxpr(mut curr: DeviceArray, args: List[DeviceArray]) raises -> None:
@@ -252,8 +253,8 @@ fn gt_zero(arg: DeviceArray) raises -> DeviceArray:
 struct IncrBatchDimCtr:
     @staticmethod
     fn maxpr(
-        args: List[compiler.graph.Symbol], array: DeviceArray
-    ) raises -> compiler.graph.Symbol:
+        args: List[Symbol], array: DeviceArray
+    ) raises -> Symbol:
         return args[0]
 
     @staticmethod
@@ -295,8 +296,8 @@ fn incr_batch_dim_ctr(arg: DeviceArray) raises -> DeviceArray:
 struct DecrBatchDimCtr:
     @staticmethod
     fn maxpr(
-        args: List[compiler.graph.Symbol], array: DeviceArray
-    ) raises -> compiler.graph.Symbol:
+        args: List[Symbol], array: DeviceArray
+    ) raises -> Symbol:
         return args[0]
 
     @staticmethod
