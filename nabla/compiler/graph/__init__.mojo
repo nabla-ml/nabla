@@ -30,7 +30,7 @@ custom ops, and add them to the graph by setting the output op(s) with
 
 For example:
 
-```mojo
+```python
 from nabla.compiler.graph import Graph, TensorType, ops
 from nabla.compiler.tensor import Tensor, TensorShape
 

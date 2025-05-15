@@ -25,7 +25,7 @@ and its corresponding quantized buffer shape.
 
 For example, this code quantizes a tensor with the Q4_0 encoding:
 
-```mojo
+```python
 from nabla.compiler.tensor import Tensor
 from nabla.compiler.graph.quantization import Q4_0Encoding
 

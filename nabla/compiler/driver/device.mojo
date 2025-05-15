@@ -15,7 +15,7 @@
 
 # For example, you can create a CPU device like this:
 
-# ```mojo
+# ```python
 # from nabla.compiler.driver import cpu
 
 # def main():

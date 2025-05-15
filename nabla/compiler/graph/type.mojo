@@ -130,7 +130,7 @@ struct Dim(Copyable, Movable, Writable, Stringable):
     In most cases you don't need to work with a `Dim` directly, but can rely
     on conversion constructors, for instance you can specify a tensor type as
 
-    ```mojo
+    ```python
     from nabla.compiler.graph import Dim, TensorType
     var tensor_type = TensorType(DType.int64, "batch", 10, Dim.dynamic())
     ```
@@ -140,7 +140,7 @@ struct Dim(Copyable, Movable, Writable, Stringable):
 
     You can still construct dimensions explicitly via helpers, eg.
 
-    ```mojo
+    ```python
     var some_dims = [
         Dim.dynamic(),
         Dim.symbolic("batch"),

@@ -30,7 +30,7 @@ def repeat_interleave(
 
     For example, given `repeats=2` and the following input:
 
-    ```mojo
+    ```python
     input = max.tensor.Tensor[DType.float32](
         max.tensor.TensorShape(2, 2),
         1.0, 2.0,
@@ -40,7 +40,7 @@ def repeat_interleave(
 
     `repeat_interleave` with `dim=0`:
 
-    ```mojo
+    ```python
     output = max.tensor.Tensor[DType.float32](
         max.tensor.TensorShape(4, 2),
         1.0, 2.0,
@@ -52,7 +52,7 @@ def repeat_interleave(
 
     `repeat_interleave` with `dim=1`:
 
-    ```mojo
+    ```python
     output = max.tensor.Tensor[DType.float32](
         max.tensor.TensorShape(2, 4),
         1.0, 1.0, 2.0, 2.0,
@@ -62,7 +62,7 @@ def repeat_interleave(
 
     `repeat_interleave` with `dim=None` (the default):
 
-    ```mojo
+    ```python
     output = max.tensor.Tensor[DType.float32](
         max.tensor.TensorShape(8),
         1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0,

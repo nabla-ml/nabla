@@ -25,7 +25,7 @@ to import each module.
 
 For example, the basic code you need to run an inference looks like this:
 
-```mojo
+```python
 from max import engine
 
 def main():

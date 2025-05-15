@@ -22,7 +22,7 @@ to import each module.
 
 For example, the basic code you need to create tensor on CPU looks like this:
 
-```mojo
+```python
 from nabla.compiler.driver import Tensor, cpu
 from testing import assert_equal
 from nabla.compiler.tensor import TensorShape

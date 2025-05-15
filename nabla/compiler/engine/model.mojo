@@ -45,7 +45,7 @@ struct Model:
     [`InferenceSession.load()`](/max/api/mojo/engine/session/InferenceSession#load).
     For example:
 
-    ```mojo
+    ```python
     var session = engine.InferenceSession()
     var model = session.load("bert-base-uncased")
     ```

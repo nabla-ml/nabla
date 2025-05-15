@@ -15,7 +15,7 @@
 For example you can use AnyTensor if you don't know the dtype of tensor in
 advance or if you don't know the tensor is DeviceTensor or Tensor:
 
-```mojo
+```python
 from nabla.compiler.driver import Tensor, AnyTensor
 from nabla.compiler.tensor import TensorShape
 

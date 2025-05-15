@@ -39,7 +39,7 @@ def save[PathLike: PathLike](tensor_dict: TensorDict, path: PathLike):
 
     For example:
 
-    ```mojo
+    ```python
     from nabla.compiler.graph.checkpoint import save, TensorDict
     from nabla.compiler.tensor import Tensor, TensorShape
 
@@ -167,7 +167,7 @@ def load[PathLike: PathLike](path: PathLike) -> TensorDict:
 
     For example:
 
-    ```mojo
+    ```python
     from nabla.compiler.graph.checkpoint import load, TensorDict
     from nabla.compiler.tensor import Tensor, TensorShape
 

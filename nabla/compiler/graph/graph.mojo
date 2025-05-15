@@ -156,7 +156,7 @@ struct Graph(Copyable, Movable, Stringable, Writable):
     sequence of ops and set the graph output with [`output()`](#output). For
     example:
 
-    ```mojo
+    ```python
     from nabla.compiler.graph import Type, Graph, TensorType, ops
     from nabla.compiler.tensor import Tensor, TensorShape
 
@@ -639,7 +639,7 @@ struct Graph(Copyable, Movable, Stringable, Writable):
         encodings](/max/api/mojo/graph/quantization/encodings)
         3. Apply quantization using [`Graph.quantize()`](/max/api/mojo/graph/graph/Graph#quantize)
 
-        ```mojo
+        ```python
         quantized_constant = graph.quantize[Q4_0Encoding](constant_value)
         ```
         4. Use [`qmatmul()`](/max/api/mojo/graph/ops/quantized_ops/qmatmul) for matrix

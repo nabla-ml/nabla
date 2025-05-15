@@ -242,7 +242,7 @@ struct InputSpec(Copyable, Movable):
     [`InferenceSession.load()`](/max/api/mojo/engine/session/InferenceSession#load).
     For example:
 
-    ```mojo
+    ```python
     var batch = 1
     var seqlen = 128
     var input_ids_spec = TensorSpec(DType.int64, batch, seqlen)
@@ -446,7 +446,7 @@ struct InferenceSession:
 
     For example, you can load a model like this:
 
-    ```mojo
+    ```python
     var session = engine.InferenceSession()
     var model = session.load("bert-base-uncased")
     ```

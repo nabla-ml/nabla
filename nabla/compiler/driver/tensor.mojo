@@ -15,7 +15,7 @@ device.
 
 For example, a tensor can be created and used like this:
 
-```mojo
+```python
 from nabla.compiler.driver import Tensor
 from nabla.compiler.tensor import TensorShape
 

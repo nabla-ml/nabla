@@ -74,7 +74,7 @@ struct TensorDict(Sized, Writable):
 
     For example:
 
-    ```mojo
+    ```python
     from nabla.compiler.graph.checkpoint import load, save, TensorDict
     from nabla.compiler.tensor import Tensor, TensorShape
 
