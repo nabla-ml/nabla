@@ -3,7 +3,7 @@ from nabla.compiler.engine import InferenceSession, SessionOptions
 from nabla.compiler.graph import Graph, TensorType, ops
 
 
-def main():
+def test_new_model_execute_method():
     host_device = cpu()
     gpu_device = cpu()  # accelerator()
 
