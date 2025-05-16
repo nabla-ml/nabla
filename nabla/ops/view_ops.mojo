@@ -20,8 +20,7 @@ from nabla.ops.unary_ops import incr_batch_dim_ctr, decr_batch_dim_ctr
 from nabla.ops.utils import get_broadcasted_axis, register_any_op, RuntimeInfo
 from nabla.api.utils import ExecutionContext, none
 from nabla.ops.reduce_ops import sum
-from nabla.compiler.graph import Symbol
-from nabla.compiler.graph import ops, Dim
+from nabla.compiler.graph import Symbol, ops, Dim
 
 
 ####################################################################################################

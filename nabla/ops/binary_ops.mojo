@@ -24,8 +24,7 @@ from nabla.ops.utils import (
 from nabla.api.utils import none
 from nabla.ops.unary_ops import negate, log
 from nabla.ops.view_ops import transpose
-from nabla.compiler.graph import Symbol
-from nabla.compiler.graph import ops
+from nabla.compiler.graph import Symbol, ops
 
 
 struct Add:

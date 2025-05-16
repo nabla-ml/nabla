@@ -17,8 +17,7 @@ from collections import Dict
 from nabla.core.device_array import DeviceArray, ArrayImpl
 from nabla.ops.utils import register_any_op, RuntimeInfo
 from nabla.ops.view_ops import squeeze, broadcast_to
-from nabla.compiler.graph import Symbol
-from nabla.compiler.graph import ops
+from nabla.compiler.graph import Symbol, ops
 
 alias BATCH_DIM_CTR = 0
 alias ORIGINALshape = 2

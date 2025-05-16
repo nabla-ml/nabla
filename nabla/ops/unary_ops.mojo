@@ -17,8 +17,7 @@ from collections import Dict
 from nabla.core.device_array import DeviceArray, ArrayImpl
 from nabla.ops.utils import register_unary_op, RuntimeInfo
 from nabla.ops.binary_ops import mul, div
-from nabla.compiler.graph import Symbol
-from nabla.compiler.graph import ops
+from nabla.compiler.graph import Symbol, ops
 
 
 struct Sin:
