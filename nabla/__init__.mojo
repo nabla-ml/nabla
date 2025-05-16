@@ -14,7 +14,6 @@
 from nabla.core.motree import MoTree, motree
 from nabla.api.array import (
     Array,
-    Tensor,
     ones,
     ones_like,
     full,
