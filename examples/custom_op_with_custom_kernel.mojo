@@ -7,7 +7,9 @@ from nabla.compiler.graph import Symbol
 struct CustomOp:
     @staticmethod
     fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
-        return nabla.compiler.graph.ops.custom["custom_op"](args[0], args[0].type())
+        return nabla.compiler.graph.ops.custom["custom_op"](
+            args[0], args[0].type()
+        )
 
     @staticmethod
     fn eagerxpr(mut curr: DeviceArray, args: List[DeviceArray]) raises -> None:
@@ -33,8 +35,10 @@ fn custom_op(arg: DeviceArray) raises -> DeviceArray:
         CustomOp.maxpr, CustomOp.vjp, CustomOp.jvp, CustomOp.eagerxpr
     ](arg, "custom_op")
 
+
 fn custom_op(arg: nabla.Array) raises -> nabla.Array:
     return nabla.Array(custom_op(arg.device_array[]))
+
 
 fn test_custom_op_with_custom_kernel() raises -> None:
     # Test the custom op with a custom kernel

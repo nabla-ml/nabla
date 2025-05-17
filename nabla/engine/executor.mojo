@@ -329,7 +329,14 @@ struct Executor(Copyable, Movable, Stringable, Writable):
 
         var session = InferenceSession()
         try:
-            max_model = ArcPointer(session.load(graph, custom_ops_paths=List(Path("./custom_kernels/kernels.mojopkg"))))
+            max_model = ArcPointer(
+                session.load(
+                    graph,
+                    custom_ops_paths=List(
+                        Path("./custom_kernels/kernels.mojopkg")
+                    ),
+                )
+            )
         except:
             max_model = ArcPointer(session.load(graph))
 
