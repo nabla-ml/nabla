@@ -14,6 +14,7 @@
 
 from memory import ArcPointer
 from collections import Dict
+from pathlib import Path
 from nabla.compiler.graph import Symbol, Graph, Type, Dim, TensorType
 from nabla.compiler.engine import InferenceSession, Model, TensorMap
 from nabla.compiler.tensor import TensorSpec
@@ -327,7 +328,10 @@ struct Executor(Copyable, Movable, Stringable, Writable):
         graph.verify()
 
         var session = InferenceSession()
-        max_model = ArcPointer(session.load(graph))
+        try:
+            max_model = ArcPointer(session.load(graph, custom_ops_paths=List(Path("./custom_kernels/kernels.mojopkg"))))
+        except:
+            max_model = ArcPointer(session.load(graph))
 
         for array in self.trace:
             array[].impl[]._max_symbol = None

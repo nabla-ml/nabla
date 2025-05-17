@@ -11,6 +11,7 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
+from .custom_op_with_custom_kernel import *
 from .eager_mlp_training import *
 from .eager_mode import *
 from .grad_grad_grad import *
