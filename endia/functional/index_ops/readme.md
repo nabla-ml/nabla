@@ -1,2 +1,0 @@
-# Indexing Operations
-
