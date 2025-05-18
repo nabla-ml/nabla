@@ -21,7 +21,7 @@ import nabla.core.device_array as devarr
 
 
 @value
-struct Array(Copyable, Movable, Writable, Stringable):
+struct Array(Copyable, Movable, Writable, Stringable, Representable):
     var device_array: ArcPointer[DeviceArray]
 
     fn __init__(out self, read device_array: DeviceArray) raises:
@@ -49,6 +49,9 @@ struct Array(Copyable, Movable, Writable, Stringable):
 
     fn zero_grad(mut self) raises -> None:
         self.device_array[].zero_grad()
+
+    fn __repr__(self) -> String:
+        return self.device_array[].__repr__()
 
     fn __str__(self) -> String:
         return String(self.device_array[])

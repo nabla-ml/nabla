@@ -249,7 +249,7 @@ struct ArrayImpl(Copyable, Movable):
 
 
 @value
-struct DeviceArray(Copyable, Movable, Writable, Stringable):
+struct DeviceArray(Copyable, Movable, Writable, Stringable, Representable):
     var impl: ArcPointer[ArrayImpl]
 
     fn __init__(
@@ -418,6 +418,9 @@ struct DeviceArray(Copyable, Movable, Writable, Stringable):
         for arg in _args:
             args_impl.append(arg[].impl)
         self.impl[]._args = args_impl
+
+    fn __repr__(self) -> String:
+        return self.__str__()
 
     fn __str__(self) -> String:
         try:
