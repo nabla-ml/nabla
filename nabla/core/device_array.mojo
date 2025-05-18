@@ -125,6 +125,7 @@ struct ArrayImpl(Copyable, Movable):
     var _tmp_is_output: Bool
     var _dual: List[ArcPointer[Self]]
     var tmp_name: String
+    var custom_kernel_path: Optional[String]
 
     fn __init__(
         out self,
@@ -175,6 +176,7 @@ struct ArrayImpl(Copyable, Movable):
         self._tmp_is_output = False
         self._dual = List[ArcPointer[Self]]()
         self.tmp_name = ""
+        self.custom_kernel_path = None
 
     fn __copyinit__(out self, read other: Self):
         self.id = other.id
@@ -207,6 +209,7 @@ struct ArrayImpl(Copyable, Movable):
         self._tmp_is_output = other._tmp_is_output
         self._dual = List[ArcPointer[Self]]()
         self.tmp_name = other.tmp_name
+        self.custom_kernel_path = other.custom_kernel_path
 
     fn __moveinit__(out self, owned other: Self):
         self.id = other.id
@@ -239,6 +242,7 @@ struct ArrayImpl(Copyable, Movable):
         self._tmp_is_output = other._tmp_is_output
         self._dual = List[ArcPointer[Self]]()
         self.tmp_name = other.tmp_name
+        self.custom_kernel_path = other.custom_kernel_path
 
     fn __del__(owned self):
         self._data.free()
@@ -335,6 +339,15 @@ struct DeviceArray(Copyable, Movable, Writable, Stringable):
 
     fn has_cotangent(self) -> Bool:
         return len(self.impl[].cotangent) == 1
+
+    fn custom_kernel_path(self) -> Optional[String]:
+        return self.impl[].custom_kernel_path
+
+    fn custom_kernel_path_(mut self, path: Optional[String]) -> None:
+        self.impl[].custom_kernel_path = path
+
+    fn has_custom_kernel(self) -> Bool:
+        return self.impl[].custom_kernel_path != None
 
     fn to_max[dtype: DType](self) raises -> Tensor[dtype]:
         var s = self

@@ -286,6 +286,8 @@ struct Executor(Copyable, Movable, Stringable, Writable):
 
             input.impl[]._max_symbol = graph[i]
 
+        var custom_kernel_paths = Dict[String, Bool]()
+
         for array in self.trace:
             var arg_ids = List[Int]()
             for arg in array[].args():
@@ -315,6 +317,11 @@ struct Executor(Copyable, Movable, Stringable, Writable):
                         array[].id()
                     )
 
+            if array[].has_custom_kernel():
+                var path = array[].custom_kernel_path().value()
+                if path not in custom_kernel_paths:
+                    custom_kernel_paths[path] = True
+
         var output_arrays = List[Symbol]()
         for output in self.outputs:
             if output[].impl[]._max_symbol:
@@ -327,18 +334,17 @@ struct Executor(Copyable, Movable, Stringable, Writable):
         graph.output(output_arrays)
         graph.verify()
 
+        var all_custom_kernel_paths = List[Path]()
+        for path in custom_kernel_paths.keys():
+            all_custom_kernel_paths.append(Path(path[]))
+
         var session = InferenceSession()
-        try:
-            max_model = ArcPointer(
-                session.load(
-                    graph,
-                    custom_ops_paths=List(
-                        Path("./custom_kernels/kernels.mojopkg")
-                    ),
-                )
+        max_model = ArcPointer(
+            session.load(
+                graph,
+                custom_ops_paths=all_custom_kernel_paths,
             )
-        except:
-            max_model = ArcPointer(session.load(graph))
+        )
 
         for array in self.trace:
             array[].impl[]._max_symbol = None

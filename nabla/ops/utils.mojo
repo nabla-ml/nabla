@@ -21,7 +21,7 @@ from nabla.api.utils import none
 from nabla.compiler.graph import Symbol
 
 
-fn generic_setup(args: List[DeviceArray], name: String) raises -> DeviceArray:
+fn generic_setup(args: List[DeviceArray], name: String, custom_kernel_path: Optional[String] = None) raises -> DeviceArray:
     var dtype = args[0].impl[].spec.dtype()
     var diffable = False
     var execution_context = Optional[ExecutionContext](None)
@@ -46,6 +46,7 @@ fn generic_setup(args: List[DeviceArray], name: String) raises -> DeviceArray:
         name="{" + String(batch_dim_ctr) + "}" + name + "(" + arg_string + ")",
     )
     res.batch_dim_ctr_(batch_dim_ctr)
+    res.custom_kernel_path_(custom_kernel_path)
 
     for arg in args:
         res.impl[]._args.append(arg[].impl)
@@ -67,8 +68,9 @@ fn register_any_op[
     name: String,
     targetshape: List[Int],
     runtime_info: List[List[Int]] = List[List[Int]](),
+    custom_kernel_path: Optional[String] = None
 ) raises -> DeviceArray:
-    var res = generic_setup(args, name)
+    var res = generic_setup(args, name, custom_kernel_path)
     res.shape_(targetshape)
     res.impl[].runtime_info = runtime_info
 
@@ -175,6 +177,7 @@ fn register_binary_op[
     read _arg0: DeviceArray,
     read _arg1: DeviceArray,
     name: String,
+    custom_kernel_path: Optional[String] = None,
 ) raises -> DeviceArray:
     var arg0 = _arg0
     var arg1 = _arg1
@@ -206,6 +209,7 @@ fn register_binary_op[
         List(arg0, arg1),
         name,
         new_shape,
+        custom_kernel_path=custom_kernel_path,
     )
 
 
@@ -218,9 +222,9 @@ fn register_unary_op[
         List[DeviceArray], List[DeviceArray], DeviceArray
     ) raises -> DeviceArray,
     eagerxpr: fn (mut DeviceArray, List[DeviceArray]) raises -> None,
-](arg: DeviceArray, name: String,) raises -> DeviceArray:
+](arg: DeviceArray, name: String, custom_kernel_path: Optional[String] = None) raises -> DeviceArray:
     return register_any_op[maxpr, vjp, jvp, eagerxpr](
-        List(arg), name, arg.shape()
+        List(arg), name, arg.shape(), custom_kernel_path=custom_kernel_path
     )
 
 
