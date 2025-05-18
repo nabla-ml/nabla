@@ -33,7 +33,11 @@ struct CustomOp:
 fn custom_op(arg: DeviceArray) raises -> DeviceArray:
     return register_unary_op[
         CustomOp.maxpr, CustomOp.vjp, CustomOp.jvp, CustomOp.eagerxpr
-    ](arg, name="custom_op", custom_kernel_path=String("./examples/custom_kernels/kernels.mojopkg"))
+    ](
+        arg,
+        name="custom_op",
+        custom_kernel_path=String("./examples/custom_kernels/kernels.mojopkg"),
+    )
 
 
 fn custom_op(arg: nabla.Array) raises -> nabla.Array:

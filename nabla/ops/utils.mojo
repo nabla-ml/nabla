@@ -21,7 +21,11 @@ from nabla.api.utils import none
 from nabla.compiler.graph import Symbol
 
 
-fn generic_setup(args: List[DeviceArray], name: String, custom_kernel_path: Optional[String] = None) raises -> DeviceArray:
+fn generic_setup(
+    args: List[DeviceArray],
+    name: String,
+    custom_kernel_path: Optional[String] = None,
+) raises -> DeviceArray:
     var dtype = args[0].impl[].spec.dtype()
     var diffable = False
     var execution_context = Optional[ExecutionContext](None)
@@ -68,7 +72,7 @@ fn register_any_op[
     name: String,
     targetshape: List[Int],
     runtime_info: List[List[Int]] = List[List[Int]](),
-    custom_kernel_path: Optional[String] = None
+    custom_kernel_path: Optional[String] = None,
 ) raises -> DeviceArray:
     var res = generic_setup(args, name, custom_kernel_path)
     res.shape_(targetshape)
@@ -222,7 +226,9 @@ fn register_unary_op[
         List[DeviceArray], List[DeviceArray], DeviceArray
     ) raises -> DeviceArray,
     eagerxpr: fn (mut DeviceArray, List[DeviceArray]) raises -> None,
-](arg: DeviceArray, name: String, custom_kernel_path: Optional[String] = None) raises -> DeviceArray:
+](
+    arg: DeviceArray, name: String, custom_kernel_path: Optional[String] = None
+) raises -> DeviceArray:
     return register_any_op[maxpr, vjp, jvp, eagerxpr](
         List(arg), name, arg.shape(), custom_kernel_path=custom_kernel_path
     )
