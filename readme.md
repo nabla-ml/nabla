@@ -7,7 +7,7 @@ While Mojo already offers extensive support for NVIDIA/AMD GPUs, Nabla is still 
 
 <p align="center">
   <a href="https://nablaml.com/docs/get_started">Nabla API</a> •
-  <a href="https://docs.modular.com/stable/max/">MAX</a> •
+  <a href="https://github.com/nabla-ml/nabla/blob/main/changelog.md">Changelog</a> •
   <a href="https://github.com/nabla-ml/nabla/issues">Report Bug</a>
 </p>
 
