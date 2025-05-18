@@ -1,11 +1,12 @@
 # NABLA ChangeLog
+This file contains larger, high-level changes. For smaller changes, please refer to the commit history of the main branch.
 
-## **[25.4]** - Unreleased
+### **[25.4]** - Unreleased
 
 - Added support for custom kernels.
 
-## **[25.3]** - 2025-10-05 (Initial, CPU-only release)
+### **[25.3]** - 2025-10-05 (Initial, CPU-only release)
 
-- Multipdimensional Arrays
+- Multidimensional Arrays
 - Full autodiff support via function transformations
-- Selected (differntiable) ops for CPU execution
+- Selected (differentiable) ops for CPU execution
