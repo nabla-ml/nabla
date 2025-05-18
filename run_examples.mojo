@@ -16,8 +16,8 @@ from examples import *
 
 
 def main():
-    # print("\033[1;33m\nCUSTOM OP WITH CUSTOM KERNEL\033[0m")
-    # test_custom_op_with_custom_kernel()
+    print("\033[1;33m\nCUSTOM OP WITH CUSTOM KERNEL\033[0m")
+    test_custom_op_with_custom_kernel()
 
     print("\033[1;94m\nEAGER MODE\033[0m")
     test_eager_mode()
