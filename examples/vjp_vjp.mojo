@@ -17,7 +17,7 @@ import nabla
 def foo(args: List[nabla.Array]) -> List[nabla.Array]:
     x = args[0]
     y = args[1]
-    return List(x * x, y * y)
+    return [x * x, y * y]
 
 
 fn test_vjp_vjp() raises -> None:
@@ -32,7 +32,7 @@ fn test_vjp_vjp() raises -> None:
     # Step 1: Compute the gradient using VJP with cotangent ones
     def grad_fn(args: List[nabla.Array]) -> List[nabla.Array]:
         _, pullback = nabla.vjp(foo, args)
-        return pullback(List(nabla.ones((2, 3)), nabla.ones((2, 3))))
+        return pullback([nabla.ones((2, 3)), nabla.ones((2, 3))])
 
     # Step 2: Compute Hessian-vector product using VJP on grad_fn
     def hvp_fn(args: List[nabla.Array]) -> List[nabla.Array]:
@@ -41,15 +41,15 @@ fn test_vjp_vjp() raises -> None:
         _, pullback_grad = nabla.vjp(grad_fn, primals)
         return pullback_grad(tangents)
 
-    var res = foo(List(x, y))
+    var res = foo([x, y])
     print(res[0])
 
     print("\nFirst Order VJP (equivalent to jvp result):")
-    grad_vjp = grad_fn(List(x, y))
+    grad_vjp = grad_fn([x, y])
     print(grad_vjp[0])
     print(grad_vjp[1])
 
     print("\nSecond Order VJP:")
-    hvp_result = hvp_fn(List(x, y, v, w))
+    hvp_result = hvp_fn([x, y, v, w])
     print(hvp_result[0])
     print(hvp_result[1])

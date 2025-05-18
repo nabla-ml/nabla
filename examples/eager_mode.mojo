@@ -25,18 +25,18 @@ def test_eager_mode():
         if z.load(0) > 0:
             w = nabla.cos(z)
             p = -nabla.sin(z) / y
-            return List(w, p)
+            return [w, p]
         else:
             w = nabla.cos(nabla.sin(z))
             p = -nabla.sin(nabla.sin(z))
-            return List(w, p)
+            return [w, p]
 
     ctx = nabla.ExecutionContext()
     arg0 = nabla.ones((1, 3), DType.float32, False, ctx)
     arg1 = nabla.ones((1, 3), DType.float32, False, ctx)
 
     for iteration in range(1001):
-        outputs = foo1(List(arg0, arg1))
+        outputs = foo1([arg0, arg1])
         arg0 = outputs[0]
         arg1 = outputs[1]
 
@@ -56,18 +56,18 @@ def test_backward_eager_mode():
         if z.load(0) > 0:
             w = nabla.cos(z)
             p = -nabla.sin(z) / y
-            return List(w, p)
+            return [w, p]
         else:
             w = nabla.cos(nabla.sin(z))
             p = -nabla.sin(nabla.sin(z))
-            return List(w, p)
+            return [w, p]
 
     ctx = nabla.ExecutionContext()
     arg0 = nabla.ones((1, 3), DType.float32, True, ctx)
     arg1 = nabla.ones((1, 3), DType.float32, True, ctx)
 
     for iteration in range(101):
-        outputs = foo1(List(arg0, arg1))
+        outputs = foo1([arg0, arg1])
         nabla.backward(outputs[0])
         arg0 = arg0 - arg0.grad() * 0.01
         arg1 = arg1 - arg1.grad() * 0.01

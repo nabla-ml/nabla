@@ -149,7 +149,7 @@ struct Value:
         var ptr = self._ptr.get_list(self._lib)
         if not ptr.ptr:
             raise "value is not a list"
-        return List(ptr, self._lib, self._session)
+        return [ptr, self._lib, self._session]
 
     fn _take_mojo_value[T: Movable](self) raises -> T:
         """Move the mojo object out of this value.

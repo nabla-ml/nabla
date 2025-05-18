@@ -33,7 +33,7 @@ fn test_jvp() raises:
         for _ in range(20):
             x = nabla.relu(x @ b + c)
         var z = nabla.sum(nabla.sin(x))
-        return List(z, z)
+        return [z, z]
 
     var avg_time = Float64(0.0)
 
@@ -43,7 +43,7 @@ fn test_jvp() raises:
     for i in range(1, iterations + 1):
         var start = perf_counter()
         _, tangents = nabla.jvp(
-            foo, List(a, b, c), List(a_tangent, b_tangent, c_tangent)
+            foo, [a, b, c], [a_tangent, b_tangent, c_tangent]
         )
 
         var res0 = tangents[0].item()

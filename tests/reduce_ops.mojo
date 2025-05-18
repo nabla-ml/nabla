@@ -18,10 +18,16 @@ fn test_sum0() raises:
     fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
         var x = args[0]
         x = nabla.sum(x, List(0))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(3, 4):
@@ -36,10 +42,16 @@ fn test_sum1() raises:
         var x = args[0]
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.sum(x, List(0))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 4):
@@ -55,10 +67,16 @@ fn test_sum2() raises:
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.sum(x, List(0))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 3):
@@ -75,10 +93,16 @@ fn test_sum3() raises:
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.sum(x, List(0))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 3, 4):
@@ -92,10 +116,16 @@ fn test_sum4() raises:
     fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
         var x = args[0]
         x = nabla.sum(x, List(0, 1))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(4):
@@ -110,10 +140,16 @@ fn test_sum5() raises:
         var x = args[0]
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.sum(x, List(0, 1))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(2):
@@ -128,10 +164,16 @@ fn test_sum6() raises:
         var x = args[0]
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.sum(x, List(0), act_on_batch_dims=True)
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(3, 4):
@@ -147,10 +189,16 @@ fn test_sum7() raises:
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.sum(x, List(0, 1), act_on_batch_dims=True)
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(4):
@@ -164,10 +212,16 @@ fn test_sum8() raises:
     fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
         var x = args[0]
         x = nabla.sum(x, List(0), keep_dim=True)
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(1, 3, 4):
@@ -182,10 +236,16 @@ fn test_sum9() raises:
         var x = args[0]
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.sum(x, List(0), keep_dim=True)
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 1, 4):
@@ -201,10 +261,16 @@ fn test_sum10() raises:
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.sum(x, List(0), keep_dim=True)
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 3, 1):
@@ -218,10 +284,16 @@ fn test_sum11() raises:
     fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
         var x = args[0]
         x = nabla.sum(x, List(0, 1), keep_dim=True)
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(1, 1, 4):
@@ -236,10 +308,16 @@ fn test_sum12() raises:
         var x = args[0]
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.sum(x, List(0, 1), keep_dim=True)
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 1, 1):
@@ -254,10 +332,16 @@ fn test_sum13() raises:
         var x = args[0]
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.sum(x, List(0), keep_dim=True, act_on_batch_dims=True)
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(1, 3, 4):
@@ -273,10 +357,16 @@ fn test_sum14() raises:
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.sum(x, List(0, 1), keep_dim=True, act_on_batch_dims=True)
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(1, 1, 4):

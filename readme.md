@@ -60,7 +60,7 @@ import nabla
 def main():
   # Define a simple function
   def foo(args: List[nabla.Array]) -> List[nabla.Array]:
-    return List(nabla.sum(nabla.sin(args[0])))
+    return [nabla.sum(nabla.sin(args[0])),]
 
   # create function TRANSFORMATIONS
   # Vectorize the function across the first dimensions
@@ -73,7 +73,7 @@ def main():
   foo_hessian = nabla.jacfwd(foo_jacobian)
 
   # Create input data and compute the hessian
-  args = List(nabla.randn((2, 3), DType.float32))
+  args = [nabla.randn((2, 3), DType.float32),]
   hessian_output = foo_hessian(args)
   print("Hessian:", hessian_output[0]) # Can you guess the output shape?
 ```

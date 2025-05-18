@@ -19,7 +19,9 @@ struct CustomOp:
     fn vjp(
         primals: List[DeviceArray], tangent: DeviceArray, array: DeviceArray
     ) raises -> List[DeviceArray]:
-        return List(custom_op(tangent))
+        return [
+            custom_op(tangent),
+        ]
 
     @staticmethod
     fn jvp(

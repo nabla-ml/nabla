@@ -15,13 +15,13 @@ import nabla
 
 
 fn test_jacrev_jacfwd() raises:
-    var x = nabla.arange((2, 3))  # + 2
-    # var y = nabla.arange((2, 3)) + 3
+    var x = nabla.arange((2, 3))
 
     def foo(args: List[nabla.Array]) -> List[nabla.Array]:
         var x = args[0]
-        # var y = args[1]
-        return List(nabla.sum(x * x * x))
+        return [
+            nabla.sum(x * x * x),
+        ]
 
     fn d1foo(args: List[nabla.Array]) raises -> List[nabla.Array]:
         return nabla.jacrev(foo)(args)
@@ -33,28 +33,28 @@ fn test_jacrev_jacfwd() raises:
         return nabla.jacfwd(d2foo)(args)
 
     var d1foo_res = d1foo(
-        List(
+        [
             x,
-        )
+        ]
     )
-    # print(nabla.xpr(d1foo)(List(x,)))
+    # print(nabla.xpr(d1foo)([x,]))
     print("\nd1st Derivative 1 (d1foo):")
     print((d1foo_res[0]))
 
     var d2foo_res = d2foo(
-        List(
+        [
             x,
-        )
+        ]
     )
-    # print(nabla.xpr(d2foo)(List(x,)))
+    # print(nabla.xpr(d2foo)([x,]))
     print("\n2nd Derivative 1 (d2foo):")
     print(nabla.sum(d2foo_res[0]))
 
     var d3foo_res = d3foo(
-        List(
+        [
             x,
-        )
+        ]
     )
-    # print(nabla.xpr(d3foo)(List(x,)))
+    # print(nabla.xpr(d3foo)([x,]))
     print("\n3rd Derivative 1 (d3foo):")
     print(nabla.sum(d3foo_res[0]))

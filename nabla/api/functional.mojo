@@ -132,7 +132,9 @@ fn vjp(
 ) raises -> Tuple[List[Array], Callable]:
     var meta = TrafoMeta()
     meta["with_remat"] = List[Int](remat)
-    meta["num_primals"] = List(len(primals))
+    meta["num_primals"] = [
+        len(primals),
+    ]
     return func(primals), Callable(
         func,
         meta,

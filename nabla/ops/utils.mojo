@@ -210,7 +210,7 @@ fn register_binary_op[
     arg1 = broadcast_to(arg1, new_shape, act_on_batch_dims=True)
 
     return register_any_op[maxpr, vjp, jvp, eagerxpr](
-        List(arg0, arg1),
+        [arg0, arg1],
         name,
         new_shape,
         custom_kernel_path=custom_kernel_path,

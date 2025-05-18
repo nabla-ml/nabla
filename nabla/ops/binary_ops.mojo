@@ -222,7 +222,7 @@ fn matmul(_arg0: DeviceArray, _arg1: DeviceArray) raises -> DeviceArray:
     return register_any_op[
         Matmul.maxpr, Matmul.vjp, Matmul.jvp, Matmul.eagerxpr
     ](
-        List(arg0, arg1),
+        [arg0, arg1],
         "matmul",
         new_shape,
     )

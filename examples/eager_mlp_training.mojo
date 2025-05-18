@@ -19,14 +19,14 @@ import nabla
 def test_simple_nn():
     batch_size = 128
 
-    layers = List(1, 64, 128, 128, 64, 1)
+    layers = [1, 64, 128, 128, 64, 1]
     every = 100
     iterations = 400
 
     periods = 8
     lr = 0.01
     momentum = 0.9
-    avg_loss = Float32(0.0)
+    avg_loss = 0.0
     avg_time = 0.0
 
     weights = List[nabla.Array]()
@@ -101,7 +101,7 @@ def test_simple_nn():
 
         if iteration % every == 0:
             print("\nITERATION:", iteration)
-            print("LOSS:", avg_loss / Float32(every))
+            print("LOSS:", avg_loss / every)
             avg_loss = 0.0
             print("TIME:", avg_time / Float64(every))
             avg_time = 0.0

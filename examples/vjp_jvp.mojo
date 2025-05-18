@@ -17,7 +17,7 @@ import nabla
 def foo(args: List[nabla.Array]) -> List[nabla.Array]:
     x = args[0]
     y = args[1]
-    return List(x * x, y * y)
+    return [x * x, y * y]
 
 
 def test_vjp_jvp():
@@ -29,7 +29,7 @@ def test_vjp_jvp():
     # Step 1: Compute the gradient using JVP.
     def grad_fn(args: List[nabla.Array]) -> List[nabla.Array]:
         _, jvp_result = nabla.jvp(
-            foo, args, List(nabla.ones((2, 3)), nabla.ones((2, 3)))
+            foo, args, [nabla.ones((2, 3)), nabla.ones((2, 3))]
         )
         return jvp_result  # This extracts f'(x)
 
@@ -40,8 +40,8 @@ def test_vjp_jvp():
         _, vjp_fn = nabla.vjp(grad_fn, x)
         return vjp_fn(v)  # VJP on gradient computes H(x)·v
 
-    grad_result = grad_fn(List(x, y))
-    hvp_result = hvp_fn(List(x, y, v, w))
+    grad_result = grad_fn([x, y])
+    hvp_result = hvp_fn([x, y, v, w])
 
     print("\nGradient using JVP:")
     print(grad_result[0])

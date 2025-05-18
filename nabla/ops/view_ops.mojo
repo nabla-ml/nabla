@@ -119,7 +119,7 @@ fn permute(arg: DeviceArray, perm: List[Int]) raises -> DeviceArray:
 
 
 fn transpose(arg: DeviceArray, x: Int, y: Int) raises -> DeviceArray:
-    return permute(arg, List(x, y))
+    return permute(arg, [x, y])
 
 
 struct Reshape:

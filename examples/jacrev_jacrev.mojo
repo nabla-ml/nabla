@@ -21,13 +21,11 @@ fn test_jacrev_jacrev() raises:
     def foo(args: List[nabla.Array]) -> List[nabla.Array]:
         var x = args[0]
         var y = args[1]
-        return List(
-            nabla.sin(x) + x**2 + y**2, nabla.sin(x) + x**2 + y**2
-        )
+        return [nabla.sin(x) + x**2 + y**2, nabla.sin(x) + x**2 + y**2]
 
     var jacobian = nabla.jacrev(foo)
-    var jac_res = jacobian(List(x, y))
-    print(nabla.xpr(jacobian)(List(x, y)))
+    var jac_res = jacobian([x, y])
+    print(nabla.xpr(jacobian)([x, y]))
     print("\nJacobian 1:")
     print(jac_res[0])
     print("\nJacobian 2:")
@@ -38,12 +36,11 @@ fn test_jacrev_jacrev() raises:
     print(jac_res[3])
 
     fn jacrev_foo(args: List[nabla.Array]) raises -> List[nabla.Array]:
-        var res = nabla.jacrev(foo)(args)
-        return res
+        return nabla.jacrev(foo)(args)
 
     var hessian = nabla.jacrev(jacrev_foo)
-    hessian_result = hessian(List(x, y))
-    print(nabla.xpr(hessian)(List(x, y)))
+    hessian_result = hessian([x, y])
+    print(nabla.xpr(hessian)([x, y]))
 
     print("\nHessian 1:")
     print(hessian_result[0])

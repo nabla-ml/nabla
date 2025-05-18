@@ -25,14 +25,16 @@ fn test_vjp() raises:
         for _ in range(20):
             x = nabla.relu(x @ b + c)
         var z = nabla.sum(nabla.sin(x))
-        return List(z)
+        return [
+            z,
+        ]
 
     print("VJP TEST")
     var a = nabla.ones((400, 400), DType.float32) / 1000
     var b = nabla.ones((400, 400), DType.float32) / 1000
     var c = nabla.ones((400, 400), DType.float32) / 1000
 
-    _, foo_vjp = nabla.vjp(foo, List(a, b, c))
+    _, foo_vjp = nabla.vjp(foo, [a, b, c])
     foo_vjp_jit = nabla.jit(foo_vjp)
 
     # loop and measure time
@@ -44,7 +46,11 @@ fn test_vjp() raises:
 
     for i in range(1, iterations + 1):
         var start = perf_counter()
-        var res = foo_vjp_jit(List(tangent))
+        var res = foo_vjp_jit(
+            [
+                tangent,
+            ]
+        )
         var a_grad = nabla.sum(res[0])
         var b_grad = nabla.sum(res[1])
         var c_grad = nabla.sum(res[2])

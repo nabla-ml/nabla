@@ -18,10 +18,16 @@ fn test_broadcast0() raises:
     fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
         var x = args[0]
         x = nabla.broadcast_to(x, (5, 2, 3, 4))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(5, 2, 3, 4):
@@ -36,10 +42,16 @@ fn test_broadcast1() raises:
         var x = args[0]
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.broadcast_to(x, (5, 3, 4))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 5, 3, 4):
@@ -55,10 +67,16 @@ fn test_broadcast2() raises:
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.broadcast_to(x, (5, 4))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 3, 5, 4):
@@ -75,10 +93,16 @@ fn test_broadcast3() raises:
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.broadcast_to(x, (5,))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 3, 4, 5):
@@ -92,10 +116,16 @@ fn test_broadcast4() raises:
     fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
         var x = args[0]
         x = nabla.broadcast_to(x, (4, 5, 2, 3))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(4, 5, 2, 3):
@@ -110,10 +140,16 @@ fn test_broadcast5() raises:
         var x = args[0]
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.broadcast_to(x, (4, 5, 3))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 4, 5, 3):
@@ -129,10 +165,16 @@ fn test_broadcast6() raises:
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.broadcast_to(x, (4, 5))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 3, 4, 5):
@@ -146,10 +188,16 @@ fn test_reshape0() raises:
     fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
         var x = args[0]
         x = nabla.reshape(x, (2, 3, 4, 5))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((6, 20))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 3, 4, 5):
@@ -164,10 +212,16 @@ fn test_reshape1() raises:
         var x = args[0]
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.reshape(x, (4, 5))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((6, 20))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(6, 4, 5):
@@ -183,10 +237,16 @@ fn test_reshape2() raises:
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.reshape(x, (1, 1))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((6, 20))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(6, 20, 1, 1):
@@ -200,10 +260,16 @@ fn test_reshape3() raises:
     fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
         var x = args[0]
         x = nabla.reshape(x, (120,))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((6, 20))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(
@@ -219,10 +285,16 @@ fn test_squeeze0() raises:
     fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
         var x = args[0]
         x = nabla.squeeze(x, List(0))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((1, 2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 3, 4):
@@ -237,10 +309,16 @@ fn test_squeeze1() raises:
         var x = args[0]
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.squeeze(x, List(0))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 1, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 3, 4):
@@ -256,10 +334,16 @@ fn test_squeeze2() raises:
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.squeeze(x, List(0))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 1, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 3, 4):
@@ -276,10 +360,16 @@ fn test_squeeze3() raises:
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.squeeze(x, List(0))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4, 1))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 3, 4):
@@ -293,10 +383,16 @@ fn test_unsqueeze0() raises:
     fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
         var x = args[0]
         x = nabla.unsqueeze(x, List(0))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(1, 2, 3, 4):
@@ -311,10 +407,16 @@ fn test_unsqueeze1() raises:
         var x = args[0]
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.unsqueeze(x, List(0))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 1, 3, 4):
@@ -330,10 +432,16 @@ fn test_unsqueeze2() raises:
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.unsqueeze(x, List(0))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 3, 1, 4):
@@ -350,10 +458,16 @@ fn test_unsqueeze3() raises:
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.unsqueeze(x, List(0))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 3, 4, 1):
@@ -367,10 +481,16 @@ fn test_slice0() raises:
     fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
         var x = args[0]
         x = x[1:2]
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(1, 3, 4):
@@ -385,10 +505,16 @@ fn test_slice1() raises:
         var x = args[0]
         x = nabla.incr_batch_dim_ctr(x)
         x = x[1:3]
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 2, 4):
@@ -404,10 +530,16 @@ fn test_slice2() raises:
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.incr_batch_dim_ctr(x)
         x = x[0:2]
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3, 4))
-    var res = test_func(List(x))[0]
+    var res = test_func(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 3, 2):
@@ -421,11 +553,22 @@ fn test_broadcast_vjp0() raises:
     fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
         var x = args[0]
         x = nabla.broadcast_to(x, (4, 2, 3))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3))
     var tangent = nabla.ones((4, 2, 3))
-    var res = nabla.vjp(test_func, List(x))[1](List(tangent))[0]
+    var res = nabla.vjp(
+        test_func,
+        [
+            x,
+        ],
+    )[1](
+        [
+            tangent,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 3):
@@ -440,12 +583,23 @@ fn test_broadcast_vjp1() raises:
         var x = args[0]
         x = nabla.incr_batch_dim_ctr(x)
         x = nabla.broadcast_to(x, (4, 3))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3))
     var tangent = nabla.ones((2, 4, 3))
     tangent = nabla.incr_batch_dim_ctr(tangent)
-    var res = nabla.vjp(test_func, List(x))[1](List(tangent))[0]
+    var res = nabla.vjp(
+        test_func,
+        [
+            x,
+        ],
+    )[1](
+        [
+            tangent,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 3):
@@ -459,12 +613,23 @@ fn test_broadcast_vjp2() raises:
     fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
         var x = args[0]
         x = nabla.broadcast_to(x, (4, 2, 3))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3))
     var tangent = nabla.ones((2, 4, 2, 3))
     tangent = nabla.incr_batch_dim_ctr(tangent)
-    var res = nabla.vjp(test_func, List(x))[1](List(tangent))[0]
+    var res = nabla.vjp(
+        test_func,
+        [
+            x,
+        ],
+    )[1](
+        [
+            tangent,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 2, 3):
@@ -478,10 +643,16 @@ fn test_broadcast_jacrev0() raises:
     fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
         var x = args[0]
         x = nabla.broadcast_to(x, (4, 2, 3))
-        return List(x)
+        return [
+            x,
+        ]
 
     var x = nabla.arange((2, 3))
-    var res = nabla.jacrev(test_func)(List(x))[0]
+    var res = nabla.jacrev(test_func)(
+        [
+            x,
+        ]
+    )[0]
     _ = res.load(0)
 
     if res.shape() == List(4, 2, 3, 2, 3):

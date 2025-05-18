@@ -96,7 +96,7 @@ struct Array(Copyable, Movable, Writable, Stringable, Representable):
         self.device_array[].backward(remat)
 
     fn item[
-        type: DType = DType.float32
+        type: DType = DType.float64
     ](
         self, execution_context: Optional[ExecutionContext] = None
     ) raises -> Scalar[type]:

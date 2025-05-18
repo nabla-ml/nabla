@@ -23,7 +23,7 @@ fn test_binary_op0() raises:
 
     var x = nabla.arange((2, 3, 4))
     var y = nabla.arange((2, 3, 4))
-    var res = test_func(List(x, y))[0]
+    var res = test_func([x, y])[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 3, 4):
@@ -44,7 +44,7 @@ fn test_binary_op1() raises:
 
     var x = nabla.arange((2, 3, 4))
     var y = nabla.arange((2, 3, 4))
-    var res = test_func(List(x, y))[0]
+    var res = test_func([x, y])[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 3, 4):
@@ -67,7 +67,7 @@ fn test_binary_op2() raises:
 
     var x = nabla.arange((2, 3, 4))
     var y = nabla.arange((2, 3, 4))
-    var res = test_func(List(x, y))[0]
+    var res = test_func([x, y])[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 3, 4):
@@ -92,7 +92,7 @@ fn test_binary_op3() raises:
 
     var x = nabla.arange((2, 3, 4))
     var y = nabla.arange((2, 3, 4))
-    var res = test_func(List(x, y))[0]
+    var res = test_func([x, y])[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 3, 4):
@@ -112,7 +112,7 @@ fn test_binary_op4() raises:
 
     var x = nabla.arange((3, 4))
     var y = nabla.arange((2, 3, 4))
-    var res = test_func(List(x, y))[0]
+    var res = test_func([x, y])[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 3, 4):
@@ -133,7 +133,7 @@ fn test_binary_op5() raises:
 
     var x = nabla.arange((4,))
     var y = nabla.arange((2, 3, 4))
-    var res = test_func(List(x, y))[0]
+    var res = test_func([x, y])[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 3, 4):
@@ -153,7 +153,7 @@ fn test_binary_op6() raises:
 
     var x = nabla.arange((2, 4))
     var y = nabla.arange((3, 4))
-    var res = test_func(List(x, y))[0]
+    var res = test_func([x, y])[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 3, 4):
@@ -175,7 +175,7 @@ fn test_binary_op7() raises:
 
     var x = nabla.arange((2, 3))
     var y = nabla.arange((3, 4))
-    var res = test_func(List(x, y))[0]
+    var res = test_func([x, y])[0]
     _ = res.load(0)
 
     if res.shape() == List(2, 3, 4):
