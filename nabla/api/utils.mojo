@@ -11,10 +11,13 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-from memory import ArcPointer
+from memory import ArcPointer, memcpy
 from collections import Dict
 from nabla.engine.utils import TrafoMeta, GraphRepr, Callable
 from nabla.compiler.engine import Model
+from nabla.core.device_array import DeviceArray
+from nabla.engine.executor import Executor
+from python import Python, PythonObject
 
 
 alias none: Int = -55555
@@ -49,3 +52,35 @@ fn xpr(callable: Callable) raises -> GraphRepr:
 
 fn xpr(func: fn (List[Array]) raises -> List[Array]) raises -> GraphRepr:
     return GraphRepr(jit(func))
+
+
+def realize(
+    mut args: List[Array], ctx: Optional[ExecutionContext] = None
+) -> None:
+    var outs = List[DeviceArray]()
+    for array in args:
+        outs.append(array[].device_array[])
+    executor = Executor(outs, ctx)
+    executor.realize()
+
+
+def realize(mut args: Array, ctx: Optional[ExecutionContext] = None) -> None:
+    var outs = List(args)
+    realize(outs, ctx)
+
+
+fn to_numpy(input: nabla.Array) raises -> PythonObject:
+    var np = Python.import_module("numpy")
+    var num_elements = 1
+    for dim in input.shape():
+        num_elements *= dim[]
+    array = np.zeros(Python.list(input.shape()), dtype=np.float32)
+    var dst = array.__array_interface__["data"][0].unsafe_get_as_pointer[
+        DType.float32
+    ]()
+    var src = input.device_array[].impl[]._data.bitcast[Scalar[DType.float32]]()
+    var length = 1
+    for dim in input.shape():
+        length *= dim[]
+    memcpy(dst, src, length)
+    return array

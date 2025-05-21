@@ -77,6 +77,12 @@ struct Array(Copyable, Movable, Writable, Stringable, Representable):
     fn requires_grad_(mut self, value: Bool = True) raises -> None:
         self.device_array[].requires_grad_(value)
 
+    fn num_elements(self) raises -> Int:
+        var num_elements = 1
+        for dim in self.shape():
+            num_elements *= dim[]
+        return num_elements
+
     fn shape(self) raises -> List[Int]:
         return self.device_array[].shape()
 

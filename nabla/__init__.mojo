@@ -55,4 +55,4 @@ from nabla.api.ops import (
     backward,
 )
 from nabla.api.functional import vjp, jvp, jacfwd, jacrev, vmap, jit, grad
-from nabla.api.utils import none, ExecutionContext, xpr
+from nabla.api.utils import none, ExecutionContext, xpr, realize, to_numpy

@@ -26,6 +26,7 @@ from .jvp_vjp import *
 from .jvp_vmap import *
 from .jvp import *
 from .motree import *
+from .simple_animation import *
 from .vjp_jvp import *
 from .vjp_vjp import *
 from .vjp_vmap import *
