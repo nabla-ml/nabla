@@ -127,7 +127,9 @@ struct Executor(Copyable, Movable, Stringable, Writable):
         for i in range(max_output.rank()):
             var dim = max_output.shape()[i]
             shape.append(dim)
-        var ptr = max_output._take_data_ptr().bitcast[Scalar[DType.uint8]]()
+        var ptr = max_output._take_data_ptr().bitcast[
+            NoneType
+        ]()  # Scalar[DType.uint8]]()
         var spec = TensorSpec(dtype, shape)
         self.outputs[i].impl[]._data = ptr
         self.outputs[i].impl[].spec = spec

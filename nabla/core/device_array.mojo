@@ -24,6 +24,12 @@ from .utils import ShapeType, getshape, compact_dtype_repr
 from nabla.engine.trafos.vjp_trafo import backward
 from nabla.engine.executor import Executor
 
+from nabla.compiler.driver._driver_library import DriverLibrary
+from nabla.compiler.driver._status import Status
+from nabla.compiler.driver.anytensor import AnyTensor
+from nabla.compiler.driver.device import Device, _CDevice
+from nabla.compiler.driver import cpu, DeviceTensor, DeviceMemory
+
 
 from nabla.ops.binary_ops import (
     add,
@@ -101,7 +107,7 @@ struct ArrayImpl(Copyable, Movable):
     var _batch_dim_ctr: Int
     var runtime_info: List[List[Int]]
     var _args: List[ArcPointer[Self]]
-    var _data: UnsafePointer[Scalar[DType.uint8]]
+    var _data: UnsafePointer[NoneType]
     var _visited: Bool
     var _max_symbol: Optional[Symbol]
     var _diffable: Bool
@@ -126,6 +132,7 @@ struct ArrayImpl(Copyable, Movable):
     var _dual: List[ArcPointer[Self]]
     var tmp_name: String
     var custom_kernel_path: Optional[String]
+    var device: Device
 
     fn __init__(
         out self,
@@ -133,21 +140,40 @@ struct ArrayImpl(Copyable, Movable):
         dtype: DType,
         requires_pullback: Bool,
         execution_context: Optional[ExecutionContext],
-        owned ptr: UnsafePointer[Scalar[DType.uint8]],
+        init_ptr: Bool = True,
         _maxpr: Optional[
             fn (List[Symbol], DeviceArray) raises -> Symbol
         ] = None,
         name: String = "",
+        device_name: String = "cpu",
     ) raises:
         self.id = -1
         self.spec = TensorSpec(dtype, shape)
         self.runtime_info = List[List[Int]]()
-        if ptr != UnsafePointer[Scalar[DType.uint8]]():
-            self._data = ptr
+        # if ptr != UnsafePointer[Scalar[DType.uint8]]():
+        #     self._data = ptr
+        # else:
+        #     self._data = UnsafePointer[Scalar[DType.uint8]].alloc(
+        #         self.spec.bytecount()
+        #     )
+
+        if device_name == "cpu":
+            self.device = cpu()
         else:
-            self._data = UnsafePointer[Scalar[DType.uint8]].alloc(
-                self.spec.bytecount()
+            raise "Non-cpu device not supported yet"
+
+        if init_ptr:
+            var status = Status(self.device._lib.value())
+            # CAUTION: this assumes that TensorSpec is bitwise identical in mojo and cpp
+            self._data = self.device._lib.value().create_device_memory_fn(
+                UnsafePointer[TensorSpec](to=self.spec),
+                self.device._cdev._ptr,
+                status.impl,
             )
+            if status:
+                raise String(status)
+        else:
+            self._data = UnsafePointer[NoneType]()
         self.tangents = List[ArcPointer[Self]]()
         self.cotangent = List[ArcPointer[Self]]()
         self._args = List[ArcPointer[Self]]()
@@ -178,7 +204,7 @@ struct ArrayImpl(Copyable, Movable):
         self.tmp_name = ""
         self.custom_kernel_path = None
 
-    fn __copyinit__(out self, read other: Self):
+    fn __copyinit__(out self: Self, read other: Self):
         self.id = other.id
         self.name = other.name
         self.spec = other.spec
@@ -192,10 +218,18 @@ struct ArrayImpl(Copyable, Movable):
         self._batch_dim_ctr = other._batch_dim_ctr
         self.runtime_info = other.runtime_info
         self._args = other._args
-        self._data = UnsafePointer[Scalar[DType.uint8]].alloc(
-            self.spec.bytecount()
+        self.device = other.device
+        var status = Status(self.device._lib.value())
+        # CAUTION: this assumes that TensorSpec is bitwise identical in mojo and cpp
+        self._data = self.device._lib.value().create_device_memory_fn(
+            UnsafePointer[TensorSpec](to=self.spec),
+            self.device._cdev._ptr,
+            status.impl,
         )
-        memcpy(self._data, other._data, self.spec.bytecount())
+        self.device._lib.value().copy_device_memory_fn(
+            self._data, other._data, status.impl
+        )
+
         self._visited = other._visited
         self._max_symbol = None
         self._diffable = other._diffable
@@ -210,6 +244,19 @@ struct ArrayImpl(Copyable, Movable):
         self._dual = List[ArcPointer[Self]]()
         self.tmp_name = other.tmp_name
         self.custom_kernel_path = other.custom_kernel_path
+
+    # fn move_to(self, device: Device) raises -> Self:
+    #     var moved = Self(
+    #         self.shape,
+    #         self.dtype,
+    #         self.requires_pullback,
+    #         self.execution_context,
+    #         UnsafePointer[Scalar[DType.uint8]](),
+    #         None,
+    #         self.name,
+    #     )
+    #     moved.copy(self, device)
+    #     return moved
 
     fn __moveinit__(out self, owned other: Self):
         self.id = other.id
@@ -225,10 +272,26 @@ struct ArrayImpl(Copyable, Movable):
         self._batch_dim_ctr = other._batch_dim_ctr
         self.runtime_info = other.runtime_info
         self._args = other._args
-        self._data = UnsafePointer[Scalar[DType.uint8]].alloc(
-            self.spec.bytecount()
-        )
-        memcpy(self._data, other._data, self.spec.bytecount())
+        # self._data = UnsafePointer[Scalar[DType.uint8]].alloc(
+        #     self.spec.bytecount()
+        # )
+        # memcpy(self._data, other._data, self.spec.bytecount())
+        var device = other.device
+        var status = Status(device._lib.value())
+        # CAUTION: this assumes that TensorSpec is bitwise identical in mojo and cpp
+        # self._data = device._lib.value().create_device_memory_fn(
+        #     UnsafePointer[TensorSpec](to=self.spec),
+        #     device._cdev._ptr,
+        #     status.impl,
+        # )
+        # memcpy(
+        #     self._data,
+        #     other._data,
+        #     self.spec.bytecount(),
+        # )
+        self._data = other._data
+        other._data = UnsafePointer[NoneType]()
+
         self._visited = other._visited
         self._max_symbol = None
         self._diffable = other._diffable
@@ -243,9 +306,10 @@ struct ArrayImpl(Copyable, Movable):
         self._dual = List[ArcPointer[Self]]()
         self.tmp_name = other.tmp_name
         self.custom_kernel_path = other.custom_kernel_path
+        self.device = other.device
 
-    fn __del__(owned self):
-        self._data.free()
+    # fn __del__(owned self):
+    #     self._data.free()
 
 
 @value
@@ -258,9 +322,11 @@ struct DeviceArray(Copyable, Movable, Writable, Stringable, Representable):
         dtype: DType,
         requires_pullback: Bool = False,
         execution_context: Optional[ExecutionContext] = None,
-        ptr: UnsafePointer[Scalar[DType.uint8]] = UnsafePointer[
-            Scalar[DType.uint8]
-        ](),
+        # ptr: UnsafePointer[NoneType] = UnsafePointer[
+        #     # Scalar[DType.uint8]
+        #     NoneType
+        # ](),
+        init_ptr: Bool = True,
         _maxpr: Optional[
             fn (List[Symbol], DeviceArray) raises -> Symbol
         ] = None,
@@ -272,7 +338,8 @@ struct DeviceArray(Copyable, Movable, Writable, Stringable, Representable):
                 dtype,
                 requires_pullback,
                 execution_context,
-                ptr,
+                # ptr,
+                init_ptr,
                 _maxpr,
                 name,
             )
@@ -349,13 +416,34 @@ struct DeviceArray(Copyable, Movable, Writable, Stringable, Representable):
     fn has_custom_kernel(self) -> Bool:
         return self.impl[].custom_kernel_path != None
 
+    fn move_to(self, device: Device) raises -> Self:
+        return self
+
     fn to_max[dtype: DType](self) raises -> Tensor[dtype]:
         var s = self
         s.realize()
         var max_array = Tensor[dtype](self.impl[].spec)
-        var max_array_ptr = max_array.unsafe_uint8_ptr()
-        memcpy(max_array_ptr, self.impl[]._data, self.impl[].spec.bytecount())
+        # var max_array_ptr = max_array.unsafe_uint8_ptr()
+        # memcpy(max_array_ptr, self.impl[]._data, self.impl[].spec.bytecount())
+        memcpy(
+            max_array.unsafe_uint8_ptr(),
+            self.impl[]._data.bitcast[Scalar[DType.uint8]](),
+            self.impl[].spec.bytecount(),
+        )
         return max_array
+
+    fn to_device_tensor(self) raises -> DeviceTensor:
+        var s = self
+        s.realize()
+        var device_tensor = DeviceTensor(
+            self.impl[].spec, self.impl[].device, String("")
+        )
+        memcpy(
+            device_tensor.unsafe_ptr().bitcast[Scalar[DType.uint8]](),
+            self.impl[]._data.bitcast[Scalar[DType.uint8]](),
+            self.impl[].spec.bytecount(),
+        )
+        return device_tensor
 
     fn tangent(self) raises -> DeviceArray:
         if len(self.impl[].tangents) == 0:

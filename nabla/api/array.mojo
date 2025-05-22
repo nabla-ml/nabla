@@ -18,6 +18,8 @@ from nabla.core.device_array import DeviceArray
 from nabla.api.utils import ExecutionContext
 from nabla.core.utils import ShapeType
 import nabla.core.device_array as devarr
+from nabla.compiler.tensor import Tensor
+from nabla.compiler.driver import DeviceTensor
 
 
 @value
@@ -97,6 +99,12 @@ struct Array(Copyable, Movable, Writable, Stringable, Representable):
 
     fn batch_dim_ctr_(mut self, value: Int) raises -> None:
         self.device_array[].batch_dim_ctr_(value)
+
+    fn to_max[dtype: DType](self) raises -> Tensor[dtype]:
+        return self.device_array[].to_max[dtype]()
+
+    fn to_device_tensor(self) raises -> DeviceTensor:
+        return self.device_array[].to_device_tensor()
 
     fn backward(mut self, remat: Bool = False) raises -> None:
         self.device_array[].backward(remat)
