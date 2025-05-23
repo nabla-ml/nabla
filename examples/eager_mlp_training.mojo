@@ -19,9 +19,9 @@ import nabla
 def test_simple_nn():
     batch_size = 128
 
-    layers = [1, 64, 128, 128, 64, 1]
+    layers = [1, 64, 128, 512, 512, 512, 128, 64, 1]
     every = 100
-    iterations = 400
+    iterations = 4000
 
     periods = 8
     lr = 0.01

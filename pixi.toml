@@ -2,12 +2,12 @@
 authors = ["TilliFe"]
 channels = ["https://conda.modular.com/max-nightly", "https://conda.modular.com/max", "https://repo.prefix.dev/modular-community", "conda-forge"]
 name = "nabla"
-platforms = ["osx-arm64"]
+platforms = ["osx-arm64", "linux-64"]
 version = "25.4.0"
 
 [tasks]
 
 [dependencies]
-max = ">=25.4.0.dev2025051505,<26"
+max = ">=25.4.0.dev2025052219,<26"
 numpy = ">=2.2.6,<3"
 matplotlib = ">=3.10.3,<4"

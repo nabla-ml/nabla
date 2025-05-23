@@ -16,8 +16,8 @@ from examples import *
 
 
 def main():
-    print("\033[1;31m\nANIMATION\033[0m")
-    test_animation()
+    # print("\033[1;31m\nANIMATION\033[0m")
+    # test_animation()
 
     # print("\033[1;33m\nCUSTOM OP WITH CUSTOM KERNEL\033[0m")
     # test_custom_op_with_custom_kernel()
@@ -28,8 +28,8 @@ def main():
     # print("\033[1;95m\nBACKWARD EAGER MODE\033[0m")
     # test_backward_eager_mode()
 
-    # print("\033[1;32m\nSIMPLE NN\033[0m")
-    # test_simple_nn()
+    print("\033[1;32m\nSIMPLE NN\033[0m")
+    test_simple_nn()
 
     # print("\033[1;35m\nVMAP\033[0m")
     # test_vmap()
