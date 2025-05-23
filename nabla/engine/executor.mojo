@@ -12,11 +12,12 @@
 # ===----------------------------------------------------------------------=== #
 
 
-from memory import ArcPointer
+from memory import ArcPointer, memcpy
 from collections import Dict
 from pathlib import Path
 from nabla.compiler.graph import Symbol, Graph, Type, Dim, TensorType
 from nabla.compiler.engine import InferenceSession, Model, TensorMap
+from nabla.compiler.driver import DeviceMemory
 from nabla.compiler.tensor import TensorSpec
 from memory import ArcPointer
 from utils import Variant
@@ -122,14 +123,19 @@ struct Executor(Copyable, Movable, Stringable, Writable):
         dtype: DType
     ](mut self, i: Int, max_outputs: TensorMap) raises:
         var max_output = max_outputs.get[dtype]("output" + String(i))
-        self.outputs[i].impl[]._data.free()
+        # self.outputs[i].impl[]._data.free()
         var shape = List[Int]()
         for i in range(max_output.rank()):
             var dim = max_output.shape()[i]
             shape.append(dim)
-        var ptr = max_output._take_data_ptr().bitcast[Scalar[DType.uint8]]()
+        var ptr = max_output._take_data_ptr().bitcast[NoneType]()
         var spec = TensorSpec(dtype, shape)
-        self.outputs[i].impl[]._data = ptr
+        self.outputs[i].impl[].ptr = ArcPointer(DeviceMemory(spec.bytecount(), self.outputs[i].impl[].device))
+        memcpy(
+            self.outputs[i].impl[].ptr[].unsafe_ptr().bitcast[Scalar[DType.uint8]](),
+            ptr.bitcast[Scalar[DType.uint8]](),
+            spec.bytecount(),
+        )
         self.outputs[i].impl[].spec = spec
         self.outputs[i].dtype_(dtype)
         self.outputs[i].impl[].shape = shape
@@ -142,7 +148,7 @@ struct Executor(Copyable, Movable, Stringable, Writable):
         name: String,
         array_map: TensorMap,
     ) raises -> None:
-        var ptr = input.impl[]._data.bitcast[SIMD[dtype, 1]]()
+        var ptr = input.impl[].ptr[].unsafe_ptr().bitcast[SIMD[dtype, 1]]()
         array_map.borrow[dtype](
             name,
             input.impl[].spec,

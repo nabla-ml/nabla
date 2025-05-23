@@ -47,6 +47,7 @@ fn generic_setup(
         dtype=dtype,
         requires_pullback=diffable,
         execution_context=execution_context,
+        init_ptr=False,
         name="{" + String(batch_dim_ctr) + "}" + name + "(" + arg_string + ")",
     )
     res.batch_dim_ctr_(batch_dim_ctr)
