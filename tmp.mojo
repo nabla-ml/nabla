@@ -6,7 +6,7 @@ from nabla.compiler.tensor import TensorSpec
 import nabla
 
 
-def test_device_tensor():
+def main():
     host_device = cpu()
     gpu_device = cpu()  # accelerator()
 

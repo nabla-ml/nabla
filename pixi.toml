@@ -2,7 +2,7 @@
 authors = ["TilliFe"]
 channels = ["https://conda.modular.com/max-nightly", "https://conda.modular.com/max", "https://repo.prefix.dev/modular-community", "conda-forge"]
 name = "nabla"
-platforms = ["osx-arm64"]
+platforms = ["osx-arm64", "linux-64"]
 version = "25.4.0"
 
 [tasks]
