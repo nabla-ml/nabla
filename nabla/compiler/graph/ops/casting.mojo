@@ -11,7 +11,7 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 """Ops that modify the shape or data type of a symbolic tensor."""
-from collections import Dict, Optional
+# from collections import Dict, Optional
 
 from _mlir.builtin_attributes import StringAttr
 from _mlir.ir import Identifier, NamedAttribute

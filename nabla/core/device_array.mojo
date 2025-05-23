@@ -12,7 +12,7 @@
 # ===----------------------------------------------------------------------=== #
 
 from memory import memset_zero, ArcPointer, UnsafePointer, memcpy
-from collections import Dict, Optional
+# from collections import Dict, Optional
 from nabla.compiler.graph import Symbol
 from nabla.compiler.tensor import TensorSpec, Tensor
 import random
@@ -276,9 +276,11 @@ struct ArrayImpl(Copyable, Movable):
         #     self.spec.bytecount()
         # )
         # memcpy(self._data, other._data, self.spec.bytecount())
-        var device = other.device
-        var status = Status(device._lib.value())
+        
+        # var device = other.device
+        
         # CAUTION: this assumes that TensorSpec is bitwise identical in mojo and cpp
+        # var status = Status(device._lib.value())
         # self._data = device._lib.value().create_device_memory_fn(
         #     UnsafePointer[TensorSpec](to=self.spec),
         #     device._cdev._ptr,
@@ -289,6 +291,7 @@ struct ArrayImpl(Copyable, Movable):
         #     other._data,
         #     self.spec.bytecount(),
         # )
+        # TODO: which one to use here? the above or the below (the below seems more correct)
         self._data = other._data
         other._data = UnsafePointer[NoneType]()
 
@@ -308,8 +311,9 @@ struct ArrayImpl(Copyable, Movable):
         self.custom_kernel_path = other.custom_kernel_path
         self.device = other.device
 
-    # fn __del__(owned self):
-    #     self._data.free()
+    fn __del__(owned self):
+        self._data.free()
+    # TODO: Is the freeing still needed???
 
 
 @value

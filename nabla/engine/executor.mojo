@@ -13,7 +13,7 @@
 
 
 from memory import ArcPointer
-from collections import Dict
+# from collections import Dict
 from pathlib import Path
 from nabla.compiler.graph import Symbol, Graph, Type, Dim, TensorType
 from nabla.compiler.engine import InferenceSession, Model, TensorMap

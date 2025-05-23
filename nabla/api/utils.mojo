@@ -12,7 +12,7 @@
 # ===----------------------------------------------------------------------=== #
 
 from memory import ArcPointer, memcpy
-from collections import Dict
+# from collections import Dict
 from nabla.engine.utils import TrafoMeta, GraphRepr, Callable
 from nabla.compiler.engine import Model
 from nabla.core.device_array import DeviceArray

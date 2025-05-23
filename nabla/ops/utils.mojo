@@ -12,7 +12,7 @@
 # ===----------------------------------------------------------------------=== #
 
 
-from collections import Dict, Optional
+# from collections import Dict, Optional
 from nabla.core.device_array import DeviceArray, ArrayImpl
 from nabla.ops.view_ops import broadcast_to, unsqueeze
 from nabla.ops.unary_ops import incr_batch_dim_ctr, decr_batch_dim_ctr

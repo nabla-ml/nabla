@@ -11,7 +11,7 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 """Structs used for maintaining a collection of tensors."""
-from collections import Dict
+# from collections import Dict
 from collections.dict import _DictEntryIter, _DictKeyIter
 
 from nabla.compiler.tensor import Tensor, TensorSpec

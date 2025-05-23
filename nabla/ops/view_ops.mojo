@@ -12,7 +12,7 @@
 # ===----------------------------------------------------------------------=== #
 
 
-from collections import Dict
+# from collections import Dict
 
 from nabla.core.device_array import DeviceArray, ArrayImpl, zeros
 from nabla.core.utils import getshape, ShapeType
