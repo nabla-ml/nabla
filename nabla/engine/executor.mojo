@@ -130,9 +130,15 @@ struct Executor(Copyable, Movable, Stringable, Writable):
             shape.append(dim)
         var ptr = max_output._take_data_ptr().bitcast[NoneType]()
         var spec = TensorSpec(dtype, shape)
-        self.outputs[i].impl[].ptr = ArcPointer(DeviceMemory(spec.bytecount(), self.outputs[i].impl[].device))
+        self.outputs[i].impl[].ptr = ArcPointer(
+            DeviceMemory(spec.bytecount(), self.outputs[i].impl[].device)
+        )
         memcpy(
-            self.outputs[i].impl[].ptr[].unsafe_ptr().bitcast[Scalar[DType.uint8]](),
+            self.outputs[i]
+            .impl[]
+            .ptr[]
+            .unsafe_ptr()
+            .bitcast[Scalar[DType.uint8]](),
             ptr.bitcast[Scalar[DType.uint8]](),
             spec.bytecount(),
         )

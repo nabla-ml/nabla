@@ -78,7 +78,9 @@ fn to_numpy(input: nabla.Array) raises -> PythonObject:
     var dst = array.__array_interface__["data"][0].unsafe_get_as_pointer[
         DType.float32
     ]()
-    var src = input.device_array[].impl[]._data.bitcast[Scalar[DType.float32]]()
+    var src = input.device_array[].impl[].ptr[].unsafe_ptr().bitcast[
+        Scalar[DType.float32]
+    ]()
     var length = 1
     for dim in input.shape():
         length *= dim[]

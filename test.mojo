@@ -2,7 +2,6 @@ from memory import ArcPointer, UnsafePointer
 from nabla.compiler.driver import DeviceMemory, accelerator, cpu
 import nabla 
 
-
 def main():
     # var cpu_device = cpu()
     # var gpu_device = accelerator()

@@ -8,6 +8,6 @@ version = "25.4.0"
 [tasks]
 
 [dependencies]
-max = ">=25.4.0.dev2025052219,<26"
+max = ">=25.4.0.dev2025052318,<26"
 numpy = ">=2.2.6,<3"
 matplotlib = ">=3.10.3,<4"

@@ -18,7 +18,13 @@ from nabla.compiler.tensor import TensorSpec, Tensor
 import random
 import math
 from utils import Variant
-from nabla.compiler.driver import DeviceMemory, accelerator, cpu, Device, DeviceTensor
+from nabla.compiler.driver import (
+    DeviceMemory,
+    accelerator,
+    cpu,
+    Device,
+    DeviceTensor,
+)
 
 from nabla.api.utils import ExecutionContext
 from .utils import ShapeType, getshape, compact_dtype_repr
@@ -137,7 +143,7 @@ struct ArrayImpl(Copyable, Movable):
         requires_pullback: Bool,
         execution_context: Optional[ExecutionContext],
         # owned ptr: UnsafePointer[Scalar[DType.uint8]],
-        init_ptr: Bool = True,
+        # init_ptr: Bool = True,
         _maxpr: Optional[
             fn (List[Symbol], DeviceArray) raises -> Symbol
         ] = None,
@@ -154,11 +160,11 @@ struct ArrayImpl(Copyable, Movable):
         #         self.spec.bytecount()
         #     )
         self.device = cpu() if device == "cpu" else accelerator()
-        if init_ptr:
-            self.ptr = ArcPointer(DeviceMemory(self.spec.bytecount(), self.device))
-            # memset_zero(self.ptr[].unsafe_ptr(), self.spec.bytecount())
-        else:
-            self.ptr = ArcPointer(DeviceMemory(0, self.device))
+        # if init_ptr:
+        self.ptr = ArcPointer(DeviceMemory(self.spec.bytecount(), self.device))
+        # memset_zero(self.ptr[].unsafe_ptr(), self.spec.bytecount())
+        # else:
+        #     self.ptr = ArcPointer(DeviceMemory(0, self.device))
         self.tangents = List[ArcPointer[Self]]()
         self.cotangent = List[ArcPointer[Self]]()
         self._args = List[ArcPointer[Self]]()
@@ -267,7 +273,7 @@ struct ArrayImpl(Copyable, Movable):
         self.device = other.device
 
     # fn __del__(owned self):
-    #     self.ptr.unsafe_ptr().free()
+    #     self.ptr[].unsafe_ptr().free()
 
 
 @value
@@ -283,7 +289,7 @@ struct DeviceArray(Copyable, Movable, Writable, Stringable, Representable):
         # ptr: UnsafePointer[Scalar[DType.uint8]] = UnsafePointer[
         #     Scalar[DType.uint8]
         # ](),
-        init_ptr: Bool = True,
+        # init_ptr: Bool = True,
         _maxpr: Optional[
             fn (List[Symbol], DeviceArray) raises -> Symbol
         ] = None,
@@ -295,7 +301,7 @@ struct DeviceArray(Copyable, Movable, Writable, Stringable, Representable):
                 dtype,
                 requires_pullback,
                 execution_context,
-                init_ptr,
+                # init_ptr,
                 _maxpr,
                 name,
             )
@@ -606,84 +612,108 @@ struct DeviceArray(Copyable, Movable, Writable, Stringable, Representable):
         if dtype == type:
             return (
                 self.impl[]
-                .ptr.unsafe_ptr().bitcast[SIMD[type, 1]]()
+                .ptr[]
+                .unsafe_ptr()
+                .bitcast[SIMD[type, 1]]()
                 .load[width=width](idx)
             )
         else:
             if dtype == DType.float16:
                 return (
                     self.impl[]
-                    .ptr.unsafe_ptr().bitcast[SIMD[DType.float16, 1]]()
+                    .ptr[]
+                    .unsafe_ptr()
+                    .bitcast[SIMD[DType.float16, 1]]()
                     .load[width=width](idx)
                     .cast[type]()
                 )
             elif dtype == DType.float32:
                 return (
                     self.impl[]
-                    .ptr.unsafe_ptr().bitcast[SIMD[DType.float32, 1]]()
+                    .ptr[]
+                    .unsafe_ptr()
+                    .bitcast[SIMD[DType.float32, 1]]()
                     .load[width=width](idx)
                     .cast[type]()
                 )
             elif dtype == DType.float64:
                 return (
                     self.impl[]
-                    .ptr.unsafe_ptr().bitcast[SIMD[DType.float64, 1]]()
+                    .ptr[]
+                    .unsafe_ptr()
+                    .bitcast[SIMD[DType.float64, 1]]()
                     .load[width=width](idx)
                     .cast[type]()
                 )
             elif dtype == DType.int8:
                 return (
                     self.impl[]
-                    .ptr.unsafe_ptr().bitcast[SIMD[DType.int8, 1]]()
+                    .ptr[]
+                    .unsafe_ptr()
+                    .bitcast[SIMD[DType.int8, 1]]()
                     .load[width=width](idx)
                     .cast[type]()
                 )
             elif dtype == DType.int16:
                 return (
                     self.impl[]
-                    .ptr.unsafe_ptr().bitcast[SIMD[DType.int16, 1]]()
+                    .ptr[]
+                    .unsafe_ptr()
+                    .bitcast[SIMD[DType.int16, 1]]()
                     .load[width=width](idx)
                     .cast[type]()
                 )
             elif dtype == DType.int32:
                 return (
                     self.impl[]
-                    .ptr.unsafe_ptr().bitcast[SIMD[DType.int32, 1]]()
+                    .ptr[]
+                    .unsafe_ptr()
+                    .bitcast[SIMD[DType.int32, 1]]()
                     .load[width=width](idx)
                     .cast[type]()
                 )
             elif dtype == DType.int64:
                 return (
                     self.impl[]
-                    .ptr.unsafe_ptr().bitcast[SIMD[DType.int64, 1]]()
+                    .ptr[]
+                    .unsafe_ptr()
+                    .bitcast[SIMD[DType.int64, 1]]()
                     .load[width=width](idx)
                     .cast[type]()
                 )
             elif dtype == DType.uint8:
                 return (
                     self.impl[]
-                    .ptr.unsafe_ptr().bitcast[SIMD[DType.uint8, 1]]()
+                    .ptr[]
+                    .unsafe_ptr()
+                    .bitcast[SIMD[DType.uint8, 1]]()
                     .load[width=width](idx)
                     .cast[type]()
                 )
             elif dtype == DType.uint16:
                 return (
                     self.impl[]
-                    .ptr.unsafe_ptr().bitcast[SIMD[DType.uint16, 1]]()
+                    .ptr[]
+                    .unsafe_ptr()
+                    .bitcast[SIMD[DType.uint16, 1]]()
                     .load[width=width](idx)
                     .cast[type]()
                 )
             elif dtype == DType.uint32:
                 return (
                     self.impl[]
-                    .ptr.unsafe_ptr().bitcast[SIMD[DType.uint32, 1]]()
+                    .ptr[]
+                    .unsafe_ptr()
+                    .bitcast[SIMD[DType.uint32, 1]]()
                     .load[width=width](idx)
                     .cast[type]()
                 )
             elif dtype == DType.uint64:
                 return (
                     self.impl[]
-                    .ptr.unsafe_ptr().bitcast[SIMD[DType.uint64, 1]]()
+                    .ptr[]
+                    .unsafe_ptr()
+                    .bitcast[SIMD[DType.uint64, 1]]()
                     .load[width=width](idx)
                     .cast[type]()
                 )
@@ -704,52 +734,54 @@ struct DeviceArray(Copyable, Movable, Writable, Stringable, Representable):
 
         var dtype = self.impl[].spec.dtype()
         if dtype == type:
-            self.impl[].ptr[].unsafe_ptr().bitcast[SIMD[type, 1]]().store(idx, value)
+            self.impl[].ptr[].unsafe_ptr().bitcast[SIMD[type, 1]]().store(
+                idx, value
+            )
         else:
             if dtype == DType.float16:
-                self.impl[].ptr[].unsafe_ptr().bitcast[SIMD[DType.float16, 1]]().store(
-                    idx, value.cast[DType.float16]()
-                )
+                self.impl[].ptr[].unsafe_ptr().bitcast[
+                    SIMD[DType.float16, 1]
+                ]().store(idx, value.cast[DType.float16]())
             elif dtype == DType.float32:
-                self.impl[].ptr[].unsafe_ptr().bitcast[SIMD[DType.float32, 1]]().store(
-                    idx, value.cast[DType.float32]()
-                )
+                self.impl[].ptr[].unsafe_ptr().bitcast[
+                    SIMD[DType.float32, 1]
+                ]().store(idx, value.cast[DType.float32]())
             elif dtype == DType.float64:
-                self.impl[].ptr[].unsafe_ptr().bitcast[SIMD[DType.float64, 1]]().store(
-                    idx, value.cast[DType.float64]()
-                )
+                self.impl[].ptr[].unsafe_ptr().bitcast[
+                    SIMD[DType.float64, 1]
+                ]().store(idx, value.cast[DType.float64]())
             elif dtype == DType.int8:
-                self.impl[].ptr[].unsafe_ptr().bitcast[SIMD[DType.int8, 1]]().store(
-                    idx, value.cast[DType.int8]()
-                )
+                self.impl[].ptr[].unsafe_ptr().bitcast[
+                    SIMD[DType.int8, 1]
+                ]().store(idx, value.cast[DType.int8]())
             elif dtype == DType.int16:
-                self.impl[].ptr[].unsafe_ptr().bitcast[SIMD[DType.int16, 1]]().store(
-                    idx, value.cast[DType.int16]()
-                )
+                self.impl[].ptr[].unsafe_ptr().bitcast[
+                    SIMD[DType.int16, 1]
+                ]().store(idx, value.cast[DType.int16]())
             elif dtype == DType.int32:
-                self.impl[].ptr[].unsafe_ptr().bitcast[SIMD[DType.int32, 1]]().store(
-                    idx, value.cast[DType.int32]()
-                )
+                self.impl[].ptr[].unsafe_ptr().bitcast[
+                    SIMD[DType.int32, 1]
+                ]().store(idx, value.cast[DType.int32]())
             elif dtype == DType.int64:
-                self.impl[].ptr[].unsafe_ptr().bitcast[SIMD[DType.int64, 1]]().store(
-                    idx, value.cast[DType.int64]()
-                )
+                self.impl[].ptr[].unsafe_ptr().bitcast[
+                    SIMD[DType.int64, 1]
+                ]().store(idx, value.cast[DType.int64]())
             elif dtype == DType.uint8:
-                self.impl[].ptr[].unsafe_ptr().bitcast[SIMD[DType.uint8, 1]]().store(
-                    idx, value.cast[DType.uint8]()
-                )
+                self.impl[].ptr[].unsafe_ptr().bitcast[
+                    SIMD[DType.uint8, 1]
+                ]().store(idx, value.cast[DType.uint8]())
             elif dtype == DType.uint16:
-                self.impl[].ptr[].unsafe_ptr().bitcast[SIMD[DType.uint16, 1]]().store(
-                    idx, value.cast[DType.uint16]()
-                )
+                self.impl[].ptr[].unsafe_ptr().bitcast[
+                    SIMD[DType.uint16, 1]
+                ]().store(idx, value.cast[DType.uint16]())
             elif dtype == DType.uint32:
-                self.impl[].ptr[].unsafe_ptr().bitcast[SIMD[DType.uint32, 1]]().store(
-                    idx, value.cast[DType.uint32]()
-                )
+                self.impl[].ptr[].unsafe_ptr().bitcast[
+                    SIMD[DType.uint32, 1]
+                ]().store(idx, value.cast[DType.uint32]())
             elif dtype == DType.uint64:
-                self.impl[].ptr[].unsafe_ptr().bitcast[SIMD[DType.uint64, 1]]().store(
-                    idx, value.cast[DType.uint64]()
-                )
+                self.impl[].ptr[].unsafe_ptr().bitcast[
+                    SIMD[DType.uint64, 1]
+                ]().store(idx, value.cast[DType.uint64]())
             else:
                 raise "Unsupported dtype: " + String(type)
 
