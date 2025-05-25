@@ -23,3 +23,5 @@ htmlcov/
 # Build artifacts specific to some tools
 .eggs/
 *.egg
+
+.magic
