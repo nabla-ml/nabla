@@ -293,66 +293,134 @@ def mul(arg0: Array, arg1: Array) -> Array:
     return res
 
 
-# matmul
 class MatMul:
     @staticmethod
     def maxpr(args: List[Value]) -> Value:
-        """MAX graph implementation of matrix multiplication."""
         if len(args) != 2:
             raise ValueError(f"MatMul operation requires 2 arguments, got {len(args)}")
 
-        # ops.matmul takes in tensor of maxxrank 4, so we mgiht need to reshape first f needed
-        if args[0].shape[-1] != args[1].shape[-2]:
+        x_val, y_val = args[0], args[1]
+        x_shape_orig, y_shape_orig = x_val.shape, y_val.shape
+
+        # K-dimension check (already in calling function, but good for safety)
+        if x_shape_orig[-1] != y_shape_orig[-2]:
             raise ValueError(
-                f"Shapes {args[0].shape} and {args[1].shape} are not compatible for matrix multiplication."
+                f"Shapes {x_shape_orig} and {y_shape_orig} are not compatible for matrix multiplication "
+                f"(K-dimension mismatch: {x_shape_orig[-1]} vs {y_shape_orig[-2]})"
             )
 
-        # reshape arg0 if needed
-        max_rank = max(args[0].rank, args[1].rank)
-        reshape_res = False
-
-        prod = 1
-
-        if args[0].rank > 4:
-            batch_dims = args[0].shape[:-2]
-            prod = np.prod(batch_dims)
-            reshape_res = True
-
-        if args[1].rank > 4:
-            batch_dims = args[1].shape[:-2]
-            prod = max(prod, np.prod(batch_dims))
-            reshape_res = True
-
-        if reshape_res:
-            arg0 = ops.reshape(args[0], (prod, args[0].shape[-2], args[0].shape[-1]))
-            arg1 = ops.reshape(args[1], (prod, args[1].shape[-2], args[1].shape[-1]))
-
-        res_shape = get_broadcasted_shape(
-            arg0.shape,
-            arg1.shape,
+        # 1. Determine the final N-D output shape.
+        # This shape defines the target for broadcasting and the final result.
+        # (M, K) @ (K, N) -> (M, N)
+        # (B, M, K) @ (K, N) -> (B, M, N)
+        # (B1, M, K) @ (B2, K, N) -> (B_broadcasted, M, N) if B1,B2 broadcast.
+        output_shape_tuple = get_broadcasted_shape(
+            x_shape_orig,
+            y_shape_orig,
             ignore_axes=[-2, -1],
-            replace_ignored_dims=[arg0.shape[-2], arg1.shape[-1]],
+            replace_ignored_dims=[x_shape_orig[-2], y_shape_orig[-1]],
         )
 
-        res = ops.matmul(arg0, arg1)
-        # reshape res to the final shape
-        if reshape_res:
-            res = ops.reshape(res, res_shape)
-        return res
+        # Extract relevant dimensions
+        m_dim = output_shape_tuple[-2]
+        n_dim = output_shape_tuple[-1]
+        k_dim = x_shape_orig[-1]  # K from input x
+
+        output_batch_shape = output_shape_tuple[:-2]
+
+        # 2. Broadcast inputs to align with the output_batch_shape.
+        # x_val needs to become shape: output_batch_shape + (m_dim, k_dim)
+        # y_val needs to become shape: output_batch_shape + (k_dim, n_dim)
+
+        x_target_broadcast_shape = output_batch_shape + (m_dim, k_dim)
+        if x_val.shape != x_target_broadcast_shape:
+            x_val_b = ops.broadcast_to(x_val, x_target_broadcast_shape)
+        else:
+            x_val_b = x_val
+
+        y_target_broadcast_shape = output_batch_shape + (k_dim, n_dim)
+        if y_val.shape != y_target_broadcast_shape:
+            y_val_b = ops.broadcast_to(y_val, y_target_broadcast_shape)
+        else:
+            y_val_b = y_val
+
+        # At this point:
+        # x_val_b.shape is output_batch_shape + (m_dim, k_dim)
+        # y_val_b.shape is output_batch_shape + (k_dim, n_dim)
+        # The leading output_batch_shape dimensions are identical for x_val_b and y_val_b.
+
+        # 3. Reshape x_val_b and y_val_b to 4D for ops.matmul: (B_eff1, B_eff2, M, K)
+        num_batch_dims = len(output_batch_shape)
+
+        # Determine target shapes for ops.matmul input
+        shape_for_x_matmul: Shape
+        shape_for_y_matmul: Shape
+
+        if num_batch_dims == 0:  # e.g., (M,K) input -> target (1,1,M,K) for matmul
+            shape_for_x_matmul = (1, 1, m_dim, k_dim)
+            shape_for_y_matmul = (1, 1, k_dim, n_dim)
+        elif num_batch_dims == 1:  # e.g., (B0,M,K) -> target (B0,1,M,K)
+            b0 = int(output_batch_shape[0])
+            shape_for_x_matmul = (b0, 1, m_dim, k_dim)
+            shape_for_y_matmul = (b0, 1, k_dim, n_dim)
+        elif num_batch_dims == 2:  # e.g., (B0,B1,M,K) -> target (B0,B1,M,K) (no change)
+            # x_val_b and y_val_b are already in the desired 4D format
+            shape_for_x_matmul = x_val_b.shape
+            shape_for_y_matmul = y_val_b.shape
+        else:  # num_batch_dims > 2, e.g. (B0,B1,B2,M,K)
+            # Flatten to (prod(B0..Bn-1), Bn, M,K)
+            b_eff_1 = int(np.prod(output_batch_shape[:-1]))
+            b_eff_2 = int(output_batch_shape[-1])
+            shape_for_x_matmul = (b_eff_1, b_eff_2, m_dim, k_dim)
+            shape_for_y_matmul = (b_eff_1, b_eff_2, k_dim, n_dim)
+
+        # Perform the reshape if needed
+        if x_val_b.shape == shape_for_x_matmul:
+            x_for_matmul = x_val_b
+        else:
+            x_for_matmul = ops.reshape(x_val_b, shape_for_x_matmul)
+
+        if y_val_b.shape == shape_for_y_matmul:
+            y_for_matmul = y_val_b
+        else:
+            y_for_matmul = ops.reshape(y_val_b, shape_for_y_matmul)
+
+        # 4. Perform the 4D matrix multiplication.
+        # ops.matmul input shapes: (B_eff1, B_eff2, M, K) and (B_eff1, B_eff2, K, N)
+        # ops.matmul output shape: (B_eff1, B_eff2, M, N)
+        matmul_res_4d = ops.matmul(x_for_matmul, y_for_matmul)
+
+        # 5. Reshape the 4D result back to the true N-D output_shape_tuple.
+        # The shape of matmul_res_4d is (B_eff1_actual, B_eff2_actual, M, N).
+        # We need to reshape it to output_shape_tuple = (BroadcastedBatchDims..., M, N)
+        if matmul_res_4d.shape != output_shape_tuple:
+            final_res = ops.reshape(matmul_res_4d, output_shape_tuple)
+        else:
+            # This condition implies output_shape_tuple was already 4D and matched
+            # the (B_eff1, B_eff2, M, N) form, e.g., num_batch_dims == 2.
+            final_res = matmul_res_4d
+
+        return final_res
 
     @staticmethod
     def eagerxpr(args: List[Array]) -> Array:
         if len(args) != 2:
             raise ValueError(f"MatMul operation requires 2 arguments, got {len(args)}")
-        if args[0].shape[-1] != args[1].shape[-2]:
+
+        arg0_numpy = args[0].get_numpy()
+        arg1_numpy = args[1].get_numpy()
+
+        if arg0_numpy.shape[-1] != arg1_numpy.shape[-2]:
             raise ValueError(
-                f"Shapes {args[0].shape} and {args[1].shape} are not compatible for matrix multiplication."
+                f"Eager MatMul: Shapes {args[0].shape} and {args[1].shape} are not compatible for matrix multiplication."
             )
 
-        np_result = np.matmul(args[0].get_numpy(), args[1].get_numpy())
+        # np.matmul handles N-D broadcasting correctly.
+        np_result = np.matmul(arg0_numpy, arg1_numpy)
         result_data = Tensor.from_numpy(np_result)
+        # The name could be more dynamic if args[0].name etc. are complex
         return Array.from_data(
-            result_data, name=f"matmul({args[0].name},{args[1].name})"
+            result_data, name=f"matmul_eager({args[0].name},{args[1].name})"
         )
 
 
@@ -366,7 +434,12 @@ def matmul(arg0: Array, arg1: Array) -> Array:
         res = MatMul.eagerxpr([arg0, arg1])
     else:
         res = Array(
-            shape=(arg0.shape[-2], arg1.shape[-1]),
+            shape=get_broadcasted_shape(
+                arg0.shape,
+                arg1.shape,
+                ignore_axes=[-2, -1],
+                replace_ignored_dims=[arg0.shape[-2], arg1.shape[-1]],
+            ),
             dtype=arg0.dtype,
             materialize=False,
             name="matmul",
@@ -555,7 +628,6 @@ if __name__ == "__main__":
 
         if iter % 100 == 0:
             print(f"Iteration {iter} completed.")
-
 
 
 # format file via: black graph.py
