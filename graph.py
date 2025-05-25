@@ -24,6 +24,68 @@ EAGERMODE: bool = False
 # Global model cache with proper typing
 global_execution_context: Dict[int, Model] = {}
 
+
+def get_broadcasted_shape(shape1: Shape, shape2: Shape, ignore_axes: List[int] = [], replace_ignored_dims: List[int] = []) -> Shape:
+    if len(replace_ignored_dims) != len(ignore_axes):
+        raise ValueError("replace_ignored_dims must have the same length as ignore_axes")
+
+    s1_len = len(shape1)
+    s2_len = len(shape2)
+    max_rank = max(s1_len, s2_len)
+
+    # Initialize result shape. We'll fill it. Using 1s is a common default for broadcasting.
+    res_shape_list = [1] * max_rank
+
+    # Normalize ignore_axes to positive indices and store their replacement values.
+    # These normalized indices refer to positions in the `max_rank` shape.
+    normalized_ignored_map = {}  # Stores {normalized_idx: replacement_dim}
+
+    for i in range(len(ignore_axes)):
+        axis_spec = ignore_axes[i]
+        replacement_dim = replace_ignored_dims[i]
+
+        # Validate and normalize the axis_spec relative to max_rank
+        if not (-max_rank <= axis_spec < max_rank):
+            raise ValueError(f"ignore_axis {axis_spec} is out of bounds for max_rank {max_rank}")
+
+        normalized_idx = axis_spec if axis_spec >= 0 else max_rank + axis_spec
+
+        # If multiple ignore_axes entries map to the same normalized_idx (e.g. 0 and -max_rank),
+        # the last one in the list will win. This is typical Python dict behavior.
+        normalized_ignored_map[normalized_idx] = replacement_dim
+        res_shape_list[normalized_idx] = replacement_dim
+
+
+    # Pad original shapes with leading 1s to align them to max_rank for broadcasting logic
+    padded_shape1_list = [1] * (max_rank - s1_len) + list(shape1)
+    padded_shape2_list = [1] * (max_rank - s2_len) + list(shape2)
+
+    # Perform broadcasting for non-ignored axes
+    # Iterate from the leftmost dimension of the padded shapes
+    for i in range(max_rank):
+        if i in normalized_ignored_map:
+            # This dimension's value in res_shape_list is already set by replace_ignored_dims
+            continue
+
+        d1 = padded_shape1_list[i]
+        d2 = padded_shape2_list[i]
+
+        if d1 == d2:
+            res_shape_list[i] = d1
+        elif d1 == 1:
+            res_shape_list[i] = d2
+        elif d2 == 1:
+            res_shape_list[i] = d1
+        else:
+            # Dimensions are different and neither is 1, broadcasting error.
+            raise ValueError(
+                f"Shapes {shape1} and {shape2} cannot be broadcast at dimension index {i} "
+                f"(0-indexed from left of max_rank {max_rank} shape). "
+                f"Padded values at this index are {d1} (from shape1) and {d2} (from shape2)."
+            )
+
+    return tuple(res_shape_list)
+
 class Array:
     name: str
     data: Optional[Tensor]
@@ -82,11 +144,6 @@ class Array:
         if self.shape != other.shape or self.dtype != other.dtype:
             raise ValueError("Shape or dtype mismatch for copy")
             
-        # # Copy data in-place
-        # if self.data is not None and other.data is not None:
-        #     np.copyto(self.get_numpy(), other.get_numpy())
-        # else:
-        #     raise ValueError("Both arrays must have data for copy operation")
         self.data = other.data.copy() if other.data is not None else None
         
     def add_argument(self, arg_node: Array) -> None:
@@ -140,24 +197,27 @@ class Add:
         if len(args) != 2:
             raise ValueError(f"Add operation requires 2 arguments, got {len(args)}")
         return args[0] + args[1]
+    
+    @staticmethod
+    def eagerxpr(args: List[Array]) -> Array:
+        if len(args) != 2:
+            raise ValueError(f"Add operation requires 2 arguments, got {len(args)}")
+        if args[0].shape != args[1].shape:
+            raise ValueError(f"Shapes {args[0].shape} and {args[1].shape} are not compatible for addition.")
+        np_result = np.add(args[0].get_numpy(), args[1].get_numpy())
+        result_data = Tensor.from_numpy(np_result)
+        return Array.from_data(result_data, name=f"add({args[0].name},{args[1].name})")
 
 
 def add(arg0: Array, arg1: Array) -> Array:
-    if arg0.shape != arg1.shape:
-        raise ValueError(f"Shapes {arg0.shape} and {arg1.shape} are not compatible for addition.")
+    if arg0.dtype != arg1.dtype:
+        raise ValueError(f"Dtypes {arg0.dtype} and {arg1.dtype} are not compatible for multiplication.")
+    res_shape = get_broadcasted_shape(arg0.shape, arg1.shape)
 
     if EAGERMODE:
-        # Use numpy directly for faster computation
-        try:
-            np_result = np.add(arg0.get_numpy(), arg1.get_numpy())
-            result_data = Tensor.from_numpy(np_result)
-            res = Array.from_data(result_data, name=f"add({arg0.name},{arg1.name})")
-        except (ValueError, TypeError) as e:
-            # Fallback if NumPy operations fail
-            result_data = Tensor.from_numpy(arg0.get_data().to_numpy() + arg1.get_data().to_numpy())
-            res = Array.from_data(result_data, name=f"add({arg0.name},{arg1.name})")
+        res = Add.eagerxpr([arg0, arg1])
     else:
-        res = Array(shape=arg0.shape, dtype=arg0.dtype, materialize=False, name="add")
+        res = Array(shape=res_shape, dtype=arg0.dtype, materialize=False, name="add")
         
     res.add_argument(arg0)
     res.add_argument(arg1)
@@ -172,28 +232,33 @@ class Mul:
         if len(args) != 2:
             raise ValueError(f"Mul operation requires 2 arguments, got {len(args)}")
         return args[0] * args[1]
+    
+    @staticmethod
+    def eagerxpr(args: List[Array]) -> Array:
+        if len(args) != 2:
+            raise ValueError(f"Mul operation requires 2 arguments, got {len(args)}")
+        if args[0].shape != args[1].shape:
+            raise ValueError(f"Shapes {args[0].shape} and {args[1].shape} are not compatible for multiplication.")
+        np_result = np.multiply(args[0].get_numpy(), args[1].get_numpy())
+        result_data = Tensor.from_numpy(np_result)
+        return Array.from_data(result_data, name=f"mul({args[0].name},{args[1].name})")
 
 
 def mul(arg0: Array, arg1: Array) -> Array:
-    if arg0.shape != arg1.shape:
-        raise ValueError(f"Shapes {arg0.shape} and {arg1.shape} are not compatible for multiplication.")
+    if arg0.dtype != arg1.dtype:
+        raise ValueError(f"Dtypes {arg0.dtype} and {arg1.dtype} are not compatible for multiplication.")
+    res_shape = get_broadcasted_shape(arg0.shape, arg1.shape)
     
     if EAGERMODE:
-        try:
-            np_result = np.multiply(arg0.get_numpy(), arg1.get_numpy())
-            result_data = Tensor.from_numpy(np_result)
-            res = Array.from_data(result_data, name=f"mul({arg0.name},{arg1.name})")
-        except (ValueError, TypeError) as e:
-            # Fallback if NumPy operations fail
-            result_data = Tensor.from_numpy(arg0.get_data().to_numpy() * arg1.get_data().to_numpy())
-            res = Array.from_data(result_data, name=f"mul({arg0.name},{arg1.name})")
+        res = Mul.eagerxpr([arg0, arg1])
     else:
-        res = Array(shape=arg0.shape, dtype=arg0.dtype, materialize=False, name="mul")
+        res = Array(shape=res_shape, dtype=arg0.dtype, materialize=False, name="mul")
         
     res.add_argument(arg0)
     res.add_argument(arg1)
     res.set_maxpr(Mul.maxpr)
     return res
+    
 
 # matmul 
 class MatMul:
@@ -202,21 +267,57 @@ class MatMul:
         """MAX graph implementation of matrix multiplication."""
         if len(args) != 2:
             raise ValueError(f"MatMul operation requires 2 arguments, got {len(args)}")
-        return ops.matmul(args[0], args[1])
+        
+        # ops.matmul takes in tensor of maxxrank 4, so we mgiht need to reshape first f needed 
+        if args[0].shape[-1] != args[1].shape[-2]:
+            raise ValueError(f"Shapes {args[0].shape} and {args[1].shape} are not compatible for matrix multiplication.")
+        
+        # reshape arg0 if needed 
+        max_rank = max(args[0].rank, args[1].rank)
+        reshape_res = False
+
+        prod = 1
+
+        if args[0].rank > 4:
+            batch_dims = args[0].shape[:-2]
+            prod = np.prod(batch_dims)
+            reshape_res = True
+
+        if args[1].rank > 4:
+            batch_dims = args[1].shape[:-2]
+            prod = max(prod, np.prod(batch_dims))
+            reshape_res = True
+
+        if reshape_res:
+            arg0 = ops.reshape(args[0], (prod, args[0].shape[-2], args[0].shape[-1]))
+            arg1 = ops.reshape(args[1], (prod, args[1].shape[-2], args[1].shape[-1]))
+
+        res_shape = get_broadcasted_shape(arg0.shape, arg1.shape, ignore_axes=[-2, -1], replace_ignored_dims=[arg0.shape[-2], arg1.shape[-1]])
+
+        res = ops.matmul(arg0, arg1)
+        # reshape res to the final shape
+        if reshape_res:
+            res = ops.reshape(res, res_shape)
+        return res
+    
+    @staticmethod
+    def eagerxpr(args: List[Array]) -> Array:
+        if len(args) != 2:
+            raise ValueError(f"MatMul operation requires 2 arguments, got {len(args)}")
+        if args[0].shape[-1] != args[1].shape[-2]:
+            raise ValueError(f"Shapes {args[0].shape} and {args[1].shape} are not compatible for matrix multiplication.")
+        
+        np_result = np.matmul(args[0].get_numpy(), args[1].get_numpy())
+        result_data = Tensor.from_numpy(np_result)
+        return Array.from_data(result_data, name=f"matmul({args[0].name},{args[1].name})")
+    
     
 def matmul(arg0: Array, arg1: Array) -> Array:
-    if arg0.shape[-1] != arg1.shape[0]:
+    if arg0.shape[-1] != arg1.shape[-2]:
         raise ValueError(f"Shapes {arg0.shape} and {arg1.shape} are not compatible for matrix multiplication.")
     
     if EAGERMODE:
-        try:
-            np_result = np.matmul(arg0.get_numpy(), arg1.get_numpy())
-            result_data = Tensor.from_numpy(np_result)
-            res = Array.from_data(result_data, name=f"matmul({arg0.name},{arg1.name})")
-        except (ValueError, TypeError) as e:
-            # Fallback if NumPy operations fail
-            result_data = Tensor.from_numpy(arg0.get_data().to_numpy() @ arg1.get_data().to_numpy())
-            res = Array.from_data(result_data, name=f"matmul({arg0.name},{arg1.name})")
+        res = MatMul.eagerxpr([arg0, arg1])
     else:
         res = Array(shape=(arg0.shape[-2], arg1.shape[-1]), dtype=arg0.dtype, materialize=False, name="matmul")
         
@@ -380,23 +481,23 @@ def realize_(outputs: Union[Sequence[Array], Array]) -> None:
 
 if __name__ == "__main__":
     # Basic tests and benchmarks
-    a = arange(shape=(256, 256), dtype=DType.float32)#.to(Accelerator())
-    print("\na:")
-    print(a)
+    a = arange(shape=(4,256, 256), dtype=DType.float32)#.to(Accelerator())
+    # print("\na:")
+    # print(a)
     
-    b = arange(shape=(256, 256), dtype=DType.float32)#.to(Accelerator())
-    print("\nb:")
-    print(b)
+    b = arange(shape=(3,4,256, 256), dtype=DType.float32)#.to(Accelerator())
+    # print("\nb:")
+    # print(b)
 
     for iter in range(1000):
         c = mul(a, b)
-        res = arange(shape=(256, 256), dtype=DType.float32)#.to(Accelerator())
+        res = arange(shape=(2,3,4,256,256), dtype=DType.float32)#.to(Accelerator())
 
         for i in range(1000):
             res = mul(res, c)
 
-        # print(res)
         _ = res.get_data()  # Trigger realization
+
         if iter % 100 == 0:
             print(f"Iteration {iter} completed.")
 
