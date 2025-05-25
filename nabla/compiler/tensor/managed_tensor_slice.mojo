@@ -25,7 +25,7 @@ from sys.intrinsics import strided_load, strided_store
 import algorithm
 from buffer import DimList, NDBuffer
 from buffer.dimlist import _make_partially_static_index_list
-from compiler_internal.directives import StaticTensorSpec, __mogg_intrinsic_attr
+from nabla.compiler.tensor.directives import StaticTensorSpec, __mogg_intrinsic_attr
 from gpu.host._compile import _get_gpu_target
 from gpu.host.info import is_cpu, is_gpu as _is_gpu
 from layout import Layout, LayoutTensor, RuntimeLayout

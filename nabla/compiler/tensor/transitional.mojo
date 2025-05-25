@@ -14,7 +14,7 @@
 """Utilities for transitional period during NDBuffer deprecation."""
 
 from buffer import NDBuffer
-from compiler_internal.directives import StaticTensorSpec
+from nabla.compiler.tensor.directives import StaticTensorSpec
 from nabla.compiler.tensor.managed_tensor_slice import ManagedTensorSlice
 
 
