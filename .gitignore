@@ -10,3 +10,5 @@
 *.egg-info
 
 jax_node.py
+
+.venv
