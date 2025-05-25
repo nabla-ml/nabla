@@ -1,0 +1,25 @@
+# Virtual Environment specific to this Nabla subdirectory
+.venv/
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.so
+# IDE / OS specific (can be in root .gitignore too)
+# .vscode/ # Better in root .gitignore if shared settings
+# .idea/   # Better in root .gitignore
+.DS_Store
+*.swp
+*.swo
+# Test artifacts
+.pytest_cache/
+htmlcov/
+.coverage
+*.hypothesis/
+# Mypy cache
+.mypy_cache/
+# Build artifacts specific to some tools
+.eggs/
+*.egg

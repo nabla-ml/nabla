@@ -1,0 +1,633 @@
+from __future__ import annotations
+import numpy as np
+import time
+from typing import (
+    List,
+    Final,
+    ClassVar,
+    Union,
+    Tuple,
+    Type,
+    Set,
+    Callable,
+    Optional,
+    Sequence,
+    Dict,
+    Protocol,
+    TypedDict,
+    cast,
+    Any,
+)
+from collections import deque
+
+from max.engine import InferenceSession, Model
+from max.driver import Tensor, CPU, Accelerator, Device
+from max.dtype import DType
+from max.graph import DeviceRef, Graph, TensorType, ops, Value
+
+# Define type aliases for better readability
+MaxprCallable = Callable[[List[Value]], Value]
+VJPRule = Callable[[List[Value], List[Value]], Value]
+JVPRule = Callable[[List[Value], List[Value]], Value]
+Shape = Tuple[int, ...]
+
+# Execution mode flag
+EAGERMODE: bool = False
+
+# Global model cache with proper typing
+global_execution_context: Dict[int, Model] = {}
+
+
+def get_broadcasted_shape(
+    shape1: Shape,
+    shape2: Shape,
+    ignore_axes: List[int] = [],
+    replace_ignored_dims: List[int] = [],
+) -> Shape:
+    if len(replace_ignored_dims) != len(ignore_axes):
+        raise ValueError(
+            "replace_ignored_dims must have the same length as ignore_axes"
+        )
+
+    s1_len = len(shape1)
+    s2_len = len(shape2)
+    max_rank = max(s1_len, s2_len)
+
+    # Initialize result shape. We'll fill it. Using 1s is a common default for broadcasting.
+    res_shape_list = [1] * max_rank
+
+    # Normalize ignore_axes to positive indices and store their replacement values.
+    # These normalized indices refer to positions in the `max_rank` shape.
+    normalized_ignored_map = {}  # Stores {normalized_idx: replacement_dim}
+
+    for i in range(len(ignore_axes)):
+        axis_spec = ignore_axes[i]
+        replacement_dim = replace_ignored_dims[i]
+
+        # Validate and normalize the axis_spec relative to max_rank
+        if not (-max_rank <= axis_spec < max_rank):
+            raise ValueError(
+                f"ignore_axis {axis_spec} is out of bounds for max_rank {max_rank}"
+            )
+
+        normalized_idx = axis_spec if axis_spec >= 0 else max_rank + axis_spec
+
+        # If multiple ignore_axes entries map to the same normalized_idx (e.g. 0 and -max_rank),
+        # the last one in the list will win. This is typical Python dict behavior.
+        normalized_ignored_map[normalized_idx] = replacement_dim
+        res_shape_list[normalized_idx] = replacement_dim
+
+    # Pad original shapes with leading 1s to align them to max_rank for broadcasting logic
+    padded_shape1_list = [1] * (max_rank - s1_len) + list(shape1)
+    padded_shape2_list = [1] * (max_rank - s2_len) + list(shape2)
+
+    # Perform broadcasting for non-ignored axes
+    # Iterate from the leftmost dimension of the padded shapes
+    for i in range(max_rank):
+        if i in normalized_ignored_map:
+            # This dimension's value in res_shape_list is already set by replace_ignored_dims
+            continue
+
+        d1 = padded_shape1_list[i]
+        d2 = padded_shape2_list[i]
+
+        if d1 == d2:
+            res_shape_list[i] = d1
+        elif d1 == 1:
+            res_shape_list[i] = d2
+        elif d2 == 1:
+            res_shape_list[i] = d1
+        else:
+            # Dimensions are different and neither is 1, broadcasting error.
+            raise ValueError(
+                f"Shapes {shape1} and {shape2} cannot be broadcast at dimension index {i} "
+                f"(0-indexed from left of max_rank {max_rank} shape). "
+                f"Padded values at this index are {d1} (from shape1) and {d2} (from shape2)."
+            )
+
+    return tuple(res_shape_list)
+
+
+class Array:
+    name: str
+    data: Optional[Tensor]
+    args: List[Array]
+    visited: bool
+    shape: Shape
+    dtype: DType
+    device: Device
+    tensor_value: Optional[Value]
+    maxpr: Optional[MaxprCallable]
+    vjp_rule: Optional[VJPRule]
+    jvp_rule: Optional[JVPRule]
+    _numpy_cache: Optional[np.ndarray]
+
+    def __init__(
+        self,
+        shape: Shape,
+        dtype: DType = DType.float32,
+        device: Device = CPU(),
+        materialize: bool = False,
+        name: str = "",
+    ) -> None:
+        self.shape = shape
+        self.dtype = dtype
+        self.device = device
+        self.name = name
+        self.args = []
+        self.visited = False
+        self.tensor_value = None
+        self.maxpr = None
+        self.vjp_rule = None
+        self.jvp_rule = None
+        self._numpy_cache = None
+
+        if materialize:
+            self.data = Tensor(dtype, shape, device=device)
+        else:
+            self.data = None
+
+    @classmethod
+    def from_data(cls, data: Tensor, name: str = "") -> Array:
+        if not isinstance(data, Tensor):
+            raise TypeError(f"Data must be a MAX Tensor, got {type(data)}")
+        if not data.shape:
+            raise ValueError("Cannot create Array from empty shape Tensor")
+
+        instance = cls(
+            shape=data.shape, dtype=data.dtype, device=data.device, materialize=True
+        )
+        instance.data = data
+        instance.name = name
+        return instance
+
+    @classmethod
+    def create_buffer(cls, shape: Shape, dtype: DType, device: Device) -> Array:
+        return cls(shape=shape, dtype=dtype, device=device, materialize=True)
+
+    def copy_from(self, other: Array) -> None:
+        if self.shape != other.shape or self.dtype != other.dtype:
+            raise ValueError("Shape or dtype mismatch for copy")
+
+        self.data = other.data.copy() if other.data is not None else None
+
+    def add_argument(self, arg_node: Array) -> None:
+        if not isinstance(arg_node, Array):
+            raise TypeError(
+                f"Argument must be an instance of Array, got {type(arg_node)}"
+            )
+        self.args.append(arg_node)
+
+    def get_data(self) -> Tensor:
+        realize_(self)
+
+        if self.data is None:
+            raise ValueError("Data is None after realization")
+        return self.data
+
+    def get_numpy(self) -> np.ndarray:
+        if self._numpy_cache is None:
+            if self.data is None:
+                raise ValueError("Cannot get NumPy array from None data")
+            self._numpy_cache = self.data.to_numpy()
+        return self._numpy_cache
+
+    def get_arguments(self) -> List[Array]:
+        return list(self.args)
+
+    def set_maxpr(self, fn: MaxprCallable) -> None:
+        self.maxpr = fn
+
+    def __repr__(self) -> str:
+        return self.get_data().to(CPU()).to_numpy().__str__()
+
+    def to(self, device: Device) -> Array:
+        if self.data is None:
+            realize_(self)
+        new_data = self.data.to(device)
+        return Array.from_data(new_data, name=self.name)
+
+
+def arange(shape: Shape, dtype: DType, device: Device = CPU()) -> Array:
+    return Array.from_data(
+        Tensor.from_numpy(
+            np.arange(np.prod(shape), dtype=DType.to_numpy(dtype)).reshape(shape)
+        )
+    ).to(device)
+
+
+class Add:
+    @staticmethod
+    def maxpr(args: List[Value]) -> Value:
+        if len(args) != 2:
+            raise ValueError(f"Add operation requires 2 arguments, got {len(args)}")
+        return args[0] + args[1]
+
+    @staticmethod
+    def eagerxpr(args: List[Array]) -> Array:
+        if len(args) != 2:
+            raise ValueError(f"Add operation requires 2 arguments, got {len(args)}")
+        if args[0].shape != args[1].shape:
+            raise ValueError(
+                f"Shapes {args[0].shape} and {args[1].shape} are not compatible for addition."
+            )
+        np_result = np.add(args[0].get_numpy(), args[1].get_numpy())
+        result_data = Tensor.from_numpy(np_result)
+        return Array.from_data(result_data, name=f"add({args[0].name},{args[1].name})")
+
+
+def add(arg0: Array, arg1: Array) -> Array:
+    if arg0.dtype != arg1.dtype:
+        raise ValueError(
+            f"Dtypes {arg0.dtype} and {arg1.dtype} are not compatible for multiplication."
+        )
+    res_shape = get_broadcasted_shape(arg0.shape, arg1.shape)
+
+    if EAGERMODE:
+        res = Add.eagerxpr([arg0, arg1])
+    else:
+        res = Array(shape=res_shape, dtype=arg0.dtype, materialize=False, name="add")
+
+    res.add_argument(arg0)
+    res.add_argument(arg1)
+    res.set_maxpr(Add.maxpr)
+    return res
+
+
+class Mul:
+    @staticmethod
+    def maxpr(args: List[Value]) -> Value:
+        """MAX graph implementation of multiplication."""
+        if len(args) != 2:
+            raise ValueError(f"Mul operation requires 2 arguments, got {len(args)}")
+        return args[0] * args[1]
+
+    @staticmethod
+    def eagerxpr(args: List[Array]) -> Array:
+        if len(args) != 2:
+            raise ValueError(f"Mul operation requires 2 arguments, got {len(args)}")
+        if args[0].shape != args[1].shape:
+            raise ValueError(
+                f"Shapes {args[0].shape} and {args[1].shape} are not compatible for multiplication."
+            )
+        np_result = np.multiply(args[0].get_numpy(), args[1].get_numpy())
+        result_data = Tensor.from_numpy(np_result)
+        return Array.from_data(result_data, name=f"mul({args[0].name},{args[1].name})")
+
+
+def mul(arg0: Array, arg1: Array) -> Array:
+    if arg0.dtype != arg1.dtype:
+        raise ValueError(
+            f"Dtypes {arg0.dtype} and {arg1.dtype} are not compatible for multiplication."
+        )
+    res_shape = get_broadcasted_shape(arg0.shape, arg1.shape)
+
+    if EAGERMODE:
+        res = Mul.eagerxpr([arg0, arg1])
+    else:
+        res = Array(shape=res_shape, dtype=arg0.dtype, materialize=False, name="mul")
+
+    res.add_argument(arg0)
+    res.add_argument(arg1)
+    res.set_maxpr(Mul.maxpr)
+    return res
+
+
+class MatMul:
+    @staticmethod
+    def maxpr(args: List[Value]) -> Value:
+        if len(args) != 2:
+            raise ValueError(f"MatMul operation requires 2 arguments, got {len(args)}")
+
+        x_val, y_val = args[0], args[1]
+        x_shape_orig, y_shape_orig = x_val.shape, y_val.shape
+
+        # K-dimension check (already in calling function, but good for safety)
+        if x_shape_orig[-1] != y_shape_orig[-2]:
+            raise ValueError(
+                f"Shapes {x_shape_orig} and {y_shape_orig} are not compatible for matrix multiplication "
+                f"(K-dimension mismatch: {x_shape_orig[-1]} vs {y_shape_orig[-2]})"
+            )
+
+        # 1. Determine the final N-D output shape.
+        # This shape defines the target for broadcasting and the final result.
+        # (M, K) @ (K, N) -> (M, N)
+        # (B, M, K) @ (K, N) -> (B, M, N)
+        # (B1, M, K) @ (B2, K, N) -> (B_broadcasted, M, N) if B1,B2 broadcast.
+        output_shape_tuple = get_broadcasted_shape(
+            x_shape_orig,
+            y_shape_orig,
+            ignore_axes=[-2, -1],
+            replace_ignored_dims=[x_shape_orig[-2], y_shape_orig[-1]],
+        )
+
+        # Extract relevant dimensions
+        m_dim = output_shape_tuple[-2]
+        n_dim = output_shape_tuple[-1]
+        k_dim = x_shape_orig[-1]  # K from input x
+
+        output_batch_shape = output_shape_tuple[:-2]
+
+        # 2. Broadcast inputs to align with the output_batch_shape.
+        # x_val needs to become shape: output_batch_shape + (m_dim, k_dim)
+        # y_val needs to become shape: output_batch_shape + (k_dim, n_dim)
+
+        x_target_broadcast_shape = output_batch_shape + (m_dim, k_dim)
+        if x_val.shape != x_target_broadcast_shape:
+            x_val_b = ops.broadcast_to(x_val, x_target_broadcast_shape)
+        else:
+            x_val_b = x_val
+
+        y_target_broadcast_shape = output_batch_shape + (k_dim, n_dim)
+        if y_val.shape != y_target_broadcast_shape:
+            y_val_b = ops.broadcast_to(y_val, y_target_broadcast_shape)
+        else:
+            y_val_b = y_val
+
+        # At this point:
+        # x_val_b.shape is output_batch_shape + (m_dim, k_dim)
+        # y_val_b.shape is output_batch_shape + (k_dim, n_dim)
+        # The leading output_batch_shape dimensions are identical for x_val_b and y_val_b.
+
+        # 3. Reshape x_val_b and y_val_b to 4D for ops.matmul: (B_eff1, B_eff2, M, K)
+        num_batch_dims = len(output_batch_shape)
+
+        # Determine target shapes for ops.matmul input
+        shape_for_x_matmul: Shape
+        shape_for_y_matmul: Shape
+
+        if num_batch_dims == 0:  # e.g., (M,K) input -> target (1,1,M,K) for matmul
+            shape_for_x_matmul = (1, 1, m_dim, k_dim)
+            shape_for_y_matmul = (1, 1, k_dim, n_dim)
+        elif num_batch_dims == 1:  # e.g., (B0,M,K) -> target (B0,1,M,K)
+            b0 = int(output_batch_shape[0])
+            shape_for_x_matmul = (b0, 1, m_dim, k_dim)
+            shape_for_y_matmul = (b0, 1, k_dim, n_dim)
+        elif num_batch_dims == 2:  # e.g., (B0,B1,M,K) -> target (B0,B1,M,K) (no change)
+            # x_val_b and y_val_b are already in the desired 4D format
+            shape_for_x_matmul = x_val_b.shape
+            shape_for_y_matmul = y_val_b.shape
+        else:  # num_batch_dims > 2, e.g. (B0,B1,B2,M,K)
+            # Flatten to (prod(B0..Bn-1), Bn, M,K)
+            b_eff_1 = int(np.prod(output_batch_shape[:-1]))
+            b_eff_2 = int(output_batch_shape[-1])
+            shape_for_x_matmul = (b_eff_1, b_eff_2, m_dim, k_dim)
+            shape_for_y_matmul = (b_eff_1, b_eff_2, k_dim, n_dim)
+
+        # Perform the reshape if needed
+        if x_val_b.shape == shape_for_x_matmul:
+            x_for_matmul = x_val_b
+        else:
+            x_for_matmul = ops.reshape(x_val_b, shape_for_x_matmul)
+
+        if y_val_b.shape == shape_for_y_matmul:
+            y_for_matmul = y_val_b
+        else:
+            y_for_matmul = ops.reshape(y_val_b, shape_for_y_matmul)
+
+        # 4. Perform the 4D matrix multiplication.
+        # ops.matmul input shapes: (B_eff1, B_eff2, M, K) and (B_eff1, B_eff2, K, N)
+        # ops.matmul output shape: (B_eff1, B_eff2, M, N)
+        matmul_res_4d = ops.matmul(x_for_matmul, y_for_matmul)
+
+        # 5. Reshape the 4D result back to the true N-D output_shape_tuple.
+        # The shape of matmul_res_4d is (B_eff1_actual, B_eff2_actual, M, N).
+        # We need to reshape it to output_shape_tuple = (BroadcastedBatchDims..., M, N)
+        if matmul_res_4d.shape != output_shape_tuple:
+            final_res = ops.reshape(matmul_res_4d, output_shape_tuple)
+        else:
+            # This condition implies output_shape_tuple was already 4D and matched
+            # the (B_eff1, B_eff2, M, N) form, e.g., num_batch_dims == 2.
+            final_res = matmul_res_4d
+
+        return final_res
+
+    @staticmethod
+    def eagerxpr(args: List[Array]) -> Array:
+        if len(args) != 2:
+            raise ValueError(f"MatMul operation requires 2 arguments, got {len(args)}")
+
+        arg0_numpy = args[0].get_numpy()
+        arg1_numpy = args[1].get_numpy()
+
+        if arg0_numpy.shape[-1] != arg1_numpy.shape[-2]:
+            raise ValueError(
+                f"Eager MatMul: Shapes {args[0].shape} and {args[1].shape} are not compatible for matrix multiplication."
+            )
+
+        # np.matmul handles N-D broadcasting correctly.
+        np_result = np.matmul(arg0_numpy, arg1_numpy)
+        result_data = Tensor.from_numpy(np_result)
+        # The name could be more dynamic if args[0].name etc. are complex
+        return Array.from_data(
+            result_data, name=f"matmul_eager({args[0].name},{args[1].name})"
+        )
+
+
+def matmul(arg0: Array, arg1: Array) -> Array:
+    if arg0.shape[-1] != arg1.shape[-2]:
+        raise ValueError(
+            f"Shapes {arg0.shape} and {arg1.shape} are not compatible for matrix multiplication."
+        )
+
+    if EAGERMODE:
+        res = MatMul.eagerxpr([arg0, arg1])
+    else:
+        res = Array(
+            shape=get_broadcasted_shape(
+                arg0.shape,
+                arg1.shape,
+                ignore_axes=[-2, -1],
+                replace_ignored_dims=[arg0.shape[-2], arg1.shape[-1]],
+            ),
+            dtype=arg0.dtype,
+            materialize=False,
+            name="matmul",
+        )
+
+    res.add_argument(arg0)
+    res.add_argument(arg1)
+    res.set_maxpr(MatMul.maxpr)
+    return res
+
+
+def compute_node_hash(node: Array) -> int:
+    components = [
+        str(node.shape),
+        str(node.dtype),
+        node.name or "unnamed",
+        # Could add operation type for more uniqueness
+    ]
+    node_str = "-".join(components)
+    return hash(node_str)
+
+
+def get_trace(nodes: Sequence[Array]) -> Tuple[List[Array], List[Array], int]:
+    trace: List[Array] = []
+    inputs: List[Array] = []
+    visited: Set[Array] = set()
+
+    # Iterative DFS using a stack
+    for start_node in nodes:
+        if start_node in visited:
+            continue
+
+        stack: List[Array] = [start_node]
+        while stack:
+            node = stack[-1]  # Peek at the top node
+
+            if node in visited:
+                stack.pop()  # Already processed this node
+                continue
+
+            # If this is a leaf node (has data)
+            if node.data is not None:
+                inputs.append(node)
+                trace.append(node)
+                visited.add(node)
+                stack.pop()
+                continue
+
+            # Check if all children have been visited
+            all_children_visited = True
+            for arg in node.args:
+                if arg not in visited:
+                    all_children_visited = False
+                    stack.append(arg)  # Add unvisited child to stack
+
+            # If all children have been visited, we can process this node
+            if all_children_visited:
+                visited.add(node)
+                trace.append(node)
+                stack.pop()
+
+    # Compute the key from the trace
+    key: int = 0
+    for node in trace:
+        node_hash = compute_node_hash(node)
+        key = key ^ (node_hash + 0x9E3779B9 + (key << 6) + (key >> 2))
+
+    key = key % 1000000000
+
+    return inputs, trace, key
+
+
+def realize_(outputs: Union[Sequence[Array], Array]) -> None:
+    # Normalize to list of arrays
+    if isinstance(outputs, Array):
+        output_list = [outputs]
+    else:
+        if not all(isinstance(x, Array) for x in outputs):
+            raise TypeError("All outputs must be Array instances")
+        output_list = list(outputs)
+
+    # Check if there are outputs which need to be realized
+    nothing_to_compute = True
+    for output in output_list:
+        if output.data is None:
+            nothing_to_compute = False
+            break
+
+    if nothing_to_compute:
+        return
+
+    # Retrieve the trace and inputs which are the last realized values (i.e. leaves)
+    inputs, trace, key = get_trace(output_list)
+
+    if key in global_execution_context:
+        model = global_execution_context[key]
+    else:
+        # Build input types for the Graph
+        input_types = []
+        devices = []
+        for input_node in inputs:
+            input_types.append(
+                TensorType(
+                    dtype=input_node.dtype,
+                    shape=input_node.shape,
+                    device=DeviceRef.from_device(input_node.device),
+                )
+            )
+            if input_node.device not in devices:
+                devices.append(input_node.device)
+
+        # Define the MAX graph
+        try:
+            with Graph("max_graph", input_types=input_types) as graph:
+                input_symbols = graph.inputs
+                for i in range(len(input_symbols)):
+                    inputs[i].tensor_value = input_symbols[i]
+
+                for node in trace:
+                    if node.tensor_value is not None:
+                        continue
+
+                    arg_symbols = []
+                    for arg in node.get_arguments():
+                        if arg.tensor_value is None:
+                            raise ValueError(f"Error retrieving symbol for {arg.name}")
+                        arg_symbols.append(arg.tensor_value)
+
+                    if node.maxpr is None:
+                        raise ValueError(f"Node {node.name} has no maxpr function")
+                    node.tensor_value = node.maxpr(arg_symbols)
+
+                output_symbols = []
+                for output in output_list:
+                    if output.tensor_value is None:
+                        raise ValueError(f"Output {output.name} has no tensor value")
+                    output_symbols.append(output.tensor_value)
+
+                graph.output(*output_symbols)
+
+            # Set up the MAX model and cache it
+            session = InferenceSession(devices=devices)
+            model = session.load(graph)
+            global_execution_context[key] = model
+
+        except Exception as e:
+            raise ValueError(f"Failed to build computation graph: {e}")
+
+    # Prepare input tensors
+    tensor_inputs = []
+    for input_node in inputs:
+        if input_node.data is None:
+            raise ValueError(f"Input {input_node.name} has no data")
+        tensor_inputs.append(input_node.data)
+
+    # Execute the model and update outputs
+    try:
+        model_outputs = model.execute(*tensor_inputs)
+        for i, output in enumerate(output_list):
+            output.data = model_outputs[i]
+            output._numpy_cache = None  # Invalidate cache
+    except Exception as e:
+        raise ValueError(f"Error executing computation: {e}")
+
+
+if __name__ == "__main__":
+    # Basic tests and benchmarks
+    a = arange(shape=(4, 256, 256), dtype=DType.float32)  # .to(Accelerator())
+    # print("\na:")
+    # print(a)
+
+    b = arange(shape=(3, 4, 256, 256), dtype=DType.float32)  # .to(Accelerator())
+    # print("\nb:")
+    # print(b)
+
+    for iter in range(1000):
+        c = mul(a, b)
+        res = arange(
+            shape=(2, 3, 4, 256, 256), dtype=DType.float32
+        )  # .to(Accelerator())
+
+        for i in range(1000):
+            res = mul(res, c)
+
+        _ = res.get_data()  # Trigger realization
+
+        if iter % 100 == 0:
+            print(f"Iteration {iter} completed.")
+
+
+# format file via: black graph.py

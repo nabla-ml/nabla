@@ -1,0 +1,87 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nabla-ml"
+version = "0.0.1"
+authors = [
+    { name = "TilliFe", email = "tillmann.fehrenbach@gmail.com" },
+]
+description = "A JAX-like deep learning framework with MAX and Mojo backends for fast, hardware-agnostic kernels."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+keywords = ["deep learning", "machine learning", "jax", "max engine", "mojo", "autodiff", "nabla"]
+
+dependencies = [
+    "numpy>=1.22",
+    # "maxsdk" # Placeholder
+    # "mojo-sdk" # Placeholder
+]
+
+[project.urls]
+Homepage = "https://github.com/nabla-ml/nabla" # Corrected
+Repository = "https://github.com/nabla-ml/nabla" # Corrected
+# Documentation = "https://nabla.readthedocs.io"
+# Changelog = "https://github.com/nabla-ml/nabla/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "ruff",
+    "black",
+    "mypy",
+    "build",
+    "twine",
+    "pre-commit",
+    # "maxsdk-dev" # Placeholder
+    # "mojo-sdk-dev" # Placeholder
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = false
+
+[tool.ruff]
+line-length = 88
+select = ["E", "F", "W", "I", "UP", "N", "B", "C4", "A", "SIM", "PTH"]
+ignore = ["E501"]
+target-version = "py39"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+# files = "src/nabla, tests"
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q --color=yes"
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
