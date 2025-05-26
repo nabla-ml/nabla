@@ -55,11 +55,11 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/llvm-openmp-20.1.5-hdb05f8b_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/matplotlib-3.10.3-py313h39782a4_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/matplotlib-base-3.10.3-py313haaf02c0_0.conda
-      - conda: https://conda.modular.com/max-nightly/noarch/max-25.4.0.dev2025051905-release.conda
-      - conda: https://conda.modular.com/max-nightly/osx-arm64/max-core-25.4.0.dev2025051905-release.conda
-      - conda: https://conda.modular.com/max-nightly/osx-arm64/max-python-25.4.0.dev2025051905-release.conda
-      - conda: https://conda.modular.com/max-nightly/noarch/mblack-25.4.0.dev2025051905-release.conda
-      - conda: https://conda.modular.com/max-nightly/noarch/mojo-jupyter-25.4.0.dev2025051905-release.conda
+      - conda: https://conda.modular.com/max-nightly/noarch/max-25.4.0.dev2025052505-release.conda
+      - conda: https://conda.modular.com/max-nightly/osx-arm64/max-core-25.4.0.dev2025052505-release.conda
+      - conda: https://conda.modular.com/max-nightly/osx-arm64/max-python-25.4.0.dev2025052505-release.conda
+      - conda: https://conda.modular.com/max-nightly/noarch/mblack-25.4.0.dev2025052505-release.conda
+      - conda: https://conda.modular.com/max-nightly/noarch/mojo-jupyter-25.4.0.dev2025052505-release.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/munkres-1.1.4-pyh9f0ad1d_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/mypy_extensions-1.1.0-pyha770c72_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/ncurses-6.5-h5e97a16_3.conda
@@ -100,8 +100,6 @@ packages:
   - brotli-bin 1.1.0 hd74edd7_2
   - libbrotlidec 1.1.0 hd74edd7_2
   - libbrotlienc 1.1.0 hd74edd7_2
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   size: 19588
@@ -113,8 +111,6 @@ packages:
   - __osx >=11.0
   - libbrotlidec 1.1.0 hd74edd7_2
   - libbrotlienc 1.1.0 hd74edd7_2
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   size: 16772
@@ -165,8 +161,6 @@ packages:
   - python >=3.13,<3.14.0a0
   - python >=3.13,<3.14.0a0 *_cp313
   - python_abi 3.13.* *_cp313
-  arch: arm64
-  platform: osx
   license: BSD-3-Clause
   license_family: BSD
   size: 247420
@@ -200,8 +194,6 @@ packages:
   - python >=3.13,<3.14.0a0
   - python >=3.13,<3.14.0a0 *_cp313
   - python_abi 3.13.* *_cp313
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   size: 2824484
@@ -212,8 +204,6 @@ packages:
   depends:
   - libfreetype 2.13.3 hce30654_1
   - libfreetype6 2.13.3 h1d14073_1
-  arch: arm64
-  platform: osx
   license: GPL-2.0-only OR FTL
   size: 172220
   timestamp: 1745370149658
@@ -263,8 +253,6 @@ packages:
   - python >=3.13.0rc1,<3.14.0a0
   - python >=3.13.0rc1,<3.14.0a0 *_cp313
   - python_abi 3.13.* *_cp313
-  arch: arm64
-  platform: osx
   license: BSD-3-Clause
   license_family: BSD
   size: 61424
@@ -289,8 +277,6 @@ packages:
   - __osx >=11.0
   - libjpeg-turbo >=3.0.0,<4.0a0
   - libtiff >=4.7.0,<4.8.0a0
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   size: 212125
@@ -301,8 +287,6 @@ packages:
   depends:
   - __osx >=11.0
   - libcxx >=18
-  arch: arm64
-  platform: osx
   license: Apache-2.0
   license_family: Apache
   size: 188306
@@ -329,8 +313,6 @@ packages:
   md5: d0bf1dff146b799b319ea0434b93f779
   depends:
   - __osx >=11.0
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   size: 68426
@@ -341,8 +323,6 @@ packages:
   depends:
   - __osx >=11.0
   - libbrotlicommon 1.1.0 hd74edd7_2
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   size: 28378
@@ -353,8 +333,6 @@ packages:
   depends:
   - __osx >=11.0
   - libbrotlicommon 1.1.0 hd74edd7_2
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   size: 279644
@@ -387,8 +365,6 @@ packages:
   md5: 3baf58a5a87e7c2f4d243ce2f8f2fe5c
   depends:
   - __osx >=11.0
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   size: 54790
@@ -429,8 +405,6 @@ packages:
   md5: d06282e08e55b752627a707d58779b8f
   depends:
   - libfreetype6 >=2.13.3
-  arch: arm64
-  platform: osx
   license: GPL-2.0-only OR FTL
   size: 7813
   timestamp: 1745370144506
@@ -443,8 +417,6 @@ packages:
   - libzlib >=1.3.1,<2.0a0
   constrains:
   - freetype >=2.13.3
-  arch: arm64
-  platform: osx
   license: GPL-2.0-only OR FTL
   size: 333529
   timestamp: 1745370142848
@@ -475,8 +447,6 @@ packages:
   - __osx >=11.0
   constrains:
   - jpeg <0.0.0a
-  arch: arm64
-  platform: osx
   license: IJG AND BSD-3-Clause AND Zlib
   size: 553624
   timestamp: 1745268405713
@@ -534,8 +504,6 @@ packages:
   depends:
   - __osx >=11.0
   - libzlib >=1.3.1,<2.0a0
-  arch: arm64
-  platform: osx
   license: zlib-acknowledgement
   size: 259332
   timestamp: 1739953032676
@@ -569,8 +537,6 @@ packages:
   - libwebp-base >=1.5.0,<2.0a0
   - libzlib >=1.3.1,<2.0a0
   - zstd >=1.5.7,<1.6.0a0
-  arch: arm64
-  platform: osx
   license: HPND
   size: 370943
   timestamp: 1747067160710
@@ -581,8 +547,6 @@ packages:
   - __osx >=11.0
   constrains:
   - libwebp 1.5.0
-  arch: arm64
-  platform: osx
   license: BSD-3-Clause
   license_family: BSD
   size: 290013
@@ -595,8 +559,6 @@ packages:
   - pthread-stubs
   - xorg-libxau >=1.0.11,<2.0a0
   - xorg-libxdmcp
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   size: 323658
@@ -630,8 +592,6 @@ packages:
   - python >=3.13,<3.14.0a0
   - python_abi 3.13.* *_cp313
   - tornado >=5
-  arch: arm64
-  platform: osx
   license: PSF-2.0
   license_family: PSF
   size: 17538
@@ -659,42 +619,37 @@ packages:
   - python-dateutil >=2.7
   - python_abi 3.13.* *_cp313
   - qhull >=2020.2,<2020.3.0a0
-  arch: arm64
-  platform: osx
   license: PSF-2.0
   license_family: PSF
   size: 8180005
   timestamp: 1746820965852
-- conda: https://conda.modular.com/max-nightly/noarch/max-25.4.0.dev2025051905-release.conda
+- conda: https://conda.modular.com/max-nightly/noarch/max-25.4.0.dev2025052505-release.conda
   noarch: python
-  sha256: 38d492af53c0a1c053828aa030746ff9d44e540d9bf101bfb93337a2662b8ee9
-  md5: 161945c39019ffdd97e57820271952f1
+  sha256: 45b1803b880fa5aac2c48892a63f055ffcac9777414f6e505f4116c0c180dbb7
   depends:
-  - max-core ==25.4.0.dev2025051905 release
-  - max-python ==25.4.0.dev2025051905 release
-  - mojo-jupyter ==25.4.0.dev2025051905 release
-  - mblack ==25.4.0.dev2025051905 release
+  - max-core ==25.4.0.dev2025052505 release
+  - max-python ==25.4.0.dev2025052505 release
+  - mojo-jupyter ==25.4.0.dev2025052505 release
+  - mblack ==25.4.0.dev2025052505 release
   license: LicenseRef-Modular-Proprietary
-  size: 9411
-  timestamp: 1747631946439
-- conda: https://conda.modular.com/max-nightly/osx-arm64/max-core-25.4.0.dev2025051905-release.conda
-  sha256: f1f5c28b16b51f163b7bbeb887c552d2345968bba6aa9bd28acfcbbbe62caee7
-  md5: 4010cbdfb3adc4ea87bddc279ded53e8
+  size: 9409
+  timestamp: 1748151465475
+- conda: https://conda.modular.com/max-nightly/osx-arm64/max-core-25.4.0.dev2025052505-release.conda
+  sha256: 84600a6f3105798fa65bcacb77639b7179844b6af8882bed704a67a29ecac409
   depends:
-  - mblack ==25.4.0.dev2025051905 release
+  - mblack ==25.4.0.dev2025052505 release
   license: LicenseRef-Modular-Proprietary
-  size: 185947553
-  timestamp: 1747632978264
-- conda: https://conda.modular.com/max-nightly/osx-arm64/max-python-25.4.0.dev2025051905-release.conda
+  size: 186823102
+  timestamp: 1748151127118
+- conda: https://conda.modular.com/max-nightly/osx-arm64/max-python-25.4.0.dev2025052505-release.conda
   noarch: python
-  sha256: 17db47870c26d86a61de02fdae44192bfab0c5a380ce549193be86e6f2dc64c0
-  md5: c975ac3e584a7de65e73cf4cd24eb6f4
+  sha256: 90ec6d1562edc3e34c9b29a908dbbd53aa35cf3ba15b25a8c51144d8ce1a16c7
   depends:
   - click >=8.0.0
   - numpy >=1.18
   - tqdm >=4.67.1
   - python-gil >=3.9,<3.14
-  - max-core ==25.4.0.dev2025051905 release
+  - max-core ==25.4.0.dev2025052505 release
   constrains:
   - aiohttp >=3.11.12
   - gguf >=0.14.0
@@ -704,6 +659,7 @@ packages:
   - psutil >=6.1.1
   - requests >=2.32.3
   - safetensors >=0.5.2
+  - pysoundfile >=0.12.1
   - pytorch >=2.5.0,<=2.7.0
   - transformers >=4.49.0,!=4.51.0
   - uvicorn >=0.34.0
@@ -735,12 +691,11 @@ packages:
   - taskgroup >=0.2.2
   - tokenizers >=0.19.0
   license: LicenseRef-Modular-Proprietary
-  size: 10441106
-  timestamp: 1747632978264
-- conda: https://conda.modular.com/max-nightly/noarch/mblack-25.4.0.dev2025051905-release.conda
+  size: 12670713
+  timestamp: 1748151127118
+- conda: https://conda.modular.com/max-nightly/noarch/mblack-25.4.0.dev2025052505-release.conda
   noarch: python
-  sha256: b4560c21da948038c8f05e84e004d86bb3babdaa52cdeeb4720ed0ee9dbeb59c
-  md5: d95bbe21def109a0a8a65a3aa2755376
+  sha256: 2a63e359c230261f2f606df7a1d96533e764b6527de17adf31731465ddbc12f7
   depends:
   - python >=3.9,<3.14
   - click >=8.0.0
@@ -751,20 +706,19 @@ packages:
   - typing_extensions >=v4.12.2
   - python
   license: MIT
-  size: 130384
-  timestamp: 1747631946439
-- conda: https://conda.modular.com/max-nightly/noarch/mojo-jupyter-25.4.0.dev2025051905-release.conda
+  size: 130368
+  timestamp: 1748151465475
+- conda: https://conda.modular.com/max-nightly/noarch/mojo-jupyter-25.4.0.dev2025052505-release.conda
   noarch: python
-  sha256: 667ae3a211ed996858acb13acdf6bf2695c8954c71d191c1ae23e2f6e8272d0d
-  md5: a568f377f414f67194a713386580dd8a
+  sha256: 301056844af51aea1d114868dd61258e0b9b6d87e5614c0a589749698d589ae5
   depends:
-  - max-core ==25.4.0.dev2025051905 release
+  - max-core ==25.4.0.dev2025052505 release
   - python >=3.9,<3.14
   - jupyter_client >=8.6.2,<8.7
   - python
   license: LicenseRef-Modular-Proprietary
-  size: 22498
-  timestamp: 1747631946439
+  size: 22489
+  timestamp: 1748151465475
 - conda: https://conda.anaconda.org/conda-forge/noarch/munkres-1.1.4-pyh9f0ad1d_0.tar.bz2
   sha256: f86fb22b58e93d04b6f25e0d811b56797689d598788b59dcb47f59045b568306
   md5: 2ba8498c1018c1e9c61eb99b973dfe19
@@ -818,8 +772,6 @@ packages:
   - libpng >=1.6.44,<1.7.0a0
   - libtiff >=4.7.0,<4.8.0a0
   - libzlib >=1.3.1,<2.0a0
-  arch: arm64
-  platform: osx
   license: BSD-2-Clause
   license_family: BSD
   size: 319362
@@ -871,8 +823,6 @@ packages:
   - python >=3.13,<3.14.0a0 *_cp313
   - python_abi 3.13.* *_cp313
   - tk >=8.6.13,<8.7.0a0
-  arch: arm64
-  platform: osx
   license: HPND
   size: 42900837
   timestamp: 1746646630611
@@ -891,8 +841,6 @@ packages:
   md5: 415816daf82e0b23a736a069a75e9da7
   depends:
   - __osx >=11.0
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   size: 8381
@@ -979,8 +927,6 @@ packages:
   depends:
   - __osx >=11.0
   - libcxx >=16
-  arch: arm64
-  platform: osx
   license: LicenseRef-Qhull
   size: 516376
   timestamp: 1720814307311
@@ -1062,8 +1008,6 @@ packages:
   md5: 50901e0764b7701d8ed7343496f4f301
   depends:
   - __osx >=11.0
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   size: 13593
@@ -1073,8 +1017,6 @@ packages:
   md5: 77c447f48cab5d3a15ac224edb86a968
   depends:
   - __osx >=11.0
-  arch: arm64
-  platform: osx
   license: MIT
   license_family: MIT
   size: 18487
@@ -1106,8 +1048,6 @@ packages:
   depends:
   - __osx >=11.0
   - libzlib >=1.3.1,<2.0a0
-  arch: arm64
-  platform: osx
   license: BSD-3-Clause
   license_family: BSD
   size: 399979

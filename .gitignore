@@ -12,3 +12,5 @@
 jax_node.py
 
 .venv
+
+custom_ops.mojopkg
