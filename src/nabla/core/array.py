@@ -112,28 +112,24 @@ class Array:
     # Operator overloading methods
     def __add__(self, other: Array) -> Array:
         """Addition operator."""
-        # Import here to avoid circular imports
         from ..ops.binary import add
 
         return add(self, other)
 
     def __mul__(self, other: Array) -> Array:
         """Multiplication operator."""
-        # Import here to avoid circular imports
         from ..ops.binary import mul
 
         return mul(self, other)
 
     def __matmul__(self, other: Array) -> Array:
         """Matrix multiplication operator (@)."""
-        # Import here to avoid circular imports
         from ..ops.linalg import matmul
 
         return matmul(self, other)
 
     def __neg__(self) -> Array:
         """Negation operator."""
-        # Import here to avoid circular imports
         from ..ops.unary import negate
 
         return negate(self)
