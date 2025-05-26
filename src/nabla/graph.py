@@ -33,7 +33,7 @@ JVPRule = Callable[[List[Value], List[Value]], Value]
 Shape = Tuple[int, ...]
 
 # Execution mode flag
-EAGERMODE: bool = False
+EAGERMODE: bool = True
 
 # Global model cache with proper typing
 global_execution_context: Dict[int, Model] = {}
@@ -402,7 +402,7 @@ def realize_(outputs: List[Array]) -> None:
 
 
 #####################################################################################
-# Initialization functions
+# Initialization Ops
 #####################################################################################
 
 
@@ -446,8 +446,6 @@ class RandN:
 
     @staticmethod
     def eagerxpr(args: List[Array], output: Array) -> None:
-        if len(args) != 0:
-            raise ValueError(f"RandN operation requires 0 arguments, got {len(args)}")
         mean, std, seed = RandN.get_mean_and_std_and_seed(output)
         np.random.seed(seed)
         np_result = np.random.normal(loc=mean, scale=std, size=output.shape).astype(
@@ -485,6 +483,8 @@ def randn(
 #####################################################################################
 # Basic operations
 #####################################################################################
+
+################################## OPS UTILS ################################
 
 
 def register_binary_op(
@@ -544,6 +544,258 @@ def register_binary_op(
         eagerxpr([arg0_broadcasted, arg1_broadcasted], res)
 
     return res
+
+
+def register_unary_op(
+    arg: Array,
+    op_name: str,
+    maxpr: MaxprCallable,
+    eagerxpr: Callable[[List[Array], Array], None],
+    vjp_rule: VJPRule,
+    jvp_rule: JVPRule,
+) -> Array:
+    """
+    Register a unary operation with the given name, maxpr function, eager expression,
+    VJP rule, and JVP rule.
+    """
+    if not isinstance(arg, Array):
+        raise TypeError(f"Argument must be an instance of Array, got {type(arg)}")
+    if not isinstance(op_name, str):
+        raise TypeError(f"Operation name must be a string, got {type(op_name)}")
+    if not callable(maxpr):
+        raise TypeError(f"maxpr must be callable, got {type(maxpr)}")
+    if not callable(eagerxpr):
+        raise TypeError(f"eagerxpr must be callable, got {type(eagerxpr)}")
+    if not callable(vjp_rule):
+        raise TypeError(f"vjp_rule must be callable, got {type(vjp_rule)}")
+    if not callable(jvp_rule):
+        raise TypeError(f"jvp_rule must be callable, got {type(jvp_rule)}")
+
+    res = Array(
+        shape=arg.shape,
+        dtype=arg.dtype,
+        device=arg.device,
+        materialize=False,
+        name=op_name,
+    )
+    res.set_maxpr(maxpr)
+    res.add_argument(arg)
+    res.vjp_rule = vjp_rule
+    res.jvp_rule = jvp_rule
+
+    if EAGERMODE:
+        eagerxpr([arg], res)
+
+    return res
+
+
+################################## UNARY OPS ################################
+
+
+class Negate:
+    @staticmethod
+    def maxpr(args: List[Value], output: Array) -> None:
+        output.tensor_value = ops.negate(args[0])
+
+    @staticmethod
+    def eagerxpr(args: List[Array], output: Array) -> None:
+        np_result = -args[0].get_numpy()
+        output.impl = Tensor.from_numpy(np_result)
+
+    @staticmethod
+    def vjp_rule(primals: List[Array], cotangent: Array, output: Array) -> List[Array]:
+        return [negate(cotangent)]
+
+    @staticmethod
+    def jvp_rule(primals: List[Array], tangents: List[Array], output: Array) -> Array:
+        return negate(tangents[0])
+
+
+def negate(arg: Array) -> Array:
+    return register_unary_op(
+        arg=arg,
+        op_name="negate",
+        maxpr=Negate.maxpr,
+        eagerxpr=Negate.eagerxpr,
+        vjp_rule=Negate.vjp_rule,
+        jvp_rule=Negate.jvp_rule,
+    )
+
+
+class Cos:
+    @staticmethod
+    def maxpr(args: List[Value], output: Array) -> None:
+        output.tensor_value = ops.cos(args[0])
+
+    @staticmethod
+    def eagerxpr(args: List[Array], output: Array) -> None:
+        np_result = np.cos(args[0].get_numpy())
+        output.impl = Tensor.from_numpy(np_result)
+
+    @staticmethod
+    def vjp_rule(primals: List[Array], cotangent: Array, output: Array) -> List[Array]:
+        return [negate(mul(cotangent, sin(primals[0])))]
+
+    @staticmethod
+    def jvp_rule(primals: List[Array], tangents: List[Array], output: Array) -> Array:
+        return negate(mul(tangents[0], sin(primals[0])))
+
+
+def cos(arg: Array) -> Array:
+    return register_unary_op(
+        arg=arg,
+        op_name="cos",
+        maxpr=Cos.maxpr,
+        eagerxpr=Cos.eagerxpr,
+        vjp_rule=Cos.vjp_rule,
+        jvp_rule=Cos.jvp_rule,
+    )
+
+
+class Sin:
+    @staticmethod
+    def maxpr(args: List[Value], output: Array) -> None:
+        output.tensor_value = ops.sin(args[0])
+
+    @staticmethod
+    def eagerxpr(args: List[Array], output: Array) -> None:
+        np_result = np.sin(args[0].get_numpy())
+        output.impl = Tensor.from_numpy(np_result)
+
+    @staticmethod
+    def vjp_rule(primals: List[Array], cotangent: Array, output: Array) -> List[Array]:
+        return [mul(cotangent, cos(primals[0]))]
+
+    @staticmethod
+    def jvp_rule(primals: List[Array], tangents: List[Array], output: Array) -> Array:
+        return mul(tangents[0], cos(primals[0]))
+
+
+def sin(arg: Array) -> Array:
+    return register_unary_op(
+        arg=arg,
+        op_name="sin",
+        maxpr=Sin.maxpr,
+        eagerxpr=Sin.eagerxpr,
+        vjp_rule=Sin.vjp_rule,
+        jvp_rule=Sin.jvp_rule,
+    )
+
+
+class AddOneCustom:
+    @staticmethod
+    def maxpr(args: List[Value], output: Array) -> None:
+        output.tensor_value = ops.custom(
+            name="add_one_custom",
+            values=[args[0]],
+            out_types=[
+                TensorType(
+                    dtype=args[0].dtype,
+                    shape=args[0].tensor.shape,
+                    device=args[0].device,
+                )
+            ],
+        )[0].tensor
+
+    @staticmethod
+    def eagerxpr(args: List[Array], output: Array) -> None:
+        np_result = args[0].get_numpy() + 1
+        output.impl = Tensor.from_numpy(np_result)
+
+    @staticmethod
+    def vjp_rule(primals: List[Array], cotangent: Array, output: Array) -> List[Array]:
+        raise NotImplementedError(
+            "AddOneCustom does not support VJP rule. It is a custom operation."
+        )
+
+    @staticmethod
+    def jvp_rule(primals: List[Array], tangents: List[Array], output: Array) -> Array:
+        raise NotImplementedError(
+            "AddOneCustom does not support JVP rule. It is a custom operation."
+        )
+
+
+def add_one_custom(arg: Array) -> Array:
+    res = Array(
+        shape=arg.shape, dtype=arg.dtype, materialize=False, name="add_one_custom"
+    )
+    res.set_maxpr(AddOneCustom.maxpr)
+    res.add_argument(arg)
+    res.vjp_rule = AddOneCustom.vjp_rule
+    res.jvp_rule = AddOneCustom.jvp_rule
+
+    if EAGERMODE:
+        AddOneCustom.eagerxpr([arg], res)
+
+    return res
+
+
+class IncrBatchDimCtr:
+    @staticmethod
+    def maxpr(args: List[Value], output: Array) -> None:
+        output.tensor_value = args[0].tensor_value
+
+    @staticmethod
+    def eagerxpr(args: List[Array], output: Array) -> None:
+        output.impl = args[0].impl
+
+    @staticmethod
+    def vjp_rule(primals: List[Array], cotangent: Array, output: Array) -> List[Array]:
+        return incr_batch_dim_ctr(cotangent)
+
+    @staticmethod
+    def jvp_rule(primals: List[Array], tangents: List[Array], output: Array) -> Array:
+        return decr_batch_dim_ctr(tangents[0])
+
+
+def incr_batch_dim_ctr(arg: Array) -> Array:
+    res = register_unary_op(
+        arg=arg,
+        op_name="incr_batch_dim_ctr",
+        maxpr=IncrBatchDimCtr.maxpr,
+        eagerxpr=IncrBatchDimCtr.eagerxpr,
+        vjp_rule=IncrBatchDimCtr.vjp_rule,
+        jvp_rule=IncrBatchDimCtr.jvp_rule,
+    )
+    res.batch_dim_ctr = arg.batch_dim_ctr + 1
+    return res
+
+
+class DecrBatchDimCtr:
+    @staticmethod
+    def maxpr(args: List[Value], output: Array) -> None:
+        output.tensor_value = args[0].tensor_value
+
+    @staticmethod
+    def eagerxpr(args: List[Array], output: Array) -> None:
+        output.impl = args[0].impl
+
+    @staticmethod
+    def vjp_rule(primals: List[Array], cotangent: Array, output: Array) -> List[Array]:
+        return decr_batch_dim_ctr(cotangent)
+
+    @staticmethod
+    def jvp_rule(primals: List[Array], tangents: List[Array], output: Array) -> Array:
+        return incr_batch_dim_ctr(tangents[0])
+
+
+def decr_batch_dim_ctr(arg: Array) -> Array:
+    if arg.batch_dim_ctr <= 0:
+        raise ValueError("Cannot decrement batch_dim_ctr below 0")
+
+    res = register_unary_op(
+        arg=arg,
+        op_name="decr_batch_dim_ctr",
+        maxpr=DecrBatchDimCtr.maxpr,
+        eagerxpr=DecrBatchDimCtr.eagerxpr,
+        vjp_rule=DecrBatchDimCtr.vjp_rule,
+        jvp_rule=DecrBatchDimCtr.jvp_rule,
+    )
+    res.batch_dim_ctr = max(0, arg.batch_dim_ctr - 1)
+    return res
+
+
+################################## BINARY OPS ################################
 
 
 class Add:
@@ -606,71 +858,7 @@ def mul(arg0: Array, arg1: Array) -> Array:
     )
 
 
-class Transpose:
-    # helper methods
-    def get_shape(arg_shape: Shape, axis_1: int, axis_2: int) -> Shape:
-        if not arg_shape:
-            raise ValueError("Cannot transpose an empty shape")
-        if axis_1 < -len(arg_shape) or axis_1 >= len(arg_shape):
-            raise ValueError(f"axis_1 {axis_1} is out of bounds for shape {arg_shape}")
-        if axis_2 < -len(arg_shape) or axis_2 >= len(arg_shape):
-            raise ValueError(f"axis_2 {axis_2} is out of bounds for shape {arg_shape}")
-
-        # Normalize negative axes
-        axis_1 = axis_1 if axis_1 >= 0 else len(arg_shape) + axis_1
-        axis_2 = axis_2 if axis_2 >= 0 else len(arg_shape) + axis_2
-
-        # Create a new shape with the axes swapped
-        new_shape = list(arg_shape)
-        new_shape[axis_1], new_shape[axis_2] = new_shape[axis_2], new_shape[axis_1]
-        return tuple(new_shape)
-
-    @staticmethod
-    def maxpr(args: List[Value], output: Array) -> None:
-        axis_1 = output.op_params.get("axis_1", -2)
-        axis_2 = output.op_params.get("axis_2", -1)
-        output.tensor_value = ops.transpose(args[0], axis_1, axis_2)
-
-    @staticmethod
-    def eagerxpr(args: List[Array], output: Array) -> None:
-        axis_1 = output.op_params.get("axis_1", -2)
-        axis_2 = output.op_params.get("axis_2", -1)
-        np_result = np.transpose(args[0].get_numpy(), axes=(axis_1, axis_2))
-        output.impl = Tensor.from_numpy(np_result)
-
-    @staticmethod
-    def vjp_rule(primals: List[Array], cotangent: Array, output: Array) -> List[Array]:
-        axis_1 = output.op_params.get("axis_1", -2)
-        axis_2 = output.op_params.get("axis_2", -1)
-        return [transpose(cotangent, axis_1, axis_2)]
-
-    @staticmethod
-    def jvp_rule(primals: List[Array], tangents: List[Array], output: Array) -> Array:
-        axis_1 = output.op_params.get("axis_1", -2)
-        axis_2 = output.op_params.get("axis_2", -1)
-        return transpose(tangents[0], axis_1, axis_2)
-
-
-def transpose(arg: Array, axis_1: int = -2, axis_2: int = -1) -> Array:
-    res = Array(
-        shape=Transpose.get_shape(arg.shape, axis_1, axis_2),
-        dtype=arg.dtype,
-        materialize=False,
-        name=f"transpose_{axis_1}_{axis_2}",
-    )
-    res.set_maxpr(Transpose.maxpr)
-    res.add_argument(arg)
-    res.vjp_rule = Transpose.vjp_rule
-    res.jvp_rule = Transpose.jvp_rule
-    res.op_params = {
-        "axis_1": axis_1,
-        "axis_2": axis_2,
-    }
-
-    if EAGERMODE:
-        Transpose.eagerxpr([arg], res)
-
-    return res
+################################## LINALG OPS ################################
 
 
 class MatMul:
@@ -827,219 +1015,80 @@ def matmul(arg0: Array, arg1: Array) -> Array:
     return res
 
 
-class Negate:
+################################## VIEW OPS ################################
+
+
+class Transpose:
+    # helper methods
+    def get_shape(arg_shape: Shape, axis_1: int, axis_2: int) -> Shape:
+        if not arg_shape:
+            raise ValueError("Cannot transpose an empty shape")
+        if axis_1 < -len(arg_shape) or axis_1 >= len(arg_shape):
+            raise ValueError(f"axis_1 {axis_1} is out of bounds for shape {arg_shape}")
+        if axis_2 < -len(arg_shape) or axis_2 >= len(arg_shape):
+            raise ValueError(f"axis_2 {axis_2} is out of bounds for shape {arg_shape}")
+
+        # Normalize negative axes
+        axis_1 = axis_1 if axis_1 >= 0 else len(arg_shape) + axis_1
+        axis_2 = axis_2 if axis_2 >= 0 else len(arg_shape) + axis_2
+
+        # Create a new shape with the axes swapped
+        new_shape = list(arg_shape)
+        new_shape[axis_1], new_shape[axis_2] = new_shape[axis_2], new_shape[axis_1]
+        return tuple(new_shape)
+
     @staticmethod
     def maxpr(args: List[Value], output: Array) -> None:
-        output.tensor_value = ops.negative(args[0])
+        axis_1 = output.op_params.get("axis_1", -2)
+        axis_2 = output.op_params.get("axis_2", -1)
+        output.tensor_value = ops.transpose(args[0], axis_1, axis_2)
 
     @staticmethod
     def eagerxpr(args: List[Array], output: Array) -> None:
-        np_result = np.negative(args[0].get_numpy())
+        axis_1 = output.op_params.get("axis_1", -2)
+        axis_2 = output.op_params.get("axis_2", -1)
+        axes = []
+        for i in range(len(args[0].shape)):
+            if i == axis_1:
+                axes.append(axis_2)
+            elif i == axis_2:
+                axes.append(axis_1)
+            else:
+                axes.append(i)
+        np_result = np.transpose(args[0].get_numpy(), axes)
         output.impl = Tensor.from_numpy(np_result)
 
     @staticmethod
     def vjp_rule(primals: List[Array], cotangent: Array, output: Array) -> List[Array]:
-        return [negate(cotangent)]
+        axis_1 = output.op_params.get("axis_1", -2)
+        axis_2 = output.op_params.get("axis_2", -1)
+        return [transpose(cotangent, axis_1, axis_2)]
 
     @staticmethod
     def jvp_rule(primals: List[Array], tangents: List[Array], output: Array) -> Array:
-        return negate(tangents[0])
+        axis_1 = output.op_params.get("axis_1", -2)
+        axis_2 = output.op_params.get("axis_2", -1)
+        return transpose(tangents[0], axis_1, axis_2)
 
 
-def negate(arg: Array) -> Array:
-    res = Array(shape=arg.shape, dtype=arg.dtype, materialize=False, name="negate")
-    res.set_maxpr(Negate.maxpr)
-    res.add_argument(arg)
-    res.vjp_rule = Negate.vjp_rule
-    res.jvp_rule = Negate.jvp_rule
-
-    if EAGERMODE:
-        Negate.eagerxpr([arg], res)
-
-    return res
-
-
-class Cos:
-    @staticmethod
-    def maxpr(args: List[Value], output: Array) -> None:
-        output.tensor_value = ops.cos(args[0])
-
-    @staticmethod
-    def eagerxpr(args: List[Array], output: Array) -> None:
-        np_result = np.cos(args[0].get_numpy())
-        output.impl = Tensor.from_numpy(np_result)
-
-    @staticmethod
-    def vjp_rule(primals: List[Array], cotangent: Array, output: Array) -> List[Array]:
-        return [negate(mul(cotangent, sin(primals[0])))]
-
-    @staticmethod
-    def jvp_rule(primals: List[Array], tangents: List[Array], output: Array) -> Array:
-        return negate(mul(tangents[0], sin(primals[0])))
-
-
-def cos(arg: Array) -> Array:
-    res = Array(shape=arg.shape, dtype=arg.dtype, materialize=False, name="cos")
-    res.set_maxpr(Cos.maxpr)
-    res.add_argument(arg)
-    res.vjp_rule = Cos.vjp_rule
-    res.jvp_rule = Cos.jvp_rule
-
-    if EAGERMODE:
-        Cos.eagerxpr([arg], res)
-
-    return res
-
-
-class Sin:
-    @staticmethod
-    def maxpr(args: List[Value], output: Array) -> None:
-        output.tensor_value = ops.sin(args[0])
-
-    @staticmethod
-    def eagerxpr(args: List[Array], output: Array) -> None:
-        np_result = np.sin(args[0].get_numpy())
-        output.impl = Tensor.from_numpy(np_result)
-
-    @staticmethod
-    def vjp_rule(primals: List[Array], cotangent: Array, output: Array) -> List[Array]:
-        return [mul(cotangent, cos(primals[0]))]
-
-    @staticmethod
-    def jvp_rule(primals: List[Array], tangents: List[Array], output: Array) -> Array:
-        return mul(tangents[0], cos(primals[0]))
-
-
-def sin(arg: Array) -> Array:
-    res = Array(shape=arg.shape, dtype=arg.dtype, materialize=False, name="sin")
-    res.set_maxpr(Sin.maxpr)
-    res.add_argument(arg)
-    res.vjp_rule = Sin.vjp_rule
-    res.jvp_rule = Sin.jvp_rule
-
-    if EAGERMODE:
-        Sin.eagerxpr([arg], res)
-
-    return res
-
-
-class AddOneCustom:
-    @staticmethod
-    def maxpr(args: List[Value], output: Array) -> None:
-        output.tensor_value = ops.custom(
-            name="add_one_custom",
-            values=[args[0]],
-            out_types=[
-                TensorType(
-                    dtype=args[0].dtype,
-                    shape=args[0].tensor.shape,
-                    device=args[0].device,
-                )
-            ],
-        )[0].tensor
-
-    @staticmethod
-    def eagerxpr(args: List[Array], output: Array) -> None:
-        np_result = args[0].get_numpy() + 1
-        output.impl = Tensor.from_numpy(np_result)
-
-    @staticmethod
-    def vjp_rule(primals: List[Array], cotangent: Array, output: Array) -> List[Array]:
-        raise NotImplementedError(
-            "AddOneCustom does not support VJP rule. It is a custom operation."
-        )
-
-    @staticmethod
-    def jvp_rule(primals: List[Array], tangents: List[Array], output: Array) -> Array:
-        raise NotImplementedError(
-            "AddOneCustom does not support JVP rule. It is a custom operation."
-        )
-
-
-def add_one_custom(arg: Array) -> Array:
+def transpose(arg: Array, axis_1: int = -2, axis_2: int = -1) -> Array:
     res = Array(
-        shape=arg.shape, dtype=arg.dtype, materialize=False, name="add_one_custom"
+        shape=Transpose.get_shape(arg.shape, axis_1, axis_2),
+        dtype=arg.dtype,
+        materialize=False,
+        name=f"transpose_{axis_1}_{axis_2}",
     )
-    res.set_maxpr(AddOneCustom.maxpr)
+    res.set_maxpr(Transpose.maxpr)
     res.add_argument(arg)
-    res.vjp_rule = AddOneCustom.vjp_rule
-    res.jvp_rule = AddOneCustom.jvp_rule
+    res.vjp_rule = Transpose.vjp_rule
+    res.jvp_rule = Transpose.jvp_rule
+    res.op_params = {
+        "axis_1": axis_1,
+        "axis_2": axis_2,
+    }
 
     if EAGERMODE:
-        AddOneCustom.eagerxpr([arg], res)
-
-    return res
-
-
-class IncrBatchDimCtr:
-    @staticmethod
-    def maxpr(args: List[Value], output: Array) -> None:
-        output.tensor_value = args[0].tensor_value
-
-    @staticmethod
-    def eagerxpr(args: List[Array], output: Array) -> None:
-        output.impl = args[0].impl
-
-    @staticmethod
-    def vjp_rule(primals: List[Array], cotangent: Array, output: Array) -> List[Array]:
-        return incr_batch_dim_ctr(cotangent)
-
-    @staticmethod
-    def jvp_rule(primals: List[Array], tangents: List[Array], output: Array) -> Array:
-        return decr_batch_dim_ctr(tangents[0])
-
-
-def incr_batch_dim_ctr(arg: Array) -> Array:
-    if EAGERMODE:
-        IncrBatchDimCtr.eagerxpr([arg])
-    else:
-        res = Array(
-            shape=arg.shape,
-            dtype=arg.dtype,
-            materialize=False,
-            name="incr_batch_dim_ctr",
-        )
-        res.set_maxpr(IncrBatchDimCtr.maxpr)
-
-    res.add_argument(arg)
-    res.vjp_rule = IncrBatchDimCtr.vjp_rule
-    res.jvp_rule = IncrBatchDimCtr.jvp_rule
-    res.batch_dim_ctr += 1
-    return res
-
-
-class DecrBatchDimCtr:
-    @staticmethod
-    def maxpr(args: List[Value], output: Array) -> None:
-        output.tensor_value = args[0].tensor_value
-
-    @staticmethod
-    def eagerxpr(args: List[Array], output: Array) -> None:
-        output.impl = args[0].impl
-
-    @staticmethod
-    def vjp_rule(primals: List[Array], cotangent: Array, output: Array) -> List[Array]:
-        return decr_batch_dim_ctr(cotangent)
-
-    @staticmethod
-    def jvp_rule(primals: List[Array], tangents: List[Array], output: Array) -> Array:
-        return incr_batch_dim_ctr(tangents[0])
-
-
-def decr_batch_dim_ctr(arg: Array) -> Array:
-    if arg.batch_dim_ctr <= 0:
-        raise ValueError("Cannot decrement batch_dim_ctr below 0")
-    res = Array(
-        shape=arg.shape, dtype=arg.dtype, materialize=False, name="decr_batch_dim_ctr"
-    )
-    res.set_maxpr(DecrBatchDimCtr.maxpr)
-    res.add_argument(arg)
-    res.vjp_rule = DecrBatchDimCtr.vjp_rule
-    res.jvp_rule = DecrBatchDimCtr.jvp_rule
-    res.batch_dim_ctr = max(0, arg.batch_dim_ctr - 1)
-
-    if EAGERMODE:
-        DecrBatchDimCtr.eagerxpr([arg], res)
+        Transpose.eagerxpr([arg], res)
 
     return res
 
@@ -1310,6 +1359,9 @@ def reshape(arg: Array, shape: Tuple[int, ...]) -> Array:
         Reshape.eagerxpr([arg], res)
 
     return res
+
+
+################################## REDUCE OPS ################################
 
 
 class Sum:
