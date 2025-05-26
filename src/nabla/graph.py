@@ -166,10 +166,6 @@ class Array:
         instance.name = name
         return instance
 
-    @classmethod
-    def create_buffer(cls, shape: Shape, dtype: DType, device: Device) -> Array:
-        return cls(shape=shape, dtype=dtype, device=device, materialize=True)
-
     def copy_from(self, other: Array) -> None:
         if self.shape != other.shape or self.dtype != other.dtype:
             raise ValueError("Shape or dtype mismatch for copy")
@@ -794,7 +790,7 @@ class Squeeze:
         return squeeze(tangents[0], axis=Squeeze.get_axis(output))
     
 def squeeze(arg: Array, axis: int) -> Array:
-    res = Array(shape=Squeeze.get_shape(arg.shape, axis), dtype=arg.dtype, materialize=False, name="squeeze")
+    res = Array(shape=Squeeze.get_shape(arg.shape, axis), dtype=arg.dtype, materialize=False, name=f"squeeze_{axis}")
     res.set_maxpr(Squeeze.maxpr)
     res.op_params = {"axis": axis}
     res.add_argument(arg)
@@ -850,7 +846,7 @@ class Unsqueeze:
         return unsqueeze(tangents[0], axis=Unsqueeze.get_axis(output))
     
 def unsqueeze(arg: Array, axis: int) -> Array:
-    res = Array(shape=Unsqueeze.get_shape(arg.shape, axis), dtype=arg.dtype, materialize=False, name="unsqueeze")
+    res = Array(shape=Unsqueeze.get_shape(arg.shape, axis), dtype=arg.dtype, materialize=False, name=f"unsqueeze_{axis}")
     res.set_maxpr(Unsqueeze.maxpr)
     res.op_params = {"axis": axis}
     res.add_argument(arg)
@@ -924,7 +920,7 @@ class BroadcastTo:
         return broadcast_to(tangents[0], target_shape)
     
 def broadcast_to(arg: Array, target_shape: Tuple[int, ...]) -> Array:
-    res = Array(shape=target_shape, dtype=arg.dtype, materialize=False, name="broadcast_to")
+    res = Array(shape=target_shape, dtype=arg.dtype, materialize=False, name=f"broadcast_to_{target_shape}")
     res.set_maxpr(BroadcastTo.maxpr)
     res.op_params = {"target_shape": target_shape}
     res.add_argument(arg)
@@ -934,6 +930,71 @@ def broadcast_to(arg: Array, target_shape: Tuple[int, ...]) -> Array:
     if EAGERMODE:
         BroadcastTo.eagerxpr([arg], res)
     return res
+
+class Reshape:
+    # helper methods 
+    def get_target_shape(output: Array) -> Tuple[int, ...]:
+        op_params = output.op_params or {}
+        if "target_shape" not in op_params:
+            raise ValueError("Reshape operation requires 'target_shape' parameter in op_params")
+        target_shape = op_params["target_shape"]
+        if not isinstance(target_shape, tuple):
+            raise ValueError(f"Reshape 'target_shape' must be a tuple, got {type(target_shape)}")
+        return target_shape
+    
+    def get_arg_shape(output: Array) -> Tuple[int, ...]:
+        op_params = output.op_params or {}
+        if "arg_shape" not in op_params:
+            raise ValueError("Reshape operation requires 'arg_shape' parameter in op_params")
+        arg_shape = op_params["arg_shape"]
+        if not isinstance(arg_shape, tuple):
+            raise ValueError(f"Reshape 'arg_shape' must be a tuple, got {type(arg_shape)}")
+        return arg_shape
+    
+    @staticmethod
+    def maxpr(args: List[Value], output: Array) -> None:
+        if len(args) != 1:
+            raise ValueError(f"Reshape operation requires 1 argument, got {len(args)}")
+        output.tensor_value = ops.reshape(args[0], Reshape.get_target_shape(output))
+
+    @staticmethod
+    def eagerxpr(args: List[Array], output: Array) -> None:
+        if len(args) != 1:
+            raise ValueError(f"Reshape operation requires 1 argument, got {len(args)}")
+        target_shape = Reshape.get_target_shape(output)
+        np_result = np.reshape(args[0].get_numpy(), target_shape)
+        output.impl = Tensor.from_numpy(np_result)
+
+    @staticmethod
+    def vjp_rule(primals: List[Array], cotangent: Array, output: Array) -> List[Array]:
+        if len(primals) != 1:
+            raise ValueError(f"Reshape VJP rule requires 1 primal, got {len(primals)}")
+        arg_shape = Reshape.get_arg_shape(output)
+        return [reshape(cotangent, arg_shape)]
+    
+    @staticmethod
+    def jvp_rule(primals: List[Array], tangents: List[Array], output: Array) -> Array:
+        if len(primals) != 1 or len(tangents) != 1:
+            raise ValueError(f"Reshape JVP rule requires 1 primal and 1 tangent, got {len(primals)} and {len(tangents)}")
+        target_shape = Reshape.get_target_shape(output)
+        return reshape(tangents[0], target_shape)
+    
+def reshape(arg: Array, shape: Tuple[int, ...]) -> Array:
+    if not isinstance(shape, tuple):
+        raise ValueError(f"Reshape 'target_shape' must be a tuple, got {type(target_shape)}")
+    
+    res = Array(shape=shape, dtype=arg.dtype, materialize=False, name=f"reshape_{shape}")
+    res.set_maxpr(Reshape.maxpr)
+    res.op_params = {"target_shape": shape, "arg_shape": arg.shape}
+    res.add_argument(arg)
+    res.vjp_rule = Reshape.vjp_rule
+    res.jvp_rule = Reshape.jvp_rule
+
+    if EAGERMODE:
+        Reshape.eagerxpr([arg], res)
+
+    return res
+
 
 
 class Sum:
@@ -1005,7 +1066,7 @@ def sum(arg: Array, axes: Union[int, List[int], None] = None, keep_dims: bool = 
         shape=Sum.get_shape(arg.shape, axes),
         dtype=arg.dtype,
         materialize=False,
-        name="sum",
+        name=f"sum_{axes}_{keep_dims}",
     )
     res.set_maxpr(Sum.maxpr)
     res.op_params = {"axes": axes, "arg_shape": arg.shape, "keep_dims": keep_dims}
