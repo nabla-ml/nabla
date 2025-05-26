@@ -1,19 +1,63 @@
 """
-Nabla: A modular deep learning framework.
+Nabla: A clean, modular deep learning framework built on MAX.
 
-Import the clean, refactored implementation by default.
-For backward compatibility, the original graph.py is still available.
+This is the main entry point that provides a clean API.
 """
 
 from max.dtype import DType
 
-# Import from the clean modular implementation
-from .nabla import *
+# Core exports - The foundation
+from .core.array import Array
+from .core.execution_context import ThreadSafeExecutionContext
+from .core.graph_execution import realize_
+from .utils.broadcasting import get_broadcasted_shape
 
-# Also provide access to the original implementation if needed
-# from . import graph as original_graph  # Original graph.py no longer exists
+# Operation exports - Clean OOP-based operations
+from .ops.binary import add, mul
+from .ops.unary import sin, cos, negate
+from .ops.linalg import matmul
+from .ops.view import transpose, reshape, broadcast_to
+from .ops.reduce import sum
+from .ops.creation import array, arange, randn
 
-# Provide the clean implementation as graph_improved for test compatibility
-from . import nabla as graph_improved
+# Set global execution mode
+from .ops.base import EAGERMODE
+
+__all__ = [
+    # Core
+    "Array",
+    "realize_",
+    "EAGERMODE",
+    "get_broadcasted_shape",
+    # Array creation
+    "array",
+    "arange",
+    "randn",
+    # Binary operations
+    "add",
+    "mul",
+    # Unary operations
+    "sin",
+    "cos",
+    "negate",
+    # Linear algebra
+    "matmul",
+    # View operations
+    "transpose",
+    "reshape",
+    "broadcast_to",
+    # Reduction operations
+    "sum",
+    # Data types
+    "DType",
+]
+
+# Maintain the execution context for compatibility
+_global_execution_context = ThreadSafeExecutionContext()
 
 __version__ = "0.1.0"
+
+# For test compatibility - provide a reference to this module
+import sys
+
+graph_improved = sys.modules[__name__]
