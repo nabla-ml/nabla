@@ -352,7 +352,9 @@ def realize_(outputs: List[Array]) -> None:
                     )  # set tensor value for each node inplace wiht the respective maxpr rule
 
                     # Convert tensor_value.shape to tuple of ints for comparison
-                    tensor_value_shape_tuple = tuple(int(dim) for dim in node.tensor_value.shape)
+                    tensor_value_shape_tuple = tuple(
+                        int(dim) for dim in node.tensor_value.shape
+                    )
                     if node.shape != tensor_value_shape_tuple:
                         raise ValueError(
                             f"Shape mismatch for node {node.name}: "
@@ -585,7 +587,7 @@ def mul(arg0: Array, arg1: Array) -> Array:
 
 
 class Transpose:
-    # helper methods 
+    # helper methods
     def get_shape(arg_shape: Shape, axis_1: int, axis_2: int) -> Shape:
         if not arg_shape:
             raise ValueError("Cannot transpose an empty shape")
@@ -602,7 +604,7 @@ class Transpose:
         new_shape = list(arg_shape)
         new_shape[axis_1], new_shape[axis_2] = new_shape[axis_2], new_shape[axis_1]
         return tuple(new_shape)
-    
+
     @staticmethod
     def maxpr(args: List[Value], output: Array) -> None:
         if len(args) != 1:
@@ -647,7 +649,10 @@ class Transpose:
 
 def transpose(arg: Array, axis_1: int = -2, axis_2: int = -1) -> Array:
     res = Array(
-        shape=Transpose.get_shape(arg.shape, axis_1, axis_2), dtype=arg.dtype, materialize=False, name=f"transpose_{axis_1}_{axis_2}"
+        shape=Transpose.get_shape(arg.shape, axis_1, axis_2),
+        dtype=arg.dtype,
+        materialize=False,
+        name=f"transpose_{axis_1}_{axis_2}",
     )
     res.set_maxpr(Transpose.maxpr)
     res.add_argument(arg)
