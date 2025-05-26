@@ -33,10 +33,15 @@ JVPRule = Callable[[List[Value], List[Value]], Value]
 Shape = Tuple[int, ...]
 
 # Execution mode flag
-EAGERMODE: bool = True
+EAGERMODE: bool = False
 
 # Global model cache with proper typing
 global_execution_context: Dict[int, Model] = {}
+
+
+#####################################################################################
+# Uility functions
+#####################################################################################
 
 
 def get_broadcasted_shape(
@@ -57,7 +62,7 @@ def get_broadcasted_shape(
     # Initialize result shape. We'll fill it. Using 1s is a common default for broadcasting.
     res_shape_list = [1] * max_rank
 
-    # Normalize ignore_axes to positive indices and store their replacement values.
+    # RandNize ignore_axes to positive indices and store their replacement values.
     # These normalized indices refer to positions in the `max_rank` shape.
     normalized_ignored_map = {}  # Stores {normalized_idx: replacement_dim}
 
@@ -107,6 +112,11 @@ def get_broadcasted_shape(
             )
 
     return tuple(res_shape_list)
+
+
+#####################################################################################
+# Array class definition
+#####################################################################################
 
 
 class Array:
@@ -212,12 +222,252 @@ class Array:
         return Array.from_impl(new_impl, name=self.name)
 
 
+#####################################################################################
+# Graph execution and tracing
+#####################################################################################
+
+
+def compute_node_hash(node: Array) -> int:
+    components = [
+        str(node.shape),
+        str(node.dtype),
+        node.name or "unnamed",
+    ]
+    node_str = "-".join(components)
+    return hash(node_str)
+
+
+def get_trace(nodes: Sequence[Array]) -> Tuple[List[Array], List[Array], int]:
+    trace: List[Array] = []
+    inputs: List[Array] = []
+    visited: Set[Array] = set()
+
+    # Iterative DFS using a stack
+    for start_node in nodes:
+        if start_node in visited:
+            continue
+
+        stack: List[Array] = [start_node]
+        while stack:
+            node = stack[-1]  # Peek at the top node
+
+            if node in visited:
+                stack.pop()  # Already processed this node
+                continue
+
+            # If this is a leaf node (has impl)
+            if node.impl is not None:
+                inputs.append(node)
+                trace.append(node)
+                visited.add(node)
+                stack.pop()
+                continue
+
+            # Check if all children have been visited
+            all_children_visited = True
+            for arg in node.args:
+                if arg not in visited:
+                    all_children_visited = False
+                    stack.append(arg)  # Add unvisited child to stack
+
+            # If all children have been visited, we can process this node
+            if all_children_visited:
+                visited.add(node)
+                trace.append(node)
+                stack.pop()
+
+    # Compute the key from the trace
+    key: int = 0
+    for node in trace:
+        node_hash = compute_node_hash(node)
+        key = key ^ (node_hash + 0x9E3779B9 + (key << 6) + (key >> 2))
+
+    key = key % 1000000000
+
+    return inputs, trace, key
+
+
+def realize_(outputs: List[Array]) -> None:
+
+    output_list = []
+
+    # Check if there are outputs which need to be realized
+    nothing_to_compute = True
+    for output in outputs:
+        if not isinstance(output, Array):
+            raise TypeError("Outputs must be an instance of Array")
+        if output.impl is None:
+            output_list.append(output)
+            nothing_to_compute = False
+
+    if nothing_to_compute:
+        return
+
+    # Retrieve the trace and inputs which are the last realized values (i.e. leaves)
+    inputs, trace, key = get_trace(output_list)
+
+    if key in global_execution_context:
+        model = global_execution_context[key]
+    else:
+        # Build input types for the Graph
+        input_types = []
+        devices = []
+        for input_node in inputs:
+            input_types.append(
+                TensorType(
+                    dtype=input_node.dtype,
+                    shape=input_node.shape,
+                    device=DeviceRef.from_device(input_node.device),
+                )
+            )
+            if input_node.device not in devices:
+                devices.append(input_node.device)
+
+        # Define the MAX graph
+        try:
+            custom_op_package_path = Path(__file__).parent / "mojo_kernels"
+            with Graph(
+                "max_graph",
+                input_types=input_types,
+                custom_extensions=[custom_op_package_path],
+            ) as graph:
+                input_symbols = graph.inputs
+                for i in range(len(input_symbols)):
+                    inputs[i].tensor_value = input_symbols[i]
+
+                for node in trace:
+                    if node.tensor_value is not None:
+                        continue
+
+                    arg_symbols = []
+                    for arg in node.get_arguments():
+                        if arg.tensor_value is None:
+                            raise ValueError(f"Error retrieving symbol for {arg.name}")
+                        arg_symbols.append(arg.tensor_value)
+
+                    if node.maxpr is None:
+                        raise ValueError(f"Node {node.name} has no maxpr function")
+                    node.maxpr(
+                        args=arg_symbols, output=node
+                    )  # set tensor value for each node inplace wiht the respective maxpr rule
+
+                output_symbols = []
+                for output in output_list:
+                    if output.tensor_value is None:
+                        raise ValueError(f"Output {output.name} has no tensor value")
+                    output_symbols.append(output.tensor_value)
+
+                graph.output(*output_symbols)
+
+            # Set up the MAX model and cache it
+            session = InferenceSession(devices=devices)
+            model = session.load(graph)
+            global_execution_context[key] = model
+
+        except Exception as e:
+            raise ValueError(f"Failed to build computation graph: {e}")
+
+    # Prepare input tensors
+    tensor_inputs = []
+    for input_node in inputs:
+        if input_node.impl is None:
+            raise ValueError(f"Input {input_node.name} has no impl")
+        tensor_inputs.append(input_node.impl)
+
+    # Execute the model and update outputs
+    try:
+        model_outputs = model.execute(*tensor_inputs)
+        for i, output in enumerate(output_list):
+            output.impl = model_outputs[i]
+            output._numpy_cache = None  # Invalidate cache
+    except Exception as e:
+        raise ValueError(f"Error executing computation: {e}")
+
+
+#####################################################################################
+# Initialization functions
+#####################################################################################
+
+
 def arange(shape: Shape, dtype: DType, device: Device = CPU()) -> Array:
     return Array.from_impl(
         Tensor.from_numpy(
             np.arange(np.prod(shape), dtype=DType.to_numpy(dtype)).reshape(shape)
         )
     ).to(device)
+
+
+class RandN:
+    @staticmethod
+    def get_mean_and_std_and_seed(output: Array) -> Tuple[float, float, Optional[int]]:
+        # get the values fromt eh op_params dict
+        if "mean" not in output.op_params or "std" not in output.op_params:
+            raise ValueError("RandN operation requires 'mean' and 'std' in op_params")
+        mean = output.op_params["mean"]
+        std = output.op_params["std"]
+        seed = output.op_params["seed"]
+        if not isinstance(mean, (int, float)) or not isinstance(std, (int, float)):
+            raise TypeError(
+                f"Expected 'mean' and 'std' to be numeric types, got {type(mean)} and {type(std)}"
+            )
+        if std <= 0:
+            raise ValueError(f"'std' must be positive, got std={std}")
+        return mean, std, seed
+
+    # creates a normal districubtied tesnro from std and variance and shape
+    @staticmethod
+    def maxpr(args: List[Value], output: Array) -> None:
+        mean, std, seed = RandN.get_mean_and_std_and_seed(output)
+        ops.random.set_seed(seed)
+        output.tensor_value = ops.random.normal(
+            TensorType(
+                output.dtype, output.shape, DeviceRef.from_device(output.device)
+            ),
+            mean=mean,
+            std=std,
+        )
+
+    @staticmethod
+    def eagerxpr(args: List[Array], output: Array) -> None:
+        if len(args) != 0:
+            raise ValueError(f"RandN operation requires 0 arguments, got {len(args)}")
+        mean, std, seed = RandN.get_mean_and_std_and_seed(output)
+        np.random.seed(seed)
+        np_result = np.random.normal(loc=mean, scale=std, size=output.shape).astype(
+            DType.to_numpy(output.dtype)
+        )
+        output.impl = Tensor.from_numpy(np_result)
+
+
+def randn(
+    shape: Shape,
+    mean: float = 0.0,
+    std: float = 1.0,
+    device: Device = CPU(),
+    seed: int = 0,
+) -> Array:
+    if not isinstance(shape, tuple):
+        raise TypeError(f"Shape must be a tuple, got {type(shape)}")
+    if not isinstance(mean, (int, float)):
+        raise TypeError(f"Mean must be a numeric type, got {type(mean)}")
+    if not isinstance(std, (int, float)):
+        raise TypeError(f"Std must be a numeric type, got {type(std)}")
+    if std <= 0:
+        raise ValueError(f"Std must be positive, got std={std}")
+
+    res = Array(shape=shape, dtype=DType.float32, device=device, materialize=False)
+    res.set_maxpr(RandN.maxpr)
+    res.op_params = {"mean": mean, "std": std, "seed": seed}
+
+    if EAGERMODE:
+        RandN.eagerxpr([], res)
+
+    return res
+
+
+#####################################################################################
+# Basic operations
+#####################################################################################
 
 
 class Add:
@@ -1212,160 +1462,3 @@ def sum(
         Sum.eagerxpr([arg], res)
 
     return res
-
-
-def compute_node_hash(node: Array) -> int:
-    components = [
-        str(node.shape),
-        str(node.dtype),
-        node.name or "unnamed",
-    ]
-    node_str = "-".join(components)
-    return hash(node_str)
-
-
-def get_trace(nodes: Sequence[Array]) -> Tuple[List[Array], List[Array], int]:
-    trace: List[Array] = []
-    inputs: List[Array] = []
-    visited: Set[Array] = set()
-
-    # Iterative DFS using a stack
-    for start_node in nodes:
-        if start_node in visited:
-            continue
-
-        stack: List[Array] = [start_node]
-        while stack:
-            node = stack[-1]  # Peek at the top node
-
-            if node in visited:
-                stack.pop()  # Already processed this node
-                continue
-
-            # If this is a leaf node (has impl)
-            if node.impl is not None:
-                inputs.append(node)
-                trace.append(node)
-                visited.add(node)
-                stack.pop()
-                continue
-
-            # Check if all children have been visited
-            all_children_visited = True
-            for arg in node.args:
-                if arg not in visited:
-                    all_children_visited = False
-                    stack.append(arg)  # Add unvisited child to stack
-
-            # If all children have been visited, we can process this node
-            if all_children_visited:
-                visited.add(node)
-                trace.append(node)
-                stack.pop()
-
-    # Compute the key from the trace
-    key: int = 0
-    for node in trace:
-        node_hash = compute_node_hash(node)
-        key = key ^ (node_hash + 0x9E3779B9 + (key << 6) + (key >> 2))
-
-    key = key % 1000000000
-
-    return inputs, trace, key
-
-
-def realize_(outputs: List[Array]) -> None:
-
-    output_list = []
-
-    # Check if there are outputs which need to be realized
-    nothing_to_compute = True
-    for output in outputs:
-        if not isinstance(output, Array):
-            raise TypeError("Outputs must be an instance of Array")
-        if output.impl is None:
-            output_list.append(output)
-            nothing_to_compute = False
-
-    if nothing_to_compute:
-        return
-
-    # Retrieve the trace and inputs which are the last realized values (i.e. leaves)
-    inputs, trace, key = get_trace(output_list)
-
-    if key in global_execution_context:
-        model = global_execution_context[key]
-    else:
-        # Build input types for the Graph
-        input_types = []
-        devices = []
-        for input_node in inputs:
-            input_types.append(
-                TensorType(
-                    dtype=input_node.dtype,
-                    shape=input_node.shape,
-                    device=DeviceRef.from_device(input_node.device),
-                )
-            )
-            if input_node.device not in devices:
-                devices.append(input_node.device)
-
-        # Define the MAX graph
-        try:
-            custom_op_package_path = Path(__file__).parent / "mojo_kernels"
-            with Graph(
-                "max_graph",
-                input_types=input_types,
-                custom_extensions=[custom_op_package_path],
-            ) as graph:
-                input_symbols = graph.inputs
-                for i in range(len(input_symbols)):
-                    inputs[i].tensor_value = input_symbols[i]
-
-                for node in trace:
-                    if node.tensor_value is not None:
-                        continue
-
-                    arg_symbols = []
-                    for arg in node.get_arguments():
-                        if arg.tensor_value is None:
-                            raise ValueError(f"Error retrieving symbol for {arg.name}")
-                        arg_symbols.append(arg.tensor_value)
-
-                    if node.maxpr is None:
-                        raise ValueError(f"Node {node.name} has no maxpr function")
-                    node.maxpr(
-                        args=arg_symbols, output=node
-                    )  # set tensor value for each node inplace wiht the respective maxpr rule
-
-                output_symbols = []
-                for output in output_list:
-                    if output.tensor_value is None:
-                        raise ValueError(f"Output {output.name} has no tensor value")
-                    output_symbols.append(output.tensor_value)
-
-                graph.output(*output_symbols)
-
-            # Set up the MAX model and cache it
-            session = InferenceSession(devices=devices)
-            model = session.load(graph)
-            global_execution_context[key] = model
-
-        except Exception as e:
-            raise ValueError(f"Failed to build computation graph: {e}")
-
-    # Prepare input tensors
-    tensor_inputs = []
-    for input_node in inputs:
-        if input_node.impl is None:
-            raise ValueError(f"Input {input_node.name} has no impl")
-        tensor_inputs.append(input_node.impl)
-
-    # Execute the model and update outputs
-    try:
-        model_outputs = model.execute(*tensor_inputs)
-        for i, output in enumerate(output_list):
-            output.impl = model_outputs[i]
-            output._numpy_cache = None  # Invalidate cache
-    except Exception as e:
-        raise ValueError(f"Error executing computation: {e}")
