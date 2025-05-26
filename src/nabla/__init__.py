@@ -1,9 +1,19 @@
 """
-Nabla: A JAX-like deep learning framework with MAX and Mojo backends.
+Nabla: A modular deep learning framework.
+
+Import the clean, refactored implementation by default.
+For backward compatibility, the original graph.py is still available.
 """
 
-__version__ = "0.0.1"
-# Minimal for now:
-# print("Nabla package (pre-alpha) loaded.")
+from max.dtype import DType
 
-from .graph import *
+# Import from the clean modular implementation
+from .nabla import *
+
+# Also provide access to the original implementation if needed
+# from . import graph as original_graph
+
+# Provide the clean implementation as graph_improved for test compatibility
+from . import nabla as graph_improved
+
+__version__ = "0.1.0"

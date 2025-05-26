@@ -26,9 +26,13 @@ if __name__ == "__main__":
     #         print(f"Iteration {iter} completed.")
     #         print(res)
 
+    # for _ in range(100):
     n0 = nb.randn((8, 8))
     n1 = nb.randn((4, 8, 8))
-    n = nb.sin(nb.negate(nb.add(n0, n1)))
+    n = nb.sum(
+        nb.reshape(nb.sin(n0 + n1), shape=(2, 2, 8, 8)), axes=(0, 1, 2), keep_dims=False
+    )
+    print(n)
     # print(n)
 
     # res = nb.unsqueeze(n, axis=2)
@@ -41,13 +45,13 @@ if __name__ == "__main__":
     # print(res2)
     # print(res2.shape)
 
-    res3 = nb.sum(n, axes=2, keep_dims=False)
-    print(res3)
-    print(res3.shape)
+    # res3 = nb.sum(n, axes=2, keep_dims=False)
+    # print(res3)
+    # print(res3.shape)
 
-    res4 = nb.transpose(nb.reshape(res3, shape=(2, 2, 8)))
-    print(res4)
-    print(res4.shape)
+    # res4 = nb.transpose(nb.reshape(res3, shape=(2, 2, 8)))
+    # print(res4)
+    # print(res4.shape)
 
     # print(res.shape)
     # print(res2.shape)

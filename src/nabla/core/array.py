@@ -1,0 +1,139 @@
+"""Core Array class with improved organization."""
+
+from __future__ import annotations
+import numpy as np
+from typing import List, Optional, Dict, Any, Callable, Tuple
+from max.driver import Tensor, CPU, Device
+from max.dtype import DType
+from max.graph import Value
+
+# Type aliases
+Shape = Tuple[int, ...]
+MaxprCallable = Callable[[List[Value]], None]
+VJPRule = Callable[[List["Array"], "Array", "Array"], List["Array"]]
+JVPRule = Callable[[List["Array"], List["Array"], "Array"], "Array"]
+
+
+class Array:
+    """Core tensor-like array class with automatic differentiation support."""
+
+    def __init__(
+        self,
+        shape: Shape,
+        dtype: DType = DType.float32,
+        device: Device = CPU(),
+        materialize: bool = False,
+        name: str = "",
+    ) -> None:
+        self.shape = shape
+        self.dtype = dtype
+        self.device = device
+        self.name = name
+        self.args: List[Array] = []
+        self.visited: bool = False
+        self.tensor_value: Optional[Value] = None
+        self.maxpr: Optional[MaxprCallable] = None
+        self.vjp_rule: Optional[VJPRule] = None
+        self.jvp_rule: Optional[JVPRule] = None
+        self.batch_dim_ctr: int = 0
+        # self.op_params: Optional[Dict[str, Any]] = None
+        self._numpy_cache: Optional[np.ndarray] = None
+
+        if materialize:
+            self.impl = Tensor(dtype, shape, device=device)
+        else:
+            self.impl = None
+
+    @classmethod
+    def from_impl(cls, impl: Tensor, name: str = "") -> Array:
+        """Create Array from existing Tensor implementation."""
+        if not isinstance(impl, Tensor):
+            raise TypeError(f"Data must be a MAX Tensor, got {type(impl)}")
+        if not impl.shape:
+            raise ValueError("Cannot create Array from empty shape Tensor")
+
+        instance = cls(
+            shape=impl.shape, dtype=impl.dtype, device=impl.device, materialize=True
+        )
+        instance.impl = impl if impl else None
+        instance.name = name
+        return instance
+
+    def copy_from(self, other: Array) -> None:
+        """Copy data from another Array."""
+        if self.shape != other.shape or self.dtype != other.dtype:
+            raise ValueError("Shape or dtype mismatch for copy")
+        self.impl = other.impl.copy()
+
+    def add_argument(self, arg_node: Array) -> None:
+        """Add an argument to this Array's computation graph."""
+        if not isinstance(arg_node, Array):
+            raise TypeError(
+                f"Argument must be an instance of Array, got {type(arg_node)}"
+            )
+        self.args.append(arg_node)
+
+    def realize(self) -> None:
+        """Force computation of this Array."""
+        from .graph_execution import realize_
+
+        realize_([self])
+        if self.impl is None:
+            raise ValueError("Data is None after realization")
+
+    def get_numpy(self) -> np.ndarray:
+        """Get NumPy representation with caching."""
+        if self._numpy_cache is None:
+            if self.impl is None:
+                raise ValueError("Cannot get NumPy array from None impl")
+            self._numpy_cache = self.impl.to_numpy()
+        return self._numpy_cache
+
+    def get_arguments(self) -> List[Array]:
+        """Get list of argument Arrays."""
+        return list(self.args)
+
+    def set_maxpr(self, fn: MaxprCallable) -> None:
+        """Set the MAX PR function for this operation."""
+        self.maxpr = fn
+
+    def __repr__(self) -> str:
+        """String representation of the Array."""
+        self.realize()
+        return self.impl.to(CPU()).to_numpy().__str__()
+
+    def to(self, device: Device) -> Array:
+        """Move Array to specified device."""
+        if self.impl is None:
+            self.realize()
+        new_impl = self.impl.to(device)
+        return Array.from_impl(new_impl, name=self.name)
+
+    # Operator overloading methods
+    def __add__(self, other: Array) -> Array:
+        """Addition operator."""
+        # Import here to avoid circular imports
+        from ..ops.binary import add
+
+        return add(self, other)
+
+    def __mul__(self, other: Array) -> Array:
+        """Multiplication operator."""
+        # Import here to avoid circular imports
+        from ..ops.binary import mul
+
+        return mul(self, other)
+
+    def __matmul__(self, other: Array) -> Array:
+        """Matrix multiplication operator (@)."""
+        # Import here to avoid circular imports
+        from ..ops.linalg import matmul
+
+        return matmul(self, other)
+
+    def __neg__(self) -> Array:
+        """Negation operator."""
+        # Import here to avoid circular imports
+        from ..ops.unary import negate
+
+        return negate(self)
