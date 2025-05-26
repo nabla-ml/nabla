@@ -3,11 +3,11 @@ import nabla as nb
 if __name__ == "__main__":
 
     # Basic tests and benchmarks
-    a = nb.arange(shape=(4, 8, 8), dtype=nb.DType.float32)  # .to(Accelerator())
+    # a = nb.arange(shape=(4, 8, 8), dtype=nb.DType.float32)  # .to(Accelerator())
     # print("\na:")
     # print(a)
 
-    b = nb.arange(shape=(3, 4, 8, 8), dtype=nb.DType.float32)  # .to(Accelerator())
+    # b = nb.arange(shape=(3, 4, 8, 8), dtype=nb.DType.float32)  # .to(Accelerator())
     # print("\nb:")
     # print(b)
 
@@ -26,22 +26,26 @@ if __name__ == "__main__":
     #         print(f"Iteration {iter} completed.")
     #         print(res)
 
-    n = nb.randn((2, 3, 4))
-    print(n)
+    n = nb.randn((4, 8, 8))
+    # print(n)
 
-    # res = nb.unsqueeze(a, axis=2)
+    # res = nb.unsqueeze(n, axis=2)
     # # print(res)
     # print(res)
+    # print(res.shape)
 
     # res2 = nb.squeeze(res, axis=2)
     # # print(res2)
     # print(res2)
+    # print(res2.shape)
 
-    # res3 = nb.sum(res2, axes=2)
-    # print(res3)
+    res3 = nb.sum(n, axes=2, keep_dims=False)
+    print(res3)
+    print(res3.shape)
 
-    # res4 = nb.reshape(res3, shape=(2, 2, 4, 2))
-    # print(res4)
+    res4 = nb.transpose(nb.reshape(res3, shape=(2, 2, 8)))
+    print(res4)
+    print(res4.shape)
 
     # print(res.shape)
     # print(res2.shape)

@@ -351,6 +351,21 @@ def realize_(outputs: List[Array]) -> None:
                         args=arg_symbols, output=node
                     )  # set tensor value for each node inplace wiht the respective maxpr rule
 
+                    # Convert tensor_value.shape to tuple of ints for comparison
+                    tensor_value_shape_tuple = tuple(int(dim) for dim in node.tensor_value.shape)
+                    if node.shape != tensor_value_shape_tuple:
+                        raise ValueError(
+                            f"Shape mismatch for node {node.name}: "
+                            f"expected {node.shape}, got {node.tensor_value.shape} (converted to {tensor_value_shape_tuple})"
+                            f"op_name: {node.name}, op_params: {node.op_params}"
+                        )
+                    if node.dtype != node.tensor_value.dtype:
+                        raise ValueError(
+                            f"Dtype mismatch for node {node.name}: "
+                            f"expected {node.dtype}, got {node.tensor_value.dtype}"
+                            f"op_name: {node.name}, op_params: {node.op_params}"
+                        )
+
                 output_symbols = []
                 for output in output_list:
                     if output.tensor_value is None:
@@ -570,13 +585,33 @@ def mul(arg0: Array, arg1: Array) -> Array:
 
 
 class Transpose:
+    # helper methods 
+    def get_shape(arg_shape: Shape, axis_1: int, axis_2: int) -> Shape:
+        if not arg_shape:
+            raise ValueError("Cannot transpose an empty shape")
+        if axis_1 < -len(arg_shape) or axis_1 >= len(arg_shape):
+            raise ValueError(f"axis_1 {axis_1} is out of bounds for shape {arg_shape}")
+        if axis_2 < -len(arg_shape) or axis_2 >= len(arg_shape):
+            raise ValueError(f"axis_2 {axis_2} is out of bounds for shape {arg_shape}")
+
+        # Normalize negative axes
+        axis_1 = axis_1 if axis_1 >= 0 else len(arg_shape) + axis_1
+        axis_2 = axis_2 if axis_2 >= 0 else len(arg_shape) + axis_2
+
+        # Create a new shape with the axes swapped
+        new_shape = list(arg_shape)
+        new_shape[axis_1], new_shape[axis_2] = new_shape[axis_2], new_shape[axis_1]
+        return tuple(new_shape)
+    
     @staticmethod
     def maxpr(args: List[Value], output: Array) -> None:
         if len(args) != 1:
             raise ValueError(
                 f"Transpose operation requires 1 argument, got {len(args)}"
             )
-        output.tensor_value = ops.transpose(args[0])
+        axis_1 = output.op_params.get("axis_1", -2)
+        axis_2 = output.op_params.get("axis_2", -1)
+        output.tensor_value = ops.transpose(args[0], axis_1, axis_2)
 
     @staticmethod
     def eagerxpr(args: List[Array], output: Array) -> None:
@@ -584,7 +619,9 @@ class Transpose:
             raise ValueError(
                 f"Transpose operation requires 1 argument, got {len(args)}"
             )
-        np_result = np.transpose(args[0].get_numpy())
+        axis_1 = output.op_params.get("axis_1", -2)
+        axis_2 = output.op_params.get("axis_2", -1)
+        np_result = np.transpose(args[0].get_numpy(), axes=(axis_1, axis_2))
         output.impl = Tensor.from_numpy(np_result)
 
     @staticmethod
@@ -593,8 +630,9 @@ class Transpose:
             raise ValueError(
                 f"Transpose VJP rule requires 1 primal, got {len(primals)}"
             )
-        # The cotangent is the gradient of the output with respect to the input
-        return [transpose(cotangent)]
+        axis_1 = output.op_params.get("axis_1", -2)
+        axis_2 = output.op_params.get("axis_2", -1)
+        return [transpose(cotangent, axis_1, axis_2)]
 
     @staticmethod
     def jvp_rule(primals: List[Array], tangents: List[Array], output: Array) -> Array:
@@ -602,18 +640,23 @@ class Transpose:
             raise ValueError(
                 f"Transpose JVP rule requires 1 primal and 1 tangent, got {len(primals)} and {len(tangents)}"
             )
-        # The JVP is simply the transpose of the tangent
-        return transpose(tangents[0])
+        axis_1 = output.op_params.get("axis_1", -2)
+        axis_2 = output.op_params.get("axis_2", -1)
+        return transpose(tangents[0], axis_1, axis_2)
 
 
-def transpose(arg: Array) -> Array:
+def transpose(arg: Array, axis_1: int = -2, axis_2: int = -1) -> Array:
     res = Array(
-        shape=arg.shape[::-1], dtype=arg.dtype, materialize=False, name="transpose"
+        shape=Transpose.get_shape(arg.shape, axis_1, axis_2), dtype=arg.dtype, materialize=False, name=f"transpose_{axis_1}_{axis_2}"
     )
     res.set_maxpr(Transpose.maxpr)
     res.add_argument(arg)
     res.vjp_rule = Transpose.vjp_rule
     res.jvp_rule = Transpose.jvp_rule
+    res.op_params = {
+        "axis_1": axis_1,
+        "axis_2": axis_2,
+    }
 
     if EAGERMODE:
         Transpose.eagerxpr([arg], res)
@@ -1181,7 +1224,6 @@ def unsqueeze(arg: Array, axis: int) -> Array:
     res.jvp_rule = Unsqueeze.jvp_rule
 
     if EAGERMODE:
-        print("Unsqueeze eagerxpr called")
         Unsqueeze.eagerxpr([arg], res)
 
     return res
@@ -1376,7 +1418,7 @@ class Sum:
     def get_shape(
         arg_shape: Tuple[int, ...],
         axes: Union[int, List[int], None],
-        keep_dim: bool = False,
+        keep_dims: bool = False,
     ) -> Tuple[int, ...]:
         if axes is None:
             return arg_shape
@@ -1390,7 +1432,7 @@ class Sum:
         for i, dim in enumerate(arg_shape):
 
             if i in axes:
-                if keep_dim:
+                if keep_dims:
                     target_shape.append(1)
             else:
                 target_shape.append(dim)
@@ -1401,12 +1443,16 @@ class Sum:
         if len(args) != 1:
             raise ValueError(f"Sum operation requires 1 argument, got {len(args)}")
         axes = output.op_params.get("axes", None)
+        keep_dims = output.op_params.get("keep_dims", False)
         if isinstance(axes, int):
             axes = [axes]
         axes = sorted(axes) if axes is not None else None
         output_symbol = args[0]
         for i in range(len(axes)):
-            output_symbol = ops.sum(output_symbol, axis=axes[i] - i)
+            axis = axes[i] if keep_dims else axes[i] - i
+            output_symbol = ops.sum(output_symbol, axis=axis)
+            if not keep_dims:
+                output_symbol = ops.squeeze(output_symbol, axis=axis)
         output.tensor_value = output_symbol
 
     @staticmethod
@@ -1447,7 +1493,7 @@ def sum(
     arg: Array, axes: Union[int, List[int], None] = None, keep_dims: bool = False
 ) -> Array:
     res = Array(
-        shape=Sum.get_shape(arg.shape, axes),
+        shape=Sum.get_shape(arg.shape, axes, keep_dims),
         dtype=arg.dtype,
         materialize=False,
         name=f"sum_{axes}_{keep_dims}",
