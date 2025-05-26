@@ -110,7 +110,7 @@ def get_broadcasted_shape(
 
 class Array:
     name: str
-    data: Optional[Tensor]
+    impl: Optional[Tensor]
     args: List[Array]
     visited: bool
     shape: Shape
@@ -143,21 +143,21 @@ class Array:
         self._numpy_cache = None
 
         if materialize:
-            self.data = Tensor(dtype, shape, device=device)
+            self.impl = Tensor(dtype, shape, device=device)
         else:
-            self.data = None
+            self.impl = None
 
     @classmethod
-    def from_data(cls, data: Tensor, name: str = "") -> Array:
-        if not isinstance(data, Tensor):
-            raise TypeError(f"Data must be a MAX Tensor, got {type(data)}")
-        if not data.shape:
+    def from_impl(cls, impl: Tensor, name: str = "") -> Array:
+        if not isinstance(impl, Tensor):
+            raise TypeError(f"Data must be a MAX Tensor, got {type(impl)}")
+        if not impl.shape:
             raise ValueError("Cannot create Array from empty shape Tensor")
 
         instance = cls(
-            shape=data.shape, dtype=data.dtype, device=data.device, materialize=True
+            shape=impl.shape, dtype=impl.dtype, device=impl.device, materialize=True
         )
-        instance.data = data
+        instance.impl = impl
         instance.name = name
         return instance
 
@@ -169,7 +169,7 @@ class Array:
         if self.shape != other.shape or self.dtype != other.dtype:
             raise ValueError("Shape or dtype mismatch for copy")
 
-        self.data = other.data.copy() if other.data is not None else None
+        self.impl = other.impl.copy() if other.impl is not None else None
 
     def add_argument(self, arg_node: Array) -> None:
         if not isinstance(arg_node, Array):
@@ -178,18 +178,16 @@ class Array:
             )
         self.args.append(arg_node)
 
-    def get_data(self) -> Tensor:
+    def realize(self) -> None:
         realize_(self)
-
-        if self.data is None:
+        if self.impl is None:
             raise ValueError("Data is None after realization")
-        return self.data
 
     def get_numpy(self) -> np.ndarray:
         if self._numpy_cache is None:
-            if self.data is None:
-                raise ValueError("Cannot get NumPy array from None data")
-            self._numpy_cache = self.data.to_numpy()
+            if self.impl is None:
+                raise ValueError("Cannot get NumPy array from None impl")
+            self._numpy_cache = self.impl.to_numpy()
         return self._numpy_cache
 
     def get_arguments(self) -> List[Array]:
@@ -199,17 +197,18 @@ class Array:
         self.maxpr = fn
 
     def __repr__(self) -> str:
-        return self.get_data().to(CPU()).to_numpy().__str__()
+        self.realize()
+        return self.impl.to(CPU()).to_numpy().__str__()
 
     def to(self, device: Device) -> Array:
-        if self.data is None:
+        if self.impl is None:
             realize_(self)
-        new_data = self.data.to(device)
-        return Array.from_data(new_data, name=self.name)
+        new_impl = self.impl.to(device)
+        return Array.from_impl(new_impl, name=self.name)
 
 
 def arange(shape: Shape, dtype: DType, device: Device = CPU()) -> Array:
-    return Array.from_data(
+    return Array.from_impl(
         Tensor.from_numpy(
             np.arange(np.prod(shape), dtype=DType.to_numpy(dtype)).reshape(shape)
         )
@@ -227,13 +226,21 @@ class Add:
     def eagerxpr(args: List[Array]) -> Array:
         if len(args) != 2:
             raise ValueError(f"Add operation requires 2 arguments, got {len(args)}")
-        if args[0].shape != args[1].shape:
-            raise ValueError(
-                f"Shapes {args[0].shape} and {args[1].shape} are not compatible for addition."
-            )
         np_result = np.add(args[0].get_numpy(), args[1].get_numpy())
-        result_data = Tensor.from_numpy(np_result)
-        return Array.from_data(result_data, name=f"add({args[0].name},{args[1].name})")
+        result_impl = Tensor.from_numpy(np_result)
+        return Array.from_impl(result_impl, name=f"add({args[0].name},{args[1].name})")
+    
+    @staticmethod
+    def vjp_rule(primals: List[Array], cotangent: Array, output: Array) -> List[Array]:
+        if len(primals) != 2:
+            raise ValueError(f"Add VJP rule requires 2 primals, got {len(primals)}")
+        return [cotangent, cotangent]
+    
+    @staticmethod
+    def jvp_rule(primals: List[Array], tangents: List[Array], output: Array) -> Array:
+        if len(primals) != 2 or len(tangents) != 2:
+            raise ValueError(f"Add JVP rule requires 2 primals and 2 tangents, got {len(primals)} and {len(tangents)}")
+        return add(tangents[0], tangents[1])
 
 
 def add(arg0: Array, arg1: Array) -> Array:
@@ -247,10 +254,12 @@ def add(arg0: Array, arg1: Array) -> Array:
         res = Add.eagerxpr([arg0, arg1])
     else:
         res = Array(shape=res_shape, dtype=arg0.dtype, materialize=False, name="add")
+        res.set_maxpr(Add.maxpr)
 
     res.add_argument(arg0)
     res.add_argument(arg1)
-    res.set_maxpr(Add.maxpr)
+    res.vjp_rule = Add.vjp_rule
+    res.jvp_rule = Add.jvp_rule
     return res
 
 
@@ -266,13 +275,24 @@ class Mul:
     def eagerxpr(args: List[Array]) -> Array:
         if len(args) != 2:
             raise ValueError(f"Mul operation requires 2 arguments, got {len(args)}")
-        if args[0].shape != args[1].shape:
-            raise ValueError(
-                f"Shapes {args[0].shape} and {args[1].shape} are not compatible for multiplication."
-            )
         np_result = np.multiply(args[0].get_numpy(), args[1].get_numpy())
-        result_data = Tensor.from_numpy(np_result)
-        return Array.from_data(result_data, name=f"mul({args[0].name},{args[1].name})")
+        result_impl = Tensor.from_numpy(np_result)
+        return Array.from_impl(result_impl, name=f"mul({args[0].name},{args[1].name})")
+    
+    @staticmethod
+    def vjp_rule(primals: List[Array], cotangent: Array, output: Array) -> List[Array]:
+        if len(primals) != 2:
+            raise ValueError(f"Mul VJP rule requires 2 primals, got {len(primals)}")
+        return [mul(cotangent, primals[1]), mul(cotangent, primals[0])]
+    
+    @staticmethod
+    def jvp_rule(primals: List[Array], tangents: List[Array], output: Array) -> Array:
+        if len(primals) != 2 or len(tangents) != 2:
+            raise ValueError(f"Mul JVP rule requires 2 primals and 2 tangents, got {len(primals)} and {len(tangents)}")
+        return ops.add(
+            mul(primals[0], tangents[1]),
+            mul(primals[1], tangents[0])
+        )
 
 
 def mul(arg0: Array, arg1: Array) -> Array:
@@ -286,12 +306,54 @@ def mul(arg0: Array, arg1: Array) -> Array:
         res = Mul.eagerxpr([arg0, arg1])
     else:
         res = Array(shape=res_shape, dtype=arg0.dtype, materialize=False, name="mul")
+        res.set_maxpr(Mul.maxpr)
 
     res.add_argument(arg0)
     res.add_argument(arg1)
-    res.set_maxpr(Mul.maxpr)
+    res.vjp_rule = Mul.vjp_rule
+    res.jvp_rule = Mul.jvp_rule
     return res
 
+class Transpose:
+    @staticmethod
+    def maxpr(args: List[Value]) -> Value:
+        if len(args) != 1:
+            raise ValueError(f"Transpose operation requires 1 argument, got {len(args)}")
+        return ops.transpose(args[0])
+
+    @staticmethod
+    def eagerxpr(args: List[Array]) -> Array:
+        if len(args) != 1:
+            raise ValueError(f"Transpose operation requires 1 argument, got {len(args)}")
+        np_result = np.transpose(args[0].get_numpy())
+        result_impl = Tensor.from_numpy(np_result)
+        return Array.from_impl(result_impl, name=f"transpose({args[0].name})")
+    
+    @staticmethod
+    def vjp_rule(primals: List[Array], cotangent: Array, output: Array) -> List[Array]:
+        if len(primals) != 1:
+            raise ValueError(f"Transpose VJP rule requires 1 primal, got {len(primals)}")
+        # The cotangent is the gradient of the output with respect to the input
+        return [transpose(cotangent)]
+    
+    @staticmethod
+    def jvp_rule(primals: List[Array], tangents: List[Array], output: Array) -> Array:
+        if len(primals) != 1 or len(tangents) != 1:
+            raise ValueError(f"Transpose JVP rule requires 1 primal and 1 tangent, got {len(primals)} and {len(tangents)}")
+        # The JVP is simply the transpose of the tangent
+        return transpose(tangents[0])
+    
+def transpose(arg: Array) -> Array: 
+    if EAGERMODE:
+        res = Transpose.eagerxpr([arg])
+    else:
+        res = Array(shape=arg.shape[::-1], dtype=arg.dtype, materialize=False, name="transpose")
+        res.set_maxpr(Transpose.maxpr)
+
+    res.add_argument(arg)
+    res.vjp_rule = Transpose.vjp_rule
+    res.jvp_rule = Transpose.jvp_rule
+    return res
 
 class MatMul:
     @staticmethod
@@ -417,11 +479,32 @@ class MatMul:
 
         # np.matmul handles N-D broadcasting correctly.
         np_result = np.matmul(arg0_numpy, arg1_numpy)
-        result_data = Tensor.from_numpy(np_result)
+        result_impl = Tensor.from_numpy(np_result)
         # The name could be more dynamic if args[0].name etc. are complex
-        return Array.from_data(
-            result_data, name=f"matmul_eager({args[0].name},{args[1].name})"
+        return Array.from_impl(
+            result_impl, name=f"matmul_eager({args[0].name},{args[1].name})"
         )
+    
+    @staticmethod
+    def vjp_rule(primals: List[Array], cotangent: Array, output: Array) -> List[Array]:
+        if len(primals) != 2:
+            raise ValueError(f"MatMul VJP rule requires 2 primals, got {len(primals)}")
+        
+        x, y = primals
+        return [
+            matmul(cotangent, transpose(y)),  # Gradient w.r.t. x
+            matmul(transpose(x), cotangent)   # Gradient w.r.t. y
+        ]
+    
+    @staticmethod
+    def jvp_rule(primals: List[Array], tangents: List[Array], output: Array) -> Array:
+        if len(primals) != 2 or len(tangents) != 2:
+            raise ValueError(f"MatMul JVP rule requires 2 primals and 2 tangents, got {len(primals)} and {len(tangents)}")
+        
+        x, y = primals
+        tx, ty = tangents
+        return add(matmul(x, ty), matmul(tx, y))
+      
 
 
 def matmul(arg0: Array, arg1: Array) -> Array:
@@ -444,12 +527,174 @@ def matmul(arg0: Array, arg1: Array) -> Array:
             materialize=False,
             name="matmul",
         )
+        res.set_maxpr(MatMul.maxpr)
 
     res.add_argument(arg0)
     res.add_argument(arg1)
-    res.set_maxpr(MatMul.maxpr)
+    res.vjp_rule = MatMul.vjp_rule
+    res.jvp_rule = MatMul.jvp_rule
     return res
 
+
+class Negate:
+    @staticmethod
+    def maxpr(args: List[Value]) -> Value:
+        if len(args) != 1:
+            raise ValueError(f"Negate operation requires 1 argument, got {len(args)}")
+        return -args[0]
+
+    @staticmethod
+    def eagerxpr(args: List[Array]) -> Array:
+        if len(args) != 1:
+            raise ValueError(f"Negate operation requires 1 argument, got {len(args)}")
+        np_result = np.negative(args[0].get_numpy())
+        result_impl = Tensor.from_numpy(np_result)
+        return Array.from_impl(result_impl, name=f"negate({args[0].name})")
+    
+    @staticmethod
+    def vjp_rule(primals: List[Array], cotangent: Array, output: Array) -> List[Array]:
+        if len(primals) != 1:
+            raise ValueError(f"Negate VJP rule requires 1 primal, got {len(primals)}")
+        return [negate(cotangent)]
+    
+    @staticmethod
+    def jvp_rule(primals: List[Array], tangents: List[Array], output: Array) -> Array:
+        if len(primals) != 1 or len(tangents) != 1:
+            raise ValueError(f"Negate JVP rule requires 1 primal and 1 tangent, got {len(primals)} and {len(tangents)}")
+        return negate(tangents[0])
+
+    
+def negate(arg: Array) -> Array:
+    if EAGERMODE:
+        res = Negate.eagerxpr([arg])
+    else:
+        res = Array(shape=arg.shape, dtype=arg.dtype, materialize=False, name="negate")
+        res.set_maxpr(Negate.maxpr)
+
+    res.add_argument(arg)
+    res.vjp_rule = Negate.vjp_rule
+    res.jvp_rule = Negate.jvp_rule
+    return res
+
+
+class Cos:
+    @staticmethod
+    def maxpr(args: List[Value]) -> Value:
+        if len(args) != 1:
+            raise ValueError(f"Cos operation requires 1 argument, got {len(args)}")
+        return ops.cos(args[0])
+
+    @staticmethod
+    def eagerxpr(args: List[Array]) -> Array:
+        if len(args) != 1:
+            raise ValueError(f"Cos operation requires 1 argument, got {len(args)}")
+        np_result = np.cos(args[0].get_numpy())
+        result_impl = Tensor.from_numpy(np_result)
+        return Array.from_impl(result_impl, name=f"cos({args[0].name})")
+    
+    @staticmethod
+    def vjp_rule(primals: List[Array], cotangent: Array, output: Array) -> List[Array]:
+        if len(primals) != 1:
+            raise ValueError(f"Cos VJP rule requires 1 primal, got {len(primals)}")
+        return [negate(mul(cotangent, sin(primals[0])))]
+    
+    @staticmethod
+    def jvp_rule(primals: List[Array], tangents: List[Array], output: Array) -> Array:
+        if len(primals) != 1 or len(tangents) != 1:
+            raise ValueError(f"Cos JVP rule requires 1 primal and 1 tangent, got {len(primals)} and {len(tangents)}")
+        return negate(mul(tangents[0], sin(primals[0])))
+    
+def cos(arg: Array) -> Array:
+    if EAGERMODE:
+        res = Cos.eagerxpr([arg])
+    else:
+        res = Array(shape=arg.shape, dtype=arg.dtype, materialize=False, name="cos")
+        res.set_maxpr(Cos.maxpr)
+
+    res.add_argument(arg)
+    res.vjp_rule = Cos.vjp_rule
+    res.jvp_rule = Cos.jvp_rule
+    return res
+
+class Sin:
+    @staticmethod
+    def maxpr(args: List[Value]) -> Value:
+        if len(args) != 1:
+            raise ValueError(f"Sin operation requires 1 argument, got {len(args)}")
+        return ops.sin(args[0])
+
+    @staticmethod
+    def eagerxpr(args: List[Array]) -> Array:
+        if len(args) != 1:
+            raise ValueError(f"Sin operation requires 1 argument, got {len(args)}")
+        np_result = np.sin(args[0].get_numpy())
+        result_impl = Tensor.from_numpy(np_result)
+        return Array.from_impl(result_impl, name=f"sin({args[0].name})")
+    
+    @staticmethod
+    def vjp_rule(primals: List[Array], cotangent: Array, output: Array) -> List[Array]:
+        if len(primals) != 1:
+            raise ValueError(f"Sin VJP rule requires 1 primal, got {len(primals)}")
+        return [mul(cotangent, cos(primals[0]))]
+    
+    @staticmethod
+    def jvp_rule(primals: List[Array], tangents: List[Array], output: Array) -> Array:
+        if len(primals) != 1 or len(tangents) != 1:
+            raise ValueError(f"Sin JVP rule requires 1 primal and 1 tangent, got {len(primals)} and {len(tangents)}")
+        return mul(tangents[0], cos(primals[0]))
+    
+def sin(arg: Array) -> Array:
+    if EAGERMODE:
+        res = Sin.eagerxpr([arg])
+    else:
+        res = Array(shape=arg.shape, dtype=arg.dtype, materialize=False, name="sin")
+        res.set_maxpr(Sin.maxpr)
+
+    res.add_argument(arg)
+    res.vjp_rule = Sin.vjp_rule
+    res.jvp_rule = Sin.jvp_rule
+    return res
+
+class AddOneCustom:
+    @staticmethod
+    def maxpr(args: List[Value]) -> Value:
+        return ops.custom(
+            name="add_one_custom",
+            values=[args[0]],
+            out_types=[TensorType(dtype=args[0].dtype, shape=args[0].tensor.shape)],
+        )[0].tensor
+    
+    @staticmethod
+    def eagerxpr(args: List[Array]) -> Array:
+        if len(args) != 1:
+            raise ValueError(f"AddOneCustom operation requires 1 argument, got {len(args)}")
+        np_result = args[0].get_numpy() + 1
+        result_impl = Tensor.from_numpy(np_result)
+        return Array.from_impl(result_impl, name=f"add_one_custom({args[0].name})")
+    
+    @staticmethod
+    def vjp_rule(primals: List[Array], cotangent: Array, output: Array) -> List[Array]:
+        raise NotImplementedError(
+            "AddOneCustom does not support VJP rule. It is a custom operation."
+        )
+    
+    @staticmethod
+    def jvp_rule(primals: List[Array], tangents: List[Array], output: Array) -> Array:
+        raise NotImplementedError(
+            "AddOneCustom does not support JVP rule. It is a custom operation."
+        )
+    
+def add_one_custom(arg: Array) -> Array:
+    if EAGERMODE:
+        res = AddOneCustom.eagerxpr([arg])
+    else:
+        res = Array(shape=arg.shape, dtype=arg.dtype, materialize=False, name="add_one_custom")
+        res.set_maxpr(AddOneCustom.maxpr)
+
+    res.add_argument(arg)
+    res.vjp_rule = AddOneCustom.vjp_rule
+    res.jvp_rule = AddOneCustom.jvp_rule
+    return res
 
 def compute_node_hash(node: Array) -> int:
     components = [
@@ -480,8 +725,8 @@ def get_trace(nodes: Sequence[Array]) -> Tuple[List[Array], List[Array], int]:
                 stack.pop()  # Already processed this node
                 continue
 
-            # If this is a leaf node (has data)
-            if node.data is not None:
+            # If this is a leaf node (has impl)
+            if node.impl is not None:
                 inputs.append(node)
                 trace.append(node)
                 visited.add(node)
@@ -524,7 +769,7 @@ def realize_(outputs: Union[Sequence[Array], Array]) -> None:
     # Check if there are outputs which need to be realized
     nothing_to_compute = True
     for output in output_list:
-        if output.data is None:
+        if output.impl is None:
             nothing_to_compute = False
             break
 
@@ -591,43 +836,19 @@ def realize_(outputs: Union[Sequence[Array], Array]) -> None:
     # Prepare input tensors
     tensor_inputs = []
     for input_node in inputs:
-        if input_node.data is None:
-            raise ValueError(f"Input {input_node.name} has no data")
-        tensor_inputs.append(input_node.data)
+        if input_node.impl is None:
+            raise ValueError(f"Input {input_node.name} has no impl")
+        tensor_inputs.append(input_node.impl)
 
     # Execute the model and update outputs
     try:
         model_outputs = model.execute(*tensor_inputs)
         for i, output in enumerate(output_list):
-            output.data = model_outputs[i]
+            output.impl = model_outputs[i]
             output._numpy_cache = None  # Invalidate cache
     except Exception as e:
         raise ValueError(f"Error executing computation: {e}")
+    
 
 
-if __name__ == "__main__":
-    # Basic tests and benchmarks
-    a = arange(shape=(4, 256, 256), dtype=DType.float32)  # .to(Accelerator())
-    # print("\na:")
-    # print(a)
-
-    b = arange(shape=(3, 4, 256, 256), dtype=DType.float32)  # .to(Accelerator())
-    # print("\nb:")
-    # print(b)
-
-    for iter in range(1000):
-        c = mul(a, b)
-        res = arange(
-            shape=(2, 3, 4, 256, 256), dtype=DType.float32
-        )  # .to(Accelerator())
-
-        for i in range(1000):
-            res = mul(res, c)
-
-        _ = res.get_data()  # Trigger realization
-
-        if iter % 100 == 0:
-            print(f"Iteration {iter} completed.")
-
-
-# format file via: black graph.py
+# class Callable:

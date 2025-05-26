@@ -1,4 +1,4 @@
-import nabla 
+import nabla
 
 
 def test_shape():
