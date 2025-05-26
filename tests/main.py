@@ -26,7 +26,9 @@ if __name__ == "__main__":
     #         print(f"Iteration {iter} completed.")
     #         print(res)
 
-    n = nb.randn((4, 8, 8))
+    n0 = nb.randn((8, 8))
+    n1 = nb.randn((4, 8, 8))
+    n = nb.add(n0, n1)
     # print(n)
 
     # res = nb.unsqueeze(n, axis=2)
