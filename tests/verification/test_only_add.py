@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+"""Test with only add operations."""
+
+import sys
+import os
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+
+import nabla
+
+print("   Creating arrays...")
+x = nabla.arange((2, 2))
+y = nabla.randn((2, 2), seed=42)
+
+print("   Testing function calls...")
+# Test function calls - only add operations
+z1 = nabla.add(x, y)
+z2 = nabla.add(x, y)
+z3 = nabla.add(x, y)
+z4 = nabla.add(x, y)
+
+print("   Realizing results...")
+# Realize results
+print("     Realizing z1 (add)...")
+z1.realize()
+print("     Realizing z2 (add)...")
+z2.realize()
+print("     Realizing z3 (add)...")
+z3.realize()
+print("     Realizing z4 (add)...")
+z4.realize()
+
+print(f"   z1 result shape: {z1.shape}")
+print(f"   z2 result shape: {z2.shape}")
+print(f"   z3 result shape: {z3.shape}")
+print(f"   z4 result shape: {z4.shape}")
+
+print("✅ All operations completed successfully!")

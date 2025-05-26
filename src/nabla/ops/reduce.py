@@ -48,7 +48,15 @@ class SumOp(ReductionOperation):
         output.tensor_value = output_symbol
 
     def eagerxpr(self, args: List[Array], output: Array) -> None:
-        np_result = np.sum(args[0].get_numpy(), axis=self.axes, keepdims=self.keep_dims)
+        # Convert axes list to tuple for numpy compatibility
+        axes = self.axes
+        if isinstance(axes, list):
+            axes = tuple(axes)
+
+        np_result = np.sum(args[0].get_numpy(), axis=axes, keepdims=self.keep_dims)
+        # Ensure result is at least a 0-d array for DLPack conversion
+        if np_result.ndim == 0:
+            np_result = np.array(np_result)
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(

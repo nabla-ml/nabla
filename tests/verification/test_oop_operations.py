@@ -4,11 +4,11 @@
 import sys
 import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-print("🧪 Testing OOP Operation Classes...")
+def test_oop_operations():
+    """Test OOP-based operations."""
+    print("🧪 Testing OOP Operation Classes...")
 
-try:
     # Test basic imports
     print("✅ Testing imports...")
     from nabla.ops.operation import (
@@ -33,7 +33,7 @@ try:
     mul_op = MulOp()
     negate_op = NegateOp()
     sin_op = SinOp()
-    sum_op = SumOp()
+    sum_op = SumOp((2, 3))  # SumOp requires arg_shape parameter
     transpose_op = TransposeOp()
     matmul_op = MatMulOp()
     print("✅ All operations instantiated successfully!")
@@ -62,9 +62,5 @@ try:
 
     print("🎉 All OOP operation tests passed!")
 
-except Exception as e:
-    print(f"❌ Error testing OOP operations: {e}")
-    import traceback
-
-    traceback.print_exc()
-    sys.exit(1)
+    # Test passes - return nothing (pytest expects None)
+    return None

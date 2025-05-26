@@ -48,7 +48,7 @@ class RandNOp(Operation):
         device: Device = CPU(),
         seed: int = 0,
     ):
-        super().__init__("randn")
+        super().__init__(f"randn_{shape}_{mean}_{std}_{seed}")
         self.shape = shape
         self.mean = mean
         self.std = std

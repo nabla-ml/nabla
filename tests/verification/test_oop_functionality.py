@@ -4,11 +4,11 @@
 import sys
 import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-print("🧪 Testing OOP Operations with Arrays...")
+def test_oop_functionality():
+    """Test OOP-based operations with arrays."""
+    print("🧪 Testing OOP Operations with Arrays...")
 
-try:
     # Import the clean entry point
     import nabla
 
@@ -61,9 +61,5 @@ try:
 
     print("🎉 All OOP operation functionality tests passed!")
 
-except Exception as e:
-    print(f"❌ Error testing OOP operations with arrays: {e}")
-    import traceback
-
-    traceback.print_exc()
-    sys.exit(1)
+    # Test passes - return nothing (pytest expects None)
+    return None

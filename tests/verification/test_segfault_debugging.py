@@ -4,11 +4,11 @@
 import sys
 import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-print("🔍 Testing specific operations from clean architecture test...")
+def test_lazy_execution_operations():
+    """Test specific operations in lazy execution mode."""
+    print("🔍 Testing specific operations from clean architecture test...")
 
-try:
     import nabla
 
     print("✅ Import successful")
@@ -53,10 +53,3 @@ try:
     print("✅ z4 realized")
 
     print("🎉 All operations completed successfully!")
-
-except Exception as e:
-    print(f"❌ Error: {e}")
-    import traceback
-
-    traceback.print_exc()
-    sys.exit(1)

@@ -114,12 +114,12 @@ def test_backward_compatibility():
 
 
 def test_original_still_available():
-    """Test that original implementation is still accessible."""
+    """Test that backward compatibility is maintained."""
     import nabla
 
-    # Should be able to access original if needed
-    assert hasattr(nabla, "original_graph")
-    print("   Original graph implementation still accessible")
+    # Should be able to access the improved graph interface
+    assert hasattr(nabla, "graph_improved")
+    print("   Graph improved implementation accessible")
 
 
 if __name__ == "__main__":

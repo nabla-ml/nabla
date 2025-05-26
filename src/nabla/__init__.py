@@ -11,7 +11,7 @@ from max.dtype import DType
 from .nabla import *
 
 # Also provide access to the original implementation if needed
-# from . import graph as original_graph
+# from . import graph as original_graph  # Original graph.py no longer exists
 
 # Provide the clean implementation as graph_improved for test compatibility
 from . import nabla as graph_improved

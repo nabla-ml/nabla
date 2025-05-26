@@ -36,9 +36,9 @@ def test_operation_consistency():
         NegateOp(),
         SinOp(),
         CosOp(),
-        SumOp(),
+        SumOp((2, 3)),  # SumOp requires arg_shape parameter
         TransposeOp(),
-        ReshapeOp((2, 3)),
+        ReshapeOp((2, 3), (6,)),  # ReshapeOp requires arg_shape and target_shape
         BroadcastToOp((2, 3)),
         MatMulOp(),
     ]

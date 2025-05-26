@@ -17,7 +17,7 @@ from ..ops.view import (
 from max.dtype import DType  # Import DType
 
 # Global execution mode flag
-EAGERMODE: bool = False
+EAGERMODE: bool = True
 
 
 def _validate_binary_args(args: List[Array], op_name: str) -> None:
