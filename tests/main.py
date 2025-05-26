@@ -11,17 +11,32 @@ if __name__ == "__main__":
     # print("\nb:")
     # print(b)
 
-    for iter in range(1000):
-        c = nb.mul(a, b)
-        res = nb.arange(
-            shape=(2, 3, 4, 8, 8), dtype=nb.DType.float32
-        )  # .to(Accelerator())
+    # for iter in range(1000):
+    #     c = nb.mul(a, b)
+    #     res = nb.arange(
+    #         shape=(2, 3, 4, 8, 8), dtype=nb.DType.float32
+    #     )  # .to(Accelerator())
 
-        for i in range(1000):
-            res = nb.sin(nb.cos(nb.mul(res, c)))
+    #     for i in range(10):
+    #         res = nb.add_one_custom(nb.sin(nb.cos(nb.mul(res, c))))
 
-        res.realize()  # Trigger realization
+    #     res.realize()  # Trigger realization
 
-        if iter % 100 == 0:
-            print(f"Iteration {iter} completed.")
-            # print(res)
+    #     if iter % 100 == 0:
+    #         print(f"Iteration {iter} completed.")
+    #         print(res)
+
+    res = nb.unsqueeze(a, axis=2)
+    # print(res)
+    print(res)
+
+    res2 = nb.squeeze(res, axis=2)
+    # print(res2)
+    print(res2)
+
+    res3 = nb.sum(res2, axes=2)
+    print(res3)
+
+    print(res.shape)
+    print(res2.shape)
+    print(res3.shape)
