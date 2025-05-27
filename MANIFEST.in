@@ -1,0 +1,27 @@
+# Include important project files
+include README.md
+include readme.md
+include LICENSE
+include pyproject.toml
+include CITATION.cff
+include changelog.md
+
+# Include all Python files in the package
+recursive-include nabla *.py
+recursive-include nabla *.mojo
+
+# Exclude unnecessary files
+exclude .gitignore
+exclude *.pyc
+exclude *.pyo
+recursive-exclude nabla __pycache__
+recursive-exclude nabla *.pyc
+recursive-exclude nabla *.pyo
+
+# Exclude development files
+exclude .git*
+exclude .pytest_cache
+exclude .venv
+exclude build
+exclude dist
+exclude *.egg-info
