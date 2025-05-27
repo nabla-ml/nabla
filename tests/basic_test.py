@@ -29,7 +29,7 @@ if __name__ == "__main__":
     # for _ in range(100):
     n0 = nb.randn((8, 8))
     n1 = nb.randn((4, 8, 8))
-    n = nb.sum(
+    n = nb.reduce_sum(
         nb.reshape(nb.sin(n0 + n1 * n1 + n0), shape=(2, 2, 8, 8)),
         axes=(0, 1, 2),
         keep_dims=False,
@@ -48,7 +48,7 @@ if __name__ == "__main__":
     # print(res2)
     # print(res2.shape)
 
-    # res3 = nb.sum(n, axes=2, keep_dims=False)
+    # res3 = nb.reduce_sum(n, axes=2, keep_dims=False)
     # print(res3)
     # print(res3.shape)
 

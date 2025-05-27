@@ -38,10 +38,10 @@ def test_oop_functionality():
 
     # Test reduction operations (using OOP)
     print("✅ Testing reduction operations...")
-    sum_x = nabla.sum(x)  # Should use SumOp
-    sum_axis = nabla.sum(x, axes=0)  # Should use SumOp
-    print(f"Sum all shape: {sum_x.shape}")
-    print(f"Sum axis 0 shape: {sum_axis.shape}")
+    reduce_sum_x = nabla.reduce_sum(x)  # Should use reduce_sumOp
+    reduce_sum_axis = nabla.reduce_sum(x, axes=0)  # Should use reduce_sumOp
+    print(f"reduce_sum all shape: {reduce_sum_x.shape}")
+    print(f"reduce_sum axis 0 shape: {reduce_sum_axis.shape}")
 
     # Test view operations (using OOP)
     print("✅ Testing view operations...")

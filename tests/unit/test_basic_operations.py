@@ -38,19 +38,19 @@ def test_reduction_operations():
     # Create a test array
     x = nabla.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
 
-    # Test sum without axis
-    result_sum_all = nabla.sum(x)
-    result_sum_all.realize()
-    assert result_sum_all.shape == ()
+    # Test reduce_sum without axis
+    result_reduce_sum_all = nabla.reduce_sum(x)
+    result_reduce_sum_all.realize()
+    assert result_reduce_sum_all.shape == ()
 
-    # Test sum with axis
-    result_sum_axis0 = nabla.sum(x, axes=0)
-    result_sum_axis0.realize()
-    assert result_sum_axis0.shape == (3,)
+    # Test reduce_sum with axis
+    result_reduce_sum_axis0 = nabla.reduce_sum(x, axes=0)
+    result_reduce_sum_axis0.realize()
+    assert result_reduce_sum_axis0.shape == (3,)
 
-    result_sum_axis1 = nabla.sum(x, axes=1)
-    result_sum_axis1.realize()
-    assert result_sum_axis1.shape == (2,)
+    result_reduce_sum_axis1 = nabla.reduce_sum(x, axes=1)
+    result_reduce_sum_axis1.realize()
+    assert result_reduce_sum_axis1.shape == (2,)
 
 
 def test_matrix_operations():
@@ -92,7 +92,7 @@ def test_complex_operations():
     # Test the example that was mentioned as working
     n0 = nabla.randn((8, 8), seed=42)
     n1 = nabla.randn((4, 8, 8), seed=43)
-    n = nabla.sum(
+    n = nabla.reduce_sum(
         nabla.reshape(nabla.sin(n0 + n1), shape=(2, 2, 8, 8)),
         axes=(0, 1, 2),
         keep_dims=False,

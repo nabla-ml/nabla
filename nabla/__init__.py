@@ -18,7 +18,7 @@ from .ops.base import EAGERMODE
 from .ops.binary import add, mul
 from .ops.creation import arange, array, randn
 from .ops.linalg import matmul
-from .ops.reduce import sum
+from .ops.reduce import reduce_sum
 from .ops.unary import cos, negate, sin
 from .ops.view import broadcast_to, reshape, transpose
 from .utils.broadcasting import get_broadcasted_shape
@@ -47,7 +47,7 @@ __all__ = [
     "reshape",
     "broadcast_to",
     # Reduction operations
-    "sum",
+    "reduce_sum",
     # Data types
     "DType",
 ]

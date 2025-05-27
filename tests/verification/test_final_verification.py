@@ -24,7 +24,7 @@ def test_complete_oop_refactoring():
             "mul",
             "sin",
             "cos",
-            "sum",
+            "reduce_sum",
             "transpose",
             "matmul",
             "arange",
@@ -37,7 +37,7 @@ def test_complete_oop_refactoring():
         print("\n2. Testing operation classes inheritance...")
         from nabla.ops.binary import _add_op, _mul_op
         from nabla.ops.unary import SinOp, CosOp, NegateOp
-        from nabla.ops.reduce import _sum_op
+        from nabla.ops.reduce import _reduce_sum_op
         from nabla.ops.view import _transpose_op
         from nabla.ops.linalg import _matmul_op
         from nabla.ops.creation import RandNOp
@@ -52,7 +52,7 @@ def test_complete_oop_refactoring():
         # Test inheritance for global instances
         assert isinstance(_add_op, BinaryOperation)
         assert isinstance(_mul_op, BinaryOperation)
-        assert isinstance(_sum_op, ReductionOperation)
+        assert isinstance(_reduce_sum_op, ReductionOperation)
         assert isinstance(_transpose_op, ViewOperation)
         assert isinstance(
             _matmul_op, Operation
@@ -111,10 +111,10 @@ def test_complete_oop_refactoring():
         print("   ✅ View operations work")
 
         print("\n7. Testing reduction operations...")
-        m = nabla.sum(b)
+        m = nabla.reduce_sum(b)
 
         m.realize()
-        print(f"   sum: {m.shape}")
+        print(f"   reduce_sum: {m.shape}")
         print("   ✅ Reduction operations work")
 
         print("\n8. Testing matrix operations...")
@@ -136,7 +136,7 @@ def test_complete_oop_refactoring():
         x3 = x1 + x2
         x4 = nabla.sin(x3)
         x5 = nabla.transpose(x4)
-        x6 = nabla.sum(x5)
+        x6 = nabla.reduce_sum(x5)
 
         result = x6.realize()
         result_val = x6.get_numpy()

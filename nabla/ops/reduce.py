@@ -10,8 +10,8 @@ from ..core.array import Array, Shape
 from .operation import ReductionOperation
 
 
-class SumOp(ReductionOperation):
-    """Sum reduction operation."""
+class reduce_sumOp(ReductionOperation):
+    """reduce_sum reduction operation."""
 
     def __init__(
         self,
@@ -19,7 +19,7 @@ class SumOp(ReductionOperation):
         axes: Union[int, list[int], None] = None,
         keep_dims: bool = False,
     ):
-        super().__init__("sum", axes, keep_dims)
+        super().__init__("reduce_sum", axes, keep_dims)
         self.arg_shape = arg_shape
         self.axes = axes
         self.keep_dims = keep_dims
@@ -27,10 +27,10 @@ class SumOp(ReductionOperation):
     def maxpr(self, args: list[Value], output: Array) -> None:
         axes = self.axes
         if axes is None:
-            # Sum over all axes - iterate through each axis from the last to first
+            # reduce_sum over all axes - iterate through each axis from the last to first
             output_symbol = args[0]
             for axis in range(len(args[0].shape) - 1, -1, -1):
-                output_symbol = ops.sum(output_symbol, axis=axis)
+                output_symbol = ops.reduce_sum(output_symbol, axis=axis)
                 if not self.keep_dims:
                     output_symbol = ops.squeeze(output_symbol, axis=axis)
         else:
@@ -70,20 +70,20 @@ class SumOp(ReductionOperation):
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
-        return sum(tangents[0], axes=self.axes, keep_dims=self.keep_dims)
+        return reduce_sum(tangents[0], axes=self.axes, keep_dims=self.keep_dims)
 
 
-def sum(
+def reduce_sum(
     arg: Array,
     axes: Optional[Union[int, list[int]]] = None,
     axis: Optional[Union[int, list[int]]] = None,
     keep_dims: bool = False,
 ) -> Array:
-    """Sum array elements over given axes."""
+    """reduce_sum array elements over given axes."""
     if axis is not None and axes is not None:
         raise ValueError("Cannot specify both 'axes' and 'axis' parameters")
     if axis is not None:
         axes = axis
 
-    op = SumOp(arg.shape, axes, keep_dims)
+    op = reduce_sumOp(arg.shape, axes, keep_dims)
     return op.forward(arg)

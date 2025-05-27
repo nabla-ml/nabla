@@ -169,10 +169,10 @@ class BroadcastToOp(ViewOperation):
             primals[0].shape, self.target_shape
         )
 
-        # Import sum here to avoid circular imports
-        from .reduce import sum
+        # Import reduce_sum here to avoid circular imports
+        from .reduce import reduce_sum
 
-        return [sum(cotangent, axes=broadcasted_axes)]
+        return [reduce_sum(cotangent, axes=broadcasted_axes)]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array

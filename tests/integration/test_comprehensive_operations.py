@@ -23,7 +23,7 @@ def test_imports():
             "cos",
             "transpose",
             "reshape",
-            "sum",
+            "reduce_sum",
             "matmul",
             "realize_",
         ]
@@ -165,19 +165,19 @@ def test_reduction_operations():
 
         x = nabla.randn((3, 4), seed=222)
 
-        # Test sum without axis
-        total = nabla.sum(x)
+        # Test reduce_sum without axis
+        total = nabla.reduce_sum(x)
         assert (
             total.shape == ()
-        ), f"sum without axis should be scalar, got shape {total.shape}"
-        print("✓ Sum without axis works")
+        ), f"reduce_sum without axis should be scalar, got shape {total.shape}"
+        print("✓ reduce_sum without axis works")
 
-        # Test sum with axis
-        sum_axis0 = nabla.sum(x, axis=0)
-        assert sum_axis0.shape == (
+        # Test reduce_sum with axis
+        reduce_sum_axis0 = nabla.reduce_sum(x, axis=0)
+        assert reduce_sum_axis0.shape == (
             4,
-        ), f"sum along axis 0 shape mismatch: expected (4,), got {sum_axis0.shape}"
-        print("✓ Sum with axis works")
+        ), f"reduce_sum along axis 0 shape mismatch: expected (4,), got {reduce_sum_axis0.shape}"
+        print("✓ reduce_sum with axis works")
 
         return True
     except Exception as e:
@@ -239,7 +239,7 @@ def test_graph_execution():
         # Test multiple outputs
         a = nabla.randn((3, 3), seed=999)
         b = nabla.transpose(a, 1, 0)
-        c = nabla.sum(a, axis=0)
+        c = nabla.reduce_sum(a, axis=0)
 
         # Realize multiple arrays
         nabla.realize_([b, c])
@@ -265,7 +265,7 @@ def test_backward_compatibility():
         # Test operations
         z = x + y
         w = nabla.sin(z)
-        result = nabla.sum(w)
+        result = nabla.reduce_sum(w)
 
         # Realize
         result.realize()

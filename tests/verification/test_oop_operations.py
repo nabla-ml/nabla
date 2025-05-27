@@ -20,7 +20,7 @@ def test_oop_operations():
     )
     from nabla.ops.unary import NegateOp, SinOp, CosOp, CastOp
     from nabla.ops.binary import AddOp, MulOp
-    from nabla.ops.reduce import SumOp
+    from nabla.ops.reduce import reduce_sumOp
     from nabla.ops.view import TransposeOp, ReshapeOp, BroadcastToOp
     from nabla.ops.linalg import MatMulOp
     from nabla.ops.creation import RandNOp
@@ -33,7 +33,7 @@ def test_oop_operations():
     mul_op = MulOp()
     negate_op = NegateOp()
     sin_op = SinOp()
-    sum_op = SumOp((2, 3))  # SumOp requires arg_shape parameter
+    reduce_sum_op = reduce_sumOp((2, 3))  # reduce_sumOp requires arg_shape parameter
     transpose_op = TransposeOp()
     matmul_op = MatMulOp()
     print("✅ All operations instantiated successfully!")
@@ -44,7 +44,7 @@ def test_oop_operations():
     assert isinstance(mul_op, BinaryOperation)
     assert isinstance(negate_op, UnaryOperation)
     assert isinstance(sin_op, UnaryOperation)
-    assert isinstance(sum_op, ReductionOperation)
+    assert isinstance(reduce_sum_op, ReductionOperation)
     assert isinstance(transpose_op, ViewOperation)
     assert isinstance(matmul_op, BinaryOperation)
     print("✅ All inheritance relationships correct!")
@@ -55,7 +55,7 @@ def test_oop_operations():
     assert isinstance(mul_op, Operation)
     assert isinstance(negate_op, Operation)
     assert isinstance(sin_op, Operation)
-    assert isinstance(sum_op, Operation)
+    assert isinstance(reduce_sum_op, Operation)
     assert isinstance(transpose_op, Operation)
     assert isinstance(matmul_op, Operation)
     print("✅ All operations inherit from Operation base class!")

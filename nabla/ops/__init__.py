@@ -5,7 +5,7 @@ from .base import EAGERMODE, register_binary_op, register_unary_op
 from .binary import add, mul
 from .creation import arange, randn
 from .linalg import matmul
-from .reduce import sum
+from .reduce import reduce_sum
 from .unary import cast, cos, negate, sin
 from .view import broadcast_to, reshape, transpose
 
@@ -28,7 +28,7 @@ __all__ = [
     "reshape",
     "broadcast_to",
     # Reduction operations
-    "sum",
+    "reduce_sum",
     # Base utilities
     "register_unary_op",
     "register_binary_op",

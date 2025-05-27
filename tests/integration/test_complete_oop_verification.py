@@ -38,7 +38,7 @@ def test_complete_oop_refactoring():
         assert hasattr(nb, "broadcast_to")
 
         # Reduction operations
-        assert hasattr(nb, "sum")
+        assert hasattr(nb, "reduce_sum")
 
         # Creation operations
         assert hasattr(nb, "arange")
@@ -62,7 +62,7 @@ def test_complete_oop_refactoring():
         )
         from nabla.ops.binary import AddOp, MulOp, _add_op, _mul_op
         from nabla.ops.unary import SinOp, CosOp, NegateOp
-        from nabla.ops.reduce import SumOp, _sum_op
+        from nabla.ops.reduce import reduce_sumOp, _reduce_sum_op
         from nabla.ops.view import TransposeOp, ReshapeOp, _transpose_op
         from nabla.ops.linalg import MatMulOp, _matmul_op
         from nabla.ops.creation import RandNOp
@@ -73,7 +73,7 @@ def test_complete_oop_refactoring():
         assert issubclass(SinOp, UnaryOperation)
         assert issubclass(CosOp, UnaryOperation)
         assert issubclass(NegateOp, UnaryOperation)
-        assert issubclass(SumOp, ReductionOperation)
+        assert issubclass(reduce_sumOp, ReductionOperation)
         assert issubclass(TransposeOp, ViewOperation)
         assert issubclass(ReshapeOp, ViewOperation)
         assert issubclass(MatMulOp, BinaryOperation)
@@ -82,7 +82,7 @@ def test_complete_oop_refactoring():
         # Check global instances
         assert isinstance(_add_op, AddOp)
         assert isinstance(_mul_op, MulOp)
-        assert isinstance(_sum_op, SumOp)
+        assert isinstance(_reduce_sum_op, reduce_sumOp)
         assert isinstance(_transpose_op, TransposeOp)
         assert isinstance(_matmul_op, MatMulOp)
 
@@ -128,7 +128,7 @@ def test_complete_oop_refactoring():
         f3.realize()
 
         # Reduction operations
-        g1 = nb.sum(m1)
+        g1 = nb.reduce_sum(m1)
         g1.realize()
 
         # Creation operations
@@ -159,7 +159,7 @@ def test_complete_oop_refactoring():
         z2 = nb.transpose(z1)  # Transpose
         z3 = nb.sin(z2)  # Unary operation
         z4 = nb.add(z3, x)  # Binary operation
-        z5 = nb.sum(z4)  # Reduction
+        z5 = nb.reduce_sum(z4)  # Reduction
 
         # Realize final result
         z5.realize()

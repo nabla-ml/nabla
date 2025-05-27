@@ -24,7 +24,7 @@ def test_operation_consistency():
     )
     from nabla.ops.unary import NegateOp, SinOp, CosOp, CastOp
     from nabla.ops.binary import AddOp, MulOp
-    from nabla.ops.reduce import SumOp
+    from nabla.ops.reduce import reduce_sumOp
     from nabla.ops.view import TransposeOp, ReshapeOp, BroadcastToOp
     from nabla.ops.linalg import MatMulOp
     from nabla.ops.creation import RandNOp
@@ -36,7 +36,7 @@ def test_operation_consistency():
         NegateOp(),
         SinOp(),
         CosOp(),
-        SumOp((2, 3)),  # SumOp requires arg_shape parameter
+        reduce_sumOp((2, 3)),  # reduce_sumOp requires arg_shape parameter
         TransposeOp(),
         ReshapeOp((2, 3), (6,)),  # ReshapeOp requires arg_shape and target_shape
         BroadcastToOp((2, 3)),
@@ -90,8 +90,8 @@ def test_function_interfaces():
         ("negate", lambda: nabla.negate(x)),
         ("sin", lambda: nabla.sin(x)),
         ("cos", lambda: nabla.cos(x)),
-        ("sum", lambda: nabla.sum(x)),
-        ("sum_axis", lambda: nabla.sum(x, axes=0)),
+        ("reduce_sum", lambda: nabla.reduce_sum(x)),
+        ("reduce_sum_axis", lambda: nabla.reduce_sum(x, axes=0)),
         ("transpose", lambda: nabla.transpose(x)),
         ("reshape", lambda: nabla.reshape(x, (3, 2))),
         ("broadcast_to", lambda: nabla.broadcast_to(x, (4, 2, 3))),
@@ -127,7 +127,7 @@ def test_no_old_static_methods():
         "Sin",
         "Cos",
         "Cast",
-        "Sum",
+        "reduce_sum",
         "Transpose",
         "Reshape",
         "BroadcastTo",
@@ -166,8 +166,8 @@ def test_backward_compatibility():
     assert nabla.negate(x).shape == (2, 3)
     assert nabla.sin(x).shape == (2, 3)
     assert nabla.cos(x).shape == (2, 3)
-    assert nabla.sum(x).shape == ()
-    assert nabla.sum(x, axes=0).shape == (3,)
+    assert nabla.reduce_sum(x).shape == ()
+    assert nabla.reduce_sum(x, axes=0).shape == (3,)
     assert nabla.transpose(x).shape == (3, 2)
     assert nabla.reshape(x, (3, 2)).shape == (3, 2)
     assert nabla.broadcast_to(x, (4, 2, 3)).shape == (4, 2, 3)

@@ -26,8 +26,8 @@ try:
         ("negate", lambda: nabla.negate(x)),
         ("sin", lambda: nabla.sin(x)),
         ("cos", lambda: nabla.cos(x)),
-        ("sum_all", lambda: nabla.sum(x)),
-        ("sum_axis", lambda: nabla.sum(x, axes=0)),
+        ("reduce_sum_all", lambda: nabla.reduce_sum(x)),
+        ("reduce_sum_axis", lambda: nabla.reduce_sum(x, axes=0)),
         ("transpose", lambda: nabla.transpose(x)),
         ("reshape", lambda: nabla.reshape(x, (3, 2))),
     ]

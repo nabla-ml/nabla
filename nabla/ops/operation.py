@@ -141,7 +141,7 @@ class BinaryOperation(Operation):
 
     def compute_output_dtype(self, arg1: Array, arg2: Array) -> DType:  # Added method
         """Default: output dtype same as first input dtype."""
-        # Assumes dtypes are validated to be compatible by _validate_inputs
+        # Asreduce_sumes dtypes are validated to be compatible by _validate_inputs
         return arg1.dtype
 
     def _validate_inputs(self, arg1: Array, arg2: Array) -> None:

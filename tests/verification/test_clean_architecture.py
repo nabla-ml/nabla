@@ -44,7 +44,7 @@ def test_imports():
         "mul",
         "sin",
         "cos",
-        "sum",
+        "reduce_sum",
         "transpose",
         "matmul",
         "arange",
@@ -107,7 +107,7 @@ def test_backward_compatibility():
     y = nabla.arange((2, 2))
     z = x + y
     w = nabla.sin(z)
-    result = nabla.sum(w)
+    result = nabla.reduce_sum(w)
     result.realize()
 
     print(f"   Complex computation result: {result.get_numpy()}")
@@ -132,7 +132,7 @@ if __name__ == "__main__":
     run_test("Backward Compatibility", test_backward_compatibility)
     run_test("Original Available", test_original_still_available)
 
-    # Print summary
+    # Print reduce_summary
     print(f"\n📊 Test Results: {tests_passed}/{tests_total} tests passed")
     print(f"📈 Success Rate: {tests_passed/tests_total*100:.1f}%")
 

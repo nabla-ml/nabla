@@ -13,7 +13,7 @@ def test_oop_refactoring():
     print("\n1. Testing imports...")
     try:
         from nabla.ops.binary import _add_op, _mul_op
-        from nabla.ops.reduce import _sum_op
+        from nabla.ops.reduce import _reduce_sum_op
         from nabla.ops.view import _transpose_op
         from nabla.ops.linalg import _matmul_op
 
@@ -83,9 +83,9 @@ def test_oop_refactoring():
     # Test 7: Reduction operations
     print("\n7. Testing reduction operations...")
     try:
-        i = nabla.sum(m1)
+        i = nabla.reduce_sum(m1)
         i.realize()
-        print(f"   ✅ Reduction operations work: sum={i.shape}")
+        print(f"   ✅ Reduction operations work: reduce_sum={i.shape}")
     except Exception as e:
         print(f"   ❌ Reduction operations failed: {e}")
         return False
