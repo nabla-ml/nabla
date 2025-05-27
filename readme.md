@@ -4,7 +4,7 @@
 
 [![Development Status](https://img.shields.io/badge/status-pre--alpha-red)](https://github.com/nabla-ml/nabla)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Apache 2.0 with LLVM Exceptions](https://img.shields.io/badge/License-Apache%202.0%20with%20LLVM%20Exceptions-blue.svg)](https://llvm.org/LICENSE.txt)
 
 ## 🚀 About
 
@@ -187,7 +187,7 @@ nabla/
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache License v2.0 with LLVM Exceptions - see the [LICENSE](LICENSE) file for details.
 
 ## 🔗 Links
 

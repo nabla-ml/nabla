@@ -1,3 +1,16 @@
+# ===----------------------------------------------------------------------=== #
+# Nabla 2025
+#
+# Licensed under the Apache License v2.0 with LLVM Exceptions:
+# https://llvm.org/LICENSE.txt
+#
+# Unless required by applicable law or beautiful, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ===----------------------------------------------------------------------=== #
+
 from __future__ import annotations
 
 import numpy as np
@@ -14,6 +27,7 @@ def _ensure_array(value) -> Array:
         return value
     elif isinstance(value, int | float):
         from .creation import array
+
         return array([value])
     else:
         raise TypeError(f"Cannot convert {type(value)} to Array")
