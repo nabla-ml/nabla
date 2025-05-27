@@ -69,7 +69,7 @@ class RandNOp(Operation):
         device: Device = _DEFAULT_CPU,
         seed: int = 0,
     ):
-        super().__init__(f"randn_{shape}_{mean}_{std}_{seed}")
+        super().__init__(f"rng_normal[shape={shape}]")
         self.shape = shape
         self.mean = mean
         self.std = std
@@ -180,3 +180,26 @@ def zeros(
     tensor = Tensor.from_numpy(np_data).to(device)
 
     return Array.from_impl(tensor)
+
+
+def ones(
+    shape: Shape, dtype: DType = DType.float32, device: Device = _DEFAULT_CPU
+) -> Array:
+    """Create an array filled with ones."""
+    if not isinstance(shape, tuple):
+        raise TypeError(f"Shape must be a tuple, got {type(shape)}")
+
+    np_data = np.ones(shape, dtype=DType.to_numpy(dtype))
+    tensor = Tensor.from_numpy(np_data).to(device)
+
+    return Array.from_impl(tensor)
+
+
+def zeros_like(template: Array) -> Array:
+    """Create an array of zeros with the same shape, dtype, and device as template."""
+    return zeros(template.shape, template.dtype, template.device)
+
+
+def ones_like(template: Array) -> Array:
+    """Create an array of ones with the same shape, dtype, and device as template."""
+    return ones(template.shape, template.dtype, template.device)

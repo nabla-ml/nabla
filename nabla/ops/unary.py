@@ -26,7 +26,7 @@ class NegateOp(UnaryOperation):
     """Element-wise negation operation."""
 
     def __init__(self):
-        super().__init__("negate")
+        super().__init__("neg")
 
     def maxpr(self, args: list[Value], output: Array) -> None:
         output.tensor_value = ops.negate(args[0])
@@ -55,7 +55,7 @@ class CastOp(UnaryOperation):
     """Type casting operation."""
 
     def __init__(self, dtype: DType):
-        super().__init__("cast")
+        super().__init__(f"convert_element_type[new_dtype={dtype}]")
         self.target_dtype = dtype
 
     def compute_output_shape(self, *input_shapes: tuple) -> tuple:

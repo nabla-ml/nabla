@@ -26,7 +26,7 @@ class MatMulOp(BinaryOperation):
     """Matrix multiplication operation with batching support."""
 
     def __init__(self):
-        super().__init__("matmul")
+        super().__init__("dot_general")
 
     def forward(self, *args: Array) -> Array:
         """Forward pass for matrix multiplication with compatible signature."""

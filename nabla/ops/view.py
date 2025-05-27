@@ -25,7 +25,7 @@ class TransposeOp(ViewOperation):
     """Matrix/tensor transpose operation."""
 
     def __init__(self, axis_1: int = -2, axis_2: int = -1):
-        super().__init__("transpose")  # Corrected super call
+        super().__init__(f"transpose[permutation=({axis_1},{axis_2})]")
         self.axis_1 = axis_1
         self.axis_2 = axis_2
 
@@ -90,7 +90,7 @@ class ReshapeOp(ViewOperation):
     """Reshape operation."""
 
     def __init__(self, arg_shape: Shape, target_shape: Shape):
-        super().__init__("reshape")  # Corrected super call
+        super().__init__(f"reshape[new_sizes={target_shape}]")
         self.arg_shape = arg_shape
         self.target_shape = target_shape
 
@@ -150,7 +150,7 @@ class BroadcastToOp(ViewOperation):
     """Broadcast array to target shape."""
 
     def __init__(self, target_shape: Shape):
-        super().__init__("broadcast_to")  # Corrected super call
+        super().__init__(f"broadcast_in_dim[shape={target_shape}]")
         self.target_shape = target_shape
 
     def compute_output_shape(self, *input_shapes: tuple) -> tuple:

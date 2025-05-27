@@ -32,7 +32,7 @@ class ReduceSumOp(ReductionOperation):
         axes: int | list[int] | None = None,
         keep_dims: bool = False,
     ):
-        super().__init__("reduce_sum", axes, keep_dims)
+        super().__init__(f"reduce_sum[axes={axes}]", axes, keep_dims)
         self.arg_shape = arg_shape
         self.axes = axes
         self.keep_dims = keep_dims

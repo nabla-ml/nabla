@@ -55,6 +55,7 @@ class Array:
         self.vjp_rule: Optional[VJPRule] = None
         self.jvp_rule: Optional[JVPRule] = None
         self.batch_dim_ctr: int = 0
+        self.traced: bool = False
         # self.op_params: Optional[Dict[str, Any]] = None
         self._numpy_cache: Optional[np.ndarray] = None
 
@@ -90,6 +91,7 @@ class Array:
             raise TypeError(
                 f"Argument must be an instance of Array, got {type(arg_node)}"
             )
+        self.traced = self.traced or arg_node.traced
         self.args.append(arg_node)
 
     def realize(self) -> None:

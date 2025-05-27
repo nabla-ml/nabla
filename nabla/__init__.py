@@ -25,13 +25,14 @@ from max.dtype import DType
 from .core.array import Array
 from .core.execution_context import ThreadSafeExecutionContext
 from .core.graph_execution import realize_
+from .core.trace import trace_function
 
 # Set global execution mode
 from .ops.base import EAGERMODE
 
 # Operation exports - Clean OOP-based operations
 from .ops.binary import add, mul
-from .ops.creation import arange, array, randn
+from .ops.creation import arange, array, randn, zeros, ones, zeros_like, ones_like
 from .ops.linalg import matmul
 from .ops.reduce import reduce_sum
 from .ops.unary import cos, negate, sin
@@ -42,12 +43,17 @@ __all__ = [
     # Core
     "Array",
     "realize_",
+    "trace_function",
     "EAGERMODE",
     "get_broadcasted_shape",
     # Array creation
     "array",
     "arange",
     "randn",
+    "zeros",
+    "ones", 
+    "zeros_like",
+    "ones_like",
     # Binary operations
     "add",
     "mul",
