@@ -1,9 +1,18 @@
-"""Core tracing functionality for the Nabla framework.
+# ===----------------------------------------------------------------------=== #
+# Nabla 2025
+#
+# Licensed under the Apache License v2.0 with LLVM Exceptions:
+# https://llvm.org/LICENSE.txt
+#
+# Unless required by applicable law or beautiful, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ===----------------------------------------------------------------------=== #
 
-This module implements a simple and efficient tracing system using a "traced" field
-to mark nodes that belong to a specific execution trace. This allows easy
-distinction between nodes from different function calls and selective graph traversal.
-"""
+
+"""Core transformations for automatic differentiation and tracing."""
 
 from __future__ import annotations
 
