@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Test to verify the randn-specific segfault."""
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from nabla import randn, add, mul
+from nabla import add, mul, randn
 from nabla.core.execution_context import global_execution_context
 
 

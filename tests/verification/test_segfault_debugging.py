@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Test the specific operations that cause segfault."""
 
-import sys
-import os
 
 
 def test_lazy_execution_operations():

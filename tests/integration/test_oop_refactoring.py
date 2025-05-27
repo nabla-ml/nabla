@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Comprehensive test to verify complete OOP refactoring."""
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
@@ -15,19 +15,14 @@ def test_operation_consistency():
     print("✅ Testing operation class structure...")
 
     # Import all operation classes
+    from nabla.ops.binary import AddOp, MulOp
+    from nabla.ops.linalg import MatMulOp
     from nabla.ops.operation import (
         Operation,
-        UnaryOperation,
-        BinaryOperation,
-        ReductionOperation,
-        ViewOperation,
     )
-    from nabla.ops.unary import NegateOp, SinOp, CosOp, CastOp
-    from nabla.ops.binary import AddOp, MulOp
-    from nabla.ops.reduce import reduce_sumOp
-    from nabla.ops.view import TransposeOp, ReshapeOp, BroadcastToOp
-    from nabla.ops.linalg import MatMulOp
-    from nabla.ops.creation import RandNOp
+    from nabla.ops.reduce import ReduceSumOp
+    from nabla.ops.unary import CosOp, NegateOp, SinOp
+    from nabla.ops.view import BroadcastToOp, ReshapeOp, TransposeOp
 
     # Test that all operations have required methods
     operations = [
@@ -36,7 +31,7 @@ def test_operation_consistency():
         NegateOp(),
         SinOp(),
         CosOp(),
-        reduce_sumOp((2, 3)),  # reduce_sumOp requires arg_shape parameter
+        ReduceSumOp((2, 3)),  # ReduceSumOp requires arg_shape parameter
         TransposeOp(),
         ReshapeOp((2, 3), (6,)),  # ReshapeOp requires arg_shape and target_shape
         BroadcastToOp((2, 3)),
@@ -45,25 +40,25 @@ def test_operation_consistency():
 
     for op in operations:
         # Check that all operations inherit from Operation
-        assert isinstance(
-            op, Operation
-        ), f"{type(op).__name__} should inherit from Operation"
+        assert isinstance(op, Operation), (
+            f"{type(op).__name__} should inherit from Operation"
+        )
 
         # Check that all operations have required methods
         assert hasattr(op, "forward"), f"{type(op).__name__} should have forward method"
         assert hasattr(op, "maxpr"), f"{type(op).__name__} should have maxpr method"
-        assert hasattr(
-            op, "eagerxpr"
-        ), f"{type(op).__name__} should have eagerxpr method"
-        assert hasattr(
-            op, "vjp_rule"
-        ), f"{type(op).__name__} should have vjp_rule method"
-        assert hasattr(
-            op, "jvp_rule"
-        ), f"{type(op).__name__} should have jvp_rule method"
-        assert hasattr(
-            op, "compute_output_shape"
-        ), f"{type(op).__name__} should have compute_output_shape method"
+        assert hasattr(op, "eagerxpr"), (
+            f"{type(op).__name__} should have eagerxpr method"
+        )
+        assert hasattr(op, "vjp_rule"), (
+            f"{type(op).__name__} should have vjp_rule method"
+        )
+        assert hasattr(op, "jvp_rule"), (
+            f"{type(op).__name__} should have jvp_rule method"
+        )
+        assert hasattr(op, "compute_output_shape"), (
+            f"{type(op).__name__} should have compute_output_shape method"
+        )
 
         # Check that operations have a name
         assert hasattr(op, "name"), f"{type(op).__name__} should have name attribute"
@@ -116,10 +111,10 @@ def test_no_old_static_methods():
     print("✅ Testing removal of old static method patterns...")
 
     # Check that old classes don't exist or aren't used
-    import nabla.ops.unary as unary_mod
-    import nabla.ops.reduce as reduce_mod
-    import nabla.ops.view as view_mod
     import nabla.ops.linalg as linalg_mod
+    import nabla.ops.reduce as reduce_mod
+    import nabla.ops.unary as unary_mod
+    import nabla.ops.view as view_mod
 
     # Check that old static method classes are replaced
     old_classes = [

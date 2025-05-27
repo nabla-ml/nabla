@@ -1,7 +1,6 @@
 import nabla as nb
 
 if __name__ == "__main__":
-
     # Basic tests and benchmarks
     # a = nb.arange(shape=(4, 8, 8), dtype=nb.DType.float32)  # .to(Accelerator())
     # print("\na:")

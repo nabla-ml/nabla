@@ -1,7 +1,5 @@
 """Broadcasting and shape manipulation utilities."""
 
-
-
 Shape = tuple[int, ...]
 
 

@@ -12,10 +12,6 @@ def test_oop_refactoring():
     # Test 1: Basic imports
     print("\n1. Testing imports...")
     try:
-        from nabla.ops.binary import _add_op, _mul_op
-        from nabla.ops.reduce import _reduce_sum_op
-        from nabla.ops.view import _transpose_op
-        from nabla.ops.linalg import _matmul_op
 
         print("   ✅ All operation instances imported")
     except Exception as e:

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Test to check if there's a model sharing or isolation issue."""
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from nabla import Array, array
+from nabla import array
 from nabla.core.execution_context import global_execution_context
 
 
@@ -112,7 +112,7 @@ def test_model_reuse():
 
     # Create same computation multiple times
     for i in range(3):
-        print(f"\nIteration {i+1}:")
+        print(f"\nIteration {i + 1}:")
         try:
             x = array([[1.0, 2.0]])
             y = array([[3.0, 4.0]])
@@ -121,10 +121,10 @@ def test_model_reuse():
             result = x * y
             result.realize()
             _ = result.get_numpy()
-            print(f"✓ Iteration {i+1} succeeded")
+            print(f"✓ Iteration {i + 1} succeeded")
             print(f"Cache size: {global_execution_context.size()}")
         except Exception as e:
-            print(f"✗ Iteration {i+1} failed: {e}")
+            print(f"✗ Iteration {i + 1} failed: {e}")
             break
 
 

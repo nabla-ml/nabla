@@ -39,7 +39,6 @@ class TransposeOp(ViewOperation):
         output.tensor_value = ops.transpose(args[0], self.axis_1, self.axis_2)
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-
         # Create permutation axes
         axes = list(range(len(args[0].shape)))
         axes[self.axis_1], axes[self.axis_2] = axes[self.axis_2], axes[self.axis_1]

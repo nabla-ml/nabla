@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Test to reproduce the segfault with mixed operations."""
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from nabla import Array, array
+from nabla import array
 from nabla.core.execution_context import global_execution_context
 
 
@@ -88,7 +88,7 @@ def test_multiple_mixed_graphs():
 
     try:
         for i in range(5):
-            print(f"  Iteration {i+1}...")
+            print(f"  Iteration {i + 1}...")
 
             # Create new arrays each time
             a = array([[1.0 + i, 2.0 + i]])
@@ -100,7 +100,7 @@ def test_multiple_mixed_graphs():
             result.realize()
             _ = result.get_numpy()
 
-            print(f"    ✓ Iteration {i+1} completed")
+            print(f"    ✓ Iteration {i + 1} completed")
             print(f"    Cache size: {global_execution_context.size()}")
 
         return True

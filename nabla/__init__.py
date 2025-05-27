@@ -4,6 +4,8 @@ Nabla: A clean, modular deep learning framework built on MAX.
 This is the main entry point that provides a clean API.
 """
 
+import sys
+
 from max.dtype import DType
 
 # Core exports - The foundation
@@ -58,6 +60,4 @@ _global_execution_context = ThreadSafeExecutionContext()
 __version__ = "0.1.0"
 
 # For test compatibility - provide a reference to this module
-import sys
-
 graph_improved = sys.modules[__name__]

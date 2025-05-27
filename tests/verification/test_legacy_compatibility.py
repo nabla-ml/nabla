@@ -10,8 +10,7 @@ sys.path.append("/Users/tillife/Documents/CodingProjects/nabla/src")
 def test_basic_operations():
     """Test basic operations work in the refactored version."""
     try:
-        from nabla.graph_improved import Array, add, mul, sin, cos, randn, matmul
-        from nabla.utils.types import DType, CPU
+        from nabla.graph_improved import add, cos, matmul, randn, sin
 
         print("✓ Imports successful")
 
@@ -22,11 +21,11 @@ def test_basic_operations():
         # Test unary operations
         y = sin(x)
         z = cos(x)
-        print(f"✓ Unary ops: sin and cos computed")
+        print("✓ Unary ops: sin and cos computed")
 
         # Test binary operations
         w = add(y, z)
-        print(f"✓ Binary op: addition computed")
+        print("✓ Binary op: addition computed")
 
         # Test matrix multiplication
         a = randn((3, 4))
@@ -36,7 +35,7 @@ def test_basic_operations():
 
         # Test realization
         c.realize()
-        print(f"✓ Graph execution successful")
+        print("✓ Graph execution successful")
 
         print("\n🎉 All tests passed! Refactored code works correctly.")
         return True

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Reproduce the exact pattern that causes the crash."""
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 

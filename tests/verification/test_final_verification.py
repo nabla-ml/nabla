@@ -4,8 +4,8 @@ Comprehensive test to verify complete OOP refactoring is working.
 This replaces the problematic test_clean_architecture.py
 """
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
@@ -36,18 +36,18 @@ def test_complete_oop_refactoring():
 
         print("\n2. Testing operation classes inheritance...")
         from nabla.ops.binary import _add_op, _mul_op
-        from nabla.ops.unary import SinOp, CosOp, NegateOp
-        from nabla.ops.reduce import _reduce_sum_op
-        from nabla.ops.view import _transpose_op
-        from nabla.ops.linalg import _matmul_op
         from nabla.ops.creation import RandNOp
+        from nabla.ops.linalg import _matmul_op
         from nabla.ops.operation import (
-            Operation,
             BinaryOperation,
-            UnaryOperation,
+            Operation,
             ReductionOperation,
+            UnaryOperation,
             ViewOperation,
         )
+        from nabla.ops.reduce import _reduce_sum_op
+        from nabla.ops.unary import CosOp, NegateOp, SinOp
+        from nabla.ops.view import _transpose_op
 
         # Test inheritance for global instances
         assert isinstance(_add_op, BinaryOperation)

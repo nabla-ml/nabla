@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Test if the issue is with random seed or randn operation itself."""
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from nabla import array, arange, randn, add, mul
+from nabla import add, arange, array, mul, randn
 from nabla.core.execution_context import global_execution_context
 
 

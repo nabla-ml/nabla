@@ -53,19 +53,19 @@ def test_complete_oop_refactoring():
     # Test 2: Verify OOP inheritance structure
     print("\n2. Testing OOP inheritance structure...")
     try:
+        from nabla.ops.binary import AddOp, MulOp, _add_op, _mul_op
+        from nabla.ops.creation import RandNOp
+        from nabla.ops.linalg import MatMulOp, _matmul_op
         from nabla.ops.operation import (
-            Operation,
             BinaryOperation,
-            UnaryOperation,
+            Operation,
             ReductionOperation,
+            UnaryOperation,
             ViewOperation,
         )
-        from nabla.ops.binary import AddOp, MulOp, _add_op, _mul_op
-        from nabla.ops.unary import SinOp, CosOp, NegateOp
-        from nabla.ops.reduce import reduce_sumOp, _reduce_sum_op
-        from nabla.ops.view import TransposeOp, ReshapeOp, _transpose_op
-        from nabla.ops.linalg import MatMulOp, _matmul_op
-        from nabla.ops.creation import RandNOp
+        from nabla.ops.reduce import ReduceSumOp, _reduce_sum_op
+        from nabla.ops.unary import CosOp, NegateOp, SinOp
+        from nabla.ops.view import ReshapeOp, TransposeOp, _transpose_op
 
         # Check inheritance hierarchy
         assert issubclass(AddOp, BinaryOperation)
@@ -73,7 +73,7 @@ def test_complete_oop_refactoring():
         assert issubclass(SinOp, UnaryOperation)
         assert issubclass(CosOp, UnaryOperation)
         assert issubclass(NegateOp, UnaryOperation)
-        assert issubclass(reduce_sumOp, ReductionOperation)
+        assert issubclass(ReduceSumOp, ReductionOperation)
         assert issubclass(TransposeOp, ViewOperation)
         assert issubclass(ReshapeOp, ViewOperation)
         assert issubclass(MatMulOp, BinaryOperation)
@@ -82,7 +82,7 @@ def test_complete_oop_refactoring():
         # Check global instances
         assert isinstance(_add_op, AddOp)
         assert isinstance(_mul_op, MulOp)
-        assert isinstance(_reduce_sum_op, reduce_sumOp)
+        assert isinstance(_reduce_sum_op, ReduceSumOp)
         assert isinstance(_transpose_op, TransposeOp)
         assert isinstance(_matmul_op, MatMulOp)
 

@@ -10,7 +10,7 @@ from ..core.array import Array, Shape
 from .operation import ReductionOperation
 
 
-class reduce_sumOp(ReductionOperation):
+class ReduceSumOp(ReductionOperation):
     """reduce_sum reduction operation."""
 
     def __init__(
@@ -85,5 +85,5 @@ def reduce_sum(
     if axis is not None:
         axes = axis
 
-    op = reduce_sumOp(arg.shape, axes, keep_dims)
+    op = ReduceSumOp(arg.shape, axes, keep_dims)
     return op.forward(arg)

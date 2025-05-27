@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Debug exactly where in model creation the segfault occurs."""
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
@@ -25,7 +25,7 @@ def debug_model_creation():
     print("1. Getting trace...")
     try:
         inputs, trace, cache_key = GraphTracer.get_trace([z])
-        print(f"   ✅ Trace obtained successfully")
+        print("   ✅ Trace obtained successfully")
         print(f"   Inputs: {len(inputs)}")
         print(f"   Trace: {len(trace)} nodes")
         print(f"   Cache key: {cache_key}")
@@ -42,7 +42,7 @@ def debug_model_creation():
 
         print("   Calling get_or_create...")
         model = global_execution_context.get_or_create(cache_key, create_model)
-        print(f"   ✅ Model created successfully")
+        print("   ✅ Model created successfully")
     except Exception as e:
         print(f"   ❌ Model creation failed: {e}")
         import traceback
@@ -54,7 +54,7 @@ def debug_model_creation():
     try:
         tensor_inputs = [input_node.impl for input_node in inputs]
         model_outputs = model.execute(*tensor_inputs)
-        print(f"   ✅ Model executed successfully")
+        print("   ✅ Model executed successfully")
     except Exception as e:
         print(f"   ❌ Model execution failed: {e}")
         return False

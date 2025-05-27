@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Minimal reproduction of the segfault to isolate the exact cause."""
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from nabla import arange, randn, add, mul
+from nabla import add, arange, mul, randn
 from nabla.core.execution_context import global_execution_context
 
 

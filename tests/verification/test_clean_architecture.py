@@ -4,8 +4,8 @@ Test script to verify the clean OOP-based architecture implementation.
 This tests the complete OOP refactoring of ALL operations.
 """
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
@@ -58,7 +58,7 @@ def test_imports():
 
 def test_operation_classes():
     """Test that operations are now proper classes."""
-    from nabla.ops.binary import AddOp, MulOp, _add_op, _mul_op
+    from nabla.ops.binary import _add_op, _mul_op
     from nabla.ops.operation import BinaryOperation
 
     # Test inheritance
@@ -134,11 +134,11 @@ if __name__ == "__main__":
 
     # Print reduce_summary
     print(f"\n📊 Test Results: {tests_passed}/{tests_total} tests passed")
-    print(f"📈 Success Rate: {tests_passed/tests_total*100:.1f}%")
+    print(f"📈 Success Rate: {tests_passed / tests_total * 100:.1f}%")
 
     if tests_passed == tests_total:
         print("\n🎉 Clean architecture implementation successful!")
         sys.exit(0)
     else:
-        print(f"\n⚠️  Some tests failed. Implementation needs attention.")
+        print("\n⚠️  Some tests failed. Implementation needs attention.")
         sys.exit(1)

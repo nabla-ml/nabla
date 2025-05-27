@@ -15,7 +15,9 @@ _DEFAULT_CPU = CPU()
 
 
 def array(
-    data: Union[list, np.ndarray], dtype: DType = DType.float32, device: Device = _DEFAULT_CPU
+    data: Union[list, np.ndarray],
+    dtype: DType = DType.float32,
+    device: Device = _DEFAULT_CPU,
 ) -> Array:
     """Create an array from Python list or numpy array."""
     if isinstance(data, list):
@@ -29,7 +31,9 @@ def array(
     return Array.from_impl(tensor)
 
 
-def arange(shape: Shape, dtype: DType = DType.float32, device: Device = _DEFAULT_CPU) -> Array:
+def arange(
+    shape: Shape, dtype: DType = DType.float32, device: Device = _DEFAULT_CPU
+) -> Array:
     """Create an array with values from 0 to prod(shape)-1 reshaped to given shape."""
     if not isinstance(shape, tuple):
         raise TypeError(f"Shape must be a tuple, got {type(shape)}")
@@ -147,7 +151,9 @@ def randn(
     return op.forward()
 
 
-def zeros(shape: Shape, dtype: DType = DType.float32, device: Device = _DEFAULT_CPU) -> Array:
+def zeros(
+    shape: Shape, dtype: DType = DType.float32, device: Device = _DEFAULT_CPU
+) -> Array:
     """Create an array filled with zeros."""
     if not isinstance(shape, tuple):
         raise TypeError(f"Shape must be a tuple, got {type(shape)}")

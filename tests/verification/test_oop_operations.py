@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Test script for OOP-based operations."""
 
-import sys
-import os
 
 
 def test_oop_operations():
@@ -11,19 +9,18 @@ def test_oop_operations():
 
     # Test basic imports
     print("✅ Testing imports...")
+    from nabla.ops.binary import AddOp, MulOp
+    from nabla.ops.linalg import MatMulOp
     from nabla.ops.operation import (
-        Operation,
-        UnaryOperation,
         BinaryOperation,
+        Operation,
         ReductionOperation,
+        UnaryOperation,
         ViewOperation,
     )
-    from nabla.ops.unary import NegateOp, SinOp, CosOp, CastOp
-    from nabla.ops.binary import AddOp, MulOp
-    from nabla.ops.reduce import reduce_sumOp
-    from nabla.ops.view import TransposeOp, ReshapeOp, BroadcastToOp
-    from nabla.ops.linalg import MatMulOp
-    from nabla.ops.creation import RandNOp
+    from nabla.ops.reduce import ReduceSumOp
+    from nabla.ops.unary import NegateOp, SinOp
+    from nabla.ops.view import TransposeOp
 
     print("✅ All operation classes imported successfully!")
 
@@ -33,7 +30,7 @@ def test_oop_operations():
     mul_op = MulOp()
     negate_op = NegateOp()
     sin_op = SinOp()
-    reduce_sum_op = reduce_sumOp((2, 3))  # reduce_sumOp requires arg_shape parameter
+    reduce_sum_op = ReduceSumOp((2, 3))  # ReduceSumOp requires arg_shape parameter
     transpose_op = TransposeOp()
     matmul_op = MatMulOp()
     print("✅ All operations instantiated successfully!")

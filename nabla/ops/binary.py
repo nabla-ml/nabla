@@ -1,6 +1,5 @@
 """Binary operations using clean OOP design."""
 
-
 import numpy as np
 from max.driver import Tensor
 from max.graph import Value, ops

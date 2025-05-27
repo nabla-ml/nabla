@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Standalone script to reproduce the segfault."""
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 

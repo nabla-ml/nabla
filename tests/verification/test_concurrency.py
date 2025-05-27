@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Test concurrent model execution to see if that causes segfaults."""
 
-import sys
 import os
+import sys
 import threading
 import time
 
@@ -70,12 +70,12 @@ def test_concurrent_execution():
     for thread in threads:
         thread.join()
 
-    print(f"\nResults:")
+    print("\nResults:")
     for op_id in sorted(results.keys()):
         print(f"  Operation {op_id}: {results[op_id]}")
 
     if errors:
-        print(f"\nErrors:")
+        print("\nErrors:")
         for op_id in sorted(errors.keys()):
             print(f"  Operation {op_id}: {errors[op_id]}")
         return False
@@ -174,7 +174,7 @@ def test_mixed_operations_concurrent():
     for thread in threads:
         thread.join()
 
-    print(f"\nResults:")
+    print("\nResults:")
     for name in [op[0] for op in operations]:
         if name in results:
             print(f"  {name}: {results[name]}")
@@ -182,7 +182,7 @@ def test_mixed_operations_concurrent():
             print(f"  {name}: ERROR - {errors[name]}")
 
     if errors:
-        print(f"\n❌ Some concurrent mixed operations failed!")
+        print("\n❌ Some concurrent mixed operations failed!")
         return False
 
     print("\n✅ All concurrent mixed operations completed!")

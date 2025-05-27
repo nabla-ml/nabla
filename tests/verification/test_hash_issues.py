@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Test to demonstrate the hash collision issue."""
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
@@ -32,12 +32,12 @@ def test_hash_determinism():
         print(f"  Mul operation cache key: {cache_key2}")
 
         # Print individual node hashes
-        print(f"  Node hashes in add trace:")
+        print("  Node hashes in add trace:")
         for i, node in enumerate(trace1):
             node_hash = GraphTracer.compute_node_hash(node)
             print(f"    {i}: {node.name} -> {node_hash}")
 
-        print(f"  Node hashes in mul trace:")
+        print("  Node hashes in mul trace:")
         for i, node in enumerate(trace2):
             node_hash = GraphTracer.compute_node_hash(node)
             print(f"    {i}: {node.name} -> {node_hash}")

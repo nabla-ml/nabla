@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Test script for OOP-based operations with arrays."""
 
-import sys
-import os
 
 
 def test_oop_functionality():
@@ -38,8 +36,8 @@ def test_oop_functionality():
 
     # Test reduction operations (using OOP)
     print("✅ Testing reduction operations...")
-    reduce_sum_x = nabla.reduce_sum(x)  # Should use reduce_sumOp
-    reduce_sum_axis = nabla.reduce_sum(x, axes=0)  # Should use reduce_sumOp
+    reduce_sum_x = nabla.reduce_sum(x)  # Should use ReduceSumOp
+    reduce_sum_axis = nabla.reduce_sum(x, axes=0)  # Should use ReduceSumOp
     print(f"reduce_sum all shape: {reduce_sum_x.shape}")
     print(f"reduce_sum axis 0 shape: {reduce_sum_axis.shape}")
 
