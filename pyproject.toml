@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "nabla-ml"  # Change this to your chosen name
+name = "nabla"
 version = "0.0.1"
 authors = [
     { name = "TilliFe", email = "tillmann.fehrenbach@gmail.com" },
@@ -29,8 +29,7 @@ keywords = ["deep learning", "machine learning", "jax", "max engine", "mojo", "a
 
 dependencies = [
     "numpy>=1.22",
-    # "maxsdk" # Placeholder
-    # "mojo-sdk" # Placeholder
+    "modular>=25.0.0",  # MAX SDK - crucial for Nabla's backend
 ]
 
 [project.urls]

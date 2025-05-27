@@ -1,0 +1,3 @@
+# Core dependencies for Nabla
+numpy>=1.22
+modular>=25.0.0

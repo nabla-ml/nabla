@@ -1,0 +1,11 @@
+# Include core dependencies
+-r requirements.txt
+
+# Development dependencies
+pytest>=7.0
+ruff
+black
+mypy
+build
+twine
+pre-commit
