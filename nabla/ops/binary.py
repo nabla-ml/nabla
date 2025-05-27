@@ -12,7 +12,7 @@ def _ensure_array(value) -> Array:
     """Convert scalar values to Arrays."""
     if isinstance(value, Array):
         return value
-    elif isinstance(value, (int, float)):
+    elif isinstance(value, int | float):
         from .creation import array
         return array([value])
     else:
