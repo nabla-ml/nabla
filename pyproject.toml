@@ -10,14 +10,13 @@ authors = [
 ]
 description = "A JAX-like deep learning framework with MAX and Mojo backends for fast, hardware-agnostic kernels."
 readme = "readme.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = "MIT"
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -53,9 +52,15 @@ dev = [
 
 [tool.ruff]
 line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "N", "B", "C4", "A", "SIM", "PTH"]
-ignore = ["E501"]
-target-version = "py39"
+ignore = ["E501", "UP007"]  # UP007: Use Union instead of | for Python 3.9 compatibility
+
+[tool.ruff.lint.per-file-ignores]
+"nabla/__init__.py" = ["A004"]  # Allow sum shadowing in public API
+"nabla/ops/__init__.py" = ["A004"]  # Allow sum shadowing in public API
 
 [tool.ruff.format]
 quote-style = "double"
@@ -63,10 +68,10 @@ indent-style = "space"
 
 [tool.black]
 line-length = 88
-target-version = ['py39']
+target-version = ['py310']
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
