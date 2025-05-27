@@ -12,7 +12,7 @@ from max.graph import Value
 
 # Type aliases
 Shape = tuple[int, ...]
-MaxprCallable = Callable[[list[Value]], None]
+MaxprCallable = Callable[[list[Value], "Array"], None]
 VJPRule = Callable[[list["Array"], "Array", "Array"], list["Array"]]
 JVPRule = Callable[[list["Array"], list["Array"], "Array"], "Array"]
 
@@ -106,7 +106,7 @@ class Array:
     def __repr__(self) -> str:
         """String representation of the Array."""
         self.realize()
-        return self.impl.to(CPU()).to_numpy().__str__()
+        return str(self.impl.to(CPU()).to_numpy())
 
     def to(self, device: Device) -> Array:
         """Move Array to specified device."""

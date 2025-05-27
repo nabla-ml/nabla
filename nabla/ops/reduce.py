@@ -50,11 +50,14 @@ class ReduceSumOp(ReductionOperation):
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         # Convert axes list to tuple for numpy compatibility
-        axes = self.axes
-        if isinstance(axes, list):
-            axes = tuple(axes)
+        if isinstance(self.axes, list):
+            numpy_axes: Union[int, tuple[int, ...], None] = tuple(self.axes)
+        else:
+            numpy_axes = self.axes
 
-        np_result = np.sum(args[0].get_numpy(), axis=axes, keepdims=self.keep_dims)
+        np_result = np.sum(
+            args[0].get_numpy(), axis=numpy_axes, keepdims=self.keep_dims
+        )
         # Ensure result is at least a 0-d array for DLPack conversion
         if np_result.ndim == 0:
             np_result = np.array(np_result)

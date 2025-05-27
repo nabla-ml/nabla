@@ -55,8 +55,12 @@ class Operation(ABC):
 class UnaryOperation(Operation):
     """Base class for unary operations."""
 
-    def forward(self, arg: Array) -> Array:  # Specific signature for Unary
+    def forward(self, *args: Array) -> Array:  # Compatible signature
         """Forward pass for unary operations."""
+        if len(args) != 1:
+            raise ValueError(f"Unary operation requires 1 argument, got {len(args)}")
+        arg = args[0]
+
         output_shape = self.compute_output_shape(arg.shape)
         output_dtype = self.compute_output_dtype(arg)  # Use compute_output_dtype
 
@@ -81,10 +85,14 @@ class UnaryOperation(Operation):
         return res
 
     def compute_output_shape(
-        self, input_shape: tuple
-    ) -> tuple:  # Specific signature for Unary
+        self, *input_shapes: tuple
+    ) -> tuple:  # Compatible signature
         """Default: output shape same as input shape."""
-        return input_shape
+        if len(input_shapes) != 1:
+            raise ValueError(
+                f"Unary operation requires 1 input shape, got {len(input_shapes)}"
+            )
+        return input_shapes[0]
 
     def compute_output_dtype(self, arg: Array) -> DType:  # Added method
         """Default: output dtype same as input dtype."""
@@ -94,10 +102,12 @@ class UnaryOperation(Operation):
 class BinaryOperation(Operation):
     """Base class for binary operations."""
 
-    def forward(
-        self, arg1: Array, arg2: Array
-    ) -> Array:  # Specific signature for Binary
+    def forward(self, *args: Array) -> Array:  # Compatible signature
         """Forward pass for binary operations."""
+        if len(args) != 2:
+            raise ValueError(f"Binary operation requires 2 arguments, got {len(args)}")
+        arg1, arg2 = args[0], args[1]
+
         # Import here to avoid circular imports
         from ..ops.view import broadcast_to
 
@@ -132,9 +142,15 @@ class BinaryOperation(Operation):
         return res
 
     def compute_output_shape(
-        self, shape1: tuple, shape2: tuple
-    ) -> tuple:  # Specific signature for Binary
+        self, *input_shapes: tuple
+    ) -> tuple:  # Compatible signature
         """Compute broadcasted output shape."""
+        if len(input_shapes) != 2:
+            raise ValueError(
+                f"Binary operation requires 2 input shapes, got {len(input_shapes)}"
+            )
+        shape1, shape2 = input_shapes[0], input_shapes[1]
+
         from ..utils.broadcasting import get_broadcasted_shape
 
         return get_broadcasted_shape(shape1, shape2)
@@ -170,9 +186,14 @@ class ReductionOperation(UnaryOperation):
         self.keep_dims = keep_dims
 
     def compute_output_shape(
-        self, input_shape: tuple
-    ) -> tuple:  # Matches UnaryOperation
+        self, *input_shapes: tuple
+    ) -> tuple:  # Compatible signature
         """Compute output shape for reduction."""
+        if len(input_shapes) != 1:
+            raise ValueError(
+                f"Reduction operation requires 1 input shape, got {len(input_shapes)}"
+            )
+        input_shape = input_shapes[0]
         return self._compute_reduction_shape(input_shape, self.axes, self.keep_dims)
 
     # compute_output_dtype will be inherited from UnaryOperation (i.e., same as input)

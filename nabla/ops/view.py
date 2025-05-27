@@ -16,8 +16,14 @@ class TransposeOp(ViewOperation):
         self.axis_1 = axis_1
         self.axis_2 = axis_2
 
-    def compute_output_shape(self, arg_shape: Shape) -> Shape:
-        """Compute output shape for transpose operation."""
+    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
+        """Compute output shape for transpose operation with compatible signature."""
+        if len(input_shapes) != 1:
+            raise ValueError(
+                f"Transpose operation requires 1 input shape, got {len(input_shapes)}"
+            )
+        arg_shape = input_shapes[0]
+
         if not arg_shape:
             raise ValueError("Cannot transpose an empty shape")
 
@@ -75,11 +81,20 @@ class ReshapeOp(ViewOperation):
         self.arg_shape = arg_shape
         self.target_shape = target_shape
 
-    def compute_output_shape(self, input_shape: tuple) -> tuple:
+    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
+        """Compatible signature."""
+        if len(input_shapes) != 1:
+            raise ValueError(
+                f"Reshape operation requires 1 input shape, got {len(input_shapes)}"
+            )
         return self.target_shape
 
-    def forward(self, arg: Array) -> Array:
-        """Override forward to validate size compatibility."""
+    def forward(self, *args: Array) -> Array:
+        """Override forward to validate size compatibility with compatible signature."""
+        if len(args) != 1:
+            raise ValueError(f"Reshape operation requires 1 argument, got {len(args)}")
+        arg = args[0]
+
         # Validate that total size remains the same
         old_size = np.prod(arg.shape) if arg.shape else 1
         new_size = np.prod(self.target_shape) if self.target_shape else 1
@@ -125,14 +140,24 @@ class BroadcastToOp(ViewOperation):
         super().__init__("broadcast_to")  # Corrected super call
         self.target_shape = target_shape
 
-    def compute_output_shape(self, input_shape: tuple) -> tuple:
+    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
+        """Compatible signature."""
+        if len(input_shapes) != 1:
+            raise ValueError(
+                f"Broadcast operation requires 1 input shape, got {len(input_shapes)}"
+            )
         return self.target_shape
 
-    def forward(self, arg: Array) -> Array:
-        """Override forward to handle case where no broadcasting needed."""
+    def forward(self, *args: Array) -> Array:
+        """Override forward to handle case where no broadcasting needed with compatible signature."""
+        if len(args) != 1:
+            raise ValueError(
+                f"Broadcast operation requires 1 argument, got {len(args)}"
+            )
+        arg = args[0]
         if arg.shape == self.target_shape:
             return arg
-        return super().forward(arg)
+        return super().forward(*args)
 
     @staticmethod
     def get_broadcasted_axes(input_shape: Shape, target_shape: Shape) -> list[int]:

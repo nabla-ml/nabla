@@ -75,8 +75,13 @@ class RandNOp(Operation):
         if not isinstance(seed, int):
             raise TypeError(f"Seed must be int, got {type(seed)}")
 
-    def forward(self) -> Array:
-        """Forward pass for creation operations (no arguments)."""
+    def forward(self, *args: Array) -> Array:
+        """Forward pass for creation operations (no arguments) with compatible signature."""
+        if len(args) != 0:
+            raise ValueError(
+                f"Creation operation requires 0 arguments, got {len(args)}"
+            )
+
         res = Array(
             shape=self.shape,
             dtype=DType.float32,  # Creation ops should define their dtype

@@ -15,8 +15,14 @@ class MatMulOp(BinaryOperation):
     def __init__(self):
         super().__init__("matmul")
 
-    def forward(self, arg1: Array, arg2: Array) -> Array:
-        """Forward pass for matrix multiplication."""
+    def forward(self, *args: Array) -> Array:
+        """Forward pass for matrix multiplication with compatible signature."""
+        if len(args) != 2:
+            raise ValueError(
+                f"Matrix multiplication requires 2 arguments, got {len(args)}"
+            )
+        arg1, arg2 = args[0], args[1]
+
         # Validate inputs
         self._validate_inputs(arg1, arg2)
 
@@ -44,8 +50,14 @@ class MatMulOp(BinaryOperation):
 
         return res
 
-    def compute_output_shape(self, shape1: tuple, shape2: tuple) -> tuple:
-        """Compute output shape for matrix multiplication."""
+    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
+        """Compute output shape for matrix multiplication with compatible signature."""
+        if len(input_shapes) != 2:
+            raise ValueError(
+                f"Matrix multiplication requires 2 input shapes, got {len(input_shapes)}"
+            )
+        shape1, shape2 = input_shapes[0], input_shapes[1]
+
         if shape1[-1] != shape2[-2]:
             raise ValueError(
                 f"Shapes {shape1} and {shape2} are not compatible for matrix multiplication"

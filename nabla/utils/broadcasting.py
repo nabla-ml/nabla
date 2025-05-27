@@ -6,8 +6,8 @@ Shape = tuple[int, ...]
 def get_broadcasted_shape(
     shape1: Shape,
     shape2: Shape,
-    ignore_axes: list[int] = None,
-    replace_ignored_dims: list[int] = None,
+    ignore_axes: list[int] | None = None,
+    replace_ignored_dims: list[int] | None = None,
 ) -> Shape:
     """
     Compute the broadcasted shape of two input shapes.

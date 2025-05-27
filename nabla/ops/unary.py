@@ -45,15 +45,22 @@ class CastOp(UnaryOperation):
         super().__init__("cast")
         self.target_dtype = dtype
 
-    def compute_output_shape(self, input_shape: tuple) -> tuple:
-        return input_shape
+    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
+        """Compatible signature - output shape same as input shape."""
+        if len(input_shapes) != 1:
+            raise ValueError(
+                f"Cast operation requires 1 input shape, got {len(input_shapes)}"
+            )
+        return input_shapes[0]
 
     def compute_output_dtype(self, arg: Array) -> DType:
         return self.target_dtype
 
-    def forward(self, arg: Array) -> Array:
-        """Override forward to set dtype."""
-        return super().forward(arg)
+    def forward(self, *args: Array) -> Array:
+        """Override forward to set dtype with compatible signature."""
+        if len(args) != 1:
+            raise ValueError(f"Cast operation requires 1 argument, got {len(args)}")
+        return super().forward(*args)
 
     def maxpr(self, args: list[Value], output: Array) -> None:
         output.tensor_value = ops.cast(args[0], output.dtype)

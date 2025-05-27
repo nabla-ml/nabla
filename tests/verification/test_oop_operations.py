@@ -2,7 +2,6 @@
 """Test script for OOP-based operations."""
 
 
-
 def test_oop_operations():
     """Test OOP-based operations."""
     print("🧪 Testing OOP Operation Classes...")

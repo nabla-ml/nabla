@@ -12,7 +12,6 @@ def test_oop_refactoring():
     # Test 1: Basic imports
     print("\n1. Testing imports...")
     try:
-
         print("   ✅ All operation instances imported")
     except Exception as e:
         print(f"   ❌ Import failed: {e}")

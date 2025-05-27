@@ -107,17 +107,19 @@ def register_unary_op(
     vjp_rule: VJPRule,
     jvp_rule: JVPRule,
     # op_params: dict = None,
-    output_shape_fn: Callable[
-        [tuple], tuple
-    ] = None,  # For ops that change shape, like Cast potentially if it could change bitwidth affecting shape in some contexts (unlikely for basic cast)
-    output_dtype: "DType" = None,  # For ops like Cast
+    output_shape_fn: (
+        Callable[[tuple], tuple] | None
+    ) = None,  # For ops that change shape, like Cast potentially if it could change bitwidth affecting shape in some contexts (unlikely for basic cast)
+    output_dtype: "DType" | None = None,  # For ops like Cast
 ) -> Array:
     """Register a unary operation with validation."""
     _validate_unary_arg(arg, op_name)
     _validate_callables(maxpr, eagerxpr, vjp_rule, jvp_rule)
 
-    final_shape = output_shape_fn(arg.shape) if output_shape_fn else arg.shape
-    final_dtype = output_dtype if output_dtype else arg.dtype
+    final_shape = (
+        output_shape_fn(arg.shape) if output_shape_fn is not None else arg.shape
+    )
+    final_dtype = output_dtype if output_dtype is not None else arg.dtype
 
     res = Array(
         shape=final_shape,

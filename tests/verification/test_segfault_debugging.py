@@ -2,7 +2,6 @@
 """Test the specific operations that cause segfault."""
 
 
-
 def test_lazy_execution_operations():
     """Test specific operations in lazy execution mode."""
     print("🔍 Testing specific operations from clean architecture test...")
