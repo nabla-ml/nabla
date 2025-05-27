@@ -1,6 +1,6 @@
 """Array creation and initialization operations."""
 
-from typing import Union
+from __future__ import annotations
 
 import numpy as np
 from max.driver import CPU, Device, Tensor
@@ -15,7 +15,7 @@ _DEFAULT_CPU = CPU()
 
 
 def array(
-    data: Union[list, np.ndarray],
+    data: list | np.ndarray,
     dtype: DType = DType.float32,
     device: Device = _DEFAULT_CPU,
 ) -> Array:

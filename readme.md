@@ -3,7 +3,7 @@
 > **A JAX-like deep learning framework with MAX and Mojo backends for fast, hardware-agnostic kernels.**
 
 [![Development Status](https://img.shields.io/badge/status-pre--alpha-red)](https://github.com/nabla-ml/nabla)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## 🚀 About
@@ -17,7 +17,7 @@ Nabla aims to provide a familiar, JAX-inspired API for numerical computation and
 ### Prerequisites
 
 Before you begin, ensure you have:
-- **Python 3.9+** installed
+- **Python 3.10+** installed
 - **Git** for cloning the repository
 - **MAX SDK** (for full functionality)
 

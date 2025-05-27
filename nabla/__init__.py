@@ -51,7 +51,7 @@ __all__ = [
     # Reduction operations
     "reduce_sum",
     # Data types
-    "DType",
+    DType,
 ]
 
 # Maintain the execution context for compatibility

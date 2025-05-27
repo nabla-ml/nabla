@@ -1,4 +1,4 @@
-"""Binary operations using clean OOP design."""
+from __future__ import annotations
 
 import numpy as np
 from max.driver import Tensor
@@ -6,6 +6,17 @@ from max.graph import Value, ops
 
 from ..core.array import Array
 from .operation import BinaryOperation
+
+
+def _ensure_array(value) -> Array:
+    """Convert scalar values to Arrays."""
+    if isinstance(value, Array):
+        return value
+    elif isinstance(value, (int, float)):
+        from .creation import array
+        return array([value])
+    else:
+        raise TypeError(f"Cannot convert {type(value)} to Array")
 
 
 class AddOp(BinaryOperation):
@@ -61,11 +72,15 @@ _add_op = AddOp()
 _mul_op = MulOp()
 
 
-def add(arg0: Array, arg1: Array) -> Array:
-    """Element-wise addition of two arrays."""
+def add(arg0, arg1) -> Array:
+    """Element-wise addition of two arrays or array and scalar."""
+    arg0 = _ensure_array(arg0)
+    arg1 = _ensure_array(arg1)
     return _add_op.forward(arg0, arg1)
 
 
-def mul(arg0: Array, arg1: Array) -> Array:
-    """Element-wise multiplication of two arrays."""
+def mul(arg0, arg1) -> Array:
+    """Element-wise multiplication of two arrays or array and scalar."""
+    arg0 = _ensure_array(arg0)
+    arg1 = _ensure_array(arg1)
     return _mul_op.forward(arg0, arg1)

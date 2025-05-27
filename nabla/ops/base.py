@@ -1,5 +1,7 @@
 """Base operation utilities and registration functions."""
 
+from __future__ import annotations
+
 from collections.abc import Callable
 
 from max.dtype import DType  # Import DType
@@ -110,7 +112,7 @@ def register_unary_op(
     output_shape_fn: (
         Callable[[tuple], tuple] | None
     ) = None,  # For ops that change shape, like Cast potentially if it could change bitwidth affecting shape in some contexts (unlikely for basic cast)
-    output_dtype: "DType" | None = None,  # For ops like Cast
+    output_dtype: DType | None = None,  # For ops like Cast
 ) -> Array:
     """Register a unary operation with validation."""
     _validate_unary_arg(arg, op_name)

@@ -1,7 +1,8 @@
 """Base operation classes for a clean OOP design."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Union
 
 from max.dtype import DType  # Added DType import
 from max.graph import Value
@@ -178,7 +179,7 @@ class ReductionOperation(UnaryOperation):
     def __init__(
         self,
         name: str,
-        axes: Union[int, list[int], None] = None,
+        axes: int | list[int] | None = None,
         keep_dims: bool = False,
     ):
         super().__init__(name)
@@ -200,7 +201,7 @@ class ReductionOperation(UnaryOperation):
 
     @staticmethod
     def _compute_reduction_shape(
-        input_shape: tuple, axes: Union[int, list[int], None], keep_dims: bool = False
+        input_shape: tuple, axes: int | list[int] | None, keep_dims: bool = False
     ) -> tuple:
         """Compute the output shape for a reduction operation."""
         if axes is None:

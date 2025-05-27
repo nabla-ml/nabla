@@ -116,13 +116,13 @@ class Array:
         return Array.from_impl(new_impl, name=self.name)
 
     # Operator overloading methods
-    def __add__(self, other: Array) -> Array:
+    def __add__(self, other) -> Array:
         """Addition operator."""
         from ..ops.binary import add
 
         return add(self, other)
 
-    def __mul__(self, other: Array) -> Array:
+    def __mul__(self, other) -> Array:
         """Multiplication operator."""
         from ..ops.binary import mul
 

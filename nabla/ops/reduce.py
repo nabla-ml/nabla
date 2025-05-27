@@ -1,6 +1,6 @@
 """Reduction operations."""
 
-from typing import Optional, Union
+from __future__ import annotations
 
 import numpy as np
 from max.driver import Tensor
@@ -16,7 +16,7 @@ class ReduceSumOp(ReductionOperation):
     def __init__(
         self,
         arg_shape: Shape,
-        axes: Union[int, list[int], None] = None,
+        axes: int | list[int] | None = None,
         keep_dims: bool = False,
     ):
         super().__init__("reduce_sum", axes, keep_dims)
@@ -51,7 +51,7 @@ class ReduceSumOp(ReductionOperation):
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         # Convert axes list to tuple for numpy compatibility
         if isinstance(self.axes, list):
-            numpy_axes: Union[int, tuple[int, ...], None] = tuple(self.axes)
+            numpy_axes: int | tuple[int, ...] | None = tuple(self.axes)
         else:
             numpy_axes = self.axes
 
@@ -78,8 +78,8 @@ class ReduceSumOp(ReductionOperation):
 
 def reduce_sum(
     arg: Array,
-    axes: Optional[Union[int, list[int]]] = None,
-    axis: Optional[Union[int, list[int]]] = None,
+    axes: int | list[int] | None = None,
+    axis: int | list[int] | None = None,
     keep_dims: bool = False,
 ) -> Array:
     """reduce_sum array elements over given axes."""
