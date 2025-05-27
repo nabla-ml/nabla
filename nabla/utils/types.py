@@ -1,11 +1,10 @@
 """Enhanced type safety with proper protocols and enums."""
 
-from typing import Protocol, Union, Literal, Tuple, List, Callable, Any
+from collections.abc import Callable
 from enum import Enum
+from typing import Any, Literal, Protocol, Union
 
 # Re-export MAX types for convenience
-from max.dtype import DType
-from max.driver import Device, CPU, Accelerator
 
 
 class ExecutionMode(Enum):
@@ -26,15 +25,15 @@ class OperationType(Enum):
 
 
 # Shape type alias
-Shape = Tuple[int, ...]
+Shape = tuple[int, ...]
 
 # Better type aliases
-AxisSpec = Union[int, List[int], None]
+AxisSpec = Union[int, list[int], None]
 DeviceType = Literal["cpu", "gpu", "accelerator"]
 
 # Function type aliases for operations
 MaxprCallable = Callable[..., None]
-VJPRule = Callable[..., List]
+VJPRule = Callable[..., list]
 JVPRule = Callable[..., Any]
 
 

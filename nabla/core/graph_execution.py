@@ -1,13 +1,12 @@
 """Core graph execution and model compilation."""
 
 from __future__ import annotations
+
+from collections.abc import Sequence
 from pathlib import Path
-from typing import List, Sequence, Set, Tuple
-from collections import deque
 
 from max.engine import InferenceSession, Model
-from max.driver import Device
-from max.graph import DeviceRef, Graph, TensorType, Value
+from max.graph import DeviceRef, Graph, TensorType
 
 from .array import Array
 from .execution_context import global_execution_context
@@ -24,7 +23,7 @@ class GraphTracer:
         return hash(node_str)
 
     @staticmethod
-    def get_trace(nodes: Sequence[Array]) -> Tuple[List[Array], List[Array], int]:
+    def get_trace(nodes: Sequence[Array]) -> tuple[list[Array], list[Array], int]:
         """
         Perform iterative DFS to get computation trace and cache key.
 
@@ -33,15 +32,15 @@ class GraphTracer:
             trace: Topological ordering of all nodes
             cache_key: Hash key for caching compiled models
         """
-        trace: List[Array] = []
-        inputs: List[Array] = []
-        visited: Set[Array] = set()
+        trace: list[Array] = []
+        inputs: list[Array] = []
+        visited: set[Array] = set()
 
         for start_node in nodes:
             if start_node in visited:
                 continue
 
-            stack: List[Array] = [start_node]
+            stack: list[Array] = [start_node]
 
             while stack:
                 node = stack[-1]  # Peek at top
@@ -77,7 +76,7 @@ class GraphTracer:
         return inputs, trace, cache_key
 
     @staticmethod
-    def _compute_cache_key(trace: List[Array]) -> int:
+    def _compute_cache_key(trace: list[Array]) -> int:
         """Compute a cache key from the computation trace."""
         key: int = 0
         for node in trace:
@@ -91,7 +90,7 @@ class ModelFactory:
 
     @staticmethod
     def create_model(
-        inputs: List[Array], trace: List[Array], outputs: List[Array]
+        inputs: list[Array], trace: list[Array], outputs: list[Array]
     ) -> Model:
         """Create a MAX model from the computation graph."""
         # Build input types
@@ -162,7 +161,7 @@ class ModelFactory:
             return session.load(graph)
 
         except Exception as e:
-            raise ValueError(f"Failed to build computation graph: {e}")
+            raise ValueError(f"Failed to build computation graph: {e}") from e
 
     @staticmethod
     def _validate_node_output(node: Array) -> None:
@@ -188,7 +187,7 @@ class ModelFactory:
             )
 
 
-def realize_(outputs: List[Array]) -> None:
+def realize_(outputs: list[Array]) -> None:
     """
     Realize (compute) the given output Arrays.
 
@@ -232,11 +231,11 @@ def realize_(outputs: List[Array]) -> None:
             output._numpy_cache = None  # Invalidate NumPy cache
 
     except Exception as e:
-        raise ValueError(f"Error executing computation: {e}")
+        raise ValueError(f"Error executing computation: {e}") from e
 
 
 # Legacy function aliases for backward compatibility
-def get_trace(nodes: Sequence[Array]) -> Tuple[List[Array], List[Array], int]:
+def get_trace(nodes: Sequence[Array]) -> tuple[list[Array], list[Array], int]:
     """Legacy alias for GraphTracer.get_trace."""
     return GraphTracer.get_trace(nodes)
 

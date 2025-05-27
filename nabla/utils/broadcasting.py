@@ -1,16 +1,15 @@
 """Broadcasting and shape manipulation utilities."""
 
-from typing import List, Tuple
-import numpy as np
 
-Shape = Tuple[int, ...]
+
+Shape = tuple[int, ...]
 
 
 def get_broadcasted_shape(
     shape1: Shape,
     shape2: Shape,
-    ignore_axes: List[int] = None,
-    replace_ignored_dims: List[int] = None,
+    ignore_axes: list[int] = None,
+    replace_ignored_dims: list[int] = None,
 ) -> Shape:
     """
     Compute the broadcasted shape of two input shapes.

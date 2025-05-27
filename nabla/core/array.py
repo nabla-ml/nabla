@@ -1,17 +1,23 @@
 """Core Array class with improved organization."""
 
 from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Optional
+
 import numpy as np
-from typing import List, Optional, Dict, Any, Callable, Tuple
-from max.driver import Tensor, CPU, Device
+from max.driver import CPU, Device, Tensor
 from max.dtype import DType
 from max.graph import Value
 
 # Type aliases
-Shape = Tuple[int, ...]
-MaxprCallable = Callable[[List[Value]], None]
-VJPRule = Callable[[List["Array"], "Array", "Array"], List["Array"]]
-JVPRule = Callable[[List["Array"], List["Array"], "Array"], "Array"]
+Shape = tuple[int, ...]
+MaxprCallable = Callable[[list[Value]], None]
+VJPRule = Callable[[list["Array"], "Array", "Array"], list["Array"]]
+JVPRule = Callable[[list["Array"], list["Array"], "Array"], "Array"]
+
+# Default device singleton to avoid function calls in defaults
+_DEFAULT_CPU = CPU()
 
 
 class Array:
@@ -21,7 +27,7 @@ class Array:
         self,
         shape: Shape,
         dtype: DType = DType.float32,
-        device: Device = CPU(),
+        device: Device = _DEFAULT_CPU,
         materialize: bool = False,
         name: str = "",
     ) -> None:
@@ -29,7 +35,7 @@ class Array:
         self.dtype = dtype
         self.device = device
         self.name = name
-        self.args: List[Array] = []
+        self.args: list[Array] = []
         self.visited: bool = False
         self.tensor_value: Optional[Value] = None
         self.maxpr: Optional[MaxprCallable] = None
@@ -89,7 +95,7 @@ class Array:
             self._numpy_cache = self.impl.to_numpy()
         return self._numpy_cache
 
-    def get_arguments(self) -> List[Array]:
+    def get_arguments(self) -> list[Array]:
         """Get list of argument Arrays."""
         return list(self.args)
 

@@ -1,11 +1,10 @@
 """Linear algebra operations."""
 
-from typing import List, Tuple
 import numpy as np
 from max.driver import Tensor
-from max.graph import ops, Value
+from max.graph import Value, ops
 
-from ..core.array import Array, Shape
+from ..core.array import Array
 from ..utils.broadcasting import get_broadcasted_shape
 from .operation import BinaryOperation
 
@@ -74,7 +73,7 @@ class MatMulOp(BinaryOperation):
                 f"Shapes {arg1.shape} and {arg2.shape} are not compatible for matrix multiplication"
             )
 
-    def maxpr(self, args: List[Value], output: Array) -> None:
+    def maxpr(self, args: list[Value], output: Array) -> None:
         x_val, y_val = args[0], args[1]
         x_shape_orig, y_shape_orig = x_val.shape, y_val.shape
 
@@ -155,15 +154,15 @@ class MatMulOp(BinaryOperation):
             else matmul_result
         )
 
-    def eagerxpr(self, args: List[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
         arg0_numpy = args[0].get_numpy()
         arg1_numpy = args[1].get_numpy()
         np_result = np.matmul(arg0_numpy, arg1_numpy)
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
-        self, primals: List[Array], cotangent: Array, output: Array
-    ) -> List[Array]:
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
         x, y = primals
         # Import transpose function here to avoid circular imports
         from .view import transpose
@@ -171,7 +170,7 @@ class MatMulOp(BinaryOperation):
         return [matmul(cotangent, transpose(y)), matmul(transpose(x), cotangent)]
 
     def jvp_rule(
-        self, primals: List[Array], tangents: List[Array], output: Array
+        self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
         x, y = primals
         tx, ty = tangents

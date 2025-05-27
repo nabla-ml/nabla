@@ -1,17 +1,21 @@
 """Array creation and initialization operations."""
 
-from typing import List, Union, Dict, Any
+from typing import Union
+
 import numpy as np
-from max.driver import Tensor, CPU, Device
+from max.driver import CPU, Device, Tensor
 from max.dtype import DType
-from max.graph import ops, TensorType, DeviceRef, Value
+from max.graph import DeviceRef, TensorType, Value, ops
 
 from ..core.array import Array, Shape
 from .operation import Operation
 
+# Default device singleton to avoid function calls in defaults
+_DEFAULT_CPU = CPU()
+
 
 def array(
-    data: Union[list, np.ndarray], dtype: DType = DType.float32, device: Device = CPU()
+    data: Union[list, np.ndarray], dtype: DType = DType.float32, device: Device = _DEFAULT_CPU
 ) -> Array:
     """Create an array from Python list or numpy array."""
     if isinstance(data, list):
@@ -25,7 +29,7 @@ def array(
     return Array.from_impl(tensor)
 
 
-def arange(shape: Shape, dtype: DType = DType.float32, device: Device = CPU()) -> Array:
+def arange(shape: Shape, dtype: DType = DType.float32, device: Device = _DEFAULT_CPU) -> Array:
     """Create an array with values from 0 to prod(shape)-1 reshaped to given shape."""
     if not isinstance(shape, tuple):
         raise TypeError(f"Shape must be a tuple, got {type(shape)}")
@@ -45,7 +49,7 @@ class RandNOp(Operation):
         shape: Shape,
         mean: float = 0.0,
         std: float = 1.0,
-        device: Device = CPU(),
+        device: Device = _DEFAULT_CPU,
         seed: int = 0,
     ):
         super().__init__(f"randn_{shape}_{mean}_{std}_{seed}")
@@ -58,9 +62,9 @@ class RandNOp(Operation):
         # Validate parameters
         if not isinstance(shape, tuple):
             raise TypeError(f"Shape must be a tuple, got {type(shape)}")
-        if not isinstance(mean, (int, float)):
+        if not isinstance(mean, int | float):
             raise TypeError(f"Mean must be numeric, got {type(mean)}")
-        if not isinstance(std, (int, float)):
+        if not isinstance(std, int | float):
             raise TypeError(f"Std must be numeric, got {type(std)}")
         if std <= 0:
             raise ValueError(f"Std must be positive, got {std}")
@@ -96,7 +100,7 @@ class RandNOp(Operation):
         """Compute the output shape."""
         return self.shape
 
-    def maxpr(self, args: List[Value], output: Array) -> None:
+    def maxpr(self, args: list[Value], output: Array) -> None:
         ops.random.set_seed(self.seed)
 
         output.tensor_value = ops.random.normal(
@@ -107,7 +111,7 @@ class RandNOp(Operation):
             std=self.std,
         )
 
-    def eagerxpr(self, args: List[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
         np.random.seed(self.seed)
 
         np_result = np.random.normal(
@@ -117,13 +121,13 @@ class RandNOp(Operation):
         output.impl = Tensor.from_numpy(np_result).to(output.device)
 
     def vjp_rule(
-        self, primals: List[Array], cotangent: Array, output: Array
-    ) -> List[Array]:
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
         """VJP for random creation - no gradients to propagate."""
         return []
 
     def jvp_rule(
-        self, primals: List[Array], tangents: List[Array], output: Array
+        self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
         """JVP for random creation - zero tangent."""
         from .creation import zeros
@@ -135,7 +139,7 @@ def randn(
     shape: Shape,
     mean: float = 0.0,
     std: float = 1.0,
-    device: Device = CPU(),
+    device: Device = _DEFAULT_CPU,
     seed: int = 0,
 ) -> Array:
     """Create array with normally distributed random values."""
@@ -143,7 +147,7 @@ def randn(
     return op.forward()
 
 
-def zeros(shape: Shape, dtype: DType = DType.float32, device: Device = CPU()) -> Array:
+def zeros(shape: Shape, dtype: DType = DType.float32, device: Device = _DEFAULT_CPU) -> Array:
     """Create an array filled with zeros."""
     if not isinstance(shape, tuple):
         raise TypeError(f"Shape must be a tuple, got {type(shape)}")

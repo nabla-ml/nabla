@@ -1,7 +1,9 @@
 """Thread-safe execution context for model caching."""
 
 import threading
-from typing import Dict, Optional, Callable
+from collections.abc import Callable
+from typing import Optional
+
 from max.engine import Model
 
 
@@ -9,7 +11,7 @@ class ThreadSafeExecutionContext:
     """Thread-safe wrapper around the global execution context dictionary."""
 
     def __init__(self) -> None:
-        self._cache: Dict[int, Model] = {}
+        self._cache: dict[int, Model] = {}
         self._lock = threading.RLock()  # Using RLock to allow recursive locking
 
     def get(self, key: int) -> Optional[Model]:

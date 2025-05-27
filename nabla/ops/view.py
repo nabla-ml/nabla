@@ -1,9 +1,8 @@
 """View and shape manipulation operations."""
 
-from typing import List, Tuple, Union
 import numpy as np
 from max.driver import Tensor
-from max.graph import ops, Value
+from max.graph import Value, ops
 
 from ..core.array import Array, Shape
 from .operation import ViewOperation
@@ -36,10 +35,10 @@ class TransposeOp(ViewOperation):
         new_shape[axis_1], new_shape[axis_2] = new_shape[axis_2], new_shape[axis_1]
         return tuple(new_shape)
 
-    def maxpr(self, args: List[Value], output: Array) -> None:
+    def maxpr(self, args: list[Value], output: Array) -> None:
         output.tensor_value = ops.transpose(args[0], self.axis_1, self.axis_2)
 
-    def eagerxpr(self, args: List[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
 
         # Create permutation axes
         axes = list(range(len(args[0].shape)))
@@ -49,12 +48,12 @@ class TransposeOp(ViewOperation):
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
-        self, primals: List[Array], cotangent: Array, output: Array
-    ) -> List[Array]:
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
         return [transpose(cotangent, self.axis_1, self.axis_2)]
 
     def jvp_rule(
-        self, primals: List[Array], tangents: List[Array], output: Array
+        self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
         return transpose(tangents[0], self.axis_1, self.axis_2)
 
@@ -92,20 +91,20 @@ class ReshapeOp(ViewOperation):
 
         return super().forward(arg)
 
-    def maxpr(self, args: List[Value], output: Array) -> None:
+    def maxpr(self, args: list[Value], output: Array) -> None:
         output.tensor_value = ops.reshape(args[0], self.target_shape)
 
-    def eagerxpr(self, args: List[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
         np_result = np.reshape(args[0].get_numpy(), self.target_shape)
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
-        self, primals: List[Array], cotangent: Array, output: Array
-    ) -> List[Array]:
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
         return [reshape(cotangent, self.arg_shape)]
 
     def jvp_rule(
-        self, primals: List[Array], tangents: List[Array], output: Array
+        self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
         return reshape(tangents[0], self.target_shape)
 
@@ -137,7 +136,7 @@ class BroadcastToOp(ViewOperation):
         return super().forward(arg)
 
     @staticmethod
-    def get_broadcasted_axes(input_shape: Shape, target_shape: Shape) -> List[int]:
+    def get_broadcasted_axes(input_shape: Shape, target_shape: Shape) -> list[int]:
         """Get axes that were broadcasted (for VJP)."""
         if len(input_shape) > len(target_shape):
             raise ValueError(
@@ -156,16 +155,16 @@ class BroadcastToOp(ViewOperation):
 
         return broadcasted_axes
 
-    def maxpr(self, args: List[Value], output: Array) -> None:
+    def maxpr(self, args: list[Value], output: Array) -> None:
         output.tensor_value = ops.broadcast_to(args[0], self.target_shape)
 
-    def eagerxpr(self, args: List[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
         np_result = np.broadcast_to(args[0].get_numpy(), shape=self.target_shape)
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
-        self, primals: List[Array], cotangent: Array, output: Array
-    ) -> List[Array]:
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
         broadcasted_axes = self.get_broadcasted_axes(
             primals[0].shape, self.target_shape
         )
@@ -176,7 +175,7 @@ class BroadcastToOp(ViewOperation):
         return [sum(cotangent, axes=broadcasted_axes)]
 
     def jvp_rule(
-        self, primals: List[Array], tangents: List[Array], output: Array
+        self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
         return broadcast_to(tangents[0], self.target_shape)
 

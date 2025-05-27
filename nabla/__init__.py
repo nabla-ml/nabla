@@ -10,18 +10,18 @@ from max.dtype import DType
 from .core.array import Array
 from .core.execution_context import ThreadSafeExecutionContext
 from .core.graph_execution import realize_
-from .utils.broadcasting import get_broadcasted_shape
-
-# Operation exports - Clean OOP-based operations
-from .ops.binary import add, mul
-from .ops.unary import sin, cos, negate
-from .ops.linalg import matmul
-from .ops.view import transpose, reshape, broadcast_to
-from .ops.reduce import sum
-from .ops.creation import array, arange, randn
 
 # Set global execution mode
 from .ops.base import EAGERMODE
+
+# Operation exports - Clean OOP-based operations
+from .ops.binary import add, mul
+from .ops.creation import arange, array, randn
+from .ops.linalg import matmul
+from .ops.reduce import sum
+from .ops.unary import cos, negate, sin
+from .ops.view import broadcast_to, reshape, transpose
+from .utils.broadcasting import get_broadcasted_shape
 
 __all__ = [
     # Core

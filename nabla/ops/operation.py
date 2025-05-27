@@ -1,12 +1,12 @@
 """Base operation classes for a clean OOP design."""
 
 from abc import ABC, abstractmethod
-from typing import List, Union, Optional, Any, Dict
+from typing import Union
+
+from max.dtype import DType  # Added DType import
 from max.graph import Value
-import numpy as np
 
 from ..core.array import Array
-from max.dtype import DType  # Added DType import
 
 
 class Operation(ABC):
@@ -28,25 +28,25 @@ class Operation(ABC):
         pass
 
     @abstractmethod
-    def maxpr(self, args: List[Value], output: Array) -> None:
+    def maxpr(self, args: list[Value], output: Array) -> None:
         """MAX graph computation."""
         pass
 
     @abstractmethod
-    def eagerxpr(self, args: List[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
         """Eager computation using NumPy."""
         pass
 
     @abstractmethod
     def vjp_rule(
-        self, primals: List[Array], cotangent: Array, output: Array
-    ) -> List[Array]:
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
         """Vector-Jacobian product rule for reverse-mode autodiff."""
         pass
 
     @abstractmethod
     def jvp_rule(
-        self, primals: List[Array], tangents: List[Array], output: Array
+        self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
         """Jacobian-vector product rule for forward-mode autodiff."""
         pass
@@ -99,7 +99,6 @@ class BinaryOperation(Operation):
     ) -> Array:  # Specific signature for Binary
         """Forward pass for binary operations."""
         # Import here to avoid circular imports
-        from ..utils.broadcasting import get_broadcasted_shape
         from ..ops.view import broadcast_to
 
         # Validate inputs
@@ -163,7 +162,7 @@ class ReductionOperation(UnaryOperation):
     def __init__(
         self,
         name: str,
-        axes: Union[int, List[int], None] = None,
+        axes: Union[int, list[int], None] = None,
         keep_dims: bool = False,
     ):
         super().__init__(name)
@@ -180,7 +179,7 @@ class ReductionOperation(UnaryOperation):
 
     @staticmethod
     def _compute_reduction_shape(
-        input_shape: tuple, axes: Union[int, List[int], None], keep_dims: bool = False
+        input_shape: tuple, axes: Union[int, list[int], None], keep_dims: bool = False
     ) -> tuple:
         """Compute the output shape for a reduction operation."""
         if axes is None:

@@ -1,26 +1,28 @@
 """Base operation utilities and registration functions."""
 
-from typing import List, Callable
+from collections.abc import Callable
+
+from max.dtype import DType  # Import DType
+
 from ..core.array import (
     Array,
+    JVPRule,
     MaxprCallable,
     VJPRule,
-    JVPRule,
 )  # Ensure Array is imported from core
-from ..utils.broadcasting import get_broadcasted_shape
 
 # Import broadcast_to from .view to avoid circular dependency if it's defined there
 # If broadcast_to is a core utility, it might need to be in ..utils or ..core
 from ..ops.view import (
     broadcast_to,
 )  # This might be a source of circular import if view ops also use base.
-from max.dtype import DType  # Import DType
+from ..utils.broadcasting import get_broadcasted_shape
 
 # Global execution mode flag
 EAGERMODE: bool = False
 
 
-def _validate_binary_args(args: List[Array], op_name: str) -> None:
+def _validate_binary_args(args: list[Array], op_name: str) -> None:
     """Validate arguments for binary operations."""
     if len(args) != 2:
         raise ValueError(f"{op_name} operation requires 2 arguments, got {len(args)}")
@@ -57,10 +59,10 @@ def _validate_callables(maxpr, eagerxpr, vjp_rule, jvp_rule) -> None:
 
 
 def register_binary_op(
-    args: List[Array],
+    args: list[Array],
     op_name: str,
     maxpr: MaxprCallable,
-    eagerxpr: Callable[[List[Array], Array], None],
+    eagerxpr: Callable[[list[Array], Array], None],
     vjp_rule: VJPRule,
     jvp_rule: JVPRule,
     # op_params: dict = None,
@@ -101,7 +103,7 @@ def register_unary_op(
     arg: Array,
     op_name: str,
     maxpr: MaxprCallable,
-    eagerxpr: Callable[[List[Array], Array], None],
+    eagerxpr: Callable[[list[Array], Array], None],
     vjp_rule: VJPRule,
     jvp_rule: JVPRule,
     # op_params: dict = None,

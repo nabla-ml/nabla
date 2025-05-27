@@ -1,10 +1,9 @@
 """Unary operations for the Nabla framework."""
 
-from typing import List, Dict, Any
 import numpy as np
-from max.graph import ops, Value
 from max.driver import Tensor
 from max.dtype import DType
+from max.graph import Value, ops
 
 from ..core.array import Array
 from .operation import UnaryOperation
@@ -16,20 +15,20 @@ class NegateOp(UnaryOperation):
     def __init__(self):
         super().__init__("negate")
 
-    def maxpr(self, args: List[Value], output: Array) -> None:
+    def maxpr(self, args: list[Value], output: Array) -> None:
         output.tensor_value = ops.negate(args[0])
 
-    def eagerxpr(self, args: List[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
         np_result = -args[0].get_numpy()
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
-        self, primals: List[Array], cotangent: Array, output: Array
-    ) -> List[Array]:
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
         return [negate(cotangent)]
 
     def jvp_rule(
-        self, primals: List[Array], tangents: List[Array], output: Array
+        self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
         return negate(tangents[0])
 
@@ -56,20 +55,20 @@ class CastOp(UnaryOperation):
         """Override forward to set dtype."""
         return super().forward(arg)
 
-    def maxpr(self, args: List[Value], output: Array) -> None:
+    def maxpr(self, args: list[Value], output: Array) -> None:
         output.tensor_value = ops.cast(args[0], output.dtype)
 
-    def eagerxpr(self, args: List[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
         np_result = args[0].get_numpy().astype(DType.to_numpy(output.dtype))
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
-        self, primals: List[Array], cotangent: Array, output: Array
-    ) -> List[Array]:
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
         return [cast(cotangent, primals[0].dtype)]
 
     def jvp_rule(
-        self, primals: List[Array], tangents: List[Array], output: Array
+        self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
         return cast(tangents[0], output.dtype)
 
@@ -89,23 +88,23 @@ class SinOp(UnaryOperation):
     def __init__(self):
         super().__init__("sin")
 
-    def maxpr(self, args: List[Value], output: Array) -> None:
+    def maxpr(self, args: list[Value], output: Array) -> None:
         output.tensor_value = ops.sin(args[0])
 
-    def eagerxpr(self, args: List[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
         np_result = np.sin(args[0].get_numpy())
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
-        self, primals: List[Array], cotangent: Array, output: Array
-    ) -> List[Array]:
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
         # Import here to avoid circular imports
         from .binary import mul
 
         return [mul(cotangent, cos(primals[0]))]
 
     def jvp_rule(
-        self, primals: List[Array], tangents: List[Array], output: Array
+        self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
         # Import here to avoid circular imports
         from .binary import mul
@@ -127,23 +126,23 @@ class CosOp(UnaryOperation):
     def __init__(self):
         super().__init__("cos")
 
-    def maxpr(self, args: List[Value], output: Array) -> None:
+    def maxpr(self, args: list[Value], output: Array) -> None:
         output.tensor_value = ops.cos(args[0])
 
-    def eagerxpr(self, args: List[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
         np_result = np.cos(args[0].get_numpy())
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
-        self, primals: List[Array], cotangent: Array, output: Array
-    ) -> List[Array]:
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
         # Import here to avoid circular imports
         from .binary import mul
 
         return [negate(mul(cotangent, sin(primals[0])))]
 
     def jvp_rule(
-        self, primals: List[Array], tangents: List[Array], output: Array
+        self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
         # Import here to avoid circular imports
         from .binary import mul

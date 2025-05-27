@@ -5,7 +5,7 @@ from .execution_context import ThreadSafeExecutionContext, global_execution_cont
 
 # Import graph execution functions - handle potential import issues gracefully
 try:
-    from .graph_execution import realize_, get_trace, compute_node_hash
+    from .graph_execution import compute_node_hash, get_trace, realize_
 except ImportError:
     # If there are import issues, we'll import these later
     pass

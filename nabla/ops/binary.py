@@ -1,9 +1,9 @@
 """Binary operations using clean OOP design."""
 
-from typing import List
+
 import numpy as np
 from max.driver import Tensor
-from max.graph import ops, Value
+from max.graph import Value, ops
 
 from ..core.array import Array
 from .operation import BinaryOperation
@@ -15,20 +15,20 @@ class AddOp(BinaryOperation):
     def __init__(self):
         super().__init__("add")
 
-    def maxpr(self, args: List[Value], output: Array) -> None:
+    def maxpr(self, args: list[Value], output: Array) -> None:
         output.tensor_value = ops.add(args[0], args[1])
 
-    def eagerxpr(self, args: List[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
         np_result = np.add(args[0].get_numpy(), args[1].get_numpy())
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
-        self, primals: List[Array], cotangent: Array, output: Array
-    ) -> List[Array]:
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
         return [cotangent, cotangent]
 
     def jvp_rule(
-        self, primals: List[Array], tangents: List[Array], output: Array
+        self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
         return add(tangents[0], tangents[1])
 
@@ -39,20 +39,20 @@ class MulOp(BinaryOperation):
     def __init__(self):
         super().__init__("mul")
 
-    def maxpr(self, args: List[Value], output: Array) -> None:
+    def maxpr(self, args: list[Value], output: Array) -> None:
         output.tensor_value = ops.mul(args[0], args[1])
 
-    def eagerxpr(self, args: List[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
         np_result = np.multiply(args[0].get_numpy(), args[1].get_numpy())
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
-        self, primals: List[Array], cotangent: Array, output: Array
-    ) -> List[Array]:
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
         return [mul(cotangent, primals[1]), mul(cotangent, primals[0])]
 
     def jvp_rule(
-        self, primals: List[Array], tangents: List[Array], output: Array
+        self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
         return add(mul(primals[0], tangents[1]), mul(primals[1], tangents[0]))
 
