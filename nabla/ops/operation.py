@@ -192,7 +192,7 @@ class ReductionOperation(UnaryOperation):
     def __init__(
         self,
         name: str,
-        axes: int | list[int] | None = None,
+        axes: int | list[int] | tuple[int, ...] | None = None,
         keep_dims: bool = False,
     ):
         super().__init__(name)
@@ -214,7 +214,9 @@ class ReductionOperation(UnaryOperation):
 
     @staticmethod
     def _compute_reduction_shape(
-        input_shape: tuple, axes: int | list[int] | None, keep_dims: bool = False
+        input_shape: tuple,
+        axes: int | list[int] | tuple[int, ...] | None,
+        keep_dims: bool = False,
     ) -> tuple:
         """Compute the output shape for a reduction operation."""
         if axes is None:
@@ -222,6 +224,8 @@ class ReductionOperation(UnaryOperation):
 
         if isinstance(axes, int):
             axes = [axes]
+        elif isinstance(axes, tuple):
+            axes = list(axes)
 
         # Normalize negative axes
         normalized_axes = []

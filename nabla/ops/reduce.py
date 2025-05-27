@@ -29,7 +29,7 @@ class ReduceSumOp(ReductionOperation):
     def __init__(
         self,
         arg_shape: Shape,
-        axes: int | list[int] | None = None,
+        axes: int | list[int] | tuple[int, ...] | None = None,
         keep_dims: bool = False,
     ):
         super().__init__(f"reduce_sum[axes={axes}]", axes, keep_dims)
@@ -91,15 +91,14 @@ class ReduceSumOp(ReductionOperation):
 
 def reduce_sum(
     arg: Array,
-    axes: int | list[int] | None = None,
-    axis: int | list[int] | None = None,
+    axes: int | list[int] | tuple[int, ...] | None = None,
     keep_dims: bool = False,
 ) -> Array:
     """reduce_sum array elements over given axes."""
-    if axis is not None and axes is not None:
-        raise ValueError("Cannot specify both 'axes' and 'axis' parameters")
-    if axis is not None:
-        axes = axis
+    # if axis is not None and axes is not None:
+    #     raise ValueError("Cannot specify both 'axes' and 'axis' parameters")
+    # if axis is not None:
+    #     axes = axis
 
     op = ReduceSumOp(arg.shape, axes, keep_dims)
     return op.forward(arg)

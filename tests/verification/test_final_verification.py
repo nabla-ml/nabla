@@ -116,11 +116,11 @@ def test_complete_oop_refactoring():
 
         print("\n6. Testing view operations...")
         k = nabla.transpose(b)
-        l = nabla.reshape(b, (3, 2))
+        reshaped = nabla.reshape(b, (3, 2))
 
         k.realize()
-        l.realize()
-        print(f"   transpose: {k.shape}, reshape: {l.shape}")
+        reshaped.realize()
+        print(f"   transpose: {k.shape}, reshape: {reshaped.shape}")
         print("   ✅ View operations work")
 
         print("\n7. Testing reduction operations...")
@@ -151,7 +151,7 @@ def test_complete_oop_refactoring():
         x5 = nabla.transpose(x4)
         x6 = nabla.reduce_sum(x5)
 
-        result = x6.realize()
+        x6.realize()
         result_val = x6.get_numpy()
         print(f"   Complex computation result: {result_val}")
         print("   ✅ Complex computation works")

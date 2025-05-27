@@ -58,6 +58,8 @@ class Array:
         self.traced: bool = False
         # self.op_params: Optional[Dict[str, Any]] = None
         self._numpy_cache: Optional[np.ndarray] = None
+        self.tangent: Optional[Array] = None
+        self.cotangent: Optional[Array] = None
 
         if materialize:
             self.impl = Tensor(dtype, shape, device=device)

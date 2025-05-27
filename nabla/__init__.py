@@ -25,14 +25,14 @@ from max.dtype import DType
 from .core.array import Array
 from .core.execution_context import ThreadSafeExecutionContext
 from .core.graph_execution import realize_
-from .core.trafos import vjp, jvp
+from .core.trafos import jvp, vjp
 
 # Set global execution mode
 from .ops.base import EAGERMODE
 
 # Operation exports - Clean OOP-based operations
 from .ops.binary import add, mul
-from .ops.creation import arange, array, randn, zeros, ones, zeros_like, ones_like
+from .ops.creation import arange, array, ones, ones_like, randn, zeros, zeros_like
 from .ops.linalg import matmul
 from .ops.reduce import reduce_sum
 from .ops.unary import cos, negate, sin
@@ -52,7 +52,7 @@ __all__ = [
     "arange",
     "randn",
     "zeros",
-    "ones", 
+    "ones",
     "zeros_like",
     "ones_like",
     # Binary operations

@@ -37,7 +37,7 @@ def test_basic_operations():
         print("✓ Unary ops: sin and cos computed")
 
         # Test binary operations
-        w = add(y, z)
+        _w = add(y, z)
         print("✓ Binary op: addition computed")
 
         # Test matrix multiplication

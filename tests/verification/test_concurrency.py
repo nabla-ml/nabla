@@ -38,7 +38,7 @@ def test_concurrent_execution():
 
     # Create multiple identical operations
     operations = []
-    for i in range(5):
+    for _i in range(5):
         z = nabla.mul(x, y)  # These should all get the same cache key
         operations.append(z)
 

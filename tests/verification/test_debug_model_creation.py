@@ -66,7 +66,7 @@ def debug_model_creation():
     print("\n3. Executing model...")
     try:
         tensor_inputs = [input_node.impl for input_node in inputs]
-        model_outputs = model.execute(*tensor_inputs)
+        _model_outputs = model.execute(*tensor_inputs)
         print("   ✅ Model executed successfully")
     except Exception as e:
         print(f"   ❌ Model execution failed: {e}")

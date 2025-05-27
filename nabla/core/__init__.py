@@ -17,9 +17,4 @@ from .array import Array
 from .execution_context import ThreadSafeExecutionContext, global_execution_context
 from .trafos import Trace
 
-__all__ = [
-    "Array", 
-    "ThreadSafeExecutionContext", 
-    "global_execution_context",
-    "Trace"
-]
+__all__ = ["Array", "ThreadSafeExecutionContext", "global_execution_context", "Trace"]
