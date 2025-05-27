@@ -30,7 +30,7 @@ class ReduceSumOp(ReductionOperation):
             # reduce_sum over all axes - iterate through each axis from the last to first
             output_symbol = args[0]
             for axis in range(len(args[0].shape) - 1, -1, -1):
-                output_symbol = ops.reduce_sum(output_symbol, axis=axis)
+                output_symbol = ops.sum(output_symbol, axis=axis)
                 if not self.keep_dims:
                     output_symbol = ops.squeeze(output_symbol, axis=axis)
         else:
