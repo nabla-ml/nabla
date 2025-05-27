@@ -25,7 +25,7 @@ from max.dtype import DType
 from .core.array import Array
 from .core.execution_context import ThreadSafeExecutionContext
 from .core.graph_execution import realize_
-from .core.trace import trace_function
+from .core.trafos import vjp, jvp
 
 # Set global execution mode
 from .ops.base import EAGERMODE
@@ -43,7 +43,8 @@ __all__ = [
     # Core
     "Array",
     "realize_",
-    "trace_function",
+    "vjp",
+    "jvp",
     "EAGERMODE",
     "get_broadcasted_shape",
     # Array creation
