@@ -1,12 +1,13 @@
 <h1 align="center">NABLA</h1>
 
-<h3 align="center">Differentiable Programming with Python + Mojo</h3>
+<h2 align="center"><em>Dynamic Neural Networks and Function Transformations in Python + Mojo</em></h2>
 
-<!-- <p align="center"><em>A Research Preview</em></p> -->
+Nabla provides 3 things:
 
-Nabla provides **JAX-like function transformations** for automatic differentiation in Python. Apply transformations like `vmap`, `grad`, `jit`, `vjp`, and `jvp` to pure functions for numerical computing and machine learning.
+- **Multidimensional array operations**: Support for binary, unary, and linear algebra operations on multi-dimensional arrays on CPU and GPU.
+- **Dynamic function transformations**: Apply JAX-like transformations like `vmap`, `grad`, `jit` to Python functions.
+- **Mojo acceleration 🔥**: Seamlessly integrate high-performance Mojo kernels for CPU and GPU execution.
 
-**Key differentiator**: Seamless integration with Mojo for writing custom high-performance kernels while maintaining a familiar JAX-like API for function transformations.
 
 <p align="center">
   <a href="#installation">Installation</a> •
