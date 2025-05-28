@@ -12,6 +12,18 @@ Nabla aims to provide a familiar, JAX-inspired API for numerical computation and
 
 **⚠️ Current Status: Pre-Alpha - Under Heavy Development**
 
+## 📁 Repository Structure
+
+This repository contains two implementations of Nabla:
+
+- **Main Directory (Python Implementation)**: The primary Python-based implementation with JAX-like API
+- **`nabla-mojo-experimental/`**: Experimental Mojo implementation leveraging MAX Engine for performance
+
+Each implementation is self-contained with its own documentation, examples, and build system. Choose the implementation that best fits your needs:
+
+- Use the **Python version** for familiar JAX-like development and broader ecosystem compatibility  
+- Use the **Mojo version** for cutting-edge performance and direct MAX Engine integration
+
 ## 🛠️ Setup & Installation
 
 ### Prerequisites
