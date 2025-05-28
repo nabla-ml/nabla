@@ -97,6 +97,7 @@ class Array:
                 f"Argument must be an instance of Array, got {type(arg_node)}"
             )
         self.traced = self.traced or arg_node.traced
+        self.batch_dim_ctr = max(self.batch_dim_ctr, arg_node.batch_dim_ctr)
         self.args.append(arg_node)
 
     def realize(self) -> None:

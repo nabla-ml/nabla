@@ -14,10 +14,24 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-"""Core components of the Nabla framework."""
+import nabla as nb
 
-from .array import Array
-from .execution_context import ThreadSafeExecutionContext, global_execution_context
-from .trafos import Trace, jvp, vjp, xpr, vmap
 
-__all__ = ["Array", "ThreadSafeExecutionContext", "global_execution_context", "Trace"]
+def test_basic_vmap_transform_with_xpr_prints():
+    """Test the new VJPTransform class."""
+    print("=== Testing VJPTransform ===")
+
+    def square_fn(inputs: list[nb.Array]) -> list[nb.Array]:
+        x = inputs[0]
+        return [nb.sin(x * x * x)]
+
+    fn_vmapped = nb.vmap(square_fn, in_axes=[0], out_axes=[0])
+
+    # Create input
+    x = nb.arange((2, 3))
+    print("\nOrignal Function:", nb.xpr(fn_vmapped, [x]))
+
+
+if __name__ == "__main__":
+    print("\nTesting with xpr prints")
+    test_basic_vmap_transform_with_xpr_prints()

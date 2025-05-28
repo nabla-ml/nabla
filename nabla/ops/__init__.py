@@ -22,8 +22,8 @@ from .binary import add, mul
 from .creation import arange, randn
 from .linalg import matmul
 from .reduce import reduce_sum
-from .unary import cast, cos, negate, sin
-from .view import broadcast_to, reshape, transpose
+from .unary import cast, cos, negate, sin, decr_batch_dim_ctr, incr_batch_dim_ctr
+from .view import broadcast_to, reshape, transpose, squeeze, unsqueeze
 
 __all__ = [
     # Creation operations
