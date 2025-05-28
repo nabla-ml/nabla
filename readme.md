@@ -1,213 +1,111 @@
-# Nabla ∇
+<h1 align="center">NABLA: Differentiable Programming with Python + Mojo</h1>
 
-> **A JAX-like deep learning framework with MAX and Mojo backends for fast, hardware-agnostic kernels.**
+<p align="center"><em>A Research Preview</em></p>
 
-[![Development Status](https://img.shields.io/badge/status-pre--alpha-red)](https://github.com/nabla-ml/nabla)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+Nabla provides **JAX-like function transformations** for automatic differentiation in Python 🔥. Apply transformations like `vmap`, `grad`, `jit`, `vjp`, and `jvp` to pure functions for numerical computing and machine learning, with high-performance Mojo kernel integration for CPU/GPU acceleration.
 
-## 🚀 About
+**Key advantage over JAX**: Seamless integration with Mojo for writing custom high-performance kernels while maintaining the familiar JAX-style functional API.
 
-Nabla aims to provide a familiar, JAX-inspired API for numerical computation and automatic differentiation, with a focus on leveraging the [MAX Engine](https://www.modular.com/max) and Mojo programming language for high-performance, portable execution across various hardware platforms.
+<p align="center">
+  <a href="#installation">Installation</a> •
+  <a href="#features">Features</a> •
+  <a href="#roadmap">Roadmap</a> •
+  <a href="https://github.com/nabla-ml/nabla/issues">Report Bug</a>
+</p>
 
-**⚠️ Current Status: Pre-Alpha - Under Heavy Development**
+## Features
 
-## 📁 Repository Structure
+- **Function Transformations**: `grad`, `jit`, `vmap`, `vjp`, `jvp` for automatic differentiation
+- **High Performance**: Mojo kernel integration for CPU/GPU acceleration  
+- **JAX-like API**: Familiar functional programming interface
+- **Pure Functions**: Compose transformations on stateless functions
+- **Custom Kernels**: Write performance-critical kernels in Mojo
 
-This repository contains two implementations of Nabla:
+## Installation
 
-- **Main Directory (Python Implementation)**: The primary Python-based implementation with JAX-like API
-- **`nabla-mojo-experimental/`**: Experimental Mojo implementation leveraging MAX Engine for performance
+**Note**: Nabla will soon be installable via pip. For now, please install from source.
 
-Each implementation is self-contained with its own documentation, examples, and build system. Choose the implementation that best fits your needs:
-
-- Use the **Python version** for familiar JAX-like development and broader ecosystem compatibility  
-- Use the **Mojo version** for cutting-edge performance and direct MAX Engine integration
-
-## 🛠️ Setup & Installation
-
-### Prerequisites
-
-Before you begin, ensure you have:
-- **Python 3.10+** installed
-- **Git** for cloning the repository
-- **MAX SDK** (for full functionality)
-
-### 1. Clone the Repository
+Get started with Nabla using Python package management.
+*(Requires [Python 3.10+](https://www.python.org/downloads/).)*
 
 ```bash
 git clone https://github.com/nabla-ml/nabla.git
 cd nabla
-```
 
-### 2. Set Up Python Environment
+# Create virtual environment (recommended)
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-We recommend using a virtual environment to isolate dependencies:
-
-```bash
-# Create virtual environment
-python3 -m venv .venv
-
-# Activate virtual environment
-# On macOS/Linux:
-source .venv/bin/activate
-# On Windows:
-# .venv\Scripts\activate
-```
-
-### 3. Install Dependencies
-
-#### Option A: Development Installation (Recommended)
-
-For active development and testing:
-
-```bash
-# Install core dependencies
-pip install -r requirements.txt
-
-# Install nabla in editable mode
+# Install in development mode
 pip install -e .
 ```
 
-This approach:
-- Installs all required dependencies including MAX SDK
-- Allows you to modify the code and see changes immediately
-- Keeps your development environment clean
+## Prerequisites
 
-#### Option B: Direct Installation with pyproject.toml
+- **Python 3.10+**
+- **NumPy** (for array operations)
+- **Optional**: MAX Engine (for Mojo kernel acceleration)
+
+## Core Transformations
+
+- `nb.grad()` - Compute gradients (reverse-mode autodiff)
+- `nb.jvp()` - Jacobian-vector product (forward-mode autodiff) 
+- `nb.vjp()` - Vector-Jacobian product (reverse-mode autodiff)
+- `nb.vmap()` - Vectorize functions over batch dimensions
+- `nb.jit()` - Just-in-time compilation for performance
+
+## Development Setup
+
+For contributors and advanced users:
 
 ```bash
-# Upgrade pip first
-pip install --upgrade pip
-
-# Install Nabla with all dependencies (including MAX SDK)
+# Install development dependencies
 pip install -e ".[dev]"
-```
 
-This will automatically install:
-- **Core dependencies**: `numpy>=1.22`, `modular>=25.0.0` (MAX SDK)
-- **Development tools**: `pytest`, `ruff`, `black`, `mypy`, `build`, `twine`, `pre-commit`
-
-### 4. Verify Installation
-
-Test that everything is working correctly:
-
-```bash
-python -c "import nabla as nb; print('Nabla installed successfully!')"
-```
-
-## 🏃‍♂️ Quick Start
-
-```python
-import nabla as nb
-
-# Create arrays
-a = nb.arange(shape=(4, 4), dtype=nb.DType.float32)
-b = nb.randn(shape=(4, 4), dtype=nb.DType.float32)
-
-# Perform operations
-c = nb.add(a, b)
-d = nb.matmul(c, nb.transpose(b))
-
-# Realize computation
-result = nb.realize_(d)
-print(result)
-```
-
-## 🧪 Development
-
-### Running Tests
-
-```bash
-# Run all tests
+# Run tests
 pytest
 
-# Run specific test categories
-pytest tests/unit/          # Unit tests
-pytest tests/integration/   # Integration tests
-pytest tests/verification/  # Verification tests
-
-# Run with verbose output
-pytest -v
-```
-
-### Code Quality
-
-The project uses several tools for code quality:
-
-```bash
-# Format code
-black nabla/
+# Format and lint code
 ruff format nabla/
-
-# Lint code
-ruff check nabla/
-
-# Type checking
-mypy nabla/
+ruff check nabla/ --fix
 ```
 
-### Pre-commit Hooks
+## Roadmap
 
-Set up pre-commit hooks for automated code quality checks:
+Following the strategic direction of the MAX project, Nabla prioritizes the **Python API first** with JAX-like function transformations.
 
-```bash
-pre-commit install
-```
+- ✅ **Function Transformations**: Core JAX-like transformations (vmap, grad, jit)
+- ✅ **Mojo Kernel Integration**: High-performance kernel implementation working
+- ✅ **GPU Acceleration**: Full GPU support
+- 👷 **Extended Operations**: Comprehensive math operations
+- 💡 **Enhanced Mojo API**: When Mojo ecosystem stabilizes, we will integrate further
 
-## 📦 Building for Distribution
+## Repository Structure
 
-To build the package for distribution:
+This repository contains:
 
-```bash
-# Clean previous builds
-rm -rf dist/ build/ *.egg-info/
+- **Main Directory**: Primary Python-based Nabla implementation (recommended)
+- **`nabla-mojo-experimental/`**: Experimental Mojo implementation (research preview)
 
-# Build source and wheel distributions
-python -m build
+The Python version is the main focus and provides the most stable experience. The Mojo version showcases future possibilities but is currently on hold pending MAX Mojo API development.
 
-# Check the built package
-twine check dist/*
-```
+## General Status & Caveats (Research Preview)
 
-## 🗂️ Project Structure
+- **API Stability**: APIs are subject to change
+- **Completeness**: Operator coverage is growing but not exhaustive
+- **Performance**: JIT compilation and Mojo kernel integration provide good performance
+- **Documentation**: Currently basic; will be expanded significantly
+- **Bugs**: Expect to encounter bugs; please report them!
 
-```
-nabla/
-├── nabla/                  # Main package
-│   ├── core/              # Core array and execution engine
-│   ├── ops/               # Mathematical operations
-│   ├── mojo_kernels/      # Mojo kernel implementations
-│   └── utils/             # Utilities and helpers
-├── tests/                 # Test suite
-│   ├── unit/              # Unit tests
-│   ├── integration/       # Integration tests
-│   └── verification/      # End-to-end verification
-├── pyproject.toml         # Project configuration
-└── readme.md              # This file
-```
+## Contributing
 
-## 🤝 Contributing
+Contributions welcome! Discuss significant changes in Issues first. Submit PRs for bugs, docs, and smaller features.
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes and add tests
-4. Run the code quality checks
-5. Commit your changes (`git commit -m 'Add amazing feature'`)
-6. Push to the branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
+## License
 
-## 📄 License
-
-This project is licensed under the Apache License v2.0 - see the [LICENSE](LICENSE) file for details.
-
-## 🔗 Links
-
-- **Repository**: [https://github.com/nabla-ml/nabla](https://github.com/nabla-ml/nabla)
-- **MAX Engine**: [https://www.modular.com/max](https://www.modular.com/max)
-- **Mojo Language**: [https://docs.modular.com/mojo/](https://docs.modular.com/mojo/)
+Nabla is licensed under the [Apache-2.0 license](https://github.com/nabla-ml/nabla/blob/main/LICENSE).
 
 ---
 
-**Built with ❤️ by the Nabla team**
+<p align="center" style="margin-top: 3em; margin-bottom: 2em;"><em>Thank you for checking out Nabla!</em></p>
 
