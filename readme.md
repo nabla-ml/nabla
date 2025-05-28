@@ -58,18 +58,13 @@ ruff check nabla/ --fix
 ```
 nabla/
 ├── nabla/                     # Core Python library
-│   ├── core/                  # Function transformations (vmap, grad, jit, vjp, jvp)
+│   ├── core/                  # Function transformations and array operations
 │   ├── ops/                   # Mathematical operations (binary, unary, linalg)
-│   └── mojo_kernels/          # High-performance Mojo kernels
+│   ├── mojo_kernels/          # High-performance Mojo kernels
+│   └── utils/                 # Utilities (broadcasting, types)
 ├── tests/                     # Comprehensive test suite
-└── nabla-mojo-experimental/   # Experimental Mojo implementation
-    ├── nabla/                 # Pure Mojo library
-    ├── examples/              # Mojo usage examples
-    └── benchmarks/            # Performance benchmarks
+└── nabla-mojo-experimental/   # Experimental pure Mojo implementation
 ```
-
-- **Main Directory**: Python implementation with Mojo kernel integration (recommended)
-- **`nabla-mojo-experimental/`**: Pure Mojo implementation (research preview)
 
 ## Status (Research Preview)
 
