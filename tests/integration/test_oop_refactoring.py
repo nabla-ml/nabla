@@ -2,10 +2,13 @@
 # ===----------------------------------------------------------------------=== #
 # Nabla 2025
 #
-# Licensed under the Apache License v2.0:
-# https://llvm.org/LICENSE.txt
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
-# Unless required by applicable law or beautiful, software
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
@@ -53,25 +56,25 @@ def test_operation_consistency():
 
     for op in operations:
         # Check that all operations inherit from Operation
-        assert isinstance(op, Operation), (
-            f"{type(op).__name__} should inherit from Operation"
-        )
+        assert isinstance(
+            op, Operation
+        ), f"{type(op).__name__} should inherit from Operation"
 
         # Check that all operations have required methods
         assert hasattr(op, "forward"), f"{type(op).__name__} should have forward method"
         assert hasattr(op, "maxpr"), f"{type(op).__name__} should have maxpr method"
-        assert hasattr(op, "eagerxpr"), (
-            f"{type(op).__name__} should have eagerxpr method"
-        )
-        assert hasattr(op, "vjp_rule"), (
-            f"{type(op).__name__} should have vjp_rule method"
-        )
-        assert hasattr(op, "jvp_rule"), (
-            f"{type(op).__name__} should have jvp_rule method"
-        )
-        assert hasattr(op, "compute_output_shape"), (
-            f"{type(op).__name__} should have compute_output_shape method"
-        )
+        assert hasattr(
+            op, "eagerxpr"
+        ), f"{type(op).__name__} should have eagerxpr method"
+        assert hasattr(
+            op, "vjp_rule"
+        ), f"{type(op).__name__} should have vjp_rule method"
+        assert hasattr(
+            op, "jvp_rule"
+        ), f"{type(op).__name__} should have jvp_rule method"
+        assert hasattr(
+            op, "compute_output_shape"
+        ), f"{type(op).__name__} should have compute_output_shape method"
 
         # Check that operations have a name
         assert hasattr(op, "name"), f"{type(op).__name__} should have name attribute"

@@ -2,10 +2,13 @@
 # ===----------------------------------------------------------------------=== #
 # Nabla 2025
 #
-# Licensed under the Apache License v2.0:
-# https://llvm.org/LICENSE.txt
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
-# Unless required by applicable law or beautiful, software
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
@@ -89,19 +92,19 @@ def test_unary_operations():
         # Test trigonometric functions
         sin_x = nabla.sin(x)
         cos_x = nabla.cos(x)
-        assert sin_x.shape == x.shape, (
-            f"sin shape mismatch: expected {x.shape}, got {sin_x.shape}"
-        )
-        assert cos_x.shape == x.shape, (
-            f"cos shape mismatch: expected {x.shape}, got {cos_x.shape}"
-        )
+        assert (
+            sin_x.shape == x.shape
+        ), f"sin shape mismatch: expected {x.shape}, got {sin_x.shape}"
+        assert (
+            cos_x.shape == x.shape
+        ), f"cos shape mismatch: expected {x.shape}, got {cos_x.shape}"
         print("✓ Trigonometric functions work")
 
         # Test negation
         neg_x = -x  # This should use the __neg__ method which calls negate
-        assert neg_x.shape == x.shape, (
-            f"negation shape mismatch: expected {x.shape}, got {neg_x.shape}"
-        )
+        assert (
+            neg_x.shape == x.shape
+        ), f"negation shape mismatch: expected {x.shape}, got {neg_x.shape}"
         print("✓ Negation works")
 
         return True
@@ -121,16 +124,16 @@ def test_binary_operations():
 
         # Test addition
         c = a + b
-        assert c.shape == a.shape, (
-            f"addition shape mismatch: expected {a.shape}, got {c.shape}"
-        )
+        assert (
+            c.shape == a.shape
+        ), f"addition shape mismatch: expected {a.shape}, got {c.shape}"
         print("✓ Addition works")
 
         # Test multiplication
         d = a * b
-        assert d.shape == a.shape, (
-            f"multiplication shape mismatch: expected {a.shape}, got {d.shape}"
-        )
+        assert (
+            d.shape == a.shape
+        ), f"multiplication shape mismatch: expected {a.shape}, got {d.shape}"
         print("✓ Multiplication works")
 
         return True
@@ -180,16 +183,16 @@ def test_reduction_operations():
 
         # Test reduce_sum without axis
         total = nabla.reduce_sum(x)
-        assert total.shape == (), (
-            f"reduce_sum without axis should be scalar, got shape {total.shape}"
-        )
+        assert (
+            total.shape == ()
+        ), f"reduce_sum without axis should be scalar, got shape {total.shape}"
         print("✓ reduce_sum without axis works")
 
         # Test reduce_sum with axis
         reduce_sum_axis0 = nabla.reduce_sum(x, axis=0)
-        assert reduce_sum_axis0.shape == (4,), (
-            f"reduce_sum along axis 0 shape mismatch: expected (4,), got {reduce_sum_axis0.shape}"
-        )
+        assert reduce_sum_axis0.shape == (
+            4,
+        ), f"reduce_sum along axis 0 shape mismatch: expected (4,), got {reduce_sum_axis0.shape}"
         print("✓ reduce_sum with axis works")
 
         return True
