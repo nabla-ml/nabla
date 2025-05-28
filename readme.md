@@ -44,15 +44,15 @@ pip install -e .
 
 - **Python 3.10+**
 - **NumPy** (for array operations)
-- **Optional**: MAX Engine (for Mojo kernel acceleration)
+- **Modular**: Includes Mojo and MAX (for JIT compilation and GPU support)
 
 ## Core Transformations
 
-- `nb.grad()` - Compute gradients (reverse-mode autodiff)
-- `nb.jvp()` - Jacobian-vector product (forward-mode autodiff) 
-- `nb.vjp()` - Vector-Jacobian product (reverse-mode autodiff)
-- `nb.vmap()` - Vectorize functions over batch dimensions
-- `nb.jit()` - Just-in-time compilation for performance
+- `jvp` - Jacobian-vector product (forward-mode autodiff) 
+- `vjp` - Vector-Jacobian product (reverse-mode autodiff)
+- `grad` - Compute gradients (choses the best mode automatically)
+- `vmap` - Vectorize functions over batch dimensions
+- `jit` - Just-in-time compilation with MAX Engine
 
 ## Development Setup
 
