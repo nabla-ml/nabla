@@ -113,6 +113,47 @@ def test_jvp_vjp_consistency():
     print("✓ JVP-VJP consistency test passed\n")
 
 
+def test_higher_order_jvp():
+    """Test higher-order derivatives using nested JVP calls."""
+    print("=== Testing Higher-Order JVP ===")
+
+    def cubic_fn(inputs):
+        x = inputs[0]
+        return [x * x * x]  # f(x) = x³
+
+    # Create input
+    x = nb.array([2.0])
+    tangent = nb.array([1.0])
+
+    # First-order: compute f(x) and f'(x) * tangent
+    values, first_order = jvp(cubic_fn, [x], [tangent])
+
+    print(f"f(2) = {values[0]} (expected: 8)")
+    print(f"f'(2) * 1 = {first_order[0]} (expected: 12)")
+
+    # For second-order derivatives, create a jacobian function
+    def jacobian_fn(inputs):
+        x = inputs[0]
+        _, tangents = jvp(cubic_fn, [x], [nb.ones(x.shape)])
+        return [tangents[0]]
+
+    # Second-order: compute the derivative of the jacobian function
+    _, second_order = jvp(jacobian_fn, [x], [tangent])
+
+    print(f"f''(2) * 1 = {second_order[0]} (expected: 12)")
+
+    # Verify results
+    # For f(x) = x³:
+    # f(2) = 8
+    # f'(x) = 3x², so f'(2) = 12
+    # f''(x) = 6x, so f''(2) = 12
+    assert abs(values[0].get_numpy()[0] - 8.0) < 1e-6
+    assert abs(first_order[0].get_numpy()[0] - 12.0) < 1e-6
+    assert abs(second_order[0].get_numpy()[0] - 12.0) < 1e-6
+
+    print("✓ Higher-order JVP test passed\n")
+
+
 if __name__ == "__main__":
     print("Testing JVP (Forward-Mode Autodiff)")
     print("=" * 50)
@@ -121,6 +162,7 @@ if __name__ == "__main__":
     test_cubic_jvp()
     test_multivariable_jvp()
     test_jvp_vjp_consistency()
+    test_higher_order_jvp()
 
     print("=" * 50)
     print("🎉 All JVP tests passed!")

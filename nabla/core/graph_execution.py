@@ -104,14 +104,18 @@ class GraphTracer:
         print(f"Inputs ({len(inputs)}):")
         for i, inp in enumerate(inputs):
             print(f"  {i}: {inp.name or 'unnamed'} {inp.shape} {inp.dtype}")
-        
+
         print(f"\nTrace ({len(trace)}):")
         for i, node in enumerate(trace):
             if node in inputs:
-                print(f"  {i}: [INPUT] {node.name or 'unnamed'} {node.shape} {node.dtype}")
+                print(
+                    f"  {i}: [INPUT] {node.name or 'unnamed'} {node.shape} {node.dtype}"
+                )
             else:
-                arg_names = [arg.name or 'unnamed' for arg in node.args]
-                print(f"  {i}: {node.name or 'unnamed'} {node.shape} {node.dtype} <- {arg_names}")
+                arg_names = [arg.name or "unnamed" for arg in node.args]
+                print(
+                    f"  {i}: {node.name or 'unnamed'} {node.shape} {node.dtype} <- {arg_names}"
+                )
         print("=" * 25)
 
 
@@ -236,7 +240,7 @@ def realize_(outputs: list[Array]) -> None:
     """
     if not outputs:
         return
-    
+
     # print("### In realize_ function")
 
     # Validate inputs
@@ -249,7 +253,7 @@ def realize_(outputs: list[Array]) -> None:
 
     if not output_list:
         return  # Nothing to compute
-    
+
     # print("### Filtered output_list for computation:")
 
     # Get computation trace

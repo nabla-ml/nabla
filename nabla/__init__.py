@@ -45,6 +45,7 @@ __all__ = [
     "realize_",
     "vjp",
     "jvp",
+    "xpr",
     "EAGERMODE",
     "get_broadcasted_shape",
     # Array creation

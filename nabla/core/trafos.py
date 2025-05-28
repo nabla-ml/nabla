@@ -30,22 +30,25 @@ class Trace:
         self.outputs = outputs if outputs is not None else []
         self.trace: list[Array] = []
         self._computed = False
-        
+
         # Mark all inputs as traced for autodiff so the computation graph gets captured
         for inp in inputs:
             inp.traced = True
 
     @classmethod
-    def trace_function(cls, fn: Callable, inputs: list[Array]) -> 'Trace':
+    def trace_function(
+        cls, fn: Callable[[list[Array]], list[Array]], inputs: list[Array]
+    ) -> Trace:
         """
         Create a trace by executing a function with tracing enabled.
-        
+
         This is the recommended way to create traces as it ensures proper
         tracing setup before function execution.
         """
+
         # Create trace instance (this marks inputs as traced)
         trace = cls(inputs)
-        
+
         try:
             # Execute function with tracing enabled
             outputs = fn(inputs)
@@ -93,7 +96,7 @@ class Trace:
         purple = "\033[95m"
         reset = "\033[0m"
 
-        def format_dtype(dtype) -> str:
+        def format_dtype(dtype: Any) -> str:
             """Format dtype for display."""
             # Convert DType to string representation
             dtype_str = str(dtype).lower()
@@ -108,7 +111,7 @@ class Trace:
             else:
                 return dtype_str
 
-        def format_shape_and_dtype(array) -> str:
+        def format_shape_and_dtype(array: Array) -> str:
             """Format shape and dtype in JAX style."""
             dtype_str = format_dtype(array.dtype)
             if array.shape:
@@ -153,8 +156,10 @@ class Trace:
                     if arg_id in var_names:
                         arg_vars.append(var_names[arg_id])
                     else:
-                        # This shouldn't happen in a well-formed trace
-                        arg_vars.append("?")
+                        # Array from external context - assign a const name
+                        temp_name = f"const{len([v for v in var_names.values() if v.startswith('const')])}"
+                        var_names[arg_id] = temp_name
+                        arg_vars.append(temp_name)
 
                 # Format the equation with type annotation
                 op_name = node.name or "unknown"
@@ -201,7 +206,7 @@ class Trace:
 
 def reset_traced_flags(arrays: list[Array]) -> None:
     """Reset autodiff traced flags for a list of arrays and their dependencies."""
-    visited = set()
+    visited: set[Array] = set()
 
     def reset_recursive(node: Array) -> None:
         if node in visited:
@@ -227,7 +232,7 @@ def pullback(
     inputs: list[Array],
     outputs: list[Array],
     cotangents: list[Array],
-    trace: Trace | None = None,
+    # trace: Trace | None = None,
 ) -> list[Array]:
     """Compute vector-Jacobian product (reverse-mode autodiff)."""
     if len(cotangents) != len(outputs):
@@ -236,8 +241,8 @@ def pullback(
         )
 
     # Use provided trace or compute new one (for backward compatibility)
-    if trace is None:
-        trace = Trace(inputs, outputs)
+    # if trace is None:
+    trace = Trace(inputs, outputs)
     traced_nodes = trace.get_traced_nodes()
 
     # Step 1: Initialize cotangents for output nodes
@@ -257,6 +262,7 @@ def pullback(
 
             # Step 3: Apply VJP rule to get cotangents for arguments
             try:
+                # print("Applying VJP rule for node:", node.name)
                 arg_cotangents = node.vjp_rule(node.args, node.cotangent, node)
 
                 # Step 4: Accumulate cotangents for each argument
@@ -298,6 +304,13 @@ def pullback(
         # (intermediate gradients were cleaned during processing)
         for inp in inputs:
             inp.cotangent = None
+
+        # Only reset traced flags if we're not in a higher-order derivative computation
+        # Check if any input still needs to be traced (indicating higher-order derivatives)
+        any_input_needs_tracing = any(inp.traced for inp in inputs)
+        if not any_input_needs_tracing:
+            # reset all traced flags
+            reset_all_traced_flags_in_graph(trace)
 
 
 def pushfwd(
@@ -371,87 +384,8 @@ def pushfwd(
             node.tangent = None
 
 
-class Transformation:
-    """
-    A composable transformation that can wrap functions or other transformations.
-
-    This enables JAX-style nested transformations like jvp(vjp(jvp(...))).
-    Each transformation implements a 3-phase execution model:
-    - pre_call: Transform inputs before calling inner transformation
-    - in_call: How to call the nested transformation/function
-    - post_call: Transform outputs after calling inner transformation
-    """
-
-    def __init__(self, callable_or_transform):
-        """
-        Initialize a transformation.
-
-        Args:
-            callable_or_transform: Either a callable function or another Transformation
-        """
-        self.inner = callable_or_transform
-        self.trace = None  # Store trace for transformations that need it
-
-    def pre_call(self, inputs: list[Array]) -> list[Array]:
-        """
-        Transform inputs before calling inner transformation.
-
-        Base implementation: pass-through (no transformation).
-        Override in subclasses for specific behavior.
-        """
-        return inputs
-
-    def in_call(self, inputs: list[Array]) -> Any:
-        """
-        Define how to call the inner transformation/function.
-
-        Base implementation: direct call.
-        Override in subclasses for specific calling patterns.
-
-        Returns:
-            Any: Could be list[Array] or other types depending on transformation
-        """
-        return self.inner(inputs)
-
-    def post_call(self, outputs: Any) -> Any:
-        """
-        Transform outputs after calling inner transformation.
-
-        Base implementation: pass-through (no transformation).
-        Override in subclasses for specific behavior.
-
-        Args:
-            outputs: Outputs from the inner call
-
-        Returns:
-            Any: Transformed outputs
-        """
-        return outputs
-
-    def __call__(self, inputs: list[Array]) -> Any:
-        """
-        Execute the 3-phase transformation pipeline.
-
-        Flow: pre_call -> in_call -> post_call
-        """
-
-        # Phase 1: Transform inputs for this transformation layer
-        transformed_inputs = self.pre_call(inputs)
-
-        # Phase 2: Call inner transformation/function
-        inner_outputs = self.in_call(transformed_inputs)
-
-        # Phase 3: Transform outputs for this transformation layer
-        final_outputs = self.post_call(inner_outputs)
-
-        # # print the trace here 
-        # print("Transformation trace:")
-        # print(str(self.trace) if self.trace else "No trace available")
-
-        return final_outputs
-
 def xpr(
-    fn: Callable,
+    fn: Callable[[list[Array]], list[Array]],
     args: list[Array],
 ) -> str:
     """
@@ -461,158 +395,76 @@ def xpr(
         fn: Function to trace
         args: List of input Arrays to the function
     Returns:
-
         str: JAX-like string representation of the computation graph
     """
     try:
+        for arg in args:
+            # Mark all input arrays as traced so computation graph gets captured
+            arg.traced = True
+
         # Use the trace_function class method for proper tracing
         trace = Trace.trace_function(fn, args)
-        
+
         # Return the string representation of the trace
         return str(trace)
     finally:
         # Clean up: reset traced flags after tracing
         reset_traced_flags(args)
 
-class VJPTransform(Transformation):
-    """Transformation for Vector-Jacobian Product (reverse-mode autodiff)."""
 
-    def __init__(self, fn: Callable):
-        """
-        Initialize VJP transformation.
+def vjp(
+    func: Callable[[list[Array]], list[Array]], inputs: list[Array]
+) -> tuple[list[Array], Callable[[list[Array]], list[Array]]]:
+    # Mark inputs for tracing
+    for inp in inputs:
+        inp.traced = True
 
-        Args:
-            fn: Function to transform
-        """
-        super().__init__(fn)
+    # Compute outputs once and create trace
+    outputs = func(inputs)
+    if not isinstance(outputs, list):
+        outputs = [outputs]
 
-    def pre_call(self, inputs: list[Array]) -> list[Array]:
-        """Mark inputs for tracing before calling the function."""
-        # Mark all input arrays as traced so computation graph gets captured
-        for inp in inputs:
-            inp.traced = True
-        return inputs
-
-    def in_call(self, inputs: list[Array]) -> list[Array]:
-        """Call the function and capture the trace."""
-        # Execute the function to get outputs
-        outputs = self.inner(inputs)
-        assert isinstance(outputs, list), "Function must return list of Arrays"
-
-        # Create and store the trace
-        self.trace = Trace(inputs, outputs)
-
-        return outputs
-
-    def post_call(self, outputs: list[Array]) -> tuple[list[Array], Callable[..., Any]]:
-        """Transform outputs to return (primals, vjp_fn)."""
-
-        if self.trace is None:
-            raise RuntimeError("VJP requires a traced computation")
-
-        # Capture the trace references we need
-        trace_inputs = self.trace.inputs
-        trace_outputs = self.trace.outputs
-        trace = self.trace
-
-        def vjp_fn(cotangents: list[Array]) -> list[Array]:
-            """Compute VJP given cotangents."""
-            return pullback(
-                trace_inputs, trace_outputs, cotangents, trace
+    def vjp_fn(cotangents: list[Array]) -> list[Array]:
+        if len(cotangents) != len(outputs):
+            raise ValueError(
+                f"Cotangents length {len(cotangents)} != outputs length {len(outputs)}"
             )
+        return pullback(inputs, outputs, cotangents)
 
-        # Clean up traced flags for ALL nodes in the computation graph
-        # This prevents traced state from leaking into subsequent VJP calls
-        reset_all_traced_flags_in_graph(self.trace)
-
-        return outputs, vjp_fn
-
-
-class JVPTransform(Transformation):
-    """Transformation for Jacobian-Vector Product (forward-mode autodiff)."""
-
-    def __init__(self, fn: Callable, tangents: list[Array]):
-        """
-        Initialize JVP transformation.
-
-        Args:
-            fn: Function to transform
-            tangents: Tangent vectors for inputs
-        """
-        super().__init__(fn)
-        self.tangents = tangents
-
-    def pre_call(self, inputs: list[Array]) -> list[Array]:
-        """Mark inputs for tracing before calling the function."""
-        # Mark all input arrays as traced so computation graph gets captured
-        for inp in inputs:
-            inp.traced = True
-        return inputs
-
-    def in_call(self, inputs: list[Array]) -> list[Array]:
-        """Call the function and capture the trace."""
-        # Execute the function to get outputs
-        outputs = self.inner(inputs)
-        assert isinstance(outputs, list), "Function must return list of Arrays"
-
-        # Create and store the trace
-        self.trace = Trace(inputs, outputs)
-
-        return outputs
-
-    def post_call(self, outputs: list[Array]) -> tuple[list[Array], list[Array]]:
-        """Transform outputs to return (primals, tangents)."""
-
-        if self.trace is None:
-            raise RuntimeError("JVP requires a traced computation")
-
-        # Compute tangents using pushfwd
-        output_tangents = pushfwd(
-            self.trace.inputs, self.trace.outputs, self.tangents, self.trace
-        )
-
-        return outputs, output_tangents
-
-
-# High-level JAX-style API functions
-def vjp(func: Callable, inputs: list[Array]) -> tuple[list[Array], Callable[..., Any]]:
-    """
-    Compute vector-Jacobian product (reverse-mode autodiff) for a function.
-
-    Args:
-        func: Function to trace and compute VJP for
-        inputs: List of input Arrays to the function
-
-    Returns:
-        Tuple of (outputs, vjp_fn) where:
-        - outputs: List of output Arrays from the function
-        - vjp_fn: Callable that computes VJP given cotangents
-    """
-    # Use the VJPTransform to handle the computation
-    vjp_transform = VJPTransform(func)
-    result = vjp_transform(inputs)
-    assert isinstance(result, tuple) and len(result) == 2
-    return result
+    return outputs, vjp_fn
 
 
 def jvp(
-    func: Callable, inputs: list[Array], tangents: list[Array]
+    func: Callable[[list[Array]], list[Array]],
+    inputs: list[Array],
+    tangents: list[Array],
 ) -> tuple[list[Array], list[Array]]:
     """
-    Compute Jacobian-vector product (forward-mode autodiff) for a function.
+    Compute Jacobian-vector product (forward-mode autodiff).
 
     Args:
-        func: Function to trace and compute JVP for
-        inputs: List of input Arrays to the function
-        tangents: List of tangent Arrays (same length as inputs)
+        func: Function to differentiate
+        inputs: Input arrays to the function
+        tangents: Tangent vectors (directional derivatives)
 
     Returns:
-        Tuple of (outputs, tangents) where:
-        - outputs: List of output Arrays from the function
-        - tangents: List of output tangent Arrays
+        tuple: (outputs, output_tangents) where output_tangents are the JVP results
     """
-    # Use the JVPTransform to handle the computation
-    jvp_transform = JVPTransform(func, tangents)
-    result = jvp_transform(inputs)
-    assert isinstance(result, tuple) and len(result) == 2
-    return result
+    if len(tangents) != len(inputs):
+        raise ValueError(
+            f"Tangents length {len(tangents)} != inputs length {len(inputs)}"
+        )
+
+    # Mark inputs for tracing
+    for inp in inputs:
+        inp.traced = True
+
+    # Compute outputs and their tangents using pushfwd
+    outputs = func(inputs)
+    if not isinstance(outputs, list):
+        outputs = [outputs]
+
+    # Use pushfwd to compute the output tangents
+    output_tangents = pushfwd(inputs, outputs, tangents)
+
+    return outputs, output_tangents
