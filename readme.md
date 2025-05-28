@@ -1,19 +1,23 @@
-<h1 align="center">NABLA</h1>
+<!-- <h1 align="center">NABLA</h1>
 
-<h2 align="center"><em>Dynamic Neural Networks and Function Transformations in Python + Mojo</em></h2>
+<h2 align="center"><em>Dynamic Neural Networks and Function Transformations in Python + Mojo</em></h2> -->
+
+# NABLA
+
+### Dynamic Neural Networks and Function Transformations in Python + Mojo
 
 Nabla provides 3 things:
 
-- **Multidimensional array operations**: Support for binary, unary, and linear algebra operations on multi-dimensional arrays on CPU and GPU.
+- **Multidimensional array operations**: Support for binary, unary, and linear algebra operations on multi-dimensional arrays (Tensors) on CPU and GPU.
 - **Dynamic function transformations**: Apply JAX-like transformations like `vmap`, `grad`, `jit` to Python functions.
 - **Mojo acceleration 🔥**: Seamlessly integrate high-performance Mojo kernels for CPU and GPU execution.
 
-
+<!-- 
 <p align="center">
   <a href="#installation">Installation</a> •
   <a href="#roadmap">Roadmap</a> •
   <a href="https://github.com/nabla-ml/nabla/issues">Report Bug</a>
-</p>
+</p> -->
 
 ## Installation
 
