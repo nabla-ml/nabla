@@ -534,6 +534,16 @@ def vmap(
         # Ensure outputs are batched according to out_axes
         if not isinstance(outputs, list):
             outputs = [outputs]
-        return [outputs[i] for i in out_axes]
+        
+        # Handle out_axes properly - None means don't index, use the entire output
+        result = []
+        for i, axis in enumerate(out_axes):
+            if axis is None:
+                # For None axis, return the output at position i directly
+                result.append(outputs[i])
+            else:
+                # For non-None axis, index into the output
+                result.append(outputs[axis])
+        return result
 
     return vectorized_func

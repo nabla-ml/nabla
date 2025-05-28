@@ -25,7 +25,7 @@ def test_basic_vmap_transform_with_xpr_prints():
         x = inputs[0]
         return [nb.sin(x * x * x)]
 
-    fn_vmapped = nb.vmap(square_fn, in_axes=[0], out_axes=[0])
+    fn_vmapped = nb.vmap(square_fn, in_axes=[None], out_axes=[None])
 
     # Create input
     x = nb.arange((2, 3))
