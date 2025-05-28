@@ -1,10 +1,12 @@
-<h1 align="center">NABLA: Differentiable Programming with Python + Mojo</h1>
+<h1 align="center">NABLA</h1>
+
+<h2 align="center">Differentiable Programming with Python + Mojo</h2>
 
 <p align="center"><em>A Research Preview</em></p>
 
-Nabla provides **JAX-like function transformations** for automatic differentiation in Python 🐍. Apply transformations like `vmap`, `grad`, `jit`, `vjp`, and `jvp` to pure functions for numerical computing and machine learning.
+Nabla provides **JAX-like function transformations** for automatic differentiation in Python. Apply transformations like `vmap`, `grad`, `jit`, `vjp`, and `jvp` to pure functions for numerical computing and machine learning.
 
-**Key differentiator**: Seamless integration with Mojo 🔥 for writing custom high-performance kernels while maintaining a familiar JAX-like API for function transformations.
+**Key differentiator**: Seamless integration with Mojo for writing custom high-performance kernels while maintaining a familiar JAX-like API for function transformations.
 
 <p align="center">
   <a href="#installation">Installation</a> •
