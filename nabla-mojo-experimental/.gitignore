@@ -1,0 +1,51 @@
+
+# Python environments and packages
+.venv/
+env/
+venv/
+ENV/
+*.egg-info/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.whl
+
+# Pixi environments
+.pixi/
+# .pixi  # Uncomment if you want to ignore .pixi
+
+# Magic environments  
+.magic/
+
+# Development files
+jax_node.py
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

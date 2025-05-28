@@ -1,0 +1,38 @@
+# ===----------------------------------------------------------------------=== #
+# Nabla 2025
+#
+# Licensed under the Apache License v2.0 with LLVM Exceptions:
+# https://llvm.org/LICENSE.txt
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ===----------------------------------------------------------------------=== #
+
+import nabla
+
+
+def foo(args: List[nabla.Array]) -> List[nabla.Array]:
+    x = args[0]
+    y = args[1]
+    return [nabla.sin(x) + x**2 + y**2, nabla.cos(y) + y * x]
+
+
+def test_vmap_vjp():
+    var x = nabla.arange((3, 2, 3)) + 2
+    var y = nabla.arange((3, 2, 3)) + 3
+
+    # Step 1: Compute the gradient using VJP.
+    def reg_vjp(args: List[nabla.Array]) -> List[nabla.Array]:
+        _, vjp_fn = nabla.vjp(foo, args)
+        return vjp_fn([nabla.ones((2, 3)), nabla.ones((2, 3))])
+
+    vjp_vmapped = nabla.vmap(reg_vjp, in_axes=[0, 0])
+    vjp_result = vjp_vmapped([x, y])
+
+    print("First Order VJP:")
+    # print(nabla.xpr(grad_fn)([x,]))
+    print(vjp_result[0])
+    print(vjp_result[1])
