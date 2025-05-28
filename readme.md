@@ -11,7 +11,7 @@
 
 ### Dynamic Neural Networks and Function Transformations in Python + Mojo
 
-Nabla provides 3 things:
+*Nabla provides 3 things:*
 
 - **Multidimensional array operations**: Support for binary, unary, and linear algebra operations on multi-dimensional arrays (Tensors) on CPU and GPU.
 - **Dynamic function transformations**: Apply JAX-like transformations like `vmap`, `grad`, `jit` to Python functions.
