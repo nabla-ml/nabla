@@ -29,13 +29,10 @@ wheels/
 
 # Magic environments  
 .magic/
+*/.magic/
 
 # Development files
 jax_node.py
-
-# Mojo-specific files (for nabla-mojo-experimental)
-*.mojo.o
-*.mojo.tmp
 
 # IDE and editor files
 .vscode/
