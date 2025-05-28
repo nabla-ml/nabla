@@ -2,31 +2,21 @@
 
 <p align="center"><em>A Research Preview</em></p>
 
-Nabla provides **JAX-like function transformations** for automatic differentiation in Python 🔥. Apply transformations like `vmap`, `grad`, `jit`, `vjp`, and `jvp` to pure functions for numerical computing and machine learning, with high-performance Mojo kernel integration for CPU/GPU acceleration.
+Nabla provides **JAX-like function transformations** for automatic differentiation in Python 🐍. Apply transformations like `vmap`, `grad`, `jit`, `vjp`, and `jvp` to pure functions for numerical computing and machine learning.
 
-**Key advantage over JAX**: Seamless integration with Mojo for writing custom high-performance kernels while maintaining the familiar JAX-style functional API.
+**Key differentiator**: Seamless integration with Mojo 🔥 for writing custom high-performance kernels while maintaining a familiar JAX-like API for function transformations.
 
 <p align="center">
   <a href="#installation">Installation</a> •
-  <a href="#features">Features</a> •
   <a href="#roadmap">Roadmap</a> •
   <a href="https://github.com/nabla-ml/nabla/issues">Report Bug</a>
 </p>
-
-## Features
-
-- **Function Transformations**: `grad`, `jit`, `vmap`, `vjp`, `jvp` for automatic differentiation
-- **High Performance**: Mojo kernel integration for CPU/GPU acceleration  
-- **JAX-like API**: Familiar functional programming interface
-- **Pure Functions**: Compose transformations on stateless functions
-- **Custom Kernels**: Write performance-critical kernels in Mojo
 
 ## Installation
 
 **Note**: Nabla will soon be installable via pip. For now, please install from source.
 
-Get started with Nabla using Python package management.
-*(Requires [Python 3.10+](https://www.python.org/downloads/).)*
+**Requirements**: Python 3.10+, NumPy, Modular (Mojo + MAX for JIT/GPU support)
 
 ```bash
 git clone https://github.com/nabla-ml/nabla.git
@@ -39,20 +29,6 @@ source .venv/bin/activate
 # Install in development mode
 pip install -e .
 ```
-
-## Prerequisites
-
-- **Python 3.10+**
-- **NumPy** (for array operations)
-- **Modular**: Includes Mojo and MAX (for JIT compilation and GPU support)
-
-## Core Transformations
-
-- `jvp` - Jacobian-vector product (forward-mode autodiff) 
-- `vjp` - Vector-Jacobian product (reverse-mode autodiff)
-- `grad` - Compute gradients (choses the best mode automatically)
-- `vmap` - Vectorize functions over batch dimensions
-- `jit` - Just-in-time compilation with MAX Engine
 
 ## Development Setup
 
@@ -72,30 +48,35 @@ ruff check nabla/ --fix
 
 ## Roadmap
 
-Following the strategic direction of the MAX project, Nabla prioritizes the **Python API first** with JAX-like function transformations.
-
-- ✅ **Function Transformations**: Core JAX-like transformations (vmap, grad, jit)
-- ✅ **Mojo Kernel Integration**: High-performance kernel implementation working
-- ✅ **GPU Acceleration**: Full GPU support
+- ✅ **Function Transformations**: `vmap`, `grad`, `jit`, `vjp`, `jvp`
+- ✅ **Mojo Kernel Integration**: CPU/GPU acceleration working
 - 👷 **Extended Operations**: Comprehensive math operations
-- 💡 **Enhanced Mojo API**: When Mojo ecosystem stabilizes, we will integrate further
+- 💡 **Enhanced Mojo API**: When Mojo ecosystem stabilizes
 
 ## Repository Structure
 
-This repository contains:
+```
+nabla/
+├── nabla/                     # Core Python library
+│   ├── core/                  # Function transformations (vmap, grad, jit, vjp, jvp)
+│   ├── ops/                   # Mathematical operations (binary, unary, linalg)
+│   └── mojo_kernels/          # High-performance Mojo kernels
+├── tests/                     # Comprehensive test suite
+└── nabla-mojo-experimental/   # Experimental Mojo implementation
+    ├── nabla/                 # Pure Mojo library
+    ├── examples/              # Mojo usage examples
+    └── benchmarks/            # Performance benchmarks
+```
 
-- **Main Directory**: Primary Python-based Nabla implementation (recommended)
-- **`nabla-mojo-experimental/`**: Experimental Mojo implementation (research preview)
+- **Main Directory**: Python implementation with Mojo kernel integration (recommended)
+- **`nabla-mojo-experimental/`**: Pure Mojo implementation (research preview)
 
-The Python version is the main focus and provides the most stable experience. The Mojo version showcases future possibilities but is currently on hold pending MAX Mojo API development.
+## Status (Research Preview)
 
-## General Status & Caveats (Research Preview)
-
-- **API Stability**: APIs are subject to change
-- **Completeness**: Operator coverage is growing but not exhaustive
-- **Performance**: JIT compilation and Mojo kernel integration provide good performance
-- **Documentation**: Currently basic; will be expanded significantly
-- **Bugs**: Expect to encounter bugs; please report them!
+- **API Stability**: Subject to change
+- **Completeness**: Growing operator coverage  
+- **Documentation**: Basic; expanding soon
+- **Bugs**: Please report issues!
 
 ## Contributing
 
