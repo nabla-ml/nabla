@@ -56,13 +56,12 @@ class GraphTracer:
             stack: list[Array] = [start_node]
 
             while stack:
-                node = stack[-1]  # Peek at top
+                node = stack[-1]
 
                 if node in visited:
                     stack.pop()
                     continue
 
-                # If leaf node (has implementation)
                 if node.impl is not None:
                     inputs.append(node)
                     trace.append(node)
@@ -70,21 +69,17 @@ class GraphTracer:
                     stack.pop()
                     continue
 
-                # Check if all children are visited
                 all_children_visited = all(arg in visited for arg in node.args)
 
                 if not all_children_visited:
-                    # Add unvisited children to stack
                     for arg in node.args:
                         if arg not in visited:
                             stack.append(arg)
                 else:
-                    # All children visited, process this node
                     visited.add(node)
                     trace.append(node)
                     stack.pop()
 
-        # Compute cache key from trace
         cache_key = GraphTracer._compute_cache_key(trace)
         return inputs, trace, cache_key
 
@@ -97,27 +92,6 @@ class GraphTracer:
             key = key ^ (node_hash + 0x9E3779B9 + (key << 6) + (key >> 2))
         return key % 1000000000
 
-    @staticmethod
-    def print_trace(inputs: list[Array], trace: list[Array]) -> None:
-        """Print the execution trace for debugging purposes."""
-        print("=== Execution Trace ===")
-        print(f"Inputs ({len(inputs)}):")
-        for i, inp in enumerate(inputs):
-            print(f"  {i}: {inp.name or 'unnamed'} {inp.shape} {inp.dtype}")
-
-        print(f"\nTrace ({len(trace)}):")
-        for i, node in enumerate(trace):
-            if node in inputs:
-                print(
-                    f"  {i}: [INPUT] {node.name or 'unnamed'} {node.shape} {node.dtype}"
-                )
-            else:
-                arg_names = [arg.name or "unnamed" for arg in node.args]
-                print(
-                    f"  {i}: {node.name or 'unnamed'} {node.shape} {node.dtype} <- {arg_names}"
-                )
-        print("=" * 25)
-
 
 class ModelFactory:
     """Factory for creating MAX models from computation graphs."""
@@ -127,9 +101,6 @@ class ModelFactory:
         inputs: list[Array], trace: list[Array], outputs: list[Array]
     ) -> Model:
         """Create a MAX model from the computation graph."""
-        # Build input types
-        print("### Building input types and devices for the model")
-
         input_types = []
         devices = []
 
@@ -145,8 +116,6 @@ class ModelFactory:
                 devices.append(input_node.device)
 
         try:
-            print("### Creating computation graph")
-            # Use custom kernels if available
             custom_op_package_path = Path(__file__).parent.parent / "mojo_kernels"
 
             with Graph(
@@ -156,56 +125,71 @@ class ModelFactory:
                     [custom_op_package_path] if custom_op_package_path.exists() else []
                 ),
             ) as graph:
-                # Map inputs to graph symbols
                 input_symbols = graph.inputs
                 for i, input_node in enumerate(inputs):
                     input_node.tensor_value = input_symbols[i]
 
-                # Process trace to build computation graph
                 for node in trace:
-                    print(f"   ### Processing node: {node.name or 'unnamed'}")
+                    node_name = node.name or "const"
+
                     if node.tensor_value is not None:
                         continue
 
-                    # Get argument symbols
                     arg_symbols = []
-                    for arg in node.get_arguments():
+                    for j, arg in enumerate(node.get_arguments()):
                         if arg.tensor_value is None:
                             raise ValueError(
-                                f"Missing tensor value for argument of {node.name}"
+                                f"Missing tensor value for argument {j} of {node_name}"
                             )
                         arg_symbols.append(arg.tensor_value)
 
-                    print("     ### Adding node to graph:", node.name or "unnamed")
-                    print("     len(args) =", len(arg_symbols))
-
-                    # Execute operation
                     if node.maxpr is None:
-                        raise ValueError(f"Node {node.name} has no maxpr function")
+                        raise ValueError(f"Node {node_name} has no maxpr function")
 
-                    node.maxpr(arg_symbols, node)
+                    try:
+                        node.maxpr(arg_symbols, node)
+                    except Exception as e:
+                        raise ValueError(
+                            f"Error executing node {node_name}: {type(e).__name__}: {e}"
+                        ) from e
 
-                    print("      ### Node execution completed:", node.name or "unnamed")
+                    try:
+                        ModelFactory._validate_node_output(node)
+                    except ValueError as ve:
+                        raise ValueError(
+                            f"Validation failed for node {node_name}: {ve}"
+                        ) from ve
 
-                    # Validate output
-                    ModelFactory._validate_node_output(node)
-
-                # Set graph outputs
                 output_symbols = []
                 for output in outputs:
                     if output.tensor_value is None:
                         raise ValueError(f"Output {output.name} has no tensor value")
                     output_symbols.append(output.tensor_value)
 
-                graph.output(*output_symbols)
+                try:
+                    graph.output(*output_symbols)
+                except Exception as e:
+                    raise ValueError(f"Failed to set graph output: {e}") from e
 
-            # Create inference session and load model
             session = InferenceSession(devices=devices)
-            print("### Loading model into session")
-            return session.load(graph)
+
+            for node in trace:
+                node.tensor_value = None
+
+            try:
+                model = session.load(graph)
+                return model
+            except Exception as e:
+                raise ValueError(f"Failed to load model: {e}") from e
 
         except Exception as e:
-            raise ValueError(f"Failed to build computation graph: {e}") from e
+            import traceback
+
+            traceback.print_exc()
+
+            raise ValueError(
+                f"Failed to build computation graph: {type(e).__name__}: {e}"
+            ) from e
 
     @staticmethod
     def _validate_node_output(node: Array) -> None:
@@ -213,22 +197,24 @@ class ModelFactory:
         if node.tensor_value is None:
             raise ValueError(f"Node {node.name} has no tensor value after execution")
 
-        # Convert tensor shape to tuple for comparison
-        tensor_shape = tuple(int(dim) for dim in node.tensor_value.shape)
+        try:
+            tensor_shape = tuple(int(dim) for dim in node.tensor_value.shape)
+            tensor_dtype = node.tensor_value.dtype
 
-        if node.shape != tensor_shape:
-            raise ValueError(
-                f"Shape mismatch for node {node.name}: "
-                f"expected {node.shape}, got {tensor_shape}. "
-                # f"Op params: {node.op_params}"
-            )
+            if node.shape != tensor_shape:
+                raise ValueError(
+                    f"Shape mismatch for node {node.name}: "
+                    f"expected {node.shape}, got {tensor_shape}"
+                )
 
-        if node.dtype != node.tensor_value.dtype:
-            raise ValueError(
-                f"Dtype mismatch for node {node.name}: "
-                f"expected {node.dtype}, got {node.tensor_value.dtype}. "
-                # f"Op params: {node.op_params}"
-            )
+            if node.dtype != tensor_dtype:
+                raise ValueError(
+                    f"Dtype mismatch for node {node.name}: "
+                    f"expected {node.dtype}, got {tensor_dtype}"
+                )
+
+        except Exception as e:
+            raise ValueError(f"Validation error for node {node.name}: {e}") from e
 
 
 def realize_(outputs: list[Array]) -> None:
@@ -241,36 +227,22 @@ def realize_(outputs: list[Array]) -> None:
     if not outputs:
         return
 
-    # print("### In realize_ function")
-
-    # Validate inputs
     for output in outputs:
         if not isinstance(output, Array):
             raise TypeError(f"All outputs must be Array instances, got {type(output)}")
 
-    # Filter outputs that need computation
     output_list = [output for output in outputs if output.impl is None]
 
     if not output_list:
-        return  # Nothing to compute
+        return
 
-    # print("### Filtered output_list for computation:")
-
-    # Get computation trace
     inputs, trace, cache_key = GraphTracer.get_trace(output_list)
 
-    print("### Computation Trace:")
-    GraphTracer.print_trace(inputs, trace)
-
-    # Create model using cached compilation
     def create_model() -> Model:
         return ModelFactory.create_model(inputs, trace, output_list)
 
     model = global_execution_context.get_or_create(cache_key, create_model)
 
-    print("### Model created or retrieved from cache")
-
-    # Execute the model
     try:
         tensor_inputs = [input_node.impl for input_node in inputs]
         if any(tensor is None for tensor in tensor_inputs):
@@ -278,10 +250,9 @@ def realize_(outputs: list[Array]) -> None:
 
         model_outputs = model.execute(*tensor_inputs)
 
-        # Update outputs with results
         for i, output in enumerate(output_list):
             output.impl = model_outputs[i]
-            output._numpy_cache = None  # Invalidate NumPy cache
+            output._numpy_cache = None
 
     except Exception as e:
         raise ValueError(f"Error executing computation: {e}") from e
@@ -289,10 +260,8 @@ def realize_(outputs: list[Array]) -> None:
 
 # Legacy function aliases for backward compatibility
 def get_trace(nodes: Sequence[Array]) -> tuple[list[Array], list[Array], int]:
-    """Legacy alias for GraphTracer.get_trace."""
     return GraphTracer.get_trace(nodes)
 
 
 def compute_node_hash(node: Array) -> int:
-    """Legacy alias for GraphTracer.compute_node_hash."""
     return GraphTracer.compute_node_hash(node)

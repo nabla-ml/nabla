@@ -175,6 +175,68 @@ def cos(arg: Array) -> Array:
     return _cos_op.forward(arg)
 
 
+class IncrBatchDimCtr(UnaryOperation):
+    """Increment batch dimension counter for debugging."""
+
+    def __init__(self):
+        super().__init__("incr_batch_dim_ctr")
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        output.tensor_value = args[0].tensor_value  # No operation, just pass through
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        output.impl = args[0].impl
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        return [decr_batch_dim_ctr(cotangent)]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        return incr_batch_dim_ctr(tangents[0])
+
+
+def incr_batch_dim_ctr(arg: Array) -> Array:
+    """Increment batch dimension counter for debugging."""
+    res = IncrBatchDimCtr().forward(arg)
+    res.batch_dim_ctr += 1
+    return res
+
+
+class DecrBatchDimCtr(UnaryOperation):
+    """Decrement batch dimension counter for debugging."""
+
+    def __init__(self):
+        super().__init__("decr_batch_dim_ctr")
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        output.tensor_value = args[0].tensor_value  # No operation, just pass through
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        output.impl = args[0].impl
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        return [incr_batch_dim_ctr(cotangent)]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        return decr_batch_dim_ctr(tangents[0])
+
+
+def decr_batch_dim_ctr(arg: Array) -> Array:
+    """Decrement batch dimension counter for debugging."""
+    if arg.batch_dim_ctr <= 0:
+        raise ValueError("Batch dimension counter cannot be decremented below zero.")
+    res = DecrBatchDimCtr().forward(arg)
+    res.batch_dim_ctr -= 1
+    return res
+
+
 # Add global instances
 _negate_op = NegateOp()
 _sin_op = SinOp()

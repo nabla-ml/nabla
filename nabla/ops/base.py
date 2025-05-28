@@ -34,7 +34,7 @@ from ..ops.view import (
 from ..utils.broadcasting import get_broadcasted_shape
 
 # Global execution mode flag
-EAGERMODE: bool = True
+EAGERMODE: bool = False
 
 
 def _validate_binary_args(args: list[Array], op_name: str) -> None:

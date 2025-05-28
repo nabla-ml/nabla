@@ -35,8 +35,8 @@ from .ops.binary import add, mul
 from .ops.creation import arange, array, ones, ones_like, randn, zeros, zeros_like
 from .ops.linalg import matmul
 from .ops.reduce import reduce_sum
-from .ops.unary import cos, negate, sin
-from .ops.view import broadcast_to, reshape, transpose
+from .ops.unary import cos, decr_batch_dim_ctr, incr_batch_dim_ctr, negate, sin
+from .ops.view import broadcast_to, reshape, squeeze, transpose, unsqueeze
 from .utils.broadcasting import get_broadcasted_shape
 
 __all__ = [
@@ -63,12 +63,16 @@ __all__ = [
     "sin",
     "cos",
     "negate",
+    "incr_batch_dim_ctr",
+    "decr_batch_dim_ctr",
     # Linear algebra
     "matmul",
     # View operations
     "transpose",
     "reshape",
     "broadcast_to",
+    "squeeze",
+    "unsqueeze",
     # Reduction operations
     "reduce_sum",
     # Data types

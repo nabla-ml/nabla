@@ -221,3 +221,131 @@ def broadcast_to(arg: Array, shape: Shape) -> Array:
     """Broadcast array to target shape."""
     op = BroadcastToOp(shape)
     return op.forward(arg)
+
+
+class SqueezeOp(ViewOperation):
+    """Squeeze operation to remove dimensions of size 1."""
+
+    def __init__(self, axes: list[int] = None):
+        super().__init__(f"squeeze[axes={axes}]")
+        self.axes = sorted(axes) if axes is not None else []
+
+    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
+        """Compatible signature."""
+        if len(input_shapes) != 1:
+            raise ValueError(
+                f"Squeeze operation requires 1 input shape, got {len(input_shapes)}"
+            )
+        input_shape = input_shapes[0]
+
+        # Normalize axes
+        normalized_axes = [ax if ax >= 0 else len(input_shape) + ax for ax in self.axes]
+
+        # Remove dimensions of size 1
+        new_shape = [
+            dim
+            for i, dim in enumerate(input_shape)
+            if i not in normalized_axes or dim > 1
+        ]
+        return tuple(new_shape)
+
+    def forward(self, *args: Array) -> Array:
+        """Override forward to handle case where no squeezing needed with compatible signature."""
+        if len(args) != 1:
+            raise ValueError(f"Squeeze operation requires 1 argument, got {len(args)}")
+        return super().forward(*args)
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        res_value = args[0]
+        for i, ax in enumerate(self.axes):
+            adjusted_axis = ax - i
+            res_value = ops.squeeze(res_value, adjusted_axis)
+        output.tensor_value = res_value
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        axis = tuple(self.axes) if self.axes else None
+        np_result = np.squeeze(args[0].get_numpy(), axis=axis)
+        output.impl = Tensor.from_numpy(np_result)
+
+    def vjp_rule(
+        self, _primals: list[Array], cotangent: Array, _output: Array
+    ) -> list[Array]:
+        return [unsqueeze(cotangent, self.axes)]
+
+    def jvp_rule(
+        self, _primals: list[Array], tangents: list[Array], _output: Array
+    ) -> Array:
+        return squeeze(tangents[0], self.axes)
+        return squeeze(tangents[0], self.axes)
+
+
+def squeeze(arg: Array, axes: list[int] = None) -> Array:
+    """Squeeze array by removing dimensions of size 1."""
+    if axes is None:
+        return arg
+    op = SqueezeOp(axes)
+    return op.forward(arg)
+
+
+class UnsqueezeOp(ViewOperation):
+    """Unsqueeze operation to add dimensions of size 1."""
+
+    def __init__(self, axes: list[int] = None):
+        super().__init__(f"unsqueeze[axes={axes}]")
+        self.axes = sorted(axes) if axes is not None else []
+
+    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
+        """Compatible signature."""
+        if len(input_shapes) != 1:
+            raise ValueError(
+                f"Unsqueeze operation requires 1 input shape, got {len(input_shapes)}"
+            )
+        input_shape = input_shapes[0]
+
+        # Normalize axes
+        normalized_axes = [ax if ax >= 0 else len(input_shape) + ax for ax in self.axes]
+
+        # Add dimensions of size 1 at specified axes
+        new_shape = list(input_shape)
+        for ax in sorted(normalized_axes):
+            new_shape.insert(ax, 1)
+        return tuple(new_shape)
+
+    def forward(self, *args: Array) -> Array:
+        """Override forward to handle case where no unsqueezing needed with compatible signature."""
+        if len(args) != 1:
+            raise ValueError(
+                f"Unsqueeze operation requires 1 argument, got {len(args)}"
+            )
+        return super().forward(*args)
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        res_value = args[0]
+        for i, ax in enumerate(self.axes):
+            adjusted_axis = ax - i
+            res_value = ops.unsqueeze(res_value, adjusted_axis)
+        output.tensor_value = res_value
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        np_result = np.expand_dims(args[0].get_numpy(), axis=self.axes)
+        output.impl = Tensor.from_numpy(np_result)
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        # Unsqueeze does not change the size, so we can just return the cotangent
+        return [squeeze(cotangent, self.axes)]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        # Unsqueeze does not change the size, so we can just return the tangent
+        return unsqueeze(tangents[0], self.axes)
+
+
+def unsqueeze(arg: Array, axes: list[int] = None) -> Array:
+    """Unsqueeze array by adding dimensions of size 1."""
+    if axes is None:
+        return arg  # No axes specified, return original array
+    op = UnsqueezeOp(axes)
+    return op.forward(arg)

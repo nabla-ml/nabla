@@ -31,6 +31,8 @@ __all__ = [
     "cos",
     "negate",
     "cast",
+    "incr_batch_dim_ctr",
+    "decr_batch_dim_ctr",
     # Binary operations
     "add",
     "mul",
@@ -40,6 +42,8 @@ __all__ = [
     "transpose",
     "reshape",
     "broadcast_to",
+    "squeeze",
+    "unsqueeze",
     # Reduction operations
     "reduce_sum",
     # Base utilities

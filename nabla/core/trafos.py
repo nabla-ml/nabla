@@ -305,13 +305,6 @@ def pullback(
         for inp in inputs:
             inp.cotangent = None
 
-        # Only reset traced flags if we're not in a higher-order derivative computation
-        # Check if any input still needs to be traced (indicating higher-order derivatives)
-        any_input_needs_tracing = any(inp.traced for inp in inputs)
-        if not any_input_needs_tracing:
-            # reset all traced flags
-            reset_all_traced_flags_in_graph(trace)
-
 
 def pushfwd(
     inputs: list[Array],
@@ -382,6 +375,13 @@ def pushfwd(
         # (inputs, outputs, and any intermediate nodes)
         for node in traced_nodes:
             node.tangent = None
+
+        # Only reset traced flags if we're not in a higher-order derivative computation
+        # Check if any input still needs to be traced (indicating higher-order derivatives)
+        any_input_needs_tracing = any(inp.traced for inp in inputs)
+        if not any_input_needs_tracing:
+            # reset all traced flags and tensor_value references
+            reset_all_traced_flags_in_graph(trace)
 
 
 def xpr(
@@ -468,3 +468,70 @@ def jvp(
     output_tangents = pushfwd(inputs, outputs, tangents)
 
     return outputs, output_tangents
+
+
+def vmap(
+    func: Callable[[list[Array]], list[Array]],
+    in_axes: list[int] | None = None,
+    out_axes: list[int] | None = None,
+) -> Callable[[list[Array]], list[Array]]:
+    """
+    Vectorize a function over its inputs.
+    Args:
+        func: Function to vectorize
+        in_axes: Input axes to vectorize over (default: all inputs)
+        out_axes: Output axes to vectorize over (default: all outputs)
+
+    Returns:
+        Callable: Vectorized function that can handle batched inputs
+    """
+    if in_axes is None:
+        in_axes = [0] * len(func.__code__.co_varnames)
+
+    if out_axes is None:
+        out_axes = [0] * len(func.__code__.co_varnames)
+
+    def vectorized_func(inputs: list[Array]) -> list[Array]:
+        # call incr_batch_dim_ctr on all inputs, also for thos which have in axis set  to None, we usnqueeze first.
+        batched_inputs = []
+        for i, inp in enumerate(inputs):
+            if in_axes[i] is None:
+                from ..ops.view import unsqueeze
+
+                batched_inputs.append(unsqueeze(inp, [0]))
+            else:
+                from ..ops.unary import incr_batch_dim_ctr
+
+                batched_inputs.append(incr_batch_dim_ctr(inp))
+
+        # Call the original function with batched inputs
+        outputs = func(batched_inputs)
+
+        # cleanup inputs, i.e. call decr_batch_dim_ctr on all inputs and also on teh outptus
+        for i, inp in enumerate(batched_inputs):
+            if in_axes[i] is None:
+                from ..ops.view import squeeze
+
+                batched_inputs[i] = squeeze(inp, [0])
+            else:
+                from ..ops.unary import decr_batch_dim_ctr
+
+                batched_inputs[i] = decr_batch_dim_ctr(inp)
+
+        # cleanup outputs, i.e. call decr_batch_dim_ctr on all outputs
+        for i, out in enumerate(outputs):
+            if out_axes[i] is None:
+                from ..ops.view import squeeze
+
+                outputs[i] = squeeze(out, [0])
+            else:
+                from ..ops.unary import decr_batch_dim_ctr
+
+                outputs[i] = decr_batch_dim_ctr(out)
+
+        # Ensure outputs are batched according to out_axes
+        if not isinstance(outputs, list):
+            outputs = [outputs]
+        return [outputs[i] for i in out_axes]
+
+    return vectorized_func
