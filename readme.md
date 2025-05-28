@@ -1,7 +1,3 @@
-<!-- <h1 align="center">NABLA</h1>
-
-<h2 align="center"><em>Dynamic Neural Networks and Function Transformations in Python + Mojo</em></h2> -->
-
 [![Development Status](https://img.shields.io/badge/status-pre--alpha-red)](https://github.com/nabla-ml/nabla)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
@@ -15,14 +11,8 @@
 
 - **Multidimensional array operations**: Support for binary, unary, and linear algebra operations on multi-dimensional arrays (Tensors) on CPU and GPU.
 - **Dynamic function transformations**: Apply JAX-like transformations like `vmap`, `grad`, `jit` to Python functions.
-- **Mojo acceleration 🔥**: Seamlessly integrate high-performance Mojo kernels for CPU and GPU execution.
+- **Mojo acceleration 🔥**: Seamlessly integrate high-performance Mojo kernels for CPU and GPU execution. ([Learn more →](https://docs.modular.com/mojo/manual/gpu/basics/))
 
-<!-- 
-<p align="center">
-  <a href="#installation">Installation</a> •
-  <a href="#roadmap">Roadmap</a> •
-  <a href="https://github.com/nabla-ml/nabla/issues">Report Bug</a>
-</p> -->
 
 ## Installation
 
@@ -73,6 +63,7 @@ nabla/
 │   ├── core/                  # Function transformations and array operations
 │   ├── ops/                   # Mathematical operations (binary, unary, linalg)
 │   ├── mojo_kernels/          # High-performance Mojo kernels
+│   ├── nn/                    # Neural network layers and utilities
 │   └── utils/                 # Utilities (broadcasting, types)
 ├── tests/                     # Comprehensive test suite
 └── nabla-mojo-experimental/   # Experimental pure Mojo implementation
