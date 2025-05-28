@@ -11,7 +11,7 @@ authors = [
 description = "A JAX-like deep learning framework with MAX and Mojo backends for fast, hardware-agnostic kernels."
 readme = "readme.md"
 requires-python = ">=3.10"
-license = "Apache-2.0 WITH LLVM-exception"
+license = "Apache-2.0"
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Developers",

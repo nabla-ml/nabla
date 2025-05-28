@@ -2,7 +2,7 @@
 # ===----------------------------------------------------------------------=== #
 # Nabla 2025
 #
-# Licensed under the Apache License v2.0 with LLVM Exceptions:
+# Licensed under the Apache License v2.0:
 # https://llvm.org/LICENSE.txt
 #
 # Unless required by applicable law or beautiful, software

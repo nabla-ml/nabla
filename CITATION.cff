@@ -9,7 +9,7 @@ version: 25.3.0
 doi: "10.5281/zenodo.12810766"
 date-released: 2025-05-13
 url: "https://github.com/nabla-ml/nabla"
-license: Apache-2.0 with LLVM-exception
+license: Apache-2.0
 keywords:
   - "differentiable programming"
   - "automatic differentiation"
