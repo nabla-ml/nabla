@@ -97,6 +97,23 @@ class GraphTracer:
             key = key ^ (node_hash + 0x9E3779B9 + (key << 6) + (key >> 2))
         return key % 1000000000
 
+    @staticmethod
+    def print_trace(inputs: list[Array], trace: list[Array]) -> None:
+        """Print the execution trace for debugging purposes."""
+        print("=== Execution Trace ===")
+        print(f"Inputs ({len(inputs)}):")
+        for i, inp in enumerate(inputs):
+            print(f"  {i}: {inp.name or 'unnamed'} {inp.shape} {inp.dtype}")
+        
+        print(f"\nTrace ({len(trace)}):")
+        for i, node in enumerate(trace):
+            if node in inputs:
+                print(f"  {i}: [INPUT] {node.name or 'unnamed'} {node.shape} {node.dtype}")
+            else:
+                arg_names = [arg.name or 'unnamed' for arg in node.args]
+                print(f"  {i}: {node.name or 'unnamed'} {node.shape} {node.dtype} <- {arg_names}")
+        print("=" * 25)
+
 
 class ModelFactory:
     """Factory for creating MAX models from computation graphs."""
@@ -107,6 +124,8 @@ class ModelFactory:
     ) -> Model:
         """Create a MAX model from the computation graph."""
         # Build input types
+        print("### Building input types and devices for the model")
+
         input_types = []
         devices = []
 
@@ -122,6 +141,7 @@ class ModelFactory:
                 devices.append(input_node.device)
 
         try:
+            print("### Creating computation graph")
             # Use custom kernels if available
             custom_op_package_path = Path(__file__).parent.parent / "mojo_kernels"
 
@@ -139,6 +159,7 @@ class ModelFactory:
 
                 # Process trace to build computation graph
                 for node in trace:
+                    print(f"   ### Processing node: {node.name or 'unnamed'}")
                     if node.tensor_value is not None:
                         continue
 
@@ -151,11 +172,16 @@ class ModelFactory:
                             )
                         arg_symbols.append(arg.tensor_value)
 
+                    print("     ### Adding node to graph:", node.name or "unnamed")
+                    print("     len(args) =", len(arg_symbols))
+
                     # Execute operation
                     if node.maxpr is None:
                         raise ValueError(f"Node {node.name} has no maxpr function")
 
                     node.maxpr(arg_symbols, node)
+
+                    print("      ### Node execution completed:", node.name or "unnamed")
 
                     # Validate output
                     ModelFactory._validate_node_output(node)
@@ -171,6 +197,7 @@ class ModelFactory:
 
             # Create inference session and load model
             session = InferenceSession(devices=devices)
+            print("### Loading model into session")
             return session.load(graph)
 
         except Exception as e:
@@ -209,6 +236,8 @@ def realize_(outputs: list[Array]) -> None:
     """
     if not outputs:
         return
+    
+    # print("### In realize_ function")
 
     # Validate inputs
     for output in outputs:
@@ -220,15 +249,22 @@ def realize_(outputs: list[Array]) -> None:
 
     if not output_list:
         return  # Nothing to compute
+    
+    # print("### Filtered output_list for computation:")
 
     # Get computation trace
     inputs, trace, cache_key = GraphTracer.get_trace(output_list)
+
+    print("### Computation Trace:")
+    GraphTracer.print_trace(inputs, trace)
 
     # Create model using cached compilation
     def create_model() -> Model:
         return ModelFactory.create_model(inputs, trace, output_list)
 
     model = global_execution_context.get_or_create(cache_key, create_model)
+
+    print("### Model created or retrieved from cache")
 
     # Execute the model
     try:

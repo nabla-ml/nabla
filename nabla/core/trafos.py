@@ -25,11 +25,35 @@ from .array import Array
 class Trace:
     """A simple trace container that holds the computation graph."""
 
-    def __init__(self, inputs: list[Array], outputs: list[Array]) -> None:
+    def __init__(self, inputs: list[Array], outputs: list[Array] | None = None) -> None:
         self.inputs = inputs
-        self.outputs = outputs
+        self.outputs = outputs if outputs is not None else []
         self.trace: list[Array] = []
         self._computed = False
+        
+        # Mark all inputs as traced for autodiff so the computation graph gets captured
+        for inp in inputs:
+            inp.traced = True
+
+    @classmethod
+    def trace_function(cls, fn: Callable, inputs: list[Array]) -> 'Trace':
+        """
+        Create a trace by executing a function with tracing enabled.
+        
+        This is the recommended way to create traces as it ensures proper
+        tracing setup before function execution.
+        """
+        # Create trace instance (this marks inputs as traced)
+        trace = cls(inputs)
+        
+        try:
+            # Execute function with tracing enabled
+            outputs = fn(inputs)
+            trace.outputs = outputs if isinstance(outputs, list) else [outputs]
+            return trace
+        finally:
+            # Don't reset traced flags here - let the caller handle cleanup
+            pass
 
     def get_traced_nodes(self) -> list[Array]:
         """Get all nodes that belong to this trace in topological order."""
@@ -176,7 +200,7 @@ class Trace:
 
 
 def reset_traced_flags(arrays: list[Array]) -> None:
-    """Reset traced flags for a list of arrays and their dependencies."""
+    """Reset autodiff traced flags for a list of arrays and their dependencies."""
     visited = set()
 
     def reset_recursive(node: Array) -> None:
@@ -189,6 +213,14 @@ def reset_traced_flags(arrays: list[Array]) -> None:
 
     for array in arrays:
         reset_recursive(array)
+
+
+def reset_all_traced_flags_in_graph(trace: Trace) -> None:
+    """Reset traced flags for all nodes in a computation trace."""
+    # Get all traced nodes and reset their flags
+    all_nodes = trace.get_traced_nodes()
+    for node in all_nodes:
+        node.traced = False
 
 
 def pullback(
@@ -412,8 +444,35 @@ class Transformation:
         # Phase 3: Transform outputs for this transformation layer
         final_outputs = self.post_call(inner_outputs)
 
+        # # print the trace here 
+        # print("Transformation trace:")
+        # print(str(self.trace) if self.trace else "No trace available")
+
         return final_outputs
 
+def xpr(
+    fn: Callable,
+    args: list[Array],
+) -> str:
+    """
+    Get a JAX-like string representation of the function's computation graph.
+
+    Args:
+        fn: Function to trace
+        args: List of input Arrays to the function
+    Returns:
+
+        str: JAX-like string representation of the computation graph
+    """
+    try:
+        # Use the trace_function class method for proper tracing
+        trace = Trace.trace_function(fn, args)
+        
+        # Return the string representation of the trace
+        return str(trace)
+    finally:
+        # Clean up: reset traced flags after tracing
+        reset_traced_flags(args)
 
 class VJPTransform(Transformation):
     """Transformation for Vector-Jacobian Product (reverse-mode autodiff)."""
@@ -429,7 +488,7 @@ class VJPTransform(Transformation):
 
     def pre_call(self, inputs: list[Array]) -> list[Array]:
         """Mark inputs for tracing before calling the function."""
-        # Mark all input arrays as traced
+        # Mark all input arrays as traced so computation graph gets captured
         for inp in inputs:
             inp.traced = True
         return inputs
@@ -451,11 +510,20 @@ class VJPTransform(Transformation):
         if self.trace is None:
             raise RuntimeError("VJP requires a traced computation")
 
+        # Capture the trace references we need
+        trace_inputs = self.trace.inputs
+        trace_outputs = self.trace.outputs
+        trace = self.trace
+
         def vjp_fn(cotangents: list[Array]) -> list[Array]:
             """Compute VJP given cotangents."""
             return pullback(
-                self.trace.inputs, self.trace.outputs, cotangents, self.trace
+                trace_inputs, trace_outputs, cotangents, trace
             )
+
+        # Clean up traced flags for ALL nodes in the computation graph
+        # This prevents traced state from leaking into subsequent VJP calls
+        reset_all_traced_flags_in_graph(self.trace)
 
         return outputs, vjp_fn
 
@@ -476,7 +544,7 @@ class JVPTransform(Transformation):
 
     def pre_call(self, inputs: list[Array]) -> list[Array]:
         """Mark inputs for tracing before calling the function."""
-        # Mark all input arrays as traced
+        # Mark all input arrays as traced so computation graph gets captured
         for inp in inputs:
             inp.traced = True
         return inputs

@@ -25,7 +25,7 @@ from max.dtype import DType
 from .core.array import Array
 from .core.execution_context import ThreadSafeExecutionContext
 from .core.graph_execution import realize_
-from .core.trafos import jvp, vjp
+from .core.trafos import jvp, vjp, xpr
 
 # Set global execution mode
 from .ops.base import EAGERMODE
