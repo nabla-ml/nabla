@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nabla-ml"
-version = "0.1.0"
+version = "25.0529"
 authors = [
     { name = "TilliFe", email = "tillmann.fehrenbach@gmail.com" },
 ]
@@ -51,7 +51,7 @@ dev = [
 
 [tool.ruff]
 line-length = 88
-target-version = "py310"
+target-version = "25.0529"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "N", "B", "C4", "A", "SIM", "PTH"]
@@ -70,14 +70,14 @@ line-length = 88
 target-version = ['py310']
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "25.0529"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
 # files = "src/nabla, tests"
 
 [tool.pytest.ini_options]
-minversion = "6.0"
+minversion = "25.0529"
 addopts = "-ra -q --color=yes"
 testpaths = ["tests"]
 python_files = "test_*.py"
