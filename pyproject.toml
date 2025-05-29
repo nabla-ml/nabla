@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=68.0,<69.0", "wheel"]
+requires = ["setuptools>=70.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "nabla-ml"
-version = "25.05291243"
+name = "nabla_ml"
+version = "25.05291415"
 authors = [
     { name = "TilliFe", email = "tillmann.fehrenbach@gmail.com" },
 ]
