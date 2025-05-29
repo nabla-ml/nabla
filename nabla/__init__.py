@@ -41,6 +41,7 @@ from .ops.reduce import reduce_sum
 from .ops.unary import cos, decr_batch_dim_ctr, incr_batch_dim_ctr, negate, sin
 from .ops.view import broadcast_to, reshape, squeeze, transpose, unsqueeze
 from .utils.broadcasting import get_broadcasted_shape
+from .utils.max_interop import device, CPU, Accelerator
 
 __all__ = [
     # Core
@@ -52,6 +53,9 @@ __all__ = [
     "xpr",
     "EAGERMODE",
     "get_broadcasted_shape",
+    "device",
+    "CPU",
+    "Accelerator",
     # Array creation
     "array",
     "arange",

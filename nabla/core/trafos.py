@@ -349,7 +349,7 @@ def pushfwd(
                     # If an argument doesn't have a tangent, use zeros
                     from ..ops.creation import zeros
 
-                    arg_tangents.append(zeros(arg.shape, dtype=arg.dtype))
+                    arg_tangents.append(zeros(arg.shape, dtype=arg.dtype, device=arg.device))
 
             # Step 4: Apply JVP rule to get tangent for this node
             try:
@@ -368,7 +368,7 @@ def pushfwd(
                 # Output has no tangent (shouldn't happen in well-formed graphs)
                 from ..ops.creation import zeros
 
-                output_tangents.append(zeros(out.shape, dtype=out.dtype))
+                output_tangents.append(zeros(out.shape, dtype=out.dtype, device=out.device))
 
         return output_tangents
 

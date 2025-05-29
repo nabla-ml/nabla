@@ -17,7 +17,7 @@
 
 """Test JVP (forward-mode autodiff) functionality."""
 
-import nabla as nb
+import nabla
 from nabla.core.trafos import jvp
 
 
@@ -25,21 +25,24 @@ def test_higher_order_jvp():
     """Test higher-order derivatives using nested JVP calls."""
     # print("=== Testing Higher-Order JVP ===")
 
+    device = nabla.device("gpu:0")  # Change to "cpu" for CPU testing
+
     def cubic_fn(inputs):
-        x = nb.unsqueeze(nb.unsqueeze(inputs[0], [0]), [0])
-        x = nb.squeeze(nb.squeeze(x, [0]), [0])
+        x = nabla.unsqueeze(nabla.unsqueeze(inputs[0], [0]), [0])
+        x = nabla.squeeze(nabla.squeeze(x, [0]), [0])
         return [x * x * x]  # f(x) = x³
 
-    x = nb.array([2.0])
-    tangent = nb.array([1.0])
+    x = nabla.array([2.0]).to(device)
+    tangent = nabla.array([1.0]).to(device)  # Tangent vector for JVP
 
     values, first_order = jvp(cubic_fn, [x], [tangent])
 
-    print(values[0].shape)
+    # print(values[0].shape)
 
     def jacobian_fn(inputs):
         x = inputs[0]
-        _, tangents = jvp(cubic_fn, [x], [nb.ones(x.shape)])
+        ones_tangent = nabla.ones((1,)).to(nabla.device("gpu:0"))
+        _, tangents = jvp(cubic_fn, [x], [ones_tangent])
         return [tangents[0]]
 
     _, second_order = jvp(jacobian_fn, [x], [tangent])
