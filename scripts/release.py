@@ -97,11 +97,26 @@ def update_version_in_file(new_version):
     pyproject_path = Path("pyproject.toml")
     content = pyproject_path.read_text()
 
-    # Replace version line
-    new_content = re.sub(
-        r'version\s*=\s*["\'][^"\']+["\']', f'version = "{new_version}"', content
-    )
-
+    # Replace ONLY the project version line - be very specific
+    # Look for version = "..." that comes after name = "nabla_ml"
+    lines = content.split('\n')
+    new_lines = []
+    in_project_section = False
+    
+    for line in lines:
+        if line.strip() == '[project]':
+            in_project_section = True
+            new_lines.append(line)
+        elif line.strip().startswith('[') and line.strip() != '[project]':
+            in_project_section = False
+            new_lines.append(line)
+        elif in_project_section and line.strip().startswith('version'):
+            # This is the project version line
+            new_lines.append(f'version = "{new_version}"')
+        else:
+            new_lines.append(line)
+    
+    new_content = '\n'.join(new_lines)
     pyproject_path.write_text(new_content)
     print_success(f"Updated version to {new_version} in pyproject.toml")
 
