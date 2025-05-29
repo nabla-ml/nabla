@@ -1,19 +1,19 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "nabla"
-version = "0.0.1"
+name = "nabla-ml"
+version = "0.1.0"
 authors = [
     { name = "TilliFe", email = "tillmann.fehrenbach@gmail.com" },
 ]
-description = "A JAX-like deep learning framework with MAX and Mojo backends for fast, hardware-agnostic kernels."
+description = "Dynamic neural networks and function transformations in Python + Mojo"
 readme = "readme.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3",
@@ -24,18 +24,17 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-keywords = ["deep learning", "machine learning", "jax", "max engine", "mojo", "autodiff", "nabla"]
+keywords = ["deep learning", "machine learning", "jax", "autodiff", "nabla", "mojo", "max", "gpu", "vmap", "grad"]
 
 dependencies = [
-    "numpy>=1.22",
-    "modular>=25.0.0",  # MAX SDK - crucial for Nabla's backend
+    "numpy>=1.22.0",
+    "modular>=25.0.0",
 ]
 
 [project.urls]
-Homepage = "https://github.com/nabla-ml/nabla" # Corrected
-Repository = "https://github.com/nabla-ml/nabla" # Corrected
-# Documentation = "https://nabla.readthedocs.io"
-# Changelog = "https://github.com/nabla-ml/nabla/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/nabla-ml/nabla"
+Repository = "https://github.com/nabla-ml/nabla"
+"Bug Tracker" = "https://github.com/nabla-ml/nabla/issues"
 
 [project.optional-dependencies]
 dev = [
