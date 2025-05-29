@@ -18,6 +18,15 @@
 
 from .array import Array
 from .execution_context import ThreadSafeExecutionContext, global_execution_context
-from .trafos import Trace, jvp, vjp, xpr, vmap
+from .trafos import Trace, jvp, vjp, vmap, xpr
 
-__all__ = ["Array", "ThreadSafeExecutionContext", "global_execution_context", "Trace"]
+__all__ = [
+    "Array",
+    "ThreadSafeExecutionContext",
+    "global_execution_context",
+    "Trace",
+    "jvp",
+    "vjp",
+    "vmap",
+    "xpr",
+]

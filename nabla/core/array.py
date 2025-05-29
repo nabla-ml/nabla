@@ -116,6 +116,24 @@ class Array:
             self._numpy_cache = self.impl.to_numpy()
         return self._numpy_cache
 
+    @classmethod
+    def from_numpy(cls, np_array: np.ndarray) -> Array:
+        """Create a new Array from a NumPy array."""
+        if not isinstance(np_array, np.ndarray):
+            raise TypeError(f"Expected numpy.ndarray, got {type(np_array)}")
+
+        # Create Array with proper constructor arguments
+        array = cls(
+            shape=np_array.shape,
+            dtype=DType.from_numpy(np_array.dtype),
+            device=_DEFAULT_CPU,  # Will be updated below
+            name=np_array.name if hasattr(np_array, "name") else "",
+        )
+        array.impl = Tensor.from_numpy(np_array)
+        array.device = array.impl.device
+        array._numpy_cache = np_array
+        return array
+
     def get_arguments(self) -> list[Array]:
         """Get list of argument Arrays."""
         return list(self.args)
@@ -154,6 +172,18 @@ class Array:
         from ..ops.binary import sub
 
         return sub(self, other)
+
+    def __pow__(self, other) -> Array:
+        """Power operator."""
+        from ..ops.binary import power
+
+        return power(self, other)
+
+    def __truediv__(self, other) -> Array:
+        """Division operator."""
+        from ..ops.binary import div
+
+        return div(self, other)
 
     def __matmul__(self, other: Array) -> Array:
         """Matrix multiplication operator (@)."""

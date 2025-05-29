@@ -28,20 +28,28 @@ from max.dtype import DType
 from .core.array import Array
 from .core.execution_context import ThreadSafeExecutionContext
 from .core.graph_execution import realize_
-from .core.trafos import jvp, vjp, xpr, vmap
+from .core.trafos import jvp, vjp, vmap, xpr
 
 # Set global execution mode
 from .ops.base import EAGERMODE
 
 # Operation exports - Clean OOP-based operations
-from .ops.binary import add, mul, sub
+from .ops.binary import add, div, mul, power, sub
 from .ops.creation import arange, array, ones, ones_like, randn, zeros, zeros_like
 from .ops.linalg import matmul
 from .ops.reduce import reduce_sum
-from .ops.unary import cos, decr_batch_dim_ctr, incr_batch_dim_ctr, negate, sin, relu
+from .ops.unary import (
+    cos,
+    decr_batch_dim_ctr,
+    incr_batch_dim_ctr,
+    log,
+    negate,
+    relu,
+    sin,
+)
 from .ops.view import broadcast_to, reshape, squeeze, transpose, unsqueeze
 from .utils.broadcasting import get_broadcasted_shape
-from .utils.max_interop import device, CPU, Accelerator
+from .utils.max_interop import accelerator, cpu, device
 
 __all__ = [
     # Core
@@ -54,8 +62,8 @@ __all__ = [
     "EAGERMODE",
     "get_broadcasted_shape",
     "device",
-    "CPU",
-    "Accelerator",
+    "cpu",
+    "accelerator",
     # Array creation
     "array",
     "arange",
@@ -68,6 +76,8 @@ __all__ = [
     "add",
     "mul",
     "sub",
+    "div",
+    "power",
     # Unary operations
     "sin",
     "cos",
@@ -75,6 +85,7 @@ __all__ = [
     "incr_batch_dim_ctr",
     "decr_batch_dim_ctr",
     "relu",
+    "log",
     # Linear algebra
     "matmul",
     # View operations

@@ -269,15 +269,57 @@ class ReLUOp(UnaryOperation):
 
         return mul(tangents[0], relu(primals[0]))
 
+
 def relu(arg: Array) -> Array:
     """Element-wise ReLU activation."""
     return ReLUOp().forward(arg)
+
+
+class LogOp(UnaryOperation):
+    """Element-wise natural logarithm operation."""
+
+    def __init__(self):
+        super().__init__("log")
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        output.tensor_value = ops.log(args[0])
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        input_array = args[0].get_numpy()
+        # Add small epsilon to avoid log(0) or log(negative)
+        # This is a common practice in deep learning
+        epsilon = 1e-15
+        safe_input = np.maximum(input_array, epsilon)
+        np_result = np.log(safe_input)
+        output.impl = Tensor.from_numpy(np_result)
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        # Import here to avoid circular imports
+        from .binary import div
+
+        # d/dx log(x) = 1/x, so multiply cotangent by 1/x
+        return [div(cotangent, primals[0])]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        # Import here to avoid circular imports
+        from .binary import div
+
+        # d/dx log(x) = 1/x, so multiply tangent by 1/x
+        return div(tangents[0], primals[0])
+
+
+def log(arg: Array) -> Array:
+    """Element-wise natural logarithm."""
+    return _log_op.forward(arg)
 
 
 # Add global instances
 _negate_op = NegateOp()
 _sin_op = SinOp()
 _cos_op = CosOp()
+_log_op = LogOp()
 _relu_op = ReLUOp()
-
-

@@ -349,7 +349,9 @@ def pushfwd(
                     # If an argument doesn't have a tangent, use zeros
                     from ..ops.creation import zeros
 
-                    arg_tangents.append(zeros(arg.shape, dtype=arg.dtype, device=arg.device))
+                    arg_tangents.append(
+                        zeros(arg.shape, dtype=arg.dtype, device=arg.device)
+                    )
 
             # Step 4: Apply JVP rule to get tangent for this node
             try:
@@ -368,7 +370,9 @@ def pushfwd(
                 # Output has no tangent (shouldn't happen in well-formed graphs)
                 from ..ops.creation import zeros
 
-                output_tangents.append(zeros(out.shape, dtype=out.dtype, device=out.device))
+                output_tangents.append(
+                    zeros(out.shape, dtype=out.dtype, device=out.device)
+                )
 
         return output_tangents
 
@@ -534,7 +538,7 @@ def vmap(
         # Ensure outputs are batched according to out_axes
         if not isinstance(outputs, list):
             outputs = [outputs]
-        
+
         # Handle out_axes properly - None means don't index, use the entire output
         result = []
         for i, axis in enumerate(out_axes):

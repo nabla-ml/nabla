@@ -18,20 +18,23 @@
 
 from max.driver import Device
 
-def Accelerator(id: int = 0) -> Device:
+
+def accelerator(device_id: int = 0) -> Device:
     """
     Create an Accelerator device instance with the specified GPU ID.
 
     Args:
-        id: GPU ID (default is 0)
+        device_id: GPU ID (default is 0)
 
     Returns:
         An instance of the Accelerator class for the specified GPU.
     """
     from max.driver import Accelerator
-    return Accelerator(id=id)
 
-def CPU() -> Device:
+    return Accelerator(id=device_id)
+
+
+def cpu() -> Device:
     """
     Create a CPU device instance.
 
@@ -39,7 +42,9 @@ def CPU() -> Device:
         An instance of the CPU class.
     """
     from max.driver import CPU
+
     return CPU()
+
 
 def device(device_name: str) -> Device:
     """
@@ -51,14 +56,14 @@ def device(device_name: str) -> Device:
     Returns:
         An instance of the corresponding Device class.
     """
-    from max.driver import CPU, Accelerator
-
-    # the name can sth like "gpu:0" or "gpu:1" or "cpu", so we need to extrac the id form this string wif gpu is part of it and apply it to the device like: Accelerator(id=0) Accelerator(id=1) or CPU()
+    # the name can sth like "gpu:0" or "gpu:1" or "cpu", so we need to extract the id from this string if gpu is part of it and apply it to the device like: accelerator(device_id=0) accelerator(device_id=1) or cpu()
     if device_name.startswith("gpu"):
         # Extract the GPU ID from the string
         gpu_id = int(device_name.split(":")[1]) if ":" in device_name else 0
-        return Accelerator(id=gpu_id)
+        return accelerator(device_id=gpu_id)
     elif device_name == "cpu":
-        return CPU()
+        return cpu()
     else:
-        raise ValueError(f"Unsupported device: {device_name}. Use 'cpu' or 'gpu:<id>' format.")
+        raise ValueError(
+            f"Unsupported device: {device_name}. Use 'cpu' or 'gpu:<id>' format."
+        )

@@ -83,6 +83,7 @@ class MulOp(BinaryOperation):
     ) -> Array:
         return add(mul(primals[0], tangents[1]), mul(primals[1], tangents[0]))
 
+
 class SubOp(BinaryOperation):
     """Subtraction operation."""
 
@@ -100,6 +101,7 @@ class SubOp(BinaryOperation):
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
         from .unary import negate
+
         return [cotangent, negate(cotangent)]
 
     def jvp_rule(
@@ -107,10 +109,105 @@ class SubOp(BinaryOperation):
     ) -> Array:
         return sub(tangents[0], tangents[1])
 
+
+class DivOp(BinaryOperation):
+    """Division operation."""
+
+    def __init__(self):
+        super().__init__("div")
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        output.tensor_value = ops.div(args[0], args[1])
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        np_result = np.divide(args[0].get_numpy(), args[1].get_numpy())
+        output.impl = Tensor.from_numpy(np_result)
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        from .unary import negate
+
+        # For f(x, y) = x / y:
+        # ∂f/∂x = 1/y
+        # ∂f/∂y = -x/y²
+        x, y = primals
+        cotangent_x = div(cotangent, y)
+        cotangent_y = negate(div(mul(cotangent, x), mul(y, y)))
+        return [cotangent_x, cotangent_y]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        from .unary import negate
+
+        # For f(x, y) = x / y:
+        # df = (∂f/∂x)dx + (∂f/∂y)dy = (1/y)dx + (-x/y²)dy
+        x, y = primals
+        dx, dy = tangents
+        term1 = div(dx, y)
+        term2 = negate(div(mul(x, dy), mul(y, y)))
+        return add(term1, term2)
+
+
+class PowerOp(BinaryOperation):
+    """Power operation (x^y)."""
+
+    def __init__(self):
+        super().__init__("pow")
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        output.tensor_value = args[0] ** args[1]
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        np_result = np.power(args[0].get_numpy(), args[1].get_numpy())
+        output.impl = Tensor.from_numpy(np_result)
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        from .unary import log
+
+        # For f(x, y) = x^y:
+        # ∂f/∂x = y * x^(y-1)
+        # ∂f/∂y = x^y * ln(x)
+        x, y = primals
+
+        # First cotangent: ∂f/∂x = y * x^(y-1)
+        # We can compute this as: y * (x^y) / x = y * output / x
+        cotangent_x = mul(mul(cotangent, y), div(output, x))
+
+        # Second cotangent: ∂f/∂y = x^y * ln(x) = output * ln(x)
+        cotangent_y = mul(mul(cotangent, output), log(x))
+
+        return [cotangent_x, cotangent_y]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        from .unary import log
+
+        # For f(x, y) = x^y:
+        # df = (∂f/∂x)dx + (∂f/∂y)dy
+        # df = (y * x^(y-1))dx + (x^y * ln(x))dy
+        x, y = primals
+        dx, dy = tangents
+
+        # First term: (y * x^(y-1)) * dx = (y * output / x) * dx
+        term1 = mul(mul(y, div(output, x)), dx)
+
+        # Second term: (x^y * ln(x)) * dy = output * ln(x) * dy
+        term2 = mul(mul(output, log(x)), dy)
+
+        return add(term1, term2)
+
+
 # Global operation instances
 _add_op = AddOp()
 _mul_op = MulOp()
 _sub_op = SubOp()
+_div_op = DivOp()
+_power_op = PowerOp()
 
 
 def add(arg0, arg1) -> Array:
@@ -126,8 +223,23 @@ def mul(arg0, arg1) -> Array:
     arg1 = _ensure_array(arg1)
     return _mul_op.forward(arg0, arg1)
 
+
 def sub(arg0, arg1) -> Array:
     """Element-wise subtraction of two arrays or array and scalar."""
     arg0 = _ensure_array(arg0)
     arg1 = _ensure_array(arg1)
     return _sub_op.forward(arg0, arg1)
+
+
+def div(arg0, arg1) -> Array:
+    """Element-wise division of two arrays or array and scalar."""
+    arg0 = _ensure_array(arg0)
+    arg1 = _ensure_array(arg1)
+    return _div_op.forward(arg0, arg1)
+
+
+def power(arg0, arg1) -> Array:
+    """Element-wise power operation (arg0^arg1)."""
+    arg0 = _ensure_array(arg0)
+    arg1 = _ensure_array(arg1)
+    return _power_op.forward(arg0, arg1)
