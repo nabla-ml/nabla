@@ -1,21 +1,21 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+requires = ["setuptools>=68.0,<69.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "nabla-ml"
-version = "25.05291222"
+version = "25.05291235"
 authors = [
     { name = "TilliFe", email = "tillmann.fehrenbach@gmail.com" },
 ]
 description = "Dynamic neural networks and function transformations in Python + Mojo"
 readme = "readme.md"
 requires-python = ">=3.10"
-license = "Apache-2.0"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -51,7 +51,7 @@ dev = [
 
 [tool.ruff]
 line-length = 88
-target-version = "25.05291222"
+target-version = "25.05291235"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "N", "B", "C4", "A", "SIM", "PTH"]
@@ -70,14 +70,14 @@ line-length = 88
 target-version = ['py310']
 
 [tool.mypy]
-python_version = "25.05291222"
+python_version = "25.05291235"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
 # files = "src/nabla, tests"
 
 [tool.pytest.ini_options]
-minversion = "25.05291222"
+minversion = "25.05291235"
 addopts = "-ra -q --color=yes"
 testpaths = ["tests"]
 python_files = "test_*.py"
