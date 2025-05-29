@@ -1,4 +1,5 @@
 [![Development Status](https://img.shields.io/badge/status-pre--alpha-red)](https://github.com/nabla-ml/nabla)
+[![PyPI version](https://badge.fury.io/py/nabla-ml.svg)](https://pypi.org/project/nabla-ml/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
@@ -16,9 +17,17 @@
 
 ## Installation
 
-**Note**: Nabla will soon be installable via pip. For now, please install from source.
+**📦 Now available on PyPI!**
+
+```bash
+pip install nabla-ml
+```
 
 **Requirements**: Python 3.10+, NumPy, Modular (Mojo + MAX for JIT/GPU support)
+
+### Development Installation
+
+For contributors and development work:
 
 ```bash
 git clone https://github.com/nabla-ml/nabla.git
@@ -29,15 +38,19 @@ python -m venv .venv
 source .venv/bin/activate
 
 # Install in development mode
-pip install -e .
+pip install -e ".[dev]"
 ```
 
 ## Development Setup
 
+### Development Setup
+
 For contributors and advanced users:
 
 ```bash
-# Install development dependencies
+# Clone and install in development mode
+git clone https://github.com/nabla-ml/nabla.git
+cd nabla
 pip install -e ".[dev]"
 
 # Run tests
@@ -46,6 +59,34 @@ pytest
 # Format and lint code
 ruff format nabla/
 ruff check nabla/ --fix
+```
+
+## Quick Start
+
+```python
+import nabla
+from nabla import grad, vmap
+
+# Create arrays
+x = nabla.array([1.0, 2.0, 3.0])
+y = nabla.array([4.0, 5.0, 6.0])
+
+# Basic operations
+z = x + y * 2.0
+print(z)  # [9.0, 12.0, 15.0]
+
+# Function transformations
+def f(x):
+    return x ** 2 + 3 * x
+
+# Compute gradients
+grad_f = grad(f)
+print(grad_f(2.0))  # 7.0 (derivative: 2*x + 3 at x=2)
+
+# Vectorize functions
+vmap_f = vmap(f)
+result = vmap_f(nabla.array([1.0, 2.0, 3.0]))
+print(result)  # [4.0, 10.0, 18.0]
 ```
 
 ## Roadmap
