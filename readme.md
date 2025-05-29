@@ -12,7 +12,7 @@
 
 - **Multidimensional array operations**: Support for binary, unary, and linear algebra operations on multi-dimensional arrays (Tensors) on CPU and GPU.
 - **Dynamic function transformations**: Apply JAX-like transformations like `vmap`, `grad`, `jit` to Python functions.
-- **Mojo acceleration 🔥**: Seamlessly integrate high-performance Mojo kernels for CPU and GPU execution. ([Learn more →](https://docs.modular.com/mojo/manual/gpu/basics/))
+- **Mojo acceleration**: Seamlessly integrate high-performance Mojo kernels for CPU and GPU execution.
 
 
 ## Installation
