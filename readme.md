@@ -66,7 +66,7 @@ nabla/
 │   ├── nn/                    # Neural network layers and utilities
 │   └── utils/                 # Utilities (broadcasting, types)
 ├── tests/                     # Comprehensive test suite
-└── nabla-mojo-experimental/   # Experimental pure Mojo implementation
+└── nabla-mojo/                # Experimental pure Mojo API
 ```
 
 ## Status (Research Preview)
