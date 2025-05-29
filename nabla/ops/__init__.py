@@ -18,11 +18,11 @@
 
 # Import all operations for easy access
 from .base import EAGERMODE, register_binary_op, register_unary_op
-from .binary import add, mul
+from .binary import add, mul, sub
 from .creation import arange, randn
 from .linalg import matmul
 from .reduce import reduce_sum
-from .unary import cast, cos, negate, sin, decr_batch_dim_ctr, incr_batch_dim_ctr
+from .unary import cast, cos, negate, sin, decr_batch_dim_ctr, incr_batch_dim_ctr, relu
 from .view import broadcast_to, reshape, transpose, squeeze, unsqueeze
 
 __all__ = [
@@ -36,6 +36,7 @@ __all__ = [
     "cast",
     "incr_batch_dim_ctr",
     "decr_batch_dim_ctr",
+    "relu",
     # Binary operations
     "add",
     "mul",

@@ -18,11 +18,19 @@ import nabla as nb
 from max.driver import CPU, Accelerator
 
 if __name__ == "__main__":
-    n0 = nb.randn((8, 8))#.to(Accelerator())
-    n1 = nb.randn((4, 8, 8))#.to(Accelerator())
-    res = nb.reduce_sum(
-        nb.reshape(nb.sin(n0 + n1 * n1 + n0), shape=(2, 2, 4, 2, 8)),
-        axes=(4),
-        keep_dims=False,
-    )
-    print(res)
+
+    device = nb.device("gpu:0")  # Change to "cpu" for CPU testing
+
+    for iter in range(10000):
+        n0 = nb.randn((8, 8)).to(device)
+        n1 = nb.randn((4, 8, 8)).to(device)
+        res = nb.reduce_sum(
+            nb.reshape(nb.sin(n0 + n1 * n1 + n0), shape=(2, 2, 4, 2, 8)),
+            axes=(4),
+            keep_dims=False,
+        )
+        res.realize()
+        # print(res)
+        if iter % 1000 == 0:
+            print(f"Iteration {iter}: Result shape {res.shape}, dtype {res.dtype}")
+            # print(res)

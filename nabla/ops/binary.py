@@ -83,10 +83,34 @@ class MulOp(BinaryOperation):
     ) -> Array:
         return add(mul(primals[0], tangents[1]), mul(primals[1], tangents[0]))
 
+class SubOp(BinaryOperation):
+    """Subtraction operation."""
+
+    def __init__(self):
+        super().__init__("sub")
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        output.tensor_value = args[0] - args[1]
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        np_result = np.subtract(args[0].get_numpy(), args[1].get_numpy())
+        output.impl = Tensor.from_numpy(np_result)
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        from .unary import negate
+        return [cotangent, negate(cotangent)]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        return sub(tangents[0], tangents[1])
 
 # Global operation instances
 _add_op = AddOp()
 _mul_op = MulOp()
+_sub_op = SubOp()
 
 
 def add(arg0, arg1) -> Array:
@@ -101,3 +125,9 @@ def mul(arg0, arg1) -> Array:
     arg0 = _ensure_array(arg0)
     arg1 = _ensure_array(arg1)
     return _mul_op.forward(arg0, arg1)
+
+def sub(arg0, arg1) -> Array:
+    """Element-wise subtraction of two arrays or array and scalar."""
+    arg0 = _ensure_array(arg0)
+    arg1 = _ensure_array(arg1)
+    return _sub_op.forward(arg0, arg1)

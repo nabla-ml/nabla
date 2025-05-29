@@ -149,6 +149,12 @@ class Array:
 
         return mul(self, other)
 
+    def __sub__(self, other) -> Array:
+        """Subtraction operator."""
+        from ..ops.binary import sub
+
+        return sub(self, other)
+
     def __matmul__(self, other: Array) -> Array:
         """Matrix multiplication operator (@)."""
         from ..ops.linalg import matmul

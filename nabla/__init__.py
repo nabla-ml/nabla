@@ -34,11 +34,11 @@ from .core.trafos import jvp, vjp, xpr, vmap
 from .ops.base import EAGERMODE
 
 # Operation exports - Clean OOP-based operations
-from .ops.binary import add, mul
+from .ops.binary import add, mul, sub
 from .ops.creation import arange, array, ones, ones_like, randn, zeros, zeros_like
 from .ops.linalg import matmul
 from .ops.reduce import reduce_sum
-from .ops.unary import cos, decr_batch_dim_ctr, incr_batch_dim_ctr, negate, sin
+from .ops.unary import cos, decr_batch_dim_ctr, incr_batch_dim_ctr, negate, sin, relu
 from .ops.view import broadcast_to, reshape, squeeze, transpose, unsqueeze
 from .utils.broadcasting import get_broadcasted_shape
 from .utils.max_interop import device, CPU, Accelerator
@@ -67,12 +67,14 @@ __all__ = [
     # Binary operations
     "add",
     "mul",
+    "sub",
     # Unary operations
     "sin",
     "cos",
     "negate",
     "incr_batch_dim_ctr",
     "decr_batch_dim_ctr",
+    "relu",
     # Linear algebra
     "matmul",
     # View operations
