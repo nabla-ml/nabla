@@ -25,25 +25,8 @@ pip install nabla-ml
 
 **Requirements**: Python 3.10+, NumPy, Modular (Mojo + MAX for JIT/GPU support)
 
-### Development Installation
-
-For contributors and development work:
-
-```bash
-git clone https://github.com/nabla-ml/nabla.git
-cd nabla
-
-# Create virtual environment (recommended)
-python -m venv .venv
-source .venv/bin/activate
-
-# Install in development mode
-pip install -e ".[dev]"
-```
 
 ## Development Setup
-
-### Development Setup
 
 For contributors and advanced users:
 
@@ -59,34 +42,6 @@ pytest
 # Format and lint code
 ruff format nabla/
 ruff check nabla/ --fix
-```
-
-## Quick Start
-
-```python
-import nabla
-from nabla import grad, vmap
-
-# Create arrays
-x = nabla.array([1.0, 2.0, 3.0])
-y = nabla.array([4.0, 5.0, 6.0])
-
-# Basic operations
-z = x + y * 2.0
-print(z)  # [9.0, 12.0, 15.0]
-
-# Function transformations
-def f(x):
-    return x ** 2 + 3 * x
-
-# Compute gradients
-grad_f = grad(f)
-print(grad_f(2.0))  # 7.0 (derivative: 2*x + 3 at x=2)
-
-# Vectorize functions
-vmap_f = vmap(f)
-result = vmap_f(nabla.array([1.0, 2.0, 3.0]))
-print(result)  # [4.0, 10.0, 18.0]
 ```
 
 ## Roadmap
@@ -109,13 +64,6 @@ nabla/
 ├── tests/                     # Comprehensive test suite
 └── nabla-mojo/                # Experimental pure Mojo API
 ```
-
-## Status (Research Preview)
-
-- **API Stability**: Subject to change
-- **Completeness**: Growing operator coverage  
-- **Documentation**: Basic; expanding soon
-- **Bugs**: Please report issues!
 
 ## Contributing
 
