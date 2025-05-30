@@ -464,63 +464,49 @@ def vmap(
     Returns:
         Callable: Vectorized function that can handle batched inputs
     """
-    if in_axes is None:
-        in_axes = [0] * len(func.__code__.co_varnames)
-
-    if out_axes is None:
-        out_axes = [0] * len(func.__code__.co_varnames)
 
     def vectorized_func(inputs: list[Array]) -> list[Array]:
         # call incr_batch_dim_ctr on all inputs, also for thos which have in axis set  to None, we usnqueeze first.
         batched_inputs = []
         for i, inp in enumerate(inputs):
-            if in_axes[i] is None:
+            if in_axes and in_axes[i] is None:
                 from ..ops.view import unsqueeze
 
                 batched_inputs.append(unsqueeze(inp, [0]))
-            else:
-                from ..ops.unary import incr_batch_dim_ctr
 
-                batched_inputs.append(incr_batch_dim_ctr(inp))
+            from ..ops.unary import incr_batch_dim_ctr
+
+            batched_inputs.append(incr_batch_dim_ctr(inp))
 
         # Call the original function with batched inputs
         outputs = func(batched_inputs)
-
-        # cleanup inputs, i.e. call decr_batch_dim_ctr on all inputs and also on teh outptus
-        for i, inp in enumerate(batched_inputs):
-            if in_axes[i] is None:
-                from ..ops.view import squeeze
-
-                batched_inputs[i] = squeeze(inp, [0])
-            else:
-                from ..ops.unary import decr_batch_dim_ctr
-
-                batched_inputs[i] = decr_batch_dim_ctr(inp)
-
-        # cleanup outputs, i.e. call decr_batch_dim_ctr on all outputs
-        for i, out in enumerate(outputs):
-            if out_axes[i] is None:
-                from ..ops.view import squeeze
-
-                outputs[i] = squeeze(out, [0])
-            else:
-                from ..ops.unary import decr_batch_dim_ctr
-
-                outputs[i] = decr_batch_dim_ctr(out)
 
         # Ensure outputs are batched according to out_axes
         if not isinstance(outputs, list):
             outputs = [outputs]
 
-        # Handle out_axes properly - None means don't index, use the entire output
-        result = []
-        for i, axis in enumerate(out_axes):
-            if axis is None:
-                # For None axis, return the output at position i directly
-                result.append(outputs[i])
-            else:
-                # For non-None axis, index into the output
-                result.append(outputs[axis])
-        return result
+        # cleanup inputs, i.e. call decr_batch_dim_ctr on all inputs and also on teh outptus
+        for i, inp in enumerate(batched_inputs):
+            if in_axes and in_axes[i] is None:
+                from ..ops.view import squeeze
+
+                batched_inputs[i] = squeeze(inp, [0])
+
+            from ..ops.unary import decr_batch_dim_ctr
+
+            batched_inputs[i] = decr_batch_dim_ctr(inp)
+
+        # cleanup outputs, i.e. call decr_batch_dim_ctr on all outputs
+        for i, out in enumerate(outputs):
+            if out_axes and out_axes[i] is None:
+                from ..ops.view import squeeze
+
+                outputs[i] = squeeze(out, [0])
+
+            from ..ops.unary import decr_batch_dim_ctr
+
+            outputs[i] = decr_batch_dim_ctr(out)
+
+        return outputs
 
     return vectorized_func

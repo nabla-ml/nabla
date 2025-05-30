@@ -21,11 +21,9 @@ if __name__ == "__main__":
     def foo(args: list[nabla.Array]) -> list[nabla.Array]:
         a = args[0]
 
-        a = nabla.incr_batch_dim_ctr(a)
-
         c = nabla.arange((2, 3, 4))
 
-        res = nabla.reduce_sum(a * a * a)
+        res = nabla.reduce_sum(c * a * a, axes=[0])
 
         return [res]
 
@@ -33,13 +31,9 @@ if __name__ == "__main__":
 
     res = foo([a])
 
-    print("Result:", res[0])
+    print("\nResult:", res[0])
 
-    values, jacobian = nabla.vjp(foo, [a])
-    print("Values:", values)
-
-    cotangents = [nabla.array([1.0])]
-    print("\nJacobian:", nabla.xpr(jacobian, cotangents))
-
-    grads = jacobian(cotangents)
-    print("Grads:", grads)
+    foo_vmapped = nabla.vmap(foo)
+    print("\nFoo Vmapped:", nabla.xpr(foo_vmapped, [a]))
+    res = foo_vmapped([a])
+    print("\nVmapped Result:", res[0])
