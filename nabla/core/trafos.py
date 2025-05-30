@@ -442,8 +442,7 @@ def vjp(
 
         gradients = pullback(inputs, outputs, cotangents)
 
-        detach(inputs)
-        detach(outputs)
+        detach(inputs) # why the inputs though?
         detach(gradients)
 
         return gradients

@@ -221,11 +221,11 @@ def main():
     parser = argparse.ArgumentParser(
         description="Release nabla-ml package with date-based versioning (YY.MMDD)"
     )
-    parser.add_arguments(
+    parser.add_argument(
         "--dry-run", action="store_true", help="Perform a dry run without uploading"
     )
-    parser.add_arguments("--skip-tests", action="store_true", help="Skip running tests")
-    parser.add_arguments(
+    parser.add_argument("--skip-tests", action="store_true", help="Skip running tests")
+    parser.add_argument(
         "--skip-upload", action="store_true", help="Skip PyPI upload (build only)"
     )
 
