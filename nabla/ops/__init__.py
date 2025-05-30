@@ -17,7 +17,7 @@
 """Operations module for Nabla framework."""
 
 # Import all operations for easy access
-from .base import EAGERMODE  # , register_binary_op, register_unary_op
+from .base import EAGERMODE
 from .binary import add, div, mul, power, sub
 from .creation import arange, randn
 from .linalg import matmul
@@ -72,7 +72,5 @@ __all__ = [
     # Reduction operations
     "reduce_sum",
     # Base utilities
-    # "register_unary_op",
-    # "register_binary_op",
     "EAGERMODE",
 ]

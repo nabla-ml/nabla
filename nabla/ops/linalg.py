@@ -202,9 +202,8 @@ class MatMulOp(BinaryOperation):
     ) -> Array:
         x, y = primals
         tx, ty = tangents
-        # Import add here to avoid circular imports
+        
         from .binary import add
-
         return add(matmul(x, ty), matmul(tx, y))
 
 

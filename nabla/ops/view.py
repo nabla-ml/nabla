@@ -236,7 +236,6 @@ class BroadcastBatchDimsOp(ViewOperation):
         super().__init__(f"broadcast_in_dim[batch_dims={target_batch_dims}]")
         self.target_batch_dims = target_batch_dims
 
-    # can we override the ViewOperation method to use this one instead?
     def compute_output_batch_dims(self, *input_batch_dimss: tuple) -> tuple:
         """Compatible signature."""
         if len(input_batch_dimss) != 1:
@@ -296,12 +295,12 @@ class BroadcastBatchDimsOp(ViewOperation):
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
-        # broadcasted_axes = self.get_broadcasted_axes(
-        #     primals[0].batch_dims, self.target_batch_dims
-        # )
-        # from .reduce import reduce_sum
-        # return [sum_batch_dims(cotangent, axes=broadcasted_axes)]
-        pass
+        from .reduce import sum_batch_dims
+        broadcasted_axes = self.get_broadcasted_axes(
+            primals[0].batch_dims, self.target_batch_dims
+        )
+        return [sum_batch_dims(cotangent, axes=broadcasted_axes)]
+
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
@@ -432,20 +431,19 @@ class UnsqueezeOp(ViewOperation):
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
-        # Unsqueeze does not change the size, so we can just return the cotangent
         return [squeeze(cotangent, self.axes)]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
-        # Unsqueeze does not change the size, so we can just return the tangent
         return unsqueeze(tangents[0], self.axes)
 
 
 def unsqueeze(arg: Array, axes: list[int] = None) -> Array:
     """Unsqueeze array by adding dimensions of size 1."""
     if axes is None:
-        return arg  # No axes specified, return original array
+        return arg  
+    
     # make axes negative, ALWAYS! Wrt. to len(shape)
     axes = [ax if ax < 0 else -len(arg.shape) - 1 + ax for ax in axes]
     op = UnsqueezeOp(axes)

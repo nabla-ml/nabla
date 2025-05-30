@@ -121,17 +121,13 @@ class SinOp(UnaryOperation):
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
-        # Import here to avoid circular imports
         from .binary import mul
-
         return [mul(cotangent, cos(primals[0]))]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
-        # Import here to avoid circular imports
         from .binary import mul
-
         return mul(tangents[0], cos(primals[0]))
 
 
@@ -159,17 +155,13 @@ class CosOp(UnaryOperation):
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
-        # Import here to avoid circular imports
         from .binary import mul
-
         return [negate(mul(cotangent, sin(primals[0])))]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
-        # Import here to avoid circular imports
         from .binary import mul
-
         return negate(mul(tangents[0], sin(primals[0])))
 
 
@@ -185,7 +177,7 @@ class IncrBatchDimCtr(UnaryOperation):
         super().__init__("incr_batch_dim_ctr")
 
     def maxpr(self, args: list[Value], output: Array) -> None:
-        output.tensor_value = args[0]  # No operation, just pass through
+        output.tensor_value = args[0] 
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         output.impl = args[0].impl
@@ -204,8 +196,6 @@ class IncrBatchDimCtr(UnaryOperation):
 def incr_batch_dim_ctr(arg: Array) -> Array:
     """Increment batch dimension counter for debugging."""
     res = IncrBatchDimCtr().forward(arg)
-    # Move the first dimension in shape to the end of batch_dims, attention: these are tuples, not lists
-    # res.batch_dims = res.batch_dims + (res.shape[0],)
     if res.shape:
         res.batch_dims = res.batch_dims + (res.shape[0],)
         res.shape = res.shape[1:]
@@ -221,7 +211,7 @@ class DecrBatchDimCtr(UnaryOperation):
         super().__init__("decr_batch_dim_ctr")
 
     def maxpr(self, args: list[Value], output: Array) -> None:
-        output.tensor_value = args[0]  # No operation, just pass through
+        output.tensor_value = args[0]
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         output.impl = args[0].impl
@@ -240,7 +230,6 @@ class DecrBatchDimCtr(UnaryOperation):
 def decr_batch_dim_ctr(arg: Array) -> Array:
     """Decrement batch dimension counter for debugging."""
     res = DecrBatchDimCtr().forward(arg)
-    # Move the last batch dimension to the front of shape, attention: these are tuples, not lists
     if res.batch_dims:
         res.shape = (res.batch_dims[-1],) + res.shape
         res.batch_dims = res.batch_dims[:-1]
@@ -295,8 +284,6 @@ class LogOp(UnaryOperation):
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         input_array = args[0].to_numpy()
-        # Add small epsilon to avoid log(0) or log(negative)
-        # This is a common practice in deep learning
         epsilon = 1e-15
         safe_input = np.maximum(input_array, epsilon)
         np_result = np.log(safe_input)
@@ -305,19 +292,13 @@ class LogOp(UnaryOperation):
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
-        # Import here to avoid circular imports
         from .binary import div
-
-        # d/dx log(x) = 1/x, so multiply cotangent by 1/x
         return [div(cotangent, primals[0])]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
-        # Import here to avoid circular imports
         from .binary import div
-
-        # d/dx log(x) = 1/x, so multiply tangent by 1/x
         return div(tangents[0], primals[0])
 
 

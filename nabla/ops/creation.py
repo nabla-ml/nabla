@@ -100,28 +100,26 @@ class RandNOp(Operation):
 
         res = Array(
             shape=self.shape,
-            dtype=DType.float32,  # Creation ops should define their dtype
+            dtype=DType.float32, 
             device=self.device,
             materialize=False,
             name=self.name,
         )
 
         res.set_maxpr(self.maxpr)
-        # Creation ops don't have primals, so VJP/JVP rules are simplified
-        # They are set to produce empty/zero grads respectively
         res.vjp_rule = self.vjp_rule
         res.jvp_rule = self.jvp_rule
 
         from .base import EAGERMODE
 
         if EAGERMODE:
-            self.eagerxpr([], res)  # Pass empty list for args
+            self.eagerxpr([], res) 
 
         return res
 
     def compute_output_shape(
         self, *input_shapes
-    ) -> tuple:  # Added *input_shapes for consistency, though not used
+    ) -> tuple: 
         """Compute the output shape."""
         return self.shape
 

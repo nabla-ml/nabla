@@ -126,11 +126,8 @@ class DivOp(BinaryOperation):
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
+        
         from .unary import negate
-
-        # For f(x, y) = x / y:
-        # ∂f/∂x = 1/y
-        # ∂f/∂y = -x/y²
         x, y = primals
         cotangent_x = div(cotangent, y)
         cotangent_y = negate(div(mul(cotangent, x), mul(y, y)))
@@ -139,10 +136,8 @@ class DivOp(BinaryOperation):
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
+        
         from .unary import negate
-
-        # For f(x, y) = x / y:
-        # df = (∂f/∂x)dx + (∂f/∂y)dy = (1/y)dx + (-x/y²)dy
         x, y = primals
         dx, dy = tangents
         term1 = div(dx, y)
@@ -166,18 +161,10 @@ class PowerOp(BinaryOperation):
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
+        
         from .unary import log
-
-        # For f(x, y) = x^y:
-        # ∂f/∂x = y * x^(y-1)
-        # ∂f/∂y = x^y * ln(x)
         x, y = primals
-
-        # First cotangent: ∂f/∂x = y * x^(y-1)
-        # We can compute this as: y * (x^y) / x = y * output / x
         cotangent_x = mul(mul(cotangent, y), div(output, x))
-
-        # Second cotangent: ∂f/∂y = x^y * ln(x) = output * ln(x)
         cotangent_y = mul(mul(cotangent, output), log(x))
 
         return [cotangent_x, cotangent_y]
@@ -185,18 +172,11 @@ class PowerOp(BinaryOperation):
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
+        
         from .unary import log
-
-        # For f(x, y) = x^y:
-        # df = (∂f/∂x)dx + (∂f/∂y)dy
-        # df = (y * x^(y-1))dx + (x^y * ln(x))dy
         x, y = primals
         dx, dy = tangents
-
-        # First term: (y * x^(y-1)) * dx = (y * output / x) * dx
         term1 = mul(mul(y, div(output, x)), dx)
-
-        # Second term: (x^y * ln(x)) * dy = output * ln(x) * dy
         term2 = mul(mul(output, log(x)), dy)
 
         return add(term1, term2)

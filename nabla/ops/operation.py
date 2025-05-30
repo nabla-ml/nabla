@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from max.dtype import DType  # Added DType import
+from max.dtype import DType
 from max.graph import Value
 
 from ..core.array import Array
@@ -33,14 +33,14 @@ class Operation(ABC):
         self.name = name
 
     @abstractmethod
-    def forward(self, *args: Array) -> Array:  # Standardized signature
+    def forward(self, *args: Array) -> Array:
         """Forward pass - creates the result Array."""
         pass
 
     @abstractmethod
     def compute_output_shape(
         self, *input_shapes: tuple
-    ) -> tuple:  # Standardized signature
+    ) -> tuple: 
         """Compute the output shape given input shapes."""
         pass
 
@@ -72,7 +72,7 @@ class Operation(ABC):
 class UnaryOperation(Operation):
     """Base class for unary operations."""
 
-    def forward(self, *args: Array) -> Array:  # Compatible signature
+    def forward(self, *args: Array) -> Array: 
         """Forward pass for unary operations."""
         if len(args) != 1:
             raise ValueError(f"Unary operation requires 1 argument, got {len(args)}")
@@ -80,15 +80,15 @@ class UnaryOperation(Operation):
 
         output_shape = self.compute_output_shape(arg.shape)
         output_batch_dims = self.compute_output_batch_dims(arg.batch_dims)
-        output_dtype = self.compute_output_dtype(arg)  # Use compute_output_dtype
+        output_dtype = self.compute_output_dtype(arg) 
 
         res = Array(
             shape=output_shape,
-            dtype=output_dtype,  # Use determined output_dtype
+            dtype=output_dtype, 
             device=arg.device,
             materialize=False,
             name=self.name,
-            batch_dims=output_batch_dims,  # Use computed output_batch_dims
+            batch_dims=output_batch_dims,  
         )
 
         res.set_maxpr(self.maxpr)
@@ -105,7 +105,7 @@ class UnaryOperation(Operation):
 
     def compute_output_shape(
         self, *input_shapes: tuple
-    ) -> tuple:  # Compatible signature
+    ) -> tuple:  
         """Default: output shape same as input shape."""
         if len(input_shapes) != 1:
             raise ValueError(
@@ -113,7 +113,7 @@ class UnaryOperation(Operation):
             )
         return input_shapes[0]
 
-    def compute_output_dtype(self, arg: Array) -> DType:  # Added method
+    def compute_output_dtype(self, arg: Array) -> DType: 
         """Default: output dtype same as input dtype."""
         return arg.dtype
 
@@ -129,16 +129,13 @@ class UnaryOperation(Operation):
 class BinaryOperation(Operation):
     """Base class for binary operations."""
 
-    def forward(self, *args: Array) -> Array:  # Compatible signature
+    def forward(self, *args: Array) -> Array:  
         """Forward pass for binary operations."""
         if len(args) != 2:
             raise ValueError(f"Binary operation requires 2 arguments, got {len(args)}")
         arg1, arg2 = args[0], args[1]
 
-        # Import here to avoid circular imports
         from ..ops.view import broadcast_batch_dims, broadcast_to
-
-        # Validate inputs
         self._validate_inputs(arg1, arg2)
 
         # Compute output shape and broadcast inputs
@@ -146,7 +143,7 @@ class BinaryOperation(Operation):
         output_batch_dims = self.compute_output_batch_dims(
             arg1.batch_dims, arg2.batch_dims
         )
-        output_dtype = self.compute_output_dtype(arg1, arg2)  # Use compute_output_dtype
+        output_dtype = self.compute_output_dtype(arg1, arg2) 
         arg1_broadcasted = broadcast_to(arg1, output_shape)
         arg2_broadcasted = broadcast_to(arg2, output_shape)
 
@@ -155,11 +152,11 @@ class BinaryOperation(Operation):
 
         res = Array(
             shape=output_shape,
-            dtype=output_dtype,  # Use determined output_dtype
+            dtype=output_dtype, 
             device=arg1.device,
             materialize=False,
             name=self.name,
-            batch_dims=output_batch_dims,  # Use computed output_batch_dims
+            batch_dims=output_batch_dims, 
         )
 
         res.set_maxpr(self.maxpr)
@@ -177,7 +174,7 @@ class BinaryOperation(Operation):
 
     def compute_output_shape(
         self, *input_shapes: tuple
-    ) -> tuple:  # Compatible signature
+    ) -> tuple:  
         """Compute broadcasted output shape."""
         if len(input_shapes) != 2:
             raise ValueError(
@@ -189,9 +186,8 @@ class BinaryOperation(Operation):
 
         return get_broadcasted_shape(shape1, shape2)
 
-    def compute_output_dtype(self, arg1: Array, arg2: Array) -> DType:  # Added method
+    def compute_output_dtype(self, arg1: Array, arg2: Array) -> DType: 
         """Default: output dtype same as first input dtype."""
-        # Asreduce_sumes dtypes are validated to be compatible by _validate_inputs
         return arg1.dtype
 
     def _validate_inputs(self, arg1: Array, arg2: Array) -> None:
@@ -233,7 +229,7 @@ class ReductionOperation(UnaryOperation):
 
     def compute_output_shape(
         self, *input_shapes: tuple
-    ) -> tuple:  # Compatible signature
+    ) -> tuple: 
         """Compute output shape for reduction."""
         if len(input_shapes) != 1:
             raise ValueError(
@@ -248,7 +244,7 @@ class ReductionOperation(UnaryOperation):
             raise ValueError(
                 f"Reduction operation requires 1 input batch dims, got {len(input_batch_dims)}"
             )
-        return input_batch_dims[0]  # Output batch dims same as input
+        return input_batch_dims[0] 
 
     @staticmethod
     def _compute_reduction_shape(
@@ -290,7 +286,7 @@ class ReductionOperation(UnaryOperation):
 class ViewOperation(UnaryOperation):
     """Base class for view operations (reshape, transpose, etc.)."""
 
-    def __init__(self, name: str):  # Constructor takes only name
+    def __init__(self, name: str): 
         super().__init__(name)
 
     def compute_output_batch_dims(self, *input_batch_dims: tuple) -> tuple:
