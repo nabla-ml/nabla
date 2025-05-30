@@ -47,7 +47,14 @@ from .ops.unary import (
     relu,
     sin,
 )
-from .ops.view import broadcast_to, reshape, squeeze, transpose, unsqueeze
+from .ops.view import (
+    broadcast_batch_dims,
+    broadcast_to,
+    reshape,
+    squeeze,
+    transpose,
+    unsqueeze,
+)
 from .utils.broadcasting import get_broadcasted_shape
 from .utils.formatting import format_dtype, format_shape_and_dtype
 from .utils.max_interop import accelerator, cpu, device
@@ -97,6 +104,7 @@ __all__ = [
     "broadcast_to",
     "squeeze",
     "unsqueeze",
+    "broadcast_batch_dims",
     # Reduction operations
     "reduce_sum",
     # Data types

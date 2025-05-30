@@ -14,24 +14,32 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-import nabla as nb
-
-
-def test_basic_vmap_transform_with_xpr_prints():
-    """Test the new VJPTransform class."""
-    print("=== Testing VJPTransform ===")
-
-    def square_fn(inputs: list[nb.Array]) -> list[nb.Array]:
-        x = inputs[0]
-        return [nb.sin(x * x * x)]
-
-    fn_vmapped = nb.vmap(square_fn, in_axes=[None], out_axes=[None])
-
-    # Create input
-    x = nb.arange((2, 3))
-    print("\nOrignal Function:", nb.xpr(fn_vmapped, [x]))
-
+import nabla
 
 if __name__ == "__main__":
-    print("\nTesting with xpr prints")
-    test_basic_vmap_transform_with_xpr_prints()
+
+    def foo(args: list[nabla.Array]) -> list[nabla.Array]:
+        a = args[0]
+
+        a = nabla.incr_batch_dim_ctr(a)
+
+        c = nabla.arange((2, 3, 4))
+
+        res = nabla.reduce_sum(a * a * a)
+
+        return [res]
+
+    a = nabla.arange((2, 3, 4))
+
+    res = foo([a])
+
+    print("Result:", res[0])
+
+    values, jacobian = nabla.vjp(foo, [a])
+    print("Values:", values)
+
+    cotangents = [nabla.array([1.0])]
+    print("\nJacobian:", nabla.xpr(jacobian, cotangents))
+
+    grads = jacobian(cotangents)
+    print("Grads:", grads)

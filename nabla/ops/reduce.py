@@ -96,10 +96,108 @@ def reduce_sum(
     keep_dims: bool = False,
 ) -> Array:
     """reduce_sum array elements over given axes."""
-    # if axis is not None and axes is not None:
-    #     raise ValueError("Cannot specify both 'axes' and 'axis' parameters")
-    # if axis is not None:
-    #     axes = axis
+    # make axes always negative
+    if axes is not None:
+        if isinstance(axes, int):
+            axes = [axes]
+        elif isinstance(axes, list) or isinstance(axes, tuple):
+            axes = [int(axis) for axis in axes]
+
+        # Convert positive axes to negative
+        axes = [axis if axis < 0 else axis - len(arg.shape) for axis in axes]
 
     op = ReduceSumOp(arg.shape, axes, keep_dims)
+    return op.forward(arg)
+
+
+class SumBatchDimsOp(ReductionOperation):
+    """reduce_sum reduction operation."""
+
+    def __init__(
+        self,
+        arg_batch_dims: Shape,
+        axes: int | list[int] | tuple[int, ...] | None = None,
+        keep_dims: bool = False,
+    ):
+        super().__init__(f"reduce_sum[axes={axes}]", axes, keep_dims)
+        self.arg_batch_dims = arg_batch_dims
+        self.axes = axes
+        self.keep_dims = keep_dims
+
+    def compute_output_shape(self, *input_shapes):
+        return input_shapes[0]  # same as input
+
+    def compute_output_batch_dims(self, *input_batch_dims):
+        return self._compute_reduction_shape(
+            input_batch_dims[0], self.axes, self.keep_dims
+        )
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        axes = self.axes
+        if axes is None:
+            # reduce_sum over all axes - iterate through each axis from the last to first
+            output_symbol = args[0]
+            for axis in range(len(args[0].shape) - 1, -1, -1):
+                output_symbol = ops.sum(output_symbol, axis=axis)
+                if not self.keep_dims:
+                    output_symbol = ops.squeeze(output_symbol, axis=axis)
+        else:
+            if isinstance(axes, int):
+                axes = [axes]
+
+            # Sort axes in descending order to avoid index shifting issues
+            axes = sorted(axes, reverse=True)
+            output_symbol = args[0]
+
+            for axis in axes:
+                output_symbol = ops.sum(output_symbol, axis=axis)
+                if not self.keep_dims:
+                    output_symbol = ops.squeeze(output_symbol, axis=axis)
+
+        output.tensor_value = output_symbol
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        # Convert axes list to tuple for numpy compatibility
+        if isinstance(self.axes, list):
+            numpy_axes: int | tuple[int, ...] | None = tuple(self.axes)
+        else:
+            numpy_axes = self.axes
+
+        np_result = np.sum(args[0].to_numpy(), axis=numpy_axes, keepdims=self.keep_dims)
+        # Ensure result is at least a 0-d array for DLPack conversion
+        if np_result.ndim == 0:
+            np_result = np.array(np_result)
+        output.impl = Tensor.from_numpy(np_result)
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        from .view import broadcast_batch_dims
+
+        return [broadcast_batch_dims(cotangent, self.arg_batch_dims)]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        return sum_batch_dims(tangents[0], axes=self.axes, keep_dims=self.keep_dims)
+
+
+def sum_batch_dims(
+    arg: Array,
+    axes: int | list[int] | tuple[int, ...] | None = None,
+    keep_dims: bool = False,
+) -> Array:
+    """reduce_sum array elements over given axes."""
+
+    # make axes always positive, not negative
+    if axes is not None:
+        if isinstance(axes, int):
+            axes = [axes]
+        elif isinstance(axes, list) or isinstance(axes, tuple):
+            axes = [int(axis) for axis in axes]
+
+        # Convert negative axes to positive
+        axes = [axis if axis >= 0 else axis + len(arg.shape) for axis in axes]
+
+    op = SumBatchDimsOp(arg.batch_dims, axes, keep_dims)
     return op.forward(arg)

@@ -79,6 +79,7 @@ class UnaryOperation(Operation):
         arg = args[0]
 
         output_shape = self.compute_output_shape(arg.shape)
+        output_batch_dims = self.compute_output_batch_dims(arg.batch_dims)
         output_dtype = self.compute_output_dtype(arg)  # Use compute_output_dtype
 
         res = Array(
@@ -87,6 +88,7 @@ class UnaryOperation(Operation):
             device=arg.device,
             materialize=False,
             name=self.name,
+            batch_dims=output_batch_dims,  # Use computed output_batch_dims
         )
 
         res.set_maxpr(self.maxpr)
@@ -115,6 +117,14 @@ class UnaryOperation(Operation):
         """Default: output dtype same as input dtype."""
         return arg.dtype
 
+    def compute_output_batch_dims(self, *input_batch_dims: int) -> int:
+        """Default: output batch dims same as input batch dims."""
+        if len(input_batch_dims) != 1:
+            raise ValueError(
+                f"Unary operation requires 1 input batch dims, got {len(input_batch_dims)}"
+            )
+        return input_batch_dims[0]
+
 
 class BinaryOperation(Operation):
     """Base class for binary operations."""
@@ -126,16 +136,22 @@ class BinaryOperation(Operation):
         arg1, arg2 = args[0], args[1]
 
         # Import here to avoid circular imports
-        from ..ops.view import broadcast_to
+        from ..ops.view import broadcast_batch_dims, broadcast_to
 
         # Validate inputs
         self._validate_inputs(arg1, arg2)
 
         # Compute output shape and broadcast inputs
         output_shape = self.compute_output_shape(arg1.shape, arg2.shape)
+        output_batch_dims = self.compute_output_batch_dims(
+            arg1.batch_dims, arg2.batch_dims
+        )
         output_dtype = self.compute_output_dtype(arg1, arg2)  # Use compute_output_dtype
         arg1_broadcasted = broadcast_to(arg1, output_shape)
         arg2_broadcasted = broadcast_to(arg2, output_shape)
+
+        arg1_broadcasted = broadcast_batch_dims(arg1_broadcasted, output_batch_dims)
+        arg2_broadcasted = broadcast_batch_dims(arg2_broadcasted, output_batch_dims)
 
         res = Array(
             shape=output_shape,
@@ -143,6 +159,7 @@ class BinaryOperation(Operation):
             device=arg1.device,
             materialize=False,
             name=self.name,
+            batch_dims=output_batch_dims,  # Use computed output_batch_dims
         )
 
         res.set_maxpr(self.maxpr)
@@ -188,6 +205,18 @@ class BinaryOperation(Operation):
                 f"Devices {arg1.device} and {arg2.device} are incompatible"
             )
 
+    def compute_output_batch_dims(self, *input_batch_dims: tuple) -> tuple:
+        """Default: output batch dims same as input batch dims."""
+        if len(input_batch_dims) != 2:
+            raise ValueError(
+                f"Binary operation requires 2 input batch dims, got {len(input_batch_dims)}"
+            )
+        shape1, shape2 = input_batch_dims[0], input_batch_dims[1]
+
+        from ..utils.broadcasting import get_broadcasted_shape
+
+        return get_broadcasted_shape(shape1, shape2)
+
 
 class ReductionOperation(UnaryOperation):
     """Base class for reduction operations."""
@@ -213,7 +242,13 @@ class ReductionOperation(UnaryOperation):
         input_shape = input_shapes[0]
         return self._compute_reduction_shape(input_shape, self.axes, self.keep_dims)
 
-    # compute_output_dtype will be inherited from UnaryOperation (i.e., same as input)
+    def compute_output_batch_dims(self, *input_batch_dims: tuple) -> tuple:
+        """Compute output batch dims for reduction."""
+        if len(input_batch_dims) != 1:
+            raise ValueError(
+                f"Reduction operation requires 1 input batch dims, got {len(input_batch_dims)}"
+            )
+        return input_batch_dims[0]  # Output batch dims same as input
 
     @staticmethod
     def _compute_reduction_shape(
@@ -257,3 +292,11 @@ class ViewOperation(UnaryOperation):
 
     def __init__(self, name: str):  # Constructor takes only name
         super().__init__(name)
+
+    def compute_output_batch_dims(self, *input_batch_dims: tuple) -> tuple:
+        """Default: output batch dims same as input batch dims."""
+        if len(input_batch_dims) != 1:
+            raise ValueError(
+                f"View operation requires 1 input batch dims, got {len(input_batch_dims)}"
+            )
+        return input_batch_dims[0]

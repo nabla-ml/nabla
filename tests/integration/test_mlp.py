@@ -16,7 +16,6 @@
 
 """Integration test for MLP training using VJP autodiff."""
 
-
 import numpy as np
 
 import nabla

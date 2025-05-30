@@ -97,14 +97,6 @@ class Array:
                 f"Argument must be an instance of Array, got {type(arg_node)}"
             )
         self.traced = self.traced or arg_node.traced
-        if self.batch_dims == ():
-            self.batch_dims = arg_node.batch_dims
-        else:
-            from ..utils.broadcasting import get_broadcasted_shape
-
-            self.batch_dims = get_broadcasted_shape(
-                self.batch_dims, arg_node.batch_dims
-            )
         self.args.append(arg_node)
 
     def realize(self) -> None:

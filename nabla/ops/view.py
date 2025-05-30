@@ -81,6 +81,8 @@ class TransposeOp(ViewOperation):
 
 def transpose(arg: Array, axis_1: int = -2, axis_2: int = -1) -> Array:
     """Transpose array along two axes."""
+    axis_1 = axis_1 if axis_1 < 0 else -len(arg.shape) + axis_1
+    axis_2 = axis_2 if axis_2 < 0 else -len(arg.shape) + axis_2
     op = TransposeOp(axis_1, axis_2)
     return op.forward(arg)
 
@@ -137,10 +139,6 @@ class ReshapeOp(ViewOperation):
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
         return reshape(tangents[0], self.target_shape)
-
-
-# Global operation instances for efficiency
-# Note: ReshapeOp requires target_shape parameter, so no global instance
 
 
 def reshape(arg: Array, shape: Shape) -> Array:
@@ -212,8 +210,6 @@ class BroadcastToOp(ViewOperation):
         broadcasted_axes = self.get_broadcasted_axes(
             primals[0].shape, self.target_shape
         )
-
-        # Import reduce_sum here to avoid circular imports
         from .reduce import reduce_sum
 
         return [reduce_sum(cotangent, axes=broadcasted_axes)]
@@ -226,11 +222,96 @@ class BroadcastToOp(ViewOperation):
 
 def broadcast_to(arg: Array, shape: Shape) -> Array:
     """Broadcast array to target shape."""
-    # let's first reshape arg to have the same number of dimensions as shape, i.e. adding ones to the front
     if len(arg.shape) < len(shape):
         new_shape = (1,) * (len(shape) - len(arg.shape)) + arg.shape
         arg = reshape(arg, new_shape)
     op = BroadcastToOp(shape)
+    return op.forward(arg)
+
+
+class BroadcastBatchDimsOp(ViewOperation):
+    """Broadcast array to target batch_dims."""
+
+    def __init__(self, target_batch_dims: Shape):
+        super().__init__(f"broadcast_in_dim[batch_dims={target_batch_dims}]")
+        self.target_batch_dims = target_batch_dims
+
+    # can we override the ViewOperation method to use this one instead?
+    def compute_output_batch_dims(self, *input_batch_dimss: tuple) -> tuple:
+        """Compatible signature."""
+        if len(input_batch_dimss) != 1:
+            raise ValueError(
+                f"Broadcast operation requires 1 input batch_dims, got {len(input_batch_dimss)}"
+            )
+        return self.target_batch_dims
+
+    def forward(self, *args: Array) -> Array:
+        """Override forward to handle case where no broadcasting needed with compatible signature."""
+        if len(args) != 1:
+            raise ValueError(
+                f"Broadcast operation requires 1 argument, got {len(args)}"
+            )
+        arg = args[0]
+        if arg.batch_dims == self.target_batch_dims:
+            return arg
+        return super().forward(*args)
+
+    @staticmethod
+    def get_broadcasted_axes(
+        input_batch_dims: Shape, target_batch_dims: Shape
+    ) -> list[int]:
+        """Get axes that were broadcasted (for VJP)."""
+        if len(input_batch_dims) > len(target_batch_dims):
+            raise ValueError(
+                f"Input batch_dims {input_batch_dims} cannot be broadcast to {target_batch_dims}"
+            )
+
+        broadcasted_axes = []
+        # Pad input batch_dims with leading 1s
+        padded_input = (1,) * (
+            len(target_batch_dims) - len(input_batch_dims)
+        ) + input_batch_dims
+
+        for i in range(len(target_batch_dims)):
+            if padded_input[i] == 1 and target_batch_dims[i] > 1:
+                broadcasted_axes.append(i)
+            elif padded_input[i] != target_batch_dims[i] and padded_input[i] != 1:
+                raise ValueError(
+                    f"Cannot broadcast {input_batch_dims} to {target_batch_dims}"
+                )
+
+        return broadcasted_axes
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        output.tensor_value = ops.broadcast_to(
+            args[0], self.target_batch_dims + output.shape
+        )
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        np_result = np.broadcast_to(
+            args[0].to_numpy(), shape=self.target_batch_dims + output.shape
+        )
+        output.impl = Tensor.from_numpy(np_result)
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        # broadcasted_axes = self.get_broadcasted_axes(
+        #     primals[0].batch_dims, self.target_batch_dims
+        # )
+        # from .reduce import reduce_sum
+        # return [sum_batch_dims(cotangent, axes=broadcasted_axes)]
+        pass
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        return broadcast_batch_dims(tangents[0], self.target_batch_dims)
+
+
+def broadcast_batch_dims(arg: Array, batch_dims: Shape) -> Array:
+    """Broadcast array to target batch_dims."""
+    op = BroadcastBatchDimsOp(batch_dims)
     return op.forward(arg)
 
 

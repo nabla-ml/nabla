@@ -16,7 +16,6 @@
 
 """Test the newly added operations: log, power, and improved division."""
 
-
 import nabla
 
 
