@@ -27,16 +27,14 @@ from ..core.array import (
     JVPRule,
     MaxprCallable,
     VJPRule,
-)  # Ensure Array is imported from core
+)  
 
-# Import broadcast_to from .view to avoid circular dependency if it's defined there
-# If broadcast_to is a core utility, it might need to be in ..utils or ..core
 from ..ops.view import (
     broadcast_to,
-)  # This might be a source of circular import if view ops also use base.
+) 
 from ..utils.broadcasting import get_broadcasted_shape
 
-# Global execution mode flag
+# Global execution mode flag, TODO: remove global flag and apply model compiling more elegantly
 EAGERMODE: bool = True
 
 
@@ -83,16 +81,12 @@ def register_binary_op(
     eagerxpr: Callable[[list[Array], Array], None],
     vjp_rule: VJPRule,
     jvp_rule: JVPRule,
-    # op_params: dict = None,
 ) -> Array:
     """Register a binary operation with validation and broadcasting."""
     _validate_binary_args(args, op_name)
     _validate_callables(maxpr, eagerxpr, vjp_rule, jvp_rule)
 
     target_shape = get_broadcasted_shape(args[0].shape, args[1].shape)
-    # broadcast_to itself is an operation, ensure it's correctly imported and used.
-    # It might be better to have broadcast_to defined in a way that doesn't create circular deps
-    # For example, if broadcast_to is in .view, and .view imports from .base, this is tricky.
     arg0_broadcasted = broadcast_to(args[0], target_shape)
     arg1_broadcasted = broadcast_to(args[1], target_shape)
 
@@ -108,8 +102,6 @@ def register_binary_op(
     res.add_argument(arg1_broadcasted)
     res.vjp_rule = vjp_rule
     res.jvp_rule = jvp_rule
-    # if op_params:
-    #     res.op_params = op_params
 
     if EAGERMODE:
         eagerxpr([arg0_broadcasted, arg1_broadcasted], res)
@@ -124,11 +116,10 @@ def register_unary_op(
     eagerxpr: Callable[[list[Array], Array], None],
     vjp_rule: VJPRule,
     jvp_rule: JVPRule,
-    # op_params: dict = None,
     output_shape_fn: (
         Callable[[tuple], tuple] | None
-    ) = None,  # For ops that change shape, like Cast potentially if it could change bitwidth affecting shape in some contexts (unlikely for basic cast)
-    output_dtype: DType | None = None,  # For ops like Cast
+    ) = None, 
+    output_dtype: DType | None = None, 
 ) -> Array:
     """Register a unary operation with validation."""
     _validate_unary_arg(arg, op_name)
@@ -150,11 +141,6 @@ def register_unary_op(
     res.add_argument(arg)
     res.vjp_rule = vjp_rule
     res.jvp_rule = jvp_rule
-    # if op_params:
-    #     res.op_params = op_params
-
-    # Special handling for CastOp's dtype, which is set on the result Array directly
-    # This is now handled by passing output_dtype to Array constructor
 
     if EAGERMODE:
         eagerxpr([arg], res)
