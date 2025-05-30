@@ -43,27 +43,29 @@ def format_dtype(dtype: Any) -> str:
     else:
         return dtype_str
 
-
 def format_shape_and_dtype(array: Array) -> str:
-    """Format shape and dtype in JAX style with batch_dims in light purple and shape in purple."""
+    """Format shape and dtype in JAX style with batch_dims numbers in blue and everything else in purple."""
     dtype_str = format_dtype(array.dtype)
 
-    # Build the dimension string with different colors
+    # Build the dimension string
     dims_parts = []
 
-    # Add batch dimensions in light purple
+    # Add batch dimensions with blue numbers
     if array.batch_dims:
-        batch_dims_str = ",".join(map(str, array.batch_dims))
-        dims_parts.append(f"{light_purple}{batch_dims_str}{reset}")
+        batch_dims_colored = []
+        for dim in array.batch_dims:
+            batch_dims_colored.append(f"{light_purple}{dim}{purple}")
+        batch_dims_str = f"{purple},{purple}".join(batch_dims_colored)
+        dims_parts.append(batch_dims_str)
 
     # Add shape dimensions in purple
     if array.shape:
-        shape_str = ",".join(map(str, array.shape))
-        dims_parts.append(f"{purple}{shape_str}{reset}")
+        shape_str = f"{purple},{purple}".join(map(str, array.shape))
+        dims_parts.append(shape_str)
 
-    # Combine dimensions with comma separator
+    # Combine dimensions with comma separator and wrap everything in purple
     if dims_parts:
-        all_dims = ",".join(dims_parts)
-        return f"{dtype_str}[{all_dims}]"
+        all_dims = f"{purple},{purple}".join(dims_parts)
+        return f"{purple}{dtype_str}[{all_dims}]{reset}"
     else:
-        return f"{dtype_str}[]"
+        return f"{purple}{dtype_str}[]{reset}"
