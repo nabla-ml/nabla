@@ -52,9 +52,9 @@ def test_jvp_of_vjp():
 
     # For f(x) = x², f'(x) = 2x, f''(x) = 2
     assert abs(grad_at_3 - 6.0) < 1e-6, f"First derivative incorrect: {grad_at_3}"
-    assert (
-        abs(hessian_at_3 - 2.0) < 1e-6
-    ), f"Second derivative incorrect: {hessian_at_3}"
+    assert abs(hessian_at_3 - 2.0) < 1e-6, (
+        f"Second derivative incorrect: {hessian_at_3}"
+    )
 
     print("✓ JVP(VJP(f)) test passed!")
 
@@ -97,9 +97,9 @@ def test_vjp_of_jvp():
     # For f(x) = x³, JVP gives 3x²*tangent = 3x² (tangent=1)
     # d/dx[3x²] = 6x, so at x=2: 6*2 = 12
     assert abs(jvp_at_2 - 12.0) < 1e-6, f"JVP value incorrect: {jvp_at_2}"
-    assert (
-        abs(mixed_deriv_at_2 - 12.0) < 1e-6
-    ), f"Mixed derivative incorrect: {mixed_deriv_at_2}"
+    assert abs(mixed_deriv_at_2 - 12.0) < 1e-6, (
+        f"Mixed derivative incorrect: {mixed_deriv_at_2}"
+    )
 
     print("✓ VJP(JVP(f)) test passed!")
 
@@ -144,12 +144,12 @@ def test_double_nested_transformations():
     # VJP(JVP(f)) = d/dx[4x³] = 12x²
     # JVP(VJP(JVP(f))) = d/dx[12x²] = 24x
     # At x=2: 24*2 = 48
-    assert (
-        abs(result_value - 48.0) < 1e-6
-    ), f"VJP(JVP(f)) value incorrect: {result_value}"
-    assert (
-        abs(result_tangent - 48.0) < 1e-6
-    ), f"JVP(VJP(JVP(f))) value incorrect: {result_tangent}"
+    assert abs(result_value - 48.0) < 1e-6, (
+        f"VJP(JVP(f)) value incorrect: {result_value}"
+    )
+    assert abs(result_tangent - 48.0) < 1e-6, (
+        f"JVP(VJP(JVP(f))) value incorrect: {result_tangent}"
+    )
 
     print("✓ Triple nested transformation test passed!")
 
@@ -191,12 +191,12 @@ def test_multivariable_nested():
     # For f(x,y) = x²y + y³:
     # ∂f/∂x = 2xy, at (2,3): 2*2*3 = 12
     # ∂²f/∂x∂y = ∂/∂y[2xy] = 2x, at (2,3): 2*2 = 4
-    assert (
-        abs(partial_x_at_2_3 - 12.0) < 1e-6
-    ), f"Partial derivative incorrect: {partial_x_at_2_3}"
-    assert (
-        abs(mixed_partial_at_2_3 - 4.0) < 1e-6
-    ), f"Mixed partial incorrect: {mixed_partial_at_2_3}"
+    assert abs(partial_x_at_2_3 - 12.0) < 1e-6, (
+        f"Partial derivative incorrect: {partial_x_at_2_3}"
+    )
+    assert abs(mixed_partial_at_2_3 - 4.0) < 1e-6, (
+        f"Mixed partial incorrect: {mixed_partial_at_2_3}"
+    )
 
     print("✓ Multivariable nested transformation test passed!")
 

@@ -185,7 +185,7 @@ class IncrBatchDimCtr(UnaryOperation):
         super().__init__("incr_batch_dim_ctr")
 
     def maxpr(self, args: list[Value], output: Array) -> None:
-        output.tensor_value = args[0].tensor_value  # No operation, just pass through
+        output.tensor_value = args[0]  # No operation, just pass through
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         output.impl = args[0].impl
@@ -221,7 +221,7 @@ class DecrBatchDimCtr(UnaryOperation):
         super().__init__("decr_batch_dim_ctr")
 
     def maxpr(self, args: list[Value], output: Array) -> None:
-        output.tensor_value = args[0].tensor_value  # No operation, just pass through
+        output.tensor_value = args[0]  # No operation, just pass through
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         output.impl = args[0].impl

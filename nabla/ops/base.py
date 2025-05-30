@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 # Global execution mode flag, TODO: remove global flag and apply model compiling more elegantly
-EAGERMODE: bool = True
+EAGERMODE: bool = False
 
 
 # def _validate_binary_args(args: list[Array], op_name: str) -> None:

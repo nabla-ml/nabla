@@ -204,10 +204,10 @@ class ModelFactory:
             tensor_shape = tuple(int(dim) for dim in node.tensor_value.shape)
             tensor_dtype = node.tensor_value.dtype
 
-            if node.shape != tensor_shape:
+            if node.batch_dims + node.shape != tensor_shape:
                 raise ValueError(
                     f"Shape mismatch for node {node.name}: "
-                    f"expected {node.shape}, got {tensor_shape}"
+                    f"expected {node.batch_dims + node.shape}, got {tensor_shape}"
                 )
 
             if node.dtype != tensor_dtype:
