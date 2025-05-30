@@ -43,7 +43,6 @@ class TransposeOp(ViewOperation):
         if not arg_shape:
             raise ValueError("Cannot transpose an empty shape")
 
-        # Normalize negative axes
         axis_1 = self.axis_1 if self.axis_1 >= 0 else len(arg_shape) + self.axis_1
         axis_2 = self.axis_2 if self.axis_2 >= 0 else len(arg_shape) + self.axis_2
 
@@ -52,7 +51,6 @@ class TransposeOp(ViewOperation):
         if axis_2 < 0 or axis_2 >= len(arg_shape):
             raise ValueError(f"axis_2 {axis_2} is out of bounds for shape {arg_shape}")
 
-        # Create new shape with axes swapped
         new_shape = list(arg_shape)
         new_shape[axis_1], new_shape[axis_2] = new_shape[axis_2], new_shape[axis_1]
         return tuple(new_shape)
@@ -61,7 +59,6 @@ class TransposeOp(ViewOperation):
         output.tensor_value = ops.transpose(args[0], self.axis_1, self.axis_2)
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        # Create permutation axes
         axes = list(range(len(args[0].shape)))
         axes[self.axis_1], axes[self.axis_2] = axes[self.axis_2], axes[self.axis_1]
 
@@ -109,7 +106,6 @@ class ReshapeOp(ViewOperation):
             raise ValueError(f"Reshape operation requires 1 argument, got {len(args)}")
         arg = args[0]
 
-        # Validate that total size remains the same
         old_size = np.prod(arg.shape) if arg.shape else 1
         new_size = np.prod(self.target_shape) if self.target_shape else 1
         if old_size != new_size:
@@ -182,7 +178,6 @@ class BroadcastToOp(ViewOperation):
             )
 
         broadcasted_axes = []
-        # Pad input shape with leading 1s
         padded_input = (1,) * (len(target_shape) - len(input_shape)) + input_shape
 
         for i in range(len(target_shape)):
@@ -266,7 +261,6 @@ class BroadcastBatchDimsOp(ViewOperation):
             )
 
         broadcasted_axes = []
-        # Pad input batch_dims with leading 1s
         padded_input = (1,) * (
             len(target_batch_dims) - len(input_batch_dims)
         ) + input_batch_dims
@@ -340,7 +334,6 @@ class SqueezeOp(ViewOperation):
                     f"Cannot squeeze axis {ax} of size {input_shape[ax]} (must be 1)"
                 )
 
-        # Remove None values (dimensions of size 1)
         new_shape = [dim for dim in new_shape if dim is not None]
         return tuple(new_shape)
 
@@ -377,7 +370,6 @@ def squeeze(arg: Array, axes: list[int] = None) -> Array:
     """Squeeze array by removing dimensions of size 1."""
     if axes is None:
         return arg
-    # make axes negative, ALWAYS! Wrt. to len(shape)
     axes = [ax if ax < 0 else -len(arg.shape) + ax for ax in axes]
     op = SqueezeOp(axes)
     return op.forward(arg)
@@ -398,7 +390,6 @@ class UnsqueezeOp(ViewOperation):
             )
         input_shape = input_shapes[0]
 
-        # Add dimensions of size 1 at specified axes
         new_shape = list(input_shape)
         for ax in self.axes:
             if ax < -len(new_shape) - 1:
@@ -444,7 +435,6 @@ def unsqueeze(arg: Array, axes: list[int] = None) -> Array:
     if axes is None:
         return arg  
     
-    # make axes negative, ALWAYS! Wrt. to len(shape)
     axes = [ax if ax < 0 else -len(arg.shape) - 1 + ax for ax in axes]
     op = UnsqueezeOp(axes)
     return op.forward(arg)

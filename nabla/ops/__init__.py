@@ -42,10 +42,8 @@ from .view import (
 )
 
 __all__ = [
-    # Creation operations
     "arange",
     "randn",
-    # Unary operations
     "sin",
     "cos",
     "negate",
@@ -54,23 +52,18 @@ __all__ = [
     "decr_batch_dim_ctr",
     "relu",
     "log",
-    # Binary operations
     "add",
     "mul",
     "sub",
     "div",
     "power",
-    # Linear algebra
     "matmul",
-    # View operations
     "transpose",
     "reshape",
     "broadcast_to",
     "squeeze",
     "unsqueeze",
     "broadcast_batch_dims",
-    # Reduction operations
     "reduce_sum",
-    # Base utilities
     "EAGERMODE",
 ]

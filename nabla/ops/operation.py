@@ -138,7 +138,6 @@ class BinaryOperation(Operation):
         from ..ops.view import broadcast_batch_dims, broadcast_to
         self._validate_inputs(arg1, arg2)
 
-        # Compute output shape and broadcast inputs
         output_shape = self.compute_output_shape(arg1.shape, arg2.shape)
         output_batch_dims = self.compute_output_batch_dims(
             arg1.batch_dims, arg2.batch_dims
@@ -261,7 +260,6 @@ class ReductionOperation(UnaryOperation):
         elif isinstance(axes, tuple):
             axes = list(axes)
 
-        # Normalize negative axes
         normalized_axes = []
         for axis in axes:
             if axis < 0:

@@ -52,7 +52,6 @@ class ReduceSumOp(ReductionOperation):
             if isinstance(axes, int):
                 axes = [axes]
 
-            # Sort axes in descending order to avoid index shifting issues
             axes = sorted(axes, reverse=True)
             output_symbol = args[0]
 
@@ -64,7 +63,6 @@ class ReduceSumOp(ReductionOperation):
         output.tensor_value = output_symbol
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        # Convert axes list to tuple for numpy compatibility
         if isinstance(self.axes, list):
             numpy_axes: int | tuple[int, ...] | None = tuple(self.axes)
         else:
@@ -100,7 +98,6 @@ def reduce_sum(
         elif isinstance(axes, list) or isinstance(axes, tuple):
             axes = [int(axis) for axis in axes]
 
-        # Convert positive axes to negative
         axes = [axis if axis < 0 else axis - len(arg.shape) for axis in axes]
 
     op = ReduceSumOp(arg.shape, axes, keep_dims)
@@ -141,7 +138,6 @@ class SumBatchDimsOp(ReductionOperation):
             if isinstance(axes, int):
                 axes = [axes]
 
-            # Sort axes in descending order to avoid index shifting issues
             axes = sorted(axes, reverse=True)
             output_symbol = args[0]
 

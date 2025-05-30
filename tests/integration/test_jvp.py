@@ -25,7 +25,7 @@ def test_higher_order_jvp():
     """Test higher-order derivatives using nested JVP calls."""
     # print("=== Testing Higher-Order JVP ===")
 
-    device = nabla.device("gpu:0")  # Change to "cpu" for CPU testing
+    device = nabla.device("cpu")  # Change to "cpu" for CPU testing
 
     def cubic_fn(inputs):
         x = nabla.unsqueeze(nabla.unsqueeze(inputs[0], [0]), [0])
@@ -41,7 +41,7 @@ def test_higher_order_jvp():
 
     def jacobian_fn(inputs):
         x = inputs[0]
-        ones_tangent = nabla.ones((1,)).to(nabla.device("gpu:0"))
+        ones_tangent = nabla.ones((1,)).to(device)
         _, tangents = jvp(cubic_fn, [x], [ones_tangent])
         return [tangents[0]]
 

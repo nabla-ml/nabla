@@ -39,10 +39,7 @@ class MatMulOp(BinaryOperation):
             )
         arg1, arg2 = args[0], args[1]
 
-        # Validate inputs
         self._validate_inputs(arg1, arg2)
-
-        # Compute output shape
         output_shape = self.compute_output_shape(arg1.shape, arg2.shape)
 
         res = Array(
@@ -105,14 +102,12 @@ class MatMulOp(BinaryOperation):
         x_val, y_val = args[0], args[1]
         x_shape_orig, y_shape_orig = x_val.shape, y_val.shape
 
-        # Validate K-dimension compatibility
         if x_shape_orig[-1] != y_shape_orig[-2]:
             raise ValueError(
                 f"Shapes {x_shape_orig} and {y_shape_orig} are not compatible for matrix multiplication "
                 f"(K-dimension mismatch: {x_shape_orig[-1]} vs {y_shape_orig[-2]})"
             )
 
-        # Compute broadcasted output shape
         output_shape_tuple = get_broadcasted_shape(
             x_shape_orig,
             y_shape_orig,
@@ -120,13 +115,11 @@ class MatMulOp(BinaryOperation):
             replace_ignored_dims=[x_shape_orig[-2], y_shape_orig[-1]],
         )
 
-        # Extract dimensions
         m_dim = output_shape_tuple[-2]
         n_dim = output_shape_tuple[-1]
         k_dim = x_shape_orig[-1]
         output_batch_shape = output_shape_tuple[:-2]
 
-        # Broadcast inputs to align with output batch shape
         x_target_shape = output_batch_shape + (m_dim, k_dim)
         y_target_shape = output_batch_shape + (k_dim, n_dim)
 
@@ -141,7 +134,6 @@ class MatMulOp(BinaryOperation):
             else y_val
         )
 
-        # Reshape for 4D matmul if needed
         num_batch_dims = len(output_batch_shape)
 
         if num_batch_dims == 0:
@@ -155,7 +147,6 @@ class MatMulOp(BinaryOperation):
             shape_for_x = x_val_b.shape
             shape_for_y = y_val_b.shape
         else:
-            # Flatten batch dimensions for ops.matmul
             b_eff_1 = int(np.prod(output_batch_shape[:-1]))
             b_eff_2 = int(output_batch_shape[-1])
             shape_for_x = (b_eff_1, b_eff_2, m_dim, k_dim)
@@ -172,10 +163,8 @@ class MatMulOp(BinaryOperation):
             else y_val_b
         )
 
-        # Perform 4D matrix multiplication
         matmul_result = ops.matmul(x_for_matmul, y_for_matmul)
 
-        # Reshape back to final output shape if needed
         output.tensor_value = (
             ops.reshape(matmul_result, output_shape_tuple)
             if matmul_result.shape != output_shape_tuple
@@ -192,7 +181,6 @@ class MatMulOp(BinaryOperation):
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
         x, y = primals
-        # Import transpose function here to avoid circular imports
         from .view import transpose
 
         return [matmul(cotangent, transpose(y)), matmul(transpose(x), cotangent)]
@@ -202,7 +190,7 @@ class MatMulOp(BinaryOperation):
     ) -> Array:
         x, y = primals
         tx, ty = tangents
-        
+
         from .binary import add
         return add(matmul(x, ty), matmul(tx, y))
 

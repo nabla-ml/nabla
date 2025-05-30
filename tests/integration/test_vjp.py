@@ -21,7 +21,7 @@ def test_basic_vjp_transform_with_xpr_prints():
     """Test the new VJPTransform class."""
     print("=== Testing VJPTransform ===")
 
-    device = nabla.device("gpu:0")  # Change to "cpu" for CPU testing
+    device = nabla.device("cpu")  # Change to "cpu" for CPU testing
 
     def square_fn(inputs: list[nabla.Array]) -> list[nabla.Array]:
         x = inputs[0]

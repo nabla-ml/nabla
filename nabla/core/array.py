@@ -26,13 +26,11 @@ from max.driver import CPU, Device, Tensor
 from max.dtype import DType
 from max.graph import Value
 
-# Type aliases
 Shape = tuple[int, ...]
 MaxprCallable = Callable[[list[Value], "Array"], None]
 VJPRule = Callable[[list["Array"], "Array", "Array"], list["Array"]]
 JVPRule = Callable[[list["Array"], list["Array"], "Array"], "Array"]
 
-# Default device singleton to avoid function calls in defaults
 _DEFAULT_CPU = CPU()
 
 
@@ -121,11 +119,10 @@ class Array:
         if not isinstance(np_array, np.ndarray):
             raise TypeError(f"Expected numpy.ndarray, got {type(np_array)}")
 
-        # Create Array with proper constructor arguments
         array = cls(
             shape=np_array.shape,
             dtype=DType.from_numpy(np_array.dtype),
-            device=_DEFAULT_CPU,  # Will be updated below
+            device=_DEFAULT_CPU,
             name=np_array.name if hasattr(np_array, "name") else "",
         )
         array.impl = Tensor.from_numpy(np_array)

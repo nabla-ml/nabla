@@ -60,7 +60,6 @@ from .utils.formatting import format_dtype, format_shape_and_dtype
 from .utils.max_interop import accelerator, cpu, device
 
 __all__ = [
-    # Core
     "Array",
     "realize_",
     "vjp",
@@ -74,7 +73,6 @@ __all__ = [
     "accelerator",
     "format_dtype",
     "format_shape_and_dtype",
-    # Array creation
     "array",
     "arange",
     "randn",
@@ -82,13 +80,11 @@ __all__ = [
     "ones",
     "zeros_like",
     "ones_like",
-    # Binary operations
     "add",
     "mul",
     "sub",
     "div",
     "power",
-    # Unary operations
     "sin",
     "cos",
     "negate",
@@ -96,18 +92,14 @@ __all__ = [
     "decr_batch_dim_ctr",
     "relu",
     "log",
-    # Linear algebra
     "matmul",
-    # View operations
     "transpose",
     "reshape",
     "broadcast_to",
     "squeeze",
     "unsqueeze",
     "broadcast_batch_dims",
-    # Reduction operations
     "reduce_sum",
-    # Data types
     DType,
 ]
 
