@@ -51,8 +51,7 @@ class MatMulOp(BinaryOperation):
         )
 
         res.set_maxpr(self.maxpr)
-        res.add_argument(arg1)
-        res.add_argument(arg2)
+        res.add_arguments(arg1, arg2)
         res.vjp_rule = self.vjp_rule
         res.jvp_rule = self.jvp_rule
 
@@ -192,6 +191,7 @@ class MatMulOp(BinaryOperation):
         tx, ty = tangents
 
         from .binary import add
+
         return add(matmul(x, ty), matmul(tx, y))
 
 

@@ -290,11 +290,11 @@ class BroadcastBatchDimsOp(ViewOperation):
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
         from .reduce import sum_batch_dims
+
         broadcasted_axes = self.get_broadcasted_axes(
             primals[0].batch_dims, self.target_batch_dims
         )
         return [sum_batch_dims(cotangent, axes=broadcasted_axes)]
-
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
@@ -433,8 +433,8 @@ class UnsqueezeOp(ViewOperation):
 def unsqueeze(arg: Array, axes: list[int] = None) -> Array:
     """Unsqueeze array by adding dimensions of size 1."""
     if axes is None:
-        return arg  
-    
+        return arg
+
     axes = [ax if ax < 0 else -len(arg.shape) - 1 + ax for ax in axes]
     op = UnsqueezeOp(axes)
     return op.forward(arg)

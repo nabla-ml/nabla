@@ -43,6 +43,7 @@ def format_dtype(dtype: Any) -> str:
     else:
         return dtype_str
 
+
 def format_shape_and_dtype(array: Array) -> str:
     """Format shape and dtype in JAX style with batch_dims numbers in blue and everything else in purple."""
     dtype_str = format_dtype(array.dtype)

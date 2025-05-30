@@ -122,12 +122,14 @@ class SinOp(UnaryOperation):
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
         from .binary import mul
+
         return [mul(cotangent, cos(primals[0]))]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
         from .binary import mul
+
         return mul(tangents[0], cos(primals[0]))
 
 
@@ -156,12 +158,14 @@ class CosOp(UnaryOperation):
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
         from .binary import mul
+
         return [negate(mul(cotangent, sin(primals[0])))]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
         from .binary import mul
+
         return negate(mul(tangents[0], sin(primals[0])))
 
 
@@ -177,7 +181,7 @@ class IncrBatchDimCtr(UnaryOperation):
         super().__init__("incr_batch_dim_ctr")
 
     def maxpr(self, args: list[Value], output: Array) -> None:
-        output.tensor_value = args[0] 
+        output.tensor_value = args[0]
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         output.impl = args[0].impl
@@ -254,10 +258,9 @@ class ReLUOp(UnaryOperation):
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
-        # Import here to avoid circular imports
-        from .binary import mul
+        from .binary import greater_equal, mul
 
-        return [mul(cotangent, relu(primals[0]))]
+        return [mul(cotangent, greater_equal(primals[0], 0))]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
@@ -293,12 +296,14 @@ class LogOp(UnaryOperation):
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
         from .binary import div
+
         return [div(cotangent, primals[0])]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
         from .binary import div
+
         return div(tangents[0], primals[0])
 
 

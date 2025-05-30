@@ -56,25 +56,25 @@ def test_operation_consistency():
 
     for op in operations:
         # Check that all operations inherit from Operation
-        assert isinstance(
-            op, Operation
-        ), f"{type(op).__name__} should inherit from Operation"
+        assert isinstance(op, Operation), (
+            f"{type(op).__name__} should inherit from Operation"
+        )
 
         # Check that all operations have required methods
         assert hasattr(op, "forward"), f"{type(op).__name__} should have forward method"
         assert hasattr(op, "maxpr"), f"{type(op).__name__} should have maxpr method"
-        assert hasattr(
-            op, "eagerxpr"
-        ), f"{type(op).__name__} should have eagerxpr method"
-        assert hasattr(
-            op, "vjp_rule"
-        ), f"{type(op).__name__} should have vjp_rule method"
-        assert hasattr(
-            op, "jvp_rule"
-        ), f"{type(op).__name__} should have jvp_rule method"
-        assert hasattr(
-            op, "compute_output_shape"
-        ), f"{type(op).__name__} should have compute_output_shape method"
+        assert hasattr(op, "eagerxpr"), (
+            f"{type(op).__name__} should have eagerxpr method"
+        )
+        assert hasattr(op, "vjp_rule"), (
+            f"{type(op).__name__} should have vjp_rule method"
+        )
+        assert hasattr(op, "jvp_rule"), (
+            f"{type(op).__name__} should have jvp_rule method"
+        )
+        assert hasattr(op, "compute_output_shape"), (
+            f"{type(op).__name__} should have compute_output_shape method"
+        )
 
         # Check that operations have a name
         assert hasattr(op, "name"), f"{type(op).__name__} should have name attribute"

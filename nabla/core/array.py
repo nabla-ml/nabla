@@ -88,14 +88,17 @@ class Array:
             raise ValueError("Shape or dtype mismatch for copy")
         self.impl = other.impl.copy()
 
-    def add_argument(self, arg_node: Array) -> None:
-        """Add an argument to this Array's computation graph."""
-        if not isinstance(arg_node, Array):
-            raise TypeError(
-                f"Argument must be an instance of Array, got {type(arg_node)}"
-            )
-        self.traced = self.traced or arg_node.traced
-        self.args.append(arg_node)
+    def add_arguments(self, *arg_nodes: Array) -> None:
+        """Add an arguments to this Array's computation graph if traced."""
+        for arg in arg_nodes:
+            if not isinstance(arg, Array):
+                raise TypeError(f"Argument must be an Array, got {type(arg)}")
+            if arg.traced:
+                self.traced = True
+
+        if self.traced:
+            for arg in arg_nodes:
+                self.args.append(arg)
 
     def realize(self) -> None:
         """Force computation of this Array."""

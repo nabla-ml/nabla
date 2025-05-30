@@ -100,7 +100,7 @@ class RandNOp(Operation):
 
         res = Array(
             shape=self.shape,
-            dtype=DType.float32, 
+            dtype=DType.float32,
             device=self.device,
             materialize=False,
             name=self.name,
@@ -113,13 +113,11 @@ class RandNOp(Operation):
         from .base import EAGERMODE
 
         if EAGERMODE:
-            self.eagerxpr([], res) 
+            self.eagerxpr([], res)
 
         return res
 
-    def compute_output_shape(
-        self, *input_shapes
-    ) -> tuple: 
+    def compute_output_shape(self, *input_shapes) -> tuple:
         """Compute the output shape."""
         return self.shape
 

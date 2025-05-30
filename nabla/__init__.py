@@ -34,7 +34,7 @@ from .core.trafos import jvp, vjp, vmap, xpr
 from .ops.base import EAGERMODE
 
 # Operation exports - Clean OOP-based operations
-from .ops.binary import add, div, mul, power, sub
+from .ops.binary import add, div, greater_equal, mul, power, sub
 from .ops.creation import arange, array, ones, ones_like, randn, zeros, zeros_like
 from .ops.linalg import matmul
 from .ops.reduce import reduce_sum
@@ -84,6 +84,7 @@ __all__ = [
     "mul",
     "sub",
     "div",
+    "greater_equal",
     "power",
     "sin",
     "cos",

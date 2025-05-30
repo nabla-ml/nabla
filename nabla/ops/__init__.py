@@ -18,7 +18,7 @@
 
 # Import all operations for easy access
 from .base import EAGERMODE
-from .binary import add, div, mul, power, sub
+from .binary import add, div, greater_equal, mul, power, sub
 from .creation import arange, randn
 from .linalg import matmul
 from .reduce import reduce_sum
@@ -56,6 +56,7 @@ __all__ = [
     "mul",
     "sub",
     "div",
+    "greater_equal",
     "power",
     "matmul",
     "transpose",

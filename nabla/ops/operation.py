@@ -38,9 +38,7 @@ class Operation(ABC):
         pass
 
     @abstractmethod
-    def compute_output_shape(
-        self, *input_shapes: tuple
-    ) -> tuple: 
+    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
         """Compute the output shape given input shapes."""
         pass
 
@@ -72,7 +70,7 @@ class Operation(ABC):
 class UnaryOperation(Operation):
     """Base class for unary operations."""
 
-    def forward(self, *args: Array) -> Array: 
+    def forward(self, *args: Array) -> Array:
         """Forward pass for unary operations."""
         if len(args) != 1:
             raise ValueError(f"Unary operation requires 1 argument, got {len(args)}")
@@ -80,19 +78,19 @@ class UnaryOperation(Operation):
 
         output_shape = self.compute_output_shape(arg.shape)
         output_batch_dims = self.compute_output_batch_dims(arg.batch_dims)
-        output_dtype = self.compute_output_dtype(arg) 
+        output_dtype = self.compute_output_dtype(arg)
 
         res = Array(
             shape=output_shape,
-            dtype=output_dtype, 
+            dtype=output_dtype,
             device=arg.device,
             materialize=False,
             name=self.name,
-            batch_dims=output_batch_dims,  
+            batch_dims=output_batch_dims,
         )
 
         res.set_maxpr(self.maxpr)
-        res.add_argument(arg)
+        res.add_arguments(arg)
         res.vjp_rule = self.vjp_rule
         res.jvp_rule = self.jvp_rule
 
@@ -103,9 +101,7 @@ class UnaryOperation(Operation):
 
         return res
 
-    def compute_output_shape(
-        self, *input_shapes: tuple
-    ) -> tuple:  
+    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
         """Default: output shape same as input shape."""
         if len(input_shapes) != 1:
             raise ValueError(
@@ -113,7 +109,7 @@ class UnaryOperation(Operation):
             )
         return input_shapes[0]
 
-    def compute_output_dtype(self, arg: Array) -> DType: 
+    def compute_output_dtype(self, arg: Array) -> DType:
         """Default: output dtype same as input dtype."""
         return arg.dtype
 
@@ -129,20 +125,21 @@ class UnaryOperation(Operation):
 class BinaryOperation(Operation):
     """Base class for binary operations."""
 
-    def forward(self, *args: Array) -> Array:  
+    def forward(self, *args: Array) -> Array:
         """Forward pass for binary operations."""
         if len(args) != 2:
             raise ValueError(f"Binary operation requires 2 arguments, got {len(args)}")
         arg1, arg2 = args[0], args[1]
 
         from ..ops.view import broadcast_batch_dims, broadcast_to
+
         self._validate_inputs(arg1, arg2)
 
         output_shape = self.compute_output_shape(arg1.shape, arg2.shape)
         output_batch_dims = self.compute_output_batch_dims(
             arg1.batch_dims, arg2.batch_dims
         )
-        output_dtype = self.compute_output_dtype(arg1, arg2) 
+        output_dtype = self.compute_output_dtype(arg1, arg2)
         arg1_broadcasted = broadcast_to(arg1, output_shape)
         arg2_broadcasted = broadcast_to(arg2, output_shape)
 
@@ -151,16 +148,15 @@ class BinaryOperation(Operation):
 
         res = Array(
             shape=output_shape,
-            dtype=output_dtype, 
+            dtype=output_dtype,
             device=arg1.device,
             materialize=False,
             name=self.name,
-            batch_dims=output_batch_dims, 
+            batch_dims=output_batch_dims,
         )
 
         res.set_maxpr(self.maxpr)
-        res.add_argument(arg1_broadcasted)
-        res.add_argument(arg2_broadcasted)
+        res.add_arguments(arg1_broadcasted, arg2_broadcasted)
         res.vjp_rule = self.vjp_rule
         res.jvp_rule = self.jvp_rule
 
@@ -171,9 +167,7 @@ class BinaryOperation(Operation):
 
         return res
 
-    def compute_output_shape(
-        self, *input_shapes: tuple
-    ) -> tuple:  
+    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
         """Compute broadcasted output shape."""
         if len(input_shapes) != 2:
             raise ValueError(
@@ -185,7 +179,7 @@ class BinaryOperation(Operation):
 
         return get_broadcasted_shape(shape1, shape2)
 
-    def compute_output_dtype(self, arg1: Array, arg2: Array) -> DType: 
+    def compute_output_dtype(self, arg1: Array, arg2: Array) -> DType:
         """Default: output dtype same as first input dtype."""
         return arg1.dtype
 
@@ -226,9 +220,7 @@ class ReductionOperation(UnaryOperation):
         self.axes = axes
         self.keep_dims = keep_dims
 
-    def compute_output_shape(
-        self, *input_shapes: tuple
-    ) -> tuple: 
+    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
         """Compute output shape for reduction."""
         if len(input_shapes) != 1:
             raise ValueError(
@@ -243,7 +235,7 @@ class ReductionOperation(UnaryOperation):
             raise ValueError(
                 f"Reduction operation requires 1 input batch dims, got {len(input_batch_dims)}"
             )
-        return input_batch_dims[0] 
+        return input_batch_dims[0]
 
     @staticmethod
     def _compute_reduction_shape(
@@ -284,7 +276,7 @@ class ReductionOperation(UnaryOperation):
 class ViewOperation(UnaryOperation):
     """Base class for view operations (reshape, transpose, etc.)."""
 
-    def __init__(self, name: str): 
+    def __init__(self, name: str):
         super().__init__(name)
 
     def compute_output_batch_dims(self, *input_batch_dims: tuple) -> tuple:

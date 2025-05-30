@@ -126,8 +126,8 @@ class DivOp(BinaryOperation):
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
-        
         from .unary import negate
+
         x, y = primals
         cotangent_x = div(cotangent, y)
         cotangent_y = negate(div(mul(cotangent, x), mul(y, y)))
@@ -136,8 +136,8 @@ class DivOp(BinaryOperation):
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
-        
         from .unary import negate
+
         x, y = primals
         dx, dy = tangents
         term1 = div(dx, y)
@@ -161,8 +161,8 @@ class PowerOp(BinaryOperation):
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
-        
         from .unary import log
+
         x, y = primals
         cotangent_x = mul(mul(cotangent, y), div(output, x))
         cotangent_y = mul(mul(cotangent, output), log(x))
@@ -172,8 +172,8 @@ class PowerOp(BinaryOperation):
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
-        
         from .unary import log
+
         x, y = primals
         dx, dy = tangents
         term1 = mul(mul(y, div(output, x)), dx)
@@ -182,12 +182,44 @@ class PowerOp(BinaryOperation):
         return add(term1, term2)
 
 
+class GreaterEqualOp(BinaryOperation):
+    """Greater than or equal to operation."""
+
+    def __init__(self):
+        super().__init__("greater_equal")
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        output.tensor_value = ops.greater_equal(args[0], args[1])
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        np_result = np.greater_equal(args[0].to_numpy(), args[1].to_numpy())
+        output.impl = Tensor.from_numpy(np_result)
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        return [0 * primals[0], 0 * primals[1]]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        return greater_equal(tangents[0], tangents[1])
+
+
+def greater_equal(arg0: Array, arg1: Array) -> Array:
+    """Element-wise greater than or equal to operation."""
+    arg0 = _ensure_array(arg0)
+    arg1 = _ensure_array(arg1)
+    return _greater_equal_op.forward(arg0, arg1)
+
+
 # Global operation instances
 _add_op = AddOp()
 _mul_op = MulOp()
 _sub_op = SubOp()
 _div_op = DivOp()
 _power_op = PowerOp()
+_greater_equal_op = GreaterEqualOp()
 
 
 def add(arg0, arg1) -> Array:

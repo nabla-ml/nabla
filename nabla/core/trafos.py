@@ -57,7 +57,15 @@ class Trace:
             return trace
         finally:
             # Don't reset traced flags here - let the caller handle cleanup
-            pass
+            # pass
+            # cleanup here
+            # for inp in inputs:
+            #     inp.traced = False
+            # for out in trace.outputs:
+            #     out.traced = False
+            for node in trace.trace:
+                node.traced = False
+                node.visited = False
 
     def get_traced_nodes(self) -> list[Array]:
         """Get all nodes that belong to this trace in topological order."""
@@ -179,28 +187,28 @@ class Trace:
         print(self)
 
 
-def reset_traced_flags(arrays: list[Array]) -> None:
-    """Reset autodiff traced flags for a list of arrays and their dependencies."""
-    visited: set[Array] = set()
+# def reset_traced_flags(arrays: list[Array]) -> None:
+#     """Reset autodiff traced flags for a list of arrays and their dependencies."""
+#     visited: set[Array] = set()
 
-    def reset_recursive(node: Array) -> None:
-        if node in visited:
-            return
-        visited.add(node)
-        node.traced = False
-        for arg in node.args:
-            reset_recursive(arg)
+#     def reset_recursive(node: Array) -> None:
+#         if node in visited:
+#             return
+#         visited.add(node)
+#         node.traced = False
+#         for arg in node.args:
+#             reset_recursive(arg)
 
-    for array in arrays:
-        reset_recursive(array)
+#     for array in arrays:
+#         reset_recursive(array)
 
 
-def reset_all_traced_flags_in_graph(trace: Trace) -> None:
-    """Reset traced flags for all nodes in a computation trace."""
-    # Get all traced nodes and reset their flags
-    all_nodes = trace.get_traced_nodes()
-    for node in all_nodes:
-        node.traced = False
+# def reset_all_traced_flags_in_graph(trace: Trace) -> None:
+#     """Reset traced flags for all nodes in a computation trace."""
+#     # Get all traced nodes and reset their flags
+#     all_nodes = trace.get_traced_nodes()
+#     for node in all_nodes:
+#         node.traced = False
 
 
 def pullback(
@@ -357,10 +365,15 @@ def pushfwd(
 
         # Only reset traced flags if we're not in a higher-order derivative computation
         # Check if any input still needs to be traced (indicating higher-order derivatives)
-        any_input_needs_tracing = any(inp.traced for inp in inputs)
-        if not any_input_needs_tracing:
-            # reset all traced flags and tensor_value references
-            reset_all_traced_flags_in_graph(trace)
+        # any_input_needs_tracing = any(inp.traced for inp in inputs)
+        # if not any_input_needs_tracing:
+        #     # reset all traced flags and tensor_value references
+        #     reset_all_traced_flags_in_graph(trace)
+        # set traced flag of inputs and outputs to false again
+        for inp in inputs:
+            inp.traced = False
+        for out in outputs:
+            out.traced = False
 
 
 def xpr(
@@ -388,7 +401,25 @@ def xpr(
         return str(trace)
     finally:
         # Clean up: reset traced flags after tracing
-        reset_traced_flags(args)
+        # reset_traced_flags(args)
+        # for inp in args:
+        #     inp.traced = False
+        # for out in trace.outputs:
+        #     out.traced = False
+        pass
+
+
+def detach(outputs: list[Array]) -> list[Array]:
+    """
+    Detach outputs from their computation graph by clearing dependencies.
+    """
+    for out in outputs:
+        if out.impl is not None:
+            #  If the vlaue is acutally realized, we can remove the dependencies (args) from this node
+            out.args.clear()
+            out.traced = False
+
+    return outputs
 
 
 def vjp(
@@ -408,7 +439,14 @@ def vjp(
             raise ValueError(
                 f"Cotangents length {len(cotangents)} != outputs length {len(outputs)}"
             )
-        return pullback(inputs, outputs, cotangents)
+
+        gradients = pullback(inputs, outputs, cotangents)
+
+        detach(inputs)
+        detach(outputs)
+        detach(gradients)
+
+        return gradients
 
     return outputs, vjp_fn
 
