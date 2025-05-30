@@ -50,7 +50,7 @@ def test_mixed_operations_in_single_graph():
         print("Computation realized successfully")
 
         # Get result
-        output = result.get_numpy()
+        output = result.to_numpy()
         print(f"Result: {output}")
 
         return True
@@ -114,7 +114,7 @@ def test_multiple_mixed_graphs():
             # Mixed operation
             result = (a + b) * c
             result.realize()
-            _ = result.get_numpy()
+            _ = result.to_numpy()
 
             print(f"    ✓ Iteration {i + 1} completed")
             print(f"    Cache size: {global_execution_context.size()}")
@@ -146,7 +146,7 @@ def test_complex_mixed_computation():
         result = intermediate2 + intermediate3
 
         result.realize()
-        output = result.get_numpy()
+        output = result.to_numpy()
         print(f"Complex computation result: {output}")
 
         return True

@@ -155,7 +155,7 @@ def test_complete_oop_refactoring():
         x6 = nabla.reduce_sum(x5)
 
         x6.realize()
-        result_val = x6.get_numpy()
+        result_val = x6.to_numpy()
         print(f"   Complex computation result: {result_val}")
         print("   ✅ Complex computation works")
 

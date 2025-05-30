@@ -65,7 +65,7 @@ class TransposeOp(ViewOperation):
         axes = list(range(len(args[0].shape)))
         axes[self.axis_1], axes[self.axis_2] = axes[self.axis_2], axes[self.axis_1]
 
-        np_result = np.transpose(args[0].get_numpy(), axes)
+        np_result = np.transpose(args[0].to_numpy(), axes)
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
@@ -77,10 +77,6 @@ class TransposeOp(ViewOperation):
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
         return transpose(tangents[0], self.axis_1, self.axis_2)
-
-
-# Global operation instances for efficiency
-# _transpose_op = TransposeOp()
 
 
 def transpose(arg: Array, axis_1: int = -2, axis_2: int = -1) -> Array:
@@ -122,10 +118,14 @@ class ReshapeOp(ViewOperation):
         return super().forward(arg)
 
     def maxpr(self, args: list[Value], output: Array) -> None:
-        output.tensor_value = ops.reshape(args[0], self.target_shape)
+        output.tensor_value = ops.reshape(
+            args[0], output.batch_dims + self.target_shape
+        )
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        np_result = np.reshape(args[0].get_numpy(), self.target_shape)
+        np_result = np.reshape(
+            args[0].to_numpy(), output.batch_dims + self.target_shape
+        )
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
@@ -196,10 +196,14 @@ class BroadcastToOp(ViewOperation):
         return broadcasted_axes
 
     def maxpr(self, args: list[Value], output: Array) -> None:
-        output.tensor_value = ops.broadcast_to(args[0], self.target_shape)
+        output.tensor_value = ops.broadcast_to(
+            args[0], output.batch_dims + self.target_shape
+        )
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        np_result = np.broadcast_to(args[0].get_numpy(), shape=self.target_shape)
+        np_result = np.broadcast_to(
+            args[0].to_numpy(), shape=output.batch_dims + self.target_shape
+        )
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
@@ -222,6 +226,10 @@ class BroadcastToOp(ViewOperation):
 
 def broadcast_to(arg: Array, shape: Shape) -> Array:
     """Broadcast array to target shape."""
+    # let's first reshape arg to have the same number of dimensions as shape, i.e. adding ones to the front
+    if len(arg.shape) < len(shape):
+        new_shape = (1,) * (len(shape) - len(arg.shape)) + arg.shape
+        arg = reshape(arg, new_shape)
     op = BroadcastToOp(shape)
     return op.forward(arg)
 
@@ -241,15 +249,19 @@ class SqueezeOp(ViewOperation):
             )
         input_shape = input_shapes[0]
 
-        # Normalize axes
-        normalized_axes = [ax if ax >= 0 else len(input_shape) + ax for ax in self.axes]
+        new_shape = list(input_shape)
+        for ax in self.axes:
+            if ax < -len(new_shape) or ax >= len(new_shape):
+                raise ValueError(f"Axis {ax} is out of bounds for squeeze operation")
+            if input_shape[ax] == 1:
+                new_shape[ax] = None
+            else:
+                raise ValueError(
+                    f"Cannot squeeze axis {ax} of size {input_shape[ax]} (must be 1)"
+                )
 
-        # Remove dimensions of size 1
-        new_shape = [
-            dim
-            for i, dim in enumerate(input_shape)
-            if i not in normalized_axes or dim > 1
-        ]
+        # Remove None values (dimensions of size 1)
+        new_shape = [dim for dim in new_shape if dim is not None]
         return tuple(new_shape)
 
     def forward(self, *args: Array) -> Array:
@@ -267,7 +279,7 @@ class SqueezeOp(ViewOperation):
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         axis = tuple(self.axes) if self.axes else None
-        np_result = np.squeeze(args[0].get_numpy(), axis=axis)
+        np_result = np.squeeze(args[0].to_numpy(), axis=axis)
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
@@ -279,13 +291,14 @@ class SqueezeOp(ViewOperation):
         self, _primals: list[Array], tangents: list[Array], _output: Array
     ) -> Array:
         return squeeze(tangents[0], self.axes)
-        return squeeze(tangents[0], self.axes)
 
 
 def squeeze(arg: Array, axes: list[int] = None) -> Array:
     """Squeeze array by removing dimensions of size 1."""
     if axes is None:
         return arg
+    # make axes negative, ALWAYS! Wrt. to len(shape)
+    axes = [ax if ax < 0 else -len(arg.shape) + ax for ax in axes]
     op = SqueezeOp(axes)
     return op.forward(arg)
 
@@ -305,13 +318,16 @@ class UnsqueezeOp(ViewOperation):
             )
         input_shape = input_shapes[0]
 
-        # Normalize axes
-        normalized_axes = [ax if ax >= 0 else len(input_shape) + ax for ax in self.axes]
-
         # Add dimensions of size 1 at specified axes
         new_shape = list(input_shape)
-        for ax in sorted(normalized_axes):
-            new_shape.insert(ax, 1)
+        for ax in self.axes:
+            if ax < -len(new_shape) - 1:
+                raise ValueError(f"Axis {ax} is out of bounds for unsqueeze operation")
+            if ax + 1 <= -1:
+                new_shape.insert(ax + 1, 1)
+            else:
+                new_shape.append(1)
+
         return tuple(new_shape)
 
     def forward(self, *args: Array) -> Array:
@@ -324,13 +340,12 @@ class UnsqueezeOp(ViewOperation):
 
     def maxpr(self, args: list[Value], output: Array) -> None:
         res_value = args[0]
-        for i, ax in enumerate(self.axes):
-            adjusted_axis = ax - i
-            res_value = ops.unsqueeze(res_value, adjusted_axis)
+        for ax in self.axes:
+            res_value = ops.unsqueeze(res_value, ax)
         output.tensor_value = res_value
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        np_result = np.expand_dims(args[0].get_numpy(), axis=self.axes)
+        np_result = np.expand_dims(args[0].to_numpy(), axis=self.axes)
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
@@ -350,5 +365,7 @@ def unsqueeze(arg: Array, axes: list[int] = None) -> Array:
     """Unsqueeze array by adding dimensions of size 1."""
     if axes is None:
         return arg  # No axes specified, return original array
+    # make axes negative, ALWAYS! Wrt. to len(shape)
+    axes = [ax if ax < 0 else -len(arg.shape) - 1 + ax for ax in axes]
     op = UnsqueezeOp(axes)
     return op.forward(arg)

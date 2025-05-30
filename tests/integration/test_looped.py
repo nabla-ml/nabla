@@ -14,11 +14,10 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
+
 import nabla as nb
-from max.driver import CPU, Accelerator
 
 if __name__ == "__main__":
-
     device = nb.device("gpu:0")  # Change to "cpu" for CPU testing
 
     for iter in range(10000):

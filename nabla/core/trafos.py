@@ -19,7 +19,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
 
 from .array import Array
 
@@ -94,33 +93,7 @@ class Trace:
         if not self._computed:
             self._compute_trace()
 
-        # ANSI color codes
-        purple = "\033[95m"
-        reset = "\033[0m"
-
-        def format_dtype(dtype: Any) -> str:
-            """Format dtype for display."""
-            # Convert DType to string representation
-            dtype_str = str(dtype).lower()
-            if "float32" in dtype_str:
-                return "f32"
-            elif "float64" in dtype_str:
-                return "f64"
-            elif "int32" in dtype_str:
-                return "i32"
-            elif "int64" in dtype_str:
-                return "i64"
-            else:
-                return dtype_str
-
-        def format_shape_and_dtype(array: Array) -> str:
-            """Format shape and dtype in JAX style."""
-            dtype_str = format_dtype(array.dtype)
-            if array.shape:
-                shape_str = ",".join(map(str, array.shape))
-                return f"{purple}{dtype_str}[{shape_str}]{reset}"
-            else:
-                return f"{purple}{dtype_str}[]{reset}"
+        from ..utils.formatting import format_shape_and_dtype
 
         # Build variable name mapping
         var_names = {}

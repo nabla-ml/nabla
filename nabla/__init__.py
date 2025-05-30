@@ -49,6 +49,7 @@ from .ops.unary import (
 )
 from .ops.view import broadcast_to, reshape, squeeze, transpose, unsqueeze
 from .utils.broadcasting import get_broadcasted_shape
+from .utils.formatting import format_dtype, format_shape_and_dtype
 from .utils.max_interop import accelerator, cpu, device
 
 __all__ = [
@@ -64,6 +65,8 @@ __all__ = [
     "device",
     "cpu",
     "accelerator",
+    "format_dtype",
+    "format_shape_and_dtype",
     # Array creation
     "array",
     "arange",

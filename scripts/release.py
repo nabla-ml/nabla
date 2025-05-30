@@ -19,9 +19,9 @@ Examples:
 """
 
 import argparse
+import re
 import subprocess
 import sys
-import re
 from datetime import datetime
 from pathlib import Path
 
@@ -99,24 +99,24 @@ def update_version_in_file(new_version):
 
     # Replace ONLY the project version line - be very specific
     # Look for version = "..." that comes after name = "nabla_ml"
-    lines = content.split('\n')
+    lines = content.split("\n")
     new_lines = []
     in_project_section = False
-    
+
     for line in lines:
-        if line.strip() == '[project]':
+        if line.strip() == "[project]":
             in_project_section = True
             new_lines.append(line)
-        elif line.strip().startswith('[') and line.strip() != '[project]':
+        elif line.strip().startswith("[") and line.strip() != "[project]":
             in_project_section = False
             new_lines.append(line)
-        elif in_project_section and line.strip().startswith('version'):
+        elif in_project_section and line.strip().startswith("version"):
             # This is the project version line
             new_lines.append(f'version = "{new_version}"')
         else:
             new_lines.append(line)
-    
-    new_content = '\n'.join(new_lines)
+
+    new_content = "\n".join(new_lines)
     pyproject_path.write_text(new_content)
     print_success(f"Updated version to {new_version} in pyproject.toml")
 
@@ -339,7 +339,7 @@ def main():
             print(f"\n📦 Package URL: https://pypi.org/project/nabla-ml/{new_version}/")
             print(f"📥 Install with: pip install nabla-ml=={new_version}")
         else:
-            print(f"\n📦 Package built in dist/ - manual upload required")
+            print("\n📦 Package built in dist/ - manual upload required")
 
     except KeyboardInterrupt:
         print_error("\nRelease cancelled by user")

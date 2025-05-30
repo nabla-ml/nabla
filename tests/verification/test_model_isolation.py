@@ -41,7 +41,7 @@ def test_sequential_operations():
         y1 = array([[3.0, 4.0]])
         result1 = x1 * y1
         result1.realize()
-        _ = result1.get_numpy()
+        _ = result1.to_numpy()
         print("✓ Mul-only operation succeeded")
         print(f"Cache size after mul: {global_execution_context.size()}")
     except Exception as e:
@@ -55,7 +55,7 @@ def test_sequential_operations():
         y2 = array([[7.0, 8.0]])
         result2 = x2 + y2
         result2.realize()
-        _ = result2.get_numpy()
+        _ = result2.to_numpy()
         print("✓ Add-only operation succeeded")
         print(f"Cache size after add: {global_execution_context.size()}")
     except Exception as e:
@@ -72,7 +72,7 @@ def test_sequential_operations():
         # Mix add and mul in the same computation
         result3 = (x3 + y3) * z3
         result3.realize()
-        _ = result3.get_numpy()
+        _ = result3.to_numpy()
         print("✓ Mixed operation succeeded")
         print(f"Cache size after mixed: {global_execution_context.size()}")
     except Exception as e:
@@ -136,7 +136,7 @@ def test_model_reuse():
             # Same computation should reuse cached model
             result = x * y
             result.realize()
-            _ = result.get_numpy()
+            _ = result.to_numpy()
             print(f"✓ Iteration {i + 1} succeeded")
             print(f"Cache size: {global_execution_context.size()}")
         except Exception as e:

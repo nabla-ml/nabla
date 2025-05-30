@@ -16,8 +16,8 @@
 
 """Test the newly added operations: log, power, and improved division."""
 
+
 import nabla
-import numpy as np
 
 
 def test_log_operation():

@@ -126,7 +126,7 @@ def test_backward_compatibility():
     result = nabla.reduce_sum(w)
     result.realize()
 
-    print(f"   Complex computation result: {result.get_numpy()}")
+    print(f"   Complex computation result: {result.to_numpy()}")
 
 
 def test_original_still_available():

@@ -46,7 +46,7 @@ class AddOp(BinaryOperation):
         output.tensor_value = ops.add(args[0], args[1])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        np_result = np.add(args[0].get_numpy(), args[1].get_numpy())
+        np_result = np.add(args[0].to_numpy(), args[1].to_numpy())
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
@@ -70,7 +70,7 @@ class MulOp(BinaryOperation):
         output.tensor_value = ops.mul(args[0], args[1])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        np_result = np.multiply(args[0].get_numpy(), args[1].get_numpy())
+        np_result = np.multiply(args[0].to_numpy(), args[1].to_numpy())
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
@@ -94,7 +94,7 @@ class SubOp(BinaryOperation):
         output.tensor_value = args[0] - args[1]
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        np_result = np.subtract(args[0].get_numpy(), args[1].get_numpy())
+        np_result = np.subtract(args[0].to_numpy(), args[1].to_numpy())
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
@@ -120,7 +120,7 @@ class DivOp(BinaryOperation):
         output.tensor_value = ops.div(args[0], args[1])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        np_result = np.divide(args[0].get_numpy(), args[1].get_numpy())
+        np_result = np.divide(args[0].to_numpy(), args[1].to_numpy())
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
@@ -160,7 +160,7 @@ class PowerOp(BinaryOperation):
         output.tensor_value = args[0] ** args[1]
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        np_result = np.power(args[0].get_numpy(), args[1].get_numpy())
+        np_result = np.power(args[0].to_numpy(), args[1].to_numpy())
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(

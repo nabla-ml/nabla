@@ -71,9 +71,7 @@ class ReduceSumOp(ReductionOperation):
         else:
             numpy_axes = self.axes
 
-        np_result = np.sum(
-            args[0].get_numpy(), axis=numpy_axes, keepdims=self.keep_dims
-        )
+        np_result = np.sum(args[0].to_numpy(), axis=numpy_axes, keepdims=self.keep_dims)
         # Ensure result is at least a 0-d array for DLPack conversion
         if np_result.ndim == 0:
             np_result = np.array(np_result)

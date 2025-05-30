@@ -44,17 +44,17 @@ def test_jvp_of_vjp():
     # JVP(VJP(f)) should give us the Hessian
     grad_values, hessian_values = nb.jvp(grad_fn, [x], [tangent])
 
-    grad_at_3 = grad_values[0].get_numpy()[0]
-    hessian_at_3 = hessian_values[0].get_numpy()[0]
+    grad_at_3 = grad_values[0].to_numpy()[0]
+    hessian_at_3 = hessian_values[0].to_numpy()[0]
 
     print(f"f'(3) = {grad_at_3} (expected: 6)")
     print(f"f''(3) = {hessian_at_3} (expected: 2)")
 
     # For f(x) = x², f'(x) = 2x, f''(x) = 2
     assert abs(grad_at_3 - 6.0) < 1e-6, f"First derivative incorrect: {grad_at_3}"
-    assert (
-        abs(hessian_at_3 - 2.0) < 1e-6
-    ), f"Second derivative incorrect: {hessian_at_3}"
+    assert abs(hessian_at_3 - 2.0) < 1e-6, (
+        f"Second derivative incorrect: {hessian_at_3}"
+    )
 
     print("✓ JVP(VJP(f)) test passed!")
 
@@ -88,8 +88,8 @@ def test_vjp_of_jvp():
     cotangent = nb.array([1.0])
     vjp_gradients = vjp_fn([cotangent])
 
-    jvp_at_2 = jvp_values[0].get_numpy()[0]
-    mixed_deriv_at_2 = vjp_gradients[0].get_numpy()[0]
+    jvp_at_2 = jvp_values[0].to_numpy()[0]
+    mixed_deriv_at_2 = vjp_gradients[0].to_numpy()[0]
 
     print(f"JVP(f)(2) = {jvp_at_2} (expected: 12)")
     print(f"d/dx[JVP(f)](2) = {mixed_deriv_at_2} (expected: 12)")
@@ -97,9 +97,9 @@ def test_vjp_of_jvp():
     # For f(x) = x³, JVP gives 3x²*tangent = 3x² (tangent=1)
     # d/dx[3x²] = 6x, so at x=2: 6*2 = 12
     assert abs(jvp_at_2 - 12.0) < 1e-6, f"JVP value incorrect: {jvp_at_2}"
-    assert (
-        abs(mixed_deriv_at_2 - 12.0) < 1e-6
-    ), f"Mixed derivative incorrect: {mixed_deriv_at_2}"
+    assert abs(mixed_deriv_at_2 - 12.0) < 1e-6, (
+        f"Mixed derivative incorrect: {mixed_deriv_at_2}"
+    )
 
     print("✓ VJP(JVP(f)) test passed!")
 
@@ -133,8 +133,8 @@ def test_double_nested_transformations():
 
     final_values, final_tangents = nb.jvp(vjp_jvp_fn, [x], [tangent])
 
-    result_value = final_values[0].get_numpy()[0]
-    result_tangent = final_tangents[0].get_numpy()[0]
+    result_value = final_values[0].to_numpy()[0]
+    result_tangent = final_tangents[0].to_numpy()[0]
 
     print(f"VJP(JVP(f))(2) = {result_value} (expected: 48)")
     print(f"JVP(VJP(JVP(f)))(2) = {result_tangent} (expected: 48)")
@@ -144,12 +144,12 @@ def test_double_nested_transformations():
     # VJP(JVP(f)) = d/dx[4x³] = 12x²
     # JVP(VJP(JVP(f))) = d/dx[12x²] = 24x
     # At x=2: 24*2 = 48
-    assert (
-        abs(result_value - 48.0) < 1e-6
-    ), f"VJP(JVP(f)) value incorrect: {result_value}"
-    assert (
-        abs(result_tangent - 48.0) < 1e-6
-    ), f"JVP(VJP(JVP(f))) value incorrect: {result_tangent}"
+    assert abs(result_value - 48.0) < 1e-6, (
+        f"VJP(JVP(f)) value incorrect: {result_value}"
+    )
+    assert abs(result_tangent - 48.0) < 1e-6, (
+        f"JVP(VJP(JVP(f))) value incorrect: {result_tangent}"
+    )
 
     print("✓ Triple nested transformation test passed!")
 
@@ -182,8 +182,8 @@ def test_multivariable_nested():
         partial_x_fn, [x, y], [tangent_x, tangent_y]
     )
 
-    partial_x_at_2_3 = partial_x_values[0].get_numpy()[0]
-    mixed_partial_at_2_3 = mixed_partial[0].get_numpy()[0]
+    partial_x_at_2_3 = partial_x_values[0].to_numpy()[0]
+    mixed_partial_at_2_3 = mixed_partial[0].to_numpy()[0]
 
     print(f"∂f/∂x(2,3) = {partial_x_at_2_3} (expected: 12)")
     print(f"∂²f/∂x∂y(2,3) = {mixed_partial_at_2_3} (expected: 4)")
@@ -191,12 +191,12 @@ def test_multivariable_nested():
     # For f(x,y) = x²y + y³:
     # ∂f/∂x = 2xy, at (2,3): 2*2*3 = 12
     # ∂²f/∂x∂y = ∂/∂y[2xy] = 2x, at (2,3): 2*2 = 4
-    assert (
-        abs(partial_x_at_2_3 - 12.0) < 1e-6
-    ), f"Partial derivative incorrect: {partial_x_at_2_3}"
-    assert (
-        abs(mixed_partial_at_2_3 - 4.0) < 1e-6
-    ), f"Mixed partial incorrect: {mixed_partial_at_2_3}"
+    assert abs(partial_x_at_2_3 - 12.0) < 1e-6, (
+        f"Partial derivative incorrect: {partial_x_at_2_3}"
+    )
+    assert abs(mixed_partial_at_2_3 - 4.0) < 1e-6, (
+        f"Mixed partial incorrect: {mixed_partial_at_2_3}"
+    )
 
     print("✓ Multivariable nested transformation test passed!")
 

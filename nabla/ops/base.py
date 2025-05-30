@@ -27,11 +27,10 @@ from ..core.array import (
     JVPRule,
     MaxprCallable,
     VJPRule,
-)  
-
+)
 from ..ops.view import (
     broadcast_to,
-) 
+)
 from ..utils.broadcasting import get_broadcasted_shape
 
 # Global execution mode flag, TODO: remove global flag and apply model compiling more elegantly
@@ -116,10 +115,8 @@ def register_unary_op(
     eagerxpr: Callable[[list[Array], Array], None],
     vjp_rule: VJPRule,
     jvp_rule: JVPRule,
-    output_shape_fn: (
-        Callable[[tuple], tuple] | None
-    ) = None, 
-    output_dtype: DType | None = None, 
+    output_shape_fn: Callable[[tuple], tuple] | None = None,
+    output_dtype: DType | None = None,
 ) -> Array:
     """Register a unary operation with validation."""
     _validate_unary_arg(arg, op_name)

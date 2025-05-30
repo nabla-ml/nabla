@@ -18,6 +18,7 @@
 """Test that operations don't produce numpy warnings."""
 
 import warnings
+
 import nabla
 
 

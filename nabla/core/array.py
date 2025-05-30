@@ -46,8 +46,10 @@ class Array:
         device: Device = _DEFAULT_CPU,
         materialize: bool = False,
         name: str = "",
+        batch_dims: Shape = (),
     ) -> None:
         self.shape = shape
+        self.batch_dims = batch_dims
         self.dtype = dtype
         self.device = device
         self.name = name
@@ -57,15 +59,13 @@ class Array:
         self.maxpr: Optional[MaxprCallable] = None
         self.vjp_rule: Optional[VJPRule] = None
         self.jvp_rule: Optional[JVPRule] = None
-        self.batch_dim_ctr: int = 0
         self.traced: bool = False
-        # self.op_params: Optional[Dict[str, Any]] = None
         self._numpy_cache: Optional[np.ndarray] = None
         self.tangent: Optional[Array] = None
         self.cotangent: Optional[Array] = None
 
         if materialize:
-            self.impl = Tensor(dtype, shape, device=device)
+            self.impl = Tensor(dtype, batch_dims + shape, device=device)
         else:
             self.impl = None
 
@@ -97,7 +97,14 @@ class Array:
                 f"Argument must be an instance of Array, got {type(arg_node)}"
             )
         self.traced = self.traced or arg_node.traced
-        self.batch_dim_ctr = max(self.batch_dim_ctr, arg_node.batch_dim_ctr)
+        if self.batch_dims == ():
+            self.batch_dims = arg_node.batch_dims
+        else:
+            from ..utils.broadcasting import get_broadcasted_shape
+
+            self.batch_dims = get_broadcasted_shape(
+                self.batch_dims, arg_node.batch_dims
+            )
         self.args.append(arg_node)
 
     def realize(self) -> None:
@@ -108,7 +115,7 @@ class Array:
         if self.impl is None:
             raise ValueError("Data is None after realization")
 
-    def get_numpy(self) -> np.ndarray:
+    def to_numpy(self) -> np.ndarray:
         """Get NumPy representation with caching."""
         if self._numpy_cache is None:
             if self.impl is None:
@@ -145,7 +152,9 @@ class Array:
     def __repr__(self) -> str:
         """String representation of the Array."""
         self.realize()
-        return str(self.impl.to(CPU()).to_numpy())
+        from ..utils.formatting import format_shape_and_dtype
+
+        return str(self.impl.to(CPU()).to_numpy()) + ":" + format_shape_and_dtype(self)
 
     def to(self, device: Device) -> Array:
         """Move Array to specified device."""

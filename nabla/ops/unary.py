@@ -35,7 +35,7 @@ class NegateOp(UnaryOperation):
         output.tensor_value = ops.negate(args[0])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        np_result = -args[0].get_numpy()
+        np_result = -args[0].to_numpy()
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
@@ -82,7 +82,7 @@ class CastOp(UnaryOperation):
         output.tensor_value = ops.cast(args[0], output.dtype)
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        np_result = args[0].get_numpy().astype(DType.to_numpy(output.dtype))
+        np_result = args[0].to_numpy().astype(DType.to_numpy(output.dtype))
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
@@ -115,7 +115,7 @@ class SinOp(UnaryOperation):
         output.tensor_value = ops.sin(args[0])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        np_result = np.sin(args[0].get_numpy())
+        np_result = np.sin(args[0].to_numpy())
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
@@ -153,7 +153,7 @@ class CosOp(UnaryOperation):
         output.tensor_value = ops.cos(args[0])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        np_result = np.cos(args[0].get_numpy())
+        np_result = np.cos(args[0].to_numpy())
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
@@ -204,7 +204,13 @@ class IncrBatchDimCtr(UnaryOperation):
 def incr_batch_dim_ctr(arg: Array) -> Array:
     """Increment batch dimension counter for debugging."""
     res = IncrBatchDimCtr().forward(arg)
-    res.batch_dim_ctr += 1
+    # Move the first dimension in shape to the end of batch_dims, attention: these are tuples, not lists
+    # res.batch_dims = res.batch_dims + (res.shape[0],)
+    if res.shape:
+        res.batch_dims = res.batch_dims + (res.shape[0],)
+        res.shape = res.shape[1:]
+    else:
+        raise ValueError("Shape is empty, cannot increment batch dimension counter.")
     return res
 
 
@@ -233,10 +239,13 @@ class DecrBatchDimCtr(UnaryOperation):
 
 def decr_batch_dim_ctr(arg: Array) -> Array:
     """Decrement batch dimension counter for debugging."""
-    if arg.batch_dim_ctr <= 0:
-        raise ValueError("Batch dimension counter cannot be decremented below zero.")
     res = DecrBatchDimCtr().forward(arg)
-    res.batch_dim_ctr -= 1
+    # Move the last batch dimension to the front of shape, attention: these are tuples, not lists
+    if res.batch_dims:
+        res.shape = (res.batch_dims[-1],) + res.shape
+        res.batch_dims = res.batch_dims[:-1]
+    else:
+        raise ValueError("Batch dimensions are empty, cannot decrement.")
     return res
 
 
@@ -250,7 +259,7 @@ class ReLUOp(UnaryOperation):
         output.tensor_value = ops.relu(args[0])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        np_result = np.maximum(0, args[0].get_numpy())
+        np_result = np.maximum(0, args[0].to_numpy())
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
@@ -285,7 +294,7 @@ class LogOp(UnaryOperation):
         output.tensor_value = ops.log(args[0])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        input_array = args[0].get_numpy()
+        input_array = args[0].to_numpy()
         # Add small epsilon to avoid log(0) or log(negative)
         # This is a common practice in deep learning
         epsilon = 1e-15

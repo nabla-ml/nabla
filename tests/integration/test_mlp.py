@@ -16,10 +16,10 @@
 
 """Integration test for MLP training using VJP autodiff."""
 
-import nabla
-import numpy as np
-from typing import Tuple
 
+import numpy as np
+
+import nabla
 
 # Configuration constants
 DEFAULT_BATCH_SIZE = 32
@@ -83,7 +83,7 @@ def mlp_forward_and_loss(inputs: list[nabla.Array]) -> list[nabla.Array]:
     return [loss]
 
 
-def create_sin_dataset(batch_size: int = 32) -> Tuple[nabla.Array, nabla.Array]:
+def create_sin_dataset(batch_size: int = 32) -> tuple[nabla.Array, nabla.Array]:
     """Create training data for learning sin function.
 
     Args:
@@ -135,7 +135,7 @@ def train_step(
     targets: nabla.Array,
     params: list[nabla.Array],
     learning_rate: float,
-) -> Tuple[list[nabla.Array], float]:
+) -> tuple[list[nabla.Array], float]:
     """Perform one training step and return updated params and loss.
 
     Args:
@@ -164,7 +164,7 @@ def train_step(
         updated_param = params[i] - lr_scalar * gradient
         updated_params.append(updated_param)
 
-    loss_scalar = loss_values[0].get_numpy().item()
+    loss_scalar = loss_values[0].to_numpy().item()
     return updated_params, loss_scalar
 
 

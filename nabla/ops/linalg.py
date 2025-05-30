@@ -183,8 +183,8 @@ class MatMulOp(BinaryOperation):
         )
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        arg0_numpy = args[0].get_numpy()
-        arg1_numpy = args[1].get_numpy()
+        arg0_numpy = args[0].to_numpy()
+        arg1_numpy = args[1].to_numpy()
         np_result = np.matmul(arg0_numpy, arg1_numpy)
         output.impl = Tensor.from_numpy(np_result)
 
