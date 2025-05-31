@@ -61,6 +61,7 @@ class Array:
         self._numpy_cache: Optional[np.ndarray] = None
         self.tangent: Optional[Array] = None
         self.cotangent: Optional[Array] = None
+        self.stage_realization: bool = False
 
         if materialize:
             self.impl = Tensor(dtype, batch_dims + shape, device=device)
@@ -95,6 +96,8 @@ class Array:
                 raise TypeError(f"Argument must be an Array, got {type(arg)}")
             if arg.traced:
                 self.traced = True
+            if arg.stage_realization:
+                self.stage_realization = True
 
         if self.traced:
             for arg in arg_nodes:
@@ -102,6 +105,17 @@ class Array:
 
     def realize(self) -> None:
         """Force computation of this Array."""
+        if self.impl is not None:
+            print(
+                "Warning: Realizing an already realized Array, this call can be removed."
+            )
+
+        if not self.stage_realization:
+            raise RuntimeError(
+                "Cannot realize Array outside of a staged context. "
+                "Use `stage_realization` to enable staged execution."
+            )
+
         from .graph_execution import realize_
 
         realize_([self])

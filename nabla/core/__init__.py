@@ -18,7 +18,7 @@
 
 from .array import Array
 from .execution_context import ThreadSafeExecutionContext, global_execution_context
-from .trafos import Trace, jvp, vjp, vmap, xpr
+from .trafos import Trace, jvp, vjp, vmap, xpr, jit
 
 __all__ = [
     "Array",
@@ -29,4 +29,5 @@ __all__ = [
     "vjp",
     "vmap",
     "xpr",
+    "jit",
 ]

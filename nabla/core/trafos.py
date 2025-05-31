@@ -417,6 +417,7 @@ def detach(outputs: list[Array]) -> list[Array]:
         # if out.impl is not None:
         #     out.args.clear() # Update: args clearing NOT needed actually, its enought to make the value untraced in most cases!!!
         out.traced = False
+        out.stage_realization = False  # Disable staged execution
 
     return outputs
 
@@ -547,3 +548,41 @@ def vmap(
         return outputs
 
     return vectorized_func
+
+
+def jit(
+    func: Callable[[list[Array]], list[Array]]
+) -> Callable[[list[Array]], list[Array]]:
+    """
+    Just-in-time compile a function for performance optimization.
+
+    Args:
+        func: Function to JIT compile
+    Returns:
+        Callable: JIT-compiled function
+    """
+    def jit_func(inputs: list[Array]) -> list[Array]:
+        # Mark inputs for tracing
+        for inp in inputs:
+            inp.traced = True
+            inp.stage_realization = True  # Enable staged execution
+
+        # Call the original function
+        outputs = func(inputs)
+
+        from .graph_execution import realize_
+
+        # Realize the outputs to compute their values
+        realize_(outputs)
+
+        # Ensure outputs are a list
+        if not isinstance(outputs, list):
+            outputs = [outputs]
+
+        # Detach inputs and outputs from the computation graph
+        detach(inputs)
+        detach(outputs)
+
+        return outputs
+
+    return jit_func

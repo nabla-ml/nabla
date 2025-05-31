@@ -94,9 +94,10 @@ class UnaryOperation(Operation):
         res.vjp_rule = self.vjp_rule
         res.jvp_rule = self.jvp_rule
 
-        from .base import EAGERMODE
+        # from .base import EAGERMODE
 
-        if EAGERMODE:
+        # if not res.stage_realization:
+        if not res.stage_realization:
             self.eagerxpr([arg], res)
 
         return res
@@ -160,9 +161,10 @@ class BinaryOperation(Operation):
         res.vjp_rule = self.vjp_rule
         res.jvp_rule = self.jvp_rule
 
-        from .base import EAGERMODE
+        # from .base import EAGERMODE
 
-        if EAGERMODE:
+        # if not res.stage_realization:
+        if not res.stage_realization:
             self.eagerxpr([arg1_broadcasted, arg2_broadcasted], res)
 
         return res

@@ -28,7 +28,7 @@ from max.dtype import DType
 from .core.array import Array
 from .core.execution_context import ThreadSafeExecutionContext
 from .core.graph_execution import realize_
-from .core.trafos import jvp, vjp, vmap, xpr
+from .core.trafos import jvp, vjp, vmap, xpr, jit
 
 # Set global execution mode
 from .ops.base import EAGERMODE
@@ -66,6 +66,7 @@ __all__ = [
     "jvp",
     "vmap",
     "xpr",
+    "jit",
     "EAGERMODE",
     "get_broadcasted_shape",
     "device",

@@ -260,7 +260,10 @@ class ReLUOp(UnaryOperation):
     ) -> list[Array]:
         from .binary import greater_equal, mul
 
-        return [mul(cotangent, greater_equal(primals[0], 0))]
+        # Cast boolean mask to cotangent's dtype to avoid dtype mismatch in JIT
+        mask = greater_equal(primals[0], 0.0)
+        mask_casted = cast(mask, cotangent.dtype)
+        return [mul(cotangent, mask_casted)]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array

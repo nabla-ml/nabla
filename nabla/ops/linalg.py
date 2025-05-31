@@ -55,9 +55,9 @@ class MatMulOp(BinaryOperation):
         res.vjp_rule = self.vjp_rule
         res.jvp_rule = self.jvp_rule
 
-        from .base import EAGERMODE
+        # from .base import EAGERMODE
 
-        if EAGERMODE:
+        if not res.stage_realization:
             self.eagerxpr([arg1, arg2], res)
 
         return res
