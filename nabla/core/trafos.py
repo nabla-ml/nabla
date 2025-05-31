@@ -414,10 +414,9 @@ def detach(outputs: list[Array]) -> list[Array]:
     Detach outputs from their computation graph by clearing dependencies.
     """
     for out in outputs:
-        if out.impl is not None:
-            #  If the vlaue is acutally realized, we can remove the dependencies (args) from this node
-            out.args.clear()
-            out.traced = False
+        # if out.impl is not None:
+        #     out.args.clear() # Update: args clearing NOT needed actually, its enought to make the value untraced in most cases!!!
+        out.traced = False
 
     return outputs
 
@@ -444,6 +443,7 @@ def vjp(
 
         detach(inputs)  # why the inputs though?
         detach(gradients)
+        detach(outputs)
 
         return gradients
 
