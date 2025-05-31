@@ -10,10 +10,9 @@
 
 *Nabla provides 3 things:*
 
-- **Multidimensional array operations**: Support for binary, unary, and linear algebra operations on multi-dimensional arrays (Tensors) on CPU and GPU.
-- **Dynamic function transformations**: Apply JAX-like transformations like `vmap`, `grad`, `jit` to Python functions.
-- **Mojo acceleration**: Seamlessly integrate high-performance Mojo kernels for CPU and GPU execution.
-
+1. **Fast Arrays**: NumPy-like operations, but faster on CPU/GPU
+2. **JAX-like Function Transforms**: `vmap`, `grad`, `jit`, `vjp`, `jvp`, etc.
+3. **Mojo Integration**: Custom CPU/GPU kernels + JIT-compilation + no CUDA setup
 
 ## Installation
 
@@ -25,6 +24,27 @@ pip install nabla-ml
 
 **Requirements**: Python 3.10+, NumPy, Modular (Mojo + MAX for JIT/GPU support)
 
+## Quick Start
+
+```python
+import nabla
+
+# Arrays and math
+x = nabla.arange((3, 4))
+result = nabla.sum(nabla.sin(x + 1))
+
+# Function transformations
+def loss_fn(args):
+    return [nabla.sum(args[0] ** 2)]
+
+# Vectorize, differentiate, accelerate
+fn = nabla.jit(nabla.grad(nabla.vmap(loss_fn)))
+gradients = fn([nabla.randn((10, 5))])
+```
+
+## Why Nabla?
+
+**No GPU setup hassle** • **C++ speed with Python syntax** • **JAX-compatible API**
 
 ## Development Setup
 
@@ -53,7 +73,7 @@ ruff check nabla/ --fix
 
 ## Repository Structure
 
-```
+```text
 nabla/
 ├── nabla/                     # Core Python library
 │   ├── core/                  # Function transformations and array operations
@@ -75,5 +95,5 @@ Nabla is licensed under the [Apache-2.0 license](https://github.com/nabla-ml/nab
 
 ---
 
-<p align="center" style="margin-top: 3em; margin-bottom: 2em;"><em>Thank you for checking out Nabla!</em></p>
+*Thank you for checking out Nabla!*
 
