@@ -106,15 +106,7 @@ class Array:
     def realize(self) -> None:
         """Force computation of this Array."""
         if self.impl is not None:
-            print(
-                "Warning: Realizing an already realized Array, this call can be removed."
-            )
-
-        if not self.stage_realization:
-            raise RuntimeError(
-                "Cannot realize Array outside of a staged context. "
-                "Use `stage_realization` to enable staged execution."
-            )
+            return
 
         from .graph_execution import realize_
 
@@ -124,6 +116,7 @@ class Array:
 
     def to_numpy(self) -> np.ndarray:
         """Get NumPy representation with caching."""
+        self.realize()  # Ensure the Array is realized before converting
         if self._numpy_cache is None:
             if self.impl is None:
                 raise ValueError("Cannot get NumPy array from None impl")

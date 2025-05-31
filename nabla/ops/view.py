@@ -59,7 +59,8 @@ class TransposeOp(ViewOperation):
         output.tensor_value = ops.transpose(args[0], self.axis_1, self.axis_2)
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        axes = list(range(len(args[0].shape)))
+        offset = len(args[0].batch_dims)
+        axes = list(range(-offset - len(args[0].shape), 0))
         axes[self.axis_1], axes[self.axis_2] = axes[self.axis_2], axes[self.axis_1]
 
         np_result = np.transpose(args[0].to_numpy(), axes)

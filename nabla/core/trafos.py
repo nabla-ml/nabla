@@ -46,13 +46,31 @@ class Trace:
         This is the recommended way to create traces as it ensures proper
         tracing setup before function execution.
         """
-
         # Create trace instance (this marks inputs as traced)
         trace = cls(inputs)
+
+        for inp in inputs:
+            # Mark input arrays as traced
+            inp.traced = True
 
         # Execute function with tracing enabled
         outputs = fn(inputs)
         trace.outputs = outputs if isinstance(outputs, list) else [outputs]
+
+        for out in trace.outputs:
+            # Mark output arrays as traced
+            out.traced = True
+
+        # trace.trace = trace.get_traced_nodes()
+
+        for inp in inputs:
+            # Reset traced flag for inputs after execution
+            inp.traced = False
+
+        for out in trace.outputs:
+            # Mark output arrays as traced
+            out.traced = False
+
         return trace
 
     def get_traced_nodes(self) -> list[Array]:
@@ -348,21 +366,25 @@ def xpr(
         str: JAX-like string representation of the computation graph
     """
     try:
-        for inp in args:
-            # Mark input arrays as traced
-            inp.traced = True
+        # for inp in args:
+        #     # Mark input arrays as traced
+        #     inp.traced = True
 
         # Use the trace_function class method for proper tracing
         trace = Trace.trace_function(fn, args)
 
         # Return the string representation of the trace
-        return str(trace)
-    finally:
-        # Clean up: reset traced flags after tracing
+        str_repr = str(trace)
+
         for inp in args:
             inp.traced = False
         for out in trace.outputs:
             out.traced = False
+
+        return str_repr
+    finally:
+        # Clean up: reset traced flags after tracing
+        pass
 
 
 def detach(outputs: list[Array]) -> list[Array]:
@@ -393,6 +415,14 @@ def vjp(
             raise ValueError(
                 f"Cotangents length {len(cotangents)} != outputs length {len(outputs)}"
             )
+
+        for inp in inputs:
+            # Mark input arrays as traced
+            inp.traced = True
+
+        for out in outputs:
+            # Mark output arrays as traced
+            out.traced = True
 
         gradients = pullback(inputs, outputs, cotangents)
 
@@ -438,6 +468,7 @@ def jvp(
 
     # Compute outputs and their tangents using pushfwd
     outputs = func(inputs)
+
     if not isinstance(outputs, list):
         outputs = [outputs]
 
@@ -460,62 +491,88 @@ def vmap(
     Vectorize a function over its inputs.
     Args:
         func: Function to vectorize
-        in_axes: Input axes to vectorize over (default: all inputs)
-        out_axes: Output axes to vectorize over (default: all outputs)
+        adapted_in_axes: Input axes to vectorize over (default: all inputs)
+        adapted_out_axes: Output axes to vectorize over (default: all outputs)
 
     Returns:
         Callable: Vectorized function that can handle batched inputs
     """
 
     def vectorized_func(inputs: list[Array]) -> list[Array]:
-        # call incr_batch_dim_ctr on all inputs, also for those which have in axis set to None, we unsqueeze first.
         for inp in inputs:
             inp.traced = True
 
+        adapted_in_axes = in_axes if in_axes is not None else [0] * len(inputs)
+
+        if len(adapted_in_axes) != len(inputs):
+            raise ValueError(
+                f"Length of adapted_in_axes {len(adapted_in_axes)} does not match number of inputs {len(inputs)}"
+            )
+
         batched_inputs = []
+
         for i, inp in enumerate(inputs):
-            if in_axes and in_axes[i] is None:
+            if adapted_in_axes[i] is None:
                 from ..ops.view import unsqueeze
 
-                batched_inputs.append(unsqueeze(inp, [0]))
+                batched_inp = unsqueeze(inp, [0])
+
+            else:
+                axis = adapted_in_axes[i]
+                batched_inp = inp
+                if axis != 0:
+                    from ..ops.view import transpose
+
+                    batched_inp = transpose(inp, axis, 0)
 
             from ..ops.unary import incr_batch_dim_ctr
 
-            batched_inputs.append(incr_batch_dim_ctr(inp))
+            batched_inp = incr_batch_dim_ctr(batched_inp)
+            batched_inputs.append(batched_inp)
 
         # Call the original function with batched inputs
         outputs = func(batched_inputs)
 
-        # Ensure outputs are batched according to out_axes
+        # Ensure outputs are batched according to adapted_out_axes
         if not isinstance(outputs, list):
             outputs = [outputs]
 
-        # cleanup inputs, i.e. call decr_batch_dim_ctr on all inputs and also on the outputs
-        for i, inp in enumerate(batched_inputs):
-            if in_axes and in_axes[i] is None:
-                from ..ops.view import squeeze
+        for out in outputs:
+            # Mark output arrays as traced
+            out.traced = True
 
-                batched_inputs[i] = squeeze(inp, [0])
+        adapted_out_axes = out_axes if out_axes is not None else [0] * len(outputs)
 
-            from ..ops.unary import decr_batch_dim_ctr
+        if len(adapted_out_axes) != len(outputs):
+            raise ValueError(
+                f"Length of adapted_out_axes {len(adapted_out_axes)} does not match number of inputs {len(outputs)}"
+            )
 
-            batched_inputs[i] = decr_batch_dim_ctr(inp)
+        unbatched_outputs = []
 
-        # cleanup outputs, i.e. call decr_batch_dim_ctr on all outputs
+        # # cleanup inputs, i.e. call decr_batch_dim_ctr on inputs that were incremented
         for i, out in enumerate(outputs):
-            if out_axes and out_axes[i] is None:
-                from ..ops.view import squeeze
-
-                outputs[i] = squeeze(out, [0])
-
             from ..ops.unary import decr_batch_dim_ctr
 
-            outputs[i] = decr_batch_dim_ctr(out)
+            unbatched_output = decr_batch_dim_ctr(out)
+            if adapted_out_axes[i] is None:
+                from ..ops.view import squeeze
 
-        detach(inputs)  # Detach inputs after computation
-        detach(outputs)
+                unbatched_output = squeeze(unbatched_output, [0])
+            else:
+                axis = adapted_out_axes[i]
+                if axis != 0:
+                    # Move axis 0 back to the original position
+                    from ..ops.view import transpose
 
-        return outputs
+                    unbatched_output = transpose(unbatched_output, 0, axis)
+
+            unbatched_outputs.append(unbatched_output)
+
+        detach(inputs)
+        detach(unbatched_outputs)
+
+        return unbatched_outputs
 
     return vectorized_func
 
