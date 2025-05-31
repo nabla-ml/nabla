@@ -6,7 +6,7 @@
 
 # NABLA
 
-*Nabla provides 3 things:*
+*Python library for scientific computing, providing 3 things:*
 
 1. **Multidimensional Arrays**: Fast NumPy-like operations on CPU and GPU
 2. **Composable Function Transforms**: `vmap`, `grad`, `jit`, etc.
@@ -25,7 +25,7 @@ pip install nabla-ml
 ```python
 import nabla as nb
 
-# Examole function using Nabla's array operations
+# Example function using Nabla's array operations
 def foo(input):
     return nb.sum(input ** 2, axis=0)
 
