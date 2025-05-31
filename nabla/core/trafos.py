@@ -50,22 +50,10 @@ class Trace:
         # Create trace instance (this marks inputs as traced)
         trace = cls(inputs)
 
-        try:
-            # Execute function with tracing enabled
-            outputs = fn(inputs)
-            trace.outputs = outputs if isinstance(outputs, list) else [outputs]
-            return trace
-        finally:
-            # Don't reset traced flags here - let the caller handle cleanup
-            # pass
-            # cleanup here
-            # for inp in inputs:
-            #     inp.traced = False
-            # for out in trace.outputs:
-            #     out.traced = False
-            for node in trace.trace:
-                node.traced = False
-                node.visited = False
+        # Execute function with tracing enabled
+        outputs = fn(inputs)
+        trace.outputs = outputs if isinstance(outputs, list) else [outputs]
+        return trace
 
     def get_traced_nodes(self) -> list[Array]:
         """Get all nodes that belong to this trace in topological order."""
@@ -85,7 +73,7 @@ class Trace:
 
     def _dfs_visit(self, node: Array, visited: set[Array]) -> None:
         """DFS traversal to build topological ordering."""
-        if node in visited or not node.traced:
+        if node in visited:
             return
 
         # Visit children first (post-order)
@@ -187,35 +175,10 @@ class Trace:
         print(self)
 
 
-# def reset_traced_flags(arrays: list[Array]) -> None:
-#     """Reset autodiff traced flags for a list of arrays and their dependencies."""
-#     visited: set[Array] = set()
-
-#     def reset_recursive(node: Array) -> None:
-#         if node in visited:
-#             return
-#         visited.add(node)
-#         node.traced = False
-#         for arg in node.args:
-#             reset_recursive(arg)
-
-#     for array in arrays:
-#         reset_recursive(array)
-
-
-# def reset_all_traced_flags_in_graph(trace: Trace) -> None:
-#     """Reset traced flags for all nodes in a computation trace."""
-#     # Get all traced nodes and reset their flags
-#     all_nodes = trace.get_traced_nodes()
-#     for node in all_nodes:
-#         node.traced = False
-
-
 def pullback(
     inputs: list[Array],
     outputs: list[Array],
     cotangents: list[Array],
-    # trace: Trace | None = None,
 ) -> list[Array]:
     """Compute vector-Jacobian product (reverse-mode autodiff)."""
     if len(cotangents) != len(outputs):
@@ -224,7 +187,6 @@ def pullback(
         )
 
     # Use provided trace or compute new one (for backward compatibility)
-    # if trace is None:
     trace = Trace(inputs, outputs)
     traced_nodes = trace.get_traced_nodes()
 
@@ -245,7 +207,6 @@ def pullback(
 
             # Step 3: Apply VJP rule to get cotangents for arguments
             try:
-                # print("Applying VJP rule for node:", node.name)
                 arg_cotangents = node.vjp_rule(node.args, node.cotangent, node)
 
                 # Step 4: Accumulate cotangents for each argument
@@ -304,6 +265,7 @@ def pushfwd(
     # Use provided trace or compute new one (for backward compatibility)
     if trace is None:
         trace = Trace(inputs, outputs)
+
     traced_nodes = trace.get_traced_nodes()
 
     # Step 1: Initialize tangents for input nodes
@@ -365,10 +327,6 @@ def pushfwd(
 
         # Only reset traced flags if we're not in a higher-order derivative computation
         # Check if any input still needs to be traced (indicating higher-order derivatives)
-        # any_input_needs_tracing = any(inp.traced for inp in inputs)
-        # if not any_input_needs_tracing:
-        #     # reset all traced flags and tensor_value references
-        #     reset_all_traced_flags_in_graph(trace)
         # set traced flag of inputs and outputs to false again
         for inp in inputs:
             inp.traced = False
@@ -390,9 +348,9 @@ def xpr(
         str: JAX-like string representation of the computation graph
     """
     try:
-        for arg in args:
-            # Mark all input arrays as traced so computation graph gets captured
-            arg.traced = True
+        for inp in args:
+            # Mark input arrays as traced
+            inp.traced = True
 
         # Use the trace_function class method for proper tracing
         trace = Trace.trace_function(fn, args)
@@ -401,12 +359,10 @@ def xpr(
         return str(trace)
     finally:
         # Clean up: reset traced flags after tracing
-        # reset_traced_flags(args)
-        # for inp in args:
-        #     inp.traced = False
-        # for out in trace.outputs:
-        #     out.traced = False
-        pass
+        for inp in args:
+            inp.traced = False
+        for out in trace.outputs:
+            out.traced = False
 
 
 def detach(outputs: list[Array]) -> list[Array]:
@@ -414,8 +370,6 @@ def detach(outputs: list[Array]) -> list[Array]:
     Detach outputs from their computation graph by clearing dependencies.
     """
     for out in outputs:
-        # if out.impl is not None:
-        #     out.args.clear() # Update: args clearing NOT needed actually, its enought to make the value untraced in most cases!!!
         out.traced = False
         out.stage_realization = False  # Disable staged execution
 
@@ -442,11 +396,17 @@ def vjp(
 
         gradients = pullback(inputs, outputs, cotangents)
 
-        detach(inputs)  # why the inputs though?
+        detach(inputs)
         detach(gradients)
         detach(outputs)
 
         return gradients
+
+    for inp in inputs:
+        inp.traced = False
+
+    for out in outputs:
+        out.traced = False
 
     return outputs, vjp_fn
 
@@ -484,6 +444,10 @@ def jvp(
     # Use pushfwd to compute the output tangents
     output_tangents = pushfwd(inputs, outputs, tangents)
 
+    detach(inputs)  # Detach inputs after computation
+    detach(outputs)  # Detach outputs after computation
+    detach(output_tangents)  # Detach output tangents
+
     return outputs, output_tangents
 
 
@@ -504,7 +468,10 @@ def vmap(
     """
 
     def vectorized_func(inputs: list[Array]) -> list[Array]:
-        # call incr_batch_dim_ctr on all inputs, also for thos which have in axis set  to None, we usnqueeze first.
+        # call incr_batch_dim_ctr on all inputs, also for those which have in axis set to None, we unsqueeze first.
+        for inp in inputs:
+            inp.traced = True
+
         batched_inputs = []
         for i, inp in enumerate(inputs):
             if in_axes and in_axes[i] is None:
@@ -523,7 +490,7 @@ def vmap(
         if not isinstance(outputs, list):
             outputs = [outputs]
 
-        # cleanup inputs, i.e. call decr_batch_dim_ctr on all inputs and also on teh outptus
+        # cleanup inputs, i.e. call decr_batch_dim_ctr on all inputs and also on the outputs
         for i, inp in enumerate(batched_inputs):
             if in_axes and in_axes[i] is None:
                 from ..ops.view import squeeze
@@ -545,13 +512,16 @@ def vmap(
 
             outputs[i] = decr_batch_dim_ctr(out)
 
+        detach(inputs)  # Detach inputs after computation
+        detach(outputs)
+
         return outputs
 
     return vectorized_func
 
 
 def jit(
-    func: Callable[[list[Array]], list[Array]]
+    func: Callable[[list[Array]], list[Array]],
 ) -> Callable[[list[Array]], list[Array]]:
     """
     Just-in-time compile a function for performance optimization.
@@ -561,6 +531,7 @@ def jit(
     Returns:
         Callable: JIT-compiled function
     """
+
     def jit_func(inputs: list[Array]) -> list[Array]:
         # Mark inputs for tracing
         for inp in inputs:
@@ -570,9 +541,9 @@ def jit(
         # Call the original function
         outputs = func(inputs)
 
+        # Realize the outputs to compute their values
         from .graph_execution import realize_
 
-        # Realize the outputs to compute their values
         realize_(outputs)
 
         # Ensure outputs are a list

@@ -60,7 +60,7 @@ nabla/
 │   ├── ops/                   # Mathematical operations (binary, unary, linalg)
 │   ├── mojo_kernels/          # Internal CPU/GPU Mojo kernels (not the built-in MAX kernels)
 │   ├── nn/                    # Neural network layers and utilities
-│   └── utils/                 # Utilities (broadcasting, types)
+│   └── utils/                 # Utilities (broadcasting, formatting, types)
 ├── tests/                     # Comprehensive test suite
 └── nabla-mojo/                # Experimental pure Mojo API
 ```

@@ -95,7 +95,7 @@ def reduce_sum(
     if axes is not None:
         if isinstance(axes, int):
             axes = [axes]
-        elif isinstance(axes, list) or isinstance(axes, tuple):
+        elif isinstance(axes, list | tuple):
             axes = [int(axis) for axis in axes]
 
         axes = [axis if axis < 0 else axis - len(arg.shape) for axis in axes]
@@ -182,7 +182,7 @@ def sum_batch_dims(
     if axes is not None:
         if isinstance(axes, int):
             axes = [axes]
-        elif isinstance(axes, list) or isinstance(axes, tuple):
+        elif isinstance(axes, list | tuple):
             axes = [int(axis) for axis in axes]
 
         axes = [axis if axis >= 0 else axis + len(arg.shape) for axis in axes]

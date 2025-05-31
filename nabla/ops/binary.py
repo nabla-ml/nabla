@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import numpy as np
 from max.driver import Tensor
+from max.dtype import DType
 from max.graph import Value, ops
 
 from ..core.array import Array
@@ -187,6 +188,10 @@ class GreaterEqualOp(BinaryOperation):
 
     def __init__(self):
         super().__init__("greater_equal")
+
+    def compute_output_dtype(self, arg1: Array, arg2: Array) -> DType:
+        """Comparison operations return bool dtype."""
+        return DType.bool
 
     def maxpr(self, args: list[Value], output: Array) -> None:
         output.tensor_value = ops.greater_equal(args[0], args[1])

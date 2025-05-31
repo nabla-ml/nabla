@@ -17,7 +17,6 @@
 """Operations module for Nabla framework."""
 
 # Import all operations for easy access
-# from .base import EAGERMODE
 from .binary import add, div, greater_equal, mul, power, sub
 from .creation import arange, randn
 from .linalg import matmul
@@ -66,5 +65,4 @@ __all__ = [
     "unsqueeze",
     "broadcast_batch_dims",
     "reduce_sum",
-    "EAGERMODE",
 ]

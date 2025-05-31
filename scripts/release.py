@@ -154,7 +154,7 @@ def validate_package():
     """Validate package with better error handling."""
     print_step("Validating package...")
     try:
-        result = run_command("python -m twine check dist/*", capture_output=True)
+        run_command("python -m twine check dist/*", capture_output=True)
         print_success("Package validation passed")
         return True
     except subprocess.CalledProcessError as e:

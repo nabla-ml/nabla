@@ -17,10 +17,10 @@
 
 """Test individual operations to identify segfault source."""
 
-import os
 import sys
+from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 print("🔍 Testing operations individually to find segfault...")
 

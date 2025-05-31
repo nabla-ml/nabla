@@ -24,7 +24,7 @@ def mlp_forward(x: nb.Array, params: list[nb.Array]) -> nb.Array:
     """MLP forward pass through all layers."""
     output = x
     for i in range(0, len(params) - 1, 2):
-        w, b = params[i], params[i + 1]
+        w, _ = params[i], params[i + 1]
         output = nb.matmul(output, w)  # + b
         # Apply ReLU to all layers except the last
         # if i < len(params) - 2:

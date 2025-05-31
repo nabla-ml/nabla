@@ -1,23 +1,19 @@
 """Integration test for MLP training with benchmarking."""
 
-import gc
-import os
 import time
-import tracemalloc
 
 import numpy as np
-import psutil
 
 import nabla as nb
 
 # Configuration constants
-DEFAULT_BATCH_SIZE = 256
-DEFAULT_LAYERS = [1, 64, 512, 512, 512, 64, 1]
+DEFAULT_BATCH_SIZE = 128
+DEFAULT_LAYERS = [1, 64, 128, 256, 128, 64, 1]
 DEFAULT_LEARNING_RATE = 0.01
 DEFAULT_MOMENTUM = 0.9
-DEFAULT_NUM_EPOCHS = 200  # Shorter for detailed profiling
-PRINT_INTERVAL = 10  # More frequent printing
-SIN_PERIODS = 8
+DEFAULT_NUM_EPOCHS = 20000  # Shorter for detailed profiling
+PRINT_INTERVAL = 100  # More frequent printing
+SIN_PERIODS = 5
 
 
 def mlp_forward(x: nb.Array, params: list[nb.Array]) -> nb.Array:
@@ -158,9 +154,6 @@ def test_mlp_training_with_benchmark():
     print(f"Sin periods: {SIN_PERIODS}")
     print("Starting training...")
 
-    # Start memory tracking
-    tracemalloc.start()
-
     # Initialize model parameters
     params = initialize_mlp_params(DEFAULT_LAYERS)
 
@@ -170,7 +163,6 @@ def test_mlp_training_with_benchmark():
     # Tracking variables
     avg_loss = 0.0
     avg_time = 0.0
-    initial_memory = None
 
     # Training loop with benchmarking
     for epoch in range(1, DEFAULT_NUM_EPOCHS + 1):
@@ -190,64 +182,17 @@ def test_mlp_training_with_benchmark():
         avg_loss += loss
         avg_time += end_time - start_time
 
-        # Memory tracking
-        if epoch == 1:
-            initial_memory = tracemalloc.get_traced_memory()[0]
-            process = psutil.Process(os.getpid())
-            initial_rss = process.memory_info().rss
-
-        # Force garbage collection periodically to see if it helps
-        if epoch % 100 == 0:
-            gc.collect()
-
         # Print progress every PRINT_INTERVAL epochs
         if epoch % PRINT_INTERVAL == 0:
-            gc.collect()  # Force garbage collection
-
-            # Detailed memory tracking
-            current_traced, peak_traced = tracemalloc.get_traced_memory()
-            memory_growth = (current_traced - initial_memory) / 1024 / 1024  # MB
-
-            process = psutil.Process(os.getpid())
-            current_rss = process.memory_info().rss
-            rss_growth = (current_rss - initial_rss) / 1024 / 1024  # MB
-
-            # Get garbage collection stats
-            gc_stats = gc.get_stats()
-
             print(f"\nITERATION: {epoch}")
             print(f"LOSS: {avg_loss / PRINT_INTERVAL:.6f}")
             print(f"TIME: {avg_time / PRINT_INTERVAL:.6f} seconds")
-            print(f"TRACED MEMORY GROWTH: {memory_growth:.2f} MB")
-            print(f"RSS MEMORY GROWTH: {rss_growth:.2f} MB")
-            print(f"PEAK TRACED MEMORY: {peak_traced / 1024 / 1024:.2f} MB")
-            print(
-                f"GC STATS: Gen0={gc_stats[0]['collections']}, Gen1={gc_stats[1]['collections']}, Gen2={gc_stats[2]['collections']}"
-            )
-
-            # Count objects of different types
-            object_counts = {}
-            for obj in gc.get_objects():
-                obj_type = type(obj).__name__
-                object_counts[obj_type] = object_counts.get(obj_type, 0) + 1
-
-            # Show count of nabla-related objects
-            nabla_objects = {
-                k: v
-                for k, v in object_counts.items()
-                if "nabla" in k.lower() or "array" in k.lower()
-            }
-            if nabla_objects:
-                print(f"NABLA OBJECTS: {nabla_objects}")
 
             # Reset averages
             avg_loss = 0.0
             avg_time = 0.0
 
     print("\nTraining completed!")
-
-    # Stop memory tracking and show final stats
-    tracemalloc.stop()
 
 
 if __name__ == "__main__":

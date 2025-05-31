@@ -110,8 +110,6 @@ class RandNOp(Operation):
         res.vjp_rule = self.vjp_rule
         res.jvp_rule = self.jvp_rule
 
-        # from .base import EAGERMODE
-
         if not res.stage_realization:
             self.eagerxpr([], res)
 

@@ -76,7 +76,7 @@ def functional_mlp_training():
     optimizer_state = init_sgd_momentum_state(params)
 
     # Training data
-    X = nb.Array.from_numpy(np.random.randn(100, input_size).astype(np.float32))
+    x = nb.Array.from_numpy(np.random.randn(100, input_size).astype(np.float32))
     y = nb.Array.from_numpy(np.random.randn(100, output_size).astype(np.float32))
 
     def mlp_forward_and_loss(inputs):
@@ -86,7 +86,7 @@ def functional_mlp_training():
         output = nb.matmul(h, w2) + b2
         # MSE loss
         loss = nb.reduce_sum((output - targets) ** 2) / (
-            nb.array([np.float32(X.shape[0])]) * nb.array([np.float32(output_size)])
+            nb.array([np.float32(x.shape[0])]) * nb.array([np.float32(output_size)])
         )
         return [loss]
 
@@ -96,7 +96,7 @@ def functional_mlp_training():
 
     for epoch in range(100):
         # Create input tuple for vjp
-        all_inputs = [X, y] + params
+        all_inputs = [x, y] + params
 
         # Compute loss and gradients
         loss_values, vjp_fn = nb.vjp(mlp_forward_and_loss, all_inputs)

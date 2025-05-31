@@ -157,15 +157,15 @@ class Array:
 
     def __repr__(self) -> str:
         """String representation of the Array."""
-        self.realize()
+        # self.realize()
         from ..utils.formatting import format_shape_and_dtype
 
         return str(self.impl.to(CPU()).to_numpy()) + ":" + format_shape_and_dtype(self)
 
     def to(self, device: Device) -> Array:
         """Move Array to specified device."""
-        if self.impl is None:
-            self.realize()
+        # if self.impl is None:
+        #     self.realize()
         new_impl = self.impl.to(device)
         return Array.from_impl(new_impl, name=self.name)
 
