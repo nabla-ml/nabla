@@ -34,6 +34,13 @@ foo_grads = nb.jit(nb.grad(nb.vmap(foo)))
 gradients = foo_grads([nb.randn((10, 5))])
 ```
 
+## Roadmap
+
+- ✅ **Function Transformations**: `vmap`, `jit`, `vjp`, `jvp`, `grad`
+- ✅ **Mojo Kernel Integration**: CPU/GPU acceleration working
+- 👷 **Extended Operations**: Comprehensive math operations
+- 💡 **Enhanced Mojo API**: When Mojo/MAX ecosystem stabilizes
+
 ## Development Setup
 
 For contributors and advanced users:
@@ -51,13 +58,6 @@ pytest
 ruff format nabla/
 ruff check nabla/ --fix
 ```
-
-## Roadmap
-
-- ✅ **Function Transformations**: `vmap`, `grad`, `jit`, `vjp`, `jvp`
-- ✅ **Mojo Kernel Integration**: CPU/GPU acceleration working
-- 👷 **Extended Operations**: Comprehensive math operations
-- 💡 **Enhanced Mojo API**: When Mojo ecosystem stabilizes
 
 ## Repository Structure
 
