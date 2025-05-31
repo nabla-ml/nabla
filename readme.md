@@ -10,9 +10,9 @@
 
 *Nabla provides 3 things:*
 
-1. **Fast Arrays**: NumPy-like operations, but faster on CPU/GPU
-2. **JAX-like Function Transforms**: `vmap`, `grad`, `jit`, `vjp`, `jvp`, etc.
-3. **Mojo Integration**: Custom CPU/GPU kernels + JIT-compilation + no CUDA setup
+1. **Multidimensional Arrays**: NumPy-like operations on CPU and GPU
+2. **JAX-like Function Transforms**: `vmap`, `grad`, `jit`, `vjp`, `jvp`
+3. **Mojo Integration**: Custom Mojo kernels + no CUDA setup
 
 ## Installation
 
