@@ -6,13 +6,11 @@
 
 # NABLA
 
-### Dynamic Neural Networks and Function Transformations in Python + Mojo
-
 *Nabla provides 3 things:*
 
-1. **Multidimensional Arrays**: NumPy-like operations on CPU and GPU
-2. **JAX-like Function Transforms**: `vmap`, `grad`, `jit`, `vjp`, `jvp`
-3. **Mojo Integration**: Custom Mojo kernels + no CUDA setup
+1. **Multidimensional Arrays**: Fast NumPy-like operations on CPU and GPU
+2. **Composable Function Transforms**: `vmap`, `grad`, `jit`, etc.
+3. **Mojo/MAX Integration**: Custom Mojo kernels + no GPU setup hassle
 
 ## Installation
 
@@ -22,29 +20,19 @@
 pip install nabla-ml
 ```
 
-**Requirements**: Python 3.10+, NumPy, Modular (Mojo + MAX for JIT/GPU support)
-
 ## Quick Start
 
 ```python
-import nabla
+import nabla as nb
 
-# Arrays and math
-x = nabla.arange((3, 4))
-result = nabla.sum(nabla.sin(x + 1))
-
-# Function transformations
-def loss_fn(args):
-    return [nabla.sum(args[0] ** 2)]
+# Examole function using Nabla's array operations
+def foo(input):
+    return nb.sum(input ** 2, axis=0)
 
 # Vectorize, differentiate, accelerate
-fn = nabla.jit(nabla.grad(nabla.vmap(loss_fn)))
-gradients = fn([nabla.randn((10, 5))])
+foo_grads = nb.jit(nb.grad(nb.vmap(foo)))
+gradients = foo_grads([nb.randn((10, 5))])
 ```
-
-## Why Nabla?
-
-**No GPU setup hassle** • **C++ speed with Python syntax** • **JAX-compatible API**
 
 ## Development Setup
 
@@ -52,7 +40,7 @@ For contributors and advanced users:
 
 ```bash
 # Clone and install in development mode
-git clone https://github.com/nabla-ml/nabla.git
+git clone https://github.com/nabla-ml/nb.git
 cd nabla
 pip install -e ".[dev]"
 
