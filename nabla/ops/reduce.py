@@ -25,6 +25,9 @@ from max.graph import Value, ops
 from ..core.array import Array, Shape
 from .operation import ReductionOperation
 
+# Public API
+__all__ = ["reduce_sum", "sum_batch_dims"]
+
 
 class ReduceSumOp(ReductionOperation):
     """reduce_sum reduction operation."""

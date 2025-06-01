@@ -24,6 +24,9 @@ from max.graph import Value, ops
 from ..core.array import Array
 from .operation import BinaryOperation
 
+# Public API
+__all__ = ["add", "mul", "sub", "div", "power", "greater_equal"]
+
 
 def _ensure_array(value) -> Array:
     """Convert scalar values to Arrays."""

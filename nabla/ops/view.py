@@ -23,6 +23,17 @@ from max.graph import Value, ops
 from ..core.array import Array, Shape
 from .operation import ViewOperation
 
+# Public API
+__all__ = [
+    "transpose",
+    "reshape",
+    "broadcast_to",
+    "broadcast_batch_dims",
+    "squeeze",
+    "unsqueeze",
+    "shallow_copy",
+]
+
 
 class TransposeOp(ViewOperation):
     """Matrix/tensor transpose operation."""
@@ -470,7 +481,8 @@ class ShallowCopyOp(ViewOperation):
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
         return tangents[0]
-    
+
+
 def shallow_copy(arg: Array) -> Array:
     """Create a shallow copy of the array."""
     op = ShallowCopyOp()

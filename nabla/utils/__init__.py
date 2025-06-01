@@ -15,7 +15,7 @@
 # ===----------------------------------------------------------------------=== #
 
 
-"""Core components of the Nabla framework.
+"""Utility functions for the Nabla framework.
 
-All exports are auto-discovered by the main package.
+Utilities are imported manually in the main package since they're stable and few.
 """

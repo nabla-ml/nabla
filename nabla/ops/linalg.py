@@ -24,6 +24,9 @@ from ..core.array import Array
 from ..utils.broadcasting import get_broadcasted_shape
 from .operation import BinaryOperation
 
+# Public API
+__all__ = ["matmul"]
+
 
 class MatMulOp(BinaryOperation):
     """Matrix multiplication operation with batching support."""

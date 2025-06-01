@@ -20,8 +20,6 @@ from collections.abc import Callable
 from enum import Enum
 from typing import Any, Literal, Protocol, Union
 
-# Re-export MAX types for convenience
-
 
 class ExecutionMode(Enum):
     """Execution modes for the framework."""

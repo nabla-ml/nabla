@@ -21,22 +21,21 @@ from collections.abc import Callable
 
 from .array import Array
 
-
 # ===----------------------------------------------------------------------=== #
 # Simple validation helpers
 # ===----------------------------------------------------------------------=== #
 
+
 def _validate_length_match(list1, list2, name1: str, name2: str) -> None:
     """Validate that two lists have matching lengths."""
     if len(list1) != len(list2):
-        raise ValueError(
-            f"{name1} length {len(list1)} != {name2} length {len(list2)}"
-        )
+        raise ValueError(f"{name1} length {len(list1)} != {name2} length {len(list2)}")
 
 
 # ===----------------------------------------------------------------------=== #
 # Trace class
 # ===----------------------------------------------------------------------=== #
+
 
 class Trace:
     """A simple trace container that holds the computation graph."""
@@ -61,7 +60,7 @@ class Trace:
         This is the recommended way to create traces as it ensures proper
         tracing setup before function execution.
         """
-        inputs = make_traced(inputs)  
+        inputs = make_traced(inputs)
 
         # Create trace instance (this marks inputs as traced)
         trace = cls(inputs)
@@ -201,12 +200,12 @@ def pullback(
     cotangents: list[Array],
 ) -> list[Array]:
     """Compute vector-Jacobian product (reverse-mode autodiff).
-    
+
     Args:
         inputs: Input arrays to the computation
-        outputs: Output arrays from the computation  
+        outputs: Output arrays from the computation
         cotangents: Cotangent vectors for each output
-        
+
     Returns:
         List of gradients with respect to inputs
     """
@@ -232,6 +231,7 @@ def pullback(
                 for arg, arg_cotangent in zip(node.args, arg_cotangents, strict=False):
                     if arg.cotangent is not None:
                         from ..ops.binary import add
+
                         arg.cotangent = add(arg.cotangent, arg_cotangent)
                     else:
                         arg.cotangent = arg_cotangent
@@ -250,6 +250,7 @@ def pullback(
                 input_gradients.append(inp.cotangent)
             else:
                 from ..ops.creation import zeros
+
                 input_gradients.append(zeros(inp.shape, dtype=inp.dtype))
 
         return input_gradients
@@ -266,13 +267,13 @@ def pushfwd(
     trace: Trace | None = None,
 ) -> list[Array]:
     """Compute Jacobian-vector product (forward-mode autodiff).
-    
+
     Args:
         inputs: Input arrays to the computation
         outputs: Output arrays from the computation
         tangents: Tangent vectors for each input
         trace: Optional precomputed trace
-        
+
     Returns:
         List of output tangents
     """
@@ -299,6 +300,7 @@ def pushfwd(
                 arg_tangents.append(arg.tangent)
             else:
                 from ..ops.creation import zeros
+
                 arg_tangents.append(
                     zeros(arg.shape, dtype=arg.dtype, device=arg.device)
                 )
@@ -316,9 +318,8 @@ def pushfwd(
             output_tangents.append(out.tangent)
         else:
             from ..ops.creation import zeros
-            output_tangents.append(
-                zeros(out.shape, dtype=out.dtype, device=out.device)
-            )
+
+            output_tangents.append(zeros(out.shape, dtype=out.dtype, device=out.device))
 
     return output_tangents
 
@@ -332,24 +333,26 @@ def xpr(
     Args:
         fn: Function to trace
         args: Input arrays to the function
-        
+
     Returns:
         JAX-like string representation of the computation graph
     """
     trace = Trace.trace_function(fn, args)
     return str(trace)
-    
+
+
 def make_traced(args: list[Array]) -> list[Array]:
     """Create shallow copies of arrays and mark them as traced.
-    
+
     Args:
         args: Arrays to copy and mark as traced
-        
+
     Returns:
         Shallow copies of input arrays with tracing enabled
     """
     copied_args = []
     from ..ops.view import shallow_copy
+
     for arg in args:
         copied_arg = shallow_copy(arg)
         copied_arg.traced = True
@@ -359,40 +362,43 @@ def make_traced(args: list[Array]) -> list[Array]:
 
 def make_untraced(args: list[Array]) -> None:
     """Disable tracing for arrays by clearing their traced flag.
-    
+
     Args:
         args: Arrays to disable tracing for
     """
     for arg in args:
         arg.traced = False
 
+
 def make_staged(args: list[Array]) -> None:
     """Enable staged execution for arrays to optimize performance.
-    
+
     Args:
         args: Arrays to enable staged execution for
     """
     for arg in args:
         arg.stage_realization = True  # Enable staged execution
 
+
 def make_unstaged(args: list[Array]) -> None:
     """Disable staged execution for arrays.
-    
+
     Args:
         args: Arrays to disable staged execution for
     """
     for arg in args:
         arg.stage_realization = False  # Disable staged execution
 
+
 def vjp(
     func: Callable[[list[Array]], list[Array]], inputs: list[Array]
 ) -> tuple[list[Array], Callable[[list[Array]], list[Array]]]:
     """Compute vector-Jacobian product (reverse-mode autodiff).
-    
+
     Args:
         func: Function to differentiate
         inputs: Input arrays to the function
-        
+
     Returns:
         Tuple of (outputs, vjp_function) where vjp_function computes gradients
     """
@@ -433,7 +439,7 @@ def jvp(
     """
     _validate_length_match(tangents, inputs, "Tangents", "inputs")
 
-    inputs = make_traced(inputs)  
+    inputs = make_traced(inputs)
     outputs = func(inputs)
 
     if not isinstance(outputs, list):
@@ -453,7 +459,7 @@ def vmap(
     out_axes: list[int] | None = None,
 ) -> Callable[[list[Array]], list[Array]]:
     """Vectorize a function over specified input axes.
-    
+
     Args:
         func: Function to vectorize
         in_axes: Input axes to vectorize over (default: axis 0 for all inputs)
@@ -464,7 +470,6 @@ def vmap(
     """
 
     def vectorized_func(inputs: list[Array]) -> list[Array]:
-
         adapted_in_axes = in_axes if in_axes is not None else [0] * len(inputs)
 
         _validate_length_match(adapted_in_axes, inputs, "adapted_in_axes", "inputs")
@@ -491,7 +496,9 @@ def vmap(
     return vectorized_func
 
 
-def _prepare_vmap_inputs(inputs: list[Array], adapted_in_axes: list[int]) -> list[Array]:
+def _prepare_vmap_inputs(
+    inputs: list[Array], adapted_in_axes: list[int]
+) -> list[Array]:
     """Prepare inputs for vmap by handling batching and axis transposition."""
     batched_inputs = []
     inputs = make_traced(inputs)
@@ -499,37 +506,45 @@ def _prepare_vmap_inputs(inputs: list[Array], adapted_in_axes: list[int]) -> lis
     for i, inp in enumerate(inputs):
         if adapted_in_axes[i] is None:
             from ..ops.view import unsqueeze
+
             batched_inp = unsqueeze(inp, [0])
         else:
             axis = adapted_in_axes[i]
             batched_inp = inp
             if axis != 0:
                 from ..ops.view import transpose
+
                 batched_inp = transpose(inp, axis, 0)
 
         from ..ops.unary import incr_batch_dim_ctr
+
         batched_inp = incr_batch_dim_ctr(batched_inp)
         batched_inputs.append(batched_inp)
 
     return batched_inputs
 
 
-def _prepare_vmap_outputs(outputs: list[Array], adapted_out_axes: list[int]) -> list[Array]:
+def _prepare_vmap_outputs(
+    outputs: list[Array], adapted_out_axes: list[int]
+) -> list[Array]:
     """Prepare outputs from vmap by handling unbatching and axis transposition."""
     unbatched_outputs = []
 
     for i, out in enumerate(outputs):
         from ..ops.unary import decr_batch_dim_ctr
+
         unbatched_output = decr_batch_dim_ctr(out)
 
         if adapted_out_axes[i] is None:
             from ..ops.view import squeeze
+
             unbatched_output = squeeze(unbatched_output, [0])
         else:
             axis = adapted_out_axes[i]
             if axis != 0:
                 # Move axis 0 back to the original position
                 from ..ops.view import transpose
+
                 unbatched_output = transpose(unbatched_output, 0, axis)
 
         unbatched_outputs.append(unbatched_output)
@@ -544,7 +559,7 @@ def jit(
 
     Args:
         func: Function to JIT compile
-        
+
     Returns:
         JIT-compiled function with optimized execution
     """
@@ -556,6 +571,7 @@ def jit(
         outputs = func(inputs)
 
         from .graph_execution import realize_
+
         realize_(outputs)
 
         if not isinstance(outputs, list):

@@ -24,6 +24,19 @@ from max.graph import Value, ops
 from ..core.array import Array
 from .operation import UnaryOperation
 
+# Public API
+__all__ = [
+    "negate",
+    "cast",
+    "sin",
+    "cos",
+    "incr_batch_dim_ctr",
+    "decr_batch_dim_ctr",
+    "relu",
+    "log",
+    "exp",
+]
+
 
 class NegateOp(UnaryOperation):
     """Element-wise negation operation."""
@@ -313,6 +326,13 @@ class LogOp(UnaryOperation):
 def log(arg: Array) -> Array:
     """Element-wise natural logarithm."""
     return _log_op.forward(arg)
+
+
+def exp(arg: Array) -> Array:
+    """Element-wise exponential function."""
+    from max.graph import ops
+
+    return Array(ops.exp(arg.value), name="exp")
 
 
 # Add global instances

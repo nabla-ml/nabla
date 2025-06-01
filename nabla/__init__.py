@@ -17,91 +17,135 @@
 """
 Nabla: A clean, modular deep learning framework built on MAX.
 
-This is the main entry point that provides a clean API.
+This package uses a hybrid approach:
+- Core framework components are imported directly for performance
+- Operations use lazy loading with explicit __all__ definitions
 """
 
 import sys
+from typing import Any
 
 from max.dtype import DType
 
-# Core exports - The foundation
+# Core framework essentials (always needed - imported eagerly)
 from .core.array import Array
 from .core.execution_context import ThreadSafeExecutionContext
-from .core.graph_execution import realize_
-from .core.trafos import jit, jvp, vjp, vmap, xpr
 
-# Operation exports - Clean OOP-based operations
-from .ops.binary import add, div, greater_equal, mul, power, sub
-from .ops.creation import arange, array, ones, ones_like, randn, zeros, zeros_like
-from .ops.linalg import matmul
-from .ops.reduce import reduce_sum
-from .ops.unary import (
-    cos,
-    decr_batch_dim_ctr,
-    incr_batch_dim_ctr,
-    log,
-    negate,
-    relu,
-    sin,
+# Import essential graph execution functions
+from .core.graph_execution import compute_node_hash, get_trace, realize_
+
+# Import core transformations (commonly used)
+from .core.trafos import (
+    Trace,
+    jit,
+    jvp,
+    make_staged,
+    make_traced,
+    make_unstaged,
+    make_untraced,
+    pullback,
+    pushfwd,
+    vjp,
+    vmap,
+    xpr,
 )
-from .ops.view import (
-    broadcast_batch_dims,
-    broadcast_to,
-    reshape,
-    squeeze,
-    transpose,
-    unsqueeze,
-    shallow_copy,
-)
+
+# Utility exports (stable, small set)
 from .utils.broadcasting import get_broadcasted_shape
 from .utils.formatting import format_dtype, format_shape_and_dtype
 from .utils.max_interop import accelerator, cpu, device
 
+
+# Lazy loading for operations (imported on first access)
+def _build_ops_registry():
+    """Build the operations registry from __all__ definitions in modules."""
+    import importlib
+
+    registry = {}
+
+    # Define the ops modules to scan
+    ops_modules = [
+        "nabla.ops.binary",
+        "nabla.ops.unary",
+        "nabla.ops.creation",
+        "nabla.ops.view",
+        "nabla.ops.linalg",
+        "nabla.ops.reduce",
+    ]
+
+    for module_name in ops_modules:
+        try:
+            module = importlib.import_module(module_name)
+            if hasattr(module, "__all__"):
+                for func_name in module.__all__:
+                    registry[func_name] = (module_name, func_name)
+        except ImportError:
+            # Skip modules that can't be imported
+            continue
+
+    return registry
+
+
+_ops_registry = _build_ops_registry()
+
+# Cache for lazily loaded operations
+_ops_cache = {}
+
+
+def __getattr__(name: str) -> Any:
+    """
+    Lazy loading of operations using __getattr__.
+
+    This is called when an attribute is not found in the module.
+    It allows us to import operations only when they're first accessed.
+    """
+    if name in _ops_registry:
+        if name not in _ops_cache:
+            module_name, attr_name = _ops_registry[name]
+            try:
+                import importlib
+
+                module = importlib.import_module(module_name)
+                _ops_cache[name] = getattr(module, attr_name)
+            except (ImportError, AttributeError) as e:
+                raise AttributeError(f"Cannot import {name} from {module_name}: {e}") from e
+        return _ops_cache[name]
+
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+
+
+# Build the __all__ list
 __all__ = [
+    # Core framework
     "Array",
-    "realize_",
+    "ThreadSafeExecutionContext",
+    # Transformations
+    "Trace",
+    "pullback",
+    "pushfwd",
+    "xpr",
+    "make_traced",
+    "make_untraced",
+    "make_staged",
+    "make_unstaged",
     "vjp",
     "jvp",
     "vmap",
-    "xpr",
     "jit",
+    # Graph execution
+    "realize_",
+    "get_trace",
+    "compute_node_hash",
+    # Utilities
     "get_broadcasted_shape",
     "device",
     "cpu",
     "accelerator",
     "format_dtype",
     "format_shape_and_dtype",
-    "array",
-    "arange",
-    "randn",
-    "zeros",
-    "ones",
-    "zeros_like",
-    "ones_like",
-    "add",
-    "mul",
-    "sub",
-    "div",
-    "greater_equal",
-    "power",
-    "sin",
-    "cos",
-    "negate",
-    "incr_batch_dim_ctr",
-    "decr_batch_dim_ctr",
-    "relu",
-    "log",
-    "matmul",
-    "transpose",
-    "reshape",
-    "broadcast_to",
-    "squeeze",
-    "unsqueeze",
-    "shallow_copy",
-    "broadcast_batch_dims",
-    "reduce_sum",
-    DType,
-]
+    # Types
+    "DType",
+] + list(_ops_registry.keys())  # Add all operation names
 
 # Maintain the execution context for compatibility
 _global_execution_context = ThreadSafeExecutionContext()

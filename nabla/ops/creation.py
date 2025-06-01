@@ -26,6 +26,9 @@ from max.graph import DeviceRef, TensorType, Value, ops
 from ..core.array import Array, Shape
 from .operation import Operation
 
+# Public API
+__all__ = ["array", "arange", "randn", "zeros", "ones", "zeros_like", "ones_like"]
+
 # Default device singleton to avoid function calls in defaults
 _DEFAULT_CPU = CPU()
 
