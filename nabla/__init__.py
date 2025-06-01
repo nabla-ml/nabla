@@ -15,11 +15,7 @@
 # ===----------------------------------------------------------------------=== #
 
 """
-Nabla: A clean, modular deep learning framework built on MAX.
-
-This package uses a hybrid approach:
-- Core framework components are imported directly for performance
-- Operations use lazy loading with explicit __all__ definitions
+Nabla: Dynamic Neural Networks and Function Transformations in Python 🐍 + Mojo 🔥
 """
 
 # Imports used within this file
