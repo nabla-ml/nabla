@@ -49,6 +49,9 @@ class NegateOp(UnaryOperation):
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         np_result = -args[0].to_numpy()
+        # Ensure result is an array, not a scalar
+        if np.isscalar(np_result):
+            np_result = np.array(np_result)
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
@@ -96,6 +99,9 @@ class CastOp(UnaryOperation):
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         np_result = args[0].to_numpy().astype(DType.to_numpy(output.dtype))
+        # Ensure result is an array, not a scalar
+        if np.isscalar(np_result):
+            np_result = np.array(np_result)
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
@@ -129,6 +135,9 @@ class SinOp(UnaryOperation):
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         np_result = np.sin(args[0].to_numpy())
+        # Ensure result is an array, not a scalar
+        if np.isscalar(np_result):
+            np_result = np.array(np_result)
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
@@ -165,6 +174,9 @@ class CosOp(UnaryOperation):
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         np_result = np.cos(args[0].to_numpy())
+        # Ensure result is an array, not a scalar
+        if np.isscalar(np_result):
+            np_result = np.array(np_result)
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
@@ -266,15 +278,20 @@ class ReLUOp(UnaryOperation):
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         np_result = np.maximum(0, args[0].to_numpy())
+        # Ensure result is an array, not a scalar
+        if np.isscalar(np_result):
+            np_result = np.array(np_result)
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
         from .binary import greater_equal, mul
+        from .creation import zeros
 
-        # Cast boolean mask to cotangent's dtype to avoid dtype mismatch in JIT
-        mask = greater_equal(primals[0], 0.0)
+        # Create zero with same dtype as primal to avoid dtype mismatch
+        zero = zeros((), dtype=primals[0].dtype)
+        mask = greater_equal(primals[0], zero)
         mask_casted = cast(mask, cotangent.dtype)
         return [mul(cotangent, mask_casted)]
 
@@ -282,14 +299,19 @@ class ReLUOp(UnaryOperation):
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
         # Import here to avoid circular imports
-        from .binary import mul
+        from .binary import greater_equal, mul
+        from .creation import zeros
 
-        return mul(tangents[0], relu(primals[0]))
+        # ReLU derivative is 1 for x > 0, 0 for x <= 0
+        zero = zeros((), dtype=primals[0].dtype)
+        mask = greater_equal(primals[0], zero)
+        mask_casted = cast(mask, tangents[0].dtype)
+        return mul(tangents[0], mask_casted)
 
 
 def relu(arg: Array) -> Array:
-    """Element-wise ReLU activation."""
-    return ReLUOp().forward(arg)
+    """Element-wise ReLU (Rectified Linear Unit) function."""
+    return _relu_op.forward(arg)
 
 
 class LogOp(UnaryOperation):
@@ -306,6 +328,9 @@ class LogOp(UnaryOperation):
         epsilon = 1e-15
         safe_input = np.maximum(input_array, epsilon)
         np_result = np.log(safe_input)
+        # Ensure result is an array, not a scalar
+        if np.isscalar(np_result):
+            np_result = np.array(np_result)
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
@@ -328,11 +353,42 @@ def log(arg: Array) -> Array:
     return _log_op.forward(arg)
 
 
+class ExpOp(UnaryOperation):
+    """Element-wise exponential operation."""
+
+    def __init__(self):
+        super().__init__("exp")
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        output.tensor_value = ops.exp(args[0])
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        np_result = np.exp(args[0].to_numpy())
+        # Ensure result is an array, not a scalar
+        if np.isscalar(np_result):
+            np_result = np.array(np_result)
+        output.impl = Tensor.from_numpy(np_result)
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        from .binary import mul
+
+        # d/dx exp(x) = exp(x), and output = exp(x)
+        return [mul(cotangent, output)]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        from .binary import mul
+
+        # d/dx exp(x) = exp(x)
+        return mul(output, tangents[0])
+
+
 def exp(arg: Array) -> Array:
     """Element-wise exponential function."""
-    from max.graph import ops
-
-    return Array(ops.exp(arg.value), name="exp")
+    return _exp_op.forward(arg)
 
 
 # Add global instances
@@ -340,4 +396,5 @@ _negate_op = NegateOp()
 _sin_op = SinOp()
 _cos_op = CosOp()
 _log_op = LogOp()
+_exp_op = ExpOp()
 _relu_op = ReLUOp()

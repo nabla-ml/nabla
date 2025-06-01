@@ -51,6 +51,9 @@ class AddOp(BinaryOperation):
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         np_result = np.add(args[0].to_numpy(), args[1].to_numpy())
+        # Ensure result is an array, not a scalar
+        if np.isscalar(np_result):
+            np_result = np.array(np_result)
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
@@ -75,6 +78,9 @@ class MulOp(BinaryOperation):
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         np_result = np.multiply(args[0].to_numpy(), args[1].to_numpy())
+        # Ensure result is an array, not a scalar
+        if np.isscalar(np_result):
+            np_result = np.array(np_result)
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
@@ -99,6 +105,9 @@ class SubOp(BinaryOperation):
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         np_result = np.subtract(args[0].to_numpy(), args[1].to_numpy())
+        # Ensure result is an array, not a scalar
+        if np.isscalar(np_result):
+            np_result = np.array(np_result)
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
@@ -125,6 +134,9 @@ class DivOp(BinaryOperation):
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         np_result = np.divide(args[0].to_numpy(), args[1].to_numpy())
+        # Ensure result is an array, not a scalar
+        if np.isscalar(np_result):
+            np_result = np.array(np_result)
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
@@ -160,6 +172,9 @@ class PowerOp(BinaryOperation):
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         np_result = np.power(args[0].to_numpy(), args[1].to_numpy())
+        # Ensure result is an array, not a scalar
+        if np.isscalar(np_result):
+            np_result = np.array(np_result)
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
@@ -201,6 +216,9 @@ class GreaterEqualOp(BinaryOperation):
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         np_result = np.greater_equal(args[0].to_numpy(), args[1].to_numpy())
+        # Ensure result is an array, not a scalar
+        if np.isscalar(np_result):
+            np_result = np.array(np_result)
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(

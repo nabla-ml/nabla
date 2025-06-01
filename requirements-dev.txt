@@ -9,3 +9,4 @@ mypy
 build
 twine
 pre-commit
+jax

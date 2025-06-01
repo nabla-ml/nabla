@@ -73,8 +73,8 @@ class Array:
         """Create Array from existing Tensor implementation."""
         if not isinstance(impl, Tensor):
             raise TypeError(f"Data must be a MAX Tensor, got {type(impl)}")
-        if not impl.shape:
-            raise ValueError("Cannot create Array from empty shape Tensor")
+        if impl.shape is None:
+            raise ValueError("Cannot create Array from None shape Tensor")
 
         instance = cls(
             shape=impl.shape, dtype=impl.dtype, device=impl.device, materialize=True

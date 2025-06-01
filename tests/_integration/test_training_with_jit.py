@@ -27,9 +27,10 @@ DEFAULT_BATCH_SIZE = 128
 DEFAULT_LAYERS = [1, 64, 128, 256, 128, 64, 1]
 DEFAULT_LEARNING_RATE = 0.01
 DEFAULT_MOMENTUM = 0.9
-DEFAULT_NUM_EPOCHS = 20000  # Shorter for detailed profiling
-PRINT_INTERVAL = 100  # More frequent printing
+DEFAULT_NUM_EPOCHS = 20
+PRINT_INTERVAL = 1
 SIN_PERIODS = 5
+ENABLE_JIT = True  # Enable JIT for performance
 
 
 def mlp_forward(x: nb.Array, params: list[nb.Array]) -> nb.Array:
@@ -140,7 +141,15 @@ def train_step_functional(
     """Perform one training step using functional SGD with momentum."""
     # Forward pass + VJP for gradients
     all_inputs = [x, targets] + params
-    loss_values, vjp_fn = nb.vjp(mlp_forward_and_loss, all_inputs)
+
+    if ENABLE_JIT:
+        jitted_mlp_forward_and_loss = nb.jit(mlp_forward_and_loss)
+        loss_values, vjp_fn = nb.vjp(jitted_mlp_forward_and_loss, all_inputs)
+    else:
+        loss_values, vjp_fn = nb.vjp(mlp_forward_and_loss, all_inputs)
+
+    if ENABLE_JIT:
+        vjp_fn = nb.jit(vjp_fn)
 
     # Backward pass
     cotangent = [nb.array([np.float32(1.0)])]

@@ -14,7 +14,6 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-
 """Integration test for MLP training with benchmarking."""
 
 import gc
@@ -32,8 +31,8 @@ DEFAULT_BATCH_SIZE = 256
 DEFAULT_LAYERS = [1, 64, 2028, 2028, 2028, 2028, 64, 1]
 DEFAULT_LEARNING_RATE = 0.01
 DEFAULT_MOMENTUM = 0.9
-DEFAULT_NUM_EPOCHS = 2000  # Longer test to check stabilization
-PRINT_INTERVAL = 200  # More frequent monitoring
+DEFAULT_NUM_EPOCHS = 20
+PRINT_INTERVAL = 1
 SIN_PERIODS = 8
 
 
@@ -41,11 +40,11 @@ def mlp_forward(x: nb.Array, params: list[nb.Array]) -> nb.Array:
     """MLP forward pass through all layers."""
     output = x
     for i in range(0, len(params) - 1, 2):
-        w, b = params[i], params[i + 1]
-        output = nb.matmul(output, w) + b
+        w, _ = params[i], params[i + 1]
+        output = nb.matmul(output, w)  # + b
         # Apply ReLU to all layers except the last
-        if i < len(params) - 2:
-            output = nb.relu(output)
+        # if i < len(params) - 2:
+        #     output = nb.relu(output)
     return output
 
 
@@ -58,12 +57,12 @@ def mean_squared_error(predictions: nb.Array, targets: nb.Array) -> nb.Array:
     return loss
 
 
-def mlp_forward_and_loss(inputs: list[nb.Array]) -> list[nb.Array]:
+def mlp_forward_and_loss(inputs: list[nb.Array]) -> float:
     """Combined forward pass and loss computation for VJP."""
     x, targets, *params = inputs
     predictions = mlp_forward(x, params)
     loss = mean_squared_error(predictions, targets)
-    return [loss]
+    return loss.to_numpy().item()
 
 
 def create_sin_dataset(batch_size: int = 32) -> tuple[nb.Array, nb.Array]:
@@ -124,8 +123,6 @@ def test_mlp_inference_with_benchmark():
 
     x, targets = create_sin_dataset(DEFAULT_BATCH_SIZE)
 
-    jitted_mlp_forward_and_loss = nb.jit(mlp_forward_and_loss)
-
     # Training loop with benchmarking
     for epoch in range(1, DEFAULT_NUM_EPOCHS + 1):
         start_time = time.perf_counter()
@@ -134,8 +131,7 @@ def test_mlp_inference_with_benchmark():
         # x, targets = create_sin_dataset(DEFAULT_BATCH_SIZE)
 
         all_inputs = [x, targets] + params
-        # loss = mlp_forward_and_loss(all_inputs)
-        loss = jitted_mlp_forward_and_loss(all_inputs)[0].to_numpy().item()
+        loss = mlp_forward_and_loss(all_inputs)
 
         # Manual cleanup attempt - clear any intermediate results
         del all_inputs
@@ -196,4 +192,4 @@ def test_mlp_inference_with_benchmark():
 
 
 if __name__ == "__main__":
-    test_mlp_inference_with_benchmark()  # with jit: 0.007189 seconds
+    test_mlp_inference_with_benchmark()

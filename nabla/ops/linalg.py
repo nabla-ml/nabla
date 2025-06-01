@@ -34,32 +34,93 @@ class MatMulOp(BinaryOperation):
     def __init__(self):
         super().__init__("dot_general")
 
+    # def forward(self, *args: Array) -> Array:
+    #     """Forward pass for matrix multiplication with compatible signature."""
+    #     if len(args) != 2:
+    #         raise ValueError(
+    #             f"Matrix multiplication requires 2 arguments, got {len(args)}"
+    #         )
+    #     arg1, arg2 = args[0], args[1]
+
+    #     self._validate_inputs(arg1, arg2)
+
+    #     # if arg1 or arg2 are respectively of rank 1, i.e, a vector, then we msut first reshape them to be 2d matrices
+    #     if len(arg1.shape) == 1:
+    #         arg1 = ops.reshape(arg1, (1, arg1.shape[0]))
+    #     if len(arg2.shape) == 1:
+    #         arg2 = ops.reshape(arg2, (arg2.shape[0], 1)) # basically a transpose
+
+    #     output_shape = self.compute_output_shape(arg1.shape, arg2.shape)
+
+    #     res = Array(
+    #         shape=output_shape,
+    #         dtype=arg1.dtype,
+    #         device=arg1.device,
+    #         materialize=False,
+    #         name=self.name,
+    #     )
+
+    #     res.set_maxpr(self.maxpr)
+    #     res.add_arguments(arg1, arg2)
+    #     res.vjp_rule = self.vjp_rule
+    #     res.jvp_rule = self.jvp_rule
+
+    #     if not res.stage_realization:
+    #         self.eagerxpr([arg1, arg2], res)
+
+    #     return res
+
     def forward(self, *args: Array) -> Array:
-        """Forward pass for matrix multiplication with compatible signature."""
+        """Forward pass for binary operations."""
         if len(args) != 2:
-            raise ValueError(
-                f"Matrix multiplication requires 2 arguments, got {len(args)}"
-            )
+            raise ValueError(f"Binary operation requires 2 arguments, got {len(args)}")
         arg1, arg2 = args[0], args[1]
 
+        from ..ops.view import broadcast_batch_dims, broadcast_to
+
         self._validate_inputs(arg1, arg2)
+
+        arg1_has_rank_1 = len(arg1.shape) == 1
+        arg2_has_rank_1 = len(arg2.shape) == 1
+        # if len(arg1.shape) == 1:
+        if arg1_has_rank_1:
+            arg1 = ops.reshape(arg1, (1, arg1.shape[0]))
+        # if len(arg2.shape) == 1:
+        if arg2_has_rank_1:
+            arg2 = ops.reshape(arg2, (arg2.shape[0], 1))
+
         output_shape = self.compute_output_shape(arg1.shape, arg2.shape)
+        output_batch_dims = self.compute_output_batch_dims(
+            arg1.batch_dims, arg2.batch_dims
+        )
+        output_dtype = self.compute_output_dtype(arg1, arg2)
+        arg1_broadcasted = broadcast_to(arg1, output_shape[:-2] + arg1.shape[-2:])
+        arg2_broadcasted = broadcast_to(arg2, output_shape[:-2] + arg2.shape[-2:])
+
+        arg1_broadcasted = broadcast_batch_dims(arg1_broadcasted, output_batch_dims)
+        arg2_broadcasted = broadcast_batch_dims(arg2_broadcasted, output_batch_dims)
 
         res = Array(
             shape=output_shape,
-            dtype=arg1.dtype,
+            dtype=output_dtype,
             device=arg1.device,
             materialize=False,
             name=self.name,
+            batch_dims=output_batch_dims,
         )
 
         res.set_maxpr(self.maxpr)
-        res.add_arguments(arg1, arg2)
+        res.add_arguments(arg1_broadcasted, arg2_broadcasted)
         res.vjp_rule = self.vjp_rule
         res.jvp_rule = self.jvp_rule
 
         if not res.stage_realization:
-            self.eagerxpr([arg1, arg2], res)
+            self.eagerxpr([arg1_broadcasted, arg2_broadcasted], res)
+
+        # if arg1_has_rank_1:
+        #     res = ops.reshape(res, res.shape[:-2] + (res.shape[-1],))
+        # if arg2_has_rank_1:
+        #     res = ops.reshape(res, res.shape[:-2] + (res.shape[-2],))
 
         return res
 
