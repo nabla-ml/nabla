@@ -118,7 +118,9 @@ def allclose_recursive(nabla_result, jax_result, rtol, atol):
         assert len(nabla_result) == len(jax_result), (
             f"Result structures have different lengths: Nabla {len(nabla_result)}, JAX {len(jax_result)}"
         )
-        for i, (nb_item, jax_item) in enumerate(zip(nabla_result, jax_result, strict=False)):
+        for i, (nb_item, jax_item) in enumerate(
+            zip(nabla_result, jax_result, strict=False)
+        ):
             assert allclose_recursive(nb_item, jax_item, rtol, atol), (
                 f"Mismatch in item {i} of recursive structure."
             )

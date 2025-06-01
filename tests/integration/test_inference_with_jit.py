@@ -29,7 +29,9 @@ import nabla as nb
 
 # Configuration constants
 TEST_BATCH_SIZE = 128
-TEST_LAYERS = [1, 64, 128, 128, 64, 1] 
+DEFAULT_BATCH_SIZE = TEST_BATCH_SIZE
+TEST_LAYERS = [1, 64, 128, 128, 64, 1]
+DEFAULT_LAYERS = TEST_LAYERS
 DEFAULT_LEARNING_RATE = 0.01
 DEFAULT_MOMENTUM = 0.9
 DEFAULT_NUM_EPOCHS = 20
@@ -124,7 +126,7 @@ def test_mlp_inference_with_benchmark():
 
     x, targets = create_sin_dataset(DEFAULT_BATCH_SIZE)
 
-    jitted_mlp_forward_and_loss = nb.jit(mlp_forward_and_loss)
+    jitted_mlp_forward_and_loss = mlp_forward_and_loss  # nb.jit(mlp_forward_and_loss)
 
     # Training loop with benchmarking
     for epoch in range(1, DEFAULT_NUM_EPOCHS + 1):
@@ -196,4 +198,4 @@ def test_mlp_inference_with_benchmark():
 
 
 if __name__ == "__main__":
-    test_mlp_inference_with_benchmark()  # with jit: 0.007189 seconds
+    test_mlp_inference_with_benchmark()

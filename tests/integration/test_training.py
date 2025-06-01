@@ -24,8 +24,8 @@ import nabla as nb
 
 # Configuration constants for tests
 TEST_BATCH_SIZE = 128
-TEST_LAYERS = [1, 64, 128, 128, 64, 1] 
-TEST_LEARNING_RATE = 0.1
+TEST_LAYERS = [1, 64, 128, 128, 64, 1]
+TEST_LEARNING_RATE = 0.01  # Reduced from 0.1 to prevent gradient explosion
 TEST_MOMENTUM = 0.9
 TEST_NUM_EPOCHS = 10
 PRINT_INTERVAL = 5  # Print every 5 epochs
@@ -80,9 +80,9 @@ def initialize_mlp_params(layers: list[int], seed: int = 42) -> list[nb.Array]:
     params = []
 
     for i in range(len(layers) - 1):
-        # Xavier initialization (matching Mojo's He initialization style)
+        # Xavier/Glorot initialization - more conservative than He for deep networks
         fan_in, fan_out = layers[i], layers[i + 1]
-        std = np.sqrt(2.0 / fan_in)  # He initialization like Mojo
+        std = np.sqrt(2.0 / (fan_in + fan_out))  # Xavier initialization
 
         w_np = np.random.normal(0.0, std, (fan_in, fan_out)).astype(np.float32)
         b_np = np.zeros((1, fan_out), dtype=np.float32)

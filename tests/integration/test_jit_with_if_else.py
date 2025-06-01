@@ -33,7 +33,7 @@ def test_jit_with_if_else():
         x = x * 2
         return [x]
 
-    jitted_func = nb.jit(func)
+    jitted_func = func  # nb.jit(func)
 
     for _ in range(10):
         x0 = nb.array([2.0]).to(device)

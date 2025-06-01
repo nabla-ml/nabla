@@ -131,7 +131,9 @@ def assert_gradients_close(
             f"Gradient list length mismatch: actual {len(actual_grads)} vs expected {len(expected_grads)}. {msg}"
         )
 
-    for i, (actual_grad, expected_grad) in enumerate(zip(actual_grads, expected_grads, strict=False)):
+    for i, (actual_grad, expected_grad) in enumerate(
+        zip(actual_grads, expected_grads, strict=False)
+    ):
         try:
             assert_arrays_close(
                 actual_grad, expected_grad, rtol, atol, f"Gradient {i}: {msg}"

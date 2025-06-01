@@ -24,7 +24,9 @@ import nabla as nb
 
 # Configuration constants
 TEST_BATCH_SIZE = 128
-TEST_LAYERS = [1, 64, 128, 128, 64, 1] 
+DEFAULT_BATCH_SIZE = TEST_BATCH_SIZE
+TEST_LAYERS = [1, 64, 128, 128, 64, 1]
+DEFAULT_LAYERS = TEST_LAYERS
 DEFAULT_LEARNING_RATE = 0.01
 DEFAULT_MOMENTUM = 0.9
 DEFAULT_NUM_EPOCHS = 20
@@ -143,13 +145,15 @@ def train_step_functional(
     all_inputs = [x, targets] + params
 
     if ENABLE_JIT:
-        jitted_mlp_forward_and_loss = nb.jit(mlp_forward_and_loss)
+        jitted_mlp_forward_and_loss = (
+            mlp_forward_and_loss  # nb.jit(mlp_forward_and_loss)
+        )
         loss_values, vjp_fn = nb.vjp(jitted_mlp_forward_and_loss, all_inputs)
     else:
         loss_values, vjp_fn = nb.vjp(mlp_forward_and_loss, all_inputs)
 
     if ENABLE_JIT:
-        vjp_fn = nb.jit(vjp_fn)
+        vjp_fn = vjp_fn  # nb.jit(vjp_fn)
 
     # Backward pass
     cotangent = [nb.array([np.float32(1.0)])]

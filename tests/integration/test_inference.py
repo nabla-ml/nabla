@@ -28,7 +28,9 @@ import nabla as nb
 
 # Configuration constants
 TEST_BATCH_SIZE = 128
-TEST_LAYERS = [1, 64, 128, 128, 64, 1] 
+DEFAULT_BATCH_SIZE = 128
+TEST_LAYERS = [1, 64, 128, 128, 64, 1]
+DEFAULT_LAYERS = TEST_LAYERS
 DEFAULT_LEARNING_RATE = 0.01
 DEFAULT_MOMENTUM = 0.9
 DEFAULT_NUM_EPOCHS = 20
@@ -40,8 +42,8 @@ def mlp_forward(x: nb.Array, params: list[nb.Array]) -> nb.Array:
     """MLP forward pass through all layers."""
     output = x
     for i in range(0, len(params) - 1, 2):
-        w, _ = params[i], params[i + 1]
-        output = nb.matmul(output, w)  + b
+        w, b = params[i], params[i + 1]
+        output = nb.matmul(output, w) + b
         # Apply ReLU to all layers except the last
         if i < len(params) - 2:
             output = nb.relu(output)
