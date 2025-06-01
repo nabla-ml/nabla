@@ -111,9 +111,7 @@ def generate_test_data(
 
 def allclose_recursive(nabla_result, jax_result, rtol, atol):
     """Recursively compare nested structures with proper error reporting."""
-    if isinstance(nabla_result, list | tuple) and isinstance(
-        jax_result, list | tuple
-    ):
+    if isinstance(nabla_result, list | tuple) and isinstance(jax_result, list | tuple):
         assert len(nabla_result) == len(jax_result), (
             f"Result structures have different lengths: Nabla {len(nabla_result)}, JAX {len(jax_result)}"
         )

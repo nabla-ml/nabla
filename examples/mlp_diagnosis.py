@@ -22,11 +22,14 @@ def analyze_gradient_flow(params, gradients):
     for i, (param, grad) in enumerate(zip(params, gradients, strict=False)):
         param_norm = np.linalg.norm(param.to_numpy())
         grad_norm = np.linalg.norm(grad.to_numpy())
-        ratio = grad_norm / param_norm if param_norm > 0 else float('inf')
+        ratio = grad_norm / param_norm if param_norm > 0 else float("inf")
 
         layer_type = "weight" if i % 2 == 0 else "bias"
         layer_num = i // 2 + 1
-        print(f"Layer {layer_num} {layer_type}: param_norm={param_norm:.6f}, grad_norm={grad_norm:.6f}, ratio={ratio:.6f}")
+        print(
+            f"Layer {layer_num} {layer_type}: param_norm={param_norm:.6f}, grad_norm={grad_norm:.6f}, ratio={ratio:.6f}"
+        )
+
 
 def analyze_activations(x, params):
     """Analyze activations to detect dead neurons."""
@@ -39,16 +42,21 @@ def analyze_activations(x, params):
 
         layer_num = i // 2 + 1
         linear_np = linear_output.to_numpy()
-        print(f"Layer {layer_num} linear output: mean={linear_np.mean():.6f}, std={linear_np.std():.6f}, min={linear_np.min():.6f}, max={linear_np.max():.6f}")
+        print(
+            f"Layer {layer_num} linear output: mean={linear_np.mean():.6f}, std={linear_np.std():.6f}, min={linear_np.min():.6f}, max={linear_np.max():.6f}"
+        )
 
         # Apply ReLU to all layers except the last
         if i < len(params) - 2:
             output = nb.relu(linear_output)
             relu_np = output.to_numpy()
             dead_ratio = (relu_np == 0).mean()
-            print(f"Layer {layer_num} ReLU output: mean={relu_np.mean():.6f}, std={relu_np.std():.6f}, dead_ratio={dead_ratio:.3f}")
+            print(
+                f"Layer {layer_num} ReLU output: mean={relu_np.mean():.6f}, std={relu_np.std():.6f}, dead_ratio={dead_ratio:.3f}"
+            )
         else:
             output = linear_output
+
 
 def analyze_target_function():
     """Analyze the complexity of the target function."""
@@ -65,6 +73,7 @@ def analyze_target_function():
     derivatives = np.diff(y_test)
     print(f"Max derivative magnitude: {np.abs(derivatives).max():.3f}")
 
+
 def test_simpler_architecture():
     """Test if a simpler architecture works better."""
     print("\n=== Testing Simpler Architecture ===")
@@ -80,7 +89,9 @@ def test_simpler_architecture():
         fan_in = simple_layers[i]
         std = np.sqrt(2.0 / fan_in)  # He initialization
 
-        w_np = np.random.normal(0.0, std, (fan_in, simple_layers[i + 1])).astype(np.float32)
+        w_np = np.random.normal(0.0, std, (fan_in, simple_layers[i + 1])).astype(
+            np.float32
+        )
         b_np = np.zeros((1, simple_layers[i + 1]), dtype=np.float32)
 
         w = nb.Array.from_numpy(w_np)
@@ -97,8 +108,9 @@ def test_simpler_architecture():
     print(f"Predictions range: [{pred_np.min():.3f}, {pred_np.max():.3f}]")
     print(f"Targets range: [{target_np.min():.3f}, {target_np.max():.3f}]")
 
-    initial_loss = np.mean((pred_np - target_np)**2)
+    initial_loss = np.mean((pred_np - target_np) ** 2)
     print(f"Initial loss with simpler architecture: {initial_loss:.6f}")
+
 
 def main():
     """Run comprehensive diagnosis."""
@@ -119,12 +131,13 @@ def main():
     predictions = mlp_forward(x, params)
     pred_np = predictions.to_numpy()
     target_np = targets.to_numpy()
-    initial_loss = np.mean((pred_np - target_np)**2)
+    initial_loss = np.mean((pred_np - target_np) ** 2)
     print(f"\nInitial loss: {initial_loss:.6f}")
     print(f"Initial predictions range: [{pred_np.min():.3f}, {pred_np.max():.3f}]")
 
     # Test simpler architecture
     test_simpler_architecture()
+
 
 if __name__ == "__main__":
     main()

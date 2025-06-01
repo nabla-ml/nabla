@@ -86,11 +86,13 @@ class TestMatmulOperation:
         # Execute VJP
         def nabla_op(inputs):
             return [nb.matmul(inputs[0], inputs[1])]
+
         _, vjp_fn_nb = nb.vjp(nabla_op, primals_nb)
         grads_nb = vjp_fn_nb([cotangent_nb])
 
         def jax_op(x, y):
             return jnp.matmul(x, y)
+
         _, vjp_fn_jax = jax.vjp(jax_op, *primals_jax)
         grads_jax = vjp_fn_jax(cotangent_jax)
 
@@ -127,10 +129,12 @@ class TestMatmulOperation:
         # Execute JVP
         def nabla_op(inputs):
             return [nb.matmul(inputs[0], inputs[1])]
+
         primal_out_nb, tangent_out_nb = nb.jvp(nabla_op, primals_nb, tangents_nb)
 
         def jax_op(x, y):
             return jnp.matmul(x, y)
+
         primal_out_jax, tangent_out_jax = jax.jvp(
             jax_op, tuple(primals_jax), tuple(tangents_jax)
         )

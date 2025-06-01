@@ -8,10 +8,10 @@ import nabla as nb
 # Configuration for COMPLEX sin curve learning - same as JAX version
 BATCH_SIZE = 256
 LAYERS = [1, 128, 128, 128, 64, 1]  # Wider, not deeper
-LEARNING_RATE = 0.001     # Lower LR for stability
+LEARNING_RATE = 0.001  # Lower LR for stability
 NUM_EPOCHS = 5000
 PRINT_INTERVAL = 200
-SIN_PERIODS = 8           # Keep the complex target!
+SIN_PERIODS = 8  # Keep the complex target!
 
 
 def mlp_forward(x: nb.Array, params: list[nb.Array]) -> nb.Array:
@@ -79,7 +79,9 @@ def create_sin_dataset(batch_size: int = 256) -> tuple[nb.Array, nb.Array]:
     return x, targets
 
 
-def initialize_for_complex_function(layers: list[int], seed: int = 42) -> list[nb.Array]:
+def initialize_for_complex_function(
+    layers: list[int], seed: int = 42
+) -> list[nb.Array]:
     """Initialize specifically for learning complex high-frequency functions."""
     np.random.seed(seed)
     params = []
@@ -151,8 +153,8 @@ def adamw_step(
     one_tensor = nb.array([np.float32(1.0)])
 
     # Bias correction terms
-    beta1_power = nb.array([np.float32(beta1 ** step)])
-    beta2_power = nb.array([np.float32(beta2 ** step)])
+    beta1_power = nb.array([np.float32(beta1**step)])
+    beta2_power = nb.array([np.float32(beta2**step)])
     bias_correction1 = one_tensor - beta1_power
     bias_correction2 = one_tensor - beta2_power
 
@@ -175,7 +177,7 @@ def adamw_step(
 
         # Update parameters
         # sqrt_v_hat = nb.sqrt(v_hat)
-        sqrt_v_hat = v_hat ** 0.5  # Use ** 0.5 instead of sqrt for Nabla compatibility
+        sqrt_v_hat = v_hat**0.5  # Use ** 0.5 instead of sqrt for Nabla compatibility
         denominator = sqrt_v_hat + eps_tensor
         update = lr_tensor * m_hat / denominator
         new_param = param_with_decay - update
@@ -199,8 +201,12 @@ def init_adamw_state(params: list[nb.Array]) -> tuple[list[nb.Array], list[nb.Ar
     return m_states, v_states
 
 
-def learning_rate_schedule(epoch: int, initial_lr: float = 0.001,
-                          decay_factor: float = 0.95, decay_every: int = 1000) -> float:
+def learning_rate_schedule(
+    epoch: int,
+    initial_lr: float = 0.001,
+    decay_factor: float = 0.95,
+    decay_every: int = 1000,
+) -> float:
     """Learning rate schedule for complex function learning."""
     return initial_lr * (decay_factor ** (epoch // decay_every))
 
@@ -239,7 +245,9 @@ def analyze_nabla_learning_progress(params: list[nb.Array], epoch: int):
     """Analyze how well we're learning the complex function."""
     # Create a dense test set
     x_test_np = np.linspace(0, 1, 1000).reshape(-1, 1).astype(np.float32)
-    targets_test_np = (np.sin(SIN_PERIODS * 2.0 * np.pi * x_test_np) / 2.0 + 0.5).astype(np.float32)
+    targets_test_np = (
+        np.sin(SIN_PERIODS * 2.0 * np.pi * x_test_np) / 2.0 + 0.5
+    ).astype(np.float32)
 
     x_test = nb.Array.from_numpy(x_test_np)
     targets_test = nb.Array.from_numpy(targets_test_np)
@@ -281,14 +289,16 @@ def test_nabla_complex_sin():
     target_init_np = targets_init.to_numpy()
 
     print(f"Initial loss: {initial_loss.to_numpy().item():.6f}")
-    print(f"Initial predictions range: [{pred_init_np.min():.3f}, {pred_init_np.max():.3f}]")
+    print(
+        f"Initial predictions range: [{pred_init_np.min():.3f}, {pred_init_np.max():.3f}]"
+    )
     print(f"Targets range: [{target_init_np.min():.3f}, {target_init_np.max():.3f}]")
 
     print("\nStarting training...")
 
     # Training loop
     avg_loss = 0.0
-    best_test_loss = float('inf')
+    best_test_loss = float("inf")
 
     for epoch in range(1, NUM_EPOCHS + 1):
         # Learning rate schedule
@@ -305,7 +315,9 @@ def test_nabla_complex_sin():
         avg_loss += loss
 
         if epoch % PRINT_INTERVAL == 0:
-            print(f"\nEpoch {epoch}: Loss = {avg_loss / PRINT_INTERVAL:.6f}, LR = {current_lr:.6f}")
+            print(
+                f"\nEpoch {epoch}: Loss = {avg_loss / PRINT_INTERVAL:.6f}, LR = {current_lr:.6f}"
+            )
 
             # Detailed analysis
             test_loss = analyze_nabla_learning_progress(params, epoch)
@@ -320,7 +332,9 @@ def test_nabla_complex_sin():
     # Final evaluation
     print("\n=== Final Evaluation ===")
     x_test_np = np.linspace(0, 1, 1000).reshape(-1, 1).astype(np.float32)
-    targets_test_np = (np.sin(SIN_PERIODS * 2.0 * np.pi * x_test_np) / 2.0 + 0.5).astype(np.float32)
+    targets_test_np = (
+        np.sin(SIN_PERIODS * 2.0 * np.pi * x_test_np) / 2.0 + 0.5
+    ).astype(np.float32)
 
     x_test = nb.Array.from_numpy(x_test_np)
     predictions_test = mlp_forward_leaky(x_test, params)
@@ -330,7 +344,9 @@ def test_nabla_complex_sin():
     final_test_loss = np.mean((pred_final_np - targets_test_np) ** 2)
 
     print(f"Final test loss: {final_test_loss:.6f}")
-    print(f"Final predictions range: [{pred_final_np.min():.3f}, {pred_final_np.max():.3f}]")
+    print(
+        f"Final predictions range: [{pred_final_np.min():.3f}, {pred_final_np.max():.3f}]"
+    )
     print(f"Target range: [{targets_test_np.min():.3f}, {targets_test_np.max():.3f}]")
 
     # Calculate correlation
