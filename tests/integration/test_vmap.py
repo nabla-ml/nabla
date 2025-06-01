@@ -14,26 +14,26 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-import nabla
+import nabla as nb
 
 if __name__ == "__main__":
 
-    def foo(args: list[nabla.Array]) -> list[nabla.Array]:
+    def foo(args: list[nb.Array]) -> list[nb.Array]:
         a = args[0]
 
-        c = nabla.arange((2, 3, 4))
+        c = nb.arange((2, 3, 4))
 
-        res = nabla.reduce_sum(c * a * a, axes=[0])
+        res = nb.reduce_sum(c * a * a, axes=[0])
 
         return [res]
 
-    a = nabla.arange((2, 3, 4))
+    a = nb.arange((2, 3, 4))
 
     res = foo([a])
 
     print("\nResult:", res[0])
 
-    foo_vmapped = nabla.vmap(foo)
-    print("\nFoo Vmapped:", nabla.xpr(foo_vmapped, [a]))
+    foo_vmapped = nb.vmap(foo)
+    print("\nFoo Vmapped:", nb.xpr(foo_vmapped, [a]))
     res = foo_vmapped([a])
     print("\nVmapped Result:", res[0])

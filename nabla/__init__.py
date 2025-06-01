@@ -92,7 +92,9 @@ def __getattr__(name: str) -> Any:
                 module = importlib.import_module(module_name)
                 _ops_cache[name] = getattr(module, attr_name)
             except (ImportError, AttributeError) as e:
-                raise AttributeError(f"Cannot import {name} from {module_name}: {e}") from e
+                raise AttributeError(
+                    f"Cannot import {name} from {module_name}: {e}"
+                ) from e
         return _ops_cache[name]
 
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
