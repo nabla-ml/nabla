@@ -23,8 +23,8 @@ import numpy as np
 import nabla as nb
 
 # Configuration constants
-DEFAULT_BATCH_SIZE = 128
-DEFAULT_LAYERS = [1, 64, 128, 256, 128, 64, 1]
+TEST_BATCH_SIZE = 128
+TEST_LAYERS = [1, 64, 128, 128, 64, 1] 
 DEFAULT_LEARNING_RATE = 0.01
 DEFAULT_MOMENTUM = 0.9
 DEFAULT_NUM_EPOCHS = 20
