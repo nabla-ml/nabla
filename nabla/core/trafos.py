@@ -19,8 +19,114 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
 from .array import Array
+
+def tree_flatten(tree: Any) -> tuple[list[Array], Any]:
+    """Flatten a pytree into a list of Arrays and structure info.
+    
+    Args:
+        tree: A pytree containing Arrays and other structures
+        
+    Returns:
+        A tuple of (list of Array leaves, structure info for reconstruction)
+    """
+    leaves = []
+    
+    def _flatten(obj: Any) -> Any:
+        if isinstance(obj, Array):
+            leaves.append(obj)
+            return None  # Placeholder for Array
+        elif isinstance(obj, dict):
+            keys = sorted(obj.keys())  # Deterministic ordering
+            return {k: _flatten(obj[k]) for k in keys}
+        elif isinstance(obj, (list, tuple)):
+            return type(obj)(_flatten(item) for item in obj)
+        else:
+            # Non-Array leaf (int, float, etc.)
+            return obj
+    
+    structure = _flatten(tree)
+    return leaves, structure
+
+
+def tree_unflatten(structure: Any, leaves: list[Array]) -> Any:
+    """Reconstruct a pytree from structure info and list of Arrays.
+    
+    Args:
+        structure: Structure info from tree_flatten
+        leaves: List of Array values to place at Array positions
+        
+    Returns:
+        Reconstructed pytree with the same structure as the original
+    """
+    leaves_iter = iter(leaves)
+    
+    def _unflatten(struct: Any) -> Any:
+        if struct is None:  # Array placeholder
+            return next(leaves_iter)
+        elif isinstance(struct, dict):
+            return {k: _unflatten(v) for k, v in struct.items()}
+        elif isinstance(struct, (list, tuple)):
+            return type(struct)(_unflatten(item) for item in struct)
+        else:
+            # Non-Array leaf
+            return struct
+    
+    result = _unflatten(structure)
+    
+    # Verify we consumed all leaves
+    try:
+        next(leaves_iter)
+        raise ValueError("Too many leaves provided for tree structure")
+    except StopIteration:
+        pass
+    
+    return result
+
+
+def tree_map(func: Callable[[Array], Array], tree: Any) -> Any:
+    """Apply a function to all Array leaves in a pytree.
+    
+    Args:
+        func: Function to apply to each Array leaf
+        tree: Pytree containing Arrays
+        
+    Returns:
+        Pytree with the same structure but transformed Arrays
+    """
+    leaves, structure = tree_flatten(tree)
+    transformed_leaves = [func(leaf) for leaf in leaves]
+    return tree_unflatten(structure, transformed_leaves)
+
+
+def _apply_transformation_to_arrays(
+    transformation_func: Callable[[list[Array]], Any],
+    tree: Any
+) -> tuple[Any, Callable[[Any], Any]]:
+    """Apply a transformation function to Arrays in a pytree structure.
+    
+    This is a helper function that:
+    1. Flattens the input tree to extract Arrays
+    2. Applies the transformation to the list of Arrays  
+    3. Returns transformed result and a function to reverse the process
+    
+    Args:
+        transformation_func: Function that takes list[Array] and returns transformed result
+        tree: Input pytree containing Arrays
+        
+    Returns:
+        Tuple of (transformed_result, unflatten_func) where unflatten_func
+        can reconstruct the original tree structure from a list of Arrays
+    """
+    leaves, structure = tree_flatten(tree)
+    
+    def unflatten_func(new_leaves: list[Array]) -> Any:
+        return tree_unflatten(structure, new_leaves)
+    
+    transformed_result = transformation_func(leaves)
+    return transformed_result, unflatten_func
 
 
 def _validate_length_match(list1, list2, name1: str, name2: str) -> None:
@@ -186,27 +292,52 @@ class Trace:
         print(self)
 
 
+def _extract_arrays_from_pytree(tree: Any) -> list[Array]:
+    """Extract all Arrays from a pytree structure.
+    
+    Args:
+        tree: Pytree that may contain Arrays, ints, floats, etc.
+        
+    Returns:
+        List of all Arrays found in the tree
+    """
+    leaves, _ = tree_flatten(tree)
+    return leaves
+
+
 def pullback(
-    inputs: list[Array],
-    outputs: list[Array],
-    cotangents: list[Array],
-) -> list[Array]:
+    inputs: Any,
+    outputs: Any,
+    cotangents: Any,
+    vjp_call_info: tuple[tuple, dict] | None = None,
+) -> Any:
     """Compute vector-Jacobian product (reverse-mode autodiff).
+    
+    Returns gradients in the exact same structure as inputs.
 
     Args:
-        inputs: Input arrays to the computation
-        outputs: Output arrays from the computation
-        cotangents: Cotangent vectors for each output
+        inputs: Input arrays or pytree of arrays
+        outputs: Output arrays or pytree of arrays  
+        cotangents: Cotangent vectors or pytree of cotangents
+        vjp_call_info: Optional tuple of (original_args, original_kwargs) from VJP call
+                      for special return structure handling
 
     Returns:
-        List of gradients with respect to inputs
+        Gradients with respect to inputs, in the same structure as inputs
+        (or adjusted structure if vjp_call_info is provided)
     """
-    _validate_length_match(cotangents, outputs, "Cotangents", "outputs")
+    # Extract arrays from pytree structures
+    input_arrays = _extract_arrays_from_pytree(inputs)
+    output_arrays = _extract_arrays_from_pytree(outputs)
+    cotangent_arrays = _extract_arrays_from_pytree(cotangents)
+    
+    _validate_length_match(cotangent_arrays, output_arrays, "Cotangent arrays", "output arrays")
 
-    trace = Trace(inputs, outputs)
+    # Core VJP computation
+    trace = Trace(input_arrays, output_arrays)
     traced_nodes = trace.get_traced_nodes()
 
-    for output, cotangent in zip(outputs, cotangents, strict=False):
+    for output, cotangent in zip(output_arrays, cotangent_arrays, strict=False):
         output.cotangent = cotangent
 
     try:
@@ -228,7 +359,7 @@ def pullback(
                     else:
                         arg.cotangent = arg_cotangent
 
-                if node not in inputs:
+                if node not in input_arrays:
                     node.cotangent = None
 
             except Exception as e:
@@ -236,16 +367,47 @@ def pullback(
                     f"VJP rule failed for operation '{node.name}': {e}"
                 ) from e
 
-        input_gradients = []
-        for inp in inputs:
+        # Collect gradients for input arrays
+        gradient_arrays = []
+        for inp in input_arrays:
             if inp.cotangent is not None:
-                input_gradients.append(inp.cotangent)
+                gradient_arrays.append(inp.cotangent)
             else:
                 from ..ops.creation import zeros
+                gradient_arrays.append(zeros(inp.shape, dtype=inp.dtype))
 
-                input_gradients.append(zeros(inp.shape, dtype=inp.dtype))
-
-        return input_gradients
+        # Return gradients in the same structure as inputs
+        gradient_iter = iter(gradient_arrays)
+        
+        def _replace_with_gradient(value: Any) -> Any:
+            if isinstance(value, Array):
+                return next(gradient_iter)
+            else:
+                # For non-Arrays, return zeros of the same type
+                if isinstance(value, (int, float)):
+                    return type(value)(0)
+                elif isinstance(value, complex):
+                    return complex(0)
+                else:
+                    return value  # Fallback for other types
+        
+        gradients_in_input_structure = tree_map(_replace_with_gradient, inputs)
+        
+        # If this is called from VJP, apply special return structure logic
+        if vjp_call_info is not None:
+            original_args, original_kwargs = vjp_call_info
+            grad_args, grad_kwargs = gradients_in_input_structure
+            
+            # Return gradients in the same structure as the original VJP call
+            if not original_kwargs:
+                if len(original_args) == 1:
+                    return grad_args[0]  # Unpack single argument
+                else:
+                    return grad_args
+            else:
+                return grad_args, grad_kwargs
+        
+        return gradients_in_input_structure
 
     finally:
         for node in traced_nodes:
@@ -333,6 +495,37 @@ def xpr(
     return str(trace)
 
 
+def make_traced_pytree(tree: Any) -> Any:
+    """Create shallow copies of arrays in a pytree and mark them as traced.
+
+    Args:
+        tree: Pytree containing Arrays to copy and mark as traced
+
+    Returns:
+        Pytree with the same structure but traced Arrays
+    """
+    def _make_traced_array(array: Array) -> Array:
+        from ..ops.view import shallow_copy
+        copied_arg = shallow_copy(array)
+        copied_arg.traced = True
+        return copied_arg
+    
+    return tree_map(_make_traced_array, tree)
+
+
+def make_untraced_pytree(tree: Any) -> None:
+    """Disable tracing for arrays in a pytree by clearing their traced flag.
+
+    Args:
+        tree: Pytree containing Arrays to disable tracing for
+    """
+    def _make_untraced_array(array: Array) -> Array:
+        array.traced = False
+        return array
+    
+    tree_map(_make_untraced_array, tree)
+
+
 def make_traced(args: list[Array]) -> list[Array]:
     """Create shallow copies of arrays and mark them as traced.
 
@@ -383,33 +576,40 @@ def make_unstaged(args: list[Array]) -> None:
 
 
 def vjp(
-    func: Callable[[list[Array]], list[Array]], inputs: list[Array]
-) -> tuple[list[Array], Callable[[list[Array]], list[Array]]]:
+    func: Callable[..., Any], *args, **kwargs
+) -> tuple[Any, Callable]:
     """Compute vector-Jacobian product (reverse-mode autodiff).
 
     Args:
-        func: Function to differentiate
-        inputs: Input arrays to the function
+        func: Function to differentiate (can have arbitrary signature)
+        *args: Positional arguments to the function (can be arbitrary pytrees)
+        **kwargs: Keyword arguments to the function (can be arbitrary pytrees)
 
     Returns:
         Tuple of (outputs, vjp_function) where vjp_function computes gradients
     """
-    inputs = make_traced(inputs)
-    outputs = func(inputs)
+    # Combine args and kwargs into a single pytree for easier handling
+    inputs_pytree = (args, kwargs)
+    
+    # Make traced copies of all inputs
+    traced_inputs_pytree = make_traced_pytree(inputs_pytree)
+    traced_args, traced_kwargs = traced_inputs_pytree
+    
+    # Execute the function with traced inputs
+    outputs = func(*traced_args, **traced_kwargs)
 
-    if not isinstance(outputs, list):
-        outputs = [outputs]
-
-    def vjp_fn(cotangents: list[Array]) -> list[Array]:
-        _validate_length_match(cotangents, outputs, "Cotangents", "outputs")
-
-        gradients = pullback(inputs, outputs, cotangents)
-
-        make_untraced(gradients)
-
+    def vjp_fn(cotangents: Any) -> Any:
+        """VJP function that computes gradients."""
+        # Use the unified pullback function with pytree support and VJP call info
+        gradients = pullback(traced_inputs_pytree, outputs, cotangents, vjp_call_info=(args, kwargs))
+        
+        # Make the gradients untraced
+        make_untraced_pytree(gradients)
+        
         return gradients
 
-    make_untraced(outputs)
+    # Make outputs untraced before returning
+    make_untraced_pytree(outputs)
 
     return outputs, vjp_fn
 
