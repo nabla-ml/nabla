@@ -51,6 +51,7 @@ from .ops.view import (
     squeeze,
     transpose,
     unsqueeze,
+    shallow_copy,
 )
 from .utils.broadcasting import get_broadcasted_shape
 from .utils.formatting import format_dtype, format_shape_and_dtype
@@ -96,6 +97,7 @@ __all__ = [
     "broadcast_to",
     "squeeze",
     "unsqueeze",
+    "shallow_copy",
     "broadcast_batch_dims",
     "reduce_sum",
     DType,

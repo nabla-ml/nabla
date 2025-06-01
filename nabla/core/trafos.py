@@ -7,8 +7,7 @@
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 #
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
+# Unless required by applicable law or agreed to in writing, softw    inputs = make_traced(inputs)ributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
@@ -22,6 +21,22 @@ from collections.abc import Callable
 
 from .array import Array
 
+
+# ===----------------------------------------------------------------------=== #
+# Simple validation helpers
+# ===----------------------------------------------------------------------=== #
+
+def _validate_length_match(list1, list2, name1: str, name2: str) -> None:
+    """Validate that two lists have matching lengths."""
+    if len(list1) != len(list2):
+        raise ValueError(
+            f"{name1} length {len(list1)} != {name2} length {len(list2)}"
+        )
+
+
+# ===----------------------------------------------------------------------=== #
+# Trace class
+# ===----------------------------------------------------------------------=== #
 
 class Trace:
     """A simple trace container that holds the computation graph."""
@@ -46,30 +61,17 @@ class Trace:
         This is the recommended way to create traces as it ensures proper
         tracing setup before function execution.
         """
+        inputs = make_traced(inputs)  
+
         # Create trace instance (this marks inputs as traced)
         trace = cls(inputs)
-
-        for inp in inputs:
-            # Mark input arrays as traced
-            inp.traced = True
 
         # Execute function with tracing enabled
         outputs = fn(inputs)
         trace.outputs = outputs if isinstance(outputs, list) else [outputs]
 
-        for out in trace.outputs:
-            # Mark output arrays as traced
-            out.traced = True
-
-        # trace.trace = trace.get_traced_nodes()
-
-        for inp in inputs:
-            # Reset traced flag for inputs after execution
-            inp.traced = False
-
-        for out in trace.outputs:
-            # Mark output arrays as traced
-            out.traced = False
+        make_untraced(inputs)  # Detach inputs from the trace
+        make_untraced(trace.outputs)
 
         return trace
 
@@ -198,48 +200,42 @@ def pullback(
     outputs: list[Array],
     cotangents: list[Array],
 ) -> list[Array]:
-    """Compute vector-Jacobian product (reverse-mode autodiff)."""
-    if len(cotangents) != len(outputs):
-        raise ValueError(
-            f"Cotangents length {len(cotangents)} != outputs length {len(outputs)}"
-        )
+    """Compute vector-Jacobian product (reverse-mode autodiff).
+    
+    Args:
+        inputs: Input arrays to the computation
+        outputs: Output arrays from the computation  
+        cotangents: Cotangent vectors for each output
+        
+    Returns:
+        List of gradients with respect to inputs
+    """
+    _validate_length_match(cotangents, outputs, "Cotangents", "outputs")
 
-    # Use provided trace or compute new one (for backward compatibility)
     trace = Trace(inputs, outputs)
     traced_nodes = trace.get_traced_nodes()
 
-    # Step 1: Initialize cotangents for output nodes
     for output, cotangent in zip(outputs, cotangents, strict=False):
         output.cotangent = cotangent
 
     try:
-        # Step 2: Traverse nodes in reverse topological order
         for node in reversed(traced_nodes):
-            # Skip nodes without cotangents (shouldn't happen in well-formed graphs)
             if node.cotangent is None:
                 continue
 
-            # Skip input nodes (they don't have VJP rules to apply)
             if not node.args or node.vjp_rule is None:
                 continue
 
-            # Step 3: Apply VJP rule to get cotangents for arguments
             try:
                 arg_cotangents = node.vjp_rule(node.args, node.cotangent, node)
 
-                # Step 4: Accumulate cotangents for each argument
                 for arg, arg_cotangent in zip(node.args, arg_cotangents, strict=False):
                     if arg.cotangent is not None:
-                        # Accumulate: add new cotangent to existing one
                         from ..ops.binary import add
-
                         arg.cotangent = add(arg.cotangent, arg_cotangent)
                     else:
-                        # First cotangent for this argument
                         arg.cotangent = arg_cotangent
 
-                # Step 5: Clean up this node's gradient immediately after processing
-                # (unless it's an input node - we need those gradients at the end)
                 if node not in inputs:
                     node.cotangent = None
 
@@ -248,24 +244,19 @@ def pullback(
                     f"VJP rule failed for operation '{node.name}': {e}"
                 ) from e
 
-        # Step 5: Collect gradients for input nodes
         input_gradients = []
         for inp in inputs:
             if inp.cotangent is not None:
                 input_gradients.append(inp.cotangent)
             else:
-                # Input has no gradient (not used in computation)
                 from ..ops.creation import zeros
-
                 input_gradients.append(zeros(inp.shape, dtype=inp.dtype))
 
         return input_gradients
 
     finally:
-        # Step 6: Cleanup - only need to clean input gradients now
-        # (intermediate gradients were cleaned during processing)
-        for inp in inputs:
-            inp.cotangent = None
+        for node in traced_nodes:
+            node.cotangent = None
 
 
 def pushfwd(
@@ -274,169 +265,153 @@ def pushfwd(
     tangents: list[Array],
     trace: Trace | None = None,
 ) -> list[Array]:
-    """Compute Jacobian-vector product (forward-mode autodiff)."""
-    if len(tangents) != len(inputs):
-        raise ValueError(
-            f"Tangents length {len(tangents)} != inputs length {len(inputs)}"
-        )
+    """Compute Jacobian-vector product (forward-mode autodiff).
+    
+    Args:
+        inputs: Input arrays to the computation
+        outputs: Output arrays from the computation
+        tangents: Tangent vectors for each input
+        trace: Optional precomputed trace
+        
+    Returns:
+        List of output tangents
+    """
+    _validate_length_match(tangents, inputs, "Tangents", "inputs")
 
-    # Use provided trace or compute new one (for backward compatibility)
     if trace is None:
         trace = Trace(inputs, outputs)
 
     traced_nodes = trace.get_traced_nodes()
 
-    # Step 1: Initialize tangents for input nodes
     for input_node, tangent in zip(inputs, tangents, strict=False):
         input_node.tangent = tangent
 
-    try:
-        # Step 2: Traverse nodes in forward topological order
-        for node in traced_nodes:
-            # Skip nodes that are inputs (they already have tangents)
-            if node in inputs:
-                continue
+    for node in traced_nodes:
+        if node in inputs:
+            continue
 
-            # Skip nodes without arguments (shouldn't happen in well-formed graphs)
-            if not node.args or node.jvp_rule is None:
-                continue
+        if not node.args or node.jvp_rule is None:
+            continue
 
-            # Step 3: Collect tangents from arguments
-            arg_tangents = []
-            for arg in node.args:
-                if arg.tangent is not None:
-                    arg_tangents.append(arg.tangent)
-                else:
-                    # If an argument doesn't have a tangent, use zeros
-                    from ..ops.creation import zeros
-
-                    arg_tangents.append(
-                        zeros(arg.shape, dtype=arg.dtype, device=arg.device)
-                    )
-
-            # Step 4: Apply JVP rule to get tangent for this node
-            try:
-                node.tangent = node.jvp_rule(node.args, arg_tangents, node)
-            except Exception as e:
-                raise RuntimeError(
-                    f"JVP rule failed for operation '{node.name}': {e}"
-                ) from e
-
-        # Step 5: Collect tangents for output nodes
-        output_tangents = []
-        for out in outputs:
-            if out.tangent is not None:
-                output_tangents.append(out.tangent)
+        arg_tangents = []
+        for arg in node.args:
+            if arg.tangent is not None:
+                arg_tangents.append(arg.tangent)
             else:
-                # Output has no tangent (shouldn't happen in well-formed graphs)
                 from ..ops.creation import zeros
-
-                output_tangents.append(
-                    zeros(out.shape, dtype=out.dtype, device=out.device)
+                arg_tangents.append(
+                    zeros(arg.shape, dtype=arg.dtype, device=arg.device)
                 )
 
-        return output_tangents
+        try:
+            node.tangent = node.jvp_rule(node.args, arg_tangents, node)
+        except Exception as e:
+            raise RuntimeError(
+                f"JVP rule failed for operation '{node.name}': {e}"
+            ) from e
 
-    finally:
-        # Step 6: Cleanup tangents for all nodes
-        # (inputs, outputs, and any intermediate nodes)
-        for node in traced_nodes:
-            node.tangent = None
+    output_tangents = []
+    for out in outputs:
+        if out.tangent is not None:
+            output_tangents.append(out.tangent)
+        else:
+            from ..ops.creation import zeros
+            output_tangents.append(
+                zeros(out.shape, dtype=out.dtype, device=out.device)
+            )
 
-        # Only reset traced flags if we're not in a higher-order derivative computation
-        # Check if any input still needs to be traced (indicating higher-order derivatives)
-        # set traced flag of inputs and outputs to false again
-        for inp in inputs:
-            inp.traced = False
-        for out in outputs:
-            out.traced = False
+    return output_tangents
 
 
 def xpr(
     fn: Callable[[list[Array]], list[Array]],
     args: list[Array],
 ) -> str:
-    """
-    Get a JAX-like string representation of the function's computation graph.
+    """Get a JAX-like string representation of the function's computation graph.
 
     Args:
         fn: Function to trace
-        args: List of input Arrays to the function
+        args: Input arrays to the function
+        
     Returns:
-        str: JAX-like string representation of the computation graph
+        JAX-like string representation of the computation graph
     """
-    try:
-        # for inp in args:
-        #     # Mark input arrays as traced
-        #     inp.traced = True
-
-        # Use the trace_function class method for proper tracing
-        trace = Trace.trace_function(fn, args)
-
-        # Return the string representation of the trace
-        str_repr = str(trace)
-
-        for inp in args:
-            inp.traced = False
-        for out in trace.outputs:
-            out.traced = False
-
-        return str_repr
-    finally:
-        # Clean up: reset traced flags after tracing
-        pass
-
-
-def detach(outputs: list[Array]) -> list[Array]:
+    trace = Trace.trace_function(fn, args)
+    return str(trace)
+    
+def make_traced(args: list[Array]) -> list[Array]:
+    """Create shallow copies of arrays and mark them as traced.
+    
+    Args:
+        args: Arrays to copy and mark as traced
+        
+    Returns:
+        Shallow copies of input arrays with tracing enabled
     """
-    Detach outputs from their computation graph by clearing dependencies.
+    copied_args = []
+    from ..ops.view import shallow_copy
+    for arg in args:
+        copied_arg = shallow_copy(arg)
+        copied_arg.traced = True
+        copied_args.append(copied_arg)
+    return copied_args
+
+
+def make_untraced(args: list[Array]) -> None:
+    """Disable tracing for arrays by clearing their traced flag.
+    
+    Args:
+        args: Arrays to disable tracing for
     """
-    for out in outputs:
-        out.traced = False
-        out.stage_realization = False  # Disable staged execution
+    for arg in args:
+        arg.traced = False
 
-    return outputs
+def make_staged(args: list[Array]) -> None:
+    """Enable staged execution for arrays to optimize performance.
+    
+    Args:
+        args: Arrays to enable staged execution for
+    """
+    for arg in args:
+        arg.stage_realization = True  # Enable staged execution
 
+def make_unstaged(args: list[Array]) -> None:
+    """Disable staged execution for arrays.
+    
+    Args:
+        args: Arrays to disable staged execution for
+    """
+    for arg in args:
+        arg.stage_realization = False  # Disable staged execution
 
 def vjp(
     func: Callable[[list[Array]], list[Array]], inputs: list[Array]
 ) -> tuple[list[Array], Callable[[list[Array]], list[Array]]]:
-    # Mark inputs for tracing
-    for inp in inputs:
-        inp.traced = True
-
-    # Compute outputs once and create trace
+    """Compute vector-Jacobian product (reverse-mode autodiff).
+    
+    Args:
+        func: Function to differentiate
+        inputs: Input arrays to the function
+        
+    Returns:
+        Tuple of (outputs, vjp_function) where vjp_function computes gradients
+    """
+    inputs = make_traced(inputs)
     outputs = func(inputs)
+
     if not isinstance(outputs, list):
         outputs = [outputs]
 
     def vjp_fn(cotangents: list[Array]) -> list[Array]:
-        if len(cotangents) != len(outputs):
-            raise ValueError(
-                f"Cotangents length {len(cotangents)} != outputs length {len(outputs)}"
-            )
-
-        for inp in inputs:
-            # Mark input arrays as traced
-            inp.traced = True
-
-        for out in outputs:
-            # Mark output arrays as traced
-            out.traced = True
+        _validate_length_match(cotangents, outputs, "Cotangents", "outputs")
 
         gradients = pullback(inputs, outputs, cotangents)
 
-        detach(inputs)
-        detach(gradients)
-        detach(outputs)
+        make_untraced(gradients)
 
         return gradients
 
-    for inp in inputs:
-        inp.traced = False
-
-    for out in outputs:
-        out.traced = False
+    make_untraced(outputs)
 
     return outputs, vjp_fn
 
@@ -446,38 +421,28 @@ def jvp(
     inputs: list[Array],
     tangents: list[Array],
 ) -> tuple[list[Array], list[Array]]:
-    """
-    Compute Jacobian-vector product (forward-mode autodiff).
+    """Compute Jacobian-vector product (forward-mode autodiff).
 
     Args:
         func: Function to differentiate
         inputs: Input arrays to the function
-        tangents: Tangent vectors (directional derivatives)
+        tangents: Tangent vectors for directional derivatives
 
     Returns:
-        tuple: (outputs, output_tangents) where output_tangents are the JVP results
+        Tuple of (outputs, output_tangents) where output_tangents are the JVP results
     """
-    if len(tangents) != len(inputs):
-        raise ValueError(
-            f"Tangents length {len(tangents)} != inputs length {len(inputs)}"
-        )
+    _validate_length_match(tangents, inputs, "Tangents", "inputs")
 
-    # Mark inputs for tracing
-    for inp in inputs:
-        inp.traced = True
-
-    # Compute outputs and their tangents using pushfwd
+    inputs = make_traced(inputs)  
     outputs = func(inputs)
 
     if not isinstance(outputs, list):
         outputs = [outputs]
 
-    # Use pushfwd to compute the output tangents
     output_tangents = pushfwd(inputs, outputs, tangents)
 
-    detach(inputs)  # Detach inputs after computation
-    detach(outputs)  # Detach outputs after computation
-    detach(output_tangents)  # Detach output tangents
+    make_untraced(outputs)
+    make_untraced(output_tangents)
 
     return outputs, output_tangents
 
@@ -487,48 +452,24 @@ def vmap(
     in_axes: list[int] | None = None,
     out_axes: list[int] | None = None,
 ) -> Callable[[list[Array]], list[Array]]:
-    """
-    Vectorize a function over its inputs.
+    """Vectorize a function over specified input axes.
+    
     Args:
         func: Function to vectorize
-        adapted_in_axes: Input axes to vectorize over (default: all inputs)
-        adapted_out_axes: Output axes to vectorize over (default: all outputs)
+        in_axes: Input axes to vectorize over (default: axis 0 for all inputs)
+        out_axes: Output axes to vectorize over (default: axis 0 for all outputs)
 
     Returns:
-        Callable: Vectorized function that can handle batched inputs
+        Vectorized function that can handle batched inputs
     """
 
     def vectorized_func(inputs: list[Array]) -> list[Array]:
-        for inp in inputs:
-            inp.traced = True
 
         adapted_in_axes = in_axes if in_axes is not None else [0] * len(inputs)
 
-        if len(adapted_in_axes) != len(inputs):
-            raise ValueError(
-                f"Length of adapted_in_axes {len(adapted_in_axes)} does not match number of inputs {len(inputs)}"
-            )
+        _validate_length_match(adapted_in_axes, inputs, "adapted_in_axes", "inputs")
 
-        batched_inputs = []
-
-        for i, inp in enumerate(inputs):
-            if adapted_in_axes[i] is None:
-                from ..ops.view import unsqueeze
-
-                batched_inp = unsqueeze(inp, [0])
-
-            else:
-                axis = adapted_in_axes[i]
-                batched_inp = inp
-                if axis != 0:
-                    from ..ops.view import transpose
-
-                    batched_inp = transpose(inp, axis, 0)
-
-            from ..ops.unary import incr_batch_dim_ctr
-
-            batched_inp = incr_batch_dim_ctr(batched_inp)
-            batched_inputs.append(batched_inp)
+        batched_inputs = _prepare_vmap_inputs(inputs, adapted_in_axes)
 
         # Call the original function with batched inputs
         outputs = func(batched_inputs)
@@ -537,79 +478,91 @@ def vmap(
         if not isinstance(outputs, list):
             outputs = [outputs]
 
-        for out in outputs:
-            # Mark output arrays as traced
-            out.traced = True
-
         adapted_out_axes = out_axes if out_axes is not None else [0] * len(outputs)
 
-        if len(adapted_out_axes) != len(outputs):
-            raise ValueError(
-                f"Length of adapted_out_axes {len(adapted_out_axes)} does not match number of inputs {len(outputs)}"
-            )
+        _validate_length_match(adapted_out_axes, outputs, "adapted_out_axes", "outputs")
 
-        unbatched_outputs = []
+        unbatched_outputs = _prepare_vmap_outputs(outputs, adapted_out_axes)
 
-        # # cleanup inputs, i.e. call decr_batch_dim_ctr on inputs that were incremented
-        for i, out in enumerate(outputs):
-            from ..ops.unary import decr_batch_dim_ctr
-
-            unbatched_output = decr_batch_dim_ctr(out)
-            if adapted_out_axes[i] is None:
-                from ..ops.view import squeeze
-
-                unbatched_output = squeeze(unbatched_output, [0])
-            else:
-                axis = adapted_out_axes[i]
-                if axis != 0:
-                    # Move axis 0 back to the original position
-                    from ..ops.view import transpose
-
-                    unbatched_output = transpose(unbatched_output, 0, axis)
-
-            unbatched_outputs.append(unbatched_output)
-
-        detach(inputs)
-        detach(unbatched_outputs)
+        make_untraced(unbatched_outputs)
 
         return unbatched_outputs
 
     return vectorized_func
 
 
+def _prepare_vmap_inputs(inputs: list[Array], adapted_in_axes: list[int]) -> list[Array]:
+    """Prepare inputs for vmap by handling batching and axis transposition."""
+    batched_inputs = []
+    inputs = make_traced(inputs)
+
+    for i, inp in enumerate(inputs):
+        if adapted_in_axes[i] is None:
+            from ..ops.view import unsqueeze
+            batched_inp = unsqueeze(inp, [0])
+        else:
+            axis = adapted_in_axes[i]
+            batched_inp = inp
+            if axis != 0:
+                from ..ops.view import transpose
+                batched_inp = transpose(inp, axis, 0)
+
+        from ..ops.unary import incr_batch_dim_ctr
+        batched_inp = incr_batch_dim_ctr(batched_inp)
+        batched_inputs.append(batched_inp)
+
+    return batched_inputs
+
+
+def _prepare_vmap_outputs(outputs: list[Array], adapted_out_axes: list[int]) -> list[Array]:
+    """Prepare outputs from vmap by handling unbatching and axis transposition."""
+    unbatched_outputs = []
+
+    for i, out in enumerate(outputs):
+        from ..ops.unary import decr_batch_dim_ctr
+        unbatched_output = decr_batch_dim_ctr(out)
+
+        if adapted_out_axes[i] is None:
+            from ..ops.view import squeeze
+            unbatched_output = squeeze(unbatched_output, [0])
+        else:
+            axis = adapted_out_axes[i]
+            if axis != 0:
+                # Move axis 0 back to the original position
+                from ..ops.view import transpose
+                unbatched_output = transpose(unbatched_output, 0, axis)
+
+        unbatched_outputs.append(unbatched_output)
+
+    return unbatched_outputs
+
+
 def jit(
     func: Callable[[list[Array]], list[Array]],
 ) -> Callable[[list[Array]], list[Array]]:
-    """
-    Just-in-time compile a function for performance optimization.
+    """Just-in-time compile a function for performance optimization.
 
     Args:
         func: Function to JIT compile
+        
     Returns:
-        Callable: JIT-compiled function
+        JIT-compiled function with optimized execution
     """
 
     def jit_func(inputs: list[Array]) -> list[Array]:
-        # Mark inputs for tracing
-        for inp in inputs:
-            inp.traced = True
-            inp.stage_realization = True  # Enable staged execution
+        inputs = make_traced(inputs)
+        make_staged(inputs)  # Only callable after make_traced
 
-        # Call the original function
         outputs = func(inputs)
 
-        # Realize the outputs to compute their values
         from .graph_execution import realize_
-
         realize_(outputs)
 
-        # Ensure outputs are a list
         if not isinstance(outputs, list):
             outputs = [outputs]
 
-        # Detach inputs and outputs from the computation graph
-        detach(inputs)
-        detach(outputs)
+        make_untraced(outputs)
+        make_unstaged(outputs)
 
         return outputs
 

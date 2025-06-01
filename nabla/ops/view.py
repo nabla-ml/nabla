@@ -439,3 +439,39 @@ def unsqueeze(arg: Array, axes: list[int] = None) -> Array:
     axes = [ax if ax < 0 else -len(arg.shape) - 1 + ax for ax in axes]
     op = UnsqueezeOp(axes)
     return op.forward(arg)
+
+
+class ShallowCopyOp(ViewOperation):
+    """Copy operation to create a new array with the same data."""
+
+    def __init__(self):
+        super().__init__("copy")
+
+    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
+        """Compatible signature."""
+        if len(input_shapes) != 1:
+            raise ValueError(
+                f"Copy operation requires 1 input shape, got {len(input_shapes)}"
+            )
+        return input_shapes[0]
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        output.tensor_value = args[0]
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        output.impl = args[0].impl
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        return [cotangent]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        return tangents[0]
+    
+def shallow_copy(arg: Array) -> Array:
+    """Create a shallow copy of the array."""
+    op = ShallowCopyOp()
+    return op.forward(arg)

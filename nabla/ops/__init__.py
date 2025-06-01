@@ -38,6 +38,7 @@ from .view import (
     squeeze,
     transpose,
     unsqueeze,
+    shallow_copy,
 )
 
 __all__ = [
@@ -63,6 +64,7 @@ __all__ = [
     "broadcast_to",
     "squeeze",
     "unsqueeze",
+    "shallow_copy",
     "broadcast_batch_dims",
     "reduce_sum",
 ]
