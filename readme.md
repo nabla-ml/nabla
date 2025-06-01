@@ -3,7 +3,6 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
-
 # NABLA
 
 *Python library for scientific computing, providing 3 things:*
@@ -85,4 +84,3 @@ Nabla is licensed under the [Apache-2.0 license](https://github.com/nabla-ml/nab
 ---
 
 *Thank you for checking out Nabla!*
-
