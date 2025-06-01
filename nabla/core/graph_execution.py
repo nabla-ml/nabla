@@ -119,7 +119,7 @@ class ModelFactory:
                 devices.append(input_node.device)
 
         try:
-            custom_op_package_path = Path(__file__).parent.parent / "mojo_kernels"
+            custom_op_package_path = Path(__file__).parent.parent / "kernels"
 
             with Graph(
                 "nabla_graph",
