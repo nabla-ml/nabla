@@ -86,10 +86,7 @@ def generate_random_data(shape, dtype=np.float32, seed=42):
 
 def assert_arrays_close(actual, expected, rtol=1e-7, atol=1e-8, msg=""):
     """Assert that two arrays are numerically close."""
-    if hasattr(actual, "to_numpy"):
-        actual_np = actual.to_numpy()
-    else:
-        actual_np = np.asarray(actual)
+    actual_np = actual.to_numpy() if hasattr(actual, "to_numpy") else np.asarray(actual)
 
     expected_np = np.asarray(expected)
 

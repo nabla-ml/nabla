@@ -17,6 +17,7 @@
 """Shorthands for utitly functions from MAX"""
 
 from max.driver import Device
+from max.graph import DeviceRef
 
 
 def accelerator(device_id: int = 0) -> Device:
@@ -67,3 +68,16 @@ def device(device_name: str) -> Device:
         raise ValueError(
             f"Unsupported device: {device_name}. Use 'cpu' or 'gpu:<id>' format."
         )
+
+
+def device_ref(device: Device) -> DeviceRef:
+    """
+    Get a DeviceRef instance for the specified device.
+
+    Args:
+        device: The Device instance to reference.
+
+    Returns:
+        A DeviceRef instance for the specified device.
+    """
+    return DeviceRef.from_device(device)

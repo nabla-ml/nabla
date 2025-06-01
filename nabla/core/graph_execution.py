@@ -19,7 +19,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from pathlib import Path
 
 from max.engine import InferenceSession, Model
 from max.graph import DeviceRef, Graph, TensorType
@@ -118,16 +117,22 @@ class ModelFactory:
             if input_node.device not in devices:
                 devices.append(input_node.device)
 
-        try:
-            custom_op_package_path = Path(__file__).parent.parent / "kernels"
+        custom_ops_paths = []
+        for node in trace:
+            if node.custom_kernel_path and node.custom_kernel_path.exists():
+                custom_ops_paths.append(node.custom_kernel_path)
 
-            with Graph(
-                "nabla_graph",
-                input_types=input_types,
-                custom_extensions=(
-                    [custom_op_package_path] if custom_op_package_path.exists() else []
-                ),
-            ) as graph:
+        try:
+            # custom_op_package_path = Path(__file__).parent.parent / "kernels"
+
+            with (
+                Graph(
+                    "nabla_graph",
+                    input_types=input_types,
+                    # [custom_op_package_path] if custom_op_package_path.exists() else []
+                    custom_extensions=custom_ops_paths,  # if len(custom_ops_paths) > 0 else None
+                ) as graph
+            ):
                 input_symbols = graph.inputs
                 for i, input_node in enumerate(inputs):
                     input_node.tensor_value = input_symbols[i]

@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
@@ -62,6 +63,7 @@ class Array:
         self.tangent: Optional[Array] = None
         self.cotangent: Optional[Array] = None
         self.stage_realization: bool = False
+        self.kernel_impl_path: Optional[Path] = None
 
         if materialize:
             self.impl = Tensor(dtype, batch_dims + shape, device=device)

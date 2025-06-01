@@ -113,6 +113,7 @@ class MatMulOp(BinaryOperation):
         res.add_arguments(arg1_broadcasted, arg2_broadcasted)
         res.vjp_rule = self.vjp_rule
         res.jvp_rule = self.jvp_rule
+        res.custom_kernel_path = self.custom_kernel_path()
 
         if not res.stage_realization:
             self.eagerxpr([arg1_broadcasted, arg2_broadcasted], res)

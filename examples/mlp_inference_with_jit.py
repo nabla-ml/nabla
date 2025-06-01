@@ -29,12 +29,9 @@ import nabla as nb
 
 # Configuration constants
 TEST_BATCH_SIZE = 128
-DEFAULT_BATCH_SIZE = TEST_BATCH_SIZE
-TEST_LAYERS = [1, 64, 128, 128, 64, 1]
-DEFAULT_LAYERS = TEST_LAYERS
-DEFAULT_LEARNING_RATE = 0.01
-DEFAULT_MOMENTUM = 0.9
-DEFAULT_NUM_EPOCHS = 20
+BATCH_SIZE = TEST_BATCH_SIZE
+LAYERS = [1, 64, 128, 128, 64, 1]
+NUM_EPOCHS = 20
 PRINT_INTERVAL = 1
 SIN_PERIODS = 8
 
@@ -106,10 +103,8 @@ def test_mlp_inference_with_benchmark():
     print(
         "=== Testing MLP Training with Functional SGD Momentum: Learning Sin Function ==="
     )
-    print(f"Batch size: {DEFAULT_BATCH_SIZE}")
-    print(f"Network architecture: {DEFAULT_LAYERS}")
-    print(f"Learning rate: {DEFAULT_LEARNING_RATE}")
-    print(f"Momentum: {DEFAULT_MOMENTUM}")
+    print(f"Batch size: {BATCH_SIZE}")
+    print(f"Network architecture: {LAYERS}")
     print(f"Sin periods: {SIN_PERIODS}")
     print("Starting training...")
 
@@ -117,23 +112,23 @@ def test_mlp_inference_with_benchmark():
     tracemalloc.start()
 
     # Initialize model parameters
-    params = initialize_mlp_params(DEFAULT_LAYERS)
+    params = initialize_mlp_params(LAYERS)
 
     # Tracking variables
     avg_loss = 0.0
     avg_time = 0.0
     initial_memory = None
 
-    x, targets = create_sin_dataset(DEFAULT_BATCH_SIZE)
+    x, targets = create_sin_dataset(BATCH_SIZE)
 
     jitted_mlp_forward_and_loss = mlp_forward_and_loss  # nb.jit(mlp_forward_and_loss)
 
     # Training loop with benchmarking
-    for epoch in range(1, DEFAULT_NUM_EPOCHS + 1):
+    for epoch in range(1, NUM_EPOCHS + 1):
         start_time = time.perf_counter()
 
         # Create fresh batch each iteration (like Mojo)
-        # x, targets = create_sin_dataset(DEFAULT_BATCH_SIZE)
+        # x, targets = create_sin_dataset(BATCH_SIZE)
 
         all_inputs = [x, targets] + params
         # loss = mlp_forward_and_loss(all_inputs)

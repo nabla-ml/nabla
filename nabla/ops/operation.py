@@ -19,6 +19,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from pathlib import Path
+from typing import Optional
 
 from max.dtype import DType
 from max.graph import Value
@@ -66,6 +68,10 @@ class Operation(ABC):
         """Jacobian-vector product rule for forward-mode autodiff."""
         pass
 
+    def custom_kernel_path(self) -> Optional[Path]:
+        """Optional: path to custom kernel implementation."""
+        return None
+
 
 class UnaryOperation(Operation):
     """Base class for unary operations."""
@@ -93,6 +99,7 @@ class UnaryOperation(Operation):
         res.add_arguments(arg)
         res.vjp_rule = self.vjp_rule
         res.jvp_rule = self.jvp_rule
+        res.custom_kernel_path = self.custom_kernel_path()
 
         if not res.stage_realization:
             self.eagerxpr([arg], res)
@@ -157,6 +164,7 @@ class BinaryOperation(Operation):
         res.add_arguments(arg1_broadcasted, arg2_broadcasted)
         res.vjp_rule = self.vjp_rule
         res.jvp_rule = self.jvp_rule
+        res.custom_kernel_path = self.custom_kernel_path()
 
         if not res.stage_realization:
             self.eagerxpr([arg1_broadcasted, arg2_broadcasted], res)

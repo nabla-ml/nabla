@@ -33,7 +33,14 @@ from .core.trafos import (
     vmap,
     xpr,
 )
-from .utils.max_interop import accelerator, cpu, device
+from .ops.operation import (
+    BinaryOperation,
+    Operation,
+    ReductionOperation,
+    UnaryOperation,
+    ViewOperation,
+)
+from .utils.max_interop import accelerator, cpu, device, device_ref
 
 
 # Lazy loading for operations (imported on first access)
@@ -100,6 +107,12 @@ def __getattr__(name: str) -> Any:
 __all__ = [
     # Core framework
     "Array",
+    # Operations
+    "Operation",
+    "UnaryOperation",
+    "BinaryOperation",
+    "ReductionOperation",
+    "ViewOperation",
     # Transformations
     "xpr",
     "vjp",
@@ -110,6 +123,7 @@ __all__ = [
     "device",
     "cpu",
     "accelerator",
+    "device_ref",
     # Types
     "DType",
 ] + list(_ops_registry.keys())  # Add all operation names

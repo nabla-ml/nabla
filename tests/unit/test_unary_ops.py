@@ -154,12 +154,14 @@ class TestUnaryOperations:
             cotangent_jax = jnp.array(cotangent_np)
 
             # Nabla VJP
-            nabla_op = lambda inputs: [nb_func(inputs[0])]
+            def nabla_op(inputs):
+                return [nb_func(inputs[0])]
             outputs_nb, vjp_fn_nb = nb.vjp(nabla_op, primals_nb)
             grads_nb = vjp_fn_nb([cotangent_nb])
 
             # JAX VJP
-            jax_op = lambda x: jax_func(x)
+            def jax_op(x):
+                return jax_func(x)
             _, vjp_fn_jax = jax.vjp(jax_op, *primals_jax)
             grads_jax = vjp_fn_jax(cotangent_jax)
 
@@ -196,13 +198,15 @@ class TestUnaryOperations:
             tangents_jax = tuple(jnp.array(t) for t in tangents_np)
 
             # Nabla JVP
-            nabla_op = lambda inputs: [nb_func(inputs[0])]
+            def nabla_op(inputs):
+                return [nb_func(inputs[0])]
             primal_out_nb, tangent_out_nb = nb.jvp(
                 nabla_op, list(primals_nb), list(tangents_nb)
             )
 
             # JAX JVP
-            jax_op = lambda x: jax_func(x)
+            def jax_op(x):
+                return jax_func(x)
             primal_out_jax, tangent_out_jax = jax.jvp(jax_op, primals_jax, tangents_jax)
 
             assert allclose_recursive(

@@ -112,6 +112,7 @@ class RandNOp(Operation):
         res.set_maxpr(self.maxpr)
         res.vjp_rule = self.vjp_rule
         res.jvp_rule = self.jvp_rule
+        res.custom_kernel_path = self.custom_kernel_path()
 
         if not res.stage_realization:
             self.eagerxpr([], res)

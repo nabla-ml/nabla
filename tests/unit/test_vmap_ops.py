@@ -111,11 +111,15 @@ class TestVmapTransformations:
 
             # Define operations for vmap
             if arity == 1:
-                nabla_op = lambda inputs: [nb_func(inputs[0])]
-                jax_op = lambda x: jax_func(x)
+                def nabla_op(inputs):
+                    return [nb_func(inputs[0])]
+                def jax_op(x):
+                    return jax_func(x)
             else:  # arity == 2
-                nabla_op = lambda inputs: [nb_func(inputs[0], inputs[1])]
-                jax_op = lambda x, y: jax_func(x, y)
+                def nabla_op(inputs):
+                    return [nb_func(inputs[0], inputs[1])]
+                def jax_op(x, y):
+                    return jax_func(x, y)
 
             # Apply vmap
             vmapped_fn_nb = nb.vmap(nabla_op, in_axes=in_axes)

@@ -287,11 +287,9 @@ class ReLUOp(UnaryOperation):
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
         from .binary import greater_equal, mul
-        from .creation import zeros
 
         # Create zero with same dtype as primal to avoid dtype mismatch
-        zero = zeros((), dtype=primals[0].dtype)
-        mask = greater_equal(primals[0], zero)
+        mask = greater_equal(primals[0], 0)
         mask_casted = cast(mask, cotangent.dtype)
         return [mul(cotangent, mask_casted)]
 
@@ -300,11 +298,9 @@ class ReLUOp(UnaryOperation):
     ) -> Array:
         # Import here to avoid circular imports
         from .binary import greater_equal, mul
-        from .creation import zeros
 
         # ReLU derivative is 1 for x > 0, 0 for x <= 0
-        zero = zeros((), dtype=primals[0].dtype)
-        mask = greater_equal(primals[0], zero)
+        mask = greater_equal(primals[0], 0)
         mask_casted = cast(mask, tangents[0].dtype)
         return mul(tangents[0], mask_casted)
 
