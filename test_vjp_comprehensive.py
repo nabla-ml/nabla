@@ -11,7 +11,7 @@ def test_vjp_single_arg():
     print("=== Test 1: Single Argument ===")
     
     def func(x):
-        return x * x + 2 * x + 1
+        return x * x + nb.array([2.0]) * x + nb.array([1.0])
     
     x = nb.array([2.0, 3.0])
     outputs, vjp_fn = nb.vjp(func, x)
@@ -301,7 +301,7 @@ def test_vjp_edge_cases():
     
     # Test with constants
     def func_with_constants(x):
-        return x * 5.0 + 3.0  # Constants shouldn't affect gradients
+        return x * nb.array([5.0]) + nb.array([3.0])  # Constants shouldn't affect gradients
     
     x = nb.array([1.0, 2.0])
     outputs, vjp_fn = nb.vjp(func_with_constants, x)

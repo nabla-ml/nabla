@@ -13,23 +13,3 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
-
-
-"""Utility functions for the Nabla framework.
-
-Utilities are imported manually in the main package since they're stable and few.
-"""
-
-# Export pytree utilities for working with nested structures
-# These are now defined in core.trafos but re-exported here for backward compatibility
-from ..core.trafos import (
-    tree_flatten,
-    tree_unflatten,
-    tree_map,
-)
-
-__all__ = [
-    "tree_flatten", 
-    "tree_unflatten",
-    "tree_map",
-]
