@@ -66,7 +66,7 @@ nabla/
 ├── nabla/                     # Core Python library
 │   ├── core/                  # Function transformations and array operations
 │   ├── ops/                   # Mathematical operations (binary, unary, linalg)
-│   ├── mojo_kernels/          # Internal CPU/GPU Mojo kernels (not the built-in MAX kernels)
+│   ├── kernels/               # Internal CPU/GPU Mojo kernels (not the built-in MAX kernels)
 │   ├── nn/                    # Neural network layers and utilities
 │   └── utils/                 # Utilities (broadcasting, formatting, types)
 ├── tests/                     # Comprehensive test suite
