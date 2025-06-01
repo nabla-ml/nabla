@@ -22,44 +22,28 @@ This package uses a hybrid approach:
 - Operations use lazy loading with explicit __all__ definitions
 """
 
+# Imports used within this file
 import sys
 from typing import Any
 
+# Re-exports: imported here to make them available when importing from nabla
 from max.dtype import DType
 
-# Core framework essentials (always needed - imported eagerly)
 from .core.array import Array
-from .core.execution_context import ThreadSafeExecutionContext
-
-# Import essential graph execution functions
-from .core.graph_execution import compute_node_hash, get_trace, realize_
-
-# Import core transformations (commonly used)
 from .core.trafos import (
-    Trace,
     jit,
     jvp,
-    make_staged,
-    make_traced,
-    make_unstaged,
-    make_untraced,
-    pullback,
-    pushfwd,
     vjp,
     vmap,
     xpr,
 )
-
-# Utility exports (stable, small set)
-from .utils.broadcasting import get_broadcasted_shape
-from .utils.formatting import format_dtype, format_shape_and_dtype
 from .utils.max_interop import accelerator, cpu, device
 
 
 # Lazy loading for operations (imported on first access)
 def _build_ops_registry():
     """Build the operations registry from __all__ definitions in modules."""
-    import importlib
+    import importlib  # Import locally where it's used
 
     registry = {}
 
@@ -103,7 +87,7 @@ def __getattr__(name: str) -> Any:
         if name not in _ops_cache:
             module_name, attr_name = _ops_registry[name]
             try:
-                import importlib
+                import importlib  # Import locally where it's used
 
                 module = importlib.import_module(module_name)
                 _ops_cache[name] = getattr(module, attr_name)
@@ -118,39 +102,20 @@ def __getattr__(name: str) -> Any:
 __all__ = [
     # Core framework
     "Array",
-    "ThreadSafeExecutionContext",
     # Transformations
-    "Trace",
-    "pullback",
-    "pushfwd",
     "xpr",
-    "make_traced",
-    "make_untraced",
-    "make_staged",
-    "make_unstaged",
     "vjp",
     "jvp",
     "vmap",
     "jit",
-    # Graph execution
-    "realize_",
-    "get_trace",
-    "compute_node_hash",
     # Utilities
-    "get_broadcasted_shape",
     "device",
     "cpu",
     "accelerator",
-    "format_dtype",
-    "format_shape_and_dtype",
     # Types
     "DType",
 ] + list(_ops_registry.keys())  # Add all operation names
 
-# Maintain the execution context for compatibility
-_global_execution_context = ThreadSafeExecutionContext()
-
-__version__ = "0.1.0"
 
 # For test compatibility - provide a reference to this module
 graph_improved = sys.modules[__name__]
