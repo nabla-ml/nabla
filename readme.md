@@ -5,11 +5,11 @@
 
 # NABLA
 
-*Python library for scientific computing, providing 3 things:*
+Nabla is a Python library that provides three key features:
 
-1. **Multidimensional Arrays**: Fast NumPy-like operations on CPU and GPU
-2. **Composable Function Transforms**: `vmap`, `grad`, `jit`, etc.
-3. **Mojo/MAX Integration**: Custom Mojo kernels + no GPU setup hassle
+- Multidimensional Array computation (like NumPy) with strong GPU acceleration
+- Composable Function Transformations: `vmap`, `grad`, `jit`, and more
+- Deep integration with (custom) Mojo kernels
 
 ## Installation
 
