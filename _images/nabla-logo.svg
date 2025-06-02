@@ -1,0 +1,6 @@
+<!-- Simple SVG placeholder for Nabla logo -->
+<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+  <rect width="200" height="200" fill="#f0f0f0"/>
+  <text x="40" y="110" font-family="Arial" font-size="60" fill="#4285f4">∇</text>
+  <text x="80" y="110" font-family="Arial" font-size="40" fill="#34a853">nabla</text>
+</svg>

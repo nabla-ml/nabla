@@ -1,0 +1,1018 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Vectorization and JIT &#8212; Nabla</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/sphinx-book-theme.css?v=eba8b062" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=1ceb4406" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../_static/documentation_options.js?v=a2693998"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'tutorials/vectorization_and_jit';</script>
+    <link rel="icon" href="../_static/nabla-logo.svg"/>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Higher-order Derivatives" href="advanced_topics.html" />
+    <link rel="prev" title="Automatic Differentiation" href="automatic_differentiation.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">NABLA</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../getting_started.html">Getting Started</a></li>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">Tutorials</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="basic_operations.html">Basic Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="automatic_differentiation.html">Automatic Differentiation</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">Vectorization and JIT</a></li>
+<li class="toctree-l2"><a class="reference internal" href="advanced_topics.html">Higher-order Derivatives</a></li>
+
+
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/index.html">Examples Gallery</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../api/index.html">API Reference</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../api/core.html">Core Components</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../api/core_Array.html">Array</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/core_jit.html">jit</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/core_jvp.html">jvp</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/core_vjp.html">vjp</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/core_vmap.html">vmap</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/core_xpr.html">xpr</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../api/creation.html">Array Creation</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../api/creation_arange.html">arange</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/creation_array.html">array</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/creation_ones.html">ones</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/creation_ones_like.html">ones_like</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/creation_randn.html">randn</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/creation_zeros.html">zeros</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/creation_zeros_like.html">zeros_like</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../api/unary.html">Unary Operations</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../api/unary_cast.html">cast</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/unary_cos.html">cos</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/unary_decr_batch_dim_ctr.html">decr_batch_dim_ctr</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/unary_exp.html">exp</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/unary_incr_batch_dim_ctr.html">incr_batch_dim_ctr</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/unary_log.html">log</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/unary_negate.html">negate</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/unary_relu.html">relu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/unary_sin.html">sin</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../api/binary.html">Binary Operations</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../api/binary_add.html">add</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/binary_div.html">div</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/binary_greater_equal.html">greater_equal</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/binary_mul.html">mul</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/binary_pow.html">pow</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/binary_sub.html">sub</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../api/reduction.html">Reduction Operations</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../api/reduction_sum.html">sum</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/reduction_sum_batch_dims.html">sum_batch_dims</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../api/linalg.html">Linear Algebra</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../api/linalg_matmul.html">matmul</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../api/manipulation.html">Array Manipulation</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../api/manipulation_broadcast_batch_dims.html">broadcast_batch_dims</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/manipulation_broadcast_to.html">broadcast_to</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/manipulation_reshape.html">reshape</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/manipulation_shallow_copy.html">shallow_copy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/manipulation_squeeze.html">squeeze</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/manipulation_transpose.html">transpose</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/manipulation_unsqueeze.html">unsqueeze</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/nabla-ml/nabla" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/nabla-ml/nabla/edit/main/docs/tutorials/vectorization_and_jit.md" target="_blank"
+   class="btn btn-sm btn-source-edit-button dropdown-item"
+   title="Suggest edit"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/nabla-ml/nabla/issues/new?title=Issue%20on%20page%20%2Ftutorials/vectorization_and_jit.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../_sources/tutorials/vectorization_and_jit.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Vectorization and JIT</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#vectorization-with-vmap">Vectorization with <code class="docutils literal notranslate"><span class="pre">vmap</span></code></a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#basic-vectorization">Basic Vectorization</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#specifying-vectorization-axes">Specifying Vectorization Axes</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nested-vectorization">Nested Vectorization</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#just-in-time-compilation-with-jit">Just-in-Time Compilation with <code class="docutils literal notranslate"><span class="pre">jit</span></code></a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#basic-jit-usage">Basic JIT Usage</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#jit-with-control-flow">JIT with Control Flow</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#jit-best-practices">JIT Best Practices</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#combining-vmap-and-jit">Combining <code class="docutils literal notranslate"><span class="pre">vmap</span></code> and <code class="docutils literal notranslate"><span class="pre">jit</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#performance-optimization-patterns">Performance Optimization Patterns</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#reduce-array-allocations">1. Reduce Array Allocations</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#batch-similar-operations">2. Batch Similar Operations</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#minimize-host-device-transfers">3. Minimize Host-Device Transfers</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#advanced-vectorization-patterns">Advanced Vectorization Patterns</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#scan-operations">Scan Operations</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#parallel-map-reduce">Parallel Map-Reduce</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#debugging-jit-functions">Debugging JIT Functions</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#common-issues-and-solutions">Common Issues and Solutions</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#performance-profiling">Performance Profiling</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#next-steps">Next Steps</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="vectorization-and-jit">
+<h1>Vectorization and JIT<a class="headerlink" href="#vectorization-and-jit" title="Link to this heading">#</a></h1>
+<p>This tutorial covers two essential performance optimization techniques in Nabla: vectorization with <code class="docutils literal notranslate"><span class="pre">vmap</span></code> and just-in-time compilation with <code class="docutils literal notranslate"><span class="pre">jit</span></code>.</p>
+<section id="vectorization-with-vmap">
+<h2>Vectorization with <code class="docutils literal notranslate"><span class="pre">vmap</span></code><a class="headerlink" href="#vectorization-with-vmap" title="Link to this heading">#</a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">vmap</span></code> (vectorized map) transformation automatically vectorizes functions to operate over batches of data efficiently.</p>
+<section id="basic-vectorization">
+<h3>Basic Vectorization<a class="headerlink" href="#basic-vectorization" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">nabla</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nb</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">simple_function</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A function that operates on a single sample&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">nb</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">x</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+
+<span class="c1"># Create batch data</span>
+<span class="n">batch_data</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">randn</span><span class="p">((</span><span class="mi">100</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>  <span class="c1"># 100 samples, each with 10 features</span>
+
+<span class="c1"># Method 1: Manual batching (inefficient)</span>
+<span class="n">results_manual</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">batch_data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">simple_function</span><span class="p">(</span><span class="n">batch_data</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+    <span class="n">results_manual</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+<span class="n">results_manual</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">results_manual</span><span class="p">)</span>
+
+<span class="c1"># Method 2: Vectorized with vmap (efficient)</span>
+<span class="n">vectorized_fn</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">simple_function</span><span class="p">)</span>
+<span class="n">results_vmap</span> <span class="o">=</span> <span class="n">vectorized_fn</span><span class="p">(</span><span class="n">batch_data</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Manual results shape: </span><span class="si">{</span><span class="n">results_manual</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Vmap results shape: </span><span class="si">{</span><span class="n">results_vmap</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="specifying-vectorization-axes">
+<h3>Specifying Vectorization Axes<a class="headerlink" href="#specifying-vectorization-axes" title="Link to this heading">#</a></h3>
+<p>You can control which axes to vectorize over:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">matrix_vector_multiply</span><span class="p">(</span><span class="n">matrix</span><span class="p">,</span> <span class="n">vector</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">nb</span><span class="o">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">matrix</span><span class="p">,</span> <span class="n">vector</span><span class="p">)</span>
+
+<span class="c1"># Batch of matrices and vectors</span>
+<span class="n">matrices</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">randn</span><span class="p">((</span><span class="mi">5</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>  <span class="c1"># 5 matrices of shape (3, 4)</span>
+<span class="n">vectors</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">randn</span><span class="p">((</span><span class="mi">5</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>      <span class="c1"># 5 vectors of shape (4,)</span>
+
+<span class="c1"># Vectorize over the first axis for both arguments</span>
+<span class="n">vmap_fn</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">matrix_vector_multiply</span><span class="p">,</span> <span class="n">in_axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">vmap_fn</span><span class="p">(</span><span class="n">matrices</span><span class="p">,</span> <span class="n">vectors</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Results shape: </span><span class="si">{</span><span class="n">results</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># (5, 3)</span>
+
+<span class="c1"># Vectorize matrix over axis 0, broadcast vector</span>
+<span class="n">matrices</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">randn</span><span class="p">((</span><span class="mi">5</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
+<span class="n">vector</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">randn</span><span class="p">((</span><span class="mi">4</span><span class="p">,))</span>  <span class="c1"># Single vector</span>
+<span class="n">vmap_fn</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">matrix_vector_multiply</span><span class="p">,</span> <span class="n">in_axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">vmap_fn</span><span class="p">(</span><span class="n">matrices</span><span class="p">,</span> <span class="n">vector</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Broadcast results shape: </span><span class="si">{</span><span class="n">results</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># (5, 3)</span>
+</pre></div>
+</div>
+</section>
+<section id="nested-vectorization">
+<h3>Nested Vectorization<a class="headerlink" href="#nested-vectorization" title="Link to this heading">#</a></h3>
+<p>You can apply <code class="docutils literal notranslate"><span class="pre">vmap</span></code> multiple times for higher-dimensional batching:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">pairwise_distance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute L2 distance between two vectors&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">nb</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">nb</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">x</span> <span class="o">-</span> <span class="n">y</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">))</span>
+
+<span class="c1"># Single distance</span>
+<span class="n">x</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">])</span>
+<span class="n">y</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">])</span>
+<span class="n">distance</span> <span class="o">=</span> <span class="n">pairwise_distance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+
+<span class="c1"># Distance between each point in batch A and each point in batch B</span>
+<span class="n">batch_a</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">randn</span><span class="p">((</span><span class="mi">10</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>  <span class="c1"># 10 points</span>
+<span class="n">batch_b</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">randn</span><span class="p">((</span><span class="mi">5</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>   <span class="c1"># 5 points</span>
+
+<span class="c1"># Create pairwise distance matrix</span>
+<span class="n">vmap_outer</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">nb</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">y</span><span class="p">:</span> <span class="n">pairwise_distance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))(</span><span class="n">batch_b</span><span class="p">))</span>
+<span class="n">distance_matrix</span> <span class="o">=</span> <span class="n">vmap_outer</span><span class="p">(</span><span class="n">batch_a</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Distance matrix shape: </span><span class="si">{</span><span class="n">distance_matrix</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># (10, 5)</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="just-in-time-compilation-with-jit">
+<h2>Just-in-Time Compilation with <code class="docutils literal notranslate"><span class="pre">jit</span></code><a class="headerlink" href="#just-in-time-compilation-with-jit" title="Link to this heading">#</a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">jit</span></code> transformation compiles functions for improved performance:</p>
+<section id="basic-jit-usage">
+<h3>Basic JIT Usage<a class="headerlink" href="#basic-jit-usage" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">expensive_computation</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A computationally expensive function&quot;&quot;&quot;</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">x</span>
+    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">):</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">result</span><span class="p">)</span> <span class="o">+</span> <span class="n">nb</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">result</span>
+
+<span class="c1"># Regular function</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="n">x</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">randn</span><span class="p">((</span><span class="mi">1000</span><span class="p">,))</span>
+
+<span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+<span class="n">result_normal</span> <span class="o">=</span> <span class="n">expensive_computation</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="n">normal_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start_time</span>
+
+<span class="c1"># JIT-compiled function</span>
+<span class="n">jit_fn</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">expensive_computation</span><span class="p">)</span>
+
+<span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+<span class="n">result_jit</span> <span class="o">=</span> <span class="n">jit_fn</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="n">jit_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start_time</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Normal execution time: </span><span class="si">{</span><span class="n">normal_time</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">s&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;JIT execution time: </span><span class="si">{</span><span class="n">jit_time</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">s&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Speedup: </span><span class="si">{</span><span class="n">normal_time</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">jit_time</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">x&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="jit-with-control-flow">
+<h3>JIT with Control Flow<a class="headerlink" href="#jit-with-control-flow" title="Link to this heading">#</a></h3>
+<p>JIT works with control flow, but performance is best with minimal branching:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">conditional_computation</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mf">0.0</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Function with conditional logic&quot;&quot;&quot;</span>
+    <span class="n">positive_part</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">x</span> <span class="o">&gt;</span> <span class="n">threshold</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
+    <span class="n">negative_part</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">x</span> <span class="o">&lt;=</span> <span class="n">threshold</span><span class="p">,</span> <span class="o">-</span><span class="n">x</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">positive_part</span> <span class="o">+</span> <span class="n">negative_part</span>
+
+<span class="c1"># JIT compile the conditional function</span>
+<span class="n">jit_conditional</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">conditional_computation</span><span class="p">)</span>
+
+<span class="n">x</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">randn</span><span class="p">((</span><span class="mi">1000</span><span class="p">,))</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">jit_conditional</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="jit-best-practices">
+<h3>JIT Best Practices<a class="headerlink" href="#jit-best-practices" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Good: Pure functions with minimal control flow</span>
+<span class="nd">@nb</span><span class="o">.</span><span class="n">jit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">good_jit_function</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">nb</span><span class="o">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="o">+</span> <span class="n">nb</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+<span class="c1"># Avoid: Functions with side effects or complex control flow</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">avoid_jit_function</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+    <span class="c1"># This won&#39;t JIT well due to side effects</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Processing </span><span class="si">{</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">100</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">complex_computation</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">simple_computation</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="combining-vmap-and-jit">
+<h2>Combining <code class="docutils literal notranslate"><span class="pre">vmap</span></code> and <code class="docutils literal notranslate"><span class="pre">jit</span></code><a class="headerlink" href="#combining-vmap-and-jit" title="Link to this heading">#</a></h2>
+<p>The most powerful pattern is combining vectorization and compilation:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">neural_layer</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">weights</span><span class="p">,</span> <span class="n">bias</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A single neural network layer&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">nb</span><span class="o">.</span><span class="n">relu</span><span class="p">(</span><span class="n">nb</span><span class="o">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">weights</span><span class="p">)</span> <span class="o">+</span> <span class="n">bias</span><span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">neural_network</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">all_params</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Full neural network&quot;&quot;&quot;</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="n">x</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">all_params</span><span class="p">),</span> <span class="mi">2</span><span class="p">):</span>
+        <span class="n">weights</span><span class="p">,</span> <span class="n">bias</span> <span class="o">=</span> <span class="n">all_params</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">all_params</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="n">neural_layer</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">weights</span><span class="p">,</span> <span class="n">bias</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">output</span>
+
+<span class="c1"># Create parameters</span>
+<span class="n">layer_sizes</span> <span class="o">=</span> <span class="p">[</span><span class="mi">10</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>
+<span class="n">params</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">layer_sizes</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">):</span>
+    <span class="n">w</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">randn</span><span class="p">((</span><span class="n">layer_sizes</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">layer_sizes</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">]))</span> <span class="o">*</span> <span class="mf">0.1</span>
+    <span class="n">b</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">layer_sizes</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">],))</span>
+    <span class="n">params</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="n">w</span><span class="p">,</span> <span class="n">b</span><span class="p">])</span>
+
+<span class="c1"># Batch processing with vmap + jit</span>
+<span class="n">batch_network</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">nb</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">neural_network</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">params</span><span class="p">)))</span>
+
+<span class="c1"># Process entire batch efficiently</span>
+<span class="n">batch_x</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">randn</span><span class="p">((</span><span class="mi">1000</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>  <span class="c1"># 1000 samples</span>
+<span class="n">batch_output</span> <span class="o">=</span> <span class="n">batch_network</span><span class="p">(</span><span class="n">batch_x</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Batch output shape: </span><span class="si">{</span><span class="n">batch_output</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># (1000, 1)</span>
+</pre></div>
+</div>
+</section>
+<section id="performance-optimization-patterns">
+<h2>Performance Optimization Patterns<a class="headerlink" href="#performance-optimization-patterns" title="Link to this heading">#</a></h2>
+<section id="reduce-array-allocations">
+<h3>1. Reduce Array Allocations<a class="headerlink" href="#reduce-array-allocations" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Less efficient: Multiple temporary arrays</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">inefficient_computation</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+    <span class="n">temp1</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="n">temp2</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="n">temp3</span> <span class="o">=</span> <span class="n">temp1</span> <span class="o">+</span> <span class="n">temp2</span>
+    <span class="k">return</span> <span class="n">temp3</span> <span class="o">**</span> <span class="mi">2</span>
+
+<span class="c1"># More efficient: Fused computation</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">efficient_computation</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">nb</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="n">nb</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">x</span><span class="p">))</span> <span class="o">**</span> <span class="mi">2</span>
+
+<span class="c1"># JIT will optimize both, but the second is better for memory</span>
+<span class="n">jit_efficient</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">efficient_computation</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="batch-similar-operations">
+<h3>2. Batch Similar Operations<a class="headerlink" href="#batch-similar-operations" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Process multiple similar computations together</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">batch_optimization_step</span><span class="p">(</span><span class="n">params_batch</span><span class="p">,</span> <span class="n">gradients_batch</span><span class="p">,</span> <span class="n">learning_rate</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Update multiple parameter sets at once&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">params_batch</span> <span class="o">-</span> <span class="n">learning_rate</span> <span class="o">*</span> <span class="n">gradients_batch</span>
+
+<span class="c1"># Vectorize over different parameter initializations</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">train_multiple_models</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">targets</span><span class="p">,</span> <span class="n">num_models</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+    <span class="c1"># Initialize multiple parameter sets</span>
+    <span class="n">param_sets</span> <span class="o">=</span> <span class="p">[</span><span class="n">initialize_params</span><span class="p">()</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_models</span><span class="p">)]</span>
+    <span class="n">param_batch</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">param_sets</span><span class="p">)</span>
+    
+    <span class="c1"># Training function for single model</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">single_model_loss</span><span class="p">(</span><span class="n">params</span><span class="p">):</span>
+        <span class="n">predictions</span> <span class="o">=</span> <span class="n">neural_network</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">nb</span><span class="o">.</span><span class="n">mean</span><span class="p">((</span><span class="n">predictions</span> <span class="o">-</span> <span class="n">targets</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+    
+    <span class="c1"># Vectorized gradient computation</span>
+    <span class="n">grad_fn</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">nb</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">single_model_loss</span><span class="p">))</span>
+    
+    <span class="c1"># Training loop</span>
+    <span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">):</span>
+        <span class="n">grads</span> <span class="o">=</span> <span class="n">grad_fn</span><span class="p">(</span><span class="n">param_batch</span><span class="p">)</span>
+        <span class="n">param_batch</span> <span class="o">=</span> <span class="n">batch_optimization_step</span><span class="p">(</span><span class="n">param_batch</span><span class="p">,</span> <span class="n">grads</span><span class="p">,</span> <span class="mf">0.01</span><span class="p">)</span>
+    
+    <span class="k">return</span> <span class="n">param_batch</span>
+</pre></div>
+</div>
+</section>
+<section id="minimize-host-device-transfers">
+<h3>3. Minimize Host-Device Transfers<a class="headerlink" href="#minimize-host-device-transfers" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@nb</span><span class="o">.</span><span class="n">jit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">gpu_intensive_computation</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Keep computation on device&quot;&quot;&quot;</span>
+    <span class="c1"># Perform many operations without transferring back to host</span>
+    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10</span><span class="p">):</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">T</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">relu</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span> <span class="o">/</span> <span class="n">nb</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># Normalize</span>
+    <span class="k">return</span> <span class="n">x</span>
+
+<span class="c1"># Good: Single transfer back to host</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">gpu_intensive_computation</span><span class="p">(</span><span class="n">nb</span><span class="o">.</span><span class="n">randn</span><span class="p">((</span><span class="mi">100</span><span class="p">,</span> <span class="mi">100</span><span class="p">)))</span>
+<span class="n">final_result</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>  <span class="c1"># Only one host transfer</span>
+
+<span class="c1"># Avoid: Multiple transfers</span>
+<span class="c1"># x = nb.randn((100, 100))</span>
+<span class="c1"># for _ in range(10):</span>
+<span class="c1">#     x = some_operation(x)</span>
+<span class="c1">#     print(nb.to_numpy(x).mean())  # Transfer each iteration</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="advanced-vectorization-patterns">
+<h2>Advanced Vectorization Patterns<a class="headerlink" href="#advanced-vectorization-patterns" title="Link to this heading">#</a></h2>
+<section id="scan-operations">
+<h3>Scan Operations<a class="headerlink" href="#scan-operations" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">scan_example</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Implement a scan (cumulative operation) with vmap&quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">scan_step</span><span class="p">(</span><span class="n">carry</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="n">new_carry</span> <span class="o">=</span> <span class="n">carry</span> <span class="o">+</span> <span class="n">x</span>
+        <span class="k">return</span> <span class="n">new_carry</span><span class="p">,</span> <span class="n">new_carry</span>
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">manual_scan</span><span class="p">(</span><span class="n">xs</span><span class="p">):</span>
+        <span class="n">carry</span> <span class="o">=</span> <span class="mf">0.0</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">xs</span><span class="p">:</span>
+            <span class="n">carry</span><span class="p">,</span> <span class="n">result</span> <span class="o">=</span> <span class="n">scan_step</span><span class="p">(</span><span class="n">carry</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+            <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">nb</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
+    
+    <span class="c1"># For now, implement with manual loop (future: native scan)</span>
+    <span class="n">xs</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">])</span>
+    <span class="n">cumsum</span> <span class="o">=</span> <span class="n">manual_scan</span><span class="p">(</span><span class="n">xs</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Cumulative sum: </span><span class="si">{</span><span class="n">cumsum</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="parallel-map-reduce">
+<h3>Parallel Map-Reduce<a class="headerlink" href="#parallel-map-reduce" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">parallel_reduction_example</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Combine vmap with reductions for parallel processing&quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">process_chunk</span><span class="p">(</span><span class="n">chunk</span><span class="p">):</span>
+        <span class="c1"># Process a chunk of data</span>
+        <span class="k">return</span> <span class="n">nb</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">chunk</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+    
+    <span class="c1"># Large dataset</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">randn</span><span class="p">((</span><span class="mi">10000</span><span class="p">,))</span>
+    
+    <span class="c1"># Split into chunks and process in parallel</span>
+    <span class="n">chunk_size</span> <span class="o">=</span> <span class="mi">1000</span>
+    <span class="n">chunks</span> <span class="o">=</span> <span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">i</span><span class="o">+</span><span class="n">chunk_size</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">),</span> <span class="n">chunk_size</span><span class="p">)]</span>
+    <span class="n">chunks_array</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">chunks</span><span class="p">)</span>
+    
+    <span class="c1"># Process all chunks in parallel</span>
+    <span class="n">chunk_results</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">process_chunk</span><span class="p">)(</span><span class="n">chunks_array</span><span class="p">)</span>
+    <span class="n">final_result</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">chunk_results</span><span class="p">)</span>
+    
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Parallel result: </span><span class="si">{</span><span class="n">final_result</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="debugging-jit-functions">
+<h2>Debugging JIT Functions<a class="headerlink" href="#debugging-jit-functions" title="Link to this heading">#</a></h2>
+<section id="common-issues-and-solutions">
+<h3>Common Issues and Solutions<a class="headerlink" href="#common-issues-and-solutions" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Issue: Shape polymorphism</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">shape_dependent_function</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+    <span class="c1"># This might not JIT well if shapes vary</span>
+    <span class="k">if</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">100</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">nb</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">nb</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+<span class="c1"># Solution: Avoid shape-dependent control flow</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">shape_agnostic_function</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+    <span class="c1"># Use mathematical operations instead</span>
+    <span class="n">weight</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">minimum</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">/</span> <span class="mf">100.0</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">weight</span> <span class="o">*</span> <span class="n">nb</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">weight</span><span class="p">)</span> <span class="o">*</span> <span class="n">nb</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+<span class="c1"># Issue: Type instability</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">type_unstable_function</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">flag</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">flag</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">x</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">nb</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>  <span class="c1"># Returns float32</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">x</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">nb</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>    <span class="c1"># Returns int32</span>
+
+<span class="c1"># Solution: Ensure consistent return types</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">type_stable_function</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">flag</span><span class="p">):</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">flag</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">nb</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">nb</span><span class="o">.</span><span class="n">float32</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">nb</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>  <span class="c1"># Always returns float32</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="performance-profiling">
+<h2>Performance Profiling<a class="headerlink" href="#performance-profiling" title="Link to this heading">#</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">profile_performance</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compare different optimization strategies&quot;&quot;&quot;</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">baseline_function</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">nb</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">x</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+    
+    <span class="c1"># Test data</span>
+    <span class="n">batch_data</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">randn</span><span class="p">((</span><span class="mi">1000</span><span class="p">,</span> <span class="mi">100</span><span class="p">))</span>
+    
+    <span class="c1"># Baseline: No optimization</span>
+    <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="p">[</span><span class="n">baseline_function</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">batch_data</span><span class="p">]</span>
+    <span class="n">baseline_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span>
+    
+    <span class="c1"># Vmap only</span>
+    <span class="n">vmap_fn</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">baseline_function</span><span class="p">)</span>
+    <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="n">results_vmap</span> <span class="o">=</span> <span class="n">vmap_fn</span><span class="p">(</span><span class="n">batch_data</span><span class="p">)</span>
+    <span class="n">vmap_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span>
+    
+    <span class="c1"># JIT only</span>
+    <span class="n">jit_fn</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">baseline_function</span><span class="p">)</span>
+    <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="n">results_jit</span> <span class="o">=</span> <span class="p">[</span><span class="n">jit_fn</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">batch_data</span><span class="p">]</span>
+    <span class="n">jit_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span>
+    
+    <span class="c1"># Both vmap and JIT</span>
+    <span class="n">vmap_jit_fn</span> <span class="o">=</span> <span class="n">nb</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">nb</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">baseline_function</span><span class="p">))</span>
+    <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="n">results_both</span> <span class="o">=</span> <span class="n">vmap_jit_fn</span><span class="p">(</span><span class="n">batch_data</span><span class="p">)</span>
+    <span class="n">both_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span>
+    
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Baseline time: </span><span class="si">{</span><span class="n">baseline_time</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">s&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Vmap time: </span><span class="si">{</span><span class="n">vmap_time</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">s (speedup: </span><span class="si">{</span><span class="n">baseline_time</span><span class="o">/</span><span class="n">vmap_time</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">x)&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;JIT time: </span><span class="si">{</span><span class="n">jit_time</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">s (speedup: </span><span class="si">{</span><span class="n">baseline_time</span><span class="o">/</span><span class="n">jit_time</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">x)&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Both time: </span><span class="si">{</span><span class="n">both_time</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">s (speedup: </span><span class="si">{</span><span class="n">baseline_time</span><span class="o">/</span><span class="n">both_time</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">x)&quot;</span><span class="p">)</span>
+
+<span class="n">profile_performance</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="next-steps">
+<h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p>Check out the <a class="reference internal" href="../examples/index.html"><span class="doc">Examples Gallery</span></a> for real-world performance examples</p></li>
+<li><p>Combine with <a class="reference internal" href="automatic_differentiation.html"><span class="doc">Automatic Differentiation</span></a> for efficient gradient computation</p></li>
+</ul>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="automatic_differentiation.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Automatic Differentiation</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="advanced_topics.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Higher-order Derivatives</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#vectorization-with-vmap">Vectorization with <code class="docutils literal notranslate"><span class="pre">vmap</span></code></a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#basic-vectorization">Basic Vectorization</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#specifying-vectorization-axes">Specifying Vectorization Axes</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nested-vectorization">Nested Vectorization</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#just-in-time-compilation-with-jit">Just-in-Time Compilation with <code class="docutils literal notranslate"><span class="pre">jit</span></code></a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#basic-jit-usage">Basic JIT Usage</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#jit-with-control-flow">JIT with Control Flow</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#jit-best-practices">JIT Best Practices</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#combining-vmap-and-jit">Combining <code class="docutils literal notranslate"><span class="pre">vmap</span></code> and <code class="docutils literal notranslate"><span class="pre">jit</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#performance-optimization-patterns">Performance Optimization Patterns</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#reduce-array-allocations">1. Reduce Array Allocations</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#batch-similar-operations">2. Batch Similar Operations</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#minimize-host-device-transfers">3. Minimize Host-Device Transfers</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#advanced-vectorization-patterns">Advanced Vectorization Patterns</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#scan-operations">Scan Operations</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#parallel-map-reduce">Parallel Map-Reduce</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#debugging-jit-functions">Debugging JIT Functions</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#common-issues-and-solutions">Common Issues and Solutions</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#performance-profiling">Performance Profiling</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#next-steps">Next Steps</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Nabla Team
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2025, Nabla Team.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+<div class="extra_footer">
+  
+    <div>
+      <a href="https://github.com/nabla-ml/nabla">Nabla</a> - Built with
+      <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+      <a href="https://github.com/executablebooks/sphinx-book-theme">Sphinx Book Theme</a>
+    </div>
+    
+</div>
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

@@ -1,0 +1,28 @@
+/* =================================================================
+   NABLA DOCUMENTATION - MINIMAL THEME
+   Simple black and white background override only
+   ================================================================= */
+
+/* Black and White Background Override */
+:root {
+  /* Light Mode - Pure White */
+  --color-bg-primary: #ffffff;
+}
+
+[data-theme="dark"] {
+  /* Dark Mode - Pure Black */
+  --color-bg-primary: #000000;
+}
+
+/* Apply background override */
+body {
+  background-color: var(--color-bg-primary) !important;
+}
+
+/* NABLA Title Styling - left-aligned, bold, white */
+.logo__title {
+  text-align: left !important;
+  font-weight: 900 !important; /* Extra bold */
+  color: white !important;
+  margin-left: 0 !important;
+}
