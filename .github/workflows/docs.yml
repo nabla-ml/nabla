@@ -54,6 +54,8 @@ jobs:
       - name: Setup Pages
         if: github.event_name == 'push' && (github.ref == 'refs/heads/nabla-python' || github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
         uses: actions/configure-pages@v4
+        with:
+          enablement: true
         
       - name: Upload artifact
         if: github.event_name == 'push' && (github.ref == 'refs/heads/nabla-python' || github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
