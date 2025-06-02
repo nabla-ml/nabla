@@ -70,6 +70,15 @@ dmypy.json
 # Jupyter Notebook
 .ipynb_checkpoints/
 
+# Documentation build files
+docs/_build/
+docs/auto_examples/
+docs/gen_modules/
+docs/sg_execution_times.rst
+docs/api/generated/
+*.codeobj.json
+searchindex.db
+
 # pyenv
 .python-version
 

@@ -1,0 +1,13 @@
+sphinx>=5.0
+sphinx-gallery
+myst-parser>=1.0.0
+furo
+sphinx-copybutton
+sphinx-design
+sphinx-autodoc-typehints
+sphinx-togglebutton
+sphinxcontrib-mermaid
+ipykernel
+matplotlib
+numpy
+memory_profiler
