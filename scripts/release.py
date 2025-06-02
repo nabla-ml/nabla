@@ -123,31 +123,39 @@ def update_version_in_file(new_version):
 
 def clean_and_build_package():
     """Clean and build package with PyPI-compatible metadata."""
+    import os
+    import shutil
+    import tempfile
+    
     print_step("Cleaning build artifacts...")
     run_command("rm -rf dist/ build/ *.egg-info", check=False)
 
     print_step("Building package with PyPI-compatible metadata...")
 
-    # Temporarily remove LICENSE file completely to avoid License-File metadata field that PyPI rejects
-    license_exists = Path("LICENSE").exists()
-    license_backup = None
-    if license_exists:
-        license_backup = Path("LICENSE").read_text()
-        run_command("rm LICENSE", check=False)
-        print_success("Temporarily removed LICENSE file to avoid PyPI metadata issues")
-
+    # Temporarily move LICENSE file to prevent setuptools auto-detection
+    # Setuptools automatically adds deprecated 'License-File' metadata when it finds LICENSE
+    license_temp_dir = None
+    license_backup_path = None
     try:
+        if os.path.exists("LICENSE"):
+            license_temp_dir = tempfile.mkdtemp()
+            license_backup_path = os.path.join(license_temp_dir, "LICENSE")
+            shutil.move("LICENSE", license_backup_path)
+
+        # Build the package
         run_command("python -m build")
         print_success("Package built successfully")
         return True
+        
     except subprocess.CalledProcessError as e:
         print_error(f"Build failed: {e}")
         return False
     finally:
-        # Restore LICENSE file
-        if license_exists and license_backup is not None:
-            Path("LICENSE").write_text(license_backup)
-            print_success("Restored LICENSE file")
+        # Always restore the LICENSE file
+        if license_backup_path and os.path.exists(license_backup_path):
+            shutil.move(license_backup_path, "LICENSE")
+        if license_temp_dir and os.path.exists(license_temp_dir):
+            shutil.rmtree(license_temp_dir)
 
 
 def validate_package():
@@ -158,19 +166,8 @@ def validate_package():
         print_success("Package validation passed")
         return True
     except subprocess.CalledProcessError as e:
-        # Check if it's the License-File issue (which we expect and handle)
-        if (
-            "license-file" in str(e.stdout).lower()
-            or "license-file" in str(e.stderr).lower()
-        ):
-            print_warning(
-                "Package validation shows License-File warning, but this is expected"
-            )
-            print_warning("The package should still upload successfully to PyPI")
-            return True
-        else:
-            print_error(f"Package validation failed: {e}")
-            return False
+        print_error(f"Package validation failed: {e}")
+        return False
 
 
 def upload_to_pypi():
