@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nabla_ml"
-version = "25.06021534"
+version = "25.06021538"
 authors = [
     { name = "TilliFe", email = "tillmann.fehrenbach@gmail.com" },
 ]
 description = "Dynamic neural networks and function transformations in Python + Mojo"
 readme = "readme.md"
-license = {text = "Apache-2.0"}
+license = "Apache-2.0"
 requires-python = ">=3.12"
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -82,7 +82,7 @@ ignore_missing_imports = true
 # files = "src/nabla, tests"
 
 [tool.setuptools]
-packages = ["nabla", "nabla.core", "nabla.ops", "nabla.utils", "nabla.nn"]
+packages = ["nabla", "nabla.core", "nabla.ops", "nabla.utils", "nabla.nn", "nabla.kernels"]
 
 [tool.setuptools.package-data]
 "nabla" = ["**/*.mojo", "**/*.py"]
