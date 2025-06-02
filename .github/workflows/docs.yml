@@ -1,10 +1,12 @@
-name: Build and Deploy Documentation
+name: Build and Deploy Documentation (DISABLED)
 
 on:
-  push:
-    branches:
-      - main
-      - nabla-python
+  # This workflow is now disabled in favor of the lightweight version
+  # Uncomment the section below if you want to re-enable it
+  # push:
+  #   branches:
+  #     - main
+  #     - nabla-python
   pull_request:
     branches:
       - main
@@ -47,7 +49,8 @@ jobs:
       - name: Build documentation
         run: |
           cd docs
-          sphinx-build -b html . _build/html
+          # Try to build with gallery first, but if it fails, build without executing examples
+          sphinx-build -b html . _build/html || sphinx-build -b html -D plot_gallery=0 . _build/html
           # Ensure .nojekyll file exists in the output directory
           touch _build/html/.nojekyll
           

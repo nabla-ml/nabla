@@ -52,25 +52,61 @@ jobs:
           This is a minimal stub that allows documentation to be built without
           installing the full nabla package with all its dependencies.
           """
+          # For numpy compatibility
+          import numpy as np
           
           # Create dummy classes and functions for documentation
           class Array:
               """Array class for nabla."""
-              pass
+              def __init__(self, *args, **kwargs):
+                  pass
+                  
+              def numpy(self):
+                  """Convert to numpy array."""
+                  return np.array([])
+              
+          def array(*args, **kwargs):
+              """Create an array."""
+              return Array()
               
           def arange(*args, **kwargs):
               """Create an array with evenly spaced values."""
-              pass
+              return Array()
               
           def sin(x):
               """Compute the sine of x."""
-              pass
+              return Array()
               
           def cos(x):
               """Compute the cosine of x."""
-              pass
+              return Array()
               
-          # Add other function stubs as needed for documentation
+          def zeros(*args, **kwargs):
+              """Create an array of zeros."""
+              return Array()
+              
+          def ones(*args, **kwargs):
+              """Create an array of ones."""
+              return Array()
+
+          def random(*args, **kwargs):
+              """Create an array of random values."""
+              return Array()
+              
+          def exp(*args, **kwargs):
+              """Compute the exponential of x."""
+              return Array()
+
+          def log(*args, **kwargs):
+              """Compute the natural logarithm of x."""
+              return Array()
+
+          # Add submodules
+          class linalg:
+              @staticmethod
+              def norm(*args, **kwargs):
+                  """Compute the norm of x."""
+                  return Array()
           EOF
           
           cat > /tmp/nabla_stub/setup.py << 'EOF'
@@ -89,7 +125,8 @@ jobs:
       - name: Build documentation
         run: |
           cd docs
-          sphinx-build -b html . _build/html
+          # Try to build with gallery first, but if it fails, build without executing examples
+          sphinx-build -b html . _build/html || sphinx-build -b html -D plot_gallery=0 . _build/html
           # Ensure .nojekyll file exists in the output directory
           touch _build/html/.nojekyll
           

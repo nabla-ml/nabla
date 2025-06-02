@@ -1,7 +1,7 @@
 sphinx>=5.0
 sphinx-gallery
 myst-parser>=1.0.0
-furo
+sphinx_book_theme
 sphinx-copybutton
 sphinx-design
 sphinx-autodoc-typehints
