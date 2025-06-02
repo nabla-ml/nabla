@@ -1,13 +1,21 @@
 # Linear Algebra
 
-Linear algebra operations.
+Linear algebra operations including matrix multiplication and decompositions.
 
-```{eval-rst}
-.. currentmodule:: nabla
+```{toctree}
+:maxdepth: 1
+:caption: Functions
 
-.. autosummary::
-   :toctree: generated
-   :nosignatures:
-
-   matmul
+linalg_matmul
 ```
+
+## Quick Reference
+
+### {doc}`matmul <linalg_matmul>`
+
+```python
+nabla.matmul(arg0: nabla.core.array.Array, arg1: nabla.core.array.Array) -> nabla.core.array.Array
+```
+
+Matrix multiplication.
+
