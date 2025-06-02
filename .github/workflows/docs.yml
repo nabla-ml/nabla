@@ -1,12 +1,10 @@
-name: Build and Deploy Documentation (DISABLED)
+name: Build and Deploy Documentation
 
 on:
-  # This workflow is now disabled in favor of the lightweight version
-  # Uncomment the section below if you want to re-enable it
-  # push:
-  #   branches:
-  #     - main
-  #     - nabla-python
+  push:
+    branches:
+      - main
+      - nabla-python
   pull_request:
     branches:
       - main
