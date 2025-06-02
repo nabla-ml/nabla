@@ -1,16 +1,15 @@
 [build-system]
-requires = ["setuptools>=70.0", "wheel"]
+requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "nabla_ml"
-version = "25.06021538"
+version = "25.06021556"
 authors = [
     { name = "TilliFe", email = "tillmann.fehrenbach@gmail.com" },
 ]
 description = "Dynamic neural networks and function transformations in Python + Mojo"
 readme = "readme.md"
-license = "Apache-2.0"
 requires-python = ">=3.12"
 classifiers = [
     "Development Status :: 3 - Alpha",
