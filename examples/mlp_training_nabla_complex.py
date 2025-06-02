@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Improved Nabla implementation to learn the complex 8-period sin curve."""
 
+import time
 import numpy as np
 
 import nabla as nb
 
 # Configuration for COMPLEX sin curve learning - same as JAX version
-BATCH_SIZE = 256
-LAYERS = [1, 128, 128, 128, 64, 1]  # Wider, not deeper
+BATCH_SIZE = 128
+LAYERS = [1, 64, 128, 128, 64, 1]  # Wider, not deeper
 LEARNING_RATE = 0.001  # Lower LR for stability
 NUM_EPOCHS = 5000
 PRINT_INTERVAL = 200
@@ -298,9 +299,12 @@ def test_nabla_complex_sin():
 
     # Training loop
     avg_loss = 0.0
+    avg_time = 0.0
     best_test_loss = float("inf")
 
     for epoch in range(1, NUM_EPOCHS + 1):
+        epoch_start_time = time.time()
+        
         # Learning rate schedule
         current_lr = learning_rate_schedule(epoch, LEARNING_RATE)
 
@@ -312,11 +316,14 @@ def test_nabla_complex_sin():
             x, targets, params, m_states, v_states, epoch, current_lr
         )
 
+        epoch_time = time.time() - epoch_start_time
         avg_loss += loss
+        avg_time += epoch_time
 
         if epoch % PRINT_INTERVAL == 0:
             print(
-                f"\nEpoch {epoch}: Loss = {avg_loss / PRINT_INTERVAL:.6f}, LR = {current_lr:.6f}"
+                f"\nEpoch {epoch}: Loss = {avg_loss / PRINT_INTERVAL:.6f}, "
+                f"LR = {current_lr:.6f}, Time = {avg_time / PRINT_INTERVAL:.4f}s/iter"
             )
 
             # Detailed analysis
@@ -326,6 +333,7 @@ def test_nabla_complex_sin():
                 print(f"  New best test loss: {best_test_loss:.6f}")
 
             avg_loss = 0.0
+            avg_time = 0.0
 
     print("\nNabla training completed!")
 

@@ -44,8 +44,8 @@ def test_vjp_cubic_function():
 
     # f'(x) = 3x², so f'(2) = 12
     expected_gradient = 3 * 2.0**2  # 12.0
-    assert np.isclose(gradients[0].to_numpy(), expected_gradient, rtol=1e-6), (
-        f"Expected gradient 12.0, got {gradients[0].to_numpy()}"
+    assert np.isclose(gradients[0][0].to_numpy(), expected_gradient, rtol=1e-6), (
+        f"Expected gradient 12.0, got {gradients[0][0].to_numpy()}"
     )
 
 
@@ -64,7 +64,8 @@ def test_vjp_second_order_derivatives():
         x_inner = inputs[0]
         _, vjp_fn = nb.vjp(cubic_fn, [x_inner])
         cotangent = [nb.ones((1,)).to(device)]
-        return [vjp_fn(cotangent)[0]]
+        gradients = vjp_fn(cotangent)
+        return [gradients[0][0]]
 
     # Compute second-order derivative
     _, hessian_fn = nb.vjp(jacobian_fn, [x])
@@ -74,8 +75,8 @@ def test_vjp_second_order_derivatives():
     # f''(x) = 6x, so f''(2) = 12
     expected_second_order = 6 * 2.0  # 12.0
     assert np.isclose(
-        second_order_grad[0].to_numpy(), expected_second_order, rtol=1e-6
-    ), f"Expected second-order derivative 12.0, got {second_order_grad[0].to_numpy()}"
+        second_order_grad[0][0].to_numpy(), expected_second_order, rtol=1e-6
+    ), f"Expected second-order derivative 12.0, got {second_order_grad[0][0].to_numpy()}"
 
 
 def test_vjp_multiple_inputs():
@@ -100,11 +101,11 @@ def test_vjp_multiple_inputs():
 
     # ∂f/∂x = y + 2x = 4 + 6 = 10
     # ∂f/∂y = x = 3
-    assert np.isclose(gradients[0].to_numpy(), 10.0, rtol=1e-6), (
-        f"Expected ∂f/∂x=10, got {gradients[0].to_numpy()}"
+    assert np.isclose(gradients[0][0].to_numpy(), 10.0, rtol=1e-6), (
+        f"Expected ∂f/∂x=10, got {gradients[0][0].to_numpy()}"
     )
-    assert np.isclose(gradients[1].to_numpy(), 3.0, rtol=1e-6), (
-        f"Expected ∂f/∂y=3, got {gradients[1].to_numpy()}"
+    assert np.isclose(gradients[0][1].to_numpy(), 3.0, rtol=1e-6), (
+        f"Expected ∂f/∂y=3, got {gradients[0][1].to_numpy()}"
     )
 
 
@@ -130,8 +131,8 @@ def test_vjp_parametrized_inputs(x_val):
 
     # f'(x) = 2x
     expected_gradient = 2 * x_val
-    assert np.isclose(gradients[0].to_numpy(), expected_gradient, rtol=1e-6), (
-        f"Expected gradient {expected_gradient}, got {gradients[0].to_numpy()}"
+    assert np.isclose(gradients[0][0].to_numpy(), expected_gradient, rtol=1e-6), (
+        f"Expected gradient {expected_gradient}, got {gradients[0][0].to_numpy()}"
     )
 
 

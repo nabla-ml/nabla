@@ -121,7 +121,7 @@ def test_mlp_inference_with_benchmark():
 
     x, targets = create_sin_dataset(BATCH_SIZE)
 
-    jitted_mlp_forward_and_loss = mlp_forward_and_loss  # nb.jit(mlp_forward_and_loss)
+    jitted_mlp_forward_and_loss = nb.jit(mlp_forward_and_loss)
 
     # Training loop with benchmarking
     for epoch in range(1, NUM_EPOCHS + 1):

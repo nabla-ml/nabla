@@ -65,8 +65,9 @@ def test_simple_vmap_different_shapes():
     )
 
 
-def test_simple_vmap_parametrized(batch_size):
+def test_simple_vmap_parametrized():
     """Test vmap with different batch sizes."""
+    batch_size = 5  # Change this to test different batch sizes
     a = nb.ones((batch_size, 2), nb.DType.float32)
     b = nb.array([10.0, 20.0], nb.DType.float32)
 
@@ -324,7 +325,7 @@ if __name__ == "__main__":
     test_vmap_with_sum()
     test_vmap_expression_compilation()
     test_vmap_with_different_arrays()
-    test_simple_vmap_parametrized([1, 2, 3, 4])
+    test_simple_vmap_parametrized()
     test_simple_dot_product()
     test_matrix_vector_product()
     test_vmap_batched_matmul()
