@@ -15,8 +15,6 @@ on:
 # Sets permissions for GitHub Pages deployment
 permissions:
   contents: write  # Needed to push to gh-pages branch
-  pages: write
-  id-token: write
 
 # Allow only one concurrent deployment
 concurrency:
