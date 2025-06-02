@@ -218,13 +218,26 @@ jobs:
           )
           EOF
           
-          # Install the stub package explicitly as nabla_ml
+          # Install the stub directly as nabla, not nabla_ml
+          cat > /tmp/nabla_stub/setup.py << 'EOF'
+          from setuptools import setup, find_packages
+          
+          setup(
+              name="nabla",
+              version="0.1.0",
+              packages=find_packages(),
+              package_data={
+                  "nabla": ["py.typed", "*.pyi", "**/*.pyi"],
+              },
+          )
+          EOF
+          
           cd /tmp/nabla_stub
           pip install -e .
           
-          # Create a symlink from nabla_ml to nabla in site-packages
-          # This ensures both import nabla and import nabla_ml will work
-          python -c "import site, os, shutil; site_packages = site.getsitepackages()[0]; nabla_path = os.path.join(site_packages, 'nabla'); nabla_ml_path = os.path.join(site_packages, 'nabla_ml'); os.symlink(nabla_ml_path, nabla_path) if not os.path.exists(nabla_path) else None;"
+          # Verify installation
+          python -c "import sys; print('Installed packages:'); [print(p) for p in sys.path if 'site-packages' in p or 'dist-packages' in p]"
+          python -c "try: import nabla; print('nabla imported successfully'); except ImportError as e: print(f'Failed to import nabla: {e}')"
           
       - name: Build documentation
         run: |
@@ -232,10 +245,70 @@ jobs:
           # Show Python path and check if nabla is importable
           echo "Current working directory: $(pwd)"
           echo "Python path: $(python -c 'import sys; print(sys.path)')"
-          echo "Can import nabla: $(python -c 'try: import nabla; print(True); except ImportError as e: print(f"False - {e}")')"
+          echo "Can import nabla: $(python -c 'try: import nabla; print(True); except ImportError as e: print(f\"False - {e}\")')"
           
-          # Try to build with gallery first, but if it fails, build without executing examples
-          sphinx-build -b html -v . _build/html || sphinx-build -b html -v -D plot_gallery=0 . _build/html
+          # Create a patch for the conf.py file to make it work without a real nabla install
+          cat > /tmp/conf_patch.py << 'EOF'
+          import sys
+          import types
+          
+          # Create a mock module for nabla if it doesn't exist
+          try:
+              import nabla
+          except ImportError:
+              nabla = types.ModuleType('nabla')
+              sys.modules['nabla'] = nabla
+              
+              # Add necessary attributes and submodules
+              nabla.__version__ = '0.1.0'
+              
+              # Create mock submodules
+              for submod in ['core', 'ops', 'nn', 'utils', 'kernels']:
+                  mock_mod = types.ModuleType(f'nabla.{submod}')
+                  setattr(nabla, submod, mock_mod)
+                  sys.modules[f'nabla.{submod}'] = mock_mod
+          EOF
+          
+          # Apply the patch at the beginning of the conf.py file
+          cp conf.py conf.py.bak
+          cat /tmp/conf_patch.py conf.py > conf.py.new
+          mv conf.py.new conf.py
+          
+          # Create a complete autosummary_mock module to help with imports
+          mkdir -p /tmp/sphinx_mock
+          cat > /tmp/sphinx_mock/autosummary_mock.py << 'EOF'
+          """
+          This module provides mocking functionality for autosummary.
+          """
+          import sys
+          from unittest.mock import MagicMock
+          
+          class MockModule(MagicMock):
+              @classmethod
+              def __getattr__(cls, name):
+                  return MockModule()
+              
+              def __call__(self, *args, **kwargs):
+                  return MockModule()
+              
+              def __iter__(self):
+                  return iter([])
+              
+              def __mro_entries__(self, bases):
+                  return (MockModule,)
+                  
+          MOCK_MODULES = ['nabla', 'nabla.core', 'nabla.ops', 'nabla.nn', 'nabla.utils', 'nabla.kernels',
+                         'nabla.core.array', 'nabla.core.trafos']
+          
+          for mod_name in MOCK_MODULES:
+              sys.modules[mod_name] = MockModule()
+          EOF
+          
+          # Add the mock directory to Python path
+          export PYTHONPATH=$PYTHONPATH:/tmp/sphinx_mock
+          
+          # Try to build without gallery and with mocking
+          sphinx-build -b html -v -D plot_gallery=0 . _build/html
           # Ensure .nojekyll file exists in the output directory
           touch _build/html/.nojekyll
           
