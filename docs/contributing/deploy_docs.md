@@ -4,7 +4,7 @@ This guide explains how to deploy the Nabla documentation using GitHub Pages.
 
 ## Automatic Deployment with GitHub Actions
 
-The Nabla documentation is automatically built and deployed to GitHub Pages whenever changes are pushed to the `main` branch. This process is handled by a GitHub Actions workflow defined in `.github/workflows/docs.yml`.
+The Nabla documentation is automatically built and deployed to GitHub Pages whenever changes are pushed to the `main` or `nabla-python` branch. This process is handled by a GitHub Actions workflow defined in `.github/workflows/docs.yml`.
 
 ### How It Works
 
