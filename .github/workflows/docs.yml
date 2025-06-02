@@ -26,9 +26,10 @@ concurrency:
 jobs:
   build-docs:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    # Only set environment for actual deployments
+    environment: ${{ github.event_name == 'push' && github.ref == 'refs/heads/nabla-python' && 'github-pages' || '' }}
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,20 +52,29 @@ jobs:
           cd docs
           # Build static documentation (API docs are pre-generated and committed)
           sphinx-build -b html . _build/html
-          # Ensure .nojekyll file exists for GitHub Pages
-          touch _build/html/.nojekyll
+          
+      - name: Add .nojekyll for GitHub Pages
+        run: |
+          touch docs/_build/html/.nojekyll
+          
+      - name: List build output (debug)
+        run: |
+          echo "Contents of docs/_build/html:"
+          ls -la docs/_build/html/
+          echo "First few lines of index.html:"
+          head -10 docs/_build/html/index.html
           
       - name: Setup Pages
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/nabla-python' || github.ref == 'refs/heads/main')
+        if: github.event_name == 'push' && github.ref == 'refs/heads/nabla-python'
         uses: actions/configure-pages@v4
         
       - name: Upload artifact
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/nabla-python' || github.ref == 'refs/heads/main')
+        if: github.event_name == 'push' && github.ref == 'refs/heads/nabla-python'
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./docs/_build/html
           
       - name: Deploy to GitHub Pages
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/nabla-python' || github.ref == 'refs/heads/main')
+        if: github.event_name == 'push' && github.ref == 'refs/heads/nabla-python'
         id: deployment
         uses: actions/deploy-pages@v4

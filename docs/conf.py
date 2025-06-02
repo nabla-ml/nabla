@@ -48,6 +48,12 @@ html_static_path = ['_static']
 html_css_files = ['custom.css']
 html_favicon = '_static/nabla-logo.svg'
 
+# GitHub Pages optimization
+html_baseurl = '/'
+html_use_index = True
+html_domain_indices = True
+html_use_modindex = True
+
 html_theme_options = {
     # Repository integration
     "repository_url": "https://github.com/nabla-ml/nabla",
