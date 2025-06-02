@@ -1,13 +1,6 @@
 # Examples Gallery
 
-This section contains practical examples demonstrating Nabla's capabilities across different domains. The gallery includes interactive examples with code and visualizations.
-
-```{toctree}
-:maxdepth: 1
-:caption: Gallery
-
-../auto_examples/index
-```
+This section contains practical examples demonstrating Nabla's capabilities across different domains.
 
 You can find all the source examples in the [`examples/`](https://github.com/nabla-ml/nabla/tree/main/examples) directory of the GitHub repository.
 

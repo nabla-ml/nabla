@@ -37,7 +37,6 @@ exclude_patterns = [
     '**/gen_modules/**', 
     'gallery_examples/**', 
     'auto_examples/**',
-    'api/generated/**',
     'sg_execution_times.rst'
 ]
 
