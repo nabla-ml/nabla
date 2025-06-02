@@ -52,7 +52,7 @@ BINARY_OPERATIONS = [
     ),
     (
         "power",
-        nb.power,
+        nb.pow,
         jnp.power if JAX_AVAILABLE else None,
         lambda i, d: (
             {"ensure_positive": True}
@@ -161,11 +161,11 @@ class TestBinaryOperations:
             cotangent_jax = jnp.array(cotangent_np)
 
             # Nabla VJP
-            def nabla_op(inputs):
-                return [nb_func(inputs[0], inputs[1])]
+            def nabla_op(x, y):
+                return nb_func(x, y)
 
-            outputs_nb, vjp_fn_nb = nb.vjp(nabla_op, primals_nb)
-            grads_nb = vjp_fn_nb([cotangent_nb])
+            outputs_nb, vjp_fn_nb = nb.vjp(nabla_op, *primals_nb)
+            grads_nb = vjp_fn_nb(cotangent_nb)
 
             # JAX VJP
             def jax_op(x, y):

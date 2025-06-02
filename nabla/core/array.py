@@ -187,7 +187,7 @@ class Array:
         """Power operator."""
         from ..ops.binary import power
 
-        return power(self, other)
+        return pow(self, other)
 
     def __truediv__(self, other) -> Array:
         """Division operator."""
@@ -206,3 +206,10 @@ class Array:
         from ..ops.unary import negate
 
         return negate(self)
+    
+
+    def __pow__(self, power: float) -> Array:
+        """Power operator for scalar exponentiation."""
+        from ..ops.binary import pow
+
+        return pow(self, power)

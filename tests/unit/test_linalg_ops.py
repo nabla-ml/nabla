@@ -70,11 +70,11 @@ class TestLinearAlgebraOperations:
             cotangent_jax = jnp.array(cotangent_np)
 
             # Nabla VJP
-            def nabla_op(inputs):
-                return [nb.matmul(inputs[0], inputs[1])]
+            def nabla_op(x, y):
+                return nb.matmul(x, y)
 
-            outputs_nb, vjp_fn_nb = nb.vjp(nabla_op, primals_nb)
-            grads_nb = vjp_fn_nb([cotangent_nb])
+            outputs_nb, vjp_fn_nb = nb.vjp(nabla_op, *primals_nb)
+            grads_nb = vjp_fn_nb(cotangent_nb)
 
             # JAX VJP
             def jax_op(x, y):

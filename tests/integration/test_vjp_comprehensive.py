@@ -27,8 +27,10 @@ def test_vjp_single_arg():
 
     # Expected: df/dx = 2x + 2, so at x=[2,3] -> [6, 8]
     expected = np.array([6.0, 8.0])
-    assert np.allclose(gradient.to_numpy(), expected), (
-        f"Expected {expected}, got {gradient.to_numpy()}"
+    # JAX always returns tuple, so access first element
+    actual_gradient = gradient[0]
+    assert np.allclose(actual_gradient.to_numpy(), expected), (
+        f"Expected {expected}, got {actual_gradient.to_numpy()}"
     )
     print("✓ Single argument test passed\n")
 
@@ -81,8 +83,8 @@ def test_vjp_multiple_args():
 
 
 def test_vjp_kwargs_only():
-    """Test VJP with keyword arguments only."""
-    print("=== Test 3: Keyword Arguments Only ===")
+    """Test VJP with keyword-only functions using functools.partial (JAX-compatible approach)."""
+    print("=== Test 3: Keyword Arguments via functools.partial ===")
 
     def func(*, x, y):
         return x * y + x
@@ -90,38 +92,35 @@ def test_vjp_kwargs_only():
     x = nb.array([2.0, 3.0])
     y = nb.array([4.0, 5.0])
 
-    outputs, vjp_fn = nb.vjp(func, x=x, y=y)
+    # JAX-compatible approach: use functools.partial for keyword arguments
+    import functools
+    func_with_args = functools.partial(func, x=x, y=y)
+    outputs, vjp_fn = nb.vjp(func_with_args)
 
     cotangent = nb.array([1.0, 1.0])
-    grad_args, grad_kwargs = vjp_fn(cotangent)  # Should return (args, kwargs) tuple
+    gradients = vjp_fn(cotangent)  # Returns gradients for the partial function (empty tuple)
 
     print(f"Input x: {x}")
     print(f"Input y: {y}")
     print(f"Output: {outputs}")
-    print(f"grad_args: {grad_args}")
-    print(f"grad_kwargs keys: {list(grad_kwargs.keys())}")
-    print(f"Gradient w.r.t. x: {grad_kwargs['x']}")
-    print(f"Gradient w.r.t. y: {grad_kwargs['y']}")
+    print(f"Gradients type: {type(gradients)}")
+    print("Note: Gradients are empty since all inputs are captured in partial")
 
-    # Expected: df/dx = y + 1, df/dy = x
-    # At x=[2,3], y=[4,5]: df/dx = [5, 6], df/dy = [2, 3]
-    expected_x = np.array([5.0, 6.0])
-    expected_y = np.array([2.0, 3.0])
-
-    assert np.allclose(grad_kwargs["x"].to_numpy(), expected_x), (
-        f"Expected {expected_x}, got {grad_kwargs['x'].to_numpy()}"
+    # Expected: f(x, y) = x * y + x, with x=[2, 3], y=[4, 5]
+    # f = [2*4 + 2, 3*5 + 3] = [10, 18]
+    expected = np.array([10.0, 18.0])
+    
+    assert np.allclose(outputs.to_numpy(), expected), (
+        f"Expected {expected}, got {outputs.to_numpy()}"
     )
-    assert np.allclose(grad_kwargs["y"].to_numpy(), expected_y), (
-        f"Expected {expected_y}, got {grad_kwargs['y'].to_numpy()}"
-    )
-    print("✓ Keyword arguments only test passed\n")
+    print("✓ Keyword arguments (via partial) test passed\n")
 
 
 def test_vjp_mixed_args_kwargs():
-    """Test VJP with both positional and keyword arguments."""
-    print("=== Test 4: Mixed Args and Kwargs ===")
+    """Test VJP with multiple positional arguments (kwargs not supported in JAX mode)."""
+    print("=== Test 4: Multiple Args (No Kwargs) ===")
 
-    def func(a, b, *, scale=1.0, offset=0.0):
+    def func(a, b, scale, offset):
         return scale * (a * b + offset)
 
     a = nb.array([1.0, 2.0])
@@ -129,20 +128,21 @@ def test_vjp_mixed_args_kwargs():
     scale = nb.array([2.0])
     offset = nb.array([1.0])
 
-    outputs, vjp_fn = nb.vjp(func, a, b, scale=scale, offset=offset)
+    outputs, vjp_fn = nb.vjp(func, a, b, scale, offset)
 
     cotangent = nb.array([1.0, 1.0])
-    grad_args, grad_kwargs = vjp_fn(cotangent)  # Should return (args, kwargs) tuple
+    gradients = vjp_fn(cotangent)  # Returns tuple of gradients
 
     print(f"Input a: {a}")
     print(f"Input b: {b}")
     print(f"Input scale: {scale}")
     print(f"Input offset: {offset}")
     print(f"Output: {outputs}")
-    print(f"Gradient w.r.t. a: {grad_args[0]}")
-    print(f"Gradient w.r.t. b: {grad_args[1]}")
-    print(f"Gradient w.r.t. scale: {grad_kwargs['scale']}")
-    print(f"Gradient w.r.t. offset: {grad_kwargs['offset']}")
+    grad_a, grad_b, grad_scale, grad_offset = gradients
+    print(f"Gradient w.r.t. a: {grad_a}")
+    print(f"Gradient w.r.t. b: {grad_b}")
+    print(f"Gradient w.r.t. scale: {grad_scale}")
+    print(f"Gradient w.r.t. offset: {grad_offset}")
 
     # Expected: f = scale * (a * b + offset)
     # df/da = scale * b = 2 * [3, 4] = [6, 8]
@@ -154,19 +154,19 @@ def test_vjp_mixed_args_kwargs():
     expected_scale = np.array([13.0])  # sum of [4, 9]
     expected_offset = np.array([4.0])  # sum of [2, 2]
 
-    assert np.allclose(grad_args[0].to_numpy(), expected_a), (
-        f"Expected {expected_a}, got {grad_args[0].to_numpy()}"
+    assert np.allclose(grad_a.to_numpy(), expected_a), (
+        f"Expected {expected_a}, got {grad_a.to_numpy()}"
     )
-    assert np.allclose(grad_args[1].to_numpy(), expected_b), (
-        f"Expected {expected_b}, got {grad_args[1].to_numpy()}"
+    assert np.allclose(grad_b.to_numpy(), expected_b), (
+        f"Expected {expected_b}, got {grad_b.to_numpy()}"
     )
-    assert np.allclose(grad_kwargs["scale"].to_numpy(), expected_scale), (
-        f"Expected {expected_scale}, got {grad_kwargs['scale'].to_numpy()}"
+    assert np.allclose(grad_scale.to_numpy(), expected_scale), (
+        f"Expected {expected_scale}, got {grad_scale.to_numpy()}"
     )
-    assert np.allclose(grad_kwargs["offset"].to_numpy(), expected_offset), (
-        f"Expected {expected_offset}, got {grad_kwargs['offset'].to_numpy()}"
+    assert np.allclose(grad_offset.to_numpy(), expected_offset), (
+        f"Expected {expected_offset}, got {grad_offset.to_numpy()}"
     )
-    print("✓ Mixed args and kwargs test passed\n")
+    print("✓ Multiple args test passed\n")
 
 
 def test_vjp_nested_structures():
@@ -187,15 +187,17 @@ def test_vjp_nested_structures():
     outputs, vjp_fn = nb.vjp(func, data)
 
     cotangent = nb.array([1.0, 1.0])
-    gradient = vjp_fn(cotangent)  # Should return nested structure like input
+    gradient = vjp_fn(cotangent)  # Returns tuple, need to unpack
 
     print(f"Input data: {data}")
     print(f"Output: {outputs}")
     print(f"Gradient type: {type(gradient)}")
-    print(f"Gradient keys: {list(gradient.keys())}")
-    print(f"Gradient w.r.t. x: {gradient['x']}")
-    print(f"Gradient w.r.t. y[0]: {gradient['y'][0]}")
-    print(f"Gradient w.r.t. y[1]: {gradient['y'][1]}")
+    # Unpack the single-element tuple
+    actual_gradient = gradient[0]
+    print(f"Gradient keys: {list(actual_gradient.keys())}")
+    print(f"Gradient w.r.t. x: {actual_gradient['x']}")
+    print(f"Gradient w.r.t. y[0]: {actual_gradient['y'][0]}")
+    print(f"Gradient w.r.t. y[1]: {actual_gradient['y'][1]}")
 
     # Expected: f = x * y[0] + x * y[1] = x * (y[0] + y[1])
     # df/dx = y[0] + y[1] = [4+6, 5+7] = [10, 12]
@@ -205,14 +207,14 @@ def test_vjp_nested_structures():
     expected_y0 = np.array([2.0, 3.0])
     expected_y1 = np.array([2.0, 3.0])
 
-    assert np.allclose(gradient["x"].to_numpy(), expected_x), (
-        f"Expected {expected_x}, got {gradient['x'].to_numpy()}"
+    assert np.allclose(actual_gradient["x"].to_numpy(), expected_x), (
+        f"Expected {expected_x}, got {actual_gradient['x'].to_numpy()}"
     )
-    assert np.allclose(gradient["y"][0].to_numpy(), expected_y0), (
-        f"Expected {expected_y0}, got {gradient['y'][0].to_numpy()}"
+    assert np.allclose(actual_gradient["y"][0].to_numpy(), expected_y0), (
+        f"Expected {expected_y0}, got {actual_gradient['y'][0].to_numpy()}"
     )
-    assert np.allclose(gradient["y"][1].to_numpy(), expected_y1), (
-        f"Expected {expected_y1}, got {gradient['y'][1].to_numpy()}"
+    assert np.allclose(actual_gradient["y"][1].to_numpy(), expected_y1), (
+        f"Expected {expected_y1}, got {actual_gradient['y'][1].to_numpy()}"
     )
     print("✓ Nested structures test passed\n")
 
@@ -229,18 +231,20 @@ def test_vjp_list_input():
     outputs, vjp_fn = nb.vjp(func, [x])  # Pass list as single argument
 
     cotangent = [nb.array([1.0])]
-    gradient = vjp_fn(cotangent)  # Should return list, not tuple
+    gradient = vjp_fn(cotangent)  # Returns tuple, need to unpack
 
     print(f"Input: {[x]}")
     print(f"Output: {outputs}")
     print(f"Gradient type: {type(gradient)}")
     print(f"Gradient: {gradient}")
-    print(f"Gradient[0]: {gradient[0]}")
+    # Unpack the single-element tuple
+    actual_gradient = gradient[0]
+    print(f"Gradient[0]: {actual_gradient}")
 
     # Expected: f = x^3, df/dx = 3x^2 = 3 * 4 = 12
     expected = np.array([12.0])
-    assert np.allclose(gradient[0].to_numpy(), expected), (
-        f"Expected {expected}, got {gradient[0].to_numpy()}"
+    assert np.allclose(actual_gradient[0].to_numpy(), expected), (
+        f"Expected {expected}, got {actual_gradient[0].to_numpy()}"
     )
     print("✓ List input test passed\n")
 
@@ -355,8 +359,10 @@ def test_vjp_edge_cases():
 
     # Expected: df/dx = 5.0
     expected = np.array([5.0, 5.0])
-    assert np.allclose(gradient.to_numpy(), expected), (
-        f"Expected {expected}, got {gradient.to_numpy()}"
+    # Unpack the single-element tuple
+    actual_gradient = gradient[0]
+    assert np.allclose(actual_gradient.to_numpy(), expected), (
+        f"Expected {expected}, got {actual_gradient.to_numpy()}"
     )
     print("✓ Constants test passed")
 
@@ -376,8 +382,10 @@ def test_vjp_edge_cases():
 
     # Expected: df/dx = 0
     expected_zero = np.array([0.0, 0.0])
-    assert np.allclose(gradient.to_numpy(), expected_zero), (
-        f"Expected {expected_zero}, got {gradient.to_numpy()}"
+    # Unpack the single-element tuple
+    actual_zero_gradient = gradient[0]
+    assert np.allclose(actual_zero_gradient.to_numpy(), expected_zero), (
+        f"Expected {expected_zero}, got {actual_zero_gradient.to_numpy()}"
     )
     print("✓ Zero gradients test passed\n")
 

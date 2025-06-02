@@ -67,8 +67,8 @@ UNARY_OPERATIONS = [
         None,
     ),
     (
-        "reduce_sum",
-        nb.reduce_sum,
+        "pow",
+        nb.sum,
         (lambda x: jnp.sum(x)) if JAX_AVAILABLE else None,
         lambda i, d: {},
         None,
@@ -154,11 +154,11 @@ class TestUnaryOperations:
             cotangent_jax = jnp.array(cotangent_np)
 
             # Nabla VJP
-            def nabla_op(inputs):
-                return [nb_func(inputs[0])]
+            def nabla_op(x):
+                return nb_func(x)
 
-            outputs_nb, vjp_fn_nb = nb.vjp(nabla_op, primals_nb)
-            grads_nb = vjp_fn_nb([cotangent_nb])
+            outputs_nb, vjp_fn_nb = nb.vjp(nabla_op, primals_nb[0])
+            grads_nb = vjp_fn_nb(cotangent_nb)
 
             # JAX VJP
             def jax_op(x):

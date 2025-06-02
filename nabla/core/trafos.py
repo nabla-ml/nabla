@@ -315,7 +315,7 @@ def _cleanup_cotangents(traced_nodes: list[Array]) -> None:
         node.cotangent = None
 
 
-def _compute_reverse_gradients(
+def _compute_pullback(
     input_arrays: list[Array],
     output_arrays: list[Array],
     cotangent_arrays: list[Array],
@@ -395,54 +395,24 @@ def _reconstruct_gradient_structure(
     Returns:
         Gradients with the same structure as inputs
     """
-    gradient_iter = iter(gradient_arrays)
-
-    def _replace_with_gradient(value: Any) -> Any:
-        if isinstance(value, Array):
-            return next(gradient_iter)
-        else:
-            # For non-Arrays, return zeros of the same type
-            if isinstance(value, (int | float)):
-                return type(value)(0)
-            elif isinstance(value, complex):
-                return complex(0)
-            else:
-                return value  # Fallback for other types
-
-    return tree_map(_replace_with_gradient, inputs)
-
-
-def _adjust_gradient_structure_for_vjp(
-    gradients_in_input_structure: Any,
-    vjp_call_info: tuple[tuple, dict],
-) -> Any:
-    """Adjust gradient structure for VJP API convenience.
-
-    Args:
-        gradients_in_input_structure: Gradients in input structure
-        vjp_call_info: Tuple of (original_args, original_kwargs) from VJP call
-
-    Returns:
-        Gradients adjusted for VJP API convenience
-    """
-    original_args, original_kwargs = vjp_call_info
-    grad_args, grad_kwargs = gradients_in_input_structure
-
-    # Return gradients in the same structure as the original VJP call
-    if not original_kwargs:
-        if len(original_args) == 1:
-            return grad_args[0]  # Unpack single argument
-        else:
-            return grad_args
-    else:
-        return grad_args, grad_kwargs
+    # Use the same flattening/unflattening logic as used for input extraction
+    input_arrays, structure = tree_flatten(inputs)
+    
+    # Validate that we have the right number of gradients
+    if len(gradient_arrays) != len(input_arrays):
+        raise ValueError(
+            f"Gradient arrays length {len(gradient_arrays)} != "
+            f"input arrays length {len(input_arrays)}"
+        )
+    
+    # Reconstruct the pytree structure with gradients
+    return tree_unflatten(structure, gradient_arrays)
 
 
 def pullback(
     inputs: Any,
     outputs: Any,
     cotangents: Any,
-    vjp_call_info: tuple[tuple, dict] | None = None,
 ) -> Any:
     """Compute vector-Jacobian product (reverse-mode autodiff).
 
@@ -452,12 +422,9 @@ def pullback(
         inputs: Input arrays or pytree of arrays
         outputs: Output arrays or pytree of arrays
         cotangents: Cotangent vectors or pytree of cotangents
-        vjp_call_info: Optional tuple of (original_args, original_kwargs) from VJP call
-                      for special return structure handling
 
     Returns:
         Gradients with respect to inputs, in the same structure as inputs
-        (or adjusted structure if vjp_call_info is provided)
     """
     # Extract arrays from pytree structures
     input_arrays = _extract_arrays_from_pytree(inputs)
@@ -469,7 +436,7 @@ def pullback(
     )
 
     # Core reverse-mode gradient computation
-    gradient_arrays = _compute_reverse_gradients(
+    gradient_arrays = _compute_pullback(
         input_arrays, output_arrays, cotangent_arrays
     )
 
@@ -477,12 +444,6 @@ def pullback(
     gradients_in_input_structure = _reconstruct_gradient_structure(
         gradient_arrays, inputs
     )
-
-    # Apply VJP API convenience adjustments if needed
-    if vjp_call_info is not None:
-        return _adjust_gradient_structure_for_vjp(
-            gradients_in_input_structure, vjp_call_info
-        )
 
     return gradients_in_input_structure
 
@@ -651,38 +612,62 @@ def make_unstaged(args: list[Array]) -> None:
         arg.stage_realization = False  # Disable staged execution
 
 
-def vjp(func: Callable[..., Any], *args, **kwargs) -> tuple[Any, Callable]:
+def vjp(func: Callable[..., Any], *primals) -> tuple[Any, Callable]:
     """Compute vector-Jacobian product (reverse-mode autodiff).
 
     Args:
-        func: Function to differentiate (can have arbitrary signature)
-        *args: Positional arguments to the function (can be arbitrary pytrees)
-        **kwargs: Keyword arguments to the function (can be arbitrary pytrees)
+        func: Function to differentiate (should take positional arguments)
+        *primals: Positional arguments to the function (can be arbitrary pytrees)
 
     Returns:
-        Tuple of (outputs, vjp_function) where vjp_function computes gradients
+        Tuple of (outputs, vjp_function) where vjp_function computes gradients.
+        
+        The vjp_function always returns gradients as a tuple (matching JAX behavior):
+        - Single argument: vjp_fn(cotangent) -> (gradient,)
+        - Multiple arguments: vjp_fn(cotangent) -> (grad1, grad2, ...)
+
+    Note:
+        This follows JAX's vjp API exactly:
+        - Only accepts positional arguments
+        - Always returns gradients as tuple
+        - For functions requiring keyword arguments, use functools.partial or lambda
     """
-    # Combine args and kwargs into a single pytree for easier handling
-    inputs_pytree = (args, kwargs)
+    # Handle the input structure based on number of arguments
+    if len(primals) == 1:
+        inputs_pytree = primals[0]
+    else:
+        inputs_pytree = primals
 
     # Make traced copies of all inputs
     traced_inputs_pytree = make_traced_pytree(inputs_pytree)
-    traced_args, traced_kwargs = traced_inputs_pytree
+    
+    # Extract traced args based on the structure
+    if len(primals) == 1:
+        traced_args = (traced_inputs_pytree,)
+    else:
+        traced_args = traced_inputs_pytree
 
     # Execute the function with traced inputs
-    outputs = func(*traced_args, **traced_kwargs)
+    outputs = func(*traced_args)
 
-    def vjp_fn(cotangents: Any) -> Any:
-        """VJP function that computes gradients."""
-        # Use the unified pullback function with pytree support and VJP call info
-        gradients = pullback(
-            traced_inputs_pytree, outputs, cotangents, vjp_call_info=(args, kwargs)
-        )
+    def vjp_fn(cotangents: Any) -> tuple:
+        """VJP function that computes gradients.
+        
+        Returns gradients as a tuple to match JAX's behavior:
+        - Single argument: returns (gradient,) 
+        - Multiple arguments: returns (grad1, grad2, ...)
+        """
+        # Use the unified pullback function with pytree support
+        gradients = pullback(traced_inputs_pytree, outputs, cotangents)
 
         # Make the gradients untraced
         make_untraced_pytree(gradients)
 
-        return gradients
+        # Always return as tuple to match JAX behavior
+        if len(primals) == 1:
+            return (gradients,)  # Wrap single gradient in tuple
+        else:
+            return gradients  # Already a tuple for multiple args
 
     # Make outputs untraced before returning
     make_untraced_pytree(outputs)

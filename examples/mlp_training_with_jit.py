@@ -51,7 +51,7 @@ def mean_squared_error(predictions: nb.Array, targets: nb.Array) -> nb.Array:
     diff = predictions - targets
     squared_errors = diff * diff
     batch_size = nb.array([np.float32(predictions.shape[0])])
-    loss = nb.reduce_sum(squared_errors) / batch_size
+    loss = nb.sum(squared_errors) / batch_size
     return loss
 
 

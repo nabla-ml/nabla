@@ -69,8 +69,12 @@ def test_vjp_with_kwargs():
     x = nb.array([1.0, 2.0])
     scale = nb.array([3.0])
 
+    # For functions with kwargs, wrap them in a lambda or use functools.partial
+    # This approach is consistent with JAX's vjp API
+    wrapped_func = lambda x, scale: kwarg_func(x, scale=scale)
+
     # Test VJP
-    outputs, vjp_fn = nb.vjp(kwarg_func, x, scale=scale)
+    outputs, vjp_fn = nb.vjp(wrapped_func, x, scale)
 
     print("Test 3: Function with kwargs f(x, scale=2.0) = x * scale")
     print(f"Input x: {x}")
@@ -79,11 +83,11 @@ def test_vjp_with_kwargs():
 
     # Test gradients
     cotangent = nb.array([1.0, 1.0])
-    grad_args, grad_kwargs = vjp_fn(cotangent)
+    gradients = vjp_fn(cotangent)
 
     print(f"Cotangent: {cotangent}")
-    print(f"Gradient w.r.t. x: {grad_args[0]}")
-    print(f"Gradient w.r.t. scale: {grad_kwargs['scale']}")
+    print(f"Gradient w.r.t. x: {gradients[0]}")
+    print(f"Gradient w.r.t. scale: {gradients[1]}")
     print()
 
 
@@ -108,12 +112,14 @@ def test_vjp_nested_structure():
 
     # Test gradients
     cotangent = nb.array([1.0, 1.0])
-    gradient = vjp_fn(cotangent)  # Returns single gradient structure since single arg
+    gradient = vjp_fn(cotangent)  # Returns tuple of gradients
 
     print(f"Cotangent: {cotangent}")
     print(f"Gradient structure: {gradient}")
-    print(f"Gradient w.r.t. x: {gradient[0]}")
-    print(f"Gradient w.r.t. y: {gradient[1]}")
+    # Unpack the tuple to get the nested structure
+    actual_gradient = gradient[0]
+    print(f"Gradient w.r.t. x: {actual_gradient[0]}")
+    print(f"Gradient w.r.t. y: {actual_gradient[1]}")
     print()
 
 

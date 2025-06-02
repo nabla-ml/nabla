@@ -84,13 +84,13 @@ def test_simple_vmap_parametrized(batch_size):
     )
 
 
-def test_vmap_with_reduce_sum():
+def test_vmap_with_sum():
     """Test vmap with reduce operations."""
 
     def foo(args: list[nb.Array]) -> list[nb.Array]:
         a = args[0]
         c = nb.arange((2, 3, 4))
-        res = nb.reduce_sum(c * a * a, axes=[0])
+        res = nb.sum(c * a * a, axes=[0])
         return [res]
 
     a = nb.arange((2, 3, 4))
@@ -105,7 +105,7 @@ def test_vmap_with_reduce_sum():
     foo_vmapped = nb.vmap(foo)
     res_vmapped = foo_vmapped([a])
 
-    # Note: vmap with reduce_sum may have different behavior than expected
+    # Note: vmap with pow may have different behavior than expected
     # The vmapped result preserves the batch dimension that was reduced in the original
     # This could be implementation-specific behavior
     print(f"Base result shape: {res[0].shape}")
@@ -129,7 +129,7 @@ def test_vmap_expression_compilation():
     def foo(args: list[nb.Array]) -> list[nb.Array]:
         a = args[0]
         c = nb.arange((2, 3, 4))
-        res = nb.reduce_sum(c * a * a, axes=[0])
+        res = nb.sum(c * a * a, axes=[0])
         return [res]
 
     a = nb.arange((2, 3, 4))
@@ -184,7 +184,7 @@ def test_vmap_batched_matmul():
 
     def dot(args: list[nb.Array]) -> list[nb.Array]:
         return [
-            nb.reduce_sum(
+            nb.sum(
                 args[0] * args[1],
                 axes=[0],
             )
@@ -238,7 +238,7 @@ def test_simple_dot_product():
 
     def dot(args: list[nb.Array]) -> list[nb.Array]:
         return [
-            nb.reduce_sum(
+            nb.sum(
                 args[0] * args[1],
                 axes=[0],
             )
@@ -262,7 +262,7 @@ def test_matrix_vector_product():
 
     def dot(args: list[nb.Array]) -> list[nb.Array]:
         return [
-            nb.reduce_sum(
+            nb.sum(
                 args[0] * args[1],
                 axes=[0],
             )
@@ -288,7 +288,7 @@ def test_batched_matmul_parametrized(batch_size, inner_dim):
     """Test batched matmul with different dimensions."""
 
     def dot(args: list[nb.Array]) -> list[nb.Array]:
-        return [nb.reduce_sum(args[0] * args[1], axes=[0])]
+        return [nb.sum(args[0] * args[1], axes=[0])]
 
     def mv_prod(args: list[nb.Array]) -> list[nb.Array]:
         return nb.vmap(dot, [0, None])(args)
@@ -321,7 +321,7 @@ def test_batched_matmul_parametrized(batch_size, inner_dim):
 if __name__ == "__main__":
     test_simple_vmap_basic()
     test_simple_vmap_different_shapes()
-    test_vmap_with_reduce_sum()
+    test_vmap_with_sum()
     test_vmap_expression_compilation()
     test_vmap_with_different_arrays()
     test_simple_vmap_parametrized([1, 2, 3, 4])

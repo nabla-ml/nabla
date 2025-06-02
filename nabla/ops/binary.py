@@ -25,7 +25,7 @@ from ..core.array import Array
 from .operation import BinaryOperation
 
 # Public API
-__all__ = ["add", "mul", "sub", "div", "power", "greater_equal"]
+__all__ = ["add", "mul", "sub", "div", "pow", "greater_equal"]
 
 
 def _ensure_array(value) -> Array:
@@ -171,7 +171,7 @@ class PowerOp(BinaryOperation):
         output.tensor_value = args[0] ** args[1]
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        np_result = np.power(args[0].to_numpy(), args[1].to_numpy())
+        np_result = np.pow(args[0].to_numpy(), args[1].to_numpy())
         # Ensure result is an array, not a scalar
         if np.isscalar(np_result):
             np_result = np.array(np_result)
@@ -276,7 +276,7 @@ def div(arg0, arg1) -> Array:
     return _div_op.forward(arg0, arg1)
 
 
-def power(arg0, arg1) -> Array:
+def pow(arg0, arg1) -> Array:
     """Element-wise power operation (arg0^arg1)."""
     arg0 = _ensure_array(arg0)
     arg1 = _ensure_array(arg1)

@@ -59,7 +59,7 @@ class TestVmapTransformations:
     ):
         """Test vmap for compatible operations."""
         # Skip operations with known issues
-        if op_name in ["reduce_sum", "matmul"]:
+        if op_name in ["pow", "matmul"]:
             pytest.skip(f"Skipping {op_name} vmap test due to known issues")
 
         rtol, atol = tolerances["value"]

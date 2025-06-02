@@ -26,11 +26,11 @@ from ..core.array import Array, Shape
 from .operation import ReductionOperation
 
 # Public API
-__all__ = ["reduce_sum", "sum_batch_dims"]
+__all__ = ["sum", "sum_batch_dims"]
 
 
 class ReduceSumOp(ReductionOperation):
-    """reduce_sum reduction operation."""
+    """sum reduction operation."""
 
     def __init__(
         self,
@@ -38,7 +38,7 @@ class ReduceSumOp(ReductionOperation):
         axes: int | list[int] | tuple[int, ...] | None = None,
         keep_dims: bool = False,
     ):
-        super().__init__(f"reduce_sum[axes={axes}]", axes, keep_dims)
+        super().__init__(f"sum[axes={axes}]", axes, keep_dims)
         self.arg_shape = arg_shape
         self.axes = axes
         self.keep_dims = keep_dims
@@ -86,15 +86,15 @@ class ReduceSumOp(ReductionOperation):
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
-        return reduce_sum(tangents[0], axes=self.axes, keep_dims=self.keep_dims)
+        return sum(tangents[0], axes=self.axes, keep_dims=self.keep_dims)
 
 
-def reduce_sum(
+def sum(
     arg: Array,
     axes: int | list[int] | tuple[int, ...] | None = None,
     keep_dims: bool = False,
 ) -> Array:
-    """reduce_sum array elements over given axes."""
+    """sum array elements over given axes."""
     if axes is not None:
         if isinstance(axes, int):
             axes = [axes]
@@ -108,7 +108,7 @@ def reduce_sum(
 
 
 class SumBatchDimsOp(ReductionOperation):
-    """reduce_sum reduction operation."""
+    """sum reduction operation."""
 
     def __init__(
         self,
@@ -116,7 +116,7 @@ class SumBatchDimsOp(ReductionOperation):
         axes: int | list[int] | tuple[int, ...] | None = None,
         keep_dims: bool = False,
     ):
-        super().__init__(f"reduce_sum[axes={axes}]", axes, keep_dims)
+        super().__init__(f"sum[axes={axes}]", axes, keep_dims)
         self.arg_batch_dims = arg_batch_dims
         self.axes = axes
         self.keep_dims = keep_dims
@@ -180,7 +180,7 @@ def sum_batch_dims(
     axes: int | list[int] | tuple[int, ...] | None = None,
     keep_dims: bool = False,
 ) -> Array:
-    """reduce_sum array elements over given axes."""
+    """sum array elements over given axes."""
 
     if axes is not None:
         if isinstance(axes, int):
