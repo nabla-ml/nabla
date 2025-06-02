@@ -14,7 +14,9 @@ on:
 
 # Sets permissions for GitHub Pages deployment
 permissions:
-  contents: write  # Needed to push to gh-pages branch
+  contents: read
+  pages: write
+  id-token: write
 
 # Allow only one concurrent deployment
 concurrency:
@@ -24,6 +26,9 @@ concurrency:
 jobs:
   build-docs:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,10 +54,17 @@ jobs:
           # Ensure .nojekyll file exists for GitHub Pages
           touch _build/html/.nojekyll
           
-      - name: Deploy to GitHub Pages
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/nabla-python' || github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
-        uses: peaceiris/actions-gh-pages@v3
+      - name: Setup Pages
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/nabla-python' || github.ref == 'refs/heads/main')
+        uses: actions/configure-pages@v4
+        
+      - name: Upload artifact
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/nabla-python' || github.ref == 'refs/heads/main')
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs/_build/html
-          force_orphan: true
+          path: ./docs/_build/html
+          
+      - name: Deploy to GitHub Pages
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/nabla-python' || github.ref == 'refs/heads/main')
+        id: deployment
+        uses: actions/deploy-pages@v4
