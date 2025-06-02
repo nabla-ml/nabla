@@ -94,11 +94,14 @@ def test_vjp_kwargs_only():
 
     # JAX-compatible approach: use functools.partial for keyword arguments
     import functools
+
     func_with_args = functools.partial(func, x=x, y=y)
     outputs, vjp_fn = nb.vjp(func_with_args)
 
     cotangent = nb.array([1.0, 1.0])
-    gradients = vjp_fn(cotangent)  # Returns gradients for the partial function (empty tuple)
+    gradients = vjp_fn(
+        cotangent
+    )  # Returns gradients for the partial function (empty tuple)
 
     print(f"Input x: {x}")
     print(f"Input y: {y}")
@@ -109,7 +112,7 @@ def test_vjp_kwargs_only():
     # Expected: f(x, y) = x * y + x, with x=[2, 3], y=[4, 5]
     # f = [2*4 + 2, 3*5 + 3] = [10, 18]
     expected = np.array([10.0, 18.0])
-    
+
     assert np.allclose(outputs.to_numpy(), expected), (
         f"Expected {expected}, got {outputs.to_numpy()}"
     )

@@ -89,6 +89,7 @@ class ReduceSumOp(ReductionOperation):
         return sum(tangents[0], axes=self.axes, keep_dims=self.keep_dims)
 
 
+# noqa: A001 - Intentionally shadowing built-in 'sum' for API consistency
 def sum(
     arg: Array,
     axes: int | list[int] | tuple[int, ...] | None = None,

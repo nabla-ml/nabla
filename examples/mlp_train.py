@@ -2,6 +2,7 @@
 """Improved Nabla implementation to learn the complex 8-period sin curve."""
 
 import time
+
 import numpy as np
 
 import nabla as nb
@@ -291,7 +292,7 @@ def test_nabla_complex_sin():
 
     for epoch in range(1, NUM_EPOCHS + 1):
         epoch_start_time = time.time()
-        
+
         # Learning rate schedule
         current_lr = learning_rate_schedule(epoch, LEARNING_RATE)
 

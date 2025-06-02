@@ -122,7 +122,7 @@ def test_mlp_inference_with_benchmark():
 
     # Training loop with benchmarking
     total_time = 0.0
-    
+
     for epoch in range(1, NUM_EPOCHS + 1):
         start_time = time.perf_counter()
 
@@ -145,7 +145,9 @@ def test_mlp_inference_with_benchmark():
 
         # Print timing for each iteration
         if epoch % PRINT_INTERVAL == 0:
-            print(f"Epoch {epoch:3d}: Loss = {loss:.6f}, Time = {iteration_time*1000:.3f}ms")
+            print(
+                f"Epoch {epoch:3d}: Loss = {loss:.6f}, Time = {iteration_time * 1000:.3f}ms"
+            )
 
         # Accumulate metrics
         avg_loss += loss
@@ -192,9 +194,9 @@ def test_mlp_inference_with_benchmark():
 
     # Final summary
     avg_time_per_epoch = total_time / NUM_EPOCHS
-    print(f"\nTraining completed!")
+    print("\nTraining completed!")
     print(f"Total time: {total_time:.4f}s")
-    print(f"Average time per epoch: {avg_time_per_epoch*1000:.3f}ms")
+    print(f"Average time per epoch: {avg_time_per_epoch * 1000:.3f}ms")
 
     # Stop memory tracking and show final stats
     tracemalloc.stop()

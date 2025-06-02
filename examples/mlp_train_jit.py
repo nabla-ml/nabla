@@ -2,6 +2,7 @@
 """Improved Nabla implementation to learn the complex 8-period sin curve."""
 
 import time
+
 import numpy as np
 
 import nabla as nb
@@ -64,6 +65,7 @@ def mlp_forward_and_loss_leaky(inputs: list[nb.Array]) -> list[nb.Array]:
     return [loss]
 
 
+@nb.jit
 def create_sin_dataset(batch_size: int = 256) -> tuple[nb.Array, nb.Array]:
     """Create the COMPLEX 8-period sin dataset."""
     np_x = np.random.uniform(0.0, 1.0, (batch_size, 1)).astype(np.float32)
@@ -197,6 +199,7 @@ def learning_rate_schedule(
     return initial_lr * (decay_factor ** (epoch // decay_every))
 
 
+@nb.jit
 def train_step_adamw(
     x: nb.Array,
     targets: nb.Array,
@@ -291,15 +294,15 @@ def test_nabla_complex_sin():
 
     for epoch in range(1, NUM_EPOCHS + 1):
         epoch_start_time = time.time()
-        
+
         # Learning rate schedule
         current_lr = learning_rate_schedule(epoch, LEARNING_RATE)
 
-        # Create fresh batch
-        x, targets = nb.jit(create_sin_dataset)(BATCH_SIZE)
+        # Create fresh batch using jitted function with decorator syntax
+        x, targets = create_sin_dataset(BATCH_SIZE)
 
-        # Training step
-        params, m_states, v_states, loss = nb.jit(train_step_adamw)(
+        # Training step using jitted function with decorator syntax
+        params, m_states, v_states, loss = train_step_adamw(
             x, targets, params, m_states, v_states, epoch, current_lr
         )
 

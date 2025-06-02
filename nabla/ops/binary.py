@@ -276,6 +276,7 @@ def div(arg0, arg1) -> Array:
     return _div_op.forward(arg0, arg1)
 
 
+# noqa: A001 - Intentionally shadowing built-in 'pow' for API consistency
 def pow(arg0, arg1) -> Array:
     """Element-wise power operation (arg0^arg1)."""
     arg0 = _ensure_array(arg0)

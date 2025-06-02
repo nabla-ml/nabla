@@ -23,6 +23,7 @@ from typing import Any
 
 from .array import Array
 
+
 def tree_flatten(tree: Any) -> tuple[list[Array], Any]:
     """Flatten a pytree into a list of Arrays and structure info.
 
@@ -101,9 +102,6 @@ def tree_map(func: Callable[[Array], Array], tree: Any) -> Any:
     return tree_unflatten(structure, transformed_leaves)
 
 
-
-
-
 def _extract_arrays_from_pytree(tree: Any) -> list[Array]:
     """Extract all Arrays from a pytree structure.
 
@@ -121,8 +119,6 @@ def _validate_length_match(list1, list2, name1, name2):
     """Check if two lists have the same length."""
     if len(list1) != len(list2):
         raise ValueError(f"{name1} length {len(list1)} != {name2} length {len(list2)}")
-
-
 
 
 def make_traced_pytree(tree: Any) -> Any:
@@ -216,13 +212,13 @@ def _handle_args_consistently(args):
 
 
 def _prepare_traced_inputs(actual_args, is_list_style, apply_staging=False):
-    """Prepare traced inputs for list-style or pytree-style arguments.""" 
+    """Prepare traced inputs for list-style or pytree-style arguments."""
     if is_list_style:
         traced_args = make_traced(actual_args)
         if apply_staging:
             make_staged(traced_args)
         return traced_args, None
-    
+
     if len(actual_args) == 1:
         inputs_pytree = actual_args[0]
         traced_inputs_pytree = make_traced_pytree(inputs_pytree)
@@ -233,9 +229,9 @@ def _prepare_traced_inputs(actual_args, is_list_style, apply_staging=False):
         traced_args = traced_inputs_pytree
 
     if apply_staging:
-        for arg in actual_args:
-            arrays = _extract_arrays_from_pytree(arg)
-            make_staged(arrays)
+        # Apply staging to the TRACED arrays, not the original args
+        arrays = _extract_arrays_from_pytree(traced_args)
+        make_staged(arrays)
 
     return traced_args, traced_inputs_pytree
 
@@ -292,13 +288,13 @@ class Trace:
 
         # Execute function with tracing enabled
         outputs = fn(inputs)
-        
+
         # Extract Arrays from outputs and store as list
         output_arrays = _extract_arrays_from_pytree(outputs)
         trace.outputs = output_arrays
 
         make_untraced(inputs)  # Detach inputs from the trace
-        
+
         # Handle outputs properly - make them untraced
         make_untraced(output_arrays)
 
@@ -420,10 +416,6 @@ class Trace:
         return result
 
 
-
-
-
-
 def _cleanup_cotangents(traced_nodes: list[Array]) -> None:
     """Clean up cotangent values from traced nodes.
 
@@ -516,14 +508,14 @@ def _reconstruct_gradient_structure(
     """
     # Use the same flattening/unflattening logic as used for input extraction
     input_arrays, structure = tree_flatten(inputs)
-    
+
     # Validate that we have the right number of gradients
     if len(gradient_arrays) != len(input_arrays):
         raise ValueError(
             f"Gradient arrays length {len(gradient_arrays)} != "
             f"input arrays length {len(input_arrays)}"
         )
-    
+
     # Reconstruct the pytree structure with gradients
     return tree_unflatten(structure, gradient_arrays)
 
@@ -555,9 +547,7 @@ def pullback(
     )
 
     # Core reverse-mode gradient computation
-    gradient_arrays = _compute_pullback(
-        input_arrays, output_arrays, cotangent_arrays
-    )
+    gradient_arrays = _compute_pullback(input_arrays, output_arrays, cotangent_arrays)
 
     # Reconstruct gradients in input structure
     gradients_in_input_structure = _reconstruct_gradient_structure(
@@ -588,12 +578,17 @@ def _compute_pushfwd(inputs, outputs, tangents, trace=None):
                 arg_tangents.append(arg.tangent)
             else:
                 from ..ops.creation import zeros
-                arg_tangents.append(zeros(arg.shape, dtype=arg.dtype, device=arg.device))
+
+                arg_tangents.append(
+                    zeros(arg.shape, dtype=arg.dtype, device=arg.device)
+                )
 
         try:
             node.tangent = node.jvp_rule(node.args, arg_tangents, node)
         except Exception as e:
-            raise RuntimeError(f"JVP rule failed for operation '{node.name}': {e}") from e
+            raise RuntimeError(
+                f"JVP rule failed for operation '{node.name}': {e}"
+            ) from e
 
     output_tangents = []
     for out in outputs:
@@ -601,6 +596,7 @@ def _compute_pushfwd(inputs, outputs, tangents, trace=None):
             output_tangents.append(out.tangent)
         else:
             from ..ops.creation import zeros
+
             output_tangents.append(zeros(out.shape, dtype=out.dtype, device=out.device))
 
     return output_tangents
@@ -695,8 +691,6 @@ def _prepare_vmap_outputs(
     return unbatched_outputs
 
 
-
-
 def xpr(
     fn: Callable[[list[Array]], list[Array]],
     args: list[Array],
@@ -712,10 +706,10 @@ def xpr(
     """
     # Handle args consistently
     actual_args, is_list_style = _handle_args_consistently([args])
-    
+
     # Prepare traced inputs
     traced_args, _ = _prepare_traced_inputs(actual_args, is_list_style)
-    
+
     # Create and return trace
     if is_list_style:
         trace = Trace.trace_function(fn, traced_args)
@@ -723,8 +717,9 @@ def xpr(
         # Adapting to xpr's function signature
         def wrapper(args_list):
             return fn(args_list[0])
+
         trace = Trace.trace_function(wrapper, [traced_args[0]])
-        
+
     return str(trace)
 
 
@@ -737,7 +732,7 @@ def vjp(func: Callable[..., Any], *primals) -> tuple[Any, Callable]:
 
     Returns:
         Tuple of (outputs, vjp_function) where vjp_function computes gradients.
-        
+
         The vjp_function always returns gradients as a tuple (matching JAX behavior):
         - Single argument: vjp_fn(cotangent) -> (gradient,)
         - Multiple arguments: vjp_fn(cotangent) -> (grad1, grad2, ...)
@@ -758,21 +753,18 @@ def vjp(func: Callable[..., Any], *primals) -> tuple[Any, Callable]:
 
     # Make traced copies of all inputs
     traced_inputs_pytree = make_traced_pytree(inputs_pytree)
-    
+
     # Extract traced args based on the structure
-    if is_single_arg:
-        traced_args = (traced_inputs_pytree,)
-    else:
-        traced_args = traced_inputs_pytree
+    traced_args = (traced_inputs_pytree,) if is_single_arg else traced_inputs_pytree
 
     # Execute the function with traced inputs
     outputs = func(*traced_args)
 
     def vjp_fn(cotangents: Any) -> tuple:
         """VJP function that computes gradients.
-        
+
         Returns gradients as a tuple to match JAX's behavior:
-        - Single argument: returns (gradient,) 
+        - Single argument: returns (gradient,)
         - Multiple arguments: returns (grad1, grad2, ...)
         """
         # Use the unified pullback function with pytree support
@@ -811,27 +803,31 @@ def jvp(func: Callable[..., Any], primals, tangents) -> tuple[Any, Any]:
     """
     # Handle inputs correctly based on structure
     is_multi_arg = isinstance(primals, tuple)
-    
+
     # Validate primals and tangents match
     if is_multi_arg:
         if not isinstance(tangents, tuple) or len(primals) != len(tangents):
-            raise ValueError(f"primals and tangents must have the same structure and length, "
-                            f"got {len(primals)} primals and {len(tangents) if isinstance(tangents, tuple) else 1} tangents")
+            raise ValueError(
+                f"primals and tangents must have the same structure and length, "
+                f"got {len(primals)} primals and {len(tangents) if isinstance(tangents, tuple) else 1} tangents"
+            )
     elif isinstance(tangents, tuple):
-        raise ValueError("If primal is a single argument, tangent should also be a single argument")
+        raise ValueError(
+            "If primal is a single argument, tangent should also be a single argument"
+        )
 
     # Make traced copies of all inputs
     traced_inputs_pytree = make_traced_pytree(primals)
-    
+
     # Extract traced args based on structure
     traced_args = traced_inputs_pytree if is_multi_arg else (traced_inputs_pytree,)
 
     # Execute the function with traced inputs
     outputs = func(*traced_args)
-    
+
     # Compute output tangents
     output_tangents = pushfwd(traced_inputs_pytree, outputs, tangents)
-    
+
     # Make everything untraced before returning
     make_untraced_pytree(outputs)
     make_untraced_pytree(output_tangents)
@@ -839,13 +835,10 @@ def jvp(func: Callable[..., Any], primals, tangents) -> tuple[Any, Any]:
     return outputs, output_tangents
 
 
-def vmap(
-    func: Callable[..., Any],
-    in_axes=0, 
-    out_axes=0
-) -> Callable[..., Any]:
+def vmap(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
     """Vectorize a function over specified input axes.
-    
+    This can be used as a function call like `vmap(func, in_axes=0)` or as a decorator `@vmap`.
+
     Args:
         func: Function to vectorize
         in_axes: Specification of axes to map over for inputs
@@ -862,118 +855,216 @@ def vmap(
         Supports both calling conventions:
         - List-style: vmapped_fn([x, y, z])
         - Unpacked-style: vmapped_fn(x, y, z)
+
+    Example:
+        # As a function call
+        vmapped_func = vmap(my_func, in_axes=0, out_axes=0)
+
+        # As a decorator
+        @vmap
+        def my_func(x):
+            return x * 2
+
+        # As a decorator with arguments
+        @vmap(in_axes=1, out_axes=0)
+        def my_func(x):
+            return x * 2
     """
-    
+    # Handle being called as a decorator with arguments: @vmap(in_axes=1)
+    if func is None:
+        return lambda f: vmap(f, in_axes=in_axes, out_axes=out_axes)
+
     # Helper function to standardize in_axes/out_axes to proper format
     def _standardize_axes(axes, length, name):
         if isinstance(axes, int) or axes is None:
             return [axes] * length
-        elif isinstance(axes, tuple) or isinstance(axes, list):
+        elif isinstance(axes, tuple | list):
             if len(axes) != length:
-                raise ValueError(f"{name} length {len(axes)} != argument length {length}")
+                raise ValueError(
+                    f"{name} length {len(axes)} != argument length {length}"
+                )
             return list(axes)
         else:
-            raise ValueError(f"{name} must be an integer, None, or a tuple/list, got {type(axes)}")
+            raise ValueError(
+                f"{name} must be an integer, None, or a tuple/list, got {type(axes)}"
+            )
 
     def vectorized_func(*args):
         # Use common argument handling logic
         actual_args, is_list_style = _handle_args_consistently(args)
-            
+
         # Handle input structure
         if not actual_args:
             raise ValueError("vmap requires at least one input argument")
-        
+
         # Standardize in_axes to match input structure
         adapted_in_axes = _standardize_axes(in_axes, len(actual_args), "in_axes")
-        
+
         # Create traced copies of inputs
         traced_args = []
         for arg, axis in zip(actual_args, adapted_in_axes, strict=False):
             # Extract arrays and prepare for batch mapping
             arg_arrays = _extract_arrays_from_pytree(arg)
             arg_structure = tree_flatten(arg)[1]
-            
+
             # Get axis for each array (replicate the axis value)
             array_axes = [axis] * len(arg_arrays)
-            
+
             # Prepare arrays for batched execution
             batched_arrays = _prepare_vmap_inputs(arg_arrays, array_axes)
-            
+
             # Reconstruct the original structure with batched arrays
             traced_arg = tree_unflatten(arg_structure, batched_arrays)
             traced_args.append(traced_arg)
-        
+
         # Call the original function with appropriate style
         outputs = func(traced_args) if is_list_style else func(*traced_args)
-        
+
         # Handle output structure - could be single output or multiple
-        if not isinstance(outputs, (list, tuple)):
+        if not isinstance(outputs, list | tuple):
             outputs_structure = [outputs]
             is_single_output = True
         else:
             outputs_structure = outputs
             is_single_output = False
-        
+
         # Standardize out_axes to match output structure
-        adapted_out_axes = _standardize_axes(out_axes, 
-                                           len(outputs_structure) if not is_single_output else 1,
-                                           "out_axes")
-        
+        adapted_out_axes = _standardize_axes(
+            out_axes, len(outputs_structure) if not is_single_output else 1, "out_axes"
+        )
+
         # Process each output
         unbatched_outputs = []
-        for out, out_axis in zip(outputs_structure if not is_single_output else [outputs],
-                              adapted_out_axes, strict=False):
+        for out, out_axis in zip(
+            outputs_structure if not is_single_output else [outputs],
+            adapted_out_axes,
+            strict=False,
+        ):
             # Extract arrays and prepare for unbatching
             out_arrays = _extract_arrays_from_pytree(out)
             out_structure = tree_flatten(out)[1]
-            
+
             # Get axis for each array
             array_out_axes = [out_axis] * len(out_arrays)
-            
+
             # Prepare arrays for unbatched results
             unbatched_arrays = _prepare_vmap_outputs(out_arrays, array_out_axes)
-            
+
             # Reconstruct the original structure with unbatched arrays
             unbatched_out = tree_unflatten(out_structure, unbatched_arrays)
             unbatched_outputs.append(unbatched_out)
-            
+
         # Return single output or tuple based on input structure
         return unbatched_outputs[0] if is_single_output else tuple(unbatched_outputs)
 
     return vectorized_func
 
 
-def jit(
-    func: Callable[..., Any],
-) -> Callable[..., Any]:
-    """Just-in-time compile a function for performance optimization.
+def _validate_staging_debug(original_args, traced_args, is_list_style):
+    """
+    TEMPORARY DEBUG FUNCTION: Validate that all inputs are properly staged.
+
+    This function checks if staging is correctly applied to inputs after
+    the staging operation in jit. It provides detailed debug output about
+    the staging status of each array.
 
     Args:
-        func: Function to differentiate (should take positional arguments)
+        original_args: Original input arguments before tracing/staging
+        traced_args: Arguments after tracing and staging
+        is_list_style: Whether using list-style arguments or not
+    """
+    print("=== STAGING VALIDATION DEBUG ===")
+
+    # Extract arrays for checking
+    if is_list_style:
+        # For list-style, traced_args should be a list of Arrays
+        arrays_to_check = traced_args
+        print(f"List-style: checking {len(arrays_to_check)} arrays")
+    else:
+        # For pytree-style, need to extract arrays from the structure
+        arrays_to_check = _extract_arrays_from_pytree(traced_args)
+        print(f"Pytree-style: extracted {len(arrays_to_check)} arrays")
+
+    staging_issues = []
+    properly_staged = 0
+
+    for i, array in enumerate(arrays_to_check):
+        if not isinstance(array, Array):
+            print(f"  Item {i}: Not an Array (type: {type(array)}) - SKIPPING")
+            continue
+
+        is_staged = getattr(array, "stage_realization", False)
+        is_traced = getattr(array, "traced", False)
+
+        print(
+            f"  Array {i}: staged={is_staged}, traced={is_traced}, name='{array.name}', shape={array.shape}"
+        )
+
+        if not is_staged:
+            staging_issues.append(f"Array {i} (name='{array.name}') is NOT staged")
+        else:
+            properly_staged += 1
+
+    print(
+        f"STAGING SUMMARY: {properly_staged}/{len(arrays_to_check)} arrays properly staged"
+    )
+
+    if staging_issues:
+        print("STAGING ISSUES FOUND:")
+        for issue in staging_issues:
+            print(f"  ❌ {issue}")
+        print("⚠️  WARNING: Some inputs may not be staged correctly!")
+    else:
+        print("✅ All arrays appear to be properly staged")
+
+    print("=== END STAGING VALIDATION ===")
+
+
+def jit(func: Callable[..., Any] = None) -> Callable[..., Any]:
+    """Just-in-time compile a function for performance optimization.
+    This can be used as a function call like `jit(func)` or as a decorator `@jit`.
+
+    Args:
+        func: Function to optimize with JIT compilation (should take positional arguments)
 
     Returns:
         JIT-compiled function with optimized execution
 
     Note:
         This follows JAX's jit API:
-        - Only accepts positional arguments 
+        - Only accepts positional arguments
         - For functions requiring keyword arguments, use functools.partial or lambda
         - Supports both list-style (legacy) and unpacked arguments style (JAX-like)
+
+    Example:
+        # As a function call
+        fast_func = jit(my_func)
+
+        # As a decorator
+        @jit
+        def my_func(x):
+            return x * 2
     """
+    # Handle being called as a decorator without arguments
+    if func is None:
+        return lambda f: jit(f)
 
     def jit_func(*args):
         # Use common argument handling logic
         actual_args, is_list_style = _handle_args_consistently(args)
 
         # Prepare traced inputs with staging enabled
-        traced_args, _ = _prepare_traced_inputs(actual_args, is_list_style, apply_staging=True)
+        traced_args, _ = _prepare_traced_inputs(
+            actual_args, is_list_style, apply_staging=True
+        )
 
         # Execute the function with traced inputs and appropriate style
         outputs = func(traced_args) if is_list_style else func(*traced_args)
-            
+
         # Realize only the Arrays in the outputs
         output_arrays = _extract_arrays_from_pytree(outputs)
         from .graph_execution import realize_
+
         realize_(output_arrays)
 
         # Clean up outputs and return

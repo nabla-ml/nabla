@@ -101,7 +101,7 @@ class Array:
             if arg.stage_realization:
                 self.stage_realization = True
 
-        if self.traced:
+        if self.traced or self.stage_realization:
             for arg in arg_nodes:
                 self.args.append(arg)
 
@@ -183,11 +183,11 @@ class Array:
 
         return sub(self, other)
 
-    def __pow__(self, other) -> Array:
+    def __pow__(self, power) -> Array:
         """Power operator."""
-        from ..ops.binary import power
+        from ..ops.binary import pow as power_op
 
-        return pow(self, other)
+        return power_op(self, power)
 
     def __truediv__(self, other) -> Array:
         """Division operator."""
@@ -206,10 +206,3 @@ class Array:
         from ..ops.unary import negate
 
         return negate(self)
-    
-
-    def __pow__(self, power: float) -> Array:
-        """Power operator for scalar exponentiation."""
-        from ..ops.binary import pow
-
-        return pow(self, power)

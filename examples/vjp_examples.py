@@ -76,7 +76,9 @@ def test_vjp_second_order_derivatives():
     expected_second_order = 6 * 2.0  # 12.0
     assert np.isclose(
         second_order_grad[0][0].to_numpy(), expected_second_order, rtol=1e-6
-    ), f"Expected second-order derivative 12.0, got {second_order_grad[0][0].to_numpy()}"
+    ), (
+        f"Expected second-order derivative 12.0, got {second_order_grad[0][0].to_numpy()}"
+    )
 
 
 def test_vjp_multiple_inputs():
