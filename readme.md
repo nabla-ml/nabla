@@ -70,7 +70,7 @@ nabla/
 │   └── utils/                 # Utilities (broadcasting, formatting, types)
 ├── tests/                     # Comprehensive test suite
 ├── examples/                  # MLP training and other examples
-└── nabla-mojo/                # Experimental pure Mojo API
+└── experimental/              # Pure Mojo API
 ```
 
 ## Contributing
