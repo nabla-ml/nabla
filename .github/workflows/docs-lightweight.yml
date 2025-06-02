@@ -42,20 +42,26 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r docs/requirements.txt
           
-      - name: Create minimal nabla stub
+      - name: Create comprehensive nabla stub
         run: |
-          mkdir -p /tmp/nabla_stub/nabla
-          cat > /tmp/nabla_stub/nabla/__init__.py << 'EOF'
-          """
-          Nabla stub for documentation building
+          # Create all necessary directories
+          mkdir -p /tmp/nabla_stub/nabla/core
+          mkdir -p /tmp/nabla_stub/nabla/ops
+          mkdir -p /tmp/nabla_stub/nabla/nn
+          mkdir -p /tmp/nabla_stub/nabla/utils
+          mkdir -p /tmp/nabla_stub/nabla/kernels
           
-          This is a minimal stub that allows documentation to be built without
-          installing the full nabla package with all its dependencies.
-          """
-          # For numpy compatibility
+          # Create core module files
+          cat > /tmp/nabla_stub/nabla/core/__init__.py << 'EOF'
+          """Core module for nabla."""
+          from .array import Array
+          from .trafos import jit, jvp, vjp, vmap
+          EOF
+          
+          cat > /tmp/nabla_stub/nabla/core/array.py << 'EOF'
+          """Array module for nabla."""
           import numpy as np
           
-          # Create dummy classes and functions for documentation
           class Array:
               """Array class for nabla."""
               def __init__(self, *args, **kwargs):
@@ -64,7 +70,88 @@ jobs:
               def numpy(self):
                   """Convert to numpy array."""
                   return np.array([])
+                  
+              def __repr__(self):
+                  return "Array(...)"
+          EOF
+          
+          cat > /tmp/nabla_stub/nabla/core/trafos.py << 'EOF'
+          """Transformation functions for nabla."""
+          def jit(fn=None, **kwargs):
+              """Just-in-time compilation."""
+              def decorator(func):
+                  return func
+              if fn is None:
+                  return decorator
+              return decorator(fn)
               
+          def jvp(fn=None, **kwargs):
+              """Jacobian-vector product."""
+              def decorator(func):
+                  return func
+              if fn is None:
+                  return decorator
+              return decorator(fn)
+              
+          def vjp(fn=None, **kwargs):
+              """Vector-Jacobian product."""
+              def decorator(func):
+                  return func
+              if fn is None:
+                  return decorator
+              return decorator(fn)
+              
+          def vmap(fn=None, **kwargs):
+              """Vectorized map."""
+              def decorator(func):
+                  return func
+              if fn is None:
+                  return decorator
+              return decorator(fn)
+          EOF
+          
+          # Create ops module
+          cat > /tmp/nabla_stub/nabla/ops/__init__.py << 'EOF'
+          """Operations module for nabla."""
+          EOF
+          
+          # Create nn module
+          cat > /tmp/nabla_stub/nabla/nn/__init__.py << 'EOF'
+          """Neural network module for nabla."""
+          EOF
+          
+          # Create utils module
+          cat > /tmp/nabla_stub/nabla/utils/__init__.py << 'EOF'
+          """Utilities module for nabla."""
+          EOF
+          
+          # Create kernels module
+          cat > /tmp/nabla_stub/nabla/kernels/__init__.py << 'EOF'
+          """Kernels module for nabla."""
+          EOF
+          
+          # Create main __init__.py with all exported functions
+          cat > /tmp/nabla_stub/nabla/__init__.py << 'EOF'
+          """
+          Nabla stub for documentation building
+          
+          This is a comprehensive stub that allows documentation to be built without
+          installing the full nabla package with all its dependencies.
+          """
+          # For numpy compatibility
+          import numpy as np
+          from typing import Any
+          
+          # Re-export from .core
+          from .core.array import Array
+          from .core.trafos import jit, jvp, vjp, vmap
+          
+          # Create a dummy DType class
+          class DType:
+              """Data type class."""
+              pass
+          
+          # Create dummy classes and functions for documentation
           def array(*args, **kwargs):
               """Create an array."""
               return Array()
@@ -100,8 +187,16 @@ jobs:
           def log(*args, **kwargs):
               """Compute the natural logarithm of x."""
               return Array()
+              
+          def tan(x):
+              """Compute the tangent of x."""
+              return Array()
+              
+          def tanh(x):
+              """Compute the hyperbolic tangent of x."""
+              return Array()
 
-          # Add submodules
+          # Linalg submodule
           class linalg:
               @staticmethod
               def norm(*args, **kwargs):
@@ -109,6 +204,7 @@ jobs:
                   return Array()
           EOF
           
+          # Create a proper setup.py that installs the package as nabla_ml
           cat > /tmp/nabla_stub/setup.py << 'EOF'
           from setuptools import setup, find_packages
           
@@ -116,17 +212,30 @@ jobs:
               name="nabla_ml",
               version="0.0.1",
               packages=find_packages(),
+              package_data={
+                  "nabla": ["py.typed", "*.pyi", "**/*.pyi"],
+              },
           )
           EOF
           
+          # Install the stub package explicitly as nabla_ml
           cd /tmp/nabla_stub
           pip install -e .
+          
+          # Create a symlink from nabla_ml to nabla in site-packages
+          # This ensures both import nabla and import nabla_ml will work
+          python -c "import site, os, shutil; site_packages = site.getsitepackages()[0]; nabla_path = os.path.join(site_packages, 'nabla'); nabla_ml_path = os.path.join(site_packages, 'nabla_ml'); os.symlink(nabla_ml_path, nabla_path) if not os.path.exists(nabla_path) else None;"
           
       - name: Build documentation
         run: |
           cd docs
+          # Show Python path and check if nabla is importable
+          echo "Current working directory: $(pwd)"
+          echo "Python path: $(python -c 'import sys; print(sys.path)')"
+          echo "Can import nabla: $(python -c 'try: import nabla; print(True); except ImportError as e: print(f"False - {e}")')"
+          
           # Try to build with gallery first, but if it fails, build without executing examples
-          sphinx-build -b html . _build/html || sphinx-build -b html -D plot_gallery=0 . _build/html
+          sphinx-build -b html -v . _build/html || sphinx-build -b html -v -D plot_gallery=0 . _build/html
           # Ensure .nojekyll file exists in the output directory
           touch _build/html/.nojekyll
           
