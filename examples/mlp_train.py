@@ -9,7 +9,7 @@ import nabla as nb
 # Configuration
 BATCH_SIZE = 128
 LAYERS = [1, 64, 128, 128, 64, 1]
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.01
 NUM_EPOCHS = 5000
 PRINT_INTERVAL = 200
 SIN_PERIODS = 8
@@ -211,14 +211,14 @@ def train_step_adamw(
     all_inputs = [x, targets] + params
     loss_values, vjp_fn = nb.vjp(mlp_forward_and_loss_leaky, all_inputs)
 
-    jitted_vjp_fn = nb.jit(vjp_fn)
-
     # Backward pass
     cotangent = [nb.array([np.float32(1.0)])]
-    gradients = jitted_vjp_fn(cotangent)[0]
+    gradients = vjp_fn(cotangent)
 
     # Extract parameter gradients (skip x and targets)
-    param_gradients = gradients[2:]
+    # After VJP refactoring, gradients is a tuple containing the gradient list
+    all_gradients = gradients[0]  # Extract the gradient list from the tuple
+    param_gradients = all_gradients[2:]  # Skip x and targets gradients
 
     # AdamW optimizer update
     updated_params, updated_m, updated_v = adamw_step(

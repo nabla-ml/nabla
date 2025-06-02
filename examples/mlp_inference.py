@@ -29,9 +29,9 @@ import nabla as nb
 # Configuration constants
 TEST_BATCH_SIZE = 128
 BATCH_SIZE = TEST_BATCH_SIZE
-LAYERS = [1, 64, 128, 128, 64, 1]
-NUM_EPOCHS = 20
-PRINT_INTERVAL = 1
+LAYERS = [1, 512, 1024, 2048, 1024, 512, 256, 128, 64, 1]  # Much larger network
+NUM_EPOCHS = 50
+PRINT_INTERVAL = 5
 SIN_PERIODS = 8
 
 
@@ -121,6 +121,8 @@ def test_mlp_inference_with_benchmark():
     x, targets = create_sin_dataset(BATCH_SIZE)
 
     # Training loop with benchmarking
+    total_time = 0.0
+    
     for epoch in range(1, NUM_EPOCHS + 1):
         start_time = time.perf_counter()
 
@@ -138,10 +140,16 @@ def test_mlp_inference_with_benchmark():
             gc.collect()
 
         end_time = time.perf_counter()
+        iteration_time = end_time - start_time
+        total_time += iteration_time
+
+        # Print timing for each iteration
+        if epoch % PRINT_INTERVAL == 0:
+            print(f"Epoch {epoch:3d}: Loss = {loss:.6f}, Time = {iteration_time*1000:.3f}ms")
 
         # Accumulate metrics
         avg_loss += loss
-        avg_time += end_time - start_time
+        avg_time += iteration_time
 
         # Periodic garbage collection to help with memory cleanup
         if epoch % 100 == 0:
@@ -182,7 +190,11 @@ def test_mlp_inference_with_benchmark():
             avg_loss = 0.0
             avg_time = 0.0
 
-    print("\nTraining completed!")
+    # Final summary
+    avg_time_per_epoch = total_time / NUM_EPOCHS
+    print(f"\nTraining completed!")
+    print(f"Total time: {total_time:.4f}s")
+    print(f"Average time per epoch: {avg_time_per_epoch*1000:.3f}ms")
 
     # Stop memory tracking and show final stats
     tracemalloc.stop()
