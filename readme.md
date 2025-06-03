@@ -19,6 +19,8 @@ Nabla is a Python library that provides three key features:
 pip install nabla-ml
 ```
 
+**Note:** Nabla also includes an [experimental pure Mojo API](https://github.com/nabla-ml/nabla/tree/main/experimental) for native Mojo development with full array operations and function transformations.
+
 ## Quick Start
 
 ```python
