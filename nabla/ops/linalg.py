@@ -83,76 +83,74 @@ class MatMulOp(BinaryOperation):
     def __init__(self):
         super().__init__("dot_general")
 
+    # def forward(self, *args: Array) -> Array:
+    #     """Forward pass for matrix multiplication with compatible signature."""
+    #     if len(args) != 2:
+    #         raise ValueError(
+    #             f"Matrix multiplication requires 2 arguments, got {len(args)}"
+    #         )
+    #     arg1, arg2 = args[0], args[1]
+
+    #     self._validate_inputs(arg1, arg2)
+
+    #     # if arg1 or arg2 are respectively of rank 1, i.e, a vector, then we msut first reshape them to be 2d matrices
+    #     if len(arg1.shape) == 1:
+    #         arg1 = ops.reshape(arg1, (1, arg1.shape[0]))
+    #     if len(arg2.shape) == 1:
+    #         arg2 = ops.reshape(arg2, (arg2.shape[0], 1)) # basically a transpose
+
+    #     output_shape = self.compute_output_shape(arg1.shape, arg2.shape)
+
+    #     res = Array(
+    #         shape=output_shape,
+    #         dtype=arg1.dtype,
+    #         device=arg1.device,
+    #         materialize=False,
+    #         name=self.name,
+    #     )
+
+    #     res.set_maxpr(self.maxpr)
+    #     res.add_arguments(arg1, arg2)
+    #     res.vjp_rule = self.vjp_rule
+    #     res.jvp_rule = self.jvp_rule
+
+    #     if not res.stage_realization:
+    #         self.eagerxpr([arg1, arg2], res)
+
+    #     return res
+
     def forward(self, *args: Array) -> Array:
         """Forward pass for binary operations."""
         if len(args) != 2:
             raise ValueError(f"Binary operation requires 2 arguments, got {len(args)}")
         arg1, arg2 = args[0], args[1]
 
-        from ..ops.view import broadcast_to  # Local import
+        from ..ops.view import broadcast_batch_dims, broadcast_to
 
-        self._validate_inputs(arg1, arg2)  # Validate original shapes for K-dim
+        self._validate_inputs(arg1, arg2)
 
-        arg1_original_ndim = len(arg1.shape)
-        arg2_original_ndim = len(arg2.shape)
+        arg1_has_rank_1 = len(arg1.shape) == 1
+        arg2_has_rank_1 = len(arg2.shape) == 1
+        # if len(arg1.shape) == 1:
+        if arg1_has_rank_1:
+            arg1 = ops.reshape(arg1, (1, arg1.shape[0]))
+        # if len(arg2.shape) == 1:
+        if arg2_has_rank_1:
+            arg2 = ops.reshape(arg2, (arg2.shape[0], 1))
 
-        # Promote 1D arrays to 2D for matmul
-        arg1_p = arg1
-        arg2_p = arg2
-        if arg1_original_ndim == 1:
-            arg1_p = ops.reshape(arg1, (1, arg1.shape[0]))
-        if arg2_original_ndim == 1:
-            arg2_p = ops.reshape(arg2, (arg2.shape[0], 1))
-
-        output_shape_promoted = self.compute_output_shape(
-            arg1_p.shape, arg2_p.shape
-        )  # output shape for promoted inputs
+        output_shape = self.compute_output_shape(arg1.shape, arg2.shape)
         output_batch_dims = self.compute_output_batch_dims(
-            arg1.batch_dims,
-            arg2.batch_dims,  # Use original batch_dims
+            arg1.batch_dims, arg2.batch_dims
         )
         output_dtype = self.compute_output_dtype(arg1, arg2)
+        arg1_broadcasted = broadcast_to(arg1, output_shape[:-2] + arg1.shape[-2:])
+        arg2_broadcasted = broadcast_to(arg2, output_shape[:-2] + arg2.shape[-2:])
 
-        # Broadcast to ensure batch dimensions match and matmul dimensions are compatible
-        # Target shape for broadcast includes batch dims from output_shape and matmul dims from args
-        arg1_target_broadcast_shape = output_shape_promoted[:-2] + arg1_p.shape[-2:]
-        arg2_target_broadcast_shape = output_shape_promoted[:-2] + arg2_p.shape[-2:]
-
-        arg1_broadcasted = broadcast_to(arg1_p, arg1_target_broadcast_shape)
-        arg2_broadcasted = broadcast_to(arg2_p, arg2_target_broadcast_shape)
-
-        # Ensure batch_dims metadata is correct after broadcasting
-        # This might involve inspecting the broadcast operation if it changes batch_dims interpretation
-        # For now, assume output_batch_dims computed earlier is fine.
-
-        res_shape_internal = output_shape_promoted  # Shape after matmul of (potentially promoted) 2D arrays
-
-        # Determine final squeezed output shape
-        final_output_shape_list = list(res_shape_internal)
-        squeezed = False
-        if arg1_original_ndim == 1 and arg2_original_ndim > 1:  # vec @ mat
-            final_output_shape_list[-2] = -1
-            squeezed = True
-        if arg1_original_ndim > 1 and arg2_original_ndim == 1:  # mat @ vec
-            final_output_shape_list[-1] = -1
-            squeezed = True
-        if (
-            arg1_original_ndim == 1 and arg2_original_ndim == 1
-        ):  # vec @ vec (dot product)
-            final_output_shape_list[-2] = -1
-            final_output_shape_list[-1] = -1
-            squeezed = True
-
-        final_output_shape_list_filtered = [
-            dim for dim in final_output_shape_list if dim != -1
-        ]
-        if not final_output_shape_list_filtered:  # scalar case
-            final_output_shape = ()
-        else:
-            final_output_shape = tuple(final_output_shape_list_filtered)
+        arg1_broadcasted = broadcast_batch_dims(arg1_broadcasted, output_batch_dims)
+        arg2_broadcasted = broadcast_batch_dims(arg2_broadcasted, output_batch_dims)
 
         res = Array(
-            shape=final_output_shape,  # Use the final (potentially squeezed) shape
+            shape=output_shape,
             dtype=output_dtype,
             device=arg1.device,
             materialize=False,
@@ -160,40 +158,33 @@ class MatMulOp(BinaryOperation):
             batch_dims=output_batch_dims,
         )
 
-        # Store internal shape pre-squeeze for maxpr
-        res._linalg_matmul_internal_shape = res_shape_internal
-
         res.set_maxpr(self.maxpr)
-        # Arguments to graph are the broadcasted & promoted ones
         res.add_arguments(arg1_broadcasted, arg2_broadcasted)
         res.vjp_rule = self.vjp_rule
         res.jvp_rule = self.jvp_rule
         res.custom_kernel_path = self.custom_kernel_path()
 
         if not res.stage_realization:
-            self.eagerxpr(
-                [arg1_broadcasted, arg2_broadcasted], res
-            )  # res already has final shape
+            self.eagerxpr([arg1_broadcasted, arg2_broadcasted], res)
+
+        # if arg1_has_rank_1:
+        #     res = ops.reshape(res, res.shape[:-2] + (res.shape[-1],))
+        # if arg2_has_rank_1:
+        #     res = ops.reshape(res, res.shape[:-2] + (res.shape[-2],))
 
         return res
 
     def compute_output_shape(self, *input_shapes: tuple) -> tuple:
-        """Compute output shape for matrix multiplication of (potentially promoted) 2D matrices."""
+        """Compute output shape for matrix multiplication with compatible signature."""
         if len(input_shapes) != 2:
             raise ValueError(
                 f"Matrix multiplication requires 2 input shapes, got {len(input_shapes)}"
             )
         shape1, shape2 = input_shapes[0], input_shapes[1]
 
-        # Assumes shapes are already rank >= 2 due to promotion in forward logic
-        if len(shape1) < 2 or len(shape2) < 2:
-            raise ValueError(
-                f"Shapes {shape1}, {shape2} must be at least 2D for internal matmul logic."
-            )
-
         if shape1[-1] != shape2[-2]:
             raise ValueError(
-                f"Shapes {shape1} and {shape2} are not compatible for matrix multiplication (K-dim mismatch: {shape1[-1]} vs {shape2[-2]})"
+                f"Shapes {shape1} and {shape2} are not compatible for matrix multiplication"
             )
 
         return get_broadcasted_shape(
@@ -204,147 +195,125 @@ class MatMulOp(BinaryOperation):
         )
 
     def _validate_inputs(self, arg1: Array, arg2: Array) -> None:
-        """Validate matrix multiplication inputs based on their original shapes."""
+        """Validate matrix multiplication inputs."""
         if not isinstance(arg1, Array) or not isinstance(arg2, Array):
             raise TypeError("Both arguments must be Array instances")
         if arg1.dtype != arg2.dtype:
-            # Allow upcasting if mixed precision becomes a feature, for now require same
-            pass  # Let compute_output_dtype handle this; for now it requires same dtype
+            raise ValueError(f"Dtypes {arg1.dtype} and {arg2.dtype} are incompatible")
         if arg1.device != arg2.device:
             raise ValueError(
                 f"Devices {arg1.device} and {arg2.device} are incompatible"
             )
-
-        shape1, shape2 = arg1.shape, arg2.shape
-
-        if len(shape1) == 0 or len(shape2) == 0:
-            raise ValueError("Scalar multiplication is not supported by matmul.")
-
-        dim1_contract = shape1[-1]
-        dim2_contract = shape2[-1] if len(shape2) == 1 else shape2[-2]
-
-        if dim1_contract != dim2_contract:
+        if arg1.shape[-1] != arg2.shape[-2]:
             raise ValueError(
-                f"Shapes {shape1} and {shape2} are not compatible for matrix multiplication (K-dim mismatch on original shapes: {dim1_contract} vs {dim2_contract})"
+                f"Shapes {arg1.shape} and {arg2.shape} are not compatible for matrix multiplication"
             )
 
     def maxpr(self, args: list[Value], output: Array) -> None:
         x_val, y_val = args[0], args[1]
+        x_shape_orig, y_shape_orig = x_val.shape, y_val.shape
 
-        matmul_result_internal = ops.matmul(
-            x_val, y_val
-        )  # Operates on broadcasted, promoted args
+        if x_shape_orig[-1] != y_shape_orig[-2]:
+            raise ValueError(
+                f"Shapes {x_shape_orig} and {y_shape_orig} are not compatible for matrix multiplication "
+                f"(K-dimension mismatch: {x_shape_orig[-1]} vs {y_shape_orig[-2]})"
+            )
 
-        # The output Array object has the final (potentially squeezed) shape.
-        # matmul_result_internal has the shape before this final squeeze.
-        # output._linalg_matmul_internal_shape stores this shape.
-        internal_shape = getattr(
-            output, "_linalg_matmul_internal_shape", matmul_result_internal.shape
+        output_shape_tuple = get_broadcasted_shape(
+            x_shape_orig,
+            y_shape_orig,
+            ignore_axes=[-2, -1],
+            replace_ignored_dims=[x_shape_orig[-2], y_shape_orig[-1]],
         )
-        if matmul_result_internal.shape != internal_shape:
-            # This should ideally not happen if args to maxpr are correctly shaped for ops.matmul
-            # and ops.matmul produces the expected internal shape.
-            # For safety, one might reshape, but it points to an inconsistency.
-            # For now, assume ops.matmul output shape matches internal_shape.
-            pass
 
-        if internal_shape != output.shape:  # If squeezing happened
-            output.tensor_value = ops.reshape(matmul_result_internal, output.shape)
+        m_dim = output_shape_tuple[-2]
+        n_dim = output_shape_tuple[-1]
+        k_dim = x_shape_orig[-1]
+        output_batch_shape = output_shape_tuple[:-2]
+
+        x_target_shape = output_batch_shape + (m_dim, k_dim)
+        y_target_shape = output_batch_shape + (k_dim, n_dim)
+
+        x_val_b = (
+            ops.broadcast_to(x_val, x_target_shape)
+            if x_val.shape != x_target_shape
+            else x_val
+        )
+        y_val_b = (
+            ops.broadcast_to(y_val, y_target_shape)
+            if y_val.shape != y_target_shape
+            else y_val
+        )
+
+        num_batch_dims = len(output_batch_shape)
+
+        if num_batch_dims == 0:
+            shape_for_x = (1, 1, m_dim, k_dim)
+            shape_for_y = (1, 1, k_dim, n_dim)
+        elif num_batch_dims == 1:
+            b0 = int(output_batch_shape[0])
+            shape_for_x = (b0, 1, m_dim, k_dim)
+            shape_for_y = (b0, 1, k_dim, n_dim)
+        elif num_batch_dims == 2:
+            shape_for_x = x_val_b.shape
+            shape_for_y = y_val_b.shape
         else:
-            output.tensor_value = matmul_result_internal
+            b_eff_1 = int(np.prod(output_batch_shape[:-1]))
+            b_eff_2 = int(output_batch_shape[-1])
+            shape_for_x = (b_eff_1, b_eff_2, m_dim, k_dim)
+            shape_for_y = (b_eff_1, b_eff_2, k_dim, n_dim)
+
+        x_for_matmul = (
+            ops.reshape(x_val_b, shape_for_x)
+            if x_val_b.shape != shape_for_x
+            else x_val_b
+        )
+        y_for_matmul = (
+            ops.reshape(y_val_b, shape_for_y)
+            if y_val_b.shape != shape_for_y
+            else y_val_b
+        )
+
+        matmul_result = ops.matmul(x_for_matmul, y_for_matmul)
+
+        output.tensor_value = (
+            ops.reshape(matmul_result, output_shape_tuple)
+            if matmul_result.shape != output_shape_tuple
+            else matmul_result
+        )
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        # args[0], args[1] are already broadcasted and promoted.
-        # output Array object has the final (potentially squeezed) shape.
         arg0_numpy = args[0].to_numpy()
         arg1_numpy = args[1].to_numpy()
-
-        np_result_internal = np.matmul(
-            arg0_numpy, arg1_numpy
-        )  # Result of matmul on promoted, broadcasted
-
-        if np_result_internal.shape != output.shape:  # If squeezing happened
-            output.impl = Tensor.from_numpy(np_result_internal.reshape(output.shape))
-        else:
-            output.impl = Tensor.from_numpy(np_result_internal)
+        np_result = np.matmul(arg0_numpy, arg1_numpy)
+        output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
         x, y = primals
-        from ..ops.manipulation import expand_dims  # For explicit dim changes
-        from .view import transpose  # Local import
+        from .view import transpose
 
-        x_orig_ndim = len(x.shape)
-        y_orig_ndim = len(y.shape)
-
-        # Reconstruct promoted shapes (as done in forward) for x and y for VJP matmuls
-        x_p, y_p = x, y
-        if x_orig_ndim == 1:
-            x_p = expand_dims(x, axis=0)  # (K,) -> (1,K)
-        if y_orig_ndim == 1:
-            y_p = expand_dims(y, axis=1)  # (K,) -> (K,1)
-
-        # output_shape_promoted is shape of matmul(x_p, y_p)
-        output_shape_promoted = self.compute_output_shape(x_p.shape, y_p.shape)
-
-        cotangent_p = cotangent
-        if cotangent.shape != output_shape_promoted:  # Unsqueeze cotangent if needed
-            cotangent_p = ops.reshape(cotangent, output_shape_promoted)
-
-        # VJP rule: dx = ct @ T(y), dy = T(x) @ ct
-        # These matmuls will handle their own internal promotion/squeezing.
-        # The key is that x_p, y_p, cotangent_p are shaped for "batched 2D" matmul logic.
-        grad_x_promoted = matmul(
-            cotangent_p, transpose(y_p)
-        )  # Result shape matches x_p
-        grad_y_promoted = matmul(
-            transpose(x_p), cotangent_p
-        )  # Result shape matches y_p
-
-        # Reshape gradients back to original x, y shapes if they were promoted
-        grad_x = grad_x_promoted
-        if grad_x_promoted.shape != x.shape:
-            grad_x = ops.reshape(grad_x_promoted, x.shape)
-
-        grad_y = grad_y_promoted
-        if grad_y_promoted.shape != y.shape:
-            grad_y = ops.reshape(grad_y_promoted, y.shape)
-
-        # Handle broadcasting in primals for VJP (summing out broadcasted dims)
-        # If x.shape was (M,K) and y.shape was (B,K,N), x was broadcast.
-        # grad_x would have shape (B,M,K). Need to sum over B.
-        # This is complex. JAX handles this via sum_keepdims and explicit broadcast_in_dim in its dot_general VJP.
-        # A full solution requires tracking broadcasted dimensions.
-        # For now, relying on matmul's own VJP to eventually handle this if it's built on JAX ops.
-        # If this VJP rule is for a "final" op, it MUST handle broadcast summation.
-        # Placeholder for simplicity. A more robust VJP would require knowing original non-broadcasted shapes
-        # and summing grad_x/grad_y to those original batch dimensions.
-
-        # Example of summing broadcasted batch dimensions (simplified):
-        if (
-            hasattr(x, "_original_shape_before_broadcast")
-            and x._original_shape_before_broadcast != grad_x.shape
-        ):
-            # Determine axes to sum over based on how x was broadcast to grad_x.shape
-            # grad_x = ops.sum(grad_x, axis=axes_to_sum_x, keepdims=True) # if needed
-            # grad_x = ops.reshape(grad_x, x.shape)
-            pass  # This logic is highly dependent on how broadcasting info is stored/passed
-
-        return [grad_x, grad_y]
+        return [matmul(cotangent, transpose(y)), matmul(transpose(x), cotangent)]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
         x, y = primals
         tx, ty = tangents
-        from .binary import add  # Local import
 
-        # JVP: x @ ty + tx @ y
-        # matmul function handles promotion and squeezing automatically.
-        res = add(matmul(x, ty), matmul(tx, y))
-        return res
+        from .binary import add
 
+        return add(matmul(x, ty), matmul(tx, y))
+
+
+# Global operation instance for efficiency
+_matmul_op = MatMulOp()
+
+
+def matmul(arg0: Array, arg1: Array) -> Array:
+    """Matrix multiplication with broadcasting support."""
+    return _matmul_op.forward(arg0, arg1)
 
 # --- Numpy-based convolution helper functions (modified for asymmetric padding) ---
 # These seem okay for their purpose, assuming groups=1.
