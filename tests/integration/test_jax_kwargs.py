@@ -53,8 +53,10 @@ try:
         print(f"✗ Failed with partial: {e}")
 
     try:
+
         def func_wrapper():
             return func_kwargs_only(x=x, y=y)
+
         out, vjp_fn = jax_vjp(func_wrapper)
         print(f"✓ Success with function wrapper: {out}")
     except Exception as e:

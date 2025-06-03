@@ -275,7 +275,9 @@ def train_step_adamw_jitted(
     updated_m = []
     updated_v = []
 
-    for param, grad, m, v in zip(params, param_gradients, m_states, v_states, strict=False):
+    for param, grad, m, v in zip(
+        params, param_gradients, m_states, v_states, strict=False
+    ):
         # Weight decay
         param_with_decay = param * (1.0 - weight_decay * learning_rate)
 

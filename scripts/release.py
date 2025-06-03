@@ -126,7 +126,7 @@ def clean_and_build_package():
     import os
     import shutil
     import tempfile
-    
+
     print_step("Cleaning build artifacts...")
     run_command("rm -rf dist/ build/ *.egg-info", check=False)
 
@@ -146,7 +146,7 @@ def clean_and_build_package():
         run_command("python -m build")
         print_success("Package built successfully")
         return True
-        
+
     except subprocess.CalledProcessError as e:
         print_error(f"Build failed: {e}")
         return False

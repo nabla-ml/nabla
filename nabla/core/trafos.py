@@ -853,23 +853,23 @@ def vmap(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
 
     Note:
         Supports both calling conventions:
-        
+
         * List-style: vmapped_fn([x, y, z])
         * Unpacked-style: vmapped_fn(x, y, z)
 
     Example:
         As a function call::
-        
+
             vmapped_func = vmap(my_func, in_axes=0, out_axes=0)
 
         As a decorator::
-        
+
             @vmap
             def my_func(x):
                 return x * 2
 
         As a decorator with arguments::
-        
+
             @vmap(in_axes=1, out_axes=0)
             def my_func(x):
                 return x * 2
@@ -1036,18 +1036,18 @@ def jit(func: Callable[..., Any] = None) -> Callable[..., Any]:
 
     Note:
         This follows JAX's jit API:
-        
+
         * Only accepts positional arguments
         * For functions requiring keyword arguments, use functools.partial or lambda
         * Supports both list-style (legacy) and unpacked arguments style (JAX-like)
 
     Example:
         As a function call::
-        
+
             fast_func = jit(my_func)
 
         As a decorator::
-        
+
             @jit
             def my_func(x):
                 return x * 2
