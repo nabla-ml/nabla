@@ -121,7 +121,6 @@ def _validate_length_match(list1, list2, name1, name2):
         raise ValueError(f"{name1} length {len(list1)} != {name2} length {len(list2)}")
 
 
-
 def _std_basis(args: list[Array]) -> tuple[list[int], list[Array]]:
     num_total_arg_elements = 0
     max_rank = 0
@@ -151,6 +150,7 @@ def _std_basis(args: list[Array]) -> tuple[list[int], list[Array]]:
         batched_shape = arg.batch_dims + (num_total_arg_elements,) + arg.shape
 
         from numpy import zeros as np_zeros
+
         np_tangent = np_zeros(batched_shape, dtype=arg.dtype.to_numpy()).flatten()
 
         num_els_batch_dims = 1
@@ -168,13 +168,19 @@ def _std_basis(args: list[Array]) -> tuple[list[int], list[Array]]:
 
         np_tangent = np_tangent.reshape(batched_shape)
         tangent = Array.from_numpy(np_tangent)
-        tangent.batch_dims = arg.batch_dims
-        tangent.shape = tangent.shape[len(arg.batch_dims) :]
+        # tangent.batch_dims = arg.batch_dims
+        # tangent.shape = tangent.shape[len(arg.batch_dims) :]
+
+        from ..ops.unary import incr_batch_dim_ctr
+
+        for _ in range(len(arg.batch_dims)):
+            tangent = incr_batch_dim_ctr(tangent)
 
         tangents.append(tangent)
         sizes.append(num_elements)
 
     return sizes, tangents
+
 
 def make_traced_pytree(tree: Any) -> Any:
     """Create shallow copies of arrays in a pytree and mark them as traced.
@@ -391,34 +397,53 @@ class Trace:
 
         from ..utils.formatting import format_shape_and_dtype
 
-        # Build variable name mapping
+        # Initialize name generator with a simple global counter
         var_names = {}
-        var_counter = 0
+        alphabet = "abcdefghijklmnopqrstuvwxyz"
+        name_counter = 0
 
-        # Assign names to inputs first with type annotations
+        def _get_next_name():
+            nonlocal name_counter
+
+            if name_counter < len(alphabet):
+                # Single letters: a, b, c, ..., z
+                name = alphabet[name_counter]
+            else:
+                # Double letters: aa, ab, ac, ..., az, ba, bb, bc, ...
+                # Calculate indices for double letters
+                double_index = name_counter - len(alphabet)
+                first_letter = double_index // len(alphabet)
+                second_letter = double_index % len(alphabet)
+                name = alphabet[first_letter] + alphabet[second_letter]
+
+            name_counter += 1
+            return name
+
+        # Assign names to inputs first
         input_vars = []
         for inp in self.inputs:
-            var_name = chr(ord("a") + var_counter)
+            var_name = _get_next_name()
             var_names[id(inp)] = var_name
             type_annotation = format_shape_and_dtype(inp)
             input_vars.append(f"{var_name}:{type_annotation}")
-            var_counter += 1
 
-        # Build the equation lines
+        # Single pass through trace: assign names and build equations
         equations = []
         for node in self.trace:
             node_id = id(node)
 
-            # Skip if this is an input (already named)
+            # Skip if this is an input (already processed)
             if node_id in var_names:
                 continue
 
-            # Assign a variable name to this node
-            var_name = chr(ord("a") + var_counter)
+            # Assign a name to this node
+            var_name = _get_next_name()
             var_names[node_id] = var_name
-            var_counter += 1
 
             # Build the operation description
+            op_name = node.name or "unknown"
+            type_annotation = format_shape_and_dtype(node)
+
             if node.args:
                 # Get argument variable names
                 arg_vars = []
@@ -427,15 +452,10 @@ class Trace:
                     if arg_id in var_names:
                         arg_vars.append(var_names[arg_id])
                     else:
-                        # Array from external context - assign a const name
-                        temp_name = f"const{len([v for v in var_names.values() if v.startswith('const')])}"
-                        var_names[arg_id] = temp_name
-                        arg_vars.append(temp_name)
+                        # Array from external context - not part of the trace
+                        arg_vars.append("external_const")
 
                 # Format the equation with type annotation
-                op_name = node.name or "unknown"
-                type_annotation = format_shape_and_dtype(node)
-
                 if len(arg_vars) == 1:
                     equation = (
                         f"    {var_name}:{type_annotation} = {op_name} {arg_vars[0]}"
@@ -444,8 +464,11 @@ class Trace:
                     args_joined = " ".join(arg_vars)
                     fmt_str = f"    {var_name}:{type_annotation} = {op_name}"
                     equation = f"{fmt_str} {args_joined}"
+            else:
+                # Node with no arguments (constants, copies of external values, etc.)
+                equation = f"    {var_name}:{type_annotation} = {op_name}"
 
-                equations.append(equation)
+            equations.append(equation)
 
         # Get output variable names
         output_vars = []
@@ -746,39 +769,61 @@ def _prepare_vmap_outputs(
     return unbatched_outputs
 
 
-def xpr(
-    fn: Callable[[list[Array]], list[Array]],
-    args: list[Array],
-) -> str:
+def xpr(fn: Callable[..., Any], *primals) -> str:
     """Get a JAX-like string representation of the function's computation graph.
 
     Args:
-        fn: Function to trace
-        args: Input arrays to the function
+        fn: Function to trace (should take positional arguments)
+        *primals: Positional arguments to the function (can be arbitrary pytrees)
 
     Returns:
         JAX-like string representation of the computation graph
+
+    Note:
+        This follows the same flexible API as vjp, jvp, and vmap:
+        - Accepts functions with any number of positional arguments
+        - For functions requiring keyword arguments, use functools.partial or lambda
     """
-    # Handle args consistently
-    actual_args, is_list_style = _handle_args_consistently([args])
-
-    # Prepare traced inputs
-    traced_args, _ = _prepare_traced_inputs(actual_args, is_list_style)
-
-    # Create and return trace
-    if is_list_style:
-        trace = Trace.trace_function(fn, traced_args)
+    # Handle the input structure based on number of arguments (same as vjp)
+    if len(primals) == 1:
+        inputs_pytree = primals[0]
+        is_single_arg = True
     else:
-        # Adapting to xpr's function signature
-        def wrapper(args_list):
-            return fn(args_list[0])
+        inputs_pytree = primals
+        is_single_arg = False
 
-        trace = Trace.trace_function(wrapper, [traced_args[0]])
+    # Make traced copies of all inputs
+    traced_inputs_pytree = make_traced_pytree(inputs_pytree)
+
+    # Extract traced args based on the structure
+    traced_args = (traced_inputs_pytree,) if is_single_arg else traced_inputs_pytree
+
+    # Execute the function with traced inputs
+    outputs = fn(*traced_args)
+
+    # Extract output arrays for trace creation
+    output_arrays = _extract_arrays_from_pytree(outputs)
+    if not isinstance(output_arrays, list):
+        output_arrays = [output_arrays] if output_arrays is not None else []
+
+    # Extract input arrays for trace creation
+    input_arrays = _extract_arrays_from_pytree(traced_inputs_pytree)
+    if not isinstance(input_arrays, list):
+        input_arrays = [input_arrays] if input_arrays is not None else []
+
+    # Create trace with the computation graph
+    trace = Trace(input_arrays, output_arrays)
+
+    # Make everything untraced before returning
+    make_untraced_pytree(traced_inputs_pytree)
+    make_untraced_pytree(outputs)
 
     return str(trace)
 
 
-def vjp(func: Callable[..., Any], *primals, has_aux: bool = False) -> tuple[Any, Callable]:
+def vjp(
+    func: Callable[..., Any], *primals, has_aux: bool = False
+) -> tuple[Any, Callable]:
     """Compute vector-Jacobian product (reverse-mode autodiff).
 
     Args:
@@ -820,7 +865,7 @@ def vjp(func: Callable[..., Any], *primals, has_aux: bool = False) -> tuple[Any,
 
     # Execute the function with traced inputs
     full_outputs = func(*traced_args)
-    
+
     # Handle has_aux: separate main outputs from auxiliary data
     if has_aux:
         if not isinstance(full_outputs, tuple) or len(full_outputs) != 2:
@@ -839,11 +884,21 @@ def vjp(func: Callable[..., Any], *primals, has_aux: bool = False) -> tuple[Any,
         - Single argument: returns (gradient,)
         - Multiple arguments: returns (grad1, grad2, ...)
         """
-        # Use the unified pullback function with pytree support
-        gradients = pullback(traced_inputs_pytree, outputs, cotangents)
+        # Always ensure cotangents are traced for composability with other transformations
+        traced_cotangents = make_traced_pytree(cotangents)
 
-        # Make the gradients untraced
-        make_untraced_pytree(gradients)
+        # Use the unified pullback function with pytree support
+        gradients = pullback(traced_inputs_pytree, outputs, traced_cotangents)
+
+        # Check if original cotangents were traced - if so, keep gradients traced
+        cotangent_arrays = _extract_arrays_from_pytree(cotangents)
+        any_cotangent_traced = any(
+            getattr(arr, "traced", False) for arr in cotangent_arrays
+        )
+
+        # Only make gradients untraced if original cotangents were not traced
+        if not any_cotangent_traced:
+            make_untraced_pytree(gradients)
 
         # Always return as tuple to match JAX behavior
         if is_single_arg:
@@ -861,16 +916,23 @@ def vjp(func: Callable[..., Any], *primals, has_aux: bool = False) -> tuple[Any,
         return outputs, vjp_fn
 
 
-def jvp(func: Callable[..., Any], primals, tangents) -> tuple[Any, Any]:
+def jvp(
+    func: Callable[..., Any], primals, tangents, has_aux: bool = False
+) -> tuple[Any, Any] | tuple[Any, Any, Any]:
     """Compute Jacobian-vector product (forward-mode autodiff).
 
     Args:
         func: Function to differentiate (should take positional arguments)
         primals: Positional arguments to the function (can be arbitrary pytrees)
         tangents: Tangent vectors for directional derivatives (matching structure of primals)
+        has_aux: Optional, bool. Indicates whether func returns a pair where the first element
+            is considered the output of the mathematical function to be differentiated and the
+            second element is auxiliary data. Default False.
 
     Returns:
-        Tuple of (outputs, output_tangents) where output_tangents are the JVP results
+        If has_aux is False, returns a (outputs, output_tangents) pair.
+        If has_aux is True, returns a (outputs, output_tangents, aux) tuple where aux is the
+        auxiliary data returned by func.
 
     Note:
         This follows JAX's jvp API:
@@ -1221,7 +1283,7 @@ def jacrev(
 
         # Compute VJP - delegate has_aux handling to vjp
         vjp_result = vjp(partial_func, *diff_args, has_aux=has_aux)
-        
+
         if has_aux:
             y, pullback, aux = vjp_result
         else:

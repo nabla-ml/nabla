@@ -27,12 +27,12 @@ from max.dtype import DType
 
 from .core.array import Array
 from .core.trafos import (
+    jacrev,
     jit,
     jvp,
     vjp,
     vmap,
     xpr,
-    jacrev,
 )
 from .ops.operation import (
     BinaryOperation,

@@ -159,7 +159,7 @@ class BroadcastToOp(ViewOperation):
     """Broadcast array to target shape."""
 
     def __init__(self, target_shape: Shape):
-        super().__init__(f"broadcast_in_dim[shape={target_shape}]")
+        super().__init__(f"broadcast[shape={target_shape}]")
         self.target_shape = target_shape
 
     def compute_output_shape(self, *input_shapes: tuple) -> tuple:
@@ -194,7 +194,9 @@ class BroadcastToOp(ViewOperation):
 
         for i in range(len(target_shape)):
             if padded_input[i] == 1 and target_shape[i] > 1:
-                broadcasted_axes.append(i)
+                # Return negative index to reference from the right side
+                # This ensures we sum over the correct dimension
+                broadcasted_axes.append(i - len(target_shape))
             elif padded_input[i] != target_shape[i] and padded_input[i] != 1:
                 raise ValueError(f"Cannot broadcast {input_shape} to {target_shape}")
 
@@ -229,6 +231,8 @@ class BroadcastToOp(ViewOperation):
 
 def broadcast_to(arg: Array, shape: Shape) -> Array:
     """Broadcast array to target shape."""
+    if arg.shape == shape:
+        return arg
     if len(arg.shape) < len(shape):
         new_shape = (1,) * (len(shape) - len(arg.shape)) + arg.shape
         arg = reshape(arg, new_shape)
@@ -240,7 +244,7 @@ class BroadcastBatchDimsOp(ViewOperation):
     """Broadcast array to target batch_dims."""
 
     def __init__(self, target_batch_dims: Shape):
-        super().__init__(f"broadcast_in_dim[batch_dims={target_batch_dims}]")
+        super().__init__(f"broadcast_batch_dims[shape={target_batch_dims}]")
         self.target_batch_dims = target_batch_dims
 
     def compute_output_batch_dims(self, *input_batch_dimss: tuple) -> tuple:
@@ -279,7 +283,9 @@ class BroadcastBatchDimsOp(ViewOperation):
 
         for i in range(len(target_batch_dims)):
             if padded_input[i] == 1 and target_batch_dims[i] > 1:
-                broadcasted_axes.append(i)
+                # Return negative index to reference from the right side
+                # This ensures we sum over the correct dimension
+                broadcasted_axes.append(i - len(target_batch_dims))
             elif padded_input[i] != target_batch_dims[i] and padded_input[i] != 1:
                 raise ValueError(
                     f"Cannot broadcast {input_batch_dims} to {target_batch_dims}"
@@ -304,7 +310,7 @@ class BroadcastBatchDimsOp(ViewOperation):
         from .reduce import sum_batch_dims
 
         broadcasted_axes = self.get_broadcasted_axes(
-            primals[0].batch_dims, self.target_batch_dims
+            primals[0].batch_dims, output.batch_dims
         )
         return [sum_batch_dims(cotangent, axes=broadcasted_axes)]
 
@@ -316,6 +322,8 @@ class BroadcastBatchDimsOp(ViewOperation):
 
 def broadcast_batch_dims(arg: Array, batch_dims: Shape) -> Array:
     """Broadcast array to target batch_dims."""
+    if arg.batch_dims == batch_dims:
+        return arg
     op = BroadcastBatchDimsOp(batch_dims)
     return op.forward(arg)
 
@@ -456,7 +464,7 @@ class ShallowCopyOp(ViewOperation):
     """Copy operation to create a new array with the same data."""
 
     def __init__(self):
-        super().__init__("copy")
+        super().__init__("shallow_copy")
 
     def compute_output_shape(self, *input_shapes: tuple) -> tuple:
         """Compatible signature."""

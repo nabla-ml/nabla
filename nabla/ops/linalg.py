@@ -315,6 +315,7 @@ def matmul(arg0: Array, arg1: Array) -> Array:
     """Matrix multiplication with broadcasting support."""
     return _matmul_op.forward(arg0, arg1)
 
+
 # --- Numpy-based convolution helper functions (modified for asymmetric padding) ---
 # These seem okay for their purpose, assuming groups=1.
 

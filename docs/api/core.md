@@ -59,7 +59,7 @@ Vectorization transformation for batching operations.
 ### {doc}`xpr <core_xpr>`
 
 ```python
-nabla.xpr(fn: 'Callable[[list[Array]], list[Array]]', args: 'list[Array]') -> 'str'
+nabla.xpr(fn: 'Callable[..., Any]', *primals) -> 'str'
 ```
 
 Create expression graphs for deferred execution.

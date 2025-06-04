@@ -285,7 +285,7 @@ def test_matrix_vector_product():
     )
 
 
-def test_batched_matmul_parametrized(batch_size, inner_dim):
+def test_batched_matmul_parametrized():
     """Test batched matmul with different dimensions."""
 
     def dot(args: list[nb.Array]) -> list[nb.Array]:
@@ -301,19 +301,20 @@ def test_batched_matmul_parametrized(batch_size, inner_dim):
         return [nb.vmap(mm_prod, [0, None])([args[0], args[1]])[0]]
 
     # Create test matrices
-    batch_a = nb.ones((batch_size, 2, inner_dim), nb.DType.float32)
-    mat_b = nb.ones((inner_dim, 3), nb.DType.float32)
+    batch_size, inner_dim = 2, 4  # Change these to test different dimensions
+    batch_a = nb.arange((batch_size, 3, inner_dim), nb.DType.float32)
+    mat_b = nb.arange((inner_dim, 5), nb.DType.float32)
 
     result = batched_matmul([batch_a, mat_b])
 
     # Expected shape: (batch_size, 2, 3)
-    expected_shape = (batch_size, 2, 3)
+    expected_shape = (batch_size, 3, 5)
     assert result[0].shape == expected_shape, (
         f"Expected shape {expected_shape}, got {result[0].shape}"
     )
 
     # For matrices of ones, result should be all inner_dim
-    expected_value = float(inner_dim)
+    expected_value = batch_a.to_numpy() @ mat_b.to_numpy()
     assert np.allclose(result[0].to_numpy(), expected_value, rtol=1e-6), (
         f"Expected all values to be {expected_value}, but got varying values"
     )
@@ -329,4 +330,4 @@ if __name__ == "__main__":
     test_simple_dot_product()
     test_matrix_vector_product()
     test_vmap_batched_matmul()
-    test_batched_matmul_parametrized(2, 3)
+    test_batched_matmul_parametrized()
