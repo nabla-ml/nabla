@@ -121,6 +121,61 @@ def _validate_length_match(list1, list2, name1, name2):
         raise ValueError(f"{name1} length {len(list1)} != {name2} length {len(list2)}")
 
 
+
+def _std_basis(args: list[Array]) -> tuple[list[int], list[Array]]:
+    num_total_arg_elements = 0
+    max_rank = 0
+    for arg in args:
+        num_elements = 1
+        for dim in arg.shape:
+            num_elements *= dim
+        num_total_arg_elements += num_elements
+        rank = len(arg.shape)
+        if rank > max_rank:
+            max_rank = rank
+
+    batch_ctr = 0
+    sizes = list[int]()
+    tangents: list[Array] = []
+
+    for i, arg in enumerate(args):
+        num_elements = 1
+
+        for dim in arg.shape:
+            num_elements *= dim
+
+        batched_shape = arg.batch_dims + arg.shape
+        for _ in range(max_rank - len(batched_shape)):
+            batched_shape = (1,) + batched_shape
+
+        batched_shape = arg.batch_dims + (num_total_arg_elements,) + arg.shape
+
+        from numpy import zeros as np_zeros
+        np_tangent = np_zeros(batched_shape, dtype=arg.dtype.to_numpy()).flatten()
+
+        num_els_batch_dims = 1
+        for dim in arg.batch_dims:
+            num_els_batch_dims *= dim
+
+        for i in range(num_els_batch_dims):
+            offset = (batch_ctr + num_total_arg_elements * i) * num_elements
+
+            for j in range(num_elements):
+                idx = offset + j
+                np_tangent[idx] = 1.0
+                offset += num_elements
+                batch_ctr += 1
+
+        np_tangent = np_tangent.reshape(batched_shape)
+        tangent = Array.from_numpy(np_tangent)
+        tangent.batch_dims = arg.batch_dims
+        tangent.shape = tangent.shape[len(arg.batch_dims) :]
+
+        tangents.append(tangent)
+        sizes.append(num_elements)
+
+    return sizes, tangents
+
 def make_traced_pytree(tree: Any) -> Any:
     """Create shallow copies of arrays in a pytree and mark them as traced.
 
@@ -723,15 +778,21 @@ def xpr(
     return str(trace)
 
 
-def vjp(func: Callable[..., Any], *primals) -> tuple[Any, Callable]:
+def vjp(func: Callable[..., Any], *primals, has_aux: bool = False) -> tuple[Any, Callable]:
     """Compute vector-Jacobian product (reverse-mode autodiff).
 
     Args:
         func: Function to differentiate (should take positional arguments)
         *primals: Positional arguments to the function (can be arbitrary pytrees)
+        has_aux: Optional, bool. Indicates whether `func` returns a pair where the
+            first element is considered the output of the mathematical function to be
+            differentiated and the second element is auxiliary data. Default False.
 
     Returns:
-        Tuple of (outputs, vjp_function) where vjp_function computes gradients.
+        If has_aux is False:
+            Tuple of (outputs, vjp_function) where vjp_function computes gradients.
+        If has_aux is True:
+            Tuple of (outputs, vjp_function, aux) where aux is the auxiliary data.
 
         The vjp_function always returns gradients as a tuple (matching JAX behavior):
         - Single argument: vjp_fn(cotangent) -> (gradient,)
@@ -758,7 +819,18 @@ def vjp(func: Callable[..., Any], *primals) -> tuple[Any, Callable]:
     traced_args = (traced_inputs_pytree,) if is_single_arg else traced_inputs_pytree
 
     # Execute the function with traced inputs
-    outputs = func(*traced_args)
+    full_outputs = func(*traced_args)
+    
+    # Handle has_aux: separate main outputs from auxiliary data
+    if has_aux:
+        if not isinstance(full_outputs, tuple) or len(full_outputs) != 2:
+            raise ValueError(
+                "Function with has_aux=True must return a tuple (output, aux)"
+            )
+        outputs, aux = full_outputs
+    else:
+        outputs = full_outputs
+        aux = None
 
     def vjp_fn(cotangents: Any) -> tuple:
         """VJP function that computes gradients.
@@ -782,7 +854,11 @@ def vjp(func: Callable[..., Any], *primals) -> tuple[Any, Callable]:
     # Make outputs untraced before returning
     make_untraced_pytree(outputs)
 
-    return outputs, vjp_fn
+    # Return based on has_aux
+    if has_aux:
+        return outputs, vjp_fn, aux
+    else:
+        return outputs, vjp_fn
 
 
 def jvp(func: Callable[..., Any], primals, tangents) -> tuple[Any, Any]:
@@ -1078,3 +1154,101 @@ def jit(func: Callable[..., Any] = None) -> Callable[..., Any]:
         return _clean_traced_outputs(outputs, is_list_style, remove_staging=True)
 
     return jit_func
+
+
+def jacrev(
+    func: Callable[..., Any],
+    argnums: int | tuple[int, ...] | list[int] = 0,
+    has_aux: bool = False,
+    holomorphic: bool = False,
+    allow_int: bool = False,
+) -> Callable[..., Any]:
+    """Compute the Jacobian of a function using reverse-mode autodiff.
+
+    Args:
+        func: Function to differentiate (should take positional arguments)
+        argnums: Optional, integer or sequence of integers. Specifies which
+            positional argument(s) to differentiate with respect to (default 0).
+        has_aux: Optional, bool. Indicates whether `func` returns a pair where the
+            first element is considered the output of the mathematical function to be
+            differentiated and the second element is auxiliary data. Default False.
+        holomorphic: Optional, bool. Indicates whether `func` is promised to be
+            holomorphic. Default False. Currently ignored.
+        allow_int: Optional, bool. Whether to allow differentiating with
+            respect to integer valued inputs. Currently ignored.
+
+    Returns:
+        A function with the same arguments as `func`, that evaluates the Jacobian of
+        `func` using reverse-mode automatic differentiation. If `has_aux` is True
+        then a pair of (jacobian, auxiliary_data) is returned.
+
+    Note:
+        This follows JAX's jacrev API:
+        - Only accepts positional arguments
+        - For functions requiring keyword arguments, use functools.partial or lambda
+        - Returns the Jacobian as a pytree structure matching the input structure
+    """
+
+    def jacrev_fn(*args: Any) -> Any:
+        # Normalize argnums to a tuple of integers
+        if isinstance(argnums, int):
+            selected_argnums = (argnums,)
+        else:
+            selected_argnums = tuple(argnums)
+
+        # Validate argnums
+        for argnum in selected_argnums:
+            if argnum >= len(args) or argnum < -len(args):
+                raise ValueError(
+                    f"argnum {argnum} is out of bounds for function with {len(args)} arguments"
+                )
+
+        # Normalize negative indices
+        normalized_argnums = tuple(
+            argnum if argnum >= 0 else len(args) + argnum for argnum in selected_argnums
+        )
+
+        # Extract the arguments to differentiate with respect to
+        diff_args = tuple(args[i] for i in normalized_argnums)
+
+        # Create a function that takes only the differentiated arguments
+        def partial_func(*diff_args_inner):
+            # Reconstruct the full argument list
+            full_args = list(args)
+            for i, arg in zip(normalized_argnums, diff_args_inner, strict=False):
+                full_args[i] = arg
+            return func(*full_args)
+
+        # Compute VJP - delegate has_aux handling to vjp
+        vjp_result = vjp(partial_func, *diff_args, has_aux=has_aux)
+        
+        if has_aux:
+            y, pullback, aux = vjp_result
+        else:
+            y, pullback = vjp_result
+
+        # Flatten output arrays for std_basis generation
+        flat_y = _extract_arrays_from_pytree(y)
+        if not isinstance(flat_y, list):
+            flat_y = [flat_y]
+
+        # Generate standard basis vectors
+        _, std_basis_vectors = _std_basis(flat_y)
+
+        # Compute Jacobian using vmap over pullback
+        jac = vmap(pullback)(std_basis_vectors)
+
+        # Handle output structure based on argnums
+        if isinstance(argnums, int):
+            # Single argnum: return the Jacobian for that argument
+            final_jac = jac[0] if len(normalized_argnums) == 1 else jac
+        else:
+            # Multiple argnums: return tuple of Jacobians
+            final_jac = jac
+
+        if not has_aux:
+            return final_jac
+        else:
+            return final_jac, aux
+
+    return jacrev_fn

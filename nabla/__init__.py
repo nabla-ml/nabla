@@ -32,6 +32,7 @@ from .core.trafos import (
     vjp,
     vmap,
     xpr,
+    jacrev,
 )
 from .ops.operation import (
     BinaryOperation,
@@ -119,6 +120,7 @@ __all__ = [
     "jvp",
     "vmap",
     "jit",
+    "jacrev",
     # Utilities
     "device",
     "cpu",
