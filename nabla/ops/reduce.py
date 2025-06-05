@@ -45,23 +45,24 @@ class ReduceSumOp(ReductionOperation):
 
     def maxpr(self, args: list[Value], output: Array) -> None:
         axes = self.axes
-        # if axes is None:
-        #     output_symbol = args[0]
-        #     for axis in range(len(args[0].shape) - 1, -1, -1):
-        #         output_symbol = ops.sum(output_symbol, axis=axis)
-        #         if not self.keep_dims:
-        #             output_symbol = ops.squeeze(output_symbol, axis=axis)
-        # else:
-        if isinstance(axes, int):
-            axes = [axes]
+        if axes is None:
+            # Sum over all axes
+            output_symbol = args[0]
+            for axis in range(len(args[0].shape) - 1, -1, -1):
+                output_symbol = ops.sum(output_symbol, axis=axis)
+                if not self.keep_dims:
+                    output_symbol = ops.squeeze(output_symbol, axis=axis)
+        else:
+            if isinstance(axes, int):
+                axes = [axes]
 
-        axes = sorted(axes, reverse=True)
-        output_symbol = args[0]
+            axes = sorted(axes, reverse=True)
+            output_symbol = args[0]
 
-        for axis in axes:
-            output_symbol = ops.sum(output_symbol, axis=axis)
-            if not self.keep_dims:
-                output_symbol = ops.squeeze(output_symbol, axis=axis)
+            for axis in axes:
+                output_symbol = ops.sum(output_symbol, axis=axis)
+                if not self.keep_dims:
+                    output_symbol = ops.squeeze(output_symbol, axis=axis)
 
         output.tensor_value = output_symbol
 

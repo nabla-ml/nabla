@@ -222,18 +222,21 @@ class RandUniformOp(RandomOp):
 
 
 def array(
-    data: list | np.ndarray,
+    data: list | np.ndarray | float | int,
     dtype: DType = _DEFAULT_DTYPE,
     device: Device = _DEFAULT_CPU,
     batch_dims: Shape = (),
 ) -> Array:
-    """Create an array from Python list or numpy array."""
+    """Create an array from Python list, numpy array, or scalar value."""
     if isinstance(data, list):
         np_data = np.array(data, dtype=DType.to_numpy(dtype))
     elif isinstance(data, np.ndarray):
         np_data = data.astype(DType.to_numpy(dtype))
+    elif isinstance(data, (int, float)):
+        # Handle scalar values
+        np_data = np.array(data, dtype=DType.to_numpy(dtype))
     else:
-        raise TypeError(f"Data must be a list or numpy array, got {type(data)}")
+        raise TypeError(f"Data must be a list, numpy array, or scalar, got {type(data)}")
 
     array = Array.from_numpy(np_data).to(device)
     return broadcast_batch_dims(array, batch_dims) if batch_dims else array

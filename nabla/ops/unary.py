@@ -225,7 +225,7 @@ class IncrBatchDimCtr(UnaryOperation):
 def incr_batch_dim_ctr(arg: Array) -> Array:
     """Increment batch dimension counter for debugging."""
     res = IncrBatchDimCtr().forward(arg)
-    if res.shape:
+    if len(res.shape) > 0:
         res.batch_dims = res.batch_dims + (res.shape[0],)
         res.shape = res.shape[1:]
     else:

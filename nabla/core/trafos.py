@@ -1300,6 +1300,47 @@ def jacrev(
         # Compute Jacobian using vmap over pullback
         jac = vmap(pullback)(std_basis_vectors)
 
+        from ..ops.view import reshape
+        # Reshape jacobian arrays to proper output_shape x input_shape format
+        # Extract jacobian arrays and input shapes for reshaping
+        flat_diff_args = _extract_arrays_from_pytree(diff_args)
+        
+        # # Process each jacobian to reshape to output_shape x input_shape
+        # reshaped_jacs = []
+        # for i, jac_tuple in enumerate(jac):
+        #     if isinstance(jac_tuple, tuple) and len(jac_tuple) == len(flat_diff_args):
+        #         # For each input argument, reshape its jacobian
+        #         arg_jacs = []
+        #         for j, (jac_array, input_arg) in enumerate(zip(jac_tuple, flat_diff_args)):
+        #             # Compute target shape: output_size x input_shape
+        #             output_size = 1
+        #             for dim in flat_y[0].shape:  # Assuming single output for now
+        #                 output_size *= dim
+        #             # If output is scalar (size 1), neglect the output dimension
+        #             if output_size == 1:
+        #                 target_shape = input_arg.shape
+        #             else:
+        #                 target_shape = (output_size,) + input_arg.shape
+        #             reshaped_jac = reshape(jac_array, target_shape)
+        #             arg_jacs.append(reshaped_jac)
+        #         reshaped_jacs.append(tuple(arg_jacs) if len(arg_jacs) > 1 else arg_jacs[0])
+        #     else:
+        #         # Single jacobian case
+        #         input_arg = flat_diff_args[0]
+        #         output_size = 1
+        #         for dim in flat_y[0].shape:
+        #             output_size *= dim
+        #         # If output is scalar (size 1), neglect the output dimension
+        #         if output_size == 1:
+        #             target_shape = input_arg.shape
+        #         else:
+        #             target_shape = (output_size,) + input_arg.shape
+        #         reshaped_jac = reshape(jac_tuple, target_shape)
+        #         reshaped_jacs.append(reshaped_jac)
+        
+        # Use reshaped jacobians
+        # jac = reshaped_jacs
+
         # Handle output structure based on argnums
         if isinstance(argnums, int):
             # Single argnum: return the Jacobian for that argument
