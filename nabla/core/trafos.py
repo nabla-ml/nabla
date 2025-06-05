@@ -121,6 +121,89 @@ def _validate_length_match(list1, list2, name1, name2):
         raise ValueError(f"{name1} length {len(list1)} != {name2} length {len(list2)}")
 
 
+# def _std_basis(args: list[Array]) -> tuple[list[int], list[Array]]:
+#     num_total_arg_elements = 0
+#     max_rank = 0
+#     for arg in args:
+#         num_elements = 1
+#         for dim in arg.shape:
+#             num_elements *= dim
+#         num_total_arg_elements += num_elements
+#         rank = len(arg.shape)
+#         if rank > max_rank:
+#             max_rank = rank
+
+#     batch_ctr = 0
+#     sizes = list[int]()
+#     tangents: list[Array] = []
+
+#     for i, arg in enumerate(args):
+#         num_elements = 1
+
+#         for dim in arg.shape:
+#             num_elements *= dim
+
+#         # For scalar outputs, preserve scalar shape instead of creating (1,) shape
+#         if arg.shape == ():
+#             # Scalar case: create a scalar basis vector
+#             from numpy import zeros as np_zeros, array as np_array
+
+#             # Create scalar array with batch dimensions
+#             if arg.batch_dims:
+#                 batched_shape = arg.batch_dims
+#                 np_tangent = np_zeros(batched_shape, dtype=arg.dtype.to_numpy())
+#                 np_tangent.fill(1.0)
+#             else:
+#                 # Pure scalar case - create a 0-dimensional numpy array
+#                 np_tangent = np_array(1.0, dtype=arg.dtype.to_numpy())
+
+#             tangent = Array.from_numpy(np_tangent)
+
+#             # Handle batch dimensions
+#             from ..ops.unary import incr_batch_dim_ctr
+#             for _ in range(len(arg.batch_dims)):
+#                 tangent = incr_batch_dim_ctr(tangent)
+
+#         else:
+#             # Non-scalar case: use original logic
+#             batched_shape = arg.batch_dims + arg.shape
+#             for _ in range(max_rank - len(batched_shape)):
+#                 batched_shape = (1,) + batched_shape
+
+#             batched_shape = arg.batch_dims + (num_total_arg_elements,) + arg.shape
+
+#             from numpy import zeros as np_zeros
+
+#             np_tangent = np_zeros(batched_shape, dtype=arg.dtype.to_numpy()).flatten()
+
+#             num_els_batch_dims = 1
+#             for dim in arg.batch_dims:
+#                 num_els_batch_dims *= dim
+
+#             for i in range(num_els_batch_dims):
+#                 offset = (batch_ctr + num_total_arg_elements * i) * num_elements
+
+#                 for j in range(num_elements):
+#                     idx = offset + j
+#                     np_tangent[idx] = 1.0
+#                     offset += num_elements
+#                     batch_ctr += 1
+
+#             np_tangent = np_tangent.reshape(batched_shape)
+#             tangent = Array.from_numpy(np_tangent)
+
+#             from ..ops.unary import incr_batch_dim_ctr
+
+#             for _ in range(len(arg.batch_dims)):
+#                 tangent = incr_batch_dim_ctr(tangent)
+
+#         tangents.append(tangent)
+#         sizes.append(num_elements)
+#         batch_ctr += num_elements
+
+#     return sizes, tangents
+
+
 def _std_basis(args: list[Array]) -> tuple[list[int], list[Array]]:
     num_total_arg_elements = 0
     max_rank = 0
@@ -1294,60 +1377,89 @@ def jacrev(
         if not isinstance(flat_y, list):
             flat_y = [flat_y]
 
-        # Generate standard basis vectors
-        _, std_basis_vectors = _std_basis(flat_y)
+        # Generate standard basis vectors and get sizes for split operations
+        sizes, std_basis_vectors = _std_basis(flat_y)
+
+        # print("std_basis_vectors:", std_basis_vectors)
+
+        # print("INTERNAL")
+        # print(xpr(vmap(pullback), std_basis_vectors))
 
         # Compute Jacobian using vmap over pullback
-        jac = vmap(pullback)(std_basis_vectors)
+        grads = vmap(pullback)(std_basis_vectors)
 
-        from ..ops.view import reshape
-        # Reshape jacobian arrays to proper output_shape x input_shape format
-        # Extract jacobian arrays and input shapes for reshaping
+        # CRITICAL: Check if std_basis_vectors were traced (indicating composition with other transformations)
+        std_basis_arrays = _extract_arrays_from_pytree(std_basis_vectors)
+        any_std_basis_traced = any(
+            getattr(arr, "traced", False) for arr in std_basis_arrays
+        )
+
+        # Make grads traced to capture subsequent operations in the computation graph
+        if not any_std_basis_traced:
+            # Only make traced if original std_basis wasn't traced (avoid double tracing)
+            grads = make_traced_pytree(grads)
+
+        # Import split function for proper jacobian structuring
+        from ..ops.view import reshape, split
+
+        # Extract flat input arguments for reshaping
         flat_diff_args = _extract_arrays_from_pytree(diff_args)
-        
-        # # Process each jacobian to reshape to output_shape x input_shape
-        # reshaped_jacs = []
-        # for i, jac_tuple in enumerate(jac):
-        #     if isinstance(jac_tuple, tuple) and len(jac_tuple) == len(flat_diff_args):
-        #         # For each input argument, reshape its jacobian
-        #         arg_jacs = []
-        #         for j, (jac_array, input_arg) in enumerate(zip(jac_tuple, flat_diff_args)):
-        #             # Compute target shape: output_size x input_shape
-        #             output_size = 1
-        #             for dim in flat_y[0].shape:  # Assuming single output for now
-        #                 output_size *= dim
-        #             # If output is scalar (size 1), neglect the output dimension
-        #             if output_size == 1:
-        #                 target_shape = input_arg.shape
-        #             else:
-        #                 target_shape = (output_size,) + input_arg.shape
-        #             reshaped_jac = reshape(jac_array, target_shape)
-        #             arg_jacs.append(reshaped_jac)
-        #         reshaped_jacs.append(tuple(arg_jacs) if len(arg_jacs) > 1 else arg_jacs[0])
-        #     else:
-        #         # Single jacobian case
-        #         input_arg = flat_diff_args[0]
-        #         output_size = 1
-        #         for dim in flat_y[0].shape:
-        #             output_size *= dim
-        #         # If output is scalar (size 1), neglect the output dimension
-        #         if output_size == 1:
-        #             target_shape = input_arg.shape
-        #         else:
-        #             target_shape = (output_size,) + input_arg.shape
-        #         reshaped_jac = reshape(jac_tuple, target_shape)
-        #         reshaped_jacs.append(reshaped_jac)
-        
-        # Use reshaped jacobians
-        # jac = reshaped_jacs
 
-        # Handle output structure based on argnums
-        if isinstance(argnums, int):
-            # Single argnum: return the Jacobian for that argument
-            final_jac = jac[0] if len(normalized_argnums) == 1 else jac
-        else:
-            # Multiple argnums: return tuple of Jacobians
-            final_jac = jac
+        splits = []
+        for i in range(len(flat_diff_args)):  # For each input argument
+            if isinstance(grads, list) and len(grads) > 0:
+                if isinstance(grads[0], tuple):
+                    # Multiple inputs: extract i-th input's gradients from each batch
+                    input_grads = grads[0][i]  # All batched gradients for input i
+                else:
+                    # Single input case
+                    input_grads = grads[0] if len(flat_diff_args) == 1 else grads[i]
+            else:
+                # Direct case
+                input_grads = grads[i] if isinstance(grads, tuple) else grads
+
+            # print("input grad:", grads[i])
+
+            # Split this input's gradients by output components (now traced!)
+            splits.append(split(input_grads, sizes=sizes, axis=0))
+
+        # Reshape jacobian components to proper out_shape + arg_shape format (now traced!)
+        cotangents = []
+        for j in range(len(flat_y)):  # For each output component
+            arg_jacs = []
+            for i in range(len(flat_diff_args)):  # For each input argument
+                grad = splits[i][j]  # j-th output component for i-th input
+                batch_dims = flat_y[j].batch_dims
+                out_shape = flat_y[j].shape
+                arg_shape = flat_diff_args[i].shape
+
+                # print("out_shape:", out_shape, "in_shape:", arg_shape)
+
+                # Only remove (1,) from output shape when we have batch dimensions (from vmap)
+                # This handles the case where scalar functions return (1,) instead of ()
+                if len(batch_dims) > 0 and len(out_shape) == 1 and out_shape[0] == 1:
+                    out_shape = ()
+                # Never remove (1,) from arg_shape - it represents valid jacobian structure
+
+                # Jacobian shape should be output_shape + input_shape
+                target_shape = out_shape + arg_shape
+                reshaped_grad = reshape(grad, target_shape)  # Now traced!
+                arg_jacs.append(reshaped_grad)
+
+            if len(arg_jacs) == 1:
+                arg_jacs = arg_jacs[0]  # Single input case, return single jacobian
+
+            cotangents.append(arg_jacs)
+
+        final_jac = cotangents
+        # print(len(cotangents))
+
+        if len(cotangents) == 1:
+            final_jac = cotangents[0]
+
+        # Make final jacobian untraced unless we're in a composition context
+        if not any_std_basis_traced:
+            make_untraced_pytree(final_jac)
 
         if not has_aux:
             return final_jac

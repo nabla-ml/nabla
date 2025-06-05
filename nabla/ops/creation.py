@@ -236,7 +236,9 @@ def array(
         # Handle scalar values
         np_data = np.array(data, dtype=DType.to_numpy(dtype))
     else:
-        raise TypeError(f"Data must be a list, numpy array, or scalar, got {type(data)}")
+        raise TypeError(
+            f"Data must be a list, numpy array, or scalar, got {type(data)}"
+        )
 
     array = Array.from_numpy(np_data).to(device)
     return broadcast_batch_dims(array, batch_dims) if batch_dims else array

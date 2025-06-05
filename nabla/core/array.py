@@ -209,22 +209,24 @@ class Array:
 
     def __getitem__(self, key) -> Array:
         """Array slicing using standard Python syntax.
-        
+
         Examples:
             arr[1:3]        # Slice first dimension
-            arr[:, 2:5]     # Slice second dimension  
+            arr[:, 2:5]     # Slice second dimension
             arr[1:3, 2:5]   # Slice multiple dimensions
             arr[-2:]        # Negative indices
             arr[..., :2]    # Ellipsis (all dimensions up to last)
         """
         from ..ops.view import array_slice
-        
+
         # Handle single slice, integer, or ellipsis
         if isinstance(key, (slice, int, type(...))):
             key = (key,)
         elif not isinstance(key, tuple):
-            raise TypeError(f"Array indices must be integers, slices, ellipsis, or tuples, got {type(key)}")
-        
+            raise TypeError(
+                f"Array indices must be integers, slices, ellipsis, or tuples, got {type(key)}"
+            )
+
         # Handle ellipsis expansion
         if ... in key:
             ellipsis_idx = key.index(...)
@@ -234,27 +236,31 @@ class Array:
             missing_dims = len(self.shape) - non_ellipsis_count
             if missing_dims < 0:
                 missing_dims = 0  # Don't allow negative
-            
+
             # Build expanded key
             expanded_key = (
-                key[:ellipsis_idx] + 
-                (slice(None),) * missing_dims + 
-                key[ellipsis_idx + 1:]
+                key[:ellipsis_idx]
+                + (slice(None),) * missing_dims
+                + key[ellipsis_idx + 1 :]
             )
             key = expanded_key
-        
+
         # Special case: if we have indices but the array is scalar, that's an error
         if len(self.shape) == 0 and len(key) > 0:
             # Check if all elements are just ellipsis that expanded to nothing
             if not (len(key) == 1 and key[0] is ...):
-                raise IndexError(f"Too many indices for array: expected 0, got {len(key)}")
-        
+                raise IndexError(
+                    f"Too many indices for array: expected 0, got {len(key)}"
+                )
+
         # Convert integers to slices and build slice list
         slices = []
         for i, k in enumerate(key):
             if i >= len(self.shape):
-                raise IndexError(f"Too many indices for array: expected {len(self.shape)}, got {len(key)}")
-            
+                raise IndexError(
+                    f"Too many indices for array: expected {len(self.shape)}, got {len(key)}"
+                )
+
             if isinstance(k, int):
                 # Convert integer index to slice
                 if k < 0:
@@ -264,6 +270,27 @@ class Array:
             elif isinstance(k, slice):
                 slices.append(k)
             else:
-                raise TypeError(f"Array index {i} must be an integer or slice, got {type(k)}")
-        
+                raise TypeError(
+                    f"Array index {i} must be an integer or slice, got {type(k)}"
+                )
+
         return array_slice(self, slices)
+
+    def sum(self, axes=None, keep_dims=False) -> Array:
+        """Sum array elements over given axes.
+
+        Args:
+            axes: Axis or axes along which to sum. Can be int, list of ints, or None (sum all)
+            keep_dims: If True, reduced axes are left as dimensions with size 1
+
+        Returns:
+            Array with the sum along the specified axes
+
+        Examples:
+            arr.sum()           # Sum all elements
+            arr.sum(axis=0)     # Sum along first axis
+            arr.sum(axis=[0,1]) # Sum along first two axes
+        """
+        from ..ops.reduce import sum
+
+        return sum(self, axes=axes, keep_dims=keep_dims)
