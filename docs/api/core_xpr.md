@@ -22,7 +22,8 @@ JAX-like string representation of the computation graph
 ## Notes
 
 This follows the same flexible API as vjp, jvp, and vmap:
-- Accepts functions with any number of positional arguments  
+
+- Accepts functions with any number of positional arguments
 - For functions requiring keyword arguments, use functools.partial or lambda
 
 ## Examples
@@ -50,4 +51,3 @@ print(nb.xpr(g, x, y))
 
 - {doc}`vjp <core_vjp>` - Vector-Jacobian product
 - {doc}`jvp <core_jvp>` - Jacobian-vector product
-
