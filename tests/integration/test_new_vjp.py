@@ -3,7 +3,7 @@
 
 # sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import nabla as nb
+import endia as nb
 
 
 def test_vjp_simple():

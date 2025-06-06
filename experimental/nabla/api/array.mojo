@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 #
 from memory import ArcPointer
 from collections import Optional
-from nabla.core.device_array import DeviceArray
-from nabla.api.utils import ExecutionContext
-from nabla.core.utils import ShapeType
-import nabla.core.device_array as devarr
+from endia.core.device_array import DeviceArray
+from endia.api.utils import ExecutionContext
+from endia.core.utils import ShapeType
+import endia.core.device_array as devarr
 
 
 @value

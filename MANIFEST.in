@@ -7,16 +7,16 @@ include CITATION.cff
 include changelog.md
 
 # Include all Python files in the package
-recursive-include nabla *.py
-recursive-include nabla *.mojo
+recursive-include endia *.py
+recursive-include endia *.mojo
 
 # Exclude unnecessary files
 exclude .gitignore
 exclude *.pyc
 exclude *.pyo
-recursive-exclude nabla __pycache__
-recursive-exclude nabla *.pyc
-recursive-exclude nabla *.pyo
+recursive-exclude endia __pycache__
+recursive-exclude endia *.pyc
+recursive-exclude endia *.pyo
 
 # Exclude development files
 exclude .git*

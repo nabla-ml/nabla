@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,8 +26,8 @@ from _mlir.builtin_attributes import StringAttr, TypeAttr
 from _mlir.builtin_types import FunctionType
 from _mlir.ir import Module, Operation
 from builtin._location import __call_location, _SourceLocation
-from nabla.compiler.graph.quantization import QuantizationEncoding
-from nabla.compiler.tensor import Tensor, TensorShape
+from endia.compiler.graph.quantization import QuantizationEncoding
+from endia.compiler.tensor import Tensor, TensorShape
 from memory import ArcPointer
 
 from utils.write import _WriteBufferStack
@@ -161,8 +161,8 @@ struct Graph(Copyable, Movable, Stringable, Writable):
     example:
 
     ```python
-    from nabla.compiler.graph import Type, Graph, TensorType, ops
-    from nabla.compiler.tensor import Tensor, TensorShape
+    from endia.compiler.graph import Type, Graph, TensorType, ops
+    from endia.compiler.tensor import Tensor, TensorShape
 
     def main():
         var graph = Graph(TensorType(DType.float32, 2, 6))

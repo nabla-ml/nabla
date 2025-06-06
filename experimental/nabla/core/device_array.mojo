@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,19 +16,19 @@
 
 from memory import memset_zero, ArcPointer, UnsafePointer, memcpy
 from collections import Dict, Optional
-from nabla.compiler.graph import Symbol
-from nabla.compiler.tensor import TensorSpec, Tensor
+from endia.compiler.graph import Symbol
+from endia.compiler.tensor import TensorSpec, Tensor
 import random
 import math
 from utils import Variant
 
-from nabla.api.utils import ExecutionContext
+from endia.api.utils import ExecutionContext
 from .utils import ShapeType, getshape, compact_dtype_repr
-from nabla.engine.trafos.vjp_trafo import backward
-from nabla.engine.executor import Executor
+from endia.engine.trafos.vjp_trafo import backward
+from endia.engine.executor import Executor
 
 
-from nabla.ops.binary_ops import (
+from endia.ops.binary_ops import (
     add,
     mul,
     sub,
@@ -37,8 +37,8 @@ from nabla.ops.binary_ops import (
     gt,
     pow,
 )
-from nabla.ops.reduce_ops import sum
-from nabla.ops.unary_ops import (
+from endia.ops.reduce_ops import sum
+from endia.ops.unary_ops import (
     sin,
     negate,
     cos,
@@ -49,7 +49,7 @@ from nabla.ops.unary_ops import (
     decr_batch_dim_ctr,
     cast,
 )
-from nabla.ops.view_ops import (
+from endia.ops.view_ops import (
     permute,
     transpose,
     reshape,

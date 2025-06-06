@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.incr_batch_dim_ctr(arg: nabla.core.array.Array) -> nabla.core.array.Array
+endia.incr_batch_dim_ctr(arg: endia.core.array.Array) -> endia.core.array.Array
 ```
 
 ## Description

@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,26 +14,26 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-from nabla.engine.utils import (
+from endia.engine.utils import (
     TrafoMeta,
     std_basis,
     get_full_trace_recursively_jvp,
     Callable,
     callable,
 )
-from nabla.api.utils import ExecutionContext
-from nabla.engine.trafos.jacfwd_trafo import jacfwd_end_rule
-from nabla.engine.trafos.jvp_trafo import jvp_call, jvp_end_rule
-from nabla.engine.trafos.jacrev_trafo import (
+from endia.api.utils import ExecutionContext
+from endia.engine.trafos.jacfwd_trafo import jacfwd_end_rule
+from endia.engine.trafos.jvp_trafo import jvp_call, jvp_end_rule
+from endia.engine.trafos.jacrev_trafo import (
     jacrev_start_rule,
     jacrev_call,
     jacrev_end_rule,
 )
-from nabla.engine.trafos.vjp_trafo import vjp_call, vjp_end_rule, backward
-from nabla.engine.trafos.jit_trafo import set_execution_context_recursively
-from nabla.engine.trafos.vmap_trafo import vmap_start_rule, vmap_end_rule
-from nabla.engine.trafos.grad_trafo import grad_call, grad_end_rule
-from nabla.engine.utils import GraphRepr
+from endia.engine.trafos.vjp_trafo import vjp_call, vjp_end_rule, backward
+from endia.engine.trafos.jit_trafo import set_execution_context_recursively
+from endia.engine.trafos.vmap_trafo import vmap_start_rule, vmap_end_rule
+from endia.engine.trafos.grad_trafo import grad_call, grad_end_rule
+from endia.engine.utils import GraphRepr
 from memory import ArcPointer
 
 

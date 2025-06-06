@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ if JAX_AVAILABLE:
     import jax
     import jax.numpy as jnp
 
-import nabla as nb
+import endia as nb
 
 
 @requires_jax
@@ -69,11 +69,11 @@ class TestLinearAlgebraOperations:
             cotangent_nb = nb.Array.from_numpy(cotangent_np)
             cotangent_jax = jnp.array(cotangent_np)
 
-            # Nabla VJP
-            def nabla_op(x, y):
+            # Endia VJP
+            def endia_op(x, y):
                 return nb.matmul(x, y)
 
-            outputs_nb, vjp_fn_nb = nb.vjp(nabla_op, *primals_nb)
+            outputs_nb, vjp_fn_nb = nb.vjp(endia_op, *primals_nb)
             grads_nb = vjp_fn_nb(cotangent_nb)
 
             # JAX VJP
@@ -103,12 +103,12 @@ class TestLinearAlgebraOperations:
             primals_jax = tuple(jnp.array(p) for p in primals_np)
             tangents_jax = tuple(jnp.array(t) for t in tangents_np)
 
-            # Nabla JVP
-            def nabla_op(inputs):
+            # Endia JVP
+            def endia_op(inputs):
                 return [nb.matmul(inputs[0], inputs[1])]
 
             primal_out_nb, tangent_out_nb = nb.jvp(
-                nabla_op, list(primals_nb), list(tangents_nb)
+                endia_op, list(primals_nb), list(tangents_nb)
             )
 
             # JAX JVP

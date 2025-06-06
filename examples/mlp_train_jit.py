@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Improved Nabla implementation to learn the complex 8-period sin curve."""
+"""Improved Endia implementation to learn the complex 8-period sin curve."""
 
 import time
 
 import numpy as np
 
-import nabla as nb
+import endia as nb
 
 # Configuration
 BATCH_SIZE = 128
@@ -29,7 +29,7 @@ def mlp_forward(x: nb.Array, params: list[nb.Array]) -> nb.Array:
 
 
 def leaky_relu_manual(x: nb.Array, negative_slope: float = 0.01) -> nb.Array:
-    """Manual leaky ReLU implementation since Nabla might not have it."""
+    """Manual leaky ReLU implementation since Endia might not have it."""
     relu_x = nb.relu(x)
     slope_tensor = nb.array([np.float32(negative_slope)])
     one_minus_slope = nb.array([np.float32(1.0 - negative_slope)])
@@ -165,7 +165,7 @@ def adamw_step(
 
         # Update parameters
         # sqrt_v_hat = nb.sqrt(v_hat)
-        sqrt_v_hat = v_hat**0.5  # Use ** 0.5 instead of sqrt for Nabla compatibility
+        sqrt_v_hat = v_hat**0.5  # Use ** 0.5 instead of sqrt for Endia compatibility
         denominator = sqrt_v_hat + eps_tensor
         update = lr_tensor * m_hat / denominator
         new_param = param_with_decay - update
@@ -232,7 +232,7 @@ def train_step_adamw(
     return updated_params, updated_m, updated_v, loss_scalar
 
 
-def analyze_nabla_learning_progress(params: list[nb.Array], epoch: int):
+def analyze_endia_learning_progress(params: list[nb.Array], epoch: int):
     """Analyze how well we're learning the complex function."""
     # Create a dense test set
     x_test_np = np.linspace(0, 1, 1000).reshape(-1, 1).astype(np.float32)
@@ -259,9 +259,9 @@ def analyze_nabla_learning_progress(params: list[nb.Array], epoch: int):
     return test_loss_scalar
 
 
-def test_nabla_complex_sin():
-    """Test Nabla implementation for complex sin learning."""
-    print("=== Learning COMPLEX 8-Period Sin Function with Nabla ===")
+def test_endia_complex_sin():
+    """Test Endia implementation for complex sin learning."""
+    print("=== Learning COMPLEX 8-Period Sin Function with Endia ===")
     print(f"Architecture: {LAYERS}")
     print(f"Initial learning rate: {LEARNING_RATE}")
     print(f"Sin periods: {SIN_PERIODS}")
@@ -317,7 +317,7 @@ def test_nabla_complex_sin():
             )
 
             # Detailed analysis
-            test_loss = analyze_nabla_learning_progress(params, epoch)
+            test_loss = analyze_endia_learning_progress(params, epoch)
             if test_loss < best_test_loss:
                 best_test_loss = test_loss
                 print(f"  New best test loss: {best_test_loss:.6f}")
@@ -325,7 +325,7 @@ def test_nabla_complex_sin():
             avg_loss = 0.0
             avg_time = 0.0
 
-    print("\nNabla training completed!")
+    print("\nEndia training completed!")
 
     # Final evaluation
     print("\n=== Final Evaluation ===")
@@ -355,16 +355,16 @@ def test_nabla_complex_sin():
 
 
 if __name__ == "__main__":
-    final_loss, correlation = test_nabla_complex_sin()
-    print("\n=== Nabla Summary ===")
+    final_loss, correlation = test_endia_complex_sin()
+    print("\n=== Endia Summary ===")
     print(f"Final test loss: {final_loss:.6f}")
     print(f"Correlation with true function: {correlation:.4f}")
 
     if correlation > 0.95:
-        print("SUCCESS: Nabla learned the complex function very well! 🎉")
+        print("SUCCESS: Endia learned the complex function very well! 🎉")
     elif correlation > 0.8:
-        print("GOOD: Nabla learned the general shape well! 👍")
+        print("GOOD: Endia learned the general shape well! 👍")
     elif correlation > 0.5:
         print("PARTIAL: Some learning but needs improvement 🤔")
     else:
-        print("POOR: Nabla failed to learn the complex function 😞")
+        print("POOR: Endia failed to learn the complex function 😞")

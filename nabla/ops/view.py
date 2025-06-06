@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -862,9 +862,9 @@ class ArraySliceOp(ViewOperation):
         # result_np = result.to_numpy().copy()  # Make a writable copy
         # result_np[tuple(target_slices)] = cotangent.to_numpy()
 
-        # from ..ops.creation import array as nabla_array
+        # from ..ops.creation import array as endia_array
 
-        # result_with_batch_dims = nabla_array(result_np, dtype=primal.dtype)
+        # result_with_batch_dims = endia_array(result_np, dtype=primal.dtype)
 
         # # Set the batch dimensions to match the cotangent
         # result_with_batch_dims.batch_dims = cotangent_batch_dims
@@ -1116,7 +1116,7 @@ class PadOp(Operation):
     ) -> list[Array]:
         """VJP rule: slice the cotangent back to original size."""
         # The VJP of pad is just a regular slice!
-        from nabla.ops.view import array_slice
+        from endia.ops.view import array_slice
 
         return [array_slice(cotangent, self.slices)]
 

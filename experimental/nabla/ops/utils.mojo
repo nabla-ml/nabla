@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,12 +15,12 @@
 # ===----------------------------------------------------------------------=== #
 
 from collections import Dict, Optional
-from nabla.core.device_array import DeviceArray, ArrayImpl
-from nabla.ops.view_ops import broadcast_to, unsqueeze
-from nabla.ops.unary_ops import incr_batch_dim_ctr, decr_batch_dim_ctr
-from nabla.api.utils import ExecutionContext
-from nabla.api.utils import none
-from nabla.compiler.graph import Symbol
+from endia.core.device_array import DeviceArray, ArrayImpl
+from endia.ops.view_ops import broadcast_to, unsqueeze
+from endia.ops.unary_ops import incr_batch_dim_ctr, decr_batch_dim_ctr
+from endia.api.utils import ExecutionContext
+from endia.api.utils import none
+from endia.compiler.graph import Symbol
 
 
 fn generic_setup(

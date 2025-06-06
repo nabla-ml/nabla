@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,8 +24,8 @@ parts respectively.
 # These operations assume that all tensors have last dim == 2, representing real
 # and imaginary parts.
 
-from nabla.compiler.graph.type import Dim
-from nabla.compiler.tensor import Tensor, TensorShape
+from endia.compiler.graph.type import Dim
+from endia.compiler.tensor import Tensor, TensorShape
 
 # ===----------------------------------------------------------------------=== #
 # Converters

@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.cos(arg: nabla.core.array.Array) -> nabla.core.array.Array
+endia.cos(arg: endia.core.array.Array) -> endia.core.array.Array
 ```
 
 ## Description
@@ -13,7 +13,7 @@ Element-wise cosine.
 ## Examples
 
 ```python
-import nabla as nb
+import endia as nb
 
 # Basic trigonometric function
 x = nb.array([0, np.pi/2, np.pi])

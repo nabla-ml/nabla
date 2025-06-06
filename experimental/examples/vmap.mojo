@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,13 +16,13 @@
 
 import math
 from time import perf_counter
-import nabla
+import endia
 
 
 fn test_vmap() raises:
-    fn dot(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn dot(args: List[endia.Array]) raises -> List[endia.Array]:
         var res = [
-            nabla.sum(
+            endia.sum(
                 args[0] * args[1],
                 axis=[
                     0,
@@ -31,71 +31,71 @@ fn test_vmap() raises:
         ]
         return res
 
-    fn mv_prod(args: List[nabla.Array]) raises -> List[nabla.Array]:
-        var res = nabla.vmap(dot, [nabla.none, 1])(args)
+    fn mv_prod(args: List[endia.Array]) raises -> List[endia.Array]:
+        var res = endia.vmap(dot, [endia.none, 1])(args)
         return res
 
-    fn mm_prod(args: List[nabla.Array]) raises -> List[nabla.Array]:
-        var res = nabla.vmap(mv_prod, [0, nabla.none])(args)
+    fn mm_prod(args: List[endia.Array]) raises -> List[endia.Array]:
+        var res = endia.vmap(mv_prod, [0, endia.none])(args)
         return res
 
-    fn batched_matmul(args: List[nabla.Array]) raises -> List[nabla.Array]:
-        var res = nabla.vmap(mm_prod, [0, nabla.none])([args[0], args[1]])[0]
+    fn batched_matmul(args: List[endia.Array]) raises -> List[endia.Array]:
+        var res = endia.vmap(mm_prod, [0, endia.none])([args[0], args[1]])[0]
         return [
             res,
         ]
 
-    var batch_a = nabla.arange((2, 3, 4), DType.float32)
-    var mat_b = nabla.arange((4, 5), DType.float32)
+    var batch_a = endia.arange((2, 3, 4), DType.float32)
+    var mat_b = endia.arange((4, 5), DType.float32)
 
-    print(nabla.xpr(batched_matmul)([batch_a, mat_b]))
+    print(endia.xpr(batched_matmul)([batch_a, mat_b]))
     var res = batched_matmul([batch_a, mat_b])
     print(res[0])
 
 
 def test_vmap2():
-    fn vv(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn vv(args: List[endia.Array]) raises -> List[endia.Array]:
         return [
-            nabla.sum(args[0] * args[1]),
+            endia.sum(args[0] * args[1]),
         ]
 
-    fn mv(args: List[nabla.Array]) raises -> List[nabla.Array]:
-        return nabla.vmap(vv, [0, nabla.none])(args)
+    fn mv(args: List[endia.Array]) raises -> List[endia.Array]:
+        return endia.vmap(vv, [0, endia.none])(args)
 
-    fn mm(args: List[nabla.Array]) raises -> List[nabla.Array]:
-        return nabla.vmap(
+    fn mm(args: List[endia.Array]) raises -> List[endia.Array]:
+        return endia.vmap(
             mv,
-            [nabla.none, 1],
+            [endia.none, 1],
             [
                 1,
             ],
         )(args)
 
-    var a = nabla.arange((2, 3), DType.float32)
-    var b = nabla.arange((3, 4), DType.float32)
+    var a = endia.arange((2, 3), DType.float32)
+    var b = endia.arange((3, 4), DType.float32)
 
     var res = mm([a, b])[0]
     print(res)
 
 
 def test_vmap3():
-    fn br_foo(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn br_foo(args: List[endia.Array]) raises -> List[endia.Array]:
         return [
-            nabla.broadcast_to(args[0], (1, 3, 9)),
+            endia.broadcast_to(args[0], (1, 3, 9)),
         ]
 
-    var res = nabla.vmap(br_foo)(
+    var res = endia.vmap(br_foo)(
         [
-            nabla.arange((2, 9), DType.float32),
+            endia.arange((2, 9), DType.float32),
         ]
     )[0]
     print(res)
 
 
 fn test_vmap4() raises:
-    fn dot(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn dot(args: List[endia.Array]) raises -> List[endia.Array]:
         return [
-            nabla.sum(
+            endia.sum(
                 args[0] * args[1],
                 axis=[
                     0,
@@ -103,12 +103,12 @@ fn test_vmap4() raises:
             ),
         ]
 
-    var mv_prod = nabla.vmap(dot, [nabla.none, 1])
-    var mm_prod = nabla.vmap(mv_prod, [0, nabla.none])
-    var batched_matmul = nabla.vmap(mm_prod, [0, nabla.none])
+    var mv_prod = endia.vmap(dot, [endia.none, 1])
+    var mm_prod = endia.vmap(mv_prod, [0, endia.none])
+    var batched_matmul = endia.vmap(mm_prod, [0, endia.none])
 
-    var batch_a = nabla.arange((2, 3, 4), DType.float32)
-    var mat_b = nabla.arange((4, 5), DType.float32)
+    var batch_a = endia.arange((2, 3, 4), DType.float32)
+    var mat_b = endia.arange((4, 5), DType.float32)
 
     var res = batched_matmul([batch_a, mat_b])[0]
     print(res)

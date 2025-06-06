@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.unsqueeze(arg: nabla.core.array.Array, axes: list[int] = None) -> nabla.core.array.Array
+endia.unsqueeze(arg: endia.core.array.Array, axes: list[int] = None) -> endia.core.array.Array
 ```
 
 ## Description

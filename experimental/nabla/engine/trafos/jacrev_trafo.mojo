@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,18 +14,18 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-from nabla.api.array import Array
-from nabla.core.device_array import DeviceArray, zeros_like
-from nabla.engine.trafos.vjp_trafo import cotangent
-from nabla.engine.utils import (
+from endia.api.array import Array
+from endia.core.device_array import DeviceArray, zeros_like
+from endia.engine.trafos.vjp_trafo import cotangent
+from endia.engine.utils import (
     TrafoMeta,
     std_basis,
     cotangent_with_remat,
     Callable,
     callable,
 )
-from nabla.api.utils import none
-from nabla.api.array import zeros
+from endia.api.utils import none
+from endia.api.array import zeros
 
 
 fn jacrev_start_rule(

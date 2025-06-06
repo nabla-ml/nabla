@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Final verification script that demonstrates Nabla's VJP is fully compatible with JAX.
+Final verification script that demonstrates Endia's VJP is fully compatible with JAX.
 
-This script shows that Nabla's VJP transformation:
+This script shows that Endia's VJP transformation:
 1. Returns gradients in exactly the same tuple format as JAX
 2. Handles single and multiple inputs correctly
 3. Supports nested data structures (dicts, lists)
@@ -14,13 +14,13 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-import nabla as nb
+import endia as nb
 
 
 def compare_vjp_structures(nb_grads, jax_grads, description):
-    """Compare VJP output structures between Nabla and JAX."""
+    """Compare VJP output structures between Endia and JAX."""
     print(f"\n{description}:")
-    print(f"  Nabla: {type(nb_grads)} with {len(nb_grads)} elements")
+    print(f"  Endia: {type(nb_grads)} with {len(nb_grads)} elements")
     print(f"  JAX:   {type(jax_grads)} with {len(jax_grads)} elements")
 
     # Both should be tuples with same length
@@ -32,15 +32,15 @@ def compare_vjp_structures(nb_grads, jax_grads, description):
 
 def demonstrate_compatibility():
     """Demonstrate comprehensive VJP compatibility."""
-    print("=== NABLA VJP COMPATIBILITY DEMONSTRATION ===")
-    print("Showing that Nabla's VJP is identical to JAX's VJP\n")
+    print("=== ENDIA VJP COMPATIBILITY DEMONSTRATION ===")
+    print("Showing that Endia's VJP is identical to JAX's VJP\n")
 
     # 1. Single input, single output
     print("1. SINGLE INPUT → SINGLE OUTPUT")
     x = np.array([1.0, 2.0, 3.0])
     cotangent = np.array([1.0, 1.0, 1.0])
 
-    # Nabla
+    # Endia
     def nb_fn(x):
         return nb.sin(x)
 
@@ -64,7 +64,7 @@ def demonstrate_compatibility():
     y = np.array([3.0, 4.0])
     cotangent = np.array([1.0, 1.0])
 
-    # Nabla
+    # Endia
     def nb_fn(x, y):
         return nb.mul(x, y)
 
@@ -88,7 +88,7 @@ def demonstrate_compatibility():
     inputs = {"a": np.array([1.0, 2.0]), "b": np.array([3.0, 4.0])}
     cotangent = np.array([1.0, 1.0])
 
-    # Nabla
+    # Endia
     def nb_fn(inputs):
         return nb.add(inputs["a"], inputs["b"])
 
@@ -116,7 +116,7 @@ def demonstrate_compatibility():
     B = np.random.randn(4, 2)
     cotangent = np.random.randn(3, 2)
 
-    # Nabla
+    # Endia
     def nb_fn(A, B):
         return nb.matmul(A, B)
 
@@ -140,7 +140,7 @@ def demonstrate_compatibility():
     x = np.array([0.5, 1.0])
     cotangent = 1.0
 
-    # Nabla - sum(exp(sin(x)) * cos(x))
+    # Endia - sum(exp(sin(x)) * cos(x))
     def nb_fn(x):
         return nb.sum(nb.mul(nb.exp(nb.sin(x)), nb.cos(x)))
 
@@ -161,13 +161,13 @@ def demonstrate_compatibility():
     print("\n" + "=" * 60)
     print("🎉 COMPLETE COMPATIBILITY VERIFIED!")
     print("=" * 60)
-    print("\nNabla's VJP transformation is 100% compatible with JAX:")
+    print("\nEndia's VJP transformation is 100% compatible with JAX:")
     print("✓ Same tuple return structure")
     print("✓ Same gradient computation")
     print("✓ Same handling of nested inputs")
     print("✓ Same support for all operation types")
     print("✓ Numerically identical results")
-    print("\n→ Users can switch between JAX and Nabla seamlessly!")
+    print("\n→ Users can switch between JAX and Endia seamlessly!")
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Documentation build script for Nabla
+# Documentation build script for Endia
 # Handles both local development and CI/CD builds
 
 DOCS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -37,13 +37,13 @@ if [[ "$BUILD_MODE" == "ci" ]]; then
         -D autodoc_mock_imports="max,max.dtype,max.graph,max.tensor,mojo,numpy,jax,torch" \
         . _build/html
 else
-    # Local build: try to generate API docs if nabla is available
-    if python -c "import nabla" 2>/dev/null; then
+    # Local build: try to generate API docs if endia is available
+    if python -c "import endia" 2>/dev/null; then
         echo "✨ Generating API documentation..."
         python ../scripts/generate_api_docs.py
         sphinx-build -b html -W --keep-going . _build/html
     else
-        echo "⚠️  Nabla not installed, building without API generation"
+        echo "⚠️  Endia not installed, building without API generation"
         sphinx-build -b html -W --keep-going \
             -D autosummary_generate=False \
             . _build/html

@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,9 +27,9 @@ to import each module.
 For example, the basic code you need to create tensor on CPU looks like this:
 
 ```python
-from nabla.compiler.driver import Tensor, cpu
+from endia.compiler.driver import Tensor, cpu
 from testing import assert_equal
-from nabla.compiler.tensor import TensorShape
+from endia.compiler.tensor import TensorShape
 
 def main():
     tensor = Tensor[DType.float32, rank=2](TensorShape(1,2))
@@ -46,7 +46,7 @@ def main():
 ```
 """
 
-from nabla.compiler._tensor_utils import (
+from endia.compiler._tensor_utils import (
     DynamicTensor,
     ManagedTensorSlice,
     StaticTensorSpec,
@@ -57,7 +57,7 @@ from nabla.compiler._tensor_utils import (
     Output,
     MutableInput,
 )
-from nabla.compiler.tensor import RuntimeTensorSpec
+from endia.compiler.tensor import RuntimeTensorSpec
 
 from ._accelerator import (
     accelerator,

@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@ device.
 For example, a tensor can be created and used like this:
 
 ```python
-from nabla.compiler.driver import Tensor
-from nabla.compiler.tensor import TensorShape
+from endia.compiler.driver import Tensor
+from endia.compiler.tensor import TensorShape
 
 def main():
     tensor = Tensor[DType.float32, rank=2](TensorShape(1, 2))
@@ -34,9 +34,9 @@ from buffer.dimlist import DimList
 from collections import InlineArray, Optional
 
 from layout import IntTuple, Layout, LayoutTensor, RuntimeLayout
-from nabla.compiler._tensor_utils import _indexing
-from nabla.compiler.tensor import Tensor as OldTensor
-from nabla.compiler.tensor import TensorShape, TensorSpec
+from endia.compiler._tensor_utils import _indexing
+from endia.compiler.tensor import Tensor as OldTensor
+from endia.compiler.tensor import TensorShape, TensorSpec
 from memory import UnsafePointer
 
 from utils import IndexList

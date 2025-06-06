@@ -1,4 +1,4 @@
-# NABLA Changelog
+# ENDIA Changelog
 This file contains larger, high-level changes. For smaller changes, please refer to the commit history of the main branch.
 
 ### **[25.4]** - Unreleased

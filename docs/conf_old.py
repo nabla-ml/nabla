@@ -28,13 +28,13 @@ for mod_name in MOCK_MODULES:
     sys.modules[mod_name] = Mock()
 
 # Add the project to Python path only if we're building locally
-if os.path.exists("../nabla"):
+if os.path.exists("../endia"):
     sys.path.insert(0, os.path.abspath("../"))
 
 # -- Project information -----------------------------------------------------
-project = "Nabla"
-copyright = "2025, Nabla Team"
-author = "Nabla Team"
+project = "Endia"
+copyright = "2025, Endia Team"
+author = "Endia Team"
 release = "0.1.0"
 
 # -- General configuration ---------------------------------------------------
@@ -109,14 +109,14 @@ exclude_patterns = [
 
 # -- Options for HTML output -------------------------------------------------
 html_theme = "sphinx_book_theme"  # Using Sphinx Book Theme like JAX docs
-html_title = "Nabla"
+html_title = "Endia"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
-html_favicon = "_static/nabla-logo.svg"
+html_favicon = "_static/endia-logo.svg"
 
 html_theme_options = {
     # Repository integration
-    "repository_url": "https://github.com/nabla-ml/nabla",
+    "repository_url": "https://github.com/endia-ml/endia",
     "repository_branch": "main",
     "use_repository_button": True,
     "use_issues_button": True,
@@ -130,12 +130,12 @@ html_theme_options = {
     "navigation_with_keys": True,
     # Logo and branding - Simple text instead of image
     "logo": {
-        "text": "NABLA",
+        "text": "ENDIA",
     },
     # Extra footer content
     "extra_footer": """
     <div>
-      <a href="https://github.com/nabla-ml/nabla">Nabla</a> - Built with
+      <a href="https://github.com/endia-ml/endia">Endia</a> - Built with
       <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
       <a href="https://github.com/executablebooks/sphinx-book-theme">Sphinx Book Theme</a>
     </div>

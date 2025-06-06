@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,33 +14,33 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-import nabla
+import endia
 
 
-def foo(args: List[nabla.Array]) -> List[nabla.Array]:
+def foo(args: List[endia.Array]) -> List[endia.Array]:
     x = args[0]
     y = args[1]
     return [x * x, y * y]
 
 
 def test_vjp_jvp():
-    var x = nabla.arange((2, 3)) + 2
-    var y = nabla.arange((2, 3)) + 3
-    var v = nabla.arange((2, 3))
-    var w = nabla.arange((2, 3))
+    var x = endia.arange((2, 3)) + 2
+    var y = endia.arange((2, 3)) + 3
+    var v = endia.arange((2, 3))
+    var w = endia.arange((2, 3))
 
     # Step 1: Compute the gradient using JVP.
-    def grad_fn(args: List[nabla.Array]) -> List[nabla.Array]:
-        _, jvp_result = nabla.jvp(
-            foo, args, [nabla.ones((2, 3)), nabla.ones((2, 3))]
+    def grad_fn(args: List[endia.Array]) -> List[endia.Array]:
+        _, jvp_result = endia.jvp(
+            foo, args, [endia.ones((2, 3)), endia.ones((2, 3))]
         )
         return jvp_result  # This extracts f'(x)
 
     # Step 2: Compute Hessian-vector product using VJP on grad_fn.
-    def hvp_fn(args: List[nabla.Array]) -> List[nabla.Array]:
+    def hvp_fn(args: List[endia.Array]) -> List[endia.Array]:
         var x = args[: len(args) // 2]
         var v = args[len(args) // 2 :]
-        _, vjp_fn = nabla.vjp(grad_fn, x)
+        _, vjp_fn = endia.vjp(grad_fn, x)
         return vjp_fn(v)  # VJP on gradient computes H(x)·v
 
     grad_result = grad_fn([x, y])

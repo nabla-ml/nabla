@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Test script to demonstrate pytree support in vjp function."""
 
-import nabla as nb
+import endia as nb
 
 # Test 1: Simple array
 print("=== Test 1: Simple Array ===")

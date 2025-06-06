@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 """Optimized quantized operators."""
 
-from nabla.compiler.graph.quantization import (
+from endia.compiler.graph.quantization import (
     Q4_0Encoding,
     Q4_KEncoding,
     Q6_KEncoding,

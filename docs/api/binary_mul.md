@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.mul(arg0, arg1) -> 'Array'
+endia.mul(arg0, arg1) -> 'Array'
 ```
 
 ## Description
@@ -13,7 +13,7 @@ Element-wise multiplication of two arrays or array and scalar.
 ## Examples
 
 ```python
-import nabla as nb
+import endia as nb
 
 # Element-wise multiplication
 a = nb.array([1, 2, 3])

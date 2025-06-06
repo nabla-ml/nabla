@@ -1,7 +1,7 @@
 [project]
 authors = ["TilliFe"]
 channels = ["https://conda.modular.com/max-nightly", "https://conda.modular.com/max", "https://repo.prefix.dev/modular-community", "conda-forge"]
-name = "nabla"
+name = "endia"
 platforms = ["osx-arm64"]
 version = "25.4.0"
 

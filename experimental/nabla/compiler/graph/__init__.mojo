@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -35,8 +35,8 @@ custom ops, and add them to the graph by setting the output op(s) with
 For example:
 
 ```python
-from nabla.compiler.graph import Graph, TensorType, ops
-from nabla.compiler.tensor import Tensor, TensorShape
+from endia.compiler.graph import Graph, TensorType, ops
+from endia.compiler.tensor import Tensor, TensorShape
 
 def build_model() -> Graph:
     var graph = Graph(

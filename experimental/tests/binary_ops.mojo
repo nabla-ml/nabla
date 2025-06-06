@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,18 +14,18 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-import nabla
+import endia
 
 
 fn test_binary_op0() raises:
-    fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn test_func(args: List[endia.Array]) raises -> List[endia.Array]:
         var x = args[0]
         var y = args[1]
         var res = x + y
         return List(res)
 
-    var x = nabla.arange((2, 3, 4))
-    var y = nabla.arange((2, 3, 4))
+    var x = endia.arange((2, 3, 4))
+    var y = endia.arange((2, 3, 4))
     var res = test_func([x, y])[0]
     _ = res.load(0)
 
@@ -37,16 +37,16 @@ fn test_binary_op0() raises:
 
 
 fn test_binary_op1() raises:
-    fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn test_func(args: List[endia.Array]) raises -> List[endia.Array]:
         var x = args[0]
         var y = args[1]
-        x = nabla.incr_batch_dim_ctr(x)
-        y = nabla.incr_batch_dim_ctr(y)
+        x = endia.incr_batch_dim_ctr(x)
+        y = endia.incr_batch_dim_ctr(y)
         var res = x + y
         return List(res)
 
-    var x = nabla.arange((2, 3, 4))
-    var y = nabla.arange((2, 3, 4))
+    var x = endia.arange((2, 3, 4))
+    var y = endia.arange((2, 3, 4))
     var res = test_func([x, y])[0]
     _ = res.load(0)
 
@@ -58,18 +58,18 @@ fn test_binary_op1() raises:
 
 
 fn test_binary_op2() raises:
-    fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn test_func(args: List[endia.Array]) raises -> List[endia.Array]:
         var x = args[0]
         var y = args[1]
-        x = nabla.incr_batch_dim_ctr(x)
-        x = nabla.incr_batch_dim_ctr(x)
-        y = nabla.incr_batch_dim_ctr(y)
-        y = nabla.incr_batch_dim_ctr(y)
+        x = endia.incr_batch_dim_ctr(x)
+        x = endia.incr_batch_dim_ctr(x)
+        y = endia.incr_batch_dim_ctr(y)
+        y = endia.incr_batch_dim_ctr(y)
         var res = x + y
         return List(res)
 
-    var x = nabla.arange((2, 3, 4))
-    var y = nabla.arange((2, 3, 4))
+    var x = endia.arange((2, 3, 4))
+    var y = endia.arange((2, 3, 4))
     var res = test_func([x, y])[0]
     _ = res.load(0)
 
@@ -81,20 +81,20 @@ fn test_binary_op2() raises:
 
 
 fn test_binary_op3() raises:
-    fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn test_func(args: List[endia.Array]) raises -> List[endia.Array]:
         var x = args[0]
         var y = args[1]
-        x = nabla.incr_batch_dim_ctr(x)
-        x = nabla.incr_batch_dim_ctr(x)
-        x = nabla.incr_batch_dim_ctr(x)
-        y = nabla.incr_batch_dim_ctr(y)
-        y = nabla.incr_batch_dim_ctr(y)
-        y = nabla.incr_batch_dim_ctr(y)
+        x = endia.incr_batch_dim_ctr(x)
+        x = endia.incr_batch_dim_ctr(x)
+        x = endia.incr_batch_dim_ctr(x)
+        y = endia.incr_batch_dim_ctr(y)
+        y = endia.incr_batch_dim_ctr(y)
+        y = endia.incr_batch_dim_ctr(y)
         var res = x + y
         return List(res)
 
-    var x = nabla.arange((2, 3, 4))
-    var y = nabla.arange((2, 3, 4))
+    var x = endia.arange((2, 3, 4))
+    var y = endia.arange((2, 3, 4))
     var res = test_func([x, y])[0]
     _ = res.load(0)
 
@@ -106,15 +106,15 @@ fn test_binary_op3() raises:
 
 
 fn test_binary_op4() raises:
-    fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn test_func(args: List[endia.Array]) raises -> List[endia.Array]:
         var x = args[0]
         var y = args[1]
-        y = nabla.incr_batch_dim_ctr(y)
+        y = endia.incr_batch_dim_ctr(y)
         var res = x + y
         return List(res)
 
-    var x = nabla.arange((3, 4))
-    var y = nabla.arange((2, 3, 4))
+    var x = endia.arange((3, 4))
+    var y = endia.arange((2, 3, 4))
     var res = test_func([x, y])[0]
     _ = res.load(0)
 
@@ -126,16 +126,16 @@ fn test_binary_op4() raises:
 
 
 fn test_binary_op5() raises:
-    fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn test_func(args: List[endia.Array]) raises -> List[endia.Array]:
         var x = args[0]
         var y = args[1]
-        y = nabla.incr_batch_dim_ctr(y)
-        y = nabla.incr_batch_dim_ctr(y)
+        y = endia.incr_batch_dim_ctr(y)
+        y = endia.incr_batch_dim_ctr(y)
         var res = x + y
         return List(res)
 
-    var x = nabla.arange((4,))
-    var y = nabla.arange((2, 3, 4))
+    var x = endia.arange((4,))
+    var y = endia.arange((2, 3, 4))
     var res = test_func([x, y])[0]
     _ = res.load(0)
 
@@ -147,15 +147,15 @@ fn test_binary_op5() raises:
 
 
 fn test_binary_op6() raises:
-    fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn test_func(args: List[endia.Array]) raises -> List[endia.Array]:
         var x = args[0]
         var y = args[1]
-        x = nabla.incr_batch_dim_ctr(x)
+        x = endia.incr_batch_dim_ctr(x)
         var res = x + y
         return List(res)
 
-    var x = nabla.arange((2, 4))
-    var y = nabla.arange((3, 4))
+    var x = endia.arange((2, 4))
+    var y = endia.arange((3, 4))
     var res = test_func([x, y])[0]
     _ = res.load(0)
 
@@ -167,17 +167,17 @@ fn test_binary_op6() raises:
 
 
 fn test_binary_op7() raises:
-    fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn test_func(args: List[endia.Array]) raises -> List[endia.Array]:
         var x = args[0]
         var y = args[1]
-        x = nabla.incr_batch_dim_ctr(x)
-        x = nabla.incr_batch_dim_ctr(x)
-        y = nabla.incr_batch_dim_ctr(y)
+        x = endia.incr_batch_dim_ctr(x)
+        x = endia.incr_batch_dim_ctr(x)
+        y = endia.incr_batch_dim_ctr(y)
         var res = x + y
         return List(res)
 
-    var x = nabla.arange((2, 3))
-    var y = nabla.arange((3, 4))
+    var x = endia.arange((2, 3))
+    var y = endia.arange((3, 4))
     var res = test_func([x, y])[0]
     _ = res.load(0)
 

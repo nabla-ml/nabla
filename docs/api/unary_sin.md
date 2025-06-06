@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.sin(arg: nabla.core.array.Array, dtype: max._core.dtype.DType | None = None) -> nabla.core.array.Array
+endia.sin(arg: endia.core.array.Array, dtype: max._core.dtype.DType | None = None) -> endia.core.array.Array
 ```
 
 ## Description
@@ -13,7 +13,7 @@ Element-wise sine.
 ## Examples
 
 ```python
-import nabla as nb
+import endia as nb
 
 # Basic trigonometric function
 x = nb.array([0, np.pi/2, np.pi])

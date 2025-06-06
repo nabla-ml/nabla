@@ -1,3 +1,3 @@
-# Core dependencies for Nabla
+# Core dependencies for Endia
 numpy>=1.22
 modular>=25.0.0

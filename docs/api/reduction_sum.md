@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.sum(arg: 'Array', axes: 'int | list[int] | tuple[int, ...] | None' = None, keep_dims: 'bool' = False) -> 'Array'
+endia.sum(arg: 'Array', axes: 'int | list[int] | tuple[int, ...] | None' = None, keep_dims: 'bool' = False) -> 'Array'
 ```
 
 ## Description
@@ -13,7 +13,7 @@ sum array elements over given axes.
 ## Examples
 
 ```python
-import nabla as nb
+import endia as nb
 
 # Sum along axes
 x = nb.array([[1, 2], [3, 4]])

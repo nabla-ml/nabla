@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,26 +16,26 @@
 
 import math
 from time import perf_counter
-import nabla
+import endia
 
 
 fn test_jvp() raises:
-    var a = nabla.ones((400, 400), DType.float32) / 1000
-    var b = nabla.ones((400, 400), DType.float32) / 1000
-    var c = nabla.ones((400, 400), DType.float32) / 1000
+    var a = endia.ones((400, 400), DType.float32) / 1000
+    var b = endia.ones((400, 400), DType.float32) / 1000
+    var c = endia.ones((400, 400), DType.float32) / 1000
 
-    var a_tangent = nabla.ones((400, 400), DType.float32) / 1000
-    var b_tangent = nabla.ones((400, 400), DType.float32) / 1000
-    var c_tangent = nabla.ones((400, 400), DType.float32) / 1000
+    var a_tangent = endia.ones((400, 400), DType.float32) / 1000
+    var b_tangent = endia.ones((400, 400), DType.float32) / 1000
+    var c_tangent = endia.ones((400, 400), DType.float32) / 1000
 
-    fn foo(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn foo(args: List[endia.Array]) raises -> List[endia.Array]:
         var a = args[0]
         var b = args[1]
         var c = args[2]
         var x = a
         for _ in range(20):
-            x = nabla.relu(x @ b + c)
-        var z = nabla.sum(nabla.sin(x))
+            x = endia.relu(x @ b + c)
+        var z = endia.sum(endia.sin(x))
         return [z, z]
 
     var avg_time = Float64(0.0)
@@ -45,7 +45,7 @@ fn test_jvp() raises:
 
     for i in range(1, iterations + 1):
         var start = perf_counter()
-        _, tangents = nabla.jvp(
+        _, tangents = endia.jvp(
             foo, [a, b, c], [a_tangent, b_tangent, c_tangent]
         )
 

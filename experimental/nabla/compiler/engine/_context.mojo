@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@ from collections.optional import Optional
 from sys.ffi import DLHandle
 from sys.param_env import is_defined
 
-from nabla.compiler._utils import call_dylib_func, exchange
-from nabla.compiler.driver import Device
+from endia.compiler._utils import call_dylib_func, exchange
+from endia.compiler.driver import Device
 from memory import UnsafePointer
 
 from ._status import Status

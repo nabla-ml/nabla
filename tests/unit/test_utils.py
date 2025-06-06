@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -109,14 +109,14 @@ def generate_test_data(
     return data
 
 
-def allclose_recursive(nabla_result, jax_result, rtol, atol):
+def allclose_recursive(endia_result, jax_result, rtol, atol):
     """Recursively compare nested structures with proper error reporting."""
-    if isinstance(nabla_result, list | tuple) and isinstance(jax_result, list | tuple):
-        assert len(nabla_result) == len(jax_result), (
-            f"Result structures have different lengths: Nabla {len(nabla_result)}, JAX {len(jax_result)}"
+    if isinstance(endia_result, list | tuple) and isinstance(jax_result, list | tuple):
+        assert len(endia_result) == len(jax_result), (
+            f"Result structures have different lengths: Endia {len(endia_result)}, JAX {len(jax_result)}"
         )
         for i, (nb_item, jax_item) in enumerate(
-            zip(nabla_result, jax_result, strict=False)
+            zip(endia_result, jax_result, strict=False)
         ):
             assert allclose_recursive(nb_item, jax_item, rtol, atol), (
                 f"Mismatch in item {i} of recursive structure."
@@ -124,12 +124,12 @@ def allclose_recursive(nabla_result, jax_result, rtol, atol):
         return True
 
     # Convert to numpy arrays
-    if hasattr(nabla_result, "to_numpy"):
-        nabla_np = nabla_result.to_numpy()
-    elif hasattr(nabla_result, "__array__"):
-        nabla_np = np.array(nabla_result)
+    if hasattr(endia_result, "to_numpy"):
+        endia_np = endia_result.to_numpy()
+    elif hasattr(endia_result, "__array__"):
+        endia_np = np.array(endia_result)
     else:
-        nabla_np = nabla_result
+        endia_np = endia_result
 
     if hasattr(jax_result, "to_numpy"):
         jax_np = jax_result.to_numpy()
@@ -138,16 +138,16 @@ def allclose_recursive(nabla_result, jax_result, rtol, atol):
     else:
         jax_np = np.array(jax_result)
 
-    assert nabla_np.shape == jax_np.shape, (
-        f"Shape mismatch: Nabla {nabla_np.shape}, JAX {jax_np.shape}.\nNabla: {nabla_np}\nJAX: {jax_np}"
+    assert endia_np.shape == jax_np.shape, (
+        f"Shape mismatch: Endia {endia_np.shape}, JAX {jax_np.shape}.\nEndia: {endia_np}\nJAX: {jax_np}"
     )
 
-    is_close = np.allclose(nabla_np, jax_np, rtol=rtol, atol=atol, equal_nan=True)
+    is_close = np.allclose(endia_np, jax_np, rtol=rtol, atol=atol, equal_nan=True)
     if not is_close:
         print(f"Numerical mismatch detected with rtol={rtol}, atol={atol}:")
-        print(f"Nabla ({nabla_np.dtype}):\n{nabla_np}")
+        print(f"Endia ({endia_np.dtype}):\n{endia_np}")
         print(f"JAX ({jax_np.dtype}):\n{jax_np}")
-        print(f"Difference:\n{nabla_np - jax_np}")
+        print(f"Difference:\n{endia_np - jax_np}")
     return is_close
 
 

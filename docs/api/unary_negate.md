@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.negate(arg: nabla.core.array.Array) -> nabla.core.array.Array
+endia.negate(arg: endia.core.array.Array) -> endia.core.array.Array
 ```
 
 ## Description

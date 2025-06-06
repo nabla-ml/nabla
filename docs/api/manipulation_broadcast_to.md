@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.broadcast_to(arg: nabla.core.array.Array, shape: tuple[int, ...]) -> nabla.core.array.Array
+endia.broadcast_to(arg: endia.core.array.Array, shape: tuple[int, ...]) -> endia.core.array.Array
 ```
 
 ## Description

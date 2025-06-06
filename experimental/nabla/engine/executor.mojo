@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,14 +17,14 @@
 from memory import ArcPointer
 from collections import Dict
 from pathlib import Path
-from nabla.compiler.graph import Symbol, Graph, Type, Dim, TensorType
-from nabla.compiler.engine import InferenceSession, Model, TensorMap
-from nabla.compiler.tensor import TensorSpec
+from endia.compiler.graph import Symbol, Graph, Type, Dim, TensorType
+from endia.compiler.engine import InferenceSession, Model, TensorMap
+from endia.compiler.tensor import TensorSpec
 from memory import ArcPointer
 from utils import Variant
-from nabla.core.device_array import DeviceArray
-from nabla.core.utils import compact_dtype_repr
-from nabla.api.utils import ExecutionContext
+from endia.core.device_array import DeviceArray
+from endia.core.utils import compact_dtype_repr
+from endia.api.utils import ExecutionContext
 
 
 @value

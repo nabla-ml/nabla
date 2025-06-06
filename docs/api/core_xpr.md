@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.xpr(fn: 'Callable[..., Any]', *primals) -> 'str'
+endia.xpr(fn: 'Callable[..., Any]', *primals) -> 'str'
 ```
 
 ## Description
@@ -29,7 +29,7 @@ This follows the same flexible API as vjp, jvp, and vmap:
 ## Examples
 
 ```python
-import nabla as nb
+import endia as nb
 
 # Single input function
 def f(x):

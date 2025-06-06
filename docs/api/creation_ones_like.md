@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.ones_like(template: 'Array') -> 'Array'
+endia.ones_like(template: 'Array') -> 'Array'
 ```
 
 ## Description

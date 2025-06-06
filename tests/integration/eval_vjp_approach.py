@@ -3,11 +3,11 @@
 
 import sys
 
-sys.path.append("/Users/tillife/Documents/CodingProjects/nabla")
+sys.path.append("/Users/tillife/Documents/CodingProjects/endia")
 
-from nabla.core.trafos import tree_flatten, tree_unflatten, vjp
-from nabla.ops.binary import add, mul
-from nabla.ops.creation import array
+from endia.core.trafos import tree_flatten, tree_unflatten, vjp
+from endia.ops.binary import add, mul
+from endia.ops.creation import array
 
 
 def test_edge_cases():

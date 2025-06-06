@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.matmul(arg0: nabla.core.array.Array, arg1: nabla.core.array.Array) -> nabla.core.array.Array
+endia.matmul(arg0: endia.core.array.Array, arg1: endia.core.array.Array) -> endia.core.array.Array
 ```
 
 ## Description
@@ -13,7 +13,7 @@ Matrix multiplication with broadcasting support.
 ## Examples
 
 ```python
-import nabla as nb
+import endia as nb
 
 # Matrix multiplication
 A = nb.array([[1, 2], [3, 4]])

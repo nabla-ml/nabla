@@ -3,12 +3,12 @@
 
 import sys
 
-sys.path.append("/Users/tillife/Documents/CodingProjects/nabla")
+sys.path.append("/Users/tillife/Documents/CodingProjects/endia")
 
-from nabla.core.trafos import vjp
-from nabla.ops.binary import add, mul
-from nabla.ops.creation import array
-from nabla.ops.reduce import sum as reduce_sum
+from endia.core.trafos import vjp
+from endia.ops.binary import add, mul
+from endia.ops.creation import array
+from endia.ops.reduce import sum as reduce_sum
 
 
 def test_nested_dict_vjp():

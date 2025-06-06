@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@ For example you can use AnyTensor if you don't know the dtype of tensor in
 advance or if you don't know the tensor is DeviceTensor or Tensor:
 
 ```python
-from nabla.compiler.driver import Tensor, AnyTensor
-from nabla.compiler.tensor import TensorShape
+from endia.compiler.driver import Tensor, AnyTensor
+from endia.compiler.tensor import TensorShape
 
 @value
 struct Container:
@@ -35,8 +35,8 @@ def main():
 from collections import Optional
 from sys import alignof, external_call, CompilationTarget, sizeof
 
-from nabla.compiler._utils import exchange
-from nabla.compiler.tensor import TensorSpec
+from endia.compiler._utils import exchange
+from endia.compiler.tensor import TensorSpec
 from memory import UnsafePointer
 
 from utils import Variant

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Automated release script for nabla-ml with date-based versioning.
+Automated release script for endia-ml with date-based versioning.
 
 Version format: YY.MMDD (e.g., 25.0529 for May 29, 2025)
 
@@ -98,7 +98,7 @@ def update_version_in_file(new_version):
     content = pyproject_path.read_text()
 
     # Replace ONLY the project version line - be very specific
-    # Look for version = "..." that comes after name = "nabla_ml"
+    # Look for version = "..." that comes after name = "endia_ml"
     lines = content.split("\n")
     new_lines = []
     in_project_section = False
@@ -216,7 +216,7 @@ def upload_to_pypi():
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Release nabla-ml package with date-based versioning (YY.MMDD)"
+        description="Release endia-ml package with date-based versioning (YY.MMDD)"
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="Perform a dry run without uploading"
@@ -229,7 +229,7 @@ def main():
     args = parser.parse_args()
 
     print(f"{Colors.HEADER}{Colors.BOLD}")
-    print("🚀 NABLA-ML RELEASE SCRIPT")
+    print("🚀 ENDIA-ML RELEASE SCRIPT")
     print("========================")
     print(f"{Colors.ENDC}")
 
@@ -333,8 +333,8 @@ def main():
             f"\n{Colors.OKGREEN}{Colors.BOLD}🎉 Release {new_version} completed successfully!{Colors.ENDC}"
         )
         if upload_success:
-            print(f"\n📦 Package URL: https://pypi.org/project/nabla-ml/{new_version}/")
-            print(f"📥 Install with: pip install nabla-ml=={new_version}")
+            print(f"\n📦 Package URL: https://pypi.org/project/endia-ml/{new_version}/")
+            print(f"📥 Install with: pip install endia-ml=={new_version}")
         else:
             print("\n📦 Package built in dist/ - manual upload required")
 

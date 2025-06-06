@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,16 +14,16 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-import nabla
-from nabla.core.device_array import DeviceArray
-from nabla.ops.utils import register_unary_op
-from nabla.compiler.graph import Symbol
+import endia
+from endia.core.device_array import DeviceArray
+from endia.ops.utils import register_unary_op
+from endia.compiler.graph import Symbol
 
 
 struct CustomOp:
     @staticmethod
     fn maxpr(args: List[Symbol], array: DeviceArray) raises -> Symbol:
-        return nabla.compiler.graph.ops.custom["custom_op"](
+        return endia.compiler.graph.ops.custom["custom_op"](
             args[0], args[0].type()
         )
 
@@ -58,12 +58,12 @@ fn custom_op(arg: DeviceArray) raises -> DeviceArray:
     )
 
 
-fn custom_op(arg: nabla.Array) raises -> nabla.Array:
-    return nabla.Array(custom_op(arg.device_array[]))
+fn custom_op(arg: endia.Array) raises -> endia.Array:
+    return endia.Array(custom_op(arg.device_array[]))
 
 
 fn test_custom_op_with_custom_kernel() raises -> None:
     # Test the custom op with a custom kernel
-    x = nabla.arange((2, 3))
+    x = endia.arange((2, 3))
     res = custom_op(x)
     print(res)

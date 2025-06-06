@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.zeros_like(template: 'Array') -> 'Array'
+endia.zeros_like(template: 'Array') -> 'Array'
 ```
 
 ## Description

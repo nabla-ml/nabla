@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,36 +16,36 @@
 
 import math
 from time import perf_counter
-import nabla
+import endia
 
 
 fn test_vjp() raises:
-    fn foo(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn foo(args: List[endia.Array]) raises -> List[endia.Array]:
         var a = args[0]
         var b = args[1]
         var c = args[2]
         var x = a
         for _ in range(20):
-            x = nabla.relu(x @ b + c)
-        var z = nabla.sum(nabla.sin(x))
+            x = endia.relu(x @ b + c)
+        var z = endia.sum(endia.sin(x))
         return [
             z,
         ]
 
     print("VJP TEST")
-    var a = nabla.ones((400, 400), DType.float32) / 1000
-    var b = nabla.ones((400, 400), DType.float32) / 1000
-    var c = nabla.ones((400, 400), DType.float32) / 1000
+    var a = endia.ones((400, 400), DType.float32) / 1000
+    var b = endia.ones((400, 400), DType.float32) / 1000
+    var c = endia.ones((400, 400), DType.float32) / 1000
 
-    _, foo_vjp = nabla.vjp(foo, [a, b, c])
-    foo_vjp_jit = nabla.jit(foo_vjp)
+    _, foo_vjp = endia.vjp(foo, [a, b, c])
+    foo_vjp_jit = endia.jit(foo_vjp)
 
     # loop and measure time
     var avg_time = Float64(0.0)
     var iterations = 4
     var every = 1
 
-    var tangent = nabla.ones((1,), DType.float32)
+    var tangent = endia.ones((1,), DType.float32)
 
     for i in range(1, iterations + 1):
         var start = perf_counter()
@@ -54,9 +54,9 @@ fn test_vjp() raises:
                 tangent,
             ]
         )
-        var a_grad = nabla.sum(res[0])
-        var b_grad = nabla.sum(res[1])
-        var c_grad = nabla.sum(res[2])
+        var a_grad = endia.sum(res[0])
+        var b_grad = endia.sum(res[1])
+        var c_grad = endia.sum(res[2])
         var end = perf_counter()
         avg_time += end - start
 

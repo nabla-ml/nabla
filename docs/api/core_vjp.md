@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.vjp(func: 'Callable[..., Any]', *primals) -> 'tuple[Any, Callable]'
+endia.vjp(func: 'Callable[..., Any]', *primals) -> 'tuple[Any, Callable]'
 ```
 
 ## Description
@@ -29,7 +29,7 @@ The vjp_function always returns gradients as a tuple (matching JAX behavior):
 ## Examples
 
 ```python
-import nabla as nb
+import endia as nb
 
 # Vector-Jacobian product for reverse-mode AD
 def f(x):

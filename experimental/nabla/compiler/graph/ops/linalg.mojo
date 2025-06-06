@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,8 +19,8 @@
 from collections import Optional
 
 from builtin._location import __call_location, _SourceLocation
-from nabla.compiler.graph import Symbol
-from nabla.compiler.tensor import Tensor, TensorShape
+from endia.compiler.graph import Symbol
+from endia.compiler.tensor import Tensor, TensorShape
 
 from ..error import error
 from ..type import Dim, TensorType

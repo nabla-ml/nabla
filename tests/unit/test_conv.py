@@ -9,12 +9,12 @@ import jax.numpy as jnp
 import numpy as np
 from jax import grad
 
-# Add nabla to path
-sys.path.insert(0, "/Users/tillife/Documents/CodingProjects/nabla")
+# Add endia to path
+sys.path.insert(0, "/Users/tillife/Documents/CodingProjects/endia")
 
-from nabla.core.trafos import vjp as nabla_vjp
-from nabla.ops.creation import array
-from nabla.ops.linalg import conv2d, conv2d_transpose
+from endia.core.trafos import vjp as endia_vjp
+from endia.ops.creation import array
+from endia.ops.linalg import conv2d, conv2d_transpose
 
 
 class ConvTestConfig:
@@ -652,17 +652,17 @@ def test_conv2d_forward(config: ConvTestConfig) -> dict[str, Any]:
     ).astype(np.float32)
 
     try:
-        # Nabla computation (NHWC format)
-        nabla_input = array(input_data)
-        nabla_filter = array(filter_data)
-        nabla_result = conv2d(
-            nabla_input,
-            nabla_filter,
+        # Endia computation (NHWC format)
+        endia_input = array(input_data)
+        endia_filter = array(filter_data)
+        endia_result = conv2d(
+            endia_input,
+            endia_filter,
             stride=config.stride,
             padding=config.padding,
             dilation=config.dilation,
         )
-        nabla_output = nabla_result.to_numpy()
+        endia_output = endia_result.to_numpy()
 
         # JAX computation (needs NCHW format)
         jax_input = jnp.transpose(input_data, (0, 3, 1, 2))  # NHWC -> NCHW
@@ -688,19 +688,19 @@ def test_conv2d_forward(config: ConvTestConfig) -> dict[str, Any]:
         jax_output = np.transpose(jax_result, (0, 2, 3, 1))
 
         # Calculate differences
-        max_diff = np.max(np.abs(nabla_output - jax_output))
-        mean_diff = np.mean(np.abs(nabla_output - jax_output))
-        is_close = np.allclose(nabla_output, jax_output, rtol=1e-5, atol=1e-6)
+        max_diff = np.max(np.abs(endia_output - jax_output))
+        mean_diff = np.mean(np.abs(endia_output - jax_output))
+        is_close = np.allclose(endia_output, jax_output, rtol=1e-5, atol=1e-6)
 
         return {
             "config": config,
             "success": True,
-            "nabla_shape": nabla_output.shape,
+            "endia_shape": endia_output.shape,
             "jax_shape": jax_output.shape,
             "max_diff": max_diff,
             "mean_diff": mean_diff,
             "is_close": is_close,
-            "test_data": (input_data, filter_data, nabla_output, jax_output),
+            "test_data": (input_data, filter_data, endia_output, jax_output),
             "error": None,
         }
 
@@ -708,7 +708,7 @@ def test_conv2d_forward(config: ConvTestConfig) -> dict[str, Any]:
         return {
             "config": config,
             "success": False,
-            "nabla_shape": "N/A",
+            "endia_shape": "N/A",
             "jax_shape": "N/A",
             "max_diff": float("inf"),
             "mean_diff": float("inf"),
@@ -781,8 +781,8 @@ def test_conv2d_gradients(config: ConvTestConfig) -> dict[str, Any]:
         output_shape = jax_conv_func(input_data).shape
         cotangent = array(np.ones(output_shape, dtype=np.float32))
 
-        # Nabla VJP functions
-        def nabla_loss_func(x):
+        # Endia VJP functions
+        def endia_loss_func(x):
             filter_arr = array(filter_data)
             result = conv2d(
                 x,
@@ -793,7 +793,7 @@ def test_conv2d_gradients(config: ConvTestConfig) -> dict[str, Any]:
             )
             return result
 
-        def nabla_loss_func_filter(w):
+        def endia_loss_func_filter(w):
             x_arr = array(input_data)
             result = conv2d(
                 x_arr,
@@ -804,26 +804,26 @@ def test_conv2d_gradients(config: ConvTestConfig) -> dict[str, Any]:
             )
             return result
 
-        # Compute Nabla gradients using VJP
+        # Compute Endia gradients using VJP
         input_grad_success = False
         filter_grad_success = False
         input_grad_error = None
         filter_grad_error = None
-        nabla_input_grad = None
-        nabla_filter_grad = None
+        endia_input_grad = None
+        endia_filter_grad = None
 
         # Test input gradient
         try:
-            _, vjp_func = nabla_vjp(nabla_loss_func, array(input_data))
-            nabla_input_grad = vjp_func(cotangent)[0].to_numpy()
+            _, vjp_func = endia_vjp(endia_loss_func, array(input_data))
+            endia_input_grad = vjp_func(cotangent)[0].to_numpy()
             input_grad_success = True
         except Exception as e:
             input_grad_error = f"{type(e).__name__}: {str(e)}"
 
         # Test filter gradient
         try:
-            _, vjp_func_filter = nabla_vjp(nabla_loss_func_filter, array(filter_data))
-            nabla_filter_grad = vjp_func_filter(cotangent)[0].to_numpy()
+            _, vjp_func_filter = endia_vjp(endia_loss_func_filter, array(filter_data))
+            endia_filter_grad = vjp_func_filter(cotangent)[0].to_numpy()
             filter_grad_success = True
         except Exception as e:
             filter_grad_error = f"{type(e).__name__}: {str(e)}"
@@ -848,10 +848,10 @@ def test_conv2d_gradients(config: ConvTestConfig) -> dict[str, Any]:
         }
 
         if input_grad_success:
-            input_max_diff = np.max(np.abs(nabla_input_grad - jax_input_grad))
-            input_mean_diff = np.mean(np.abs(nabla_input_grad - jax_input_grad))
+            input_max_diff = np.max(np.abs(endia_input_grad - jax_input_grad))
+            input_mean_diff = np.mean(np.abs(endia_input_grad - jax_input_grad))
             input_is_close = np.allclose(
-                nabla_input_grad, jax_input_grad, rtol=1e-4, atol=1e-5
+                endia_input_grad, jax_input_grad, rtol=1e-4, atol=1e-5
             )
 
             results.update(
@@ -859,16 +859,16 @@ def test_conv2d_gradients(config: ConvTestConfig) -> dict[str, Any]:
                     "input_grad_max_diff": input_max_diff,
                     "input_grad_mean_diff": input_mean_diff,
                     "input_grad_is_close": input_is_close,
-                    "nabla_input_grad_shape": nabla_input_grad.shape,
+                    "endia_input_grad_shape": endia_input_grad.shape,
                     "jax_input_grad_shape": jax_input_grad.shape,
                 }
             )
 
         if filter_grad_success:
-            filter_max_diff = np.max(np.abs(nabla_filter_grad - jax_filter_grad))
-            filter_mean_diff = np.mean(np.abs(nabla_filter_grad - jax_filter_grad))
+            filter_max_diff = np.max(np.abs(endia_filter_grad - jax_filter_grad))
+            filter_mean_diff = np.mean(np.abs(endia_filter_grad - jax_filter_grad))
             filter_is_close = np.allclose(
-                nabla_filter_grad, jax_filter_grad, rtol=1e-4, atol=1e-5
+                endia_filter_grad, jax_filter_grad, rtol=1e-4, atol=1e-5
             )
 
             results.update(
@@ -876,7 +876,7 @@ def test_conv2d_gradients(config: ConvTestConfig) -> dict[str, Any]:
                     "filter_grad_max_diff": filter_max_diff,
                     "filter_grad_mean_diff": filter_mean_diff,
                     "filter_grad_is_close": filter_is_close,
-                    "nabla_filter_grad_shape": nabla_filter_grad.shape,
+                    "endia_filter_grad_shape": endia_filter_grad.shape,
                     "jax_filter_grad_shape": jax_filter_grad.shape,
                 }
             )
@@ -918,18 +918,18 @@ def test_conv2d_transpose_forward(config: ConvTestConfig) -> dict[str, Any]:
     ).astype(np.float32)
 
     try:
-        # Nabla computation (NHWC format)
-        nabla_input = array(input_data)
-        nabla_filter = array(filter_data)
-        nabla_result = conv2d_transpose(
-            nabla_input,
-            nabla_filter,
+        # Endia computation (NHWC format)
+        endia_input = array(input_data)
+        endia_filter = array(filter_data)
+        endia_result = conv2d_transpose(
+            endia_input,
+            endia_filter,
             stride=config.stride,
             padding=config.padding,
             output_padding=config.output_padding,
             dilation=config.dilation,
         )
-        nabla_output = nabla_result.to_numpy()
+        endia_output = endia_result.to_numpy()
 
         # JAX computation (needs NCHW format)
         jax_input = jnp.transpose(input_data, (0, 3, 1, 2))  # NHWC -> NCHW
@@ -955,19 +955,19 @@ def test_conv2d_transpose_forward(config: ConvTestConfig) -> dict[str, Any]:
         jax_output = np.transpose(jax_result, (0, 2, 3, 1))
 
         # Calculate differences
-        max_diff = np.max(np.abs(nabla_output - jax_output))
-        mean_diff = np.mean(np.abs(nabla_output - jax_output))
-        is_close = np.allclose(nabla_output, jax_output, rtol=1e-5, atol=1e-6)
+        max_diff = np.max(np.abs(endia_output - jax_output))
+        mean_diff = np.mean(np.abs(endia_output - jax_output))
+        is_close = np.allclose(endia_output, jax_output, rtol=1e-5, atol=1e-6)
 
         return {
             "config": config,
             "success": True,
-            "nabla_shape": nabla_output.shape,
+            "endia_shape": endia_output.shape,
             "jax_shape": jax_output.shape,
             "max_diff": max_diff,
             "mean_diff": mean_diff,
             "is_close": is_close,
-            "test_data": (input_data, filter_data, nabla_output, jax_output),
+            "test_data": (input_data, filter_data, endia_output, jax_output),
             "error": None,
             "detailed_info": {
                 "input_shape": input_data.shape,
@@ -1005,7 +1005,7 @@ def test_conv2d_transpose_forward(config: ConvTestConfig) -> dict[str, Any]:
         return {
             "config": config,
             "success": False,
-            "nabla_shape": "ERROR",
+            "endia_shape": "ERROR",
             "jax_shape": expected_shape,
             "max_diff": float("inf"),
             "mean_diff": float("inf"),
@@ -1108,8 +1108,8 @@ def test_conv2d_transpose_gradients(config: ConvTestConfig) -> dict[str, Any]:
                 },
             }
 
-        # Nabla VJP functions
-        def nabla_loss_func(x):
+        # Endia VJP functions
+        def endia_loss_func(x):
             filter_arr = array(filter_data)
             result = conv2d_transpose(
                 x,
@@ -1121,7 +1121,7 @@ def test_conv2d_transpose_gradients(config: ConvTestConfig) -> dict[str, Any]:
             )
             return result
 
-        def nabla_loss_func_filter(w):
+        def endia_loss_func_filter(w):
             x_arr = array(input_data)
             result = conv2d_transpose(
                 x_arr,
@@ -1133,26 +1133,26 @@ def test_conv2d_transpose_gradients(config: ConvTestConfig) -> dict[str, Any]:
             )
             return result
 
-        # Compute Nabla gradients using VJP
+        # Compute Endia gradients using VJP
         input_grad_success = False
         filter_grad_success = False
         input_grad_error = None
         filter_grad_error = None
-        nabla_input_grad = None
-        nabla_filter_grad = None
+        endia_input_grad = None
+        endia_filter_grad = None
 
         # Test input gradient
         try:
-            _, vjp_func = nabla_vjp(nabla_loss_func, array(input_data))
-            nabla_input_grad = vjp_func(cotangent)[0].to_numpy()
+            _, vjp_func = endia_vjp(endia_loss_func, array(input_data))
+            endia_input_grad = vjp_func(cotangent)[0].to_numpy()
             input_grad_success = True
         except Exception as e:
             input_grad_error = f"{type(e).__name__}: {str(e)}"
 
         # Test filter gradient
         try:
-            _, vjp_func_filter = nabla_vjp(nabla_loss_func_filter, array(filter_data))
-            nabla_filter_grad = vjp_func_filter(cotangent)[0].to_numpy()
+            _, vjp_func_filter = endia_vjp(endia_loss_func_filter, array(filter_data))
+            endia_filter_grad = vjp_func_filter(cotangent)[0].to_numpy()
             filter_grad_success = True
         except Exception as e:
             filter_grad_error = f"{type(e).__name__}: {str(e)}"
@@ -1178,10 +1178,10 @@ def test_conv2d_transpose_gradients(config: ConvTestConfig) -> dict[str, Any]:
         }
 
         if input_grad_success:
-            input_max_diff = np.max(np.abs(nabla_input_grad - jax_input_grad))
-            input_mean_diff = np.mean(np.abs(nabla_input_grad - jax_input_grad))
+            input_max_diff = np.max(np.abs(endia_input_grad - jax_input_grad))
+            input_mean_diff = np.mean(np.abs(endia_input_grad - jax_input_grad))
             input_is_close = np.allclose(
-                nabla_input_grad, jax_input_grad, rtol=1e-4, atol=1e-5
+                endia_input_grad, jax_input_grad, rtol=1e-4, atol=1e-5
             )
 
             results.update(
@@ -1189,16 +1189,16 @@ def test_conv2d_transpose_gradients(config: ConvTestConfig) -> dict[str, Any]:
                     "input_grad_max_diff": input_max_diff,
                     "input_grad_mean_diff": input_mean_diff,
                     "input_grad_is_close": input_is_close,
-                    "nabla_input_grad_shape": nabla_input_grad.shape,
+                    "endia_input_grad_shape": endia_input_grad.shape,
                     "jax_input_grad_shape": jax_input_grad.shape,
                 }
             )
 
         if filter_grad_success:
-            filter_max_diff = np.max(np.abs(nabla_filter_grad - jax_filter_grad))
-            filter_mean_diff = np.mean(np.abs(nabla_filter_grad - jax_filter_grad))
+            filter_max_diff = np.max(np.abs(endia_filter_grad - jax_filter_grad))
+            filter_mean_diff = np.mean(np.abs(endia_filter_grad - jax_filter_grad))
             filter_is_close = np.allclose(
-                nabla_filter_grad, jax_filter_grad, rtol=1e-4, atol=1e-5
+                endia_filter_grad, jax_filter_grad, rtol=1e-4, atol=1e-5
             )
 
             results.update(
@@ -1206,7 +1206,7 @@ def test_conv2d_transpose_gradients(config: ConvTestConfig) -> dict[str, Any]:
                     "filter_grad_max_diff": filter_max_diff,
                     "filter_grad_mean_diff": filter_mean_diff,
                     "filter_grad_is_close": filter_is_close,
-                    "nabla_filter_grad_shape": nabla_filter_grad.shape,
+                    "endia_filter_grad_shape": endia_filter_grad.shape,
                     "jax_filter_grad_shape": jax_filter_grad.shape,
                 }
             )
@@ -1260,7 +1260,7 @@ def print_test_summary(results: list[dict[str, Any]], test_name: str) -> None:
                 f"{config.name:20s} | {status} | "
                 f"Max diff: {result.get('max_diff', 'N/A'):.2e} | "
                 f"Mean diff: {result.get('mean_diff', 'N/A'):.2e} | "
-                f"Shape: {result.get('nabla_shape', 'N/A')}"
+                f"Shape: {result.get('endia_shape', 'N/A')}"
             )
 
             # Print error details for failed tests
@@ -1327,7 +1327,7 @@ def run_comprehensive_tests():
     """Run comprehensive convolution tests."""
     print("🧪 Comprehensive Conv2D Test Suite")
     print("=" * 80)
-    print("Testing Nabla conv2d operations against JAX reference implementation")
+    print("Testing Endia conv2d operations against JAX reference implementation")
     print("This includes various configurations of stride, padding, dilation, etc.")
     print()
 
@@ -1352,7 +1352,7 @@ def run_comprehensive_tests():
                     "is_close": False,
                     "max_diff": float("inf"),
                     "mean_diff": float("inf"),
-                    "nabla_shape": "N/A",
+                    "endia_shape": "N/A",
                     "error": str(e),
                     "error_type": type(e).__name__,
                 }
@@ -1401,7 +1401,7 @@ def run_comprehensive_tests():
                     "is_close": False,
                     "max_diff": float("inf"),
                     "mean_diff": float("inf"),
-                    "nabla_shape": "N/A",
+                    "endia_shape": "N/A",
                     "error": str(e),
                     "error_type": type(e).__name__,
                 }
@@ -1487,7 +1487,7 @@ def run_comprehensive_tests():
     print(f"Overall Success Rate: {total_passed}/{total_tests} ({success_rate:.1f}%)")
 
     if success_rate == 100.0:
-        print("🎉 All tests passed! Nabla conv2d operations match JAX perfectly.")
+        print("🎉 All tests passed! Endia conv2d operations match JAX perfectly.")
     elif success_rate >= 95.0:
         print("✅ Excellent! Nearly all tests passed.")
     elif success_rate >= 80.0:

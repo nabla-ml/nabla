@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@ Defines the `Model` type that holds a model ready for execution.
 
 from sys.ffi import DLHandle
 
-from nabla.compiler._utils import call_dylib_func, exchange
-from nabla.compiler.driver import (
+from endia.compiler._utils import call_dylib_func, exchange
+from endia.compiler.driver import (
     AnyMemory,
     AnyMojoValue,
     AnyTensor,
@@ -29,8 +29,8 @@ from nabla.compiler.driver import (
     DeviceMemory,
     DeviceTensor,
 )
-from nabla.compiler.driver._utils import _steal_device_memory_impl_ptr
-from nabla.compiler.tensor import Tensor, TensorSpec
+from endia.compiler.driver._utils import _steal_device_memory_impl_ptr
+from endia.compiler.tensor import Tensor, TensorSpec
 from memory import UnsafePointer
 from python import PythonObject
 

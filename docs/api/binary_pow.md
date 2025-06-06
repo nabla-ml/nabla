@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.pow(arg0, arg1) -> 'Array'
+endia.pow(arg0, arg1) -> 'Array'
 ```
 
 ## Description

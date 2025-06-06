@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 import compiler
 from utils.index import IndexList
-from nabla.compiler.tensor import (
+from endia.compiler.tensor import (
     OutputTensor,
     InputTensor,
     foreach,

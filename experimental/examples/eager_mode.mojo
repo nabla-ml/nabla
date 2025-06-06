@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,27 +16,27 @@
 
 import math
 from time import perf_counter
-import nabla
+import endia
 
 
 def test_eager_mode():
     # EAGER MODE
-    def foo1(_args: List[nabla.Array]) -> List[nabla.Array]:
-        x = nabla.cast(nabla.sin(_args[0]), DType.float64)
-        y = nabla.cast(nabla.sin(_args[1]), DType.float64)
+    def foo1(_args: List[endia.Array]) -> List[endia.Array]:
+        x = endia.cast(endia.sin(_args[0]), DType.float64)
+        y = endia.cast(endia.sin(_args[1]), DType.float64)
         z = x * y
         if z.load(0) > 0:
-            w = nabla.cos(z)
-            p = -nabla.sin(z) / y
+            w = endia.cos(z)
+            p = -endia.sin(z) / y
             return [w, p]
         else:
-            w = nabla.cos(nabla.sin(z))
-            p = -nabla.sin(nabla.sin(z))
+            w = endia.cos(endia.sin(z))
+            p = -endia.sin(endia.sin(z))
             return [w, p]
 
-    ctx = nabla.ExecutionContext()
-    arg0 = nabla.ones((1, 3), DType.float32, False, ctx)
-    arg1 = nabla.ones((1, 3), DType.float32, False, ctx)
+    ctx = endia.ExecutionContext()
+    arg0 = endia.ones((1, 3), DType.float32, False, ctx)
+    arg1 = endia.ones((1, 3), DType.float32, False, ctx)
 
     for iteration in range(1001):
         outputs = foo1([arg0, arg1])
@@ -52,26 +52,26 @@ def test_eager_mode():
 def test_backward_eager_mode():
     # EAGER MODE
 
-    def foo1(_args: List[nabla.Array]) -> List[nabla.Array]:
-        x = nabla.cast(nabla.sin(_args[0]), DType.float64)
-        y = nabla.cast(nabla.sin(_args[1]), DType.float64)
+    def foo1(_args: List[endia.Array]) -> List[endia.Array]:
+        x = endia.cast(endia.sin(_args[0]), DType.float64)
+        y = endia.cast(endia.sin(_args[1]), DType.float64)
         z = x * y
         if z.load(0) > 0:
-            w = nabla.cos(z)
-            p = -nabla.sin(z) / y
+            w = endia.cos(z)
+            p = -endia.sin(z) / y
             return [w, p]
         else:
-            w = nabla.cos(nabla.sin(z))
-            p = -nabla.sin(nabla.sin(z))
+            w = endia.cos(endia.sin(z))
+            p = -endia.sin(endia.sin(z))
             return [w, p]
 
-    ctx = nabla.ExecutionContext()
-    arg0 = nabla.ones((1, 3), DType.float32, True, ctx)
-    arg1 = nabla.ones((1, 3), DType.float32, True, ctx)
+    ctx = endia.ExecutionContext()
+    arg0 = endia.ones((1, 3), DType.float32, True, ctx)
+    arg1 = endia.ones((1, 3), DType.float32, True, ctx)
 
     for iteration in range(101):
         outputs = foo1([arg0, arg1])
-        nabla.backward(outputs[0])
+        endia.backward(outputs[0])
         arg0 = arg0 - arg0.grad() * 0.01
         arg1 = arg1 - arg1.grad() * 0.01
         arg0.requires_grad_(True)

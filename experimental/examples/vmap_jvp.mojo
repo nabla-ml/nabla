@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,33 +14,33 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-import nabla
+import endia
 
 
-def foo(args: List[nabla.Array]) -> List[nabla.Array]:
+def foo(args: List[endia.Array]) -> List[endia.Array]:
     x = args[0]
     y = args[1]
-    return [nabla.sin(x) + x**2 + y**2, nabla.cos(y) + y * x]
+    return [endia.sin(x) + x**2 + y**2, endia.cos(y) + y * x]
 
 
 def test_vmap_jvp():
-    var x = nabla.arange((3, 2, 3)) + 2
-    var y = nabla.arange((3, 2, 3)) + 3
-    var v = nabla.arange((3, 2, 3))
-    var w = nabla.arange((3, 2, 3))
+    var x = endia.arange((3, 2, 3)) + 2
+    var y = endia.arange((3, 2, 3)) + 3
+    var v = endia.arange((3, 2, 3))
+    var w = endia.arange((3, 2, 3))
 
     # Step 1: Compute the gradient using VJP.
-    fn jvp_vmapped(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn jvp_vmapped(args: List[endia.Array]) raises -> List[endia.Array]:
         var primals = args[: len(args) // 2]
         var tangents = args[len(args) // 2 :]
         # print("Start VMAP")
-        var foo_vmap = nabla.vmap(foo)
+        var foo_vmap = endia.vmap(foo)
         # print("End VMAP")
-        return nabla.jvp(foo_vmap, primals, tangents)[1]  # This extracts f'(x)
+        return endia.jvp(foo_vmap, primals, tangents)[1]  # This extracts f'(x)
 
     jvp_result = jvp_vmapped([x, y, v, w])
 
     print("First Order JVP:")
-    # print(nabla.xpr(grad_fn)([x,]))
+    # print(endia.xpr(grad_fn)([x,]))
     print(jvp_result[0])
     print(jvp_result[1])

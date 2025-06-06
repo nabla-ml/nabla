@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.div(arg0, arg1) -> 'Array'
+endia.div(arg0, arg1) -> 'Array'
 ```
 
 ## Description

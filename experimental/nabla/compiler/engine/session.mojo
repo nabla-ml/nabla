@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,10 +25,10 @@ from os.atomic import Atomic
 from pathlib import Path
 from sys.ffi import _get_global_or_null
 
-from nabla.compiler._utils import call_dylib_func
-from nabla.compiler.driver import Accelerator, Device, cpu
-from nabla.compiler.graph import Graph
-from nabla.compiler.tensor import Tensor, TensorSpec
+from endia.compiler._utils import call_dylib_func
+from endia.compiler.driver import Accelerator, Device, cpu
+from endia.compiler.graph import Graph
+from endia.compiler.tensor import Tensor, TensorSpec
 from memory import ArcPointer, UnsafePointer
 
 from ._compilation import (

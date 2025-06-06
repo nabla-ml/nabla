@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """Comprehensive test to verify VJP compatibility with JAX behavior.
 
-This test systematically checks that Nabla's vjp function behaves exactly like JAX's vjp
+This test systematically checks that Endia's vjp function behaves exactly like JAX's vjp
 for various input structures and gradient output structures.
 """
 
 import sys
 
-sys.path.append("/Users/tillife/Documents/CodingProjects/nabla")
+sys.path.append("/Users/tillife/Documents/CodingProjects/endia")
 
 import numpy as np
 
-import nabla as nb
+import endia as nb
 
 try:
     import jax
@@ -22,26 +22,26 @@ try:
     print("✓ JAX available for comparison")
 except ImportError:
     JAX_AVAILABLE = False
-    print("✗ JAX not available - will only test Nabla behavior")
+    print("✗ JAX not available - will only test Endia behavior")
 
 
 def test_single_array_arg():
     """Test 1: Single array argument - f(x) -> scalar"""
     print("\n=== Test 1: Single Array Argument ===")
 
-    def func_nabla(x):
+    def func_endia(x):
         return nb.sum(x**2)
 
-    # Nabla test
-    x_nabla = nb.array([2.0, 3.0, 4.0])
-    outputs_nabla, vjp_fn_nabla = nb.vjp(func_nabla, x_nabla)
-    gradients_nabla = vjp_fn_nabla(nb.array([1.0]))
+    # Endia test
+    x_endia = nb.array([2.0, 3.0, 4.0])
+    outputs_endia, vjp_fn_endia = nb.vjp(func_endia, x_endia)
+    gradients_endia = vjp_fn_endia(nb.array([1.0]))
 
-    print("Nabla:")
-    print(f"  Input: {x_nabla}")
-    print(f"  Output: {outputs_nabla}")
-    print(f"  Gradient type: {type(gradients_nabla)}")
-    print(f"  Gradient value: {gradients_nabla}")
+    print("Endia:")
+    print(f"  Input: {x_endia}")
+    print(f"  Output: {outputs_endia}")
+    print(f"  Gradient type: {type(gradients_endia)}")
+    print(f"  Gradient value: {gradients_endia}")
 
     if JAX_AVAILABLE:
 
@@ -64,8 +64,8 @@ def test_single_array_arg():
 
         # Compare values (both now return tuples)
         jax_grad_value = gradients_jax[0]
-        nabla_grad_value = gradients_nabla[0]
-        assert np.allclose(nabla_grad_value.to_numpy(), jax_grad_value), (
+        endia_grad_value = gradients_endia[0]
+        assert np.allclose(endia_grad_value.to_numpy(), jax_grad_value), (
             "Gradient values don't match!"
         )
         print("  ✓ Gradient values and structures match perfectly!")
@@ -75,24 +75,24 @@ def test_multiple_array_args():
     """Test 2: Multiple array arguments - f(x, y) -> scalar"""
     print("\n=== Test 2: Multiple Array Arguments ===")
 
-    def func_nabla(x, y):
+    def func_endia(x, y):
         return nb.sum(x * y)
 
-    # Nabla test
-    x_nabla = nb.array([2.0, 3.0])
-    y_nabla = nb.array([4.0, 5.0])
-    outputs_nabla, vjp_fn_nabla = nb.vjp(func_nabla, x_nabla, y_nabla)
-    gradients_nabla = vjp_fn_nabla(nb.array([1.0]))
+    # Endia test
+    x_endia = nb.array([2.0, 3.0])
+    y_endia = nb.array([4.0, 5.0])
+    outputs_endia, vjp_fn_endia = nb.vjp(func_endia, x_endia, y_endia)
+    gradients_endia = vjp_fn_endia(nb.array([1.0]))
 
-    print("Nabla:")
-    print(f"  Inputs: x={x_nabla}, y={y_nabla}")
-    print(f"  Output: {outputs_nabla}")
-    print(f"  Gradient type: {type(gradients_nabla)}")
-    print(f"  Gradient is tuple: {isinstance(gradients_nabla, tuple)}")
-    if isinstance(gradients_nabla, tuple):
-        print(f"  Gradient length: {len(gradients_nabla)}")
-        print(f"  Gradient w.r.t. x: {gradients_nabla[0]}")
-        print(f"  Gradient w.r.t. y: {gradients_nabla[1]}")
+    print("Endia:")
+    print(f"  Inputs: x={x_endia}, y={y_endia}")
+    print(f"  Output: {outputs_endia}")
+    print(f"  Gradient type: {type(gradients_endia)}")
+    print(f"  Gradient is tuple: {isinstance(gradients_endia, tuple)}")
+    if isinstance(gradients_endia, tuple):
+        print(f"  Gradient length: {len(gradients_endia)}")
+        print(f"  Gradient w.r.t. x: {gradients_endia[0]}")
+        print(f"  Gradient w.r.t. y: {gradients_endia[1]}")
 
     if JAX_AVAILABLE:
 
@@ -114,20 +114,20 @@ def test_multiple_array_args():
         print(f"  Gradient w.r.t. y: {gradients_jax[1]}")
 
         # Compare structures and values
-        assert isinstance(gradients_nabla, tuple), (
-            "Nabla should return tuple for multiple args"
+        assert isinstance(gradients_endia, tuple), (
+            "Endia should return tuple for multiple args"
         )
         assert isinstance(gradients_jax, tuple), (
             "JAX should return tuple for multiple args"
         )
-        assert len(gradients_nabla) == len(gradients_jax), (
+        assert len(gradients_endia) == len(gradients_jax), (
             "Gradient tuple lengths should match"
         )
 
-        assert np.allclose(gradients_nabla[0].to_numpy(), gradients_jax[0]), (
+        assert np.allclose(gradients_endia[0].to_numpy(), gradients_jax[0]), (
             "Gradient w.r.t. x doesn't match!"
         )
-        assert np.allclose(gradients_nabla[1].to_numpy(), gradients_jax[1]), (
+        assert np.allclose(gradients_endia[1].to_numpy(), gradients_jax[1]), (
             "Gradient w.r.t. y doesn't match!"
         )
         print("  ✓ Gradient structures and values match perfectly!")
@@ -137,24 +137,24 @@ def test_dict_input():
     """Test 3: Dictionary input - f(dict) -> scalar"""
     print("\n=== Test 3: Dictionary Input ===")
 
-    def func_nabla(params):
+    def func_endia(params):
         return nb.sum(params["x"] ** 2) + nb.sum(params["y"])
 
-    # Nabla test
-    params_nabla = {"x": nb.array([2.0, 3.0]), "y": nb.array([4.0, 5.0])}
-    outputs_nabla, vjp_fn_nabla = nb.vjp(func_nabla, params_nabla)
-    gradients_nabla = vjp_fn_nabla(nb.array([1.0]))
+    # Endia test
+    params_endia = {"x": nb.array([2.0, 3.0]), "y": nb.array([4.0, 5.0])}
+    outputs_endia, vjp_fn_endia = nb.vjp(func_endia, params_endia)
+    gradients_endia = vjp_fn_endia(nb.array([1.0]))
 
-    print("Nabla:")
-    print(f"  Input: {params_nabla}")
-    print(f"  Output: {outputs_nabla}")
-    print(f"  Gradient type: {type(gradients_nabla)}")
+    print("Endia:")
+    print(f"  Input: {params_endia}")
+    print(f"  Output: {outputs_endia}")
+    print(f"  Gradient type: {type(gradients_endia)}")
     print(
-        f"  Gradient keys: {list(gradients_nabla.keys()) if isinstance(gradients_nabla, dict) else 'N/A'}"
+        f"  Gradient keys: {list(gradients_endia.keys()) if isinstance(gradients_endia, dict) else 'N/A'}"
     )
-    if isinstance(gradients_nabla, dict):
-        print(f"  Gradient w.r.t. x: {gradients_nabla['x']}")
-        print(f"  Gradient w.r.t. y: {gradients_nabla['y']}")
+    if isinstance(gradients_endia, dict):
+        print(f"  Gradient w.r.t. x: {gradients_endia['x']}")
+        print(f"  Gradient w.r.t. y: {gradients_endia['y']}")
 
     if JAX_AVAILABLE:
 
@@ -179,23 +179,23 @@ def test_dict_input():
             print(f"  Gradient w.r.t. y: {grad_dict['y']}")
 
         # Compare structures and values
-        # Both JAX and Nabla now return (dict_of_gradients,)
+        # Both JAX and Endia now return (dict_of_gradients,)
         jax_grad_dict = gradients_jax[0]
-        nabla_grad_dict = gradients_nabla[0]
+        endia_grad_dict = gradients_endia[0]
 
-        assert isinstance(gradients_nabla, tuple), "Nabla should return tuple"
-        assert isinstance(nabla_grad_dict, dict), (
-            "Nabla should return dict inside tuple"
+        assert isinstance(gradients_endia, tuple), "Endia should return tuple"
+        assert isinstance(endia_grad_dict, dict), (
+            "Endia should return dict inside tuple"
         )
         assert isinstance(jax_grad_dict, dict), "JAX should return dict inside tuple"
-        assert set(nabla_grad_dict.keys()) == set(jax_grad_dict.keys()), (
+        assert set(endia_grad_dict.keys()) == set(jax_grad_dict.keys()), (
             "Gradient dict keys should match"
         )
 
-        assert np.allclose(nabla_grad_dict["x"].to_numpy(), jax_grad_dict["x"]), (
+        assert np.allclose(endia_grad_dict["x"].to_numpy(), jax_grad_dict["x"]), (
             "Gradient w.r.t. x doesn't match!"
         )
-        assert np.allclose(nabla_grad_dict["y"].to_numpy(), jax_grad_dict["y"]), (
+        assert np.allclose(endia_grad_dict["y"].to_numpy(), jax_grad_dict["y"]), (
             "Gradient w.r.t. y doesn't match!"
         )
         print("  ✓ Gradient structures and values match perfectly!")
@@ -205,32 +205,32 @@ def test_nested_dict_input():
     """Test 4: Nested dictionary input - f(nested_dict) -> scalar"""
     print("\n=== Test 4: Nested Dictionary Input ===")
 
-    def func_nabla(params):
+    def func_endia(params):
         x_sum = nb.sum(params["layer1"]["weights"] ** 2)
         bias_sum = nb.sum(params["layer1"]["bias"])
         return x_sum + bias_sum
 
-    # Nabla test
-    params_nabla = {
+    # Endia test
+    params_endia = {
         "layer1": {
             "weights": nb.array([[1.0, 2.0], [3.0, 4.0]]),
             "bias": nb.array([0.5, 1.0]),
         }
     }
-    outputs_nabla, vjp_fn_nabla = nb.vjp(func_nabla, params_nabla)
-    gradients_nabla = vjp_fn_nabla(nb.array([1.0]))
+    outputs_endia, vjp_fn_endia = nb.vjp(func_endia, params_endia)
+    gradients_endia = vjp_fn_endia(nb.array([1.0]))
 
-    print("Nabla:")
-    print(f"  Input structure preserved: {isinstance(gradients_nabla, tuple)}")
-    if isinstance(gradients_nabla, tuple) and len(gradients_nabla) > 0:
-        nabla_grad_dict = gradients_nabla[0]
+    print("Endia:")
+    print(f"  Input structure preserved: {isinstance(gradients_endia, tuple)}")
+    if isinstance(gradients_endia, tuple) and len(gradients_endia) > 0:
+        endia_grad_dict = gradients_endia[0]
         print(
-            f"  Gradient top-level keys: {list(nabla_grad_dict.keys()) if isinstance(nabla_grad_dict, dict) else 'N/A'}"
+            f"  Gradient top-level keys: {list(endia_grad_dict.keys()) if isinstance(endia_grad_dict, dict) else 'N/A'}"
         )
-        if isinstance(nabla_grad_dict, dict) and "layer1" in nabla_grad_dict:
-            print(f"  Gradient nested keys: {list(nabla_grad_dict['layer1'].keys())}")
-            print(f"  Gradient w.r.t. weights: {nabla_grad_dict['layer1']['weights']}")
-            print(f"  Gradient w.r.t. bias: {nabla_grad_dict['layer1']['bias']}")
+        if isinstance(endia_grad_dict, dict) and "layer1" in endia_grad_dict:
+            print(f"  Gradient nested keys: {list(endia_grad_dict['layer1'].keys())}")
+            print(f"  Gradient w.r.t. weights: {endia_grad_dict['layer1']['weights']}")
+            print(f"  Gradient w.r.t. bias: {endia_grad_dict['layer1']['bias']}")
 
     if JAX_AVAILABLE:
 
@@ -260,23 +260,23 @@ def test_nested_dict_input():
 
         # Compare nested structures
         jax_grad_dict = gradients_jax[0]
-        nabla_grad_dict = gradients_nabla[0]
+        endia_grad_dict = gradients_endia[0]
 
-        assert isinstance(gradients_nabla, tuple), "Nabla should return tuple"
-        assert isinstance(nabla_grad_dict, dict), (
-            "Nabla should preserve dict structure inside tuple"
+        assert isinstance(gradients_endia, tuple), "Endia should return tuple"
+        assert isinstance(endia_grad_dict, dict), (
+            "Endia should preserve dict structure inside tuple"
         )
-        assert "layer1" in nabla_grad_dict, "Nabla should preserve nested structure"
-        assert set(nabla_grad_dict["layer1"].keys()) == set(
+        assert "layer1" in endia_grad_dict, "Endia should preserve nested structure"
+        assert set(endia_grad_dict["layer1"].keys()) == set(
             jax_grad_dict["layer1"].keys()
         ), "Nested keys should match"
 
         assert np.allclose(
-            nabla_grad_dict["layer1"]["weights"].to_numpy(),
+            endia_grad_dict["layer1"]["weights"].to_numpy(),
             jax_grad_dict["layer1"]["weights"],
         ), "Gradient w.r.t. weights doesn't match!"
         assert np.allclose(
-            nabla_grad_dict["layer1"]["bias"].to_numpy(),
+            endia_grad_dict["layer1"]["bias"].to_numpy(),
             jax_grad_dict["layer1"]["bias"],
         ), "Gradient w.r.t. bias doesn't match!"
         print("  ✓ Nested gradient structures and values match perfectly!")
@@ -286,27 +286,27 @@ def test_list_input():
     """Test 5: List input - f(list) -> scalar"""
     print("\n=== Test 5: List Input ===")
 
-    def func_nabla(data):
+    def func_endia(data):
         x, y = data
         return nb.sum(x * y)
 
-    # Nabla test
-    data_nabla = [nb.array([2.0, 3.0]), nb.array([4.0, 5.0])]
-    outputs_nabla, vjp_fn_nabla = nb.vjp(func_nabla, data_nabla)
-    gradients_nabla = vjp_fn_nabla(nb.array([1.0]))
+    # Endia test
+    data_endia = [nb.array([2.0, 3.0]), nb.array([4.0, 5.0])]
+    outputs_endia, vjp_fn_endia = nb.vjp(func_endia, data_endia)
+    gradients_endia = vjp_fn_endia(nb.array([1.0]))
 
-    print("Nabla:")
-    print(f"  Input: {data_nabla}")
-    print(f"  Output: {outputs_nabla}")
-    print(f"  Gradient type: {type(gradients_nabla)}")
-    print(f"  Gradient is tuple: {isinstance(gradients_nabla, tuple)}")
-    if isinstance(gradients_nabla, tuple) and len(gradients_nabla) > 0:
-        nabla_grad_list = gradients_nabla[0]
-        print(f"  Gradient list type: {type(nabla_grad_list)}")
-        if isinstance(nabla_grad_list, list):
-            print(f"  Gradient length: {len(nabla_grad_list)}")
-            print(f"  Gradient[0]: {nabla_grad_list[0]}")
-            print(f"  Gradient[1]: {nabla_grad_list[1]}")
+    print("Endia:")
+    print(f"  Input: {data_endia}")
+    print(f"  Output: {outputs_endia}")
+    print(f"  Gradient type: {type(gradients_endia)}")
+    print(f"  Gradient is tuple: {isinstance(gradients_endia, tuple)}")
+    if isinstance(gradients_endia, tuple) and len(gradients_endia) > 0:
+        endia_grad_list = gradients_endia[0]
+        print(f"  Gradient list type: {type(endia_grad_list)}")
+        if isinstance(endia_grad_list, list):
+            print(f"  Gradient length: {len(endia_grad_list)}")
+            print(f"  Gradient[0]: {endia_grad_list[0]}")
+            print(f"  Gradient[1]: {endia_grad_list[1]}")
 
     if JAX_AVAILABLE:
 
@@ -332,19 +332,19 @@ def test_list_input():
 
         # Compare list structures
         jax_grad_list = gradients_jax[0]
-        nabla_grad_list = gradients_nabla[0]
+        endia_grad_list = gradients_endia[0]
 
-        assert isinstance(gradients_nabla, tuple), "Nabla should return tuple"
-        assert isinstance(nabla_grad_list, list), (
-            "Nabla should preserve list structure inside tuple"
+        assert isinstance(gradients_endia, tuple), "Endia should return tuple"
+        assert isinstance(endia_grad_list, list), (
+            "Endia should preserve list structure inside tuple"
         )
         assert isinstance(jax_grad_list, list), "JAX should return list inside tuple"
-        assert len(nabla_grad_list) == len(jax_grad_list), "List lengths should match"
+        assert len(endia_grad_list) == len(jax_grad_list), "List lengths should match"
 
-        assert np.allclose(nabla_grad_list[0].to_numpy(), jax_grad_list[0]), (
+        assert np.allclose(endia_grad_list[0].to_numpy(), jax_grad_list[0]), (
             "Gradient[0] doesn't match!"
         )
-        assert np.allclose(nabla_grad_list[1].to_numpy(), jax_grad_list[1]), (
+        assert np.allclose(endia_grad_list[1].to_numpy(), jax_grad_list[1]), (
             "Gradient[1] doesn't match!"
         )
         print("  ✓ List gradient structures and values match perfectly!")
@@ -354,35 +354,35 @@ def test_mixed_nested_structure():
     """Test 6: Mixed nested structure - f(complex_pytree) -> scalar"""
     print("\n=== Test 6: Mixed Nested Structure ===")
 
-    def func_nabla(data):
+    def func_endia(data):
         x = data["x"]
         y_list = data["y"]
         return nb.sum(x * y_list[0]) + nb.sum(x * y_list[1])
 
-    # Nabla test
-    data_nabla = {
+    # Endia test
+    data_endia = {
         "x": nb.array([2.0, 3.0]),
         "y": [nb.array([4.0, 5.0]), nb.array([6.0, 7.0])],
     }
-    outputs_nabla, vjp_fn_nabla = nb.vjp(func_nabla, data_nabla)
-    gradients_nabla = vjp_fn_nabla(nb.array([1.0]))
+    outputs_endia, vjp_fn_endia = nb.vjp(func_endia, data_endia)
+    gradients_endia = vjp_fn_endia(nb.array([1.0]))
 
-    print("Nabla:")
-    print(f"  Input: {data_nabla}")
-    print(f"  Output: {outputs_nabla}")
-    print(f"  Gradient type: {type(gradients_nabla)}")
-    print(f"  Gradient is tuple: {isinstance(gradients_nabla, tuple)}")
-    if isinstance(gradients_nabla, tuple) and len(gradients_nabla) > 0:
-        nabla_grad_dict = gradients_nabla[0]
+    print("Endia:")
+    print(f"  Input: {data_endia}")
+    print(f"  Output: {outputs_endia}")
+    print(f"  Gradient type: {type(gradients_endia)}")
+    print(f"  Gradient is tuple: {isinstance(gradients_endia, tuple)}")
+    if isinstance(gradients_endia, tuple) and len(gradients_endia) > 0:
+        endia_grad_dict = gradients_endia[0]
         print(
-            f"  Gradient dict keys: {list(nabla_grad_dict.keys()) if isinstance(nabla_grad_dict, dict) else 'N/A'}"
+            f"  Gradient dict keys: {list(endia_grad_dict.keys()) if isinstance(endia_grad_dict, dict) else 'N/A'}"
         )
-        if isinstance(nabla_grad_dict, dict):
-            print(f"  Gradient w.r.t. x: {nabla_grad_dict['x']}")
-            print(f"  Gradient w.r.t. y type: {type(nabla_grad_dict['y'])}")
-            if isinstance(nabla_grad_dict["y"], list):
-                print(f"  Gradient w.r.t. y[0]: {nabla_grad_dict['y'][0]}")
-                print(f"  Gradient w.r.t. y[1]: {nabla_grad_dict['y'][1]}")
+        if isinstance(endia_grad_dict, dict):
+            print(f"  Gradient w.r.t. x: {endia_grad_dict['x']}")
+            print(f"  Gradient w.r.t. y type: {type(endia_grad_dict['y'])}")
+            if isinstance(endia_grad_dict["y"], list):
+                print(f"  Gradient w.r.t. y[0]: {endia_grad_dict['y'][0]}")
+                print(f"  Gradient w.r.t. y[1]: {endia_grad_dict['y'][1]}")
 
     if JAX_AVAILABLE:
 
@@ -411,27 +411,27 @@ def test_mixed_nested_structure():
 
         # Compare complex nested structures
         jax_grad_dict = gradients_jax[0]
-        nabla_grad_dict = gradients_nabla[0]
+        endia_grad_dict = gradients_endia[0]
 
-        assert isinstance(gradients_nabla, tuple), "Nabla should return tuple"
-        assert isinstance(nabla_grad_dict, dict), (
-            "Nabla should preserve dict structure inside tuple"
+        assert isinstance(gradients_endia, tuple), "Endia should return tuple"
+        assert isinstance(endia_grad_dict, dict), (
+            "Endia should preserve dict structure inside tuple"
         )
-        assert isinstance(nabla_grad_dict["y"], list), (
-            "Nabla should preserve nested list structure"
+        assert isinstance(endia_grad_dict["y"], list), (
+            "Endia should preserve nested list structure"
         )
-        assert len(nabla_grad_dict["y"]) == len(jax_grad_dict["y"]), (
+        assert len(endia_grad_dict["y"]) == len(jax_grad_dict["y"]), (
             "Nested list lengths should match"
         )
 
         # Check values
-        assert np.allclose(nabla_grad_dict["x"].to_numpy(), jax_grad_dict["x"]), (
+        assert np.allclose(endia_grad_dict["x"].to_numpy(), jax_grad_dict["x"]), (
             "Gradient w.r.t. x doesn't match!"
         )
-        assert np.allclose(nabla_grad_dict["y"][0].to_numpy(), jax_grad_dict["y"][0]), (
+        assert np.allclose(endia_grad_dict["y"][0].to_numpy(), jax_grad_dict["y"][0]), (
             "Gradient w.r.t. y[0] doesn't match!"
         )
-        assert np.allclose(nabla_grad_dict["y"][1].to_numpy(), jax_grad_dict["y"][1]), (
+        assert np.allclose(endia_grad_dict["y"][1].to_numpy(), jax_grad_dict["y"][1]), (
             "Gradient w.r.t. y[1] doesn't match!"
         )
         print("  ✓ Complex nested gradient structures and values match perfectly!")
@@ -445,18 +445,18 @@ def summarize_findings():
 
     print("\n🎉 FULL JAX COMPATIBILITY ACHIEVED!")
     print("\n✅ GRADIENT RETURN STRUCTURE:")
-    print("   • Nabla vjp now ALWAYS returns gradients as a tuple")
-    print("   • Single argument: nabla.vjp(f, x) returns (output, lambda: (grad_x,))")
+    print("   • Endia vjp now ALWAYS returns gradients as a tuple")
+    print("   • Single argument: endia.vjp(f, x) returns (output, lambda: (grad_x,))")
     print(
-        "   • Multiple args: nabla.vjp(f, x, y) returns (output, lambda: (grad_x, grad_y))"
+        "   • Multiple args: endia.vjp(f, x, y) returns (output, lambda: (grad_x, grad_y))"
     )
     print(
-        "   • Pytree args: nabla.vjp(f, pytree) returns (output, lambda: (grad_pytree,))"
+        "   • Pytree args: endia.vjp(f, pytree) returns (output, lambda: (grad_pytree,))"
     )
 
     print("\n✅ IDENTICAL TO JAX BEHAVIOR:")
     print("   • JAX: vjp_fn(cotangent) -> (grad1, grad2, ...)")
-    print("   • Nabla: vjp_fn(cotangent) -> (grad1, grad2, ...)")
+    print("   • Endia: vjp_fn(cotangent) -> (grad1, grad2, ...)")
     print("   • Same unpacking: grad_x, = vjp_fn(cotangent)  # Single arg")
     print("   • Same unpacking: grad_x, grad_y = vjp_fn(cotangent)  # Multiple args")
 
@@ -471,15 +471,15 @@ def summarize_findings():
     print("   ✅ Code is drop-in compatible!")
 
     print("\n🚀 MIGRATION PATH:")
-    print("   • JAX code works directly with Nabla - no changes needed!")
-    print("   • import jax -> import nabla as jax")
-    print("   • jax.vjp -> nabla.vjp (same API)")
+    print("   • JAX code works directly with Endia - no changes needed!")
+    print("   • import jax -> import endia as jax")
+    print("   • jax.vjp -> endia.vjp (same API)")
     print("   • All existing JAX vjp code patterns work unchanged")
 
 
 if __name__ == "__main__":
     print("🧪 COMPREHENSIVE VJP COMPATIBILITY TEST")
-    print("Testing Nabla's vjp function against JAX's behavior...")
+    print("Testing Endia's vjp function against JAX's behavior...")
 
     test_single_array_arg()
     test_multiple_array_args()
@@ -494,6 +494,6 @@ if __name__ == "__main__":
     if JAX_AVAILABLE:
         print("🎯 PERFECT JAX COMPATIBILITY ACHIEVED!")
         print("🔄 All gradient values and structures match JAX exactly!")
-        print("📦 Nabla is now a drop-in replacement for JAX vjp!")
+        print("📦 Endia is now a drop-in replacement for JAX vjp!")
     else:
-        print("ℹ️  JAX not available - tested Nabla behavior only")
+        print("ℹ️  JAX not available - tested Endia behavior only")

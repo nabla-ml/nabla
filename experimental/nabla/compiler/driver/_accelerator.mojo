@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ from gpu.host import DeviceContext
 from gpu.host import DeviceFunction as AcceleratorFunction
 from gpu.host import Dim, FuncAttribute
 from gpu.host._compile import _get_gpu_target
-from nabla.compiler._utils import call_dylib_func
+from endia.compiler._utils import call_dylib_func
 from memory import UnsafePointer
 from runtime.asyncrt import DeviceContextPtr
 

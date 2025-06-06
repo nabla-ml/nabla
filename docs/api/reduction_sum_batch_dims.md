@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.sum_batch_dims(arg: 'Array', axes: 'int | list[int] | tuple[int, ...] | None' = None, keep_dims: 'bool' = False) -> 'Array'
+endia.sum_batch_dims(arg: 'Array', axes: 'int | list[int] | tuple[int, ...] | None' = None, keep_dims: 'bool' = False) -> 'Array'
 ```
 
 ## Description

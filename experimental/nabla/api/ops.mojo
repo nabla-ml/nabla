@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,10 +14,10 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-from nabla.api.array import Array
+from endia.api.array import Array
 import .. ops as ops
-from nabla.core.utils import ShapeType, getshape
-from nabla.core.device_array import DeviceArray
+from endia.core.utils import ShapeType, getshape
+from endia.core.device_array import DeviceArray
 import ..engine.trafos.vjp_trafo as vjp_trafo
 
 

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Demonstrate the key incompatibility between Nabla and JAX vjp."""
+"""Demonstrate the key incompatibility between Endia and JAX vjp."""
 
 import sys
 
-sys.path.append("/Users/tillife/Documents/CodingProjects/nabla")
+sys.path.append("/Users/tillife/Documents/CodingProjects/endia")
 
-import nabla as nb
+import endia as nb
 
 try:
     # We need jax.numpy and the vjp function, but don't directly use the jax module
@@ -20,7 +20,7 @@ print("🚨 DEMONSTRATING VJP INCOMPATIBILITY")
 print("=" * 50)
 
 
-def simple_func_nabla(x):
+def simple_func_endia(x):
     return nb.sum(x**2)
 
 
@@ -29,21 +29,21 @@ def simple_func_jax(x):
 
 
 # Test with single argument
-x_nabla = nb.array([2.0, 3.0])
+x_endia = nb.array([2.0, 3.0])
 x_jax = jnp.array([2.0, 3.0]) if JAX_AVAILABLE else None
 
 print("\n📋 SINGLE ARGUMENT TEST:")
 print("Function: f(x) = sum(x²)")
 
-# Nabla behavior
-outputs_nabla, vjp_fn_nabla = nb.vjp(simple_func_nabla, x_nabla)
-gradients_nabla = vjp_fn_nabla(nb.array([1.0]))
+# Endia behavior
+outputs_endia, vjp_fn_endia = nb.vjp(simple_func_endia, x_endia)
+gradients_endia = vjp_fn_endia(nb.array([1.0]))
 
-print("\nNabla VJP:")
-print(f"  Output: {outputs_nabla}")
-print(f"  Gradient type: {type(gradients_nabla)}")
-print(f"  Gradient value: {gradients_nabla}")
-print(f"  Is tuple: {isinstance(gradients_nabla, tuple)}")
+print("\nEndia VJP:")
+print(f"  Output: {outputs_endia}")
+print(f"  Gradient type: {type(gradients_endia)}")
+print(f"  Gradient value: {gradients_endia}")
+print(f"  Is tuple: {isinstance(gradients_endia, tuple)}")
 
 if JAX_AVAILABLE:
     # JAX behavior
@@ -65,11 +65,11 @@ print("=" * 50)
 if JAX_AVAILABLE:
     import numpy as np
 
-    values_match = np.allclose(gradients_nabla[0].to_numpy(), gradients_jax[0])
+    values_match = np.allclose(gradients_endia[0].to_numpy(), gradients_jax[0])
     print(f"✅ Gradient VALUES match: {values_match}")
     print("✅ Gradient STRUCTURE now matches!")
     print(
-        f"   • Nabla returns: {type(gradients_nabla).__name__} (length {len(gradients_nabla)})"
+        f"   • Endia returns: {type(gradients_endia).__name__} (length {len(gradients_endia)})"
     )
     print(
         f"   • JAX returns:   {type(gradients_jax).__name__} (length {len(gradients_jax)})"
@@ -84,7 +84,7 @@ print("  ✅ Drop-in replacement for JAX code")
 
 # Demonstrate the practical impact
 print("\n💻 CODE COMPATIBILITY IMPACT:")
-print("✅ JAX code now works directly with Nabla:")
+print("✅ JAX code now works directly with Endia:")
 print("  outputs, vjp_fn = jax.vjp(f, x)     # JAX")
-print("  outputs, vjp_fn = nabla.vjp(f, x)   # Nabla")
+print("  outputs, vjp_fn = endia.vjp(f, x)   # Endia")
 print("  grad_x, = vjp_fn(cotangent)         # Same for both!")

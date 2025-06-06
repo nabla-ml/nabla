@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@ Defines the `TensorMap` type that holds input and output tensors for a model.
 from sys.ffi import DLHandle
 
 from buffer import NDBuffer
-from nabla.compiler._utils import CString, call_dylib_func, exchange
-from nabla.compiler.tensor import Tensor, TensorSpec
+from endia.compiler._utils import CString, call_dylib_func, exchange
+from endia.compiler.tensor import Tensor, TensorSpec
 from memory import UnsafePointer
 from memory.unsafe import bitcast
 

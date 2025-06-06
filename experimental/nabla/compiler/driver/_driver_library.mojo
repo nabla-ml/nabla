@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 from sys.ffi import DLHandle
 
-from nabla.compiler._utils import call_dylib_func, get_lib_path_from_cfg
-from nabla.compiler.tensor import TensorSpec
+from endia.compiler._utils import call_dylib_func, get_lib_path_from_cfg
+from endia.compiler.tensor import TensorSpec
 from memory import ArcPointer, UnsafePointer
 
 from ._status import _CStatus

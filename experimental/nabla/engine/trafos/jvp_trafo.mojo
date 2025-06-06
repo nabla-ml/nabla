@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,16 +16,16 @@
 
 from utils import Variant
 
-from nabla.api.array import Array
-from nabla.core.device_array import DeviceArray, zeros_like
-from nabla.engine.utils import (
+from endia.api.array import Array
+from endia.core.device_array import DeviceArray, zeros_like
+from endia.engine.utils import (
     TrafoMeta,
     std_basis,
     get_full_trace_recursively_jvp,
     Callable,
     callable,
 )
-from nabla.api.utils import none
+from endia.api.utils import none
 
 
 fn jvp_call(

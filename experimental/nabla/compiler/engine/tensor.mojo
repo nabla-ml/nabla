@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ You can pass each of the types shown here to
 """
 from collections import List
 
-from nabla.compiler.tensor import Tensor
+from endia.compiler.tensor import Tensor
 from memory import ArcPointer, UnsafePointer
 from memory.unsafe import bitcast
 from python import Python, PythonObject

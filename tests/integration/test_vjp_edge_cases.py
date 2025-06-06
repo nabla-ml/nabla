@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Additional edge case tests for Nabla VJP compatibility.
+Additional edge case tests for Endia VJP compatibility.
 """
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
-import nabla as nb
+import endia as nb
 
 
 def test_matrix_operations():
@@ -27,7 +27,7 @@ def test_matrix_operations():
     cotangent_nb = nb.Array.from_numpy(cotangent_np)
     cotangent_jax = jnp.array(cotangent_np)
 
-    # Nabla VJP
+    # Endia VJP
     def nb_fn(A, B):
         return nb.matmul(A, B)
 
@@ -61,7 +61,7 @@ def test_complex_function():
     cotangent_nb = nb.Array.from_numpy(np.array(cotangent_np))
     cotangent_jax = jnp.array(cotangent_np)
 
-    # Nabla VJP - complex function: sum(sin(x) * exp(x))
+    # Endia VJP - complex function: sum(sin(x) * exp(x))
     def nb_fn(x):
         return nb.sum(nb.mul(nb.sin(x), nb.exp(x)))
 
@@ -101,7 +101,7 @@ def test_list_inputs():
     cotangent_nb = nb.Array.from_numpy(cotangent_np)
     cotangent_jax = jnp.array(cotangent_np)
 
-    # Nabla VJP
+    # Endia VJP
     def nb_fn(inputs):
         return nb.add(nb.add(inputs[0], inputs[1]), inputs[2])
 
@@ -129,7 +129,7 @@ def test_list_inputs():
 
 def main():
     """Run edge case tests."""
-    print("=== Nabla VJP Edge Case Tests ===")
+    print("=== Endia VJP Edge Case Tests ===")
     print("Testing additional VJP scenarios\n")
 
     try:
@@ -138,7 +138,7 @@ def main():
         test_list_inputs()
 
         print("\n🎉 ALL EDGE CASE TESTS PASSED!")
-        print("Nabla's VJP is robust and fully JAX-compatible!")
+        print("Endia's VJP is robust and fully JAX-compatible!")
 
     except Exception as e:
         print(f"\n❌ EDGE CASE TEST FAILED: {e}")

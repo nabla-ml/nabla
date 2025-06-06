@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.arange(shape: 'Shape', dtype: 'DType' = float32, device: 'Device' = Device(type=cpu,id=0)) -> 'Array'
+endia.arange(shape: 'Shape', dtype: 'DType' = float32, device: 'Device' = Device(type=cpu,id=0)) -> 'Array'
 ```
 
 ## Description

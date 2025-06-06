@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -574,7 +574,7 @@ def numpy_transposed_conv2d_im2col(
     dilation_h, dilation_w = dilation
     out_pad_h, out_pad_w = output_padding
 
-    # Calculate output shape based on Nabla's formula (P_fwd_equiv, output_padding)
+    # Calculate output shape based on Endia's formula (P_fwd_equiv, output_padding)
     eff_k_h = (filter_h - 1) * dilation_h + 1
     eff_k_w = (filter_w - 1) * dilation_w + 1
     target_H_out = (
@@ -786,7 +786,7 @@ class Conv2DOp(BinaryOperation):
         input_arr, filter_arr = primals  # input (NHWC), filter (HWIO)
         # filter_arr (HWIO): (KH, KW, Cin/G, Cout)
 
-        from ..ops.creation import array as nabla_array  # Renamed to avoid conflict
+        from ..ops.creation import array as endia_array  # Renamed to avoid conflict
 
         filter_np = filter_arr.to_numpy()
 
@@ -802,7 +802,7 @@ class Conv2DOp(BinaryOperation):
         # Output of conv_transpose will have Cin_orig/G channels. Correct if groups=1.
         # If groups > 1, conv_transpose with groups=self.groups should handle it.
         filter_for_input_grad_np = filter_np[::-1, ::-1, :, :]
-        filter_for_input_grad = nabla_array(
+        filter_for_input_grad = endia_array(
             filter_for_input_grad_np, dtype=filter_arr.dtype, device=filter_arr.device
         )
 
@@ -990,34 +990,34 @@ class Conv2DTransposeOp(BinaryOperation):
         input_val, filter_val = args[0], args[1]  # input (NHWC), filter (HWOI)
 
         # JAX conv_transpose takes padding as P_internal for its direct conv.
-        # To match Nabla's API (P_fwd_equiv), we must either:
-        # 1. Calculate P_internal from Nabla's P_fwd_equiv and output_padding, then pass to JAX.
+        # To match Endia's API (P_fwd_equiv), we must either:
+        # 1. Calculate P_internal from Endia's P_fwd_equiv and output_padding, then pass to JAX.
         # 2. Or, if ops.conv_transpose is a higher-level op that takes P_fwd_equiv, use that.
-        # For now, assume a hypothetical ops.conv_transpose_nabla_semantics exists or can be built.
+        # For now, assume a hypothetical ops.conv_transpose_endia_semantics exists or can be built.
         # If using jax.lax.conv_transpose directly, it needs P_internal or output_shape.
-        # The most robust for maxpr is to use output.shape (which is precomputed by Nabla's formula).
+        # The most robust for maxpr is to use output.shape (which is precomputed by Endia's formula).
 
         # JAX lax.conv_transpose uses filter (IOHW) if 'NCHW','IOHW','NCHW'.
-        # Nabla filter (HWOI) passed to maxpr: (KH,KW,Cout_T,Cin_T/G)
+        # Endia filter (HWOI) passed to maxpr: (KH,KW,Cout_T,Cin_T/G)
         # Need to convert to IOHW for JAX: (Cin_T/G, Cout_T, KH, KW)
         # This is filter_val.transpose((3,2,0,1))
         # However, the test uses JAX with ('NCHW', 'IOHW', 'NCHW'), implying filter is (InChan, OutChan, K, K).
         # For conv_transpose, this means (InChan_of_Filter, OutChan_of_Filter, K, K).
         # InFeat for conv_transpose filter is Cin_T/G. OutFeat for conv_transpose filter is Cout_T.
         # So JAX filter (IOHW) is (Cin_T/G, Cout_T, KH, KW).
-        # Current Nabla filter_val (HWOI) is (KH, KW, Cout_T, Cin_T/G).
+        # Current Endia filter_val (HWOI) is (KH, KW, Cout_T, Cin_T/G).
         # Permute to (3,2,0,1) -> (Cin_T/G, Cout_T, KH, KW). This seems consistent.
 
-        # For dimension_numbers ('NHWC', 'HWOI', 'NHWC') as used by Nabla convention:
+        # For dimension_numbers ('NHWC', 'HWOI', 'NHWC') as used by Endia convention:
         # filter_val is already HWOI. No transpose needed for JAX if it uses these DN.
         # JAX lax.conv_transpose default DN are NCHW-based. If we use it, input and output need transpose.
         # If a max.ops.conv_transpose exists that expects NHWC and HWOI, it's simpler.
         # Let's assume such an op exists or conv_general_dilated(transpose_kernel=True) is used.
 
         if hasattr(
-            ops, "conv_transpose_nabla"
-        ):  # Hypothetical op matching Nabla semantics
-            output.tensor_value = ops.conv_transpose_nabla(
+            ops, "conv_transpose_endia"
+        ):  # Hypothetical op matching Endia semantics
+            output.tensor_value = ops.conv_transpose_endia(
                 input_val,
                 filter_val,
                 strides=self.stride,
@@ -1025,7 +1025,7 @@ class Conv2DTransposeOp(BinaryOperation):
                 output_padding=self.output_padding,
                 rhs_dilation=self.dilation,  # Kernel Dilation
                 feature_group_count=self.groups,
-                dimension_numbers=("NHWC", "HWOI", "NHWC"),  # Nabla convention
+                dimension_numbers=("NHWC", "HWOI", "NHWC"),  # Endia convention
             )
         else:  # Fallback: use JAX lax.conv_transpose, requires careful parameter mapping
             # This path needs input NHWC->NCHW, filter HWOI->IOHW, output NCHW->NHWC
@@ -1101,7 +1101,7 @@ class Conv2DTransposeOp(BinaryOperation):
         input_arr, filter_arr = primals  # input (NHWC), filter (HWOI for convT)
         # filter_arr (HWOI): (KH, KW, Cout_T, Cin_T/G)
 
-        from ..ops.creation import array as nabla_array  # Renamed
+        from ..ops.creation import array as endia_array  # Renamed
 
         filter_np = filter_arr.to_numpy()
         # For dL/dX_T = conv_forward(dL/dY_T, W_T_rot180_channels_NOT_swapped)
@@ -1110,7 +1110,7 @@ class Conv2DTransposeOp(BinaryOperation):
         # So, filter for conv2d should be (KH, KW, Cout_T, Cin_T/G).
         # filter_arr is (KH,KW,Cout_T,Cin_T/G). So use it directly, spatially flipped.
         filter_for_input_grad_np = filter_np[::-1, ::-1, :, :]
-        filter_for_input_grad = nabla_array(
+        filter_for_input_grad = endia_array(
             filter_for_input_grad_np, dtype=filter_arr.dtype, device=filter_arr.device
         )
 
@@ -1263,9 +1263,9 @@ def _conv2d_filter_gradient(
                             sum_val  # += is okay due to np.zeros init
                         )
                         # and outer loops ensure unique indices.
-    from ..core.array import Array as NablaArray
+    from ..core.array import Array as EndiaArray
 
-    return NablaArray.from_numpy(filter_grad_np)
+    return EndiaArray.from_numpy(filter_grad_np)
 
 
 def _conv2d_transpose_filter_gradient(
@@ -1447,9 +1447,9 @@ def _conv2d_transpose_filter_gradient(
                                         )
                         filter_grad_np[kh_idx, kw_idx, co_t_idx, ci_t_g_idx] += sum_val
 
-    from ..core.array import Array as NablaArray
+    from ..core.array import Array as EndiaArray
 
-    return NablaArray.from_numpy(filter_grad_np)
+    return EndiaArray.from_numpy(filter_grad_np)
 
 
 _matmul_op = MatMulOp()

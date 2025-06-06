@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-from nabla.core.motree import MoTree, motree
-from nabla.api.array import (
+from endia.core.motree import MoTree, motree
+from endia.api.array import (
     Array,
     ones,
     ones_like,
@@ -27,7 +27,7 @@ from nabla.api.array import (
     rand,
     he_normal,
 )
-from nabla.api.ops import (
+from endia.api.ops import (
     add,
     sub,
     mul,
@@ -57,5 +57,5 @@ from nabla.api.ops import (
     unsqueeze,
     backward,
 )
-from nabla.api.functional import vjp, jvp, jacfwd, jacrev, vmap, jit, grad
-from nabla.api.utils import none, ExecutionContext, xpr, realize, to_numpy
+from endia.api.functional import vjp, jvp, jacfwd, jacrev, vmap, jit, grad
+from endia.api.utils import none, ExecutionContext, xpr, realize, to_numpy

@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.log(arg: nabla.core.array.Array) -> nabla.core.array.Array
+endia.log(arg: endia.core.array.Array) -> endia.core.array.Array
 ```
 
 ## Description
@@ -13,7 +13,7 @@ Element-wise natural logarithm.
 ## Examples
 
 ```python
-import nabla as nb
+import endia as nb
 
 # Natural logarithm
 x = nb.array([1, np.e, np.e**2])

@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 from collections import Dict
 from collections.dict import _DictEntryIter, _DictKeyIter
 
-from nabla.compiler.tensor import Tensor, TensorSpec
+from endia.compiler.tensor import Tensor, TensorSpec
 from memory import UnsafePointer, memcpy
 
 
@@ -79,8 +79,8 @@ struct TensorDict(Sized, Writable):
     For example:
 
     ```python
-    from nabla.compiler.graph.checkpoint import load, save, TensorDict
-    from nabla.compiler.tensor import Tensor, TensorShape
+    from endia.compiler.graph.checkpoint import load, save, TensorDict
+    from endia.compiler.tensor import Tensor, TensorShape
 
     def write_to_disk():
         tensors = TensorDict()

@@ -1,13 +1,13 @@
 # Automatic Differentiation
 
-Nabla provides powerful automatic differentiation capabilities through several transformation functions. This tutorial covers the core AD functions: `grad`, `vjp`, and `jvp`.
+Endia provides powerful automatic differentiation capabilities through several transformation functions. This tutorial covers the core AD functions: `grad`, `vjp`, and `jvp`.
 
 ## The `grad` Function
 
 The `grad` function computes gradients using reverse-mode automatic differentiation:
 
 ```python
-import nabla as nb
+import endia as nb
 
 def simple_function(x):
     return nb.sum(x ** 2)

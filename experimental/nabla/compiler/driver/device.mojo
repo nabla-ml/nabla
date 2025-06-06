@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 # For example, you can create a CPU device like this:
 
 # ```python
-# from nabla.compiler.driver import cpu
+# from endia.compiler.driver import cpu
 
 # def main():
 #     device = cpu()
@@ -32,8 +32,8 @@ from collections import Optional
 from collections.string import StaticString
 from pathlib import Path
 
-from nabla.compiler._utils import call_dylib_func, get_lib_path_from_cfg
-from nabla.compiler.tensor import TensorSpec
+from endia.compiler._utils import call_dylib_func, get_lib_path_from_cfg
+from endia.compiler.tensor import TensorSpec
 from memory import UnsafePointer
 
 from ._driver_library import DriverLibrary

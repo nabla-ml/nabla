@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 from collections import Optional
 
 import _mlir
-from nabla.compiler.tensor import TensorSpec
+from endia.compiler.tensor import TensorSpec
 from collections.string import StaticString
 
 from utils.variant import Variant
@@ -135,7 +135,7 @@ struct Dim(Copyable, Movable, Writable, Stringable):
     on conversion constructors, for instance you can specify a tensor type as
 
     ```python
-    from nabla.compiler.graph import Dim, TensorType
+    from endia.compiler.graph import Dim, TensorType
     var tensor_type = TensorType(DType.int64, "batch", 10, Dim.dynamic())
     ```
     will create a tensor type with 3 dimensions: a symbolic "batch" dimension,

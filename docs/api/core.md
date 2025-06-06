@@ -1,6 +1,6 @@
 # Core Components
 
-Core components of Nabla including the Array class and function transformations.
+Core components of Endia including the Array class and function transformations.
 
 ```{toctree}
 :maxdepth: 1
@@ -19,15 +19,15 @@ core_xpr
 ### {doc}`Array <core_Array>`
 
 ```python
-nabla.Array(shape: 'Shape', dtype: 'DType' = float32, device: 'Device' = Device(type=cpu,id=0), materialize: 'bool' = False, name: 'str' = '', batch_dims: 'Shape' = ()) -> 'None'
+endia.Array(shape: 'Shape', dtype: 'DType' = float32, device: 'Device' = Device(type=cpu,id=0), materialize: 'bool' = False, name: 'str' = '', batch_dims: 'Shape' = ()) -> 'None'
 ```
 
-The fundamental array type in Nabla.
+The fundamental array type in Endia.
 
 ### {doc}`jit <core_jit>`
 
 ```python
-nabla.jit(func: 'Callable[..., Any]' = None) -> 'Callable[..., Any]'
+endia.jit(func: 'Callable[..., Any]' = None) -> 'Callable[..., Any]'
 ```
 
 Just-in-time compilation for performance optimization.
@@ -35,7 +35,7 @@ Just-in-time compilation for performance optimization.
 ### {doc}`jvp <core_jvp>`
 
 ```python
-nabla.jvp(func: 'Callable[..., Any]', primals, tangents) -> 'tuple[Any, Any]'
+endia.jvp(func: 'Callable[..., Any]', primals, tangents) -> 'tuple[Any, Any]'
 ```
 
 Jacobian-vector product for forward-mode automatic differentiation.
@@ -43,7 +43,7 @@ Jacobian-vector product for forward-mode automatic differentiation.
 ### {doc}`vjp <core_vjp>`
 
 ```python
-nabla.vjp(func: 'Callable[..., Any]', *primals) -> 'tuple[Any, Callable]'
+endia.vjp(func: 'Callable[..., Any]', *primals) -> 'tuple[Any, Callable]'
 ```
 
 Vector-Jacobian product for reverse-mode automatic differentiation.
@@ -51,7 +51,7 @@ Vector-Jacobian product for reverse-mode automatic differentiation.
 ### {doc}`vmap <core_vmap>`
 
 ```python
-nabla.vmap(func=None, in_axes=0, out_axes=0) -> 'Callable[..., Any]'
+endia.vmap(func=None, in_axes=0, out_axes=0) -> 'Callable[..., Any]'
 ```
 
 Vectorization transformation for batching operations.
@@ -59,7 +59,7 @@ Vectorization transformation for batching operations.
 ### {doc}`xpr <core_xpr>`
 
 ```python
-nabla.xpr(fn: 'Callable[..., Any]', *primals) -> 'str'
+endia.xpr(fn: 'Callable[..., Any]', *primals) -> 'str'
 ```
 
 Create expression graphs for deferred execution.

@@ -1,11 +1,11 @@
-[![Development Status](https://img.shields.io/badge/status-pre--alpha-red)](https://github.com/nabla-ml/nabla)
-[![PyPI version](https://badge.fury.io/py/nabla-ml.svg)](https://badge.fury.io/py/nabla-ml)
+[![Development Status](https://img.shields.io/badge/status-pre--alpha-red)](https://github.com/endia-ml/endia)
+[![PyPI version](https://badge.fury.io/py/endia-ml.svg)](https://badge.fury.io/py/endia-ml)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
-# NABLA
+# ENDIA
 
-Nabla is a Python library that provides three key features:
+Endia is a Python library that provides three key features:
 
 - Multidimensional Array computation (like NumPy) with strong GPU acceleration
 - Composable Function Transformations: `vmap`, `grad`, `jit`, and more
@@ -16,17 +16,17 @@ Nabla is a Python library that provides three key features:
 **📦 Now available on PyPI!**
 
 ```bash
-pip install nabla-ml
+pip install endia-ml
 ```
 
-**Note:** Nabla also includes an [experimental pure Mojo API](https://github.com/nabla-ml/nabla/tree/main/experimental) for native Mojo development.
+**Note:** Endia also includes an [experimental pure Mojo API](https://github.com/endia-ml/endia/tree/main/experimental) for native Mojo development.
 
 ## Quick Start
 
 ```python
-import nabla as nb
+import endia as nb
 
-# Example function using Nabla's array operations
+# Example function using Endia's array operations
 def foo(input):
     return nb.sum(input ** 2, axis=0)
 
@@ -48,23 +48,23 @@ For contributors and advanced users:
 
 ```bash
 # Clone and install in development mode
-git clone https://github.com/nabla-ml/nb.git
-cd nabla
+git clone https://github.com/endia-ml/nb.git
+cd endia
 pip install -e ".[dev]"
 
 # Run tests
 pytest
 
 # Format and lint code
-ruff format nabla/
-ruff check nabla/ --fix
+ruff format endia/
+ruff check endia/ --fix
 ```
 
 ## Repository Structure
 
 ```text
-nabla/
-├── nabla/                     # Core Python library
+endia/
+├── endia/                     # Core Python library
 │   ├── core/                  # Function transformations and array operations
 │   ├── ops/                   # Mathematical operations (binary, unary, linalg)
 │   ├── kernels/               # Internal CPU/GPU Mojo kernels (not the built-in MAX kernels)
@@ -81,8 +81,8 @@ Contributions welcome! Discuss significant changes in Issues first. Submit PRs f
 
 ## License
 
-Nabla is licensed under the [Apache-2.0 license](https://github.com/nabla-ml/nabla/blob/main/LICENSE).
+Endia is licensed under the [Apache-2.0 license](https://github.com/endia-ml/endia/blob/main/LICENSE).
 
 ---
 
-*Thank you for checking out Nabla!*
+*Thank you for checking out Endia!*

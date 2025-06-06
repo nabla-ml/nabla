@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,14 +15,14 @@
 # ===----------------------------------------------------------------------=== #
 
 """
-Nabla: Dynamic Neural Networks and Function Transformations in Python 🐍 + Mojo 🔥
+Endia: Dynamic Neural Networks and Function Transformations in Python 🐍 + Mojo 🔥
 """
 
 # Imports used within this file
 import sys
 from typing import Any
 
-# Re-exports: imported here to make them available when importing from nabla
+# Re-exports: imported here to make them available when importing from endia
 from max.dtype import DType
 
 from .core.array import Array
@@ -53,12 +53,12 @@ def _build_ops_registry():
 
     # Define the ops modules to scan
     ops_modules = [
-        "nabla.ops.binary",
-        "nabla.ops.unary",
-        "nabla.ops.creation",
-        "nabla.ops.view",
-        "nabla.ops.linalg",
-        "nabla.ops.reduce",
+        "endia.ops.binary",
+        "endia.ops.unary",
+        "endia.ops.creation",
+        "endia.ops.view",
+        "endia.ops.linalg",
+        "endia.ops.reduce",
     ]
 
     for module_name in ops_modules:

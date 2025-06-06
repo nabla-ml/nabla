@@ -1,5 +1,5 @@
 /* =================================================================
-   NABLA DOCUMENTATION - MINIMAL THEME
+   ENDIA DOCUMENTATION - MINIMAL THEME
    Simple black and white background override only
    ================================================================= */
 
@@ -19,7 +19,7 @@ body {
   background-color: var(--color-bg-primary) !important;
 }
 
-/* NABLA Title Styling - left-aligned, bold, white */
+/* ENDIA Title Styling - left-aligned, bold, white */
 .logo__title {
   text-align: left !important;
   font-weight: 900 !important; /* Extra bold */

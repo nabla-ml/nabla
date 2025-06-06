@@ -1,4 +1,4 @@
-# Makefile for Nabla documentation
+# Makefile for Endia documentation
 
 # You can set these variables from the command line.
 SPHINXOPTS    = -W --keep-going
@@ -21,7 +21,7 @@ clean:
 install-deps:
 	pip install -r requirements.txt
 
-# Generate API documentation stubs (requires nabla to be installed)
+# Generate API documentation stubs (requires endia to be installed)
 generate-api:
 	python ../scripts/generate_api_docs.py
 
@@ -33,7 +33,7 @@ html:
 
 # Build HTML with live reload for development
 livehtml:
-	sphinx-autobuild -b html $(SPHINXOPTS) "$(SOURCEDIR)" "$(BUILDDIR)/html" --watch ../nabla
+	sphinx-autobuild -b html $(SPHINXOPTS) "$(SOURCEDIR)" "$(BUILDDIR)/html" --watch ../endia
 
 # Build for CI/CD (minimal, no autosummary generation)
 html-ci:

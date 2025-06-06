@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.sub(arg0, arg1) -> 'Array'
+endia.sub(arg0, arg1) -> 'Array'
 ```
 
 ## Description

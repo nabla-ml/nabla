@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,13 +19,13 @@ from utils import Variant
 from collections import Dict
 from memory import ArcPointer
 
-from nabla.api.array import Array
-from nabla.core.device_array import DeviceArray
-from nabla.engine.trafos.vjp_trafo import compute_cotangent
-from nabla.api.utils import ExecutionContext
-from nabla.engine.executor import Executor
-from nabla.api.array import zeros
-from nabla.api.utils import none
+from endia.api.array import Array
+from endia.core.device_array import DeviceArray
+from endia.engine.trafos.vjp_trafo import compute_cotangent
+from endia.api.utils import ExecutionContext
+from endia.engine.executor import Executor
+from endia.api.array import zeros
+from endia.api.utils import none
 
 
 alias axes_type = Variant[

@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.jvp(func: 'Callable[..., Any]', primals, tangents) -> 'tuple[Any, Any]'
+endia.jvp(func: 'Callable[..., Any]', primals, tangents) -> 'tuple[Any, Any]'
 ```
 
 ## Description

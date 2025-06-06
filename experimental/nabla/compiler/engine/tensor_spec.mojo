@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,8 +23,8 @@ from collections.optional import Optional
 from os import abort
 from sys.ffi import DLHandle
 
-from nabla.compiler._utils import call_dylib_func
-from nabla.compiler.tensor import TensorSpec
+from endia.compiler._utils import call_dylib_func
+from endia.compiler.tensor import TensorSpec
 
 from ._tensor_spec_impl import CTensorSpec
 from .session import InferenceSession

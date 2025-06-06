@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@ from pathlib import Path
 from sys import external_call
 from sys.ffi import DLHandle, c_char
 
-from nabla.compiler._utils import OwningVector, call_dylib_func, exchange
-from nabla.compiler.tensor import TensorSpec
+from endia.compiler._utils import OwningVector, call_dylib_func, exchange
+from endia.compiler.tensor import TensorSpec
 from memory import OwnedPointer, UnsafePointer
 
 from ._model_specs import InputTensorNames, OutputTensorNames

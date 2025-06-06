@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.body.appendChild(toggleBtn);
         
         // Check if user preference exists in localStorage
-        const tocHidden = localStorage.getItem('nabla-toc-hidden') === 'true';
+        const tocHidden = localStorage.getItem('endia-toc-hidden') === 'true';
         
         // Apply initial state
         if (tocHidden) {
@@ -34,13 +34,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 tocSidebar.classList.remove('toc-hidden');
                 mainContent.classList.remove('toc-hidden');
                 toggleBtn.innerHTML = 'TOC';
-                localStorage.setItem('nabla-toc-hidden', 'false');
+                localStorage.setItem('endia-toc-hidden', 'false');
             } else {
                 // Hide TOC
                 tocSidebar.classList.add('toc-hidden');
                 mainContent.classList.add('toc-hidden');
                 toggleBtn.innerHTML = 'Show TOC';
-                localStorage.setItem('nabla-toc-hidden', 'true');
+                localStorage.setItem('endia-toc-hidden', 'true');
             }
         });
         

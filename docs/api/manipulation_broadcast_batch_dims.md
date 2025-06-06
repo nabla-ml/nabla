@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.broadcast_batch_dims(arg: nabla.core.array.Array, batch_dims: tuple[int, ...]) -> nabla.core.array.Array
+endia.broadcast_batch_dims(arg: endia.core.array.Array, batch_dims: tuple[int, ...]) -> endia.core.array.Array
 ```
 
 ## Description

@@ -1,11 +1,11 @@
 # Documentation
 
-```{image} _static/nabla-logo.svg
+```{image} _static/endia-logo.svg
 :align: center
 :width: 150px
 ```
 
-Welcome to **Nabla**, a Python library for differentiable programming that brings JAX-like function transformations and GPU acceleration to Python with deep integration with Mojo kernels.
+Welcome to **Endia**, a Python library for differentiable programming that brings JAX-like function transformations and GPU acceleration to Python with deep integration with Mojo kernels.
 
 ```{toctree}
 :maxdepth: 2
@@ -23,9 +23,9 @@ examples/index
 api/index
 ```
 
-## What is Nabla?
+## What is Endia?
 
-Nabla is a Python library that provides three key features:
+Endia is a Python library that provides three key features:
 
 - **Multidimensional Array computation** (like NumPy) with strong GPU acceleration
 - **Composable Function Transformations**: `vmap`, `grad`, `jit`, and more  
@@ -34,9 +34,9 @@ Nabla is a Python library that provides three key features:
 ## Quick Start
 
 ```python
-import nabla as nb
+import endia as nb
 
-# Example function using Nabla's array operations
+# Example function using Endia's array operations
 def foo(input):
     return nb.sum(input ** 2, axis=0)
 
@@ -71,7 +71,7 @@ gradients = foo_grads([nb.randn((10, 5))])
 ## Installation
 
 ```bash
-pip install nabla-ml
+pip install endia-ml
 ```
 
 ## Indices and tables

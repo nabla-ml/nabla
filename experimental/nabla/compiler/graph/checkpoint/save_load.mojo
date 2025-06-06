@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,8 +19,8 @@ from os import PathLike
 from pathlib import Path
 from sys import sizeof
 
-from nabla.compiler.engine import TensorMap
-from nabla.compiler.tensor import Tensor, TensorShape, TensorSpec
+from endia.compiler.engine import TensorMap
+from endia.compiler.tensor import Tensor, TensorShape, TensorSpec
 from memory import UnsafePointer
 
 from .metadata import _read_version, _serialization_header, current_version
@@ -44,8 +44,8 @@ def save[PathLike: PathLike](tensor_dict: TensorDict, path: PathLike):
     For example:
 
     ```python
-    from nabla.compiler.graph.checkpoint import save, TensorDict
-    from nabla.compiler.tensor import Tensor, TensorShape
+    from endia.compiler.graph.checkpoint import save, TensorDict
+    from endia.compiler.tensor import Tensor, TensorShape
 
     def write_to_disk():
         tensors = TensorDict()
@@ -172,8 +172,8 @@ def load[PathLike: PathLike](path: PathLike) -> TensorDict:
     For example:
 
     ```python
-    from nabla.compiler.graph.checkpoint import load, TensorDict
-    from nabla.compiler.tensor import Tensor, TensorShape
+    from endia.compiler.graph.checkpoint import load, TensorDict
+    from endia.compiler.tensor import Tensor, TensorShape
 
     def read_from_disk():
         tensors = load("/path/to/checkpoint.maxckpt")

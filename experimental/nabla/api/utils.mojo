@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,10 +16,10 @@
 
 from memory import ArcPointer, memcpy
 from collections import Dict
-from nabla.engine.utils import TrafoMeta, GraphRepr, Callable
-from nabla.compiler.engine import Model
-from nabla.core.device_array import DeviceArray
-from nabla.engine.executor import Executor
+from endia.engine.utils import TrafoMeta, GraphRepr, Callable
+from endia.compiler.engine import Model
+from endia.core.device_array import DeviceArray
+from endia.engine.executor import Executor
 from python import Python, PythonObject
 
 
@@ -72,7 +72,7 @@ def realize(mut args: Array, ctx: Optional[ExecutionContext] = None) -> None:
     realize(outs, ctx)
 
 
-fn to_numpy(input: nabla.Array) raises -> PythonObject:
+fn to_numpy(input: endia.Array) raises -> PythonObject:
     var np = Python.import_module("numpy")
     var num_elements = 1
     for dim in input.shape():

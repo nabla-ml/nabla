@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 
-import nabla as nb
+import endia as nb
 
 if __name__ == "__main__":
 
@@ -22,7 +22,7 @@ if __name__ == "__main__":
 
     res = foo(a, b)
 
-    print("Nabla result:")
+    print("Endia result:")
     print(res)
     print("numpy_shape:", res.to_numpy().shape)
 
@@ -39,7 +39,7 @@ if __name__ == "__main__":
 
     # now the vmapped stuff
     res_vmap = foo_vmapped(a, b)
-    print("\nNabla vmap result:")
+    print("\nEndia vmap result:")
     print(res_vmap)
     print("numpy_shape:", res_vmap.to_numpy().shape)
 
@@ -64,22 +64,22 @@ if __name__ == "__main__":
         x_jax = x.to_numpy()
 
         # Test forward pass
-        result_nabla = slice_func(x)
+        result_endia = slice_func(x)
         result_jax = slice_func_jax(x_jax)
 
         print(f"Input shape: {x.shape}")
-        print(f"Nabla slice result shape: {result_nabla.shape}")
+        print(f"Endia slice result shape: {result_endia.shape}")
         print(f"JAX slice result shape: {result_jax.shape}")
 
-        assert result_nabla.shape == result_jax.shape, (
+        assert result_endia.shape == result_jax.shape, (
             f"{test_name}: Forward shapes don't match!"
         )
-        assert np.allclose(result_nabla.to_numpy(), result_jax), (
+        assert np.allclose(result_endia.to_numpy(), result_jax), (
             f"{test_name}: Forward results don't match!"
         )
 
         # Test VJP - create a cotangent with the same shape as the output
-        cotangent = nb.ones(result_nabla.shape)
+        cotangent = nb.ones(result_endia.shape)
         cotangent_jax = jnp.ones(result_jax.shape)
 
         # Use vjp to get the backward function and apply cotangent
@@ -89,7 +89,7 @@ if __name__ == "__main__":
         primals_out_jax, vjp_fun_jax = jax.vjp(slice_func_jax, x_jax)
         vjp_result_jax = vjp_fun_jax(cotangent_jax)
 
-        print(f"Nabla VJP result shape: {vjp_result[0].shape}")
+        print(f"Endia VJP result shape: {vjp_result[0].shape}")
         print(f"JAX VJP result shape: {vjp_result_jax[0].shape}")
 
         assert vjp_result[0].shape == vjp_result_jax[0].shape, (
@@ -109,7 +109,7 @@ if __name__ == "__main__":
             slice_func_jax, (x_jax,), (tangent_jax,)
         )
 
-        print(f"Nabla JVP result shape: {tangents_out.shape}")
+        print(f"Endia JVP result shape: {tangents_out.shape}")
         print(f"JAX JVP result shape: {tangents_out_jax.shape}")
 
         assert tangents_out.shape == tangents_out_jax.shape, (
@@ -120,7 +120,7 @@ if __name__ == "__main__":
         )
 
         # Test VMAP - create batched version of the function
-        vmapped_slice_nabla = nb.vmap(slice_func, in_axes=0)
+        vmapped_slice_endia = nb.vmap(slice_func, in_axes=0)
         vmapped_slice_jax = jax.vmap(slice_func_jax, in_axes=0)
 
         # Create batched input (add batch dimension)
@@ -128,31 +128,31 @@ if __name__ == "__main__":
         batched_x_jax = batched_x.to_numpy()
 
         # Test vmapped forward pass
-        vmapped_result_nabla = vmapped_slice_nabla(batched_x)
+        vmapped_result_endia = vmapped_slice_endia(batched_x)
         vmapped_result_jax = vmapped_slice_jax(batched_x_jax)
 
         print(f"Batched input shape: {batched_x.shape}")
-        print(f"Nabla vmapped result shape: {vmapped_result_nabla.shape}")
+        print(f"Endia vmapped result shape: {vmapped_result_endia.shape}")
         print(f"JAX vmapped result shape: {vmapped_result_jax.shape}")
 
-        assert vmapped_result_nabla.shape == vmapped_result_jax.shape, (
+        assert vmapped_result_endia.shape == vmapped_result_jax.shape, (
             f"{test_name}: Vmapped forward shapes don't match!"
         )
-        assert np.allclose(vmapped_result_nabla.to_numpy(), vmapped_result_jax), (
+        assert np.allclose(vmapped_result_endia.to_numpy(), vmapped_result_jax), (
             f"{test_name}: Vmapped forward results don't match!"
         )
 
         # Test vmapped VJP
-        batched_cotangent = nb.ones(vmapped_result_nabla.shape)
+        batched_cotangent = nb.ones(vmapped_result_endia.shape)
         batched_cotangent_jax = jnp.ones(vmapped_result_jax.shape)
 
-        primals_vmap, vjp_fun_vmap = nb.vjp(vmapped_slice_nabla, batched_x)
+        primals_vmap, vjp_fun_vmap = nb.vjp(vmapped_slice_endia, batched_x)
         vjp_result_vmap = vjp_fun_vmap(batched_cotangent)
 
         primals_vmap_jax, vjp_fun_vmap_jax = jax.vjp(vmapped_slice_jax, batched_x_jax)
         vjp_result_vmap_jax = vjp_fun_vmap_jax(batched_cotangent_jax)
 
-        print(f"Nabla vmapped VJP result shape: {vjp_result_vmap[0].shape}")
+        print(f"Endia vmapped VJP result shape: {vjp_result_vmap[0].shape}")
         print(f"JAX vmapped VJP result shape: {vjp_result_vmap_jax[0].shape}")
 
         assert vjp_result_vmap[0].shape == vjp_result_vmap_jax[0].shape, (
@@ -167,13 +167,13 @@ if __name__ == "__main__":
         batched_tangent_jax = jnp.ones(batched_x_jax.shape)
 
         primals_jvp_vmap, tangents_jvp_vmap = nb.jvp(
-            vmapped_slice_nabla, (batched_x,), (batched_tangent,)
+            vmapped_slice_endia, (batched_x,), (batched_tangent,)
         )
         primals_jvp_vmap_jax, tangents_jvp_vmap_jax = jax.jvp(
             vmapped_slice_jax, (batched_x_jax,), (batched_tangent_jax,)
         )
 
-        print(f"Nabla vmapped JVP result shape: {tangents_jvp_vmap.shape}")
+        print(f"Endia vmapped JVP result shape: {tangents_jvp_vmap.shape}")
         print(f"JAX vmapped JVP result shape: {tangents_jvp_vmap_jax.shape}")
 
         assert tangents_jvp_vmap.shape == tangents_jvp_vmap_jax.shape, (
@@ -350,22 +350,22 @@ if __name__ == "__main__":
         x_jax = x.to_numpy()
 
         # Test forward pass
-        result_nabla = slice_func(x)
+        result_endia = slice_func(x)
         result_jax = slice_func_jax(x_jax)
 
         print(f"1D Input shape: {x.shape}")
-        print(f"Nabla 1D result shape: {result_nabla.shape}")
+        print(f"Endia 1D result shape: {result_endia.shape}")
         print(f"JAX 1D result shape: {result_jax.shape}")
 
-        assert result_nabla.shape == result_jax.shape, (
+        assert result_endia.shape == result_jax.shape, (
             f"{test_name}: 1D Forward shapes don't match!"
         )
-        assert np.allclose(result_nabla.to_numpy(), result_jax), (
+        assert np.allclose(result_endia.to_numpy(), result_jax), (
             f"{test_name}: 1D Forward results don't match!"
         )
 
         # Test VJP
-        cotangent = nb.ones(result_nabla.shape)
+        cotangent = nb.ones(result_endia.shape)
         cotangent_jax = jnp.ones(result_jax.shape)
 
         primals_out, vjp_fun = nb.vjp(slice_func, x)
@@ -429,22 +429,22 @@ if __name__ == "__main__":
         x_jax = x.to_numpy()
 
         # Test forward pass
-        result_nabla = slice_func(x)
+        result_endia = slice_func(x)
         result_jax = slice_func_jax(x_jax)
 
         print(f"Small input shape: {x.shape}")
-        print(f"Nabla small result shape: {result_nabla.shape}")
+        print(f"Endia small result shape: {result_endia.shape}")
         print(f"JAX small result shape: {result_jax.shape}")
 
-        assert result_nabla.shape == result_jax.shape, (
+        assert result_endia.shape == result_jax.shape, (
             f"{test_name}: Small forward shapes don't match!"
         )
-        assert np.allclose(result_nabla.to_numpy(), result_jax), (
+        assert np.allclose(result_endia.to_numpy(), result_jax), (
             f"{test_name}: Small forward results don't match!"
         )
 
         # Test VJP
-        cotangent = nb.ones(result_nabla.shape)
+        cotangent = nb.ones(result_endia.shape)
         cotangent_jax = jnp.ones(result_jax.shape)
 
         primals_out, vjp_fun = nb.vjp(slice_func, x)
@@ -527,7 +527,7 @@ if __name__ == "__main__":
 
     # jacobian = nb.jacrev(foo, argnums=0)
     # print(nb.xpr(jacobian, a))
-    # print("\nNabla result:")
+    # print("\nEndia result:")
     # j = jacobian(a)
     # print(j)
 

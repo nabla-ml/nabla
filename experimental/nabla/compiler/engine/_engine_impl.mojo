@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ from pathlib import Path
 from sys import external_call
 from sys.ffi import _OwnedDLHandle, DLHandle, _find_dylib
 
-from nabla.compiler._utils import (
+from endia.compiler._utils import (
     CString,
     call_dylib_func,
     exchange,

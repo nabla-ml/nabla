@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.jit(func: 'Callable[..., Any]' = None) -> 'Callable[..., Any]'
+endia.jit(func: 'Callable[..., Any]' = None) -> 'Callable[..., Any]'
 ```
 
 ## Description

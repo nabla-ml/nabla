@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,18 +14,18 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-import nabla
+import endia
 
 
 fn test_sum0() raises:
-    fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn test_func(args: List[endia.Array]) raises -> List[endia.Array]:
         var x = args[0]
-        x = nabla.sum(x, List(0))
+        x = endia.sum(x, List(0))
         return [
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = endia.arange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -41,15 +41,15 @@ fn test_sum0() raises:
 
 
 fn test_sum1() raises:
-    fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn test_func(args: List[endia.Array]) raises -> List[endia.Array]:
         var x = args[0]
-        x = nabla.incr_batch_dim_ctr(x)
-        x = nabla.sum(x, List(0))
+        x = endia.incr_batch_dim_ctr(x)
+        x = endia.sum(x, List(0))
         return [
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = endia.arange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -65,16 +65,16 @@ fn test_sum1() raises:
 
 
 fn test_sum2() raises:
-    fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn test_func(args: List[endia.Array]) raises -> List[endia.Array]:
         var x = args[0]
-        x = nabla.incr_batch_dim_ctr(x)
-        x = nabla.incr_batch_dim_ctr(x)
-        x = nabla.sum(x, List(0))
+        x = endia.incr_batch_dim_ctr(x)
+        x = endia.incr_batch_dim_ctr(x)
+        x = endia.sum(x, List(0))
         return [
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = endia.arange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -90,17 +90,17 @@ fn test_sum2() raises:
 
 
 fn test_sum3() raises:
-    fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn test_func(args: List[endia.Array]) raises -> List[endia.Array]:
         var x = args[0]
-        x = nabla.incr_batch_dim_ctr(x)
-        x = nabla.incr_batch_dim_ctr(x)
-        x = nabla.incr_batch_dim_ctr(x)
-        x = nabla.sum(x, List(0))
+        x = endia.incr_batch_dim_ctr(x)
+        x = endia.incr_batch_dim_ctr(x)
+        x = endia.incr_batch_dim_ctr(x)
+        x = endia.sum(x, List(0))
         return [
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = endia.arange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -116,14 +116,14 @@ fn test_sum3() raises:
 
 
 fn test_sum4() raises:
-    fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn test_func(args: List[endia.Array]) raises -> List[endia.Array]:
         var x = args[0]
-        x = nabla.sum(x, List(0, 1))
+        x = endia.sum(x, List(0, 1))
         return [
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = endia.arange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -139,15 +139,15 @@ fn test_sum4() raises:
 
 
 fn test_sum5() raises:
-    fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn test_func(args: List[endia.Array]) raises -> List[endia.Array]:
         var x = args[0]
-        x = nabla.incr_batch_dim_ctr(x)
-        x = nabla.sum(x, List(0, 1))
+        x = endia.incr_batch_dim_ctr(x)
+        x = endia.sum(x, List(0, 1))
         return [
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = endia.arange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -163,15 +163,15 @@ fn test_sum5() raises:
 
 
 fn test_sum6() raises:
-    fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn test_func(args: List[endia.Array]) raises -> List[endia.Array]:
         var x = args[0]
-        x = nabla.incr_batch_dim_ctr(x)
-        x = nabla.sum(x, List(0), act_on_batch_dims=True)
+        x = endia.incr_batch_dim_ctr(x)
+        x = endia.sum(x, List(0), act_on_batch_dims=True)
         return [
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = endia.arange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -187,16 +187,16 @@ fn test_sum6() raises:
 
 
 fn test_sum7() raises:
-    fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn test_func(args: List[endia.Array]) raises -> List[endia.Array]:
         var x = args[0]
-        x = nabla.incr_batch_dim_ctr(x)
-        x = nabla.incr_batch_dim_ctr(x)
-        x = nabla.sum(x, List(0, 1), act_on_batch_dims=True)
+        x = endia.incr_batch_dim_ctr(x)
+        x = endia.incr_batch_dim_ctr(x)
+        x = endia.sum(x, List(0, 1), act_on_batch_dims=True)
         return [
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = endia.arange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -212,14 +212,14 @@ fn test_sum7() raises:
 
 
 fn test_sum8() raises:
-    fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn test_func(args: List[endia.Array]) raises -> List[endia.Array]:
         var x = args[0]
-        x = nabla.sum(x, List(0), keep_dim=True)
+        x = endia.sum(x, List(0), keep_dim=True)
         return [
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = endia.arange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -235,15 +235,15 @@ fn test_sum8() raises:
 
 
 fn test_sum9() raises:
-    fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn test_func(args: List[endia.Array]) raises -> List[endia.Array]:
         var x = args[0]
-        x = nabla.incr_batch_dim_ctr(x)
-        x = nabla.sum(x, List(0), keep_dim=True)
+        x = endia.incr_batch_dim_ctr(x)
+        x = endia.sum(x, List(0), keep_dim=True)
         return [
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = endia.arange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -259,16 +259,16 @@ fn test_sum9() raises:
 
 
 fn test_sum10() raises:
-    fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn test_func(args: List[endia.Array]) raises -> List[endia.Array]:
         var x = args[0]
-        x = nabla.incr_batch_dim_ctr(x)
-        x = nabla.incr_batch_dim_ctr(x)
-        x = nabla.sum(x, List(0), keep_dim=True)
+        x = endia.incr_batch_dim_ctr(x)
+        x = endia.incr_batch_dim_ctr(x)
+        x = endia.sum(x, List(0), keep_dim=True)
         return [
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = endia.arange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -284,14 +284,14 @@ fn test_sum10() raises:
 
 
 fn test_sum11() raises:
-    fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn test_func(args: List[endia.Array]) raises -> List[endia.Array]:
         var x = args[0]
-        x = nabla.sum(x, List(0, 1), keep_dim=True)
+        x = endia.sum(x, List(0, 1), keep_dim=True)
         return [
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = endia.arange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -307,15 +307,15 @@ fn test_sum11() raises:
 
 
 fn test_sum12() raises:
-    fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn test_func(args: List[endia.Array]) raises -> List[endia.Array]:
         var x = args[0]
-        x = nabla.incr_batch_dim_ctr(x)
-        x = nabla.sum(x, List(0, 1), keep_dim=True)
+        x = endia.incr_batch_dim_ctr(x)
+        x = endia.sum(x, List(0, 1), keep_dim=True)
         return [
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = endia.arange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -331,15 +331,15 @@ fn test_sum12() raises:
 
 
 fn test_sum13() raises:
-    fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn test_func(args: List[endia.Array]) raises -> List[endia.Array]:
         var x = args[0]
-        x = nabla.incr_batch_dim_ctr(x)
-        x = nabla.sum(x, List(0), keep_dim=True, act_on_batch_dims=True)
+        x = endia.incr_batch_dim_ctr(x)
+        x = endia.sum(x, List(0), keep_dim=True, act_on_batch_dims=True)
         return [
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = endia.arange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -355,16 +355,16 @@ fn test_sum13() raises:
 
 
 fn test_sum14() raises:
-    fn test_func(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn test_func(args: List[endia.Array]) raises -> List[endia.Array]:
         var x = args[0]
-        x = nabla.incr_batch_dim_ctr(x)
-        x = nabla.incr_batch_dim_ctr(x)
-        x = nabla.sum(x, List(0, 1), keep_dim=True, act_on_batch_dims=True)
+        x = endia.incr_batch_dim_ctr(x)
+        x = endia.incr_batch_dim_ctr(x)
+        x = endia.sum(x, List(0, 1), keep_dim=True, act_on_batch_dims=True)
         return [
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = endia.arange((2, 3, 4))
     var res = test_func(
         [
             x,

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Nabla Documentation Update Script
+Endia Documentation Update Script
 
 This script regenerates the API documentation and builds the full documentation.
 Use this script whenever you want to update the static API documentation files
@@ -10,12 +10,12 @@ Usage:
     python scripts/update_docs.py
 
 The script will:
-1. Generate static API documentation from the current Nabla source code
+1. Generate static API documentation from the current Endia source code
 2. Build the complete documentation
 3. Show the local documentation URL for preview
 
 Note: The generated API documentation files should be committed to the repository
-so that GitHub Actions can build the docs without installing Nabla.
+so that GitHub Actions can build the docs without installing Endia.
 """
 
 import subprocess
@@ -29,7 +29,7 @@ def main():
     project_root = script_dir.parent
     docs_dir = project_root / "docs"
 
-    print("🔄 Updating Nabla Documentation")
+    print("🔄 Updating Endia Documentation")
     print("=" * 50)
 
     # Step 1: Generate API documentation

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import max  # noqa: A004
 
-import nabla as nb
+import endia as nb
 
 
 class AddOneCustomOp(nb.UnaryOperation):

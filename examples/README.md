@@ -1,6 +1,6 @@
-# Nabla Examples Gallery
+# Endia Examples Gallery
 
-This gallery contains examples demonstrating various features and capabilities of the Nabla library.
+This gallery contains examples demonstrating various features and capabilities of the Endia library.
 Each example is a complete, runnable script that illustrates specific functionality.
 
 ## Contents
@@ -9,4 +9,4 @@ Each example is a complete, runnable script that illustrates specific functional
 - Automatic Differentiation: Using `vjp` and `jvp`
 - Vectorization: Using `vmap` for automatic batching
 - JIT Compilation: Accelerating code with just-in-time compilation
-- Neural Networks: Building and training neural networks with Nabla
+- Neural Networks: Building and training neural networks with Endia

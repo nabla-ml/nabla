@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""JAX implementation to learn the complex 8-period sin curve (equivalent to Nabla version)."""
+"""JAX implementation to learn the complex 8-period sin curve (equivalent to Endia version)."""
 
 import time
 
@@ -7,7 +7,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-# Configuration - matches the Nabla version
+# Configuration - matches the Endia version
 BATCH_SIZE = 128
 LAYERS = [1, 64, 128, 128, 64, 1]
 LEARNING_RATE = 0.001

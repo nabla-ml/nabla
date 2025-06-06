@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,8 +19,8 @@
 from collections import List
 from collections.string.string_slice import StaticString
 
-from nabla.compiler.graph._attributes import _string_attr
-from nabla.compiler.graph.type import Type
+from endia.compiler.graph._attributes import _string_attr
+from endia.compiler.graph.type import Type
 
 
 def custom[name: StaticString](value: Symbol, out_type: Type) -> Symbol:

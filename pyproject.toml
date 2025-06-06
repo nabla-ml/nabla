@@ -3,7 +3,7 @@ requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "nabla_ml"
+name = "endia_ml"
 version = "25.06021607"
 authors = [
     { name = "TilliFe", email = "tillmann.fehrenbach@gmail.com" },
@@ -21,7 +21,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-keywords = ["deep learning", "machine learning", "jax", "autodiff", "nabla", "mojo", "max", "gpu", "vmap", "grad"]
+keywords = ["deep learning", "machine learning", "jax", "autodiff", "endia", "mojo", "max", "gpu", "vmap", "grad"]
 
 dependencies = [
     "numpy>=1.22.0",
@@ -29,9 +29,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/nabla-ml/nabla"
-Repository = "https://github.com/nabla-ml/nabla"
-"Bug Tracker" = "https://github.com/nabla-ml/nabla/issues"
+Homepage = "https://github.com/endia-ml/endia"
+Repository = "https://github.com/endia-ml/endia"
+"Bug Tracker" = "https://github.com/endia-ml/endia/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -55,10 +55,10 @@ select = ["E", "F", "W", "I", "UP", "N", "B", "C4", "A", "SIM", "PTH"]
 ignore = ["E501", "UP007"]  # UP007: Use Union instead of | for Python 3.9 compatibility
 
 [tool.ruff.lint.per-file-ignores]
-"nabla/__init__.py" = ["A004"]  # Allow sum shadowing in public API
-"nabla/ops/__init__.py" = ["A004"]  # Allow sum shadowing in public API
-"nabla/ops/binary.py" = ["A001"]  # Allow intentional shadowing of built-in 'pow' for API consistency
-"nabla/ops/reduce.py" = ["A001"]  # Allow intentional shadowing of built-in 'sum' for API consistency
+"endia/__init__.py" = ["A004"]  # Allow sum shadowing in public API
+"endia/ops/__init__.py" = ["A004"]  # Allow sum shadowing in public API
+"endia/ops/binary.py" = ["A001"]  # Allow intentional shadowing of built-in 'pow' for API consistency
+"endia/ops/reduce.py" = ["A001"]  # Allow intentional shadowing of built-in 'sum' for API consistency
 "tests/integration/test_nested_dict_vjp.py" = ["E721"]  # Allow type comparison with == for tests
 "tests/integration/test_new_vjp.py" = ["E731"]  # Allow lambda assignments in tests
 "tests/integration/test_vjp_edge_cases.py" = ["N803", "N806"]  # Allow uppercase variable names in matrix tests
@@ -78,13 +78,13 @@ python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
-# files = "src/nabla, tests"
+# files = "src/endia, tests"
 
 [tool.setuptools]
-packages = ["nabla", "nabla.core", "nabla.ops", "nabla.utils", "nabla.nn", "nabla.kernels"]
+packages = ["endia", "endia.core", "endia.ops", "endia.utils", "endia.nn", "endia.kernels"]
 
 [tool.setuptools.package-data]
-"nabla" = ["**/*.mojo", "**/*.py"]
+"endia" = ["**/*.mojo", "**/*.py"]
 
 [tool.pytest.ini_options]
 minversion = "7.0"

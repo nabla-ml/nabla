@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 
 from _mlir import Identifier, NamedAttribute
 from _mlir.builtin_attributes import BoolAttr
-from nabla.compiler.tensor import Tensor, TensorShape
+from endia.compiler.tensor import Tensor, TensorShape
 
 from ..error import error
 

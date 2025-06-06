@@ -19,7 +19,7 @@ binary_sub
 ### {doc}`add <binary_add>`
 
 ```python
-nabla.add(arg0, arg1) -> 'Array'
+endia.add(arg0, arg1) -> 'Array'
 ```
 
 Element-wise addition of two arrays.
@@ -27,7 +27,7 @@ Element-wise addition of two arrays.
 ### {doc}`div <binary_div>`
 
 ```python
-nabla.div(arg0, arg1) -> 'Array'
+endia.div(arg0, arg1) -> 'Array'
 ```
 
 Element-wise division of two arrays.
@@ -35,15 +35,15 @@ Element-wise division of two arrays.
 ### {doc}`greater_equal <binary_greater_equal>`
 
 ```python
-nabla.greater_equal(arg0: 'Array', arg1: 'Array') -> 'Array'
+endia.greater_equal(arg0: 'Array', arg1: 'Array') -> 'Array'
 ```
 
-Nabla operation: `greater_equal`
+Endia operation: `greater_equal`
 
 ### {doc}`mul <binary_mul>`
 
 ```python
-nabla.mul(arg0, arg1) -> 'Array'
+endia.mul(arg0, arg1) -> 'Array'
 ```
 
 Element-wise multiplication of two arrays.
@@ -51,7 +51,7 @@ Element-wise multiplication of two arrays.
 ### {doc}`pow <binary_pow>`
 
 ```python
-nabla.pow(arg0, arg1) -> 'Array'
+endia.pow(arg0, arg1) -> 'Array'
 ```
 
 Element-wise exponentiation.
@@ -59,7 +59,7 @@ Element-wise exponentiation.
 ### {doc}`sub <binary_sub>`
 
 ```python
-nabla.sub(arg0, arg1) -> 'Array'
+endia.sub(arg0, arg1) -> 'Array'
 ```
 
 Element-wise subtraction of two arrays.

@@ -1,6 +1,6 @@
 # API Reference
 
-This page contains the complete API reference for Nabla, organized by functionality.
+This page contains the complete API reference for Endia, organized by functionality.
 
 ```{toctree}
 :maxdepth: 2
@@ -32,7 +32,7 @@ manipulation
 
 ## Overview
 
-Nabla provides a comprehensive set of APIs for array operations, function transformations, and automatic differentiation:
+Endia provides a comprehensive set of APIs for array operations, function transformations, and automatic differentiation:
 
 - **Core Array**: The fundamental `Array` class and its operations
 - **Function Transformations**: Tools like `jit`, `vmap`, `jvp`, and `vjp` for compilation and differentiation

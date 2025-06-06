@@ -1,13 +1,13 @@
 import jax
 import jax.numpy as jnp
 import numpy as np
-import nabla as nb
+import endia as nb
 
 
 def test_vector_to_scalar_jacobian():
     """Test vector to scalar jacobian against JAX."""
 
-    # Define functions for both Nabla and JAX
+    # Define functions for both Endia and JAX
     def func_nb(x):
         # return (x * x).sum([0]) #y#x * x * y * y * y
         return x * x * x * x * x#nb.sin(x)#nb.unsqueeze(x, [0])
@@ -33,9 +33,9 @@ def test_vector_to_scalar_jacobian():
     print("\n=== FORWARD PASS COMPARISON ===")
     result_nb = func_nb(x_nb)
     result_jax = func_jax(x_jax)
-    print("Nabla XPR:")
+    print("Endia XPR:")
     print(nb.xpr(func_nb, x_nb))
-    print(f"Nabla result shape: {result_nb.shape}")
+    print(f"Endia result shape: {result_nb.shape}")
     print(f"JAX result shape: {result_jax.shape}")
     print(f"Forward values match: {np.allclose(result_nb.to_numpy(), result_jax)}")
 
@@ -44,7 +44,7 @@ def test_vector_to_scalar_jacobian():
         max_diff = np.max(np.abs(result_nb.to_numpy() - result_jax))
         print(f"Max difference: {max_diff}")
         # Show sample values for debugging
-        print(f"Nabla sample values: {result_nb.to_numpy().flat[:10]}")
+        print(f"Endia sample values: {result_nb.to_numpy().flat[:10]}")
         print(f"JAX sample values: {result_jax.flatten()[:10]}")
         print(f"Difference sample: {(result_nb.to_numpy() - result_jax).flatten()[:10]}")
 
@@ -57,9 +57,9 @@ def test_vector_to_scalar_jacobian():
     jac_nb = jac_fn_nb(x_nb)
     jac_jax = jac_fn_jax(x_jax)
     
-    print("Nabla XPR:")
+    print("Endia XPR:")
     print(nb.xpr(jac_fn_nb, x_nb))
-    print(f"Nabla jacobian shape: {jac_nb.shape}")
+    print(f"Endia jacobian shape: {jac_nb.shape}")
     print(f"JAX jacobian shape: {jac_jax.shape}")
     print(f"Jacobian values match: {np.allclose(jac_nb.to_numpy(), jac_jax, rtol=1e-5, atol=1e-6)}")
     
@@ -77,9 +77,9 @@ def test_vector_to_scalar_jacobian():
     hess_nb = hess_fn_nb(x_nb)
     hess_jax = hess_fn_jax(x_jax)
 
-    print("Nabla XPR:")
+    print("Endia XPR:")
     print(nb.xpr(hess_fn_nb, x_nb))
-    print(f"Nabla hessian shape: {hess_nb.shape}")
+    print(f"Endia hessian shape: {hess_nb.shape}")
     print(f"JAX hessian shape: {hess_jax.shape}")
     print(f"Hessian values match: {np.allclose(hess_nb.to_numpy(), hess_jax, rtol=1e-4, atol=1e-5)}")
     
@@ -97,9 +97,9 @@ def test_vector_to_scalar_jacobian():
     third_nb = third_fn_nb(x_nb)
     third_jax = third_fn_jax(x_jax)
     
-    print("Nabla XPR:")
+    print("Endia XPR:")
     print(nb.xpr(third_fn_nb, x_nb))
-    print(f"Nabla third derivative shape: {third_nb.shape}")
+    print(f"Endia third derivative shape: {third_nb.shape}")
     print(f"JAX third derivative shape: {third_jax.shape}")
     print(f"Third derivative values match: {np.allclose(third_nb.to_numpy(), third_jax, rtol=1e-3, atol=1e-4)}")
     
@@ -108,7 +108,7 @@ def test_vector_to_scalar_jacobian():
         max_diff = np.max(np.abs(third_nb.to_numpy() - third_jax))
         print(f"Max difference: {max_diff}")
         # Show sample values for debugging
-        print(f"Nabla sample values: {third_nb.to_numpy().flat[:10]}")
+        print(f"Endia sample values: {third_nb.to_numpy().flat[:10]}")
         print(f"JAX sample values: {third_jax.flatten()[:10]}")
         print(f"Difference sample: {(third_nb.to_numpy() - third_jax).flatten()[:10]}")
 
@@ -120,11 +120,11 @@ def test_vector_to_scalar_jacobian():
     forth_nb = forth_fn_nb(x_nb)
     forth_jax = forth_fn_jax(x_jax)
 
-    print("Nabla XPR:")
+    print("Endia XPR:")
     print(nb.xpr(forth_fn_nb, x_nb))
     print("\nJAXPR:")
     print(jax.make_jaxpr(forth_fn_jax)(x_jax))
-    print(f"Nabla forth derivative shape: {forth_nb.shape}")
+    print(f"Endia forth derivative shape: {forth_nb.shape}")
     print(f"JAX forth derivative shape: {forth_jax.shape}")
     print(f"Forth derivative values match: {np.allclose(forth_nb.to_numpy(), forth_jax, rtol=1e-3, atol=1e-4)}")
 
@@ -133,7 +133,7 @@ def test_vector_to_scalar_jacobian():
         max_diff = np.max(np.abs(forth_nb.to_numpy() - forth_jax))
         print(f"Max difference: {max_diff}")
         # Show sample values for debugging
-        print(f"Nabla sample values: {forth_nb.to_numpy().flat[:10]}")
+        print(f"Endia sample values: {forth_nb.to_numpy().flat[:10]}")
         print(f"JAX sample values: {forth_jax.flatten()[:10]}")
         print(f"Difference sample: {(forth_nb.to_numpy() - forth_jax).flatten()[:10]}")
     
@@ -144,7 +144,7 @@ def test_vector_to_scalar_jacobian():
     assert np.allclose(third_nb.to_numpy(), third_jax, rtol=1e-3, atol=1e-4), "Third derivative must match"
     assert np.allclose(forth_nb.to_numpy(), forth_jax, rtol=1e-3, atol=1e-4), "Forth derivative must match"
     
-    print("\n✅ All tests passed! Nabla's derivatives match JAX ground truth.")
+    print("\n✅ All tests passed! Endia's derivatives match JAX ground truth.")
 
 
 if __name__ == "__main__":

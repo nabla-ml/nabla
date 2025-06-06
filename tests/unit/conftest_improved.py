@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025 - Improved Unit Test Configuration
+# Endia 2025 - Improved Unit Test Configuration
 # ===----------------------------------------------------------------------=== #
 
 """Pytest configuration and fixtures for unit tests."""

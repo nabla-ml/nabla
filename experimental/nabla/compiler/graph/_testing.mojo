@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,8 +17,8 @@
 from pathlib import Path
 
 from builtin._location import __call_location
-from nabla.compiler.engine import InferenceSession, TensorMap
-from nabla.compiler.tensor import Tensor, TensorShape
+from endia.compiler.engine import InferenceSession, TensorMap
+from endia.compiler.tensor import Tensor, TensorShape
 from testing import assert_almost_equal, assert_equal
 
 

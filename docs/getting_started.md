@@ -5,14 +5,14 @@
 **📦 Now available on PyPI!**
 
 ```bash
-pip install nabla-ml
+pip install endia-ml
 ```
 
 For development installation:
 
 ```bash
-git clone https://github.com/nabla-ml/nabla.git
-cd nabla
+git clone https://github.com/endia-ml/endia.git
+cd endia
 pip install -e ".[dev]"
 ```
 
@@ -27,7 +27,7 @@ pip install -e ".[dev]"
 ### Creating Arrays
 
 ```python
-import nabla as nb
+import endia as nb
 
 # Create arrays
 x = nb.array([1, 2, 3, 4])

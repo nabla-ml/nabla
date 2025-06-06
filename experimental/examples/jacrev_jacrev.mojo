@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,21 +14,21 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-import nabla
+import endia
 
 
 fn test_jacrev_jacrev() raises:
-    var x = nabla.arange((2, 3)) + 2
-    var y = nabla.arange((2, 3)) + 3
+    var x = endia.arange((2, 3)) + 2
+    var y = endia.arange((2, 3)) + 3
 
-    def foo(args: List[nabla.Array]) -> List[nabla.Array]:
+    def foo(args: List[endia.Array]) -> List[endia.Array]:
         var x = args[0]
         var y = args[1]
-        return [nabla.sin(x) + x**2 + y**2, nabla.sin(x) + x**2 + y**2]
+        return [endia.sin(x) + x**2 + y**2, endia.sin(x) + x**2 + y**2]
 
-    var jacobian = nabla.jacrev(foo)
+    var jacobian = endia.jacrev(foo)
     var jac_res = jacobian([x, y])
-    print(nabla.xpr(jacobian)([x, y]))
+    print(endia.xpr(jacobian)([x, y]))
     print("\nJacobian 1:")
     print(jac_res[0])
     print("\nJacobian 2:")
@@ -38,12 +38,12 @@ fn test_jacrev_jacrev() raises:
     print("\nJacobian 4:")
     print(jac_res[3])
 
-    fn jacrev_foo(args: List[nabla.Array]) raises -> List[nabla.Array]:
-        return nabla.jacrev(foo)(args)
+    fn jacrev_foo(args: List[endia.Array]) raises -> List[endia.Array]:
+        return endia.jacrev(foo)(args)
 
-    var hessian = nabla.jacrev(jacrev_foo)
+    var hessian = endia.jacrev(jacrev_foo)
     hessian_result = hessian([x, y])
-    print(nabla.xpr(hessian)([x, y]))
+    print(endia.xpr(hessian)([x, y]))
 
     print("\nHessian 1:")
     print(hessian_result[0])

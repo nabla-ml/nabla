@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,43 +14,43 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-import nabla
+import endia
 
 
 fn test_jacrev_jacfwd_jacfwd() raises:
-    fn foo(args: List[nabla.Array]) raises -> List[nabla.Array]:
+    fn foo(args: List[endia.Array]) raises -> List[endia.Array]:
         return [
-            nabla.sum(nabla.sin(args[0] * args[1])),
-            nabla.sum(nabla.cos(args[0] * args[1])),
+            endia.sum(endia.sin(args[0] * args[1])),
+            endia.sum(endia.cos(args[0] * args[1])),
         ]
 
-    var foo_vmapped = nabla.vmap(foo)
-    var foo_d1 = nabla.jacrev(foo_vmapped)
-    var foo_d2 = nabla.jacfwd(foo_d1)
-    var foo_d3 = nabla.jacfwd(foo_d2)
+    var foo_vmapped = endia.vmap(foo)
+    var foo_d1 = endia.jacrev(foo_vmapped)
+    var foo_d2 = endia.jacfwd(foo_d1)
+    var foo_d3 = endia.jacfwd(foo_d2)
 
-    var args = [nabla.arange((2, 3)), nabla.arange((2, 3))]
+    var args = [endia.arange((2, 3)), endia.arange((2, 3))]
 
     var res = foo(args)
-    # print(nabla.xpr(foo)(args))
+    # print(endia.xpr(foo)(args))
     # print(res[0])
-    print("foo checksum: ", nabla.sum(res[0]))  # , nabla.sum(res[1]))
+    print("foo checksum: ", endia.sum(res[0]))  # , endia.sum(res[1]))
 
     var d1 = foo_d1(args)
-    # print(nabla.xpr(foo_d1)(args))
+    # print(endia.xpr(foo_d1)(args))
     # print(d1[0])
     print(
-        "foo_d1 checksum: ", nabla.sum(d1[0])
-    )  # , nabla.sum(d1[1]), nabla.sum(d1[2]), nabla.sum(d1[3]))
+        "foo_d1 checksum: ", endia.sum(d1[0])
+    )  # , endia.sum(d1[1]), endia.sum(d1[2]), endia.sum(d1[3]))
 
     var d2 = foo_d2(args)
-    # print(nabla.xpr(foo_d2)(args))
+    # print(endia.xpr(foo_d2)(args))
     # print(d2[0])
     print(
-        "foo_d2 checksum: ", nabla.sum(d2[0])
-    )  # , nabla.sum(d2[1]), nabla.sum(d2[2]), nabla.sum(d2[3]), nabla.sum(d2[4]), nabla.sum(d2[5]), nabla.sum(d2[6]), nabla.sum(d2[7]))
+        "foo_d2 checksum: ", endia.sum(d2[0])
+    )  # , endia.sum(d2[1]), endia.sum(d2[2]), endia.sum(d2[3]), endia.sum(d2[4]), endia.sum(d2[5]), endia.sum(d2[6]), endia.sum(d2[7]))
 
     var d3 = foo_d3(args)
     print(
-        "foo_d3 checksum: ", nabla.sum(d3[0])
-    )  # , nabla.sum(d3[1]), nabla.sum(d3[2]), nabla.sum(d3[3]), nabla.sum(d3[4]), nabla.sum(d3[5]), nabla.sum(d3[6]), nabla.sum(d3[7]), nabla.sum(d3[8]), nabla.sum(d3[9]), nabla.sum(d3[10]), nabla.sum(d3[11]), nabla.sum(d3[12]), nabla.sum(d3[13]), nabla.sum(d3[14]), nabla.sum(d3[15]))
+        "foo_d3 checksum: ", endia.sum(d3[0])
+    )  # , endia.sum(d3[1]), endia.sum(d3[2]), endia.sum(d3[3]), endia.sum(d3[4]), endia.sum(d3[5]), endia.sum(d3[6]), endia.sum(d3[7]), endia.sum(d3[8]), endia.sum(d3[9]), endia.sum(d3[10]), endia.sum(d3[11]), endia.sum(d3[12]), endia.sum(d3[13]), endia.sum(d3[14]), endia.sum(d3[15]))

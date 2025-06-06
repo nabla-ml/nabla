@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ lists, tensors, etc.
 """
 
 import _mlir
-from nabla.compiler.tensor import Tensor
+from endia.compiler.tensor import Tensor
 
 import ._c
 from .type import TensorType

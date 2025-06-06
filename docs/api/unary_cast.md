@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.cast(arg: nabla.core.array.Array, dtype: max._core.dtype.DType) -> nabla.core.array.Array
+endia.cast(arg: endia.core.array.Array, dtype: max._core.dtype.DType) -> endia.core.array.Array
 ```
 
 ## Description

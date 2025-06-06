@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,28 +14,28 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-import nabla
+import endia
 
 
-def foo(args: List[nabla.Array]) -> List[nabla.Array]:
+def foo(args: List[endia.Array]) -> List[endia.Array]:
     x = args[0]
     y = args[1]
-    return [nabla.sin(x) + x**2 + y**2, nabla.cos(y) + y * x]
+    return [endia.sin(x) + x**2 + y**2, endia.cos(y) + y * x]
 
 
 fn test_vmap_jacfwd() raises:
-    var x = nabla.arange((3, 2, 3)) + 2
-    var y = nabla.arange((3, 2, 3)) + 3
+    var x = endia.arange((3, 2, 3)) + 2
+    var y = endia.arange((3, 2, 3)) + 3
 
-    def foo(args: List[nabla.Array]) -> List[nabla.Array]:
+    def foo(args: List[endia.Array]) -> List[endia.Array]:
         var x = args[0]
         var y = args[1]
-        var res = [nabla.sin(x) + x**2 + y**2, nabla.cos(y) + y * x]
+        var res = [endia.sin(x) + x**2 + y**2, endia.cos(y) + y * x]
         return res
 
-    var jacobian = nabla.jacfwd(foo)
+    var jacobian = endia.jacfwd(foo)
     jacobian_result = jacobian([x, y])
-    # print(nabla.xpr(jacobian)([x,y]))
+    # print(endia.xpr(jacobian)([x,y]))
 
     print("\nJacobian 1:")
     print(jacobian_result[0])

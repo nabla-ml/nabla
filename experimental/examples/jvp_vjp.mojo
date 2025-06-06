@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,31 +14,31 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-import nabla
+import endia
 
 
-def foo(args: List[nabla.Array]) -> List[nabla.Array]:
+def foo(args: List[endia.Array]) -> List[endia.Array]:
     x = args[0]
     y = args[1]
-    return [nabla.sin(x) + x**2 + y**2, nabla.cos(y) + y * x]
+    return [endia.sin(x) + x**2 + y**2, endia.cos(y) + y * x]
 
 
 def test_jvp_vjp():
-    var x = nabla.arange((2, 3)) + 2
-    var y = nabla.arange((2, 3)) + 3
-    var v = nabla.arange((2, 3))
-    var w = nabla.arange((2, 3))
+    var x = endia.arange((2, 3)) + 2
+    var y = endia.arange((2, 3)) + 3
+    var v = endia.arange((2, 3))
+    var w = endia.arange((2, 3))
 
     # Step 1: Compute the gradient using VJP.
-    def grad_fn(args: List[nabla.Array]) -> List[nabla.Array]:
-        _, vjp_fn = nabla.vjp(foo, args)
-        return vjp_fn([nabla.ones((2, 3)), nabla.ones((2, 3))])
+    def grad_fn(args: List[endia.Array]) -> List[endia.Array]:
+        _, vjp_fn = endia.vjp(foo, args)
+        return vjp_fn([endia.ones((2, 3)), endia.ones((2, 3))])
 
     # Step 2: Compute Hessian-vector product using JVP on grad_fn.
-    def hvp_fn(args: List[nabla.Array]) -> List[nabla.Array]:
+    def hvp_fn(args: List[endia.Array]) -> List[endia.Array]:
         var primals = args[: len(args) // 2]
         var tangents = args[len(args) // 2 :]
-        return nabla.jvp(grad_fn, primals, tangents)[
+        return endia.jvp(grad_fn, primals, tangents)[
             1
         ]  # JVP on gradient computes H(x)·v
 
@@ -46,11 +46,11 @@ def test_jvp_vjp():
     hvp_result = hvp_fn([x, y, v, w])
 
     print("\nGradient using VJP:")
-    # print(nabla.xpr(grad_fn)([x,]))
+    # print(endia.xpr(grad_fn)([x,]))
     print(grad_result[0])
     print(grad_result[1])
 
     print("\nHessian-vector product using VJP + JVP:")
-    # print(nabla.xpr(hvp_fn)([x, v]))
+    # print(endia.xpr(hvp_fn)([x, v]))
     print(hvp_result[0])
     print(hvp_result[1])

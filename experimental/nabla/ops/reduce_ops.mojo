@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,10 +16,10 @@
 
 from collections import Dict
 
-from nabla.core.device_array import DeviceArray, ArrayImpl
-from nabla.ops.utils import register_any_op, RuntimeInfo
-from nabla.ops.view_ops import squeeze, broadcast_to
-from nabla.compiler.graph import Symbol, ops
+from endia.core.device_array import DeviceArray, ArrayImpl
+from endia.ops.utils import register_any_op, RuntimeInfo
+from endia.ops.view_ops import squeeze, broadcast_to
+from endia.compiler.graph import Symbol, ops
 
 alias BATCH_DIM_CTR = 0
 alias ORIGINALshape = 2

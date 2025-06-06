@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,8 +29,8 @@ and its corresponding quantized buffer shape.
 For example, this code quantizes a tensor with the Q4_0 encoding:
 
 ```python
-from nabla.compiler.tensor import Tensor
-from nabla.compiler.graph.quantization import Q4_0Encoding
+from endia.compiler.tensor import Tensor
+from endia.compiler.graph.quantization import Q4_0Encoding
 
 var tensor: Tensor[DType.float32]
 # Initialize `tensor`.

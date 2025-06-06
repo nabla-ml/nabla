@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,9 +14,9 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-from nabla.compiler.driver import accelerator, cpu, Tensor, Device, AnyMemory
-from nabla.compiler.engine import InferenceSession, SessionOptions
-from nabla.compiler.graph import Graph, TensorType, ops
+from endia.compiler.driver import accelerator, cpu, Tensor, Device, AnyMemory
+from endia.compiler.engine import InferenceSession, SessionOptions
+from endia.compiler.graph import Graph, TensorType, ops
 
 
 def test_new_model_execute_method():

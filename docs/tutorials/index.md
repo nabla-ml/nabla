@@ -1,6 +1,6 @@
 # Tutorials
 
-Learn Nabla through hands-on tutorials covering core concepts and practical applications.
+Learn Endia through hands-on tutorials covering core concepts and practical applications.
 
 ```{toctree}
 :maxdepth: 2
@@ -23,7 +23,7 @@ advanced_topics
 ### Fundamentals
 
 #### {doc}`basic_operations`
-Learn the fundamentals of working with Nabla arrays, including creation, manipulation, and basic mathematical operations.
+Learn the fundamentals of working with Endia arrays, including creation, manipulation, and basic mathematical operations.
 
 #### {doc}`automatic_differentiation`  
 Understand automatic differentiation with `grad`, `vjp`, and `jvp` transformations for computing derivatives.

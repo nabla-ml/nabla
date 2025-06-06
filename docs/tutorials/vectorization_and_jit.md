@@ -1,6 +1,6 @@
 # Vectorization and JIT
 
-This tutorial covers two essential performance optimization techniques in Nabla: vectorization with `vmap` and just-in-time compilation with `jit`.
+This tutorial covers two essential performance optimization techniques in Endia: vectorization with `vmap` and just-in-time compilation with `jit`.
 
 ## Vectorization with `vmap`
 
@@ -9,7 +9,7 @@ The `vmap` (vectorized map) transformation automatically vectorizes functions to
 ### Basic Vectorization
 
 ```python
-import nabla as nb
+import endia as nb
 
 def simple_function(x):
     """A function that operates on a single sample"""

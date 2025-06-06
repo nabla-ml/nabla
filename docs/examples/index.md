@@ -1,11 +1,11 @@
 # Examples Gallery
 
-This section contains practical examples demonstrating Nabla's capabilities across different domains.
+This section contains practical examples demonstrating Endia's capabilities across different domains.
 
-You can find all the source examples in the [`examples/`](https://github.com/nabla-ml/nabla/tree/main/examples) directory of the GitHub repository.
+You can find all the source examples in the [`examples/`](https://github.com/endia-ml/endia/tree/main/examples) directory of the GitHub repository.
 
 ```{note}
-The examples directory includes both beginner-friendly introductions and advanced usage patterns to help you get the most out of Nabla.
+The examples directory includes both beginner-friendly introductions and advanced usage patterns to help you get the most out of Endia.
 ```
 
 ## Example Categories
@@ -20,7 +20,7 @@ The examples directory includes both beginner-friendly introductions and advance
 
 - **MLP Training**: Multi-layer perceptron training from scratch
 - **MLP Inference**: Efficient inference with JIT compilation
-- **JAX Compatibility**: Comparing Nabla with JAX implementations
+- **JAX Compatibility**: Comparing Endia with JAX implementations
 
 ### Performance and Compilation
 

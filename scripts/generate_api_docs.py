@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Generate complete API documentation for Nabla.
+Generate complete API documentation for Endia.
 
-This script introspects the Nabla codebase and generates static Markdown files
+This script introspects the Endia codebase and generates static Markdown files
 for all API components, eliminating the need for autodoc during Sphinx builds.
 """
 
@@ -17,10 +17,10 @@ class APIDocGenerator:
 
     def __init__(self, project_root: Path):
         self.project_root = project_root
-        self.nabla_path = project_root / "nabla"
+        self.endia_path = project_root / "endia"
         self.docs_api_path = project_root / "docs" / "api"
 
-        # Add nabla to Python path for imports
+        # Add endia to Python path for imports
         sys.path.insert(0, str(project_root))
 
     def extract_docstring(self, node: ast.AST) -> Optional[str]:
@@ -291,8 +291,8 @@ def {method_name}{method_sig}
 
         return doc
 
-    def introspect_nabla_ops(self) -> dict[str, list[str]]:
-        """Introspect Nabla to get all operations organized by category."""
+    def introspect_endia_ops(self) -> dict[str, list[str]]:
+        """Introspect Endia to get all operations organized by category."""
         ops_categories = {
             "binary": [],
             "unary": [],
@@ -304,7 +304,7 @@ def {method_name}{method_sig}
         }
 
         # Scan ops modules
-        ops_path = self.nabla_path / "ops"
+        ops_path = self.endia_path / "ops"
         if ops_path.exists():
             for py_file in ops_path.glob("*.py"):
                 if py_file.name == "__init__.py":
@@ -340,7 +340,7 @@ def {method_name}{method_sig}
         self.docs_api_path.mkdir(exist_ok=True)
 
         # Get operations by category
-        ops_by_category = self.introspect_nabla_ops()
+        ops_by_category = self.introspect_endia_ops()
 
         # Generate documentation for each category
         category_docs = {
@@ -413,7 +413,7 @@ def {method_name}{method_sig}
     def get_category_description(self, category: str) -> str:
         """Get description for a category."""
         descriptions = {
-            "core": "Core components of Nabla including the Array class and function transformations.",
+            "core": "Core components of Endia including the Array class and function transformations.",
             "creation": "Functions for creating new arrays with various initialization patterns.",
             "unary": "Element-wise unary operations that operate on a single array.",
             "binary": "Element-wise binary operations that operate on two arrays.",
@@ -421,7 +421,7 @@ def {method_name}{method_sig}
             "linalg": "Linear algebra operations including matrix multiplication and decompositions.",
             "manipulation": "Operations for reshaping, indexing, and manipulating array structure.",
         }
-        return descriptions.get(category, "Nabla operations.")
+        return descriptions.get(category, "Endia operations.")
 
     def generate_function_page(self, function_name: str, category: str):
         """Generate a dedicated page for a single function."""
@@ -473,7 +473,7 @@ def {method_name}{method_sig}
                 doc += f"""## Examples
 
 ```python
-import nabla as nb
+import endia as nb
 
 {example}
 ```
@@ -615,7 +615,7 @@ results = batch_dot(a_batch, b_batch)  # 10 dot products""",
         """Introspect a function to get its real signature and docstring."""
         # Default fallback
         func_info = {
-            "signature": f"nabla.{function_name}(...)",
+            "signature": f"endia.{function_name}(...)",
             "docstring": f"*Documentation for `{function_name}` is being generated. Please check the source code for implementation details.*",
             "examples": None,
             "parameters": None,
@@ -624,18 +624,18 @@ results = batch_dot(a_batch, b_batch)  # 10 dot products""",
         }
 
         try:
-            # Try to import nabla and get the actual function
-            import nabla
+            # Try to import endia and get the actual function
+            import endia
 
-            if hasattr(nabla, function_name):
-                func = getattr(nabla, function_name)
+            if hasattr(endia, function_name):
+                func = getattr(endia, function_name)
 
                 # Get signature
                 try:
                     import inspect
 
                     sig = inspect.signature(func)
-                    func_info["signature"] = f"nabla.{function_name}{sig}"
+                    func_info["signature"] = f"endia.{function_name}{sig}"
                 except:
                     pass
 
@@ -719,7 +719,7 @@ results = batch_dot(a_batch, b_batch)  # 10 dot products""",
             # Try to find the function in source files for better documentation
             else:
                 # Search in ops modules
-                ops_path = self.nabla_path / "ops"
+                ops_path = self.endia_path / "ops"
                 for py_file in ops_path.glob("*.py"):
                     if py_file.name == "__init__.py":
                         continue
@@ -729,7 +729,7 @@ results = batch_dot(a_batch, b_batch)  # 10 dot products""",
                         if func["name"] == function_name and func["docstring"]:
                             func_info["docstring"] = func["docstring"]
                             func_info["signature"] = (
-                                f"nabla.{function_name}{func['signature']}"
+                                f"endia.{function_name}{func['signature']}"
                             )
                             break
 
@@ -744,7 +744,7 @@ results = batch_dot(a_batch, b_batch)  # 10 dot products""",
         """Fallback: try to extract info from source code parsing."""
         try:
             # Search in ops modules
-            ops_path = self.nabla_path / "ops"
+            ops_path = self.endia_path / "ops"
             for py_file in ops_path.glob("*.py"):
                 if py_file.name == "__init__.py":
                     continue
@@ -757,7 +757,7 @@ results = batch_dot(a_batch, b_batch)  # 10 dot products""",
                         if func["docstring"]:
                             func_info["docstring"] = func["docstring"]
                         func_info["signature"] = (
-                            f"nabla.{function_name}{func['signature']}"
+                            f"endia.{function_name}{func['signature']}"
                         )
                         return
 
@@ -776,7 +776,7 @@ results = batch_dot(a_batch, b_batch)  # 10 dot products""",
         # Enhanced descriptions for common operations
         descriptions = {
             # Core operations
-            "Array": "The fundamental array type in Nabla.",
+            "Array": "The fundamental array type in Endia.",
             "jit": "Just-in-time compilation for performance optimization.",
             "vjp": "Vector-Jacobian product for reverse-mode automatic differentiation.",
             "jvp": "Jacobian-vector product for forward-mode automatic differentiation.",
@@ -822,13 +822,13 @@ results = batch_dot(a_batch, b_batch)  # 10 dot products""",
             "unsqueeze": "Add single-dimensional entries to array shape.",
         }
 
-        return descriptions.get(op, f"Nabla operation: `{op}`")
+        return descriptions.get(op, f"Endia operation: `{op}`")
 
     def generate_api_index(self):
         """Generate the main API index file."""
         index_content = """# API Reference
 
-This page contains the complete API reference for Nabla, organized by functionality.
+This page contains the complete API reference for Endia, organized by functionality.
 
 ```{toctree}
 :maxdepth: 2
@@ -860,7 +860,7 @@ manipulation
 
 ## Overview
 
-Nabla provides a comprehensive set of APIs for array operations, function transformations, and automatic differentiation:
+Endia provides a comprehensive set of APIs for array operations, function transformations, and automatic differentiation:
 
 - **Core Array**: The fundamental `Array` class and its operations
 - **Function Transformations**: Tools like `jit`, `vmap`, `jvp`, and `vjp` for compilation and differentiation

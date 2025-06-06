@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script to verify that Nabla's VJP transformation matches JAX's behavior
+Test script to verify that Endia's VJP transformation matches JAX's behavior
 exactly in terms of input/output structure and gradient computation.
 """
 
@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-import nabla as nb
+import endia as nb
 
 
 def test_single_input_single_output():
@@ -24,7 +24,7 @@ def test_single_input_single_output():
     cotangent_nb = nb.Array.from_numpy(cotangent_np)
     cotangent_jax = jnp.array(cotangent_np)
 
-    # Nabla VJP
+    # Endia VJP
     def nb_fn(x):
         return nb.sin(x)
 
@@ -40,7 +40,7 @@ def test_single_input_single_output():
 
     # Check structure
     print(
-        f"  Nabla VJP structure: {type(grads_nb)}, len={len(grads_nb) if hasattr(grads_nb, '__len__') else 'N/A'}"
+        f"  Endia VJP structure: {type(grads_nb)}, len={len(grads_nb) if hasattr(grads_nb, '__len__') else 'N/A'}"
     )
     print(
         f"  JAX VJP structure: {type(grads_jax)}, len={len(grads_jax) if hasattr(grads_jax, '__len__') else 'N/A'}"
@@ -48,13 +48,13 @@ def test_single_input_single_output():
 
     # Both should return tuples with one element
     assert isinstance(grads_nb, tuple), (
-        f"Nabla should return tuple, got {type(grads_nb)}"
+        f"Endia should return tuple, got {type(grads_nb)}"
     )
     assert isinstance(grads_jax, tuple), (
         f"JAX should return tuple, got {type(grads_jax)}"
     )
     assert len(grads_nb) == 1, (
-        f"Nabla should return tuple with 1 element, got {len(grads_nb)}"
+        f"Endia should return tuple with 1 element, got {len(grads_nb)}"
     )
     assert len(grads_jax) == 1, (
         f"JAX should return tuple with 1 element, got {len(grads_jax)}"
@@ -83,7 +83,7 @@ def test_multiple_inputs_single_output():
     cotangent_nb = nb.Array.from_numpy(cotangent_np)
     cotangent_jax = jnp.array(cotangent_np)
 
-    # Nabla VJP
+    # Endia VJP
     def nb_fn(x, y):
         return nb.add(x, y)
 
@@ -98,18 +98,18 @@ def test_multiple_inputs_single_output():
     grads_jax = vjp_jax(cotangent_jax)
 
     # Check structure
-    print(f"  Nabla VJP structure: {type(grads_nb)}, len={len(grads_nb)}")
+    print(f"  Endia VJP structure: {type(grads_nb)}, len={len(grads_nb)}")
     print(f"  JAX VJP structure: {type(grads_jax)}, len={len(grads_jax)}")
 
     # Both should return tuples with two elements
     assert isinstance(grads_nb, tuple), (
-        f"Nabla should return tuple, got {type(grads_nb)}"
+        f"Endia should return tuple, got {type(grads_nb)}"
     )
     assert isinstance(grads_jax, tuple), (
         f"JAX should return tuple, got {type(grads_jax)}"
     )
     assert len(grads_nb) == 2, (
-        f"Nabla should return tuple with 2 elements, got {len(grads_nb)}"
+        f"Endia should return tuple with 2 elements, got {len(grads_nb)}"
     )
     assert len(grads_jax) == 2, (
         f"JAX should return tuple with 2 elements, got {len(grads_jax)}"
@@ -135,7 +135,7 @@ def test_nested_structure():
     # This dict was created for clarity but isn't used
     # inputs_dict = {"x": x_np, "y": y_np}
 
-    # Convert to Nabla and JAX
+    # Convert to Endia and JAX
     x_nb = nb.Array.from_numpy(x_np)
     y_nb = nb.Array.from_numpy(y_np)
     inputs_nb = {"x": x_nb, "y": y_nb}
@@ -148,7 +148,7 @@ def test_nested_structure():
     cotangent_nb = nb.Array.from_numpy(cotangent_np)
     cotangent_jax = jnp.array(cotangent_np)
 
-    # Nabla VJP
+    # Endia VJP
     def nb_fn(inputs):
         return nb.mul(inputs["x"], inputs["y"])
 
@@ -163,25 +163,25 @@ def test_nested_structure():
     grads_jax = vjp_jax(cotangent_jax)
 
     # Check structure
-    print(f"  Nabla VJP structure: {type(grads_nb)}, len={len(grads_nb)}")
+    print(f"  Endia VJP structure: {type(grads_nb)}, len={len(grads_nb)}")
     print(f"  JAX VJP structure: {type(grads_jax)}, len={len(grads_jax)}")
 
     # Both should return tuples with one element (the dict)
     assert isinstance(grads_nb, tuple), (
-        f"Nabla should return tuple, got {type(grads_nb)}"
+        f"Endia should return tuple, got {type(grads_nb)}"
     )
     assert isinstance(grads_jax, tuple), (
         f"JAX should return tuple, got {type(grads_jax)}"
     )
     assert len(grads_nb) == 1, (
-        f"Nabla should return tuple with 1 element, got {len(grads_nb)}"
+        f"Endia should return tuple with 1 element, got {len(grads_nb)}"
     )
     assert len(grads_jax) == 1, (
         f"JAX should return tuple with 1 element, got {len(grads_jax)}"
     )
 
     # Both should have the same dictionary structure
-    assert isinstance(grads_nb[0], dict), "Nabla gradient should be a dict"
+    assert isinstance(grads_nb[0], dict), "Endia gradient should be a dict"
     assert isinstance(grads_jax[0], dict), "JAX gradient should be a dict"
     assert set(grads_nb[0].keys()) == set(grads_jax[0].keys()), (
         "Gradient dicts should have same keys"
@@ -198,8 +198,8 @@ def test_nested_structure():
 
 def main():
     """Run all compatibility tests."""
-    print("=== Nabla VJP Compatibility Test ===")
-    print("Verifying that Nabla's VJP matches JAX's behavior exactly\n")
+    print("=== Endia VJP Compatibility Test ===")
+    print("Verifying that Endia's VJP matches JAX's behavior exactly\n")
 
     try:
         test_single_input_single_output()
@@ -207,7 +207,7 @@ def main():
         test_nested_structure()
 
         print("\n🎉 ALL TESTS PASSED!")
-        print("Nabla's VJP transformation is fully compatible with JAX!")
+        print("Endia's VJP transformation is fully compatible with JAX!")
 
     except Exception as e:
         print(f"\n❌ TEST FAILED: {e}")

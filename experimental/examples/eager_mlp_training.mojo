@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 import math
 from time import perf_counter
-import nabla
+import endia
 
 
 def test_simple_nn():
@@ -32,47 +32,47 @@ def test_simple_nn():
     avg_loss = 0.0
     avg_time = 0.0
 
-    weights = List[nabla.Array]()
-    biases = List[nabla.Array]()
-    weight_velocities = List[nabla.Array]()
-    bias_velocities = List[nabla.Array]()
-    ctx = nabla.ExecutionContext()
+    weights = List[endia.Array]()
+    biases = List[endia.Array]()
+    weight_velocities = List[endia.Array]()
+    bias_velocities = List[endia.Array]()
+    ctx = endia.ExecutionContext()
 
     for i in range(len(layers) - 1):
-        w = nabla.randn((layers[i + 1], layers[i]), DType.float32) * math.sqrt(
+        w = endia.randn((layers[i + 1], layers[i]), DType.float32) * math.sqrt(
             2.0 / layers[i]
         )
         w.requires_grad_(True)
         weights.append(w)
-        biases.append(nabla.zeros((layers[i + 1], 1), DType.float32, True))
+        biases.append(endia.zeros((layers[i + 1], 1), DType.float32, True))
         weight_velocities.append(
-            nabla.zeros((layers[i + 1], layers[i]), DType.float32)
+            endia.zeros((layers[i + 1], layers[i]), DType.float32)
         )
-        bias_velocities.append(nabla.zeros((layers[i + 1], 1), DType.float32))
+        bias_velocities.append(endia.zeros((layers[i + 1], 1), DType.float32))
 
-    def forward(_input: nabla.Array) capturing -> nabla.Array:
+    def forward(_input: endia.Array) capturing -> endia.Array:
         x = _input
         for i in range(len(layers) - 1):
             x = weights[i] @ x + biases[i]
             if i % 2 == 0:
                 x.checkpoint()
             if i < len(layers) - 2:
-                x = nabla.relu(x)
+                x = endia.relu(x)
                 # _ = x.load(0, ctx)
         return x
 
     for iteration in range(1, iterations + 1):
         start = perf_counter()
-        input = nabla.rand(
+        input = endia.rand(
             (1, batch_size),
             DType.float32,
             min=0.0,
             max=1.0,
         )
-        y = nabla.sin((periods * 2.0 * math.pi) * input) / 2.0 + 0.5
+        y = endia.sin((periods * 2.0 * math.pi) * input) / 2.0 + 0.5
 
         prediction = forward(input)
-        loss = nabla.sum((prediction - y) ** 2.0) / batch_size
+        loss = endia.sum((prediction - y) ** 2.0) / batch_size
 
         loss.backward()
 

@@ -22,7 +22,7 @@ unary_sin
 ### {doc}`cast <unary_cast>`
 
 ```python
-nabla.cast(arg: nabla.core.array.Array, dtype: max._core.dtype.DType) -> nabla.core.array.Array
+endia.cast(arg: endia.core.array.Array, dtype: max._core.dtype.DType) -> endia.core.array.Array
 ```
 
 Cast array elements to a different data type.
@@ -30,7 +30,7 @@ Cast array elements to a different data type.
 ### {doc}`cos <unary_cos>`
 
 ```python
-nabla.cos(arg: nabla.core.array.Array) -> nabla.core.array.Array
+endia.cos(arg: endia.core.array.Array) -> endia.core.array.Array
 ```
 
 Element-wise cosine function.
@@ -38,15 +38,15 @@ Element-wise cosine function.
 ### {doc}`decr_batch_dim_ctr <unary_decr_batch_dim_ctr>`
 
 ```python
-nabla.decr_batch_dim_ctr(arg: nabla.core.array.Array) -> nabla.core.array.Array
+endia.decr_batch_dim_ctr(arg: endia.core.array.Array) -> endia.core.array.Array
 ```
 
-Nabla operation: `decr_batch_dim_ctr`
+Endia operation: `decr_batch_dim_ctr`
 
 ### {doc}`exp <unary_exp>`
 
 ```python
-nabla.exp(arg: nabla.core.array.Array) -> nabla.core.array.Array
+endia.exp(arg: endia.core.array.Array) -> endia.core.array.Array
 ```
 
 Element-wise exponential function.
@@ -54,15 +54,15 @@ Element-wise exponential function.
 ### {doc}`incr_batch_dim_ctr <unary_incr_batch_dim_ctr>`
 
 ```python
-nabla.incr_batch_dim_ctr(arg: nabla.core.array.Array) -> nabla.core.array.Array
+endia.incr_batch_dim_ctr(arg: endia.core.array.Array) -> endia.core.array.Array
 ```
 
-Nabla operation: `incr_batch_dim_ctr`
+Endia operation: `incr_batch_dim_ctr`
 
 ### {doc}`log <unary_log>`
 
 ```python
-nabla.log(arg: nabla.core.array.Array) -> nabla.core.array.Array
+endia.log(arg: endia.core.array.Array) -> endia.core.array.Array
 ```
 
 Element-wise natural logarithm.
@@ -70,7 +70,7 @@ Element-wise natural logarithm.
 ### {doc}`negate <unary_negate>`
 
 ```python
-nabla.negate(arg: nabla.core.array.Array) -> nabla.core.array.Array
+endia.negate(arg: endia.core.array.Array) -> endia.core.array.Array
 ```
 
 Element-wise negation.
@@ -78,7 +78,7 @@ Element-wise negation.
 ### {doc}`relu <unary_relu>`
 
 ```python
-nabla.relu(arg: nabla.core.array.Array) -> nabla.core.array.Array
+endia.relu(arg: endia.core.array.Array) -> endia.core.array.Array
 ```
 
 Element-wise rectified linear unit activation.
@@ -86,7 +86,7 @@ Element-wise rectified linear unit activation.
 ### {doc}`sin <unary_sin>`
 
 ```python
-nabla.sin(arg: nabla.core.array.Array, dtype: max._core.dtype.DType | None = None) -> nabla.core.array.Array
+endia.sin(arg: endia.core.array.Array, dtype: max._core.dtype.DType | None = None) -> endia.core.array.Array
 ```
 
 Element-wise sine function.

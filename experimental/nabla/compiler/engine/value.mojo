@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@
 
 from sys.ffi import DLHandle, external_call
 
-from nabla.compiler._utils import call_dylib_func, exchange
-from nabla.compiler.tensor import Tensor
+from endia.compiler._utils import call_dylib_func, exchange
+from endia.compiler.tensor import Tensor
 from memory import UnsafePointer
 
 from ._context import CRuntimeContext

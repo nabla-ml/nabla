@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,33 +14,33 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-import nabla
+import endia
 
 
 fn test_jacrev_jacfwd() raises:
-    var x = nabla.arange((2, 3))
+    var x = endia.arange((2, 3))
 
-    def foo(args: List[nabla.Array]) -> List[nabla.Array]:
+    def foo(args: List[endia.Array]) -> List[endia.Array]:
         var x = args[0]
         return [
-            nabla.sum(x * x * x),
+            endia.sum(x * x * x),
         ]
 
-    fn d1foo(args: List[nabla.Array]) raises -> List[nabla.Array]:
-        return nabla.jacrev(foo)(args)
+    fn d1foo(args: List[endia.Array]) raises -> List[endia.Array]:
+        return endia.jacrev(foo)(args)
 
-    fn d2foo(args: List[nabla.Array]) raises -> List[nabla.Array]:
-        return nabla.jacfwd(d1foo)(args)
+    fn d2foo(args: List[endia.Array]) raises -> List[endia.Array]:
+        return endia.jacfwd(d1foo)(args)
 
-    fn d3foo(args: List[nabla.Array]) raises -> List[nabla.Array]:
-        return nabla.jacfwd(d2foo)(args)
+    fn d3foo(args: List[endia.Array]) raises -> List[endia.Array]:
+        return endia.jacfwd(d2foo)(args)
 
     var d1foo_res = d1foo(
         [
             x,
         ]
     )
-    # print(nabla.xpr(d1foo)([x,]))
+    # print(endia.xpr(d1foo)([x,]))
     print("\nd1st Derivative 1 (d1foo):")
     print((d1foo_res[0]))
 
@@ -49,15 +49,15 @@ fn test_jacrev_jacfwd() raises:
             x,
         ]
     )
-    # print(nabla.xpr(d2foo)([x,]))
+    # print(endia.xpr(d2foo)([x,]))
     print("\n2nd Derivative 1 (d2foo):")
-    print(nabla.sum(d2foo_res[0]))
+    print(endia.sum(d2foo_res[0]))
 
     var d3foo_res = d3foo(
         [
             x,
         ]
     )
-    # print(nabla.xpr(d3foo)([x,]))
+    # print(endia.xpr(d3foo)([x,]))
     print("\n3rd Derivative 1 (d3foo):")
-    print(nabla.sum(d3foo_res[0]))
+    print(endia.sum(d3foo_res[0]))

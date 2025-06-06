@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.relu(arg: nabla.core.array.Array) -> nabla.core.array.Array
+endia.relu(arg: endia.core.array.Array) -> endia.core.array.Array
 ```
 
 ## Description

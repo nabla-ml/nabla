@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.greater_equal(arg0: 'Array', arg1: 'Array') -> 'Array'
+endia.greater_equal(arg0: 'Array', arg1: 'Array') -> 'Array'
 ```
 
 ## Description

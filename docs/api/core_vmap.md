@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.vmap(func=None, in_axes=0, out_axes=0) -> 'Callable[..., Any]'
+endia.vmap(func=None, in_axes=0, out_axes=0) -> 'Callable[..., Any]'
 ```
 
 ## Description

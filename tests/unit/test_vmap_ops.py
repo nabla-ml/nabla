@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Endia 2025
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ if JAX_AVAILABLE:
     import jax
     import jax.numpy as jnp
 
-import nabla as nb
+import endia as nb
 
 # Operations that work well with vmap
 VMAP_COMPATIBLE_OPERATIONS = [
@@ -112,21 +112,21 @@ class TestVmapTransformations:
             # Define operations for vmap
             if arity == 1:
 
-                def nabla_op(inputs):
+                def endia_op(inputs):
                     return [nb_func(inputs[0])]
 
                 def jax_op(x):
                     return jax_func(x)
             else:  # arity == 2
 
-                def nabla_op(inputs):
+                def endia_op(inputs):
                     return [nb_func(inputs[0], inputs[1])]
 
                 def jax_op(x, y):
                     return jax_func(x, y)
 
             # Apply vmap
-            vmapped_fn_nb = nb.vmap(nabla_op, in_axes=in_axes)
+            vmapped_fn_nb = nb.vmap(endia_op, in_axes=in_axes)
             result_nb = vmapped_fn_nb(primals_nb)
 
             vmapped_fn_jax = jax.vmap(jax_op, in_axes=in_axes)

@@ -1,13 +1,13 @@
 # Basic Operations
 
-This tutorial covers the fundamental operations you can perform with Nabla arrays.
+This tutorial covers the fundamental operations you can perform with Endia arrays.
 
 ## Array Creation
 
-Nabla provides several ways to create arrays:
+Endia provides several ways to create arrays:
 
 ```python
-import nabla as nb
+import endia as nb
 import numpy as np
 
 # From Python lists
@@ -80,7 +80,7 @@ abs_x = nb.abs(x)
 
 ## Broadcasting
 
-Nabla supports NumPy-style broadcasting:
+Endia supports NumPy-style broadcasting:
 
 ```python
 # Broadcasting scalar with array
