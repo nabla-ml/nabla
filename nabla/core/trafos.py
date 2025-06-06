@@ -226,38 +226,49 @@ def _std_basis(args: list[Array]) -> tuple[list[int], list[Array]]:
         for dim in arg.shape:
             num_elements *= dim
 
-        batched_shape = arg.batch_dims + arg.shape
-        for _ in range(max_rank - len(batched_shape)):
-            batched_shape = (1,) + batched_shape
+        # batched_shape = arg.batch_dims + arg.shape
+        # for _ in range(max_rank - len(batched_shape)):
+        #     batched_shape = (1,) + batched_shape
 
-        batched_shape = arg.batch_dims + (num_total_arg_elements,) + arg.shape
+        batched_shape =  (num_total_arg_elements,) + arg.shape
 
         from numpy import zeros as np_zeros
 
         np_tangent = np_zeros(batched_shape, dtype=arg.dtype.to_numpy()).flatten()
 
-        num_els_batch_dims = 1
-        for dim in arg.batch_dims:
-            num_els_batch_dims *= dim
+        # num_els_batch_dims = 1
+        # for dim in arg.batch_dims:
+        #     num_els_batch_dims *= dim
 
-        for i in range(num_els_batch_dims):
-            offset = (batch_ctr + num_total_arg_elements * i) * num_elements
+        # for i in range(num_elements):
+        #     offset = batch_ctr * num_elements
 
-            for j in range(num_elements):
-                idx = offset + j
-                np_tangent[idx] = 1.0
-                offset += num_elements
-                batch_ctr += 1
+        offset = batch_ctr * num_elements
+
+        for j in range(num_elements):
+            # offset = j * num_elements
+            idx = offset + j * num_elements + j
+            np_tangent[idx] = 1.0
+            # offset += num_elements
+            batch_ctr += 1
 
         np_tangent = np_tangent.reshape(batched_shape)
         tangent = Array.from_numpy(np_tangent)
         # tangent.batch_dims = arg.batch_dims
         # tangent.shape = tangent.shape[len(arg.batch_dims) :]
 
-        from ..ops.unary import incr_batch_dim_ctr
+        # print(tangent)
+        # print(tangent)
 
-        for _ in range(len(arg.batch_dims)):
-            tangent = incr_batch_dim_ctr(tangent)
+        from ..ops.view import broadcast_batch_dims
+        tangent = broadcast_batch_dims(tangent, arg.batch_dims)
+
+        # print(tangent)
+
+        # from ..ops.unary import incr_batch_dim_ctr
+
+        # for _ in range(len(arg.batch_dims)):
+        #     tangent = incr_batch_dim_ctr(tangent)
 
         tangents.append(tangent)
         sizes.append(num_elements)
@@ -738,10 +749,10 @@ def _compute_pushfwd(inputs, outputs, tangents, trace=None):
             if arg.tangent is not None:
                 arg_tangents.append(arg.tangent)
             else:
-                from ..ops.creation import zeros
+                from ..ops.creation import zeros_like
 
                 arg_tangents.append(
-                    zeros(arg.shape, dtype=arg.dtype, device=arg.device)
+                    zeros_like(arg)
                 )
 
         try:
@@ -756,9 +767,9 @@ def _compute_pushfwd(inputs, outputs, tangents, trace=None):
         if out.tangent is not None:
             output_tangents.append(out.tangent)
         else:
-            from ..ops.creation import zeros
+            from ..ops.creation import zeros_like
 
-            output_tangents.append(zeros(out.shape, dtype=out.dtype, device=out.device))
+            output_tangents.append(zeros_like(out))
 
     return output_tangents
 
@@ -1143,6 +1154,7 @@ def vmap(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
             traced_args.append(traced_arg)
 
         # Call the original function with appropriate style
+        # print(xpr(func, *traced_args))  # Debug: print the computation graph
         outputs = func(traced_args) if is_list_style else func(*traced_args)
 
         # Handle output structure - could be single output or multiple
@@ -1335,6 +1347,7 @@ def jacrev(
     """
 
     def jacrev_fn(*args: Any) -> Any:
+        # print("\nSTART JACREV FN")
         # Normalize argnums to a tuple of integers
         if isinstance(argnums, int):
             selected_argnums = (argnums,)
@@ -1381,12 +1394,17 @@ def jacrev(
         sizes, std_basis_vectors = _std_basis(flat_y)
 
         # print("std_basis_vectors:", std_basis_vectors)
+        # print("sizes:", sizes)
 
         # print("INTERNAL")
         # print(xpr(vmap(pullback), std_basis_vectors))
 
         # Compute Jacobian using vmap over pullback
+        # print("\n   CALL INNER\n")
         grads = vmap(pullback)(std_basis_vectors)
+        # print("inner xpr:")
+        # print(xpr(vmap(pullback), std_basis_vectors))
+        # print("\n   END INNER\n")
 
         # CRITICAL: Check if std_basis_vectors were traced (indicating composition with other transformations)
         std_basis_arrays = _extract_arrays_from_pytree(std_basis_vectors)
@@ -1404,6 +1422,8 @@ def jacrev(
 
         # Extract flat input arguments for reshaping
         flat_diff_args = _extract_arrays_from_pytree(diff_args)
+
+        # print("grads:", grads)  
 
         splits = []
         for i in range(len(flat_diff_args)):  # For each input argument
@@ -1460,6 +1480,8 @@ def jacrev(
         # Make final jacobian untraced unless we're in a composition context
         if not any_std_basis_traced:
             make_untraced_pytree(final_jac)
+
+        # print("\nEND JACREV FN\n")
 
         if not has_aux:
             return final_jac

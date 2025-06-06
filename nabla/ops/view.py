@@ -31,9 +31,11 @@ __all__ = [
     "broadcast_batch_dims",
     "squeeze",
     "unsqueeze",
+    "squeeze_batch_dims",
+    "unsqueeze_batch_dims",
     "shallow_copy",
     "array_slice",
-    "inverse_slice",
+    "pad",
     "concatenate",
 ]
 
@@ -224,7 +226,7 @@ class BroadcastToOp(ViewOperation):
         )
         from .reduce import sum as sum_op  # Renamed to avoid shadowing built-in
 
-        return [sum_op(cotangent, axes=broadcasted_axes)]
+        return [sum_op(cotangent, axes=broadcasted_axes, keep_dims=False)]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
@@ -323,7 +325,7 @@ class BroadcastBatchDimsOp(ViewOperation):
         broadcasted_axes = self.get_broadcasted_axes(
             primals[0].batch_dims, output.batch_dims
         )
-        return [sum_batch_dims(cotangent, axes=broadcasted_axes)]
+        return [sum_batch_dims(cotangent, axes=broadcasted_axes, keep_dims=False)]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
@@ -402,8 +404,16 @@ def squeeze(arg: Array, axes: list[int] = None) -> Array:
     if axes is None:
         return arg
     axes = [ax if ax < 0 else -len(arg.shape) + ax for ax in axes]
+
+    # print("SQUEZZE: arg.shape:", arg.shape, "axes:", axes)
     op = SqueezeOp(axes)
-    return op.forward(arg)
+    res = op.forward(arg)
+
+    # print(" -> res.shape:", res.shape)
+
+    # print(res)
+
+    return res
 
 
 class UnsqueezeOp(ViewOperation):
@@ -453,7 +463,7 @@ class UnsqueezeOp(ViewOperation):
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
-        return squeeze(cotangent, self.axes)
+        return [squeeze(cotangent, self.axes)]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
@@ -792,69 +802,71 @@ class ArraySliceOp(ViewOperation):
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
         """Vector-Jacobian product rule for array slice."""
-        primal = primals[0]
+        # primal = primals[0]
 
-        # Check for step slicing - currently not supported for VJP
-        for s in self.slices:
-            if s.step is not None and s.step != 1:
-                raise NotImplementedError(
-                    f"VJP for array slice with step={s.step} is not yet implemented. "
-                    "Only basic slicing (step=1 or None) is currently supported."
-                )
+        # # Check for step slicing - currently not supported for VJP
+        # for s in self.slices:
+        #     if s.step is not None and s.step != 1:
+        #         raise NotImplementedError(
+        #             f"VJP for array slice with step={s.step} is not yet implemented. "
+        #             "Only basic slicing (step=1 or None) is currently supported."
+        #         )
 
-        # Create a result array with the original shape plus any batch dimensions from cotangent
-        from ..ops.creation import zeros
+        # # Create a result array with the original shape plus any batch dimensions from cotangent
+        # from ..ops.creation import zeros
 
-        # The cotangent may have additional batch dimensions from jacobian computation
-        # We need to create a result that matches cotangent's batch structure
-        cotangent_batch_dims = cotangent.batch_dims
-        result_shape = cotangent_batch_dims + primal.shape
-        result = zeros(result_shape, dtype=cotangent.dtype)
+        # # The cotangent may have additional batch dimensions from jacobian computation
+        # # We need to create a result that matches cotangent's batch structure
+        # cotangent_batch_dims = cotangent.batch_dims
+        # result_shape = cotangent_batch_dims + primal.shape
+        # result = zeros(result_shape, dtype=cotangent.dtype)
 
-        # Build target slices for placing the cotangent back into the result
-        target_slices = []
+        # # Build target slices for placing the cotangent back into the result
+        # target_slices = []
 
-        # Add full slices for any batch dimensions
-        for _ in range(len(cotangent_batch_dims)):
-            target_slices.append(slice(None))
+        # # Add full slices for any batch dimensions
+        # for _ in range(len(cotangent_batch_dims)):
+        #     target_slices.append(slice(None))
 
-        # Add the actual slices for shape dimensions
-        for i in range(len(primal.shape)):
-            if i < len(self.slices):
-                s = self.slices[i]
-                start = s.start if s.start is not None else 0
-                stop = s.stop if s.stop is not None else primal.shape[i]
+        # # Add the actual slices for shape dimensions
+        # for i in range(len(primal.shape)):
+        #     if i < len(self.slices):
+        #         s = self.slices[i]
+        #         start = s.start if s.start is not None else 0
+        #         stop = s.stop if s.stop is not None else primal.shape[i]
 
-                # Handle negative indices
-                if start < 0:
-                    start = max(0, primal.shape[i] + start)
-                if stop < 0:
-                    stop = max(0, primal.shape[i] + stop)
+        #         # Handle negative indices
+        #         if start < 0:
+        #             start = max(0, primal.shape[i] + start)
+        #         if stop < 0:
+        #             stop = max(0, primal.shape[i] + stop)
 
-                # Clamp to valid range
-                start = max(0, min(start, primal.shape[i]))
-                stop = max(start, min(stop, primal.shape[i]))
+        #         # Clamp to valid range
+        #         start = max(0, min(start, primal.shape[i]))
+        #         stop = max(start, min(stop, primal.shape[i]))
 
-                target_slices.append(slice(start, stop))
-            else:
-                target_slices.append(
-                    slice(None)
-                )  # Full slice for unspecified dimensions
+        #         target_slices.append(slice(start, stop))
+        #     else:
+        #         target_slices.append(
+        #             slice(None)
+        #         )  # Full slice for unspecified dimensions
 
-        # Place the cotangent back into the result at the correct location
-        # Use numpy to handle the complex indexing for the eagerxpr path
-        result_np = result.to_numpy().copy()  # Make a writable copy
-        result_np[tuple(target_slices)] = cotangent.to_numpy()
+        # # Place the cotangent back into the result at the correct location
+        # # Use numpy to handle the complex indexing for the eagerxpr path
+        # result_np = result.to_numpy().copy()  # Make a writable copy
+        # result_np[tuple(target_slices)] = cotangent.to_numpy()
 
-        from ..ops.creation import array as nabla_array
+        # from ..ops.creation import array as nabla_array
 
-        result_with_batch_dims = nabla_array(result_np, dtype=primal.dtype)
+        # result_with_batch_dims = nabla_array(result_np, dtype=primal.dtype)
 
-        # Set the batch dimensions to match the cotangent
-        result_with_batch_dims.batch_dims = cotangent_batch_dims
-        result_with_batch_dims.shape = primal.shape
+        # # Set the batch dimensions to match the cotangent
+        # result_with_batch_dims.batch_dims = cotangent_batch_dims
+        # result_with_batch_dims.shape = primal.shape
 
-        return [result_with_batch_dims]
+        # return [result_with_batch_dims]
+
+        return [pad(cotangent, self.slices, primals[0].shape)]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
@@ -924,7 +936,7 @@ def split(arg: Array, sizes: list[int], axis: int = 0) -> list[Array]:
     return results
 
 
-class InverseSliceOp(Operation):
+class PadOp(Operation):
     """Inverse slice operation - places a smaller array into a larger zero-filled array."""
 
     def __init__(self, slices: list[slice], target_shape: Shape):
@@ -939,7 +951,7 @@ class InverseSliceOp(Operation):
             else:
                 slice_strs.append(f"{start}:{stop}")
 
-        super().__init__(f"inverse_slice[{','.join(slice_strs)}]")
+        super().__init__(f"pad[{','.join(slice_strs)}]")
         self.slices = slices
         self.target_shape = target_shape
 
@@ -964,7 +976,7 @@ class InverseSliceOp(Operation):
 
                 if step != 1:
                     raise NotImplementedError(
-                        "Stepped slicing not yet supported in inverse_slice"
+                        "Stepped slicing not yet supported in pad"
                     )
 
                 # Handle negative indices
@@ -995,72 +1007,76 @@ class InverseSliceOp(Operation):
 
     def maxpr(self, args: list[Value], output: Array) -> None:
         """MAX graph implementation using scatter operation."""
-        # Create zero tensor with target shape
-        target_shape_with_batch = list(output.batch_dims) + list(self.target_shape)
-        zeros_tensor = ops.full(target_shape_with_batch, 0.0, dtype=args[0].dtype)
+        # # Create zero tensor with target shape
+        # target_shape_with_batch = list(output.batch_dims) + list(self.target_shape)
+        # zeros_tensor = ops.full(target_shape_with_batch, 0.0, dtype=args[0].dtype)
 
-        # Build indices for scatter operation
-        # We need to create index tensors for each dimension
-        indices = []
+        # # Build indices for scatter operation
+        # # We need to create index tensors for each dimension
+        # indices = []
 
-        # Handle batch dimensions first - these get full ranges
-        for batch_dim in output.batch_dims:
-            batch_indices = ops.range(0, batch_dim, dtype=ops.DType.index)
-            indices.append(batch_indices)
+        # # Handle batch dimensions first - these get full ranges
+        # for batch_dim in output.batch_dims:
+        #     batch_indices = ops.range(0, batch_dim, dtype=ops.DType.index)
+        #     indices.append(batch_indices)
 
-        # Handle shape dimensions - use the slice ranges
-        for i, dim_size in enumerate(self.target_shape):
-            if i < len(self.slices):
-                s = self.slices[i]
-                start = s.start if s.start is not None else 0
-                stop = s.stop if s.stop is not None else dim_size
+        # # Handle shape dimensions - use the slice ranges
+        # for i, dim_size in enumerate(self.target_shape):
+        #     if i < len(self.slices):
+        #         s = self.slices[i]
+        #         start = s.start if s.start is not None else 0
+        #         stop = s.stop if s.stop is not None else dim_size
 
-                # Handle negative indices
-                if start < 0:
-                    start = max(0, dim_size + start)
-                if stop < 0:
-                    stop = max(0, dim_size + stop)
+        #         # Handle negative indices
+        #         if start < 0:
+        #             start = max(0, dim_size + start)
+        #         if stop < 0:
+        #             stop = max(0, dim_size + stop)
 
-                # Clamp to valid range
-                start = max(0, min(start, dim_size))
-                stop = max(start, min(stop, dim_size))
+        #         # Clamp to valid range
+        #         start = max(0, min(start, dim_size))
+        #         stop = max(start, min(stop, dim_size))
 
-                # Create range for this slice
-                slice_indices = ops.range(start, stop, dtype=ops.DType.index)
-                indices.append(slice_indices)
-            else:
-                # Full dimension
-                full_indices = ops.range(0, dim_size, dtype=ops.DType.index)
-                indices.append(full_indices)
+        #         # Create range for this slice
+        #         slice_indices = ops.range(start, stop, dtype=ops.DType.index)
+        #         indices.append(slice_indices)
+        #     else:
+        #         # Full dimension
+        #         full_indices = ops.range(0, dim_size, dtype=ops.DType.index)
+        #         indices.append(full_indices)
 
-        # Use scatter to place the input array into the zero tensor
-        # This is a simplified approach - in practice, we might need a more sophisticated
-        # scatter operation depending on the exact MAX graph API
-        try:
-            # Attempt to use scatter_nd if available
-            output.tensor_value = ops.scatter_nd(zeros_tensor, indices, args[0])
-        except (AttributeError, NotImplementedError):
-            # Fallback: create a more complex implementation using slice_set
-            # This requires setting up the slice indices properly
-            slice_indices = []
+        # # Use scatter to place the input array into the zero tensor
+        # # This is a simplified approach - in practice, we might need a more sophisticated
+        # # scatter operation depending on the exact MAX graph API
+        # try:
+        #     # Attempt to use scatter_nd if available
+        #     output.tensor_value = ops.scatter_nd(zeros_tensor, indices, args[0])
+        # except (AttributeError, NotImplementedError):
+        #     # Fallback: create a more complex implementation using slice_set
+        #     # This requires setting up the slice indices properly
+        #     slice_indices = []
 
-            # Add full slices for batch dimensions
-            for _ in range(len(output.batch_dims)):
-                slice_indices.append(slice(None))
+        #     # Add full slices for batch dimensions
+        #     for _ in range(len(output.batch_dims)):
+        #         slice_indices.append(slice(None))
 
-            # Add the actual slices for shape dimensions
-            slice_indices.extend(self.slices)
+        #     # Add the actual slices for shape dimensions
+        #     slice_indices.extend(self.slices)
 
-            # Use slice_set or similar operation if available
-            if hasattr(ops, "slice_set"):
-                output.tensor_value = ops.slice_set(
-                    zeros_tensor, slice_indices, args[0]
-                )
-            else:
-                # Ultimate fallback - use the eagerxpr path
-                raise NotImplementedError(
-                    "MAX graph implementation for inverse_slice requires scatter_nd or slice_set operations"
-                )
+        #     # Use slice_set or similar operation if available
+        #     if hasattr(ops, "slice_set"):
+        #         output.tensor_value = ops.slice_set(
+        #             zeros_tensor, slice_indices, args[0]
+        #         )
+        #     else:
+        #         # Ultimate fallback - use the eagerxpr path
+        #         raise NotImplementedError(
+        #             "MAX graph implementation for pad requires scatter_nd or slice_set operations"
+        #         )
+        raise NotImplementedError(
+            "MAX graph implementation for pad is not yet implemented."
+        )
+    
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         """Eager execution using NumPy."""
@@ -1093,7 +1109,7 @@ class InverseSliceOp(Operation):
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
         """VJP rule: slice the cotangent back to original size."""
-        # The VJP of inverse_slice is just a regular slice!
+        # The VJP of pad is just a regular slice!
         from nabla.ops.view import array_slice
 
         return [array_slice(cotangent, self.slices)]
@@ -1101,8 +1117,8 @@ class InverseSliceOp(Operation):
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
-        """JVP rule: apply inverse_slice to tangents."""
-        return inverse_slice(tangents[0], self.slices, self.target_shape)
+        """JVP rule: apply pad to tangents."""
+        return pad(tangents[0], self.slices, self.target_shape)
 
     def forward(self, *args: Array) -> Array:
         """Forward pass for inverse slice operation."""
@@ -1139,7 +1155,7 @@ class InverseSliceOp(Operation):
         return res
 
 
-def inverse_slice(arg: Array, slices: list[slice], target_shape: Shape) -> Array:
+def pad(arg: Array, slices: list[slice], target_shape: Shape) -> Array:
     """Place a smaller array into a larger zero-filled array at the location specified by slices.
 
     This is the inverse operation of array slicing - given slices, a small array, and target shape,
@@ -1154,5 +1170,192 @@ def inverse_slice(arg: Array, slices: list[slice], target_shape: Shape) -> Array
     Returns:
         Larger array with input placed at sliced location, zeros elsewhere
     """
-    op = InverseSliceOp(slices, target_shape)
+    op = PadOp(slices, target_shape)
+    return op.forward(arg)
+
+
+
+
+class SqueezeBatchDimsOp(ViewOperation):
+    """Squeeze operation to remove batch dimensions of size 1."""
+
+    def __init__(self, axes: list[int] = None):
+        super().__init__(f"squeeze_batch_dims[axes={axes}]")
+        self.axes = sorted(axes) if axes is not None else []
+
+    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
+        """Shape stays the same for batch dimension operations."""
+        if len(input_shapes) != 1:
+            raise ValueError(
+                f"Squeeze batch dims operation requires 1 input shape, got {len(input_shapes)}"
+            )
+        return input_shapes[0]
+
+    def compute_output_batch_dims(self, *input_batch_dimss: tuple) -> tuple:
+        """Compute output batch_dims for squeeze operation."""
+        if len(input_batch_dimss) != 1:
+            raise ValueError(
+                f"Squeeze batch dims operation requires 1 input batch_dims, got {len(input_batch_dimss)}"
+            )
+        input_batch_dims = input_batch_dimss[0]
+
+        new_batch_dims = list(input_batch_dims)
+        for ax in self.axes:
+            if ax < -len(new_batch_dims) or ax >= len(new_batch_dims):
+                raise ValueError(f"Axis {ax} is out of bounds for squeeze batch dims operation")
+            if input_batch_dims[ax] == 1:
+                new_batch_dims[ax] = None
+            else:
+                raise ValueError(
+                    f"Cannot squeeze batch axis {ax} of size {input_batch_dims[ax]} (must be 1)"
+                )
+
+        new_batch_dims = [dim for dim in new_batch_dims if dim is not None]
+        return tuple(new_batch_dims)
+
+    def forward(self, *args: Array) -> Array:
+        """Override forward to handle case where no squeezing needed."""
+        if len(args) != 1:
+            raise ValueError(f"Squeeze batch dims operation requires 1 argument, got {len(args)}")
+        return super().forward(*args)
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        """MAX graph implementation using ops.squeeze."""
+        # res_value = args[0]
+        # # Apply squeezes to batch dimensions (at the beginning of tensor)
+        # for i, ax in enumerate(self.axes):
+        #     # Adjust axis index as we remove dimensions
+        #     adjusted_axis = ax - i
+        #     res_value = ops.squeeze(res_value, adjusted_axis)
+        # output.tensor_value = res_valu
+        raise NotImplementedError(
+            "MAX graph implementation for squeeze batch dims is not yet implemented."
+        )
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        """Eager execution using NumPy squeeze."""
+        # For batch dimensions, we need to squeeze at the beginning of the tensor
+        # since the self.axis valuea re all negative we must suberact the len(shape) from all these vlaues
+        axes = [ax - len(args[0].shape) for ax in self.axes]
+        # print(axes)
+
+        np_result = np.squeeze(args[0].to_numpy(), axis=tuple(axes))
+        output.impl = Tensor.from_numpy(np_result)
+
+    def vjp_rule(
+        self, _primals: list[Array], cotangent: Array, _output: Array
+    ) -> list[Array]:
+        """VJP rule: unsqueeze the cotangent back to original batch dimensions."""
+        return [unsqueeze_batch_dims(cotangent, self.axes)]
+
+    def jvp_rule(
+        self, _primals: list[Array], tangents: list[Array], _output: Array
+    ) -> Array:
+        """JVP rule: apply squeeze to tangents."""
+        return squeeze_batch_dims(tangents[0], self.axes)
+
+
+def squeeze_batch_dims(arg: Array, axes: list[int] = None) -> Array:
+    """Squeeze array by removing batch dimensions of size 1.
+    
+    Args:
+        arg: Input array
+        axes: List of batch dimension axes to squeeze. If None, returns array unchanged.
+        
+    Returns:
+        Array with specified batch dimensions of size 1 removed
+    """
+    if axes is None:
+        return arg
+    # Convert to negative indices for consistency with batch dimension handling
+    axes = [ax if ax < 0 else -len(arg.batch_dims) + ax for ax in axes]
+    op = SqueezeBatchDimsOp(axes)
+    return op.forward(arg)
+
+
+class UnsqueezeBatchDimsOp(ViewOperation):
+    """Unsqueeze operation to add batch dimensions of size 1."""
+
+    def __init__(self, axes: list[int] = None):
+        super().__init__(f"unsqueeze_batch_dims[axes={axes}]")
+        self.axes = sorted(axes) if axes is not None else []
+
+    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
+        """Shape stays the same for batch dimension operations."""
+        if len(input_shapes) != 1:
+            raise ValueError(
+                f"Unsqueeze batch dims operation requires 1 input shape, got {len(input_shapes)}"
+            )
+        return input_shapes[0]
+
+    def compute_output_batch_dims(self, *input_batch_dimss: tuple) -> tuple:
+        """Compute output batch_dims for unsqueeze operation."""
+        if len(input_batch_dimss) != 1:
+            raise ValueError(
+                f"Unsqueeze batch dims operation requires 1 input batch_dims, got {len(input_batch_dimss)}"
+            )
+        input_batch_dims = input_batch_dimss[0]
+
+        new_batch_dims = list(input_batch_dims)
+        for ax in self.axes:
+            if ax < -len(new_batch_dims) - 1:
+                raise ValueError(f"Axis {ax} is out of bounds for unsqueeze batch dims operation")
+            if ax + 1 <= -1:
+                new_batch_dims.insert(ax + 1, 1)
+            else:
+                new_batch_dims.append(1)
+
+        return tuple(new_batch_dims)
+
+    def forward(self, *args: Array) -> Array:
+        """Override forward to handle case where no unsqueezing needed."""
+        if len(args) != 1:
+            raise ValueError(
+                f"Unsqueeze batch dims operation requires 1 argument, got {len(args)}"
+            )
+        return super().forward(*args)
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        """MAX graph implementation using ops.unsqueeze."""
+        raise NotImplementedError(
+            "MAX graph implementation for unsqueeze batch dims is not yet implemented."
+        )
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        """Eager execution using NumPy expand_dims."""
+        axes = [ax - len(args[0].shape) for ax in self.axes] if self.axes else None
+        np_result = np.expand_dims(args[0].to_numpy(), axis=axes)
+        output.impl = Tensor.from_numpy(np_result)
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        """VJP rule: squeeze the cotangent back to original batch dimensions."""
+        return [squeeze_batch_dims(cotangent, self.axes)]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        """JVP rule: apply unsqueeze to tangents."""
+        return unsqueeze_batch_dims(tangents[0], self.axes)
+
+
+def unsqueeze_batch_dims(arg: Array, axes: list[int] = None) -> Array:
+    """Unsqueeze array by adding batch dimensions of size 1.
+    
+    Args:
+        arg: Input array
+        axes: List of positions where to insert batch dimensions of size 1. 
+              If None, returns array unchanged.
+        
+    Returns:
+        Array with batch dimensions of size 1 added at specified positions
+    """
+    if axes is None:
+        return arg
+
+    # Convert to negative indices for consistency with batch dimension handling
+    axes = [ax if ax < 0 else -len(arg.batch_dims) - 1 + ax for ax in axes]
+    
+    op = UnsqueezeBatchDimsOp(axes)
     return op.forward(arg)

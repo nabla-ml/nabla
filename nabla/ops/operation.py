@@ -33,6 +33,7 @@ class Operation(ABC):
 
     def __init__(self, name: str):
         self.name = name
+        # print(f"[DEBUG] Created operation: {name}")
 
     @abstractmethod
     def forward(self, *args: Array) -> Array:
@@ -231,7 +232,7 @@ class ReductionOperation(UnaryOperation):
                 f"Reduction operation requires 1 input shape, got {len(input_shapes)}"
             )
         input_shape = input_shapes[0]
-        return self._compute_reduction_shape(input_shape, self.axes, self.keep_dims)
+        return self._compute_reduction_shape(input_shape, self.axes)
 
     def compute_output_batch_dims(self, *input_batch_dims: tuple) -> tuple:
         """Compute output batch dims for reduction."""
@@ -239,17 +240,23 @@ class ReductionOperation(UnaryOperation):
             raise ValueError(
                 f"Reduction operation requires 1 input batch dims, got {len(input_batch_dims)}"
             )
+        # For regular reductions, batch_dims are not affected - they pass through unchanged
+        # Only SumBatchDimsOp overrides this to actually reduce batch dimensions
         return input_batch_dims[0]
 
     @staticmethod
     def _compute_reduction_shape(
         input_shape: tuple,
         axes: int | list[int] | tuple[int, ...] | None,
-        keep_dims: bool = False,
     ) -> tuple:
-        """Compute the output shape for a reduction operation."""
+        """Compute the output shape for a reduction operation.
+        
+        Always preserves dimensions (sets reduced axes to size 1).
+        Dimension removal should be handled separately by squeeze operations.
+        """
         if axes is None:
-            return () if not keep_dims else (1,) * len(input_shape)
+            # Reduce all axes - return shape with all dimensions set to 1
+            return (1,) * len(input_shape)
 
         if isinstance(axes, int):
             axes = [axes]
@@ -269,8 +276,8 @@ class ReductionOperation(UnaryOperation):
         output_shape = []
         for i, dim in enumerate(input_shape):
             if i in normalized_axes:
-                if keep_dims:
-                    output_shape.append(1)
+                # Always preserve dimensions - set reduced axes to size 1
+                output_shape.append(1)
             else:
                 output_shape.append(dim)
 

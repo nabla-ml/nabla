@@ -65,10 +65,14 @@ class Array:
         self.stage_realization: bool = False
         self.kernel_impl_path: Optional[Path] = None
 
+        # Debug print for newly created arrays
+        # print(f"[DEBUG] Created array: name='{name}', shape={shape}, dtype={dtype}")
+
         if materialize:
             self.impl = Tensor(dtype, batch_dims + shape, device=device)
         else:
             self.impl = None
+
 
     @classmethod
     def from_impl(cls, impl: Tensor, name: str = "") -> Array:
