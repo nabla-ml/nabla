@@ -35,28 +35,28 @@ PRINT_INTERVAL = 5
 SIN_PERIODS = 8
 
 
-def mlp_forward(x: nb.Array, params: list[nb.Array]) -> nb.Array:
+def mlp_forward(x: nd.Array, params: list[nd.Array]) -> nd.Array:
     """MLP forward pass through all layers."""
     output = x
     for i in range(0, len(params) - 1, 2):
         w, b = params[i], params[i + 1]
-        output = nb.matmul(output, w) + b
+        output = nd.matmul(output, w) + b
         # Apply ReLU to all layers except the last
         if i < len(params) - 2:
-            output = nb.relu(output)
+            output = nd.relu(output)
     return output
 
 
-def mean_squared_error(predictions: nb.Array, targets: nb.Array) -> nb.Array:
+def mean_squared_error(predictions: nd.Array, targets: nd.Array) -> nd.Array:
     """Compute mean squared error loss."""
     diff = predictions - targets
     squared_errors = diff * diff
-    batch_size = nb.array([np.float32(predictions.shape[0])])
-    loss = nb.sum(squared_errors) / batch_size
+    batch_size = nd.array([np.float32(predictions.shape[0])])
+    loss = nd.sum(squared_errors) / batch_size
     return loss
 
 
-def mlp_forward_and_loss(inputs: list[nb.Array]) -> float:
+def mlp_forward_and_loss(inputs: list[nd.Array]) -> float:
     """Combined forward pass and loss computation for VJP."""
     x, targets, *params = inputs
     predictions = mlp_forward(x, params)
@@ -64,20 +64,20 @@ def mlp_forward_and_loss(inputs: list[nb.Array]) -> float:
     return loss.to_numpy().item()
 
 
-def create_sin_dataset(batch_size: int = 32) -> tuple[nb.Array, nb.Array]:
+def create_sin_dataset(batch_size: int = 32) -> tuple[nd.Array, nd.Array]:
     """Create training data for learning sin function."""
     np_x = np.random.uniform(0.0, 1.0, (batch_size, 1)).astype(np.float32)
     np_targets = (np.sin(SIN_PERIODS * 2.0 * np.pi * np_x) / 2.0 + 0.5).astype(
         np.float32
     )
 
-    x = nb.Array.from_numpy(np_x)
-    targets = nb.Array.from_numpy(np_targets)
+    x = nd.Array.from_numpy(np_x)
+    targets = nd.Array.from_numpy(np_targets)
 
     return x, targets
 
 
-def initialize_mlp_params(layers: list[int], seed: int = 42) -> list[nb.Array]:
+def initialize_mlp_params(layers: list[int], seed: int = 42) -> list[nd.Array]:
     """Initialize MLP parameters with Xavier initialization."""
     np.random.seed(seed)
     params = []
@@ -90,8 +90,8 @@ def initialize_mlp_params(layers: list[int], seed: int = 42) -> list[nb.Array]:
         w_np = np.random.normal(0.0, std, (fan_in, fan_out)).astype(np.float32)
         b_np = np.zeros((1, fan_out), dtype=np.float32)
 
-        w = nb.Array.from_numpy(w_np)
-        b = nb.Array.from_numpy(b_np)
+        w = nd.Array.from_numpy(w_np)
+        b = nd.Array.from_numpy(b_np)
         params.extend([w, b])
 
     return params

@@ -21,7 +21,7 @@ print("=" * 50)
 
 
 def simple_func_endia(x):
-    return nb.sum(x**2)
+    return nd.sum(x**2)
 
 
 def simple_func_jax(x):
@@ -29,15 +29,15 @@ def simple_func_jax(x):
 
 
 # Test with single argument
-x_endia = nb.array([2.0, 3.0])
+x_endia = nd.array([2.0, 3.0])
 x_jax = jnp.array([2.0, 3.0]) if JAX_AVAILABLE else None
 
 print("\n📋 SINGLE ARGUMENT TEST:")
 print("Function: f(x) = sum(x²)")
 
 # Endia behavior
-outputs_endia, vjp_fn_endia = nb.vjp(simple_func_endia, x_endia)
-gradients_endia = vjp_fn_endia(nb.array([1.0]))
+outputs_endia, vjp_fn_endia = nd.vjp(simple_func_endia, x_endia)
+gradients_endia = vjp_fn_endia(nd.array([1.0]))
 
 print("\nEndia VJP:")
 print(f"  Output: {outputs_endia}")

@@ -10,13 +10,13 @@ The `grad` function computes gradients using reverse-mode automatic differentiat
 import endia as nb
 
 def simple_function(x):
-    return nb.sum(x ** 2)
+    return nd.sum(x ** 2)
 
 # Create gradient function
-grad_fn = nb.grad(simple_function)
+grad_fn = nd.grad(simple_function)
 
 # Compute gradient
-x = nb.array([1.0, 2.0, 3.0])
+x = nd.array([1.0, 2.0, 3.0])
 gradient = grad_fn(x)
 print(f"Gradient: {gradient}")  # [2.0, 4.0, 6.0]
 ```
@@ -25,15 +25,15 @@ print(f"Gradient: {gradient}")  # [2.0, 4.0, 6.0]
 
 ```python
 def multi_arg_function(x, y):
-    return nb.sum(x * y + x ** 2)
+    return nd.sum(x * y + x ** 2)
 
 # Gradient with respect to first argument (default)
-grad_wrt_x = nb.grad(multi_arg_function)
-x, y = nb.array([1.0, 2.0]), nb.array([3.0, 4.0])
+grad_wrt_x = nd.grad(multi_arg_function)
+x, y = nd.array([1.0, 2.0]), nd.array([3.0, 4.0])
 dx = grad_wrt_x(x, y)
 
 # Gradient with respect to specific argument
-grad_wrt_y = nb.grad(multi_arg_function, argnums=1)
+grad_wrt_y = nd.grad(multi_arg_function, argnums=1)
 dy = grad_wrt_y(x, y)
 
 print(f"Gradient w.r.t x: {dx}")
@@ -47,15 +47,15 @@ def polynomial(x):
     return x ** 4 + 2 * x ** 3 - 3 * x ** 2 + x
 
 # First derivative
-first_derivative = nb.grad(polynomial)
+first_derivative = nd.grad(polynomial)
 
 # Second derivative (gradient of gradient)
-second_derivative = nb.grad(first_derivative)
+second_derivative = nd.grad(first_derivative)
 
 # Third derivative
-third_derivative = nb.grad(second_derivative)
+third_derivative = nd.grad(second_derivative)
 
-x = nb.array([2.0])
+x = nd.array([2.0])
 print(f"f'(2) = {first_derivative(x)}")
 print(f"f''(2) = {second_derivative(x)}")
 print(f"f'''(2) = {third_derivative(x)}")
@@ -67,15 +67,15 @@ The `vjp` function computes both the function value and returns a function to co
 
 ```python
 def vector_function(x):
-    return nb.array([x[0] ** 2 + x[1], x[0] * x[1] ** 2])
+    return nd.array([x[0] ** 2 + x[1], x[0] * x[1] ** 2])
 
-x = nb.array([2.0, 3.0])
+x = nd.array([2.0, 3.0])
 
 # VJP returns (output, vjp_function)
-output, vjp_fn = nb.vjp(vector_function, x)
+output, vjp_fn = nd.vjp(vector_function, x)
 
 # Compute VJP with a cotangent vector
-cotangent = nb.array([1.0, 1.0])
+cotangent = nd.array([1.0, 1.0])
 gradient = vjp_fn(cotangent)
 
 print(f"Function output: {output}")
@@ -86,21 +86,21 @@ print(f"VJP result: {gradient}")
 
 ```python
 def linear_layer(x, weights, bias):
-    return nb.matmul(x, weights) + bias
+    return nd.matmul(x, weights) + bias
 
 def relu_layer(x, weights, bias):
-    return nb.relu(linear_layer(x, weights, bias))
+    return nd.relu(linear_layer(x, weights, bias))
 
 # Sample data
-x = nb.randn((32, 10))  # Batch of 32, input dim 10
-W = nb.randn((10, 5))   # Weights
-b = nb.zeros((5,))      # Bias
+x = nd.randn((32, 10))  # Batch of 32, input dim 10
+W = nd.randn((10, 5))   # Weights
+b = nd.zeros((5,))      # Bias
 
 # Forward pass with VJP
-output, vjp_fn = nb.vjp(lambda W, b: relu_layer(x, W, b), W, b)
+output, vjp_fn = nd.vjp(lambda W, b: relu_layer(x, W, b), W, b)
 
 # Backward pass (assuming unit cotangent)
-cotangent = nb.ones_like(output)
+cotangent = nd.ones_like(output)
 dW, db = vjp_fn(cotangent)
 
 print(f"Output shape: {output.shape}")
@@ -114,13 +114,13 @@ The `jvp` function implements forward-mode automatic differentiation:
 
 ```python
 def vector_function(x):
-    return nb.array([x[0] ** 2 + x[1], x[0] * x[1] ** 2])
+    return nd.array([x[0] ** 2 + x[1], x[0] * x[1] ** 2])
 
-x = nb.array([2.0, 3.0])
-tangent = nb.array([1.0, 0.0])  # Direction vector
+x = nd.array([2.0, 3.0])
+tangent = nd.array([1.0, 0.0])  # Direction vector
 
 # JVP returns (output, jvp_result)
-output, jvp_result = nb.jvp(vector_function, (x,), (tangent,))
+output, jvp_result = nd.jvp(vector_function, (x,), (tangent,))
 
 print(f"Function output: {output}")
 print(f"JVP result: {jvp_result}")
@@ -144,7 +144,7 @@ def loss_function(params):  # params could be millions of parameters
     # ... complex computation ...
     return scalar_loss  # Single output
 
-grad_loss = nb.grad(loss_function)  # Efficient with VJP
+grad_loss = nd.grad(loss_function)  # Efficient with VJP
 
 # Example: Few inputs → many outputs (use JVP)  
 def physics_simulation(initial_conditions):  # Few parameters
@@ -152,7 +152,7 @@ def physics_simulation(initial_conditions):  # Few parameters
     return state_vector  # Many outputs (position, velocity, etc.)
 
 # Sensitivity to initial conditions
-output, sensitivity = nb.jvp(physics_simulation, (initial_conditions,), (perturbation,))
+output, sensitivity = nd.jvp(physics_simulation, (initial_conditions,), (perturbation,))
 ```
 
 ## Combining Transformations
@@ -161,19 +161,19 @@ You can compose different AD transformations:
 
 ```python
 def quadratic_form(x, A):
-    return nb.sum(x * nb.matmul(A, x))
+    return nd.sum(x * nd.matmul(A, x))
 
 # Gradient of gradient (Hessian-vector product)
 def hvp(f, x, v):
     """Hessian-vector product using grad composition"""
-    return nb.jvp(nb.grad(f), (x,), (v,))[1]
+    return nd.jvp(nd.grad(f), (x,), (v,))[1]
 
 # Example usage
-x = nb.array([1.0, 2.0, 3.0])
-A = nb.array([[2.0, -1.0, 0.0],
+x = nd.array([1.0, 2.0, 3.0])
+A = nd.array([[2.0, -1.0, 0.0],
               [-1.0, 2.0, -1.0], 
               [0.0, -1.0, 2.0]])
-v = nb.array([1.0, 0.0, 0.0])
+v = nd.array([1.0, 0.0, 0.0])
 
 hessian_vector_product = hvp(lambda x: quadratic_form(x, A), x, v)
 print(f"Hessian-vector product: {hessian_vector_product}")
@@ -184,11 +184,11 @@ print(f"Hessian-vector product: {hessian_vector_product}")
 ```python
 def rosenbrock(x):
     """The Rosenbrock function - a classic optimization test case"""
-    return nb.sum(100.0 * (x[1:] - x[:-1] ** 2) ** 2 + (1 - x[:-1]) ** 2)
+    return nd.sum(100.0 * (x[1:] - x[:-1] ** 2) ** 2 + (1 - x[:-1]) ** 2)
 
 def gradient_descent(f, x0, learning_rate=0.01, num_steps=1000):
     """Simple gradient descent optimizer"""
-    grad_f = nb.grad(f)
+    grad_f = nd.grad(f)
     x = x0
     
     for i in range(num_steps):
@@ -202,7 +202,7 @@ def gradient_descent(f, x0, learning_rate=0.01, num_steps=1000):
     return x
 
 # Optimize the Rosenbrock function
-x0 = nb.array([0.0, 0.0])
+x0 = nd.array([0.0, 0.0])
 x_opt = gradient_descent(rosenbrock, x0, learning_rate=0.001, num_steps=5000)
 print(f"Optimized point: {x_opt}")
 print(f"Function value: {rosenbrock(x_opt)}")
@@ -218,11 +218,11 @@ For memory-efficient training of large models:
 def expensive_function(x):
     # Simulate a memory-intensive computation
     for _ in range(10):
-        x = nb.sin(x) + nb.cos(x)
-    return nb.sum(x ** 2)
+        x = nd.sin(x) + nd.cos(x)
+    return nd.sum(x ** 2)
 
 # Standard gradient computation (high memory)
-standard_grad = nb.grad(expensive_function)
+standard_grad = nd.grad(expensive_function)
 
 # Memory-efficient gradient with checkpointing
 # (Note: Implementation details may vary)
@@ -230,7 +230,7 @@ def checkpointed_grad(f):
     def grad_fn(x):
         # This would implement gradient checkpointing
         # Trading computation for memory
-        return nb.grad(f)(x)
+        return nd.grad(f)(x)
     return grad_fn
 
 efficient_grad = checkpointed_grad(expensive_function)
@@ -243,12 +243,12 @@ efficient_grad = checkpointed_grad(expensive_function)
 ```python
 def mse_loss(predictions, targets):
     """Mean squared error loss"""
-    return nb.mean((predictions - targets) ** 2)
+    return nd.mean((predictions - targets) ** 2)
 
 def cross_entropy_loss(logits, labels):
     """Cross-entropy loss with numerical stability"""
-    log_softmax = logits - nb.log(nb.sum(nb.exp(logits), axis=-1, keepdims=True))
-    return -nb.mean(nb.sum(labels * log_softmax, axis=-1))
+    log_softmax = logits - nd.log(nd.sum(nd.exp(logits), axis=-1, keepdims=True))
+    return -nd.mean(nd.sum(labels * log_softmax, axis=-1))
 ```
 
 ### 2. Parameter Updates
@@ -268,7 +268,7 @@ def adam_update(params, gradients, m, v, t, lr=0.001, beta1=0.9, beta2=0.999, ep
     v_hat = [vi / (1 - beta2 ** t) for vi in new_v]
     
     # Parameter update
-    new_params = [p - lr * mh / (nb.sqrt(vh) + eps) 
+    new_params = [p - lr * mh / (nd.sqrt(vh) + eps) 
                   for p, mh, vh in zip(params, m_hat, v_hat)]
     
     return new_params, new_m, new_v

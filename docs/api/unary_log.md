@@ -16,8 +16,8 @@ Element-wise natural logarithm.
 import endia as nb
 
 # Natural logarithm
-x = nb.array([1, np.e, np.e**2])
-result = nb.log(x)
+x = nd.array([1, np.e, np.e**2])
+result = nd.log(x)
 print(result)  # [0, 1, 2] (approximately)
 ```
 

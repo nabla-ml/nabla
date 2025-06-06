@@ -44,10 +44,10 @@ class TestLinearAlgebraOperations:
             a_np = generate_test_data(shape_a, dtype)
             b_np = generate_test_data(shape_b, dtype)
 
-            a_nb, a_jax = nb.Array.from_numpy(a_np), jnp.array(a_np)
-            b_nb, b_jax = nb.Array.from_numpy(b_np), jnp.array(b_np)
+            a_nb, a_jax = nd.Array.from_numpy(a_np), jnp.array(a_np)
+            b_nb, b_jax = nd.Array.from_numpy(b_np), jnp.array(b_np)
 
-            result_nb = nb.matmul(a_nb, b_nb)
+            result_nb = nd.matmul(a_nb, b_nb)
             result_jax = jnp.matmul(a_jax, b_jax)
 
             assert allclose_recursive(result_nb, result_jax, rtol, atol), (
@@ -60,20 +60,20 @@ class TestLinearAlgebraOperations:
 
         for shapes_tuple in SIMPLE_MATMUL_SHAPES:
             primals_np = [generate_test_data(s, dtype) for s in shapes_tuple]
-            primals_nb = [nb.Array.from_numpy(p) for p in primals_np]
+            primals_nb = [nd.Array.from_numpy(p) for p in primals_np]
             primals_jax = [jnp.array(p) for p in primals_np]
 
             # Determine output shape for cotangent
             dummy_jax_out = jnp.matmul(primals_jax[0], primals_jax[1])
             cotangent_np = generate_test_data(dummy_jax_out.shape, dummy_jax_out.dtype)
-            cotangent_nb = nb.Array.from_numpy(cotangent_np)
+            cotangent_nb = nd.Array.from_numpy(cotangent_np)
             cotangent_jax = jnp.array(cotangent_np)
 
             # Endia VJP
             def endia_op(x, y):
-                return nb.matmul(x, y)
+                return nd.matmul(x, y)
 
-            outputs_nb, vjp_fn_nb = nb.vjp(endia_op, *primals_nb)
+            outputs_nb, vjp_fn_nb = nd.vjp(endia_op, *primals_nb)
             grads_nb = vjp_fn_nb(cotangent_nb)
 
             # JAX VJP
@@ -98,16 +98,16 @@ class TestLinearAlgebraOperations:
             primals_np = [generate_test_data(s, dtype) for s in shapes_tuple]
             tangents_np = [generate_test_data(s, dtype) for s in shapes_tuple]
 
-            primals_nb = tuple(nb.Array.from_numpy(p) for p in primals_np)
-            tangents_nb = tuple(nb.Array.from_numpy(t) for t in tangents_np)
+            primals_nb = tuple(nd.Array.from_numpy(p) for p in primals_np)
+            tangents_nb = tuple(nd.Array.from_numpy(t) for t in tangents_np)
             primals_jax = tuple(jnp.array(p) for p in primals_np)
             tangents_jax = tuple(jnp.array(t) for t in tangents_np)
 
             # Endia JVP
             def endia_op(inputs):
-                return [nb.matmul(inputs[0], inputs[1])]
+                return [nd.matmul(inputs[0], inputs[1])]
 
-            primal_out_nb, tangent_out_nb = nb.jvp(
+            primal_out_nb, tangent_out_nb = nd.jvp(
                 endia_op, list(primals_nb), list(tangents_nb)
             )
 

@@ -16,7 +16,7 @@ Create an array filled with zeros.
 import endia as nb
 
 # Create array of zeros
-result = nb.zeros((2, 3))
+result = nd.zeros((2, 3))
 print(result)  # [[0, 0, 0], [0, 0, 0]]
 ```
 

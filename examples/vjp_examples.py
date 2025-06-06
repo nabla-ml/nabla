@@ -22,18 +22,18 @@ import endia as nb
 
 def test_vjp_cubic_function():
     """Test VJP computation for a cubic function f(x) = x³."""
-    device = nb.device("cpu")
+    device = nd.device("cpu")
 
-    def cubic_fn(inputs: list[nb.Array]) -> list[nb.Array]:
+    def cubic_fn(inputs: list[nd.Array]) -> list[nd.Array]:
         x = inputs[0]
         return [x * x * x]  # f(x) = x³
 
     # Test case: x = 2.0
-    x = nb.array([2.0]).to(device)
+    x = nd.array([2.0]).to(device)
 
     # Compute VJP
-    values, vjp_fn = nb.vjp(cubic_fn, [x])
-    cotangent = [nb.ones(values[0].shape).to(device)]
+    values, vjp_fn = nd.vjp(cubic_fn, [x])
+    cotangent = [nd.ones(values[0].shape).to(device)]
     gradients = vjp_fn(cotangent)
 
     # Assertions
@@ -51,25 +51,25 @@ def test_vjp_cubic_function():
 
 def test_vjp_second_order_derivatives():
     """Test second-order derivatives using nested VJP calls."""
-    device = nb.device("cpu")
+    device = nd.device("cpu")
 
-    def cubic_fn(inputs: list[nb.Array]) -> list[nb.Array]:
+    def cubic_fn(inputs: list[nd.Array]) -> list[nd.Array]:
         x = inputs[0]
         return [x * x * x]  # f(x) = x³
 
-    x = nb.array([2.0]).to(device)
+    x = nd.array([2.0]).to(device)
 
     # Define jacobian function for second-order derivatives
     def jacobian_fn(inputs):
         x_inner = inputs[0]
-        _, vjp_fn = nb.vjp(cubic_fn, [x_inner])
-        cotangent = [nb.ones((1,)).to(device)]
+        _, vjp_fn = nd.vjp(cubic_fn, [x_inner])
+        cotangent = [nd.ones((1,)).to(device)]
         gradients = vjp_fn(cotangent)
         return [gradients[0][0]]
 
     # Compute second-order derivative
-    _, hessian_fn = nb.vjp(jacobian_fn, [x])
-    cotangent2 = [nb.ones((1,)).to(device)]
+    _, hessian_fn = nd.vjp(jacobian_fn, [x])
+    cotangent2 = [nd.ones((1,)).to(device)]
     second_order_grad = hessian_fn(cotangent2)
 
     # f''(x) = 6x, so f''(2) = 12
@@ -83,17 +83,17 @@ def test_vjp_second_order_derivatives():
 
 def test_vjp_multiple_inputs():
     """Test VJP with multiple input arrays."""
-    device = nb.device("cpu")
+    device = nd.device("cpu")
 
-    def multi_input_fn(inputs: list[nb.Array]) -> list[nb.Array]:
+    def multi_input_fn(inputs: list[nd.Array]) -> list[nd.Array]:
         x, y = inputs[0], inputs[1]
         return [x * y + x * x]  # f(x,y) = xy + x²
 
-    x = nb.array([3.0]).to(device)
-    y = nb.array([4.0]).to(device)
+    x = nd.array([3.0]).to(device)
+    y = nd.array([4.0]).to(device)
 
-    values, vjp_fn = nb.vjp(multi_input_fn, [x, y])
-    cotangent = [nb.ones(values[0].shape).to(device)]
+    values, vjp_fn = nd.vjp(multi_input_fn, [x, y])
+    cotangent = [nd.ones(values[0].shape).to(device)]
     gradients = vjp_fn(cotangent)
 
     # f(3,4) = 3*4 + 3² = 12 + 9 = 21
@@ -114,15 +114,15 @@ def test_vjp_multiple_inputs():
 @pytest.mark.parametrize("x_val", [0.0, 1.0, -2.0, 5.0])
 def test_vjp_parametrized_inputs(x_val):
     """Test VJP with different input values."""
-    device = nb.device("cpu")
+    device = nd.device("cpu")
 
-    def square_fn(inputs: list[nb.Array]) -> list[nb.Array]:
+    def square_fn(inputs: list[nd.Array]) -> list[nd.Array]:
         x = inputs[0]
         return [x * x]  # f(x) = x²
 
-    x = nb.array([x_val]).to(device)
-    values, vjp_fn = nb.vjp(square_fn, [x])
-    cotangent = [nb.ones(values[0].shape).to(device)]
+    x = nd.array([x_val]).to(device)
+    values, vjp_fn = nd.vjp(square_fn, [x])
+    cotangent = [nd.ones(values[0].shape).to(device)]
     gradients = vjp_fn(cotangent)
 
     # f(x) = x²

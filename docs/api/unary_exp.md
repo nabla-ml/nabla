@@ -16,8 +16,8 @@ Element-wise exponential function.
 import endia as nb
 
 # Exponential function
-x = nb.array([0, 1, 2])
-result = nb.exp(x)
+x = nd.array([0, 1, 2])
+result = nd.exp(x)
 print(result)  # [1, e, e^2] (approximately)
 ```
 

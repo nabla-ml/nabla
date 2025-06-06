@@ -33,7 +33,7 @@ TEST_SEEDS = [42, 123]  # Only 2 seeds instead of 4
 @pytest.mark.parametrize("shape", TEST_SHAPES)
 def test_zeros_init(shape):
     """Test zeros initialization produces all zeros."""
-    result = nb.zeros(shape)
+    result = nd.zeros(shape)
     assert result.shape == shape
     assert np.allclose(result.to_numpy(), 0.0), "Zeros init should produce all zeros"
 
@@ -41,7 +41,7 @@ def test_zeros_init(shape):
 @pytest.mark.parametrize("shape", TEST_SHAPES)
 def test_ones_init(shape):
     """Test ones initialization produces all ones."""
-    result = nb.ones(shape)
+    result = nd.ones(shape)
     assert result.shape == shape
     assert np.allclose(result.to_numpy(), 1.0), "Ones init should produce all ones"
 
@@ -51,7 +51,7 @@ def test_ones_init(shape):
 def test_xavier_uniform_properties(shape, seed):
     """Test Xavier uniform statistical properties."""
     gain = 1.0
-    result = nb.xavier_uniform(shape, gain=gain, seed=seed)
+    result = nd.xavier_uniform(shape, gain=gain, seed=seed)
     values = result.to_numpy()
 
     # Check shape
@@ -76,7 +76,7 @@ def test_xavier_uniform_properties(shape, seed):
 def test_xavier_normal_properties(shape, seed):
     """Test Xavier normal statistical properties."""
     gain = 1.0
-    result = nb.xavier_normal(shape, gain=gain, seed=seed)
+    result = nd.xavier_normal(shape, gain=gain, seed=seed)
     values = result.to_numpy()
 
     # Check shape
@@ -102,7 +102,7 @@ def test_xavier_normal_properties(shape, seed):
 @pytest.mark.parametrize("seed", TEST_SEEDS)
 def test_he_uniform_properties(shape, seed):
     """Test He uniform statistical properties."""
-    result = nb.he_uniform(shape, seed=seed)
+    result = nd.he_uniform(shape, seed=seed)
     values = result.to_numpy()
 
     # Check shape
@@ -119,7 +119,7 @@ def test_he_uniform_properties(shape, seed):
 @pytest.mark.parametrize("seed", TEST_SEEDS)
 def test_he_normal_properties(shape, seed):
     """Test He normal statistical properties."""
-    result = nb.he_normal(shape, seed=seed)
+    result = nd.he_normal(shape, seed=seed)
     values = result.to_numpy()
 
     # Check shape
@@ -137,7 +137,7 @@ def test_he_normal_properties(shape, seed):
 @pytest.mark.parametrize("seed", TEST_SEEDS)
 def test_lecun_uniform_properties(shape, seed):
     """Test LeCun uniform statistical properties."""
-    result = nb.lecun_uniform(shape, seed=seed)
+    result = nd.lecun_uniform(shape, seed=seed)
     values = result.to_numpy()
 
     # Check shape
@@ -154,7 +154,7 @@ def test_lecun_uniform_properties(shape, seed):
 @pytest.mark.parametrize("seed", TEST_SEEDS)
 def test_lecun_normal_properties(shape, seed):
     """Test LeCun normal statistical properties."""
-    result = nb.lecun_normal(shape, seed=seed)
+    result = nd.lecun_normal(shape, seed=seed)
     values = result.to_numpy()
 
     # Check shape
@@ -174,7 +174,7 @@ def test_randn_properties(seed):
     shape = (100, 200)
     mean, std = 0.0, 1.0
 
-    result = nb.randn(shape, mean=mean, std=std, seed=seed)
+    result = nd.randn(shape, mean=mean, std=std, seed=seed)
     values = result.to_numpy()
 
     # Check shape
@@ -191,7 +191,7 @@ def test_rand_properties(seed):
     shape = (100, 200)
     lower, upper = -2.0, 3.0
 
-    result = nb.rand(shape, lower=lower, upper=upper, seed=seed)
+    result = nd.rand(shape, lower=lower, upper=upper, seed=seed)
     values = result.to_numpy()
 
     # Check shape
@@ -212,13 +212,13 @@ def test_error_conditions():
     """Test error conditions for initialization methods."""
     # Test 1D shape (should fail for most methods)
     with pytest.raises(ValueError):
-        nb.xavier_uniform((10,))
+        nd.xavier_uniform((10,))
 
     with pytest.raises(ValueError):
-        nb.he_normal((10,))
+        nd.he_normal((10,))
 
     with pytest.raises(ValueError):
-        nb.lecun_uniform((10,))
+        nd.lecun_uniform((10,))
 
 
 def test_deterministic_behavior():
@@ -228,12 +228,12 @@ def test_deterministic_behavior():
 
     # Test multiple methods
     methods = [
-        nb.xavier_uniform,
-        nb.xavier_normal,
-        nb.he_uniform,
-        nb.he_normal,
-        nb.lecun_uniform,
-        nb.lecun_normal,
+        nd.xavier_uniform,
+        nd.xavier_normal,
+        nd.he_uniform,
+        nd.he_normal,
+        nd.lecun_uniform,
+        nd.lecun_normal,
     ]
 
     for method in methods:

@@ -17,7 +17,7 @@ import endia as nb
 
 # Create array from data
 data = [[1, 2, 3], [4, 5, 6]]
-result = nb.array(data)
+result = nd.array(data)
 print(result)  # [[1, 2, 3], [4, 5, 6]]
 ```
 

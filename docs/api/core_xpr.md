@@ -35,16 +35,16 @@ import endia as nb
 def f(x):
     return x ** 2
 
-x = nb.array([1.0, 2.0])
-print(nb.xpr(f, x))
+x = nd.array([1.0, 2.0])
+print(nd.xpr(f, x))
 
 # Multiple input function  
 def g(x, y):
     return x * y + x ** 2
 
-x = nb.array([1.0, 2.0])
-y = nb.array([3.0, 4.0])
-print(nb.xpr(g, x, y))
+x = nd.array([1.0, 2.0])
+y = nd.array([3.0, 4.0])
+print(nd.xpr(g, x, y))
 ```
 
 ## See Also

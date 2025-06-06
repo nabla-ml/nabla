@@ -17,18 +17,18 @@ def test_single_input_single_output():
 
     # Setup
     x_np = np.array([1.0, 2.0, 3.0])
-    x_nb = nb.Array.from_numpy(x_np)
+    x_nb = nd.Array.from_numpy(x_np)
     x_jax = jnp.array(x_np)
 
     cotangent_np = np.array([1.0, 1.0, 1.0])
-    cotangent_nb = nb.Array.from_numpy(cotangent_np)
+    cotangent_nb = nd.Array.from_numpy(cotangent_np)
     cotangent_jax = jnp.array(cotangent_np)
 
     # Endia VJP
     def nb_fn(x):
-        return nb.sin(x)
+        return nd.sin(x)
 
-    out_nb, vjp_nb = nb.vjp(nb_fn, x_nb)
+    out_nb, vjp_nb = nd.vjp(nb_fn, x_nb)
     grads_nb = vjp_nb(cotangent_nb)
 
     # JAX VJP
@@ -74,20 +74,20 @@ def test_multiple_inputs_single_output():
     # Setup
     x_np = np.array([1.0, 2.0])
     y_np = np.array([3.0, 4.0])
-    x_nb = nb.Array.from_numpy(x_np)
-    y_nb = nb.Array.from_numpy(y_np)
+    x_nb = nd.Array.from_numpy(x_np)
+    y_nb = nd.Array.from_numpy(y_np)
     x_jax = jnp.array(x_np)
     y_jax = jnp.array(y_np)
 
     cotangent_np = np.array([1.0, 1.0])
-    cotangent_nb = nb.Array.from_numpy(cotangent_np)
+    cotangent_nb = nd.Array.from_numpy(cotangent_np)
     cotangent_jax = jnp.array(cotangent_np)
 
     # Endia VJP
     def nb_fn(x, y):
-        return nb.add(x, y)
+        return nd.add(x, y)
 
-    out_nb, vjp_nb = nb.vjp(nb_fn, x_nb, y_nb)
+    out_nb, vjp_nb = nd.vjp(nb_fn, x_nb, y_nb)
     grads_nb = vjp_nb(cotangent_nb)
 
     # JAX VJP
@@ -136,8 +136,8 @@ def test_nested_structure():
     # inputs_dict = {"x": x_np, "y": y_np}
 
     # Convert to Endia and JAX
-    x_nb = nb.Array.from_numpy(x_np)
-    y_nb = nb.Array.from_numpy(y_np)
+    x_nb = nd.Array.from_numpy(x_np)
+    y_nb = nd.Array.from_numpy(y_np)
     inputs_nb = {"x": x_nb, "y": y_nb}
 
     x_jax = jnp.array(x_np)
@@ -145,14 +145,14 @@ def test_nested_structure():
     inputs_jax = {"x": x_jax, "y": y_jax}
 
     cotangent_np = np.array([1.0, 1.0])
-    cotangent_nb = nb.Array.from_numpy(cotangent_np)
+    cotangent_nb = nd.Array.from_numpy(cotangent_np)
     cotangent_jax = jnp.array(cotangent_np)
 
     # Endia VJP
     def nb_fn(inputs):
-        return nb.mul(inputs["x"], inputs["y"])
+        return nd.mul(inputs["x"], inputs["y"])
 
-    out_nb, vjp_nb = nb.vjp(nb_fn, inputs_nb)
+    out_nb, vjp_nb = nd.vjp(nb_fn, inputs_nb)
     grads_nb = vjp_nb(cotangent_nb)
 
     # JAX VJP

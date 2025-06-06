@@ -508,85 +508,85 @@ import endia as nb
         """Generate basic usage examples for common functions."""
         examples = {
             "sin": """# Basic trigonometric function
-x = nb.array([0, np.pi/2, np.pi])
-result = nb.sin(x)
+x = nd.array([0, np.pi/2, np.pi])
+result = nd.sin(x)
 print(result)  # [0, 1, 0] (approximately)""",
             "cos": """# Basic trigonometric function
-x = nb.array([0, np.pi/2, np.pi])
-result = nb.cos(x)
+x = nd.array([0, np.pi/2, np.pi])
+result = nd.cos(x)
 print(result)  # [1, 0, -1] (approximately)""",
             "exp": """# Exponential function
-x = nb.array([0, 1, 2])
-result = nb.exp(x)
+x = nd.array([0, 1, 2])
+result = nd.exp(x)
 print(result)  # [1, e, e^2] (approximately)""",
             "log": """# Natural logarithm
-x = nb.array([1, np.e, np.e**2])
-result = nb.log(x)
+x = nd.array([1, np.e, np.e**2])
+result = nd.log(x)
 print(result)  # [0, 1, 2] (approximately)""",
             "add": """# Element-wise addition
-a = nb.array([1, 2, 3])
-b = nb.array([4, 5, 6])
-result = nb.add(a, b)
+a = nd.array([1, 2, 3])
+b = nd.array([4, 5, 6])
+result = nd.add(a, b)
 print(result)  # [5, 7, 9]""",
             "mul": """# Element-wise multiplication
-a = nb.array([1, 2, 3])
-b = nb.array([4, 5, 6])
-result = nb.mul(a, b)
+a = nd.array([1, 2, 3])
+b = nd.array([4, 5, 6])
+result = nd.mul(a, b)
 print(result)  # [4, 10, 18]""",
             "sum": """# Sum along axes
-x = nb.array([[1, 2], [3, 4]])
-result = nb.sum(x)  # Sum all elements
+x = nd.array([[1, 2], [3, 4]])
+result = nd.sum(x)  # Sum all elements
 print(result)  # 10
 
-result_axis0 = nb.sum(x, axis=0)  # Sum along rows
+result_axis0 = nd.sum(x, axis=0)  # Sum along rows
 print(result_axis0)  # [4, 6]""",
             "matmul": """# Matrix multiplication
-A = nb.array([[1, 2], [3, 4]])
-B = nb.array([[5, 6], [7, 8]])
-result = nb.matmul(A, B)
+A = nd.array([[1, 2], [3, 4]])
+B = nd.array([[5, 6], [7, 8]])
+result = nd.matmul(A, B)
 print(result)  # [[19, 22], [43, 50]]""",
             "reshape": """# Change array shape
-x = nb.array([1, 2, 3, 4, 5, 6])
-result = nb.reshape(x, (2, 3))
+x = nd.array([1, 2, 3, 4, 5, 6])
+result = nd.reshape(x, (2, 3))
 print(result)  # [[1, 2, 3], [4, 5, 6]]""",
             "transpose": """# Transpose array
-x = nb.array([[1, 2, 3], [4, 5, 6]])
-result = nb.transpose(x)
+x = nd.array([[1, 2, 3], [4, 5, 6]])
+result = nd.transpose(x)
 print(result)  # [[1, 4], [2, 5], [3, 6]]""",
             "ones": """# Create array of ones
-result = nb.ones((2, 3))
+result = nd.ones((2, 3))
 print(result)  # [[1, 1, 1], [1, 1, 1]]""",
             "zeros": """# Create array of zeros
-result = nb.zeros((2, 3))
+result = nd.zeros((2, 3))
 print(result)  # [[0, 0, 0], [0, 0, 0]]""",
             "array": """# Create array from data
 data = [[1, 2, 3], [4, 5, 6]]
-result = nb.array(data)
+result = nd.array(data)
 print(result)  # [[1, 2, 3], [4, 5, 6]]""",
             "vjp": """# Vector-Jacobian product for reverse-mode AD
 def f(x):
-    return nb.sum(x ** 2)
+    return nd.sum(x ** 2)
 
-x = nb.array([1.0, 2.0, 3.0])
-output, vjp_fn = nb.vjp(f, x)
-gradients = vjp_fn(nb.ones_like(output))
+x = nd.array([1.0, 2.0, 3.0])
+output, vjp_fn = nd.vjp(f, x)
+gradients = vjp_fn(nd.ones_like(output))
 print(gradients)  # [2.0, 4.0, 6.0]""",
             "jit": """# Just-in-time compilation
-@nb.jit
+@nd.jit
 def fast_function(x):
-    return nb.sum(x ** 2) + nb.mean(x)
+    return nd.sum(x ** 2) + nd.mean(x)
 
-x = nb.randn((1000,))
+x = nd.randn((1000,))
 result = fast_function(x)  # Compiled on first call""",
             "vmap": """# Vectorize function over batch dimension
 def dot_product(a, b):
-    return nb.sum(a * b)
+    return nd.sum(a * b)
 
 # Vectorize over first dimension
-batch_dot = nb.vmap(dot_product, in_axes=(0, 0))
+batch_dot = nd.vmap(dot_product, in_axes=(0, 0))
 
-a_batch = nb.randn((10, 5))  # 10 vectors of length 5
-b_batch = nb.randn((10, 5))
+a_batch = nd.randn((10, 5))  # 10 vectors of length 5
+b_batch = nd.randn((10, 5))
 results = batch_dot(a_batch, b_batch)  # 10 dot products""",
         }
 

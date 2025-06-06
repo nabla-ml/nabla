@@ -16,8 +16,8 @@ Element-wise sine.
 import endia as nb
 
 # Basic trigonometric function
-x = nb.array([0, np.pi/2, np.pi])
-result = nb.sin(x)
+x = nd.array([0, np.pi/2, np.pi])
+result = nd.sin(x)
 print(result)  # [0, 1, 0] (approximately)
 ```
 

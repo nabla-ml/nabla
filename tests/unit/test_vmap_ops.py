@@ -33,19 +33,19 @@ import endia as nb
 
 # Operations that work well with vmap
 VMAP_COMPATIBLE_OPERATIONS = [
-    ("add", nb.add, jnp.add, lambda i, d: {}, 2),
-    ("sub", nb.sub, jnp.subtract, lambda i, d: {}, 2),
+    ("add", nd.add, jnp.add, lambda i, d: {}, 2),
+    ("sub", nd.sub, jnp.subtract, lambda i, d: {}, 2),
     (
         "mul",
-        nb.mul,
+        nd.mul,
         jnp.multiply,
         lambda i, d: ({"for_binary_op_rhs": True} if i == 1 else {}),
         2,
     ),
-    ("exp", nb.exp, jnp.exp, lambda i, d: {}, 1),
-    ("sin", nb.sin, jnp.sin, lambda i, d: {}, 1),
-    ("cos", nb.cos, jnp.cos, lambda i, d: {}, 1),
-    ("relu", nb.relu, lambda x: jnp.maximum(x, 0), lambda i, d: {}, 1),
+    ("exp", nd.exp, jnp.exp, lambda i, d: {}, 1),
+    ("sin", nd.sin, jnp.sin, lambda i, d: {}, 1),
+    ("cos", nd.cos, jnp.cos, lambda i, d: {}, 1),
+    ("relu", nd.relu, lambda x: jnp.maximum(x, 0), lambda i, d: {}, 1),
 ]
 
 
@@ -106,7 +106,7 @@ class TestVmapTransformations:
 
             in_axes = tuple(in_axes_list)
 
-            primals_nb = [nb.Array.from_numpy(p) for p in batched_primals_np]
+            primals_nb = [nd.Array.from_numpy(p) for p in batched_primals_np]
             primals_jax = [jnp.array(p) for p in batched_primals_np]
 
             # Define operations for vmap
@@ -126,7 +126,7 @@ class TestVmapTransformations:
                     return jax_func(x, y)
 
             # Apply vmap
-            vmapped_fn_nb = nb.vmap(endia_op, in_axes=in_axes)
+            vmapped_fn_nb = nd.vmap(endia_op, in_axes=in_axes)
             result_nb = vmapped_fn_nb(primals_nb)
 
             vmapped_fn_jax = jax.vmap(jax_op, in_axes=in_axes)
@@ -143,18 +143,18 @@ class TestVmapTransformations:
 
         def simple_func(inputs):
             x = inputs[0]
-            return [x * x + nb.array([1.0], dtype=x.dtype)]
+            return [x * x + nd.array([1.0], dtype=x.dtype)]
 
         def jax_simple_func(x):
             return x * x + 1.0
 
         # Create batched input
         x_batched_np = generate_test_data((batch_size, 3), dtype)
-        x_batched_nb = nb.Array.from_numpy(x_batched_np)
+        x_batched_nb = nd.Array.from_numpy(x_batched_np)
         x_batched_jax = jnp.array(x_batched_np)
 
         # Apply vmap
-        vmapped_nb = nb.vmap(simple_func)
+        vmapped_nb = nd.vmap(simple_func)
         result_nb = vmapped_nb([x_batched_nb])
 
         vmapped_jax = jax.vmap(jax_simple_func)
@@ -171,8 +171,8 @@ class TestVmapTransformations:
 
         def nested_func(inputs):
             x, y = inputs[0], inputs[1]
-            z = nb.add(x, y)
-            return [nb.mul(z, z)]
+            z = nd.add(x, y)
+            return [nd.mul(z, z)]
 
         def jax_nested_func(x, y):
             z = jnp.add(x, y)
@@ -182,13 +182,13 @@ class TestVmapTransformations:
         x_batched_np = generate_test_data((batch_size, 2, 3), dtype)
         y_batched_np = generate_test_data((batch_size, 2, 3), dtype)
 
-        x_batched_nb = nb.Array.from_numpy(x_batched_np)
-        y_batched_nb = nb.Array.from_numpy(y_batched_np)
+        x_batched_nb = nd.Array.from_numpy(x_batched_np)
+        y_batched_nb = nd.Array.from_numpy(y_batched_np)
         x_batched_jax = jnp.array(x_batched_np)
         y_batched_jax = jnp.array(y_batched_np)
 
         # Apply vmap
-        vmapped_nb = nb.vmap(nested_func, in_axes=(0, 0))
+        vmapped_nb = nd.vmap(nested_func, in_axes=(0, 0))
         result_nb = vmapped_nb([x_batched_nb, y_batched_nb])
 
         vmapped_jax = jax.vmap(jax_nested_func, in_axes=(0, 0))

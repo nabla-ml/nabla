@@ -27,11 +27,11 @@ def simple_add(args):
 def test_simple_vmap_basic():
     """Test basic vmap functionality with broadcasting."""
     # Test simple vmap
-    a = nb.arange((3, 4), nb.DType.float32)  # shape (3, 4)
-    b = nb.arange((4,), nb.DType.float32)  # shape (4,)
+    a = nd.arange((3, 4), nd.DType.float32)  # shape (3, 4)
+    b = nd.arange((4,), nd.DType.float32)  # shape (4,)
 
     # This should vectorize over the first axis of a, and broadcast b
-    vmapped_add = nb.vmap(simple_add, [0, None])
+    vmapped_add = nd.vmap(simple_add, [0, None])
     result = vmapped_add([a, b])
 
     # Assertions
@@ -50,10 +50,10 @@ def test_simple_vmap_basic():
 def test_simple_vmap_different_shapes():
     """Test vmap with different input shapes."""
     # Test with different shapes
-    a = nb.ones((2, 3), nb.DType.float32)
-    b = nb.array([1.0, 2.0, 3.0], nb.DType.float32)
+    a = nd.ones((2, 3), nd.DType.float32)
+    b = nd.array([1.0, 2.0, 3.0], nd.DType.float32)
 
-    vmapped_add = nb.vmap(simple_add, [0, None])
+    vmapped_add = nd.vmap(simple_add, [0, None])
     result = vmapped_add([a, b])
 
     assert result[0].shape == (2, 3), f"Expected shape (2, 3), got {result[0].shape}"
@@ -68,10 +68,10 @@ def test_simple_vmap_different_shapes():
 def test_simple_vmap_parametrized():
     """Test vmap with different batch sizes."""
     batch_size = 5  # Change this to test different batch sizes
-    a = nb.ones((batch_size, 2), nb.DType.float32)
-    b = nb.array([10.0, 20.0], nb.DType.float32)
+    a = nd.ones((batch_size, 2), nd.DType.float32)
+    b = nd.array([10.0, 20.0], nd.DType.float32)
 
-    vmapped_add = nb.vmap(simple_add, [0, None])
+    vmapped_add = nd.vmap(simple_add, [0, None])
     result = vmapped_add([a, b])
 
     assert result[0].shape == (batch_size, 2), (
@@ -88,13 +88,13 @@ def test_simple_vmap_parametrized():
 def test_vmap_with_sum():
     """Test vmap with reduce operations."""
 
-    def foo(args: list[nb.Array]) -> list[nb.Array]:
+    def foo(args: list[nd.Array]) -> list[nd.Array]:
         a = args[0]
-        c = nb.arange((2, 3, 4))
-        res = nb.sum(c * a * a, axes=[0])
+        c = nd.arange((2, 3, 4))
+        res = nd.sum(c * a * a, axes=[0])
         return [res]
 
-    a = nb.arange((2, 3, 4))
+    a = nd.arange((2, 3, 4))
 
     # First test the base function
     res = foo([a])
@@ -103,7 +103,7 @@ def test_vmap_with_sum():
     )
 
     # Test vmap version
-    foo_vmapped = nb.vmap(foo)
+    foo_vmapped = nd.vmap(foo)
     res_vmapped = foo_vmapped([a])
 
     # Note: vmap with pow may have different behavior than expected
@@ -127,18 +127,18 @@ def test_vmap_with_sum():
 def test_vmap_expression_compilation():
     """Test that vmap expressions can be compiled and executed."""
 
-    def foo(args: list[nb.Array]) -> list[nb.Array]:
+    def foo(args: list[nd.Array]) -> list[nd.Array]:
         a = args[0]
-        c = nb.arange((2, 3, 4))
-        res = nb.sum(c * a * a, axes=[0])
+        c = nd.arange((2, 3, 4))
+        res = nd.sum(c * a * a, axes=[0])
         return [res]
 
-    a = nb.arange((2, 3, 4))
-    foo_vmapped = nb.vmap(foo)
+    a = nd.arange((2, 3, 4))
+    foo_vmapped = nd.vmap(foo)
 
     # Test that the expression can be compiled
     try:
-        expr = nb.xpr(foo_vmapped, [a])
+        expr = nd.xpr(foo_vmapped, [a])
         assert expr is not None, "Failed to compile vmap expression"
     except Exception as e:
         pytest.fail(f"Failed to compile vmap expression: {e}")
@@ -155,13 +155,13 @@ def test_vmap_expression_compilation():
 def test_vmap_with_different_arrays():
     """Test vmap with different input array configurations."""
 
-    def simple_multiply(args: list[nb.Array]) -> list[nb.Array]:
+    def simple_multiply(args: list[nd.Array]) -> list[nd.Array]:
         a = args[0]
         return [a * a]  # Simple squaring operation
 
     # Test with 1D array
-    a1d = nb.array([1.0, 2.0, 3.0], nb.DType.float32)
-    vmapped_1d = nb.vmap(simple_multiply)
+    a1d = nd.array([1.0, 2.0, 3.0], nd.DType.float32)
+    vmapped_1d = nd.vmap(simple_multiply)
     result_1d = vmapped_1d([a1d])
 
     expected_1d = np.array([1.0, 4.0, 9.0], dtype=np.float32)
@@ -170,8 +170,8 @@ def test_vmap_with_different_arrays():
     )
 
     # Test with 2D array
-    a2d = nb.array([[1.0, 2.0], [3.0, 4.0]], nb.DType.float32)
-    vmapped_2d = nb.vmap(simple_multiply)
+    a2d = nd.array([[1.0, 2.0], [3.0, 4.0]], nd.DType.float32)
+    vmapped_2d = nd.vmap(simple_multiply)
     result_2d = vmapped_2d([a2d])
 
     expected_2d = np.array([[1.0, 4.0], [9.0, 16.0]], dtype=np.float32)
@@ -183,30 +183,30 @@ def test_vmap_with_different_arrays():
 def test_vmap_batched_matmul():
     """Test batched matrix multiplication using nested vmap."""
 
-    def dot(args: list[nb.Array]) -> list[nb.Array]:
+    def dot(args: list[nd.Array]) -> list[nd.Array]:
         return [
-            nb.sum(
+            nd.sum(
                 args[0] * args[1],
                 axes=[0],
             )
         ]
 
-    def mv_prod(args: list[nb.Array]) -> list[nb.Array]:
-        return nb.vmap(dot, [0, None])(args)
+    def mv_prod(args: list[nd.Array]) -> list[nd.Array]:
+        return nd.vmap(dot, [0, None])(args)
 
-    def mm_prod(args: list[nb.Array]) -> list[nb.Array]:
-        return nb.vmap(mv_prod, [None, 1], [1])(args)
+    def mm_prod(args: list[nd.Array]) -> list[nd.Array]:
+        return nd.vmap(mv_prod, [None, 1], [1])(args)
 
-    def batched_matmul(args: list[nb.Array]) -> list[nb.Array]:
-        return [nb.vmap(mm_prod, [0, None])([args[0], args[1]])[0]]
+    def batched_matmul(args: list[nd.Array]) -> list[nd.Array]:
+        return [nd.vmap(mm_prod, [0, None])([args[0], args[1]])[0]]
 
     # Test data
-    batch_a = nb.arange((2, 3, 4), nb.DType.float32)  # Batch of 2 matrices (3x4)
-    mat_b = nb.arange((4, 5), nb.DType.float32)  # Single matrix (4x5)
+    batch_a = nd.arange((2, 3, 4), nd.DType.float32)  # Batch of 2 matrices (3x4)
+    mat_b = nd.arange((4, 5), nd.DType.float32)  # Single matrix (4x5)
 
     # Test that expression can be compiled
     try:
-        expr = nb.xpr(batched_matmul, [batch_a, mat_b])
+        expr = nd.xpr(batched_matmul, [batch_a, mat_b])
         assert expr is not None, "Failed to compile batched matmul expression"
     except Exception as e:
         pytest.fail(f"Failed to compile batched matmul expression: {e}")
@@ -237,17 +237,17 @@ def test_vmap_batched_matmul():
 def test_simple_dot_product():
     """Test the basic dot product function used in batched matmul."""
 
-    def dot(args: list[nb.Array]) -> list[nb.Array]:
+    def dot(args: list[nd.Array]) -> list[nd.Array]:
         return [
-            nb.sum(
+            nd.sum(
                 args[0] * args[1],
                 axes=[0],
             )
         ]
 
     # Test with simple vectors
-    a = nb.array([1.0, 2.0, 3.0], nb.DType.float32)
-    b = nb.array([4.0, 5.0, 6.0], nb.DType.float32)
+    a = nd.array([1.0, 2.0, 3.0], nd.DType.float32)
+    b = nd.array([4.0, 5.0, 6.0], nd.DType.float32)
 
     result = dot([a, b])
 
@@ -261,20 +261,20 @@ def test_simple_dot_product():
 def test_matrix_vector_product():
     """Test matrix-vector multiplication using vmap."""
 
-    def dot(args: list[nb.Array]) -> list[nb.Array]:
+    def dot(args: list[nd.Array]) -> list[nd.Array]:
         return [
-            nb.sum(
+            nd.sum(
                 args[0] * args[1],
                 axes=[0],
             )
         ]
 
-    def mv_prod(args: list[nb.Array]) -> list[nb.Array]:
-        return nb.vmap(dot, [0, None])(args)
+    def mv_prod(args: list[nd.Array]) -> list[nd.Array]:
+        return nd.vmap(dot, [0, None])(args)
 
     # Test data: 2x3 matrix times 3-element vector
-    matrix = nb.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], nb.DType.float32)
-    vector = nb.array([1.0, 1.0, 1.0], nb.DType.float32)
+    matrix = nd.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], nd.DType.float32)
+    vector = nd.array([1.0, 1.0, 1.0], nd.DType.float32)
 
     result = mv_prod([matrix, vector])
 
@@ -288,22 +288,22 @@ def test_matrix_vector_product():
 def test_batched_matmul_parametrized():
     """Test batched matmul with different dimensions."""
 
-    def dot(args: list[nb.Array]) -> list[nb.Array]:
-        return [nb.sum(args[0] * args[1], axes=[0])]
+    def dot(args: list[nd.Array]) -> list[nd.Array]:
+        return [nd.sum(args[0] * args[1], axes=[0])]
 
-    def mv_prod(args: list[nb.Array]) -> list[nb.Array]:
-        return nb.vmap(dot, [0, None])(args)
+    def mv_prod(args: list[nd.Array]) -> list[nd.Array]:
+        return nd.vmap(dot, [0, None])(args)
 
-    def mm_prod(args: list[nb.Array]) -> list[nb.Array]:
-        return nb.vmap(mv_prod, [None, 1], [1])(args)
+    def mm_prod(args: list[nd.Array]) -> list[nd.Array]:
+        return nd.vmap(mv_prod, [None, 1], [1])(args)
 
-    def batched_matmul(args: list[nb.Array]) -> list[nb.Array]:
-        return [nb.vmap(mm_prod, [0, None])([args[0], args[1]])[0]]
+    def batched_matmul(args: list[nd.Array]) -> list[nd.Array]:
+        return [nd.vmap(mm_prod, [0, None])([args[0], args[1]])[0]]
 
     # Create test matrices
     batch_size, inner_dim = 2, 4  # Change these to test different dimensions
-    batch_a = nb.arange((batch_size, 3, inner_dim), nb.DType.float32)
-    mat_b = nb.arange((inner_dim, 5), nb.DType.float32)
+    batch_a = nd.arange((batch_size, 3, inner_dim), nd.DType.float32)
+    mat_b = nd.arange((inner_dim, 5), nd.DType.float32)
 
     result = batched_matmul([batch_a, mat_b])
 

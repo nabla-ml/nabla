@@ -22,25 +22,25 @@ import endia as nb
 def test_jit_with_if_else():
     """Test JIT compilation with conditional statements"""
 
-    device = nb.device("cpu")
+    device = nd.device("cpu")
 
-    def func(inputs: list[nb.Array]) -> list[nb.Array]:
+    def func(inputs: list[nd.Array]) -> list[nd.Array]:
         x = inputs[0]
-        x = nb.sin(x)
+        x = nd.sin(x)
 
-        x = nb.negate(x) if x.to_numpy().item() > 0.5 else x + nb.array([1000.0])
+        x = nd.negate(x) if x.to_numpy().item() > 0.5 else x + nd.array([1000.0])
 
         x = x * 2
         return [x]
 
-    jitted_func = func  # nb.jit(func)
+    jitted_func = func  # nd.jit(func)
 
     for _ in range(10):
-        x0 = nb.array([2.0]).to(device)
+        x0 = nd.array([2.0]).to(device)
         outputs0 = jitted_func([x0])
         print("Output:", outputs0[0])
 
-        x1 = nb.array([3.0]).to(device)
+        x1 = nd.array([3.0]).to(device)
         outputs1 = jitted_func([x1])
         print("Output:", outputs1[0])
 

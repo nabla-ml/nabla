@@ -24,17 +24,17 @@ import endia as nb
 
 def test_jvp_cubic_function():
     """Test JVP computation for a cubic function f(x) = x³."""
-    device = nb.device("cpu")
+    device = nd.device("cpu")
 
     def cubic_fn(inputs):
         x = inputs[0]
         return [x * x * x]  # f(x) = x³
 
     # Test case: x = 2.0, tangent = 1.0
-    x = nb.array([2.0]).to(device)
-    tangent = nb.array([1.0]).to(device)
+    x = nd.array([2.0]).to(device)
+    tangent = nd.array([1.0]).to(device)
 
-    values, tangent_out = nb.jvp(cubic_fn, [x], [tangent])
+    values, tangent_out = nd.jvp(cubic_fn, [x], [tangent])
 
     # Assertions
     # f(2) = 8
@@ -52,27 +52,27 @@ def test_jvp_cubic_function():
 
 def test_jvp_higher_order_derivatives():
     """Test second-order derivatives using nested JVP calls."""
-    device = nb.device("cpu")
+    device = nd.device("cpu")
 
     def cubic_fn(inputs):
         x = inputs[0]
         return [x * x * x]  # f(x) = x³
 
-    x = nb.array([2.0]).to(device)
-    tangent = nb.array([1.0]).to(device)
+    x = nd.array([2.0]).to(device)
+    tangent = nd.array([1.0]).to(device)
 
     # First-order JVP
-    values, first_order = nb.jvp(cubic_fn, [x], [tangent])
+    values, first_order = nd.jvp(cubic_fn, [x], [tangent])
 
     # Define jacobian function for second-order derivatives
     def jacobian_fn(inputs):
         x_inner = inputs[0]
-        ones_tangent = nb.ones((1,)).to(device)
-        _, tangents = nb.jvp(cubic_fn, [x_inner], [ones_tangent])
+        ones_tangent = nd.ones((1,)).to(device)
+        _, tangents = nd.jvp(cubic_fn, [x_inner], [ones_tangent])
         return [tangents[0]]
 
     # Second-order JVP
-    _, second_order = nb.jvp(jacobian_fn, [x], [tangent])
+    _, second_order = nd.jvp(jacobian_fn, [x], [tangent])
 
     # f''(x) = 6x, so f''(2) = 12
     expected_second_order = 6 * 2.0 * 1.0  # 12.0
@@ -83,18 +83,18 @@ def test_jvp_higher_order_derivatives():
 
 def test_jvp_multiple_inputs():
     """Test JVP with multiple input arrays."""
-    device = nb.device("cpu")
+    device = nd.device("cpu")
 
     def multi_input_fn(inputs):
         x, y = inputs[0], inputs[1]
         return [x * y + x * x]  # f(x,y) = xy + x²
 
-    x = nb.array([3.0]).to(device)
-    y = nb.array([4.0]).to(device)
-    tangent_x = nb.array([1.0]).to(device)
-    tangent_y = nb.array([1.0]).to(device)
+    x = nd.array([3.0]).to(device)
+    y = nd.array([4.0]).to(device)
+    tangent_x = nd.array([1.0]).to(device)
+    tangent_y = nd.array([1.0]).to(device)
 
-    values, tangent_out = nb.jvp(multi_input_fn, [x, y], [tangent_x, tangent_y])
+    values, tangent_out = nd.jvp(multi_input_fn, [x, y], [tangent_x, tangent_y])
 
     # f(3,4) = 3*4 + 3² = 12 + 9 = 21
     assert np.isclose(values[0].to_numpy(), 21.0, rtol=1e-6), (
@@ -116,16 +116,16 @@ def test_jvp_multiple_inputs():
 )
 def test_jvp_parametrized_inputs(x_val, tangent_val):
     """Test JVP with different input and tangent values."""
-    device = nb.device("cpu")
+    device = nd.device("cpu")
 
     def square_fn(inputs):
         x = inputs[0]
         return [x * x]  # f(x) = x²
 
-    x = nb.array([x_val]).to(device)
-    tangent = nb.array([tangent_val]).to(device)
+    x = nd.array([x_val]).to(device)
+    tangent = nd.array([tangent_val]).to(device)
 
-    values, tangent_out = nb.jvp(square_fn, [x], [tangent])
+    values, tangent_out = nd.jvp(square_fn, [x], [tangent])
 
     # f(x) = x²
     expected_value = x_val**2
@@ -142,17 +142,17 @@ def test_jvp_parametrized_inputs(x_val, tangent_val):
 
 def test_jvp_with_squeeze_unsqueeze():
     """Test JVP with squeeze and unsqueeze operations."""
-    device = nb.device("cpu")
+    device = nd.device("cpu")
 
     def squeeze_unsqueeze_fn(inputs):
-        x = nb.unsqueeze(nb.unsqueeze(inputs[0], [0]), [0])
-        x = nb.squeeze(nb.squeeze(x, [0]), [0])
+        x = nd.unsqueeze(nd.unsqueeze(inputs[0], [0]), [0])
+        x = nd.squeeze(nd.squeeze(x, [0]), [0])
         return [x * x * x]  # f(x) = x³
 
-    x = nb.array([2.0]).to(device)
-    tangent = nb.array([1.0]).to(device)
+    x = nd.array([2.0]).to(device)
+    tangent = nd.array([1.0]).to(device)
 
-    values, tangent_out = nb.jvp(squeeze_unsqueeze_fn, [x], [tangent])
+    values, tangent_out = nd.jvp(squeeze_unsqueeze_fn, [x], [tangent])
 
     # Should behave the same as cubic function
     assert np.isclose(values[0].to_numpy(), 8.0, rtol=1e-6), (

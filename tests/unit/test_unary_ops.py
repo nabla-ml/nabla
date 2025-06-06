@@ -37,38 +37,38 @@ import endia as nb
 UNARY_OPERATIONS = [
     (
         "negate",
-        nb.negate,
+        nd.negate,
         jnp.negative if JAX_AVAILABLE else None,
         lambda i, d: {},
         "- (prefix)",
     ),
-    ("exp", nb.exp, jnp.exp if JAX_AVAILABLE else None, lambda i, d: {}, None),
+    ("exp", nd.exp, jnp.exp if JAX_AVAILABLE else None, lambda i, d: {}, None),
     (
         "log",
-        nb.log,
+        nd.log,
         jnp.log if JAX_AVAILABLE else None,
         lambda i, d: {"ensure_positive": True},
         None,
     ),
-    ("sin", nb.sin, jnp.sin if JAX_AVAILABLE else None, lambda i, d: {}, None),
-    ("cos", nb.cos, jnp.cos if JAX_AVAILABLE else None, lambda i, d: {}, None),
+    ("sin", nd.sin, jnp.sin if JAX_AVAILABLE else None, lambda i, d: {}, None),
+    ("cos", nd.cos, jnp.cos if JAX_AVAILABLE else None, lambda i, d: {}, None),
     (
         "relu",
-        nb.relu,
+        nd.relu,
         (lambda x: jnp.maximum(x, 0)) if JAX_AVAILABLE else None,
         lambda i, d: {},
         None,
     ),
     (
         "transpose",
-        nb.transpose,
+        nd.transpose,
         (lambda x: jnp.transpose(x)) if JAX_AVAILABLE else None,
         lambda i, d: {},
         None,
     ),
     (
         "pow",
-        nb.sum,
+        nd.sum,
         (lambda x: jnp.sum(x)) if JAX_AVAILABLE else None,
         lambda i, d: {},
         None,
@@ -94,7 +94,7 @@ class TestUnaryOperations:
 
         for shape_a, desc in shapes_to_test:
             a_np = generate_test_data(shape_a, dtype, **constraints_fn(0, dtype))
-            a_nb, a_jax = nb.Array.from_numpy(a_np), jnp.array(a_np)
+            a_nb, a_jax = nd.Array.from_numpy(a_np), jnp.array(a_np)
 
             result_nb = nb_func(a_nb)
             result_jax = jax_func(a_jax)
@@ -109,10 +109,10 @@ class TestUnaryOperations:
         shape = (3,)
 
         a_np = generate_test_data(shape, dtype)
-        a_nb = nb.Array.from_numpy(a_np)
+        a_nb = nd.Array.from_numpy(a_np)
 
         result_nb_op = -a_nb  # Operator overload
-        result_nb_func = nb.negate(a_nb)  # Function call
+        result_nb_func = nd.negate(a_nb)  # Function call
         result_jax = -jnp.array(a_np)  # JAX reference
 
         assert allclose_recursive(result_nb_op, result_jax, rtol, atol), (
@@ -144,20 +144,20 @@ class TestUnaryOperations:
                 generate_test_data(s, dtype, **constraints_fn(i, dtype))
                 for i, s in enumerate(shapes_tuple)
             ]
-            primals_nb = [nb.Array.from_numpy(p) for p in primals_np]
+            primals_nb = [nd.Array.from_numpy(p) for p in primals_np]
             primals_jax = [jnp.array(p) for p in primals_np]
 
             # Determine output shape for cotangent
             dummy_jax_out = jax_func(primals_jax[0])
             cotangent_np = generate_test_data(dummy_jax_out.shape, dummy_jax_out.dtype)
-            cotangent_nb = nb.Array.from_numpy(cotangent_np)
+            cotangent_nb = nd.Array.from_numpy(cotangent_np)
             cotangent_jax = jnp.array(cotangent_np)
 
             # Endia VJP
             def endia_op(x):
                 return nb_func(x)
 
-            outputs_nb, vjp_fn_nb = nb.vjp(endia_op, primals_nb[0])
+            outputs_nb, vjp_fn_nb = nd.vjp(endia_op, primals_nb[0])
             grads_nb = vjp_fn_nb(cotangent_nb)
 
             # JAX VJP
@@ -194,8 +194,8 @@ class TestUnaryOperations:
             ]
             tangents_np = [generate_test_data(s, dtype) for s in shapes_tuple]
 
-            primals_nb = tuple(nb.Array.from_numpy(p) for p in primals_np)
-            tangents_nb = tuple(nb.Array.from_numpy(t) for t in tangents_np)
+            primals_nb = tuple(nd.Array.from_numpy(p) for p in primals_np)
+            tangents_nb = tuple(nd.Array.from_numpy(t) for t in tangents_np)
             primals_jax = tuple(jnp.array(p) for p in primals_np)
             tangents_jax = tuple(jnp.array(t) for t in tangents_np)
 
@@ -203,7 +203,7 @@ class TestUnaryOperations:
             def endia_op(inputs):
                 return [nb_func(inputs[0])]
 
-            primal_out_nb, tangent_out_nb = nb.jvp(
+            primal_out_nb, tangent_out_nb = nd.jvp(
                 endia_op, list(primals_nb), list(tangents_nb)
             )
 

@@ -16,9 +16,9 @@ Element-wise addition of two arrays or array and scalar.
 import endia as nb
 
 # Element-wise addition
-a = nb.array([1, 2, 3])
-b = nb.array([4, 5, 6])
-result = nb.add(a, b)
+a = nd.array([1, 2, 3])
+b = nd.array([4, 5, 6])
+result = nd.add(a, b)
 print(result)  # [5, 7, 9]
 ```
 

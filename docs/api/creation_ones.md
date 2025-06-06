@@ -16,7 +16,7 @@ Create an array filled with ones.
 import endia as nb
 
 # Create array of ones
-result = nb.ones((2, 3))
+result = nd.ones((2, 3))
 print(result)  # [[1, 1, 1], [1, 1, 1]]
 ```
 

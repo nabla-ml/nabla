@@ -33,11 +33,11 @@ import endia as nb
 
 # Vector-Jacobian product for reverse-mode AD
 def f(x):
-    return nb.sum(x ** 2)
+    return nd.sum(x ** 2)
 
-x = nb.array([1.0, 2.0, 3.0])
-output, vjp_fn = nb.vjp(f, x)
-gradients = vjp_fn(nb.ones_like(output))
+x = nd.array([1.0, 2.0, 3.0])
+output, vjp_fn = nd.vjp(f, x)
+gradients = vjp_fn(nd.ones_like(output))
 print(gradients)  # [2.0, 4.0, 6.0]
 ```
 

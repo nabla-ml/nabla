@@ -30,12 +30,12 @@ def test_single_array_arg():
     print("\n=== Test 1: Single Array Argument ===")
 
     def func_endia(x):
-        return nb.sum(x**2)
+        return nd.sum(x**2)
 
     # Endia test
-    x_endia = nb.array([2.0, 3.0, 4.0])
-    outputs_endia, vjp_fn_endia = nb.vjp(func_endia, x_endia)
-    gradients_endia = vjp_fn_endia(nb.array([1.0]))
+    x_endia = nd.array([2.0, 3.0, 4.0])
+    outputs_endia, vjp_fn_endia = nd.vjp(func_endia, x_endia)
+    gradients_endia = vjp_fn_endia(nd.array([1.0]))
 
     print("Endia:")
     print(f"  Input: {x_endia}")
@@ -76,13 +76,13 @@ def test_multiple_array_args():
     print("\n=== Test 2: Multiple Array Arguments ===")
 
     def func_endia(x, y):
-        return nb.sum(x * y)
+        return nd.sum(x * y)
 
     # Endia test
-    x_endia = nb.array([2.0, 3.0])
-    y_endia = nb.array([4.0, 5.0])
-    outputs_endia, vjp_fn_endia = nb.vjp(func_endia, x_endia, y_endia)
-    gradients_endia = vjp_fn_endia(nb.array([1.0]))
+    x_endia = nd.array([2.0, 3.0])
+    y_endia = nd.array([4.0, 5.0])
+    outputs_endia, vjp_fn_endia = nd.vjp(func_endia, x_endia, y_endia)
+    gradients_endia = vjp_fn_endia(nd.array([1.0]))
 
     print("Endia:")
     print(f"  Inputs: x={x_endia}, y={y_endia}")
@@ -138,12 +138,12 @@ def test_dict_input():
     print("\n=== Test 3: Dictionary Input ===")
 
     def func_endia(params):
-        return nb.sum(params["x"] ** 2) + nb.sum(params["y"])
+        return nd.sum(params["x"] ** 2) + nd.sum(params["y"])
 
     # Endia test
-    params_endia = {"x": nb.array([2.0, 3.0]), "y": nb.array([4.0, 5.0])}
-    outputs_endia, vjp_fn_endia = nb.vjp(func_endia, params_endia)
-    gradients_endia = vjp_fn_endia(nb.array([1.0]))
+    params_endia = {"x": nd.array([2.0, 3.0]), "y": nd.array([4.0, 5.0])}
+    outputs_endia, vjp_fn_endia = nd.vjp(func_endia, params_endia)
+    gradients_endia = vjp_fn_endia(nd.array([1.0]))
 
     print("Endia:")
     print(f"  Input: {params_endia}")
@@ -206,19 +206,19 @@ def test_nested_dict_input():
     print("\n=== Test 4: Nested Dictionary Input ===")
 
     def func_endia(params):
-        x_sum = nb.sum(params["layer1"]["weights"] ** 2)
-        bias_sum = nb.sum(params["layer1"]["bias"])
+        x_sum = nd.sum(params["layer1"]["weights"] ** 2)
+        bias_sum = nd.sum(params["layer1"]["bias"])
         return x_sum + bias_sum
 
     # Endia test
     params_endia = {
         "layer1": {
-            "weights": nb.array([[1.0, 2.0], [3.0, 4.0]]),
-            "bias": nb.array([0.5, 1.0]),
+            "weights": nd.array([[1.0, 2.0], [3.0, 4.0]]),
+            "bias": nd.array([0.5, 1.0]),
         }
     }
-    outputs_endia, vjp_fn_endia = nb.vjp(func_endia, params_endia)
-    gradients_endia = vjp_fn_endia(nb.array([1.0]))
+    outputs_endia, vjp_fn_endia = nd.vjp(func_endia, params_endia)
+    gradients_endia = vjp_fn_endia(nd.array([1.0]))
 
     print("Endia:")
     print(f"  Input structure preserved: {isinstance(gradients_endia, tuple)}")
@@ -288,12 +288,12 @@ def test_list_input():
 
     def func_endia(data):
         x, y = data
-        return nb.sum(x * y)
+        return nd.sum(x * y)
 
     # Endia test
-    data_endia = [nb.array([2.0, 3.0]), nb.array([4.0, 5.0])]
-    outputs_endia, vjp_fn_endia = nb.vjp(func_endia, data_endia)
-    gradients_endia = vjp_fn_endia(nb.array([1.0]))
+    data_endia = [nd.array([2.0, 3.0]), nd.array([4.0, 5.0])]
+    outputs_endia, vjp_fn_endia = nd.vjp(func_endia, data_endia)
+    gradients_endia = vjp_fn_endia(nd.array([1.0]))
 
     print("Endia:")
     print(f"  Input: {data_endia}")
@@ -357,15 +357,15 @@ def test_mixed_nested_structure():
     def func_endia(data):
         x = data["x"]
         y_list = data["y"]
-        return nb.sum(x * y_list[0]) + nb.sum(x * y_list[1])
+        return nd.sum(x * y_list[0]) + nd.sum(x * y_list[1])
 
     # Endia test
     data_endia = {
-        "x": nb.array([2.0, 3.0]),
-        "y": [nb.array([4.0, 5.0]), nb.array([6.0, 7.0])],
+        "x": nd.array([2.0, 3.0]),
+        "y": [nd.array([4.0, 5.0]), nd.array([6.0, 7.0])],
     }
-    outputs_endia, vjp_fn_endia = nb.vjp(func_endia, data_endia)
-    gradients_endia = vjp_fn_endia(nb.array([1.0]))
+    outputs_endia, vjp_fn_endia = nd.vjp(func_endia, data_endia)
+    gradients_endia = vjp_fn_endia(nd.array([1.0]))
 
     print("Endia:")
     print(f"  Input: {data_endia}")

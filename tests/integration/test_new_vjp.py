@@ -13,17 +13,17 @@ def test_vjp_simple():
         return x * 2.0
 
     # Create input
-    x = nb.array([1.0, 2.0, 3.0])
+    x = nd.array([1.0, 2.0, 3.0])
 
     # Test VJP
-    outputs, vjp_fn = nb.vjp(simple_func, x)
+    outputs, vjp_fn = nd.vjp(simple_func, x)
 
     print("Test 1: Simple function f(x) = x * 2")
     print(f"Input: {x}")
     print(f"Output: {outputs}")
 
     # Test gradients
-    cotangent = nb.array([1.0, 1.0, 1.0])
+    cotangent = nd.array([1.0, 1.0, 1.0])
     gradient = vjp_fn(cotangent)  # Returns single gradient since single arg
 
     print(f"Cotangent: {cotangent}")
@@ -38,11 +38,11 @@ def test_vjp_multiple_args():
         return x * y + x
 
     # Create inputs
-    x = nb.array([1.0, 2.0])
-    y = nb.array([3.0, 4.0])
+    x = nd.array([1.0, 2.0])
+    y = nd.array([3.0, 4.0])
 
     # Test VJP
-    outputs, vjp_fn = nb.vjp(multi_arg_func, x, y)
+    outputs, vjp_fn = nd.vjp(multi_arg_func, x, y)
 
     print("Test 2: Multi-argument function f(x, y) = x * y + x")
     print(f"Input x: {x}")
@@ -50,7 +50,7 @@ def test_vjp_multiple_args():
     print(f"Output: {outputs}")
 
     # Test gradients
-    cotangent = nb.array([1.0, 1.0])
+    cotangent = nd.array([1.0, 1.0])
     gradients = vjp_fn(cotangent)  # Returns tuple of gradients for multiple args
 
     print(f"Cotangent: {cotangent}")
@@ -66,15 +66,15 @@ def test_vjp_with_kwargs():
         return x * scale
 
     # Create inputs
-    x = nb.array([1.0, 2.0])
-    scale = nb.array([3.0])
+    x = nd.array([1.0, 2.0])
+    scale = nd.array([3.0])
 
     # For functions with kwargs, wrap them in a lambda or use functools.partial
     # This approach is consistent with JAX's vjp API
     wrapped_func = lambda x, scale: kwarg_func(x, scale=scale)
 
     # Test VJP
-    outputs, vjp_fn = nb.vjp(wrapped_func, x, scale)
+    outputs, vjp_fn = nd.vjp(wrapped_func, x, scale)
 
     print("Test 3: Function with kwargs f(x, scale=2.0) = x * scale")
     print(f"Input x: {x}")
@@ -82,7 +82,7 @@ def test_vjp_with_kwargs():
     print(f"Output: {outputs}")
 
     # Test gradients
-    cotangent = nb.array([1.0, 1.0])
+    cotangent = nd.array([1.0, 1.0])
     gradients = vjp_fn(cotangent)
 
     print(f"Cotangent: {cotangent}")
@@ -99,19 +99,19 @@ def test_vjp_nested_structure():
         return x + y
 
     # Create nested input structure
-    x = nb.array([1.0, 2.0])
-    y = nb.array([3.0, 4.0])
+    x = nd.array([1.0, 2.0])
+    y = nd.array([3.0, 4.0])
     data = (x, y)
 
     # Test VJP
-    outputs, vjp_fn = nb.vjp(nested_func, data)
+    outputs, vjp_fn = nd.vjp(nested_func, data)
 
     print("Test 4: Function with nested structure f((x, y)) = x + y")
     print(f"Input data: {data}")
     print(f"Output: {outputs}")
 
     # Test gradients
-    cotangent = nb.array([1.0, 1.0])
+    cotangent = nd.array([1.0, 1.0])
     gradient = vjp_fn(cotangent)  # Returns tuple of gradients
 
     print(f"Cotangent: {cotangent}")

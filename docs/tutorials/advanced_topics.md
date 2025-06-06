@@ -13,16 +13,16 @@ import endia as nb
 import numpy as np
 
 def f(x):
-    return nb.sin(x)
+    return nd.sin(x)
 
 # First derivative
-df_dx = nb.grad(f)
+df_dx = nd.grad(f)
 
 # Second derivative
-d2f_dx2 = nb.grad(df_dx)
+d2f_dx2 = nd.grad(df_dx)
 
 # Evaluate at a specific point
-x = nb.array(np.pi/4)
+x = nd.array(np.pi/4)
 print(f"First derivative at pi/4: {df_dx(x)}")
 print(f"Second derivative at pi/4: {d2f_dx2(x)}")
 ```
@@ -46,7 +46,7 @@ class MyCustomOp(Operation):
 
 # Use the custom operation
 my_op = MyCustomOp()
-result = my_op(nb.array([1.0, 2.0, 3.0]))
+result = my_op(nd.array([1.0, 2.0, 3.0]))
 ```
 
 ## Optimization Techniques
@@ -63,10 +63,10 @@ def loss_fn(params):
     return (x - 2)**2 + (y - 3)**2
 
 # Gradient function
-grad_fn = nb.grad(loss_fn)
+grad_fn = nd.grad(loss_fn)
 
 # Simple gradient descent
-params = nb.array([0.0, 0.0])
+params = nd.array([0.0, 0.0])
 learning_rate = 0.1
 
 for _ in range(100):

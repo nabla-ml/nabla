@@ -16,8 +16,8 @@ Element-wise cosine.
 import endia as nb
 
 # Basic trigonometric function
-x = nb.array([0, np.pi/2, np.pi])
-result = nb.cos(x)
+x = nd.array([0, np.pi/2, np.pi])
+result = nd.cos(x)
 print(result)  # [1, 0, -1] (approximately)
 ```
 

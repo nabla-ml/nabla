@@ -16,8 +16,8 @@ Transpose array along two axes.
 import endia as nb
 
 # Transpose array
-x = nb.array([[1, 2, 3], [4, 5, 6]])
-result = nb.transpose(x)
+x = nd.array([[1, 2, 3], [4, 5, 6]])
+result = nd.transpose(x)
 print(result)  # [[1, 4], [2, 5], [3, 6]]
 ```
 

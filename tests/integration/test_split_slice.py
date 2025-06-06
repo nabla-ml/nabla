@@ -6,19 +6,19 @@ import endia as nb
 if __name__ == "__main__":
 
     def foo(a, b):
-        # return nb.sum(nb.broadcast_to(a, (4, 2, 3)))
-        return nb.concatenate([a, b], axis=1)
+        # return nd.sum(nd.broadcast_to(a, (4, 2, 3)))
+        return nd.concatenate([a, b], axis=1)
 
     # JAX version of the same function
     def foo_jax(a, b):
         # return jnp.sum(jnp.broadcast_to(a, (4, 2, 3)))
         return jnp.concatenate([a, b], axis=1)
 
-    foo_vmapped = nb.vmap(foo, in_axes=(0, 0))
+    foo_vmapped = nd.vmap(foo, in_axes=(0, 0))
     foo_jax_vmapped = jax.vmap(foo_jax, in_axes=(0, 0))
 
-    a = nb.arange((2, 3, 4))
-    b = nb.arange((2, 3, 4)) + 1
+    a = nd.arange((2, 3, 4))
+    b = nd.arange((2, 3, 4)) + 1
 
     res = foo(a, b)
 
@@ -60,7 +60,7 @@ if __name__ == "__main__":
         print(f"\n--- Testing {test_name} ---")
 
         # Create test input
-        x = nb.arange((4, 6, 8))
+        x = nd.arange((4, 6, 8))
         x_jax = x.to_numpy()
 
         # Test forward pass
@@ -79,11 +79,11 @@ if __name__ == "__main__":
         )
 
         # Test VJP - create a cotangent with the same shape as the output
-        cotangent = nb.ones(result_endia.shape)
+        cotangent = nd.ones(result_endia.shape)
         cotangent_jax = jnp.ones(result_jax.shape)
 
         # Use vjp to get the backward function and apply cotangent
-        primals_out, vjp_fun = nb.vjp(slice_func, x)
+        primals_out, vjp_fun = nd.vjp(slice_func, x)
         vjp_result = vjp_fun(cotangent)
 
         primals_out_jax, vjp_fun_jax = jax.vjp(slice_func_jax, x_jax)
@@ -100,11 +100,11 @@ if __name__ == "__main__":
         )
 
         # Test JVP - create a tangent with the same shape as the input
-        tangent = nb.ones(x.shape)
+        tangent = nd.ones(x.shape)
         tangent_jax = jnp.ones(x_jax.shape)
 
         # Use jvp to get the forward-mode derivative
-        primals_out_jvp, tangents_out = nb.jvp(slice_func, (x,), (tangent,))
+        primals_out_jvp, tangents_out = nd.jvp(slice_func, (x,), (tangent,))
         primals_out_jvp_jax, tangents_out_jax = jax.jvp(
             slice_func_jax, (x_jax,), (tangent_jax,)
         )
@@ -120,11 +120,11 @@ if __name__ == "__main__":
         )
 
         # Test VMAP - create batched version of the function
-        vmapped_slice_endia = nb.vmap(slice_func, in_axes=0)
+        vmapped_slice_endia = nd.vmap(slice_func, in_axes=0)
         vmapped_slice_jax = jax.vmap(slice_func_jax, in_axes=0)
 
         # Create batched input (add batch dimension)
-        batched_x = nb.arange((3, 4, 6, 8))  # batch size 3
+        batched_x = nd.arange((3, 4, 6, 8))  # batch size 3
         batched_x_jax = batched_x.to_numpy()
 
         # Test vmapped forward pass
@@ -143,10 +143,10 @@ if __name__ == "__main__":
         )
 
         # Test vmapped VJP
-        batched_cotangent = nb.ones(vmapped_result_endia.shape)
+        batched_cotangent = nd.ones(vmapped_result_endia.shape)
         batched_cotangent_jax = jnp.ones(vmapped_result_jax.shape)
 
-        primals_vmap, vjp_fun_vmap = nb.vjp(vmapped_slice_endia, batched_x)
+        primals_vmap, vjp_fun_vmap = nd.vjp(vmapped_slice_endia, batched_x)
         vjp_result_vmap = vjp_fun_vmap(batched_cotangent)
 
         primals_vmap_jax, vjp_fun_vmap_jax = jax.vjp(vmapped_slice_jax, batched_x_jax)
@@ -163,10 +163,10 @@ if __name__ == "__main__":
         ), f"{test_name}: Vmapped VJP results don't match!"
 
         # Test vmapped JVP
-        batched_tangent = nb.ones(batched_x.shape)
+        batched_tangent = nd.ones(batched_x.shape)
         batched_tangent_jax = jnp.ones(batched_x_jax.shape)
 
-        primals_jvp_vmap, tangents_jvp_vmap = nb.jvp(
+        primals_jvp_vmap, tangents_jvp_vmap = nd.jvp(
             vmapped_slice_endia, (batched_x,), (batched_tangent,)
         )
         primals_jvp_vmap_jax, tangents_jvp_vmap_jax = jax.jvp(
@@ -346,7 +346,7 @@ if __name__ == "__main__":
         print(f"\n--- Testing 1D: {test_name} ---")
 
         # Create 1D test input
-        x = nb.arange((10,))
+        x = nd.arange((10,))
         x_jax = x.to_numpy()
 
         # Test forward pass
@@ -365,10 +365,10 @@ if __name__ == "__main__":
         )
 
         # Test VJP
-        cotangent = nb.ones(result_endia.shape)
+        cotangent = nd.ones(result_endia.shape)
         cotangent_jax = jnp.ones(result_jax.shape)
 
-        primals_out, vjp_fun = nb.vjp(slice_func, x)
+        primals_out, vjp_fun = nd.vjp(slice_func, x)
         vjp_result = vjp_fun(cotangent)
 
         primals_out_jax, vjp_fun_jax = jax.vjp(slice_func_jax, x_jax)
@@ -425,7 +425,7 @@ if __name__ == "__main__":
         print(f"\n--- Testing Small Array ({shape}): {test_name} ---")
 
         # Create small test input
-        x = nb.arange(shape)
+        x = nd.arange(shape)
         x_jax = x.to_numpy()
 
         # Test forward pass
@@ -444,10 +444,10 @@ if __name__ == "__main__":
         )
 
         # Test VJP
-        cotangent = nb.ones(result_endia.shape)
+        cotangent = nd.ones(result_endia.shape)
         cotangent_jax = jnp.ones(result_jax.shape)
 
-        primals_out, vjp_fun = nb.vjp(slice_func, x)
+        primals_out, vjp_fun = nd.vjp(slice_func, x)
         vjp_result = vjp_fun(cotangent)
 
         primals_out_jax, vjp_fun_jax = jax.vjp(slice_func_jax, x_jax)
@@ -525,8 +525,8 @@ if __name__ == "__main__":
 
     print("\n🎉 All array slice VJP/JVP/VMAP tests (including edge cases) passed!")
 
-    # jacobian = nb.jacrev(foo, argnums=0)
-    # print(nb.xpr(jacobian, a))
+    # jacobian = nd.jacrev(foo, argnums=0)
+    # print(nd.xpr(jacobian, a))
     # print("\nEndia result:")
     # j = jacobian(a)
     # print(j)

@@ -38,11 +38,11 @@ import endia as nb
 
 # Example function using Endia's array operations
 def foo(input):
-    return nb.sum(input ** 2, axis=0)
+    return nd.sum(input ** 2, axis=0)
 
 # Vectorize, differentiate, accelerate
-foo_grads = nb.jit(nb.grad(nb.vmap(foo)))
-gradients = foo_grads([nb.randn((10, 5))])
+foo_grads = nd.jit(nd.grad(nd.vmap(foo)))
+gradients = foo_grads([nd.randn((10, 5))])
 ```
 
 ## Key Features

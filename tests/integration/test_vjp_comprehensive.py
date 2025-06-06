@@ -12,12 +12,12 @@ def test_vjp_single_arg():
     print("=== Test 1: Single Argument ===")
 
     def func(x):
-        return x * x + nb.array([2.0]) * x + nb.array([1.0])
+        return x * x + nd.array([2.0]) * x + nd.array([1.0])
 
-    x = nb.array([2.0, 3.0])
-    outputs, vjp_fn = nb.vjp(func, x)
+    x = nd.array([2.0, 3.0])
+    outputs, vjp_fn = nd.vjp(func, x)
 
-    cotangent = nb.array([1.0, 1.0])
+    cotangent = nd.array([1.0, 1.0])
     gradient = vjp_fn(cotangent)  # Should return single Array, not tuple
 
     print(f"Input: {x}")
@@ -42,13 +42,13 @@ def test_vjp_multiple_args():
     def func(x, y, z):
         return x * y + y * z + x * z
 
-    x = nb.array([1.0, 2.0])
-    y = nb.array([3.0, 4.0])
-    z = nb.array([5.0, 6.0])
+    x = nd.array([1.0, 2.0])
+    y = nd.array([3.0, 4.0])
+    z = nd.array([5.0, 6.0])
 
-    outputs, vjp_fn = nb.vjp(func, x, y, z)
+    outputs, vjp_fn = nd.vjp(func, x, y, z)
 
-    cotangent = nb.array([1.0, 1.0])
+    cotangent = nd.array([1.0, 1.0])
     gradients = vjp_fn(cotangent)  # Should return tuple of 3 gradients
 
     print(f"Input x: {x}")
@@ -89,16 +89,16 @@ def test_vjp_kwargs_only():
     def func(*, x, y):
         return x * y + x
 
-    x = nb.array([2.0, 3.0])
-    y = nb.array([4.0, 5.0])
+    x = nd.array([2.0, 3.0])
+    y = nd.array([4.0, 5.0])
 
     # JAX-compatible approach: use functools.partial for keyword arguments
     import functools
 
     func_with_args = functools.partial(func, x=x, y=y)
-    outputs, vjp_fn = nb.vjp(func_with_args)
+    outputs, vjp_fn = nd.vjp(func_with_args)
 
-    cotangent = nb.array([1.0, 1.0])
+    cotangent = nd.array([1.0, 1.0])
     gradients = vjp_fn(
         cotangent
     )  # Returns gradients for the partial function (empty tuple)
@@ -126,14 +126,14 @@ def test_vjp_mixed_args_kwargs():
     def func(a, b, scale, offset):
         return scale * (a * b + offset)
 
-    a = nb.array([1.0, 2.0])
-    b = nb.array([3.0, 4.0])
-    scale = nb.array([2.0])
-    offset = nb.array([1.0])
+    a = nd.array([1.0, 2.0])
+    b = nd.array([3.0, 4.0])
+    scale = nd.array([2.0])
+    offset = nd.array([1.0])
 
-    outputs, vjp_fn = nb.vjp(func, a, b, scale, offset)
+    outputs, vjp_fn = nd.vjp(func, a, b, scale, offset)
 
-    cotangent = nb.array([1.0, 1.0])
+    cotangent = nd.array([1.0, 1.0])
     gradients = vjp_fn(cotangent)  # Returns tuple of gradients
 
     print(f"Input a: {a}")
@@ -181,15 +181,15 @@ def test_vjp_nested_structures():
         y_list = data["y"]
         return x * y_list[0] + x * y_list[1]
 
-    x = nb.array([2.0, 3.0])
-    y1 = nb.array([4.0, 5.0])
-    y2 = nb.array([6.0, 7.0])
+    x = nd.array([2.0, 3.0])
+    y1 = nd.array([4.0, 5.0])
+    y2 = nd.array([6.0, 7.0])
 
     data = {"x": x, "y": [y1, y2]}
 
-    outputs, vjp_fn = nb.vjp(func, data)
+    outputs, vjp_fn = nd.vjp(func, data)
 
-    cotangent = nb.array([1.0, 1.0])
+    cotangent = nd.array([1.0, 1.0])
     gradient = vjp_fn(cotangent)  # Returns tuple, need to unpack
 
     print(f"Input data: {data}")
@@ -229,11 +229,11 @@ def test_vjp_list_input():
     def func(inputs):
         return inputs[0] ** 3  # Cubic function
 
-    x = nb.array([2.0])
+    x = nd.array([2.0])
 
-    outputs, vjp_fn = nb.vjp(func, [x])  # Pass list as single argument
+    outputs, vjp_fn = nd.vjp(func, [x])  # Pass list as single argument
 
-    cotangent = [nb.array([1.0])]
+    cotangent = [nd.array([1.0])]
     gradient = vjp_fn(cotangent)  # Returns tuple, need to unpack
 
     print(f"Input: {[x]}")
@@ -260,14 +260,14 @@ def test_vjp_complex_computation():
         # f(x, y) = sin(x) * cos(y) + exp(x) * log(y)
         import endia as nb
 
-        return nb.sin(x) * nb.cos(y) + nb.exp(x) * nb.log(y)
+        return nd.sin(x) * nd.cos(y) + nd.exp(x) * nd.log(y)
 
-    x = nb.array([0.5])  # sin'(0.5) = cos(0.5), exp'(0.5) = exp(0.5)
-    y = nb.array([1.0])  # cos'(1.0) = -sin(1.0), log'(1.0) = 1.0
+    x = nd.array([0.5])  # sin'(0.5) = cos(0.5), exp'(0.5) = exp(0.5)
+    y = nd.array([1.0])  # cos'(1.0) = -sin(1.0), log'(1.0) = 1.0
 
-    outputs, vjp_fn = nb.vjp(complex_func, x, y)
+    outputs, vjp_fn = nd.vjp(complex_func, x, y)
 
-    cotangent = nb.array([1.0])
+    cotangent = nd.array([1.0])
     gradients = vjp_fn(cotangent)
 
     print(f"Input x: {x}")
@@ -305,14 +305,14 @@ def test_vjp_multiple_outputs():
     def multi_output_func(x, y):
         return x + y, x * y
 
-    x = nb.array([2.0, 3.0])
-    y = nb.array([4.0, 5.0])
+    x = nd.array([2.0, 3.0])
+    y = nd.array([4.0, 5.0])
 
-    outputs, vjp_fn = nb.vjp(multi_output_func, x, y)
+    outputs, vjp_fn = nd.vjp(multi_output_func, x, y)
 
     # Need cotangents for both outputs
-    cotangent1 = nb.array([1.0, 1.0])
-    cotangent2 = nb.array([1.0, 1.0])
+    cotangent1 = nd.array([1.0, 1.0])
+    cotangent2 = nd.array([1.0, 1.0])
 
     gradients = vjp_fn((cotangent1, cotangent2))
 
@@ -346,14 +346,14 @@ def test_vjp_edge_cases():
 
     # Test with constants
     def func_with_constants(x):
-        return x * nb.array([5.0]) + nb.array(
+        return x * nd.array([5.0]) + nd.array(
             [3.0]
         )  # Constants shouldn't affect gradients
 
-    x = nb.array([1.0, 2.0])
-    outputs, vjp_fn = nb.vjp(func_with_constants, x)
+    x = nd.array([1.0, 2.0])
+    outputs, vjp_fn = nd.vjp(func_with_constants, x)
 
-    cotangent = nb.array([1.0, 1.0])
+    cotangent = nd.array([1.0, 1.0])
     gradient = vjp_fn(cotangent)
 
     print(f"Input: {x}")
@@ -371,12 +371,12 @@ def test_vjp_edge_cases():
 
     # Test with zero gradients
     def zero_grad_func(x):
-        return nb.array([42.0])  # Constant output, zero gradient
+        return nd.array([42.0])  # Constant output, zero gradient
 
-    x = nb.array([1.0, 2.0])
-    outputs, vjp_fn = nb.vjp(zero_grad_func, x)
+    x = nd.array([1.0, 2.0])
+    outputs, vjp_fn = nd.vjp(zero_grad_func, x)
 
-    cotangent = nb.array([1.0])
+    cotangent = nd.array([1.0])
     gradient = vjp_fn(cotangent)
 
     print(f"Zero gradient input: {x}")

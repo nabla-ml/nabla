@@ -16,9 +16,9 @@ Element-wise multiplication of two arrays or array and scalar.
 import endia as nb
 
 # Element-wise multiplication
-a = nb.array([1, 2, 3])
-b = nb.array([4, 5, 6])
-result = nb.mul(a, b)
+a = nd.array([1, 2, 3])
+b = nd.array([4, 5, 6])
+result = nd.mul(a, b)
 print(result)  # [4, 10, 18]
 ```
 

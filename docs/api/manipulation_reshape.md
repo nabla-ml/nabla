@@ -16,8 +16,8 @@ Reshape array to given shape.
 import endia as nb
 
 # Change array shape
-x = nb.array([1, 2, 3, 4, 5, 6])
-result = nb.reshape(x, (2, 3))
+x = nd.array([1, 2, 3, 4, 5, 6])
+result = nd.reshape(x, (2, 3))
 print(result)  # [[1, 2, 3], [4, 5, 6]]
 ```
 

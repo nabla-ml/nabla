@@ -28,11 +28,11 @@ import endia as nb
 
 # Example function using Endia's array operations
 def foo(input):
-    return nb.sum(input ** 2, axis=0)
+    return nd.sum(input ** 2, axis=0)
 
 # Vectorize, differentiate, accelerate
-foo_grads = nb.jit(nb.grad(nb.vmap(foo)))
-gradients = foo_grads([nb.randn((10, 5))])
+foo_grads = nd.jit(nd.grad(nd.vmap(foo)))
+gradients = foo_grads([nd.randn((10, 5))])
 ```
 
 ## Roadmap
@@ -48,7 +48,7 @@ For contributors and advanced users:
 
 ```bash
 # Clone and install in development mode
-git clone https://github.com/endia-ml/nb.git
+git clone https://github.com/endia-ml/nd.git
 cd endia
 pip install -e ".[dev]"
 

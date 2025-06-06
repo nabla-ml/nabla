@@ -11,9 +11,9 @@ import matplotlib.pyplot as plt
 import endia as nb
 
 # Create arrays
-x = nb.arange(-5, 5, 0.1)
-y1 = nb.sin(x)
-y2 = nb.cos(x)
+x = nd.arange(-5, 5, 0.1)
+y1 = nd.sin(x)
+y2 = nd.cos(x)
 
 # Convert to NumPy for plotting
 x_np = x.numpy()

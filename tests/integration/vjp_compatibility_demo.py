@@ -42,10 +42,10 @@ def demonstrate_compatibility():
 
     # Endia
     def nb_fn(x):
-        return nb.sin(x)
+        return nd.sin(x)
 
-    _, vjp_nb = nb.vjp(nb_fn, nb.Array.from_numpy(x))
-    grads_nb = vjp_nb(nb.Array.from_numpy(cotangent))
+    _, vjp_nb = nd.vjp(nb_fn, nd.Array.from_numpy(x))
+    grads_nb = vjp_nb(nd.Array.from_numpy(cotangent))
 
     # JAX
     def jax_fn(x):
@@ -66,10 +66,10 @@ def demonstrate_compatibility():
 
     # Endia
     def nb_fn(x, y):
-        return nb.mul(x, y)
+        return nd.mul(x, y)
 
-    _, vjp_nb = nb.vjp(nb_fn, nb.Array.from_numpy(x), nb.Array.from_numpy(y))
-    grads_nb = vjp_nb(nb.Array.from_numpy(cotangent))
+    _, vjp_nb = nd.vjp(nb_fn, nd.Array.from_numpy(x), nd.Array.from_numpy(y))
+    grads_nb = vjp_nb(nd.Array.from_numpy(cotangent))
 
     # JAX
     def jax_fn(x, y):
@@ -90,11 +90,11 @@ def demonstrate_compatibility():
 
     # Endia
     def nb_fn(inputs):
-        return nb.add(inputs["a"], inputs["b"])
+        return nd.add(inputs["a"], inputs["b"])
 
-    inputs_nb = {k: nb.Array.from_numpy(v) for k, v in inputs.items()}
-    _, vjp_nb = nb.vjp(nb_fn, inputs_nb)
-    grads_nb = vjp_nb(nb.Array.from_numpy(cotangent))
+    inputs_nb = {k: nd.Array.from_numpy(v) for k, v in inputs.items()}
+    _, vjp_nb = nd.vjp(nb_fn, inputs_nb)
+    grads_nb = vjp_nb(nd.Array.from_numpy(cotangent))
 
     # JAX
     def jax_fn(inputs):
@@ -118,10 +118,10 @@ def demonstrate_compatibility():
 
     # Endia
     def nb_fn(A, B):
-        return nb.matmul(A, B)
+        return nd.matmul(A, B)
 
-    _, vjp_nb = nb.vjp(nb_fn, nb.Array.from_numpy(A), nb.Array.from_numpy(B))
-    grads_nb = vjp_nb(nb.Array.from_numpy(cotangent))
+    _, vjp_nb = nd.vjp(nb_fn, nd.Array.from_numpy(A), nd.Array.from_numpy(B))
+    grads_nb = vjp_nb(nd.Array.from_numpy(cotangent))
 
     # JAX
     def jax_fn(A, B):
@@ -142,10 +142,10 @@ def demonstrate_compatibility():
 
     # Endia - sum(exp(sin(x)) * cos(x))
     def nb_fn(x):
-        return nb.sum(nb.mul(nb.exp(nb.sin(x)), nb.cos(x)))
+        return nd.sum(nd.mul(nd.exp(nd.sin(x)), nd.cos(x)))
 
-    _, vjp_nb = nb.vjp(nb_fn, nb.Array.from_numpy(x))
-    grads_nb = vjp_nb(nb.Array.from_numpy(np.array(cotangent)))
+    _, vjp_nb = nd.vjp(nb_fn, nd.Array.from_numpy(x))
+    grads_nb = vjp_nb(nd.Array.from_numpy(np.array(cotangent)))
 
     # JAX
     def jax_fn(x):

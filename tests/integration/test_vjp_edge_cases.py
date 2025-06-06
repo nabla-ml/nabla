@@ -17,21 +17,21 @@ def test_matrix_operations():
     # Setup matrices
     A_np = np.random.randn(3, 4)
     B_np = np.random.randn(4, 2)
-    A_nb = nb.Array.from_numpy(A_np)
-    B_nb = nb.Array.from_numpy(B_np)
+    A_nb = nd.Array.from_numpy(A_np)
+    B_nb = nd.Array.from_numpy(B_np)
     A_jax = jnp.array(A_np)
     B_jax = jnp.array(B_np)
 
     # Cotangent for result (3, 2)
     cotangent_np = np.random.randn(3, 2)
-    cotangent_nb = nb.Array.from_numpy(cotangent_np)
+    cotangent_nb = nd.Array.from_numpy(cotangent_np)
     cotangent_jax = jnp.array(cotangent_np)
 
     # Endia VJP
     def nb_fn(A, B):
-        return nb.matmul(A, B)
+        return nd.matmul(A, B)
 
-    out_nb, vjp_nb = nb.vjp(nb_fn, A_nb, B_nb)
+    out_nb, vjp_nb = nd.vjp(nb_fn, A_nb, B_nb)
     grads_nb = vjp_nb(cotangent_nb)
 
     # JAX VJP
@@ -54,18 +54,18 @@ def test_complex_function():
 
     # Setup
     x_np = np.array([0.5, 1.0, 1.5])
-    x_nb = nb.Array.from_numpy(x_np)
+    x_nb = nd.Array.from_numpy(x_np)
     x_jax = jnp.array(x_np)
 
     cotangent_np = 1.0  # Scalar output
-    cotangent_nb = nb.Array.from_numpy(np.array(cotangent_np))
+    cotangent_nb = nd.Array.from_numpy(np.array(cotangent_np))
     cotangent_jax = jnp.array(cotangent_np)
 
     # Endia VJP - complex function: sum(sin(x) * exp(x))
     def nb_fn(x):
-        return nb.sum(nb.mul(nb.sin(x), nb.exp(x)))
+        return nd.sum(nd.mul(nd.sin(x), nd.exp(x)))
 
-    out_nb, vjp_nb = nb.vjp(nb_fn, x_nb)
+    out_nb, vjp_nb = nd.vjp(nb_fn, x_nb)
     grads_nb = vjp_nb(cotangent_nb)
 
     # JAX VJP
@@ -91,21 +91,21 @@ def test_list_inputs():
     z_np = np.array([5.0, 6.0])
 
     inputs_nb = [
-        nb.Array.from_numpy(x_np),
-        nb.Array.from_numpy(y_np),
-        nb.Array.from_numpy(z_np),
+        nd.Array.from_numpy(x_np),
+        nd.Array.from_numpy(y_np),
+        nd.Array.from_numpy(z_np),
     ]
     inputs_jax = [jnp.array(x_np), jnp.array(y_np), jnp.array(z_np)]
 
     cotangent_np = np.array([1.0, 1.0])
-    cotangent_nb = nb.Array.from_numpy(cotangent_np)
+    cotangent_nb = nd.Array.from_numpy(cotangent_np)
     cotangent_jax = jnp.array(cotangent_np)
 
     # Endia VJP
     def nb_fn(inputs):
-        return nb.add(nb.add(inputs[0], inputs[1]), inputs[2])
+        return nd.add(nd.add(inputs[0], inputs[1]), inputs[2])
 
-    out_nb, vjp_nb = nb.vjp(nb_fn, inputs_nb)
+    out_nb, vjp_nb = nd.vjp(nb_fn, inputs_nb)
     grads_nb = vjp_nb(cotangent_nb)
 
     # JAX VJP
