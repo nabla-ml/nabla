@@ -7,7 +7,7 @@ Endia provides powerful automatic differentiation capabilities through several t
 The `grad` function computes gradients using reverse-mode automatic differentiation:
 
 ```python
-import endia as nb
+import endia as nd
 
 def simple_function(x):
     return nd.sum(x ** 2)

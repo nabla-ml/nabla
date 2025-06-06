@@ -13,7 +13,7 @@ Create an array filled with zeros.
 ## Examples
 
 ```python
-import endia as nb
+import endia as nd
 
 # Create array of zeros
 result = nd.zeros((2, 3))

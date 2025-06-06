@@ -9,7 +9,7 @@ The `vmap` (vectorized map) transformation automatically vectorizes functions to
 ### Basic Vectorization
 
 ```python
-import endia as nb
+import endia as nd
 
 def simple_function(x):
     """A function that operates on a single sample"""

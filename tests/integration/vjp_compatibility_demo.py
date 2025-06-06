@@ -14,7 +14,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-import endia as nb
+import endia as nd
 
 
 def compare_vjp_structures(nb_grads, jax_grads, description):

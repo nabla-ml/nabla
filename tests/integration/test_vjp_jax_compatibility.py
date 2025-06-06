@@ -11,7 +11,7 @@ sys.path.append("/Users/tillife/Documents/CodingProjects/endia")
 
 import numpy as np
 
-import endia as nb
+import endia as nd
 
 try:
     import jax

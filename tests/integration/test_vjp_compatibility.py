@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-import endia as nb
+import endia as nd
 
 
 def test_single_input_single_output():

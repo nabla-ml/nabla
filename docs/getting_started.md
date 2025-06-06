@@ -27,7 +27,7 @@ pip install -e ".[dev]"
 ### Creating Arrays
 
 ```python
-import endia as nb
+import endia as nd
 
 # Create arrays
 x = nd.array([1, 2, 3, 4])

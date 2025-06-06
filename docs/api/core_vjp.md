@@ -29,7 +29,7 @@ The vjp_function always returns gradients as a tuple (matching JAX behavior):
 ## Examples
 
 ```python
-import endia as nb
+import endia as nd
 
 # Vector-Jacobian product for reverse-mode AD
 def f(x):

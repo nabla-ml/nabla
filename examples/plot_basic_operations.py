@@ -8,7 +8,7 @@ and mathematical functions.
 
 import matplotlib.pyplot as plt
 
-import endia as nb
+import endia as nd
 
 # Create arrays
 x = nd.arange(-5, 5, 0.1)

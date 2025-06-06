@@ -13,7 +13,7 @@ Create an array filled with ones.
 ## Examples
 
 ```python
-import endia as nb
+import endia as nd
 
 # Create array of ones
 result = nd.ones((2, 3))

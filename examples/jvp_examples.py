@@ -19,7 +19,7 @@
 import numpy as np
 import pytest
 
-import endia as nb
+import endia as nd
 
 
 def test_jvp_cubic_function():

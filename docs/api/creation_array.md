@@ -13,7 +13,7 @@ Create an array from Python list or numpy array.
 ## Examples
 
 ```python
-import endia as nb
+import endia as nd
 
 # Create array from data
 data = [[1, 2, 3], [4, 5, 6]]

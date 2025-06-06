@@ -4,7 +4,7 @@
 
 import numpy as np
 
-import endia as nb
+import endia as nd
 
 
 def test_vjp_single_arg():
@@ -258,7 +258,7 @@ def test_vjp_complex_computation():
 
     def complex_func(x, y):
         # f(x, y) = sin(x) * cos(y) + exp(x) * log(y)
-        import endia as nb
+        import endia as nd
 
         return nd.sin(x) * nd.cos(y) + nd.exp(x) * nd.log(y)
 

@@ -29,7 +29,7 @@ This follows the same flexible API as vjp, jvp, and vmap:
 ## Examples
 
 ```python
-import endia as nb
+import endia as nd
 
 # Single input function
 def f(x):

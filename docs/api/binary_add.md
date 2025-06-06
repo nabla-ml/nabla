@@ -13,7 +13,7 @@ Element-wise addition of two arrays or array and scalar.
 ## Examples
 
 ```python
-import endia as nb
+import endia as nd
 
 # Element-wise addition
 a = nd.array([1, 2, 3])

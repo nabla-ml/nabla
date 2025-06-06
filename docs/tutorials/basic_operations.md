@@ -7,7 +7,7 @@ This tutorial covers the fundamental operations you can perform with Endia array
 Endia provides several ways to create arrays:
 
 ```python
-import endia as nb
+import endia as nd
 import numpy as np
 
 # From Python lists

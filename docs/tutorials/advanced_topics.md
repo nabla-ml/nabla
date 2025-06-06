@@ -9,7 +9,7 @@ This tutorial covers advanced topics in the Endia library that extend beyond the
 Endia supports computing higher-order derivatives through repeated application of differentiation operators:
 
 ```python
-import endia as nb
+import endia as nd
 import numpy as np
 
 def f(x):
@@ -32,7 +32,7 @@ print(f"Second derivative at pi/4: {d2f_dx2(x)}")
 You can extend Endia with custom operations:
 
 ```python
-import endia as nb
+import endia as nd
 from endia.ops import Operation
 
 class MyCustomOp(Operation):
@@ -54,7 +54,7 @@ result = my_op(nd.array([1.0, 2.0, 3.0]))
 Endia can be used for various optimization problems:
 
 ```python
-import endia as nb
+import endia as nd
 import numpy as np
 
 # Define a simple loss function

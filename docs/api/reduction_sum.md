@@ -13,7 +13,7 @@ sum array elements over given axes.
 ## Examples
 
 ```python
-import endia as nb
+import endia as nd
 
 # Sum along axes
 x = nd.array([[1, 2], [3, 4]])

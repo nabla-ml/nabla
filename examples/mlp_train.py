@@ -5,7 +5,7 @@ import time
 
 import numpy as np
 
-import endia as nb
+import endia as nd
 
 # Configuration
 BATCH_SIZE = 128

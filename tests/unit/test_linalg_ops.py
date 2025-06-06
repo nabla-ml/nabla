@@ -31,7 +31,7 @@ if JAX_AVAILABLE:
     import jax
     import jax.numpy as jnp
 
-import endia as nb
+import endia as nd
 
 
 @requires_jax

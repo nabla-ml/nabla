@@ -13,7 +13,7 @@ Element-wise cosine.
 ## Examples
 
 ```python
-import endia as nb
+import endia as nd
 
 # Basic trigonometric function
 x = nd.array([0, np.pi/2, np.pi])

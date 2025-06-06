@@ -13,7 +13,7 @@ Element-wise multiplication of two arrays or array and scalar.
 ## Examples
 
 ```python
-import endia as nb
+import endia as nd
 
 # Element-wise multiplication
 a = nd.array([1, 2, 3])

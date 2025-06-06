@@ -24,7 +24,7 @@ import tracemalloc
 import numpy as np
 import psutil
 
-import endia as nb
+import endia as nd
 
 # Configuration constants
 TEST_BATCH_SIZE = 128

@@ -13,7 +13,7 @@ Element-wise exponential function.
 ## Examples
 
 ```python
-import endia as nb
+import endia as nd
 
 # Exponential function
 x = nd.array([0, 1, 2])

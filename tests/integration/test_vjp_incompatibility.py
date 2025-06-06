@@ -5,7 +5,7 @@ import sys
 
 sys.path.append("/Users/tillife/Documents/CodingProjects/endia")
 
-import endia as nb
+import endia as nd
 
 try:
     # We need jax.numpy and the vjp function, but don't directly use the jax module

@@ -13,7 +13,7 @@ Transpose array along two axes.
 ## Examples
 
 ```python
-import endia as nb
+import endia as nd
 
 # Transpose array
 x = nd.array([[1, 2, 3], [4, 5, 6]])

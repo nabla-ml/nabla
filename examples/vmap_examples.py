@@ -17,7 +17,7 @@
 import numpy as np
 import pytest
 
-import endia as nb
+import endia as nd
 
 
 def simple_add(args):

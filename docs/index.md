@@ -34,7 +34,7 @@ Endia is a Python library that provides three key features:
 ## Quick Start
 
 ```python
-import endia as nb
+import endia as nd
 
 # Example function using Endia's array operations
 def foo(input):

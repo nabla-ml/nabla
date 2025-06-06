@@ -24,7 +24,7 @@ pip install endia-ml
 ## Quick Start
 
 ```python
-import endia as nb
+import endia as nd
 
 # Example function using Endia's array operations
 def foo(input):

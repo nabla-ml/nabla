@@ -473,7 +473,7 @@ def {method_name}{method_sig}
                 doc += f"""## Examples
 
 ```python
-import endia as nb
+import endia as nd
 
 {example}
 ```

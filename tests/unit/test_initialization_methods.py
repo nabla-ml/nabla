@@ -19,7 +19,7 @@
 import numpy as np
 import pytest
 
-import endia as nb
+import endia as nd
 
 # Reduced test parameters to avoid overwhelming the test runner
 TEST_SHAPES = [

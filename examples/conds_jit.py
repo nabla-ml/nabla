@@ -16,7 +16,7 @@
 
 """Test JIT compilation"""
 
-import endia as nb
+import endia as nd
 
 
 def test_jit_with_if_else():

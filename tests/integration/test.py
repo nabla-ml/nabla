@@ -1,6 +1,6 @@
 
 
-import endia as nb 
+import endia as nd 
 
 
 def test1():

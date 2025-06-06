@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 
-import endia as nb
+import endia as nd
 
 if __name__ == "__main__":
 

@@ -13,7 +13,7 @@ Reshape array to given shape.
 ## Examples
 
 ```python
-import endia as nb
+import endia as nd
 
 # Change array shape
 x = nd.array([1, 2, 3, 4, 5, 6])

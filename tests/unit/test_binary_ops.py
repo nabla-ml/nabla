@@ -30,7 +30,7 @@ from tests.unit.test_utils import (
 if JAX_AVAILABLE:
     import jax.numpy as jnp
 
-import endia as nb
+import endia as nd
 
 # Binary operation configurations
 BINARY_OPERATIONS = [

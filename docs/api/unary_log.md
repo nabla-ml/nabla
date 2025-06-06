@@ -13,7 +13,7 @@ Element-wise natural logarithm.
 ## Examples
 
 ```python
-import endia as nb
+import endia as nd
 
 # Natural logarithm
 x = nd.array([1, np.e, np.e**2])

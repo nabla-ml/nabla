@@ -29,7 +29,7 @@ if JAX_AVAILABLE:
     import jax
     import jax.numpy as jnp
 
-import endia as nb
+import endia as nd
 
 # Operations that work well with vmap
 VMAP_COMPATIBLE_OPERATIONS = [
