@@ -2,7 +2,7 @@
 # Setup script for PyPI credentials
 # Run this once to configure your PyPI API token
 
-echo "🔐 PyPI Token Setup for endia-ml"
+echo "🔐 PyPI Token Setup for endia"
 echo "================================="
 echo ""
 echo "To publish to PyPI, you need to set up your API token."
@@ -51,7 +51,7 @@ case $choice in
         fi
         
         echo "" >> "$profile_file"
-        echo "# PyPI credentials for endia-ml" >> "$profile_file"
+        echo "# PyPI credentials for endia" >> "$profile_file"
         echo "export TWINE_USERNAME=\"__token__\"" >> "$profile_file"
         echo "export TWINE_PASSWORD=\"$token\"" >> "$profile_file"
         

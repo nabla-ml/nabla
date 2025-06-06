@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Automated release script for endia-ml with date-based versioning.
+Automated release script for endia with date-based versioning.
 
 Version format: YY.MMDD (e.g., 25.0529 for May 29, 2025)
 
@@ -216,7 +216,7 @@ def upload_to_pypi():
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Release endia-ml package with date-based versioning (YY.MMDD)"
+        description="Release endia package with date-based versioning (YY.MMDD)"
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="Perform a dry run without uploading"
@@ -333,8 +333,8 @@ def main():
             f"\n{Colors.OKGREEN}{Colors.BOLD}🎉 Release {new_version} completed successfully!{Colors.ENDC}"
         )
         if upload_success:
-            print(f"\n📦 Package URL: https://pypi.org/project/endia-ml/{new_version}/")
-            print(f"📥 Install with: pip install endia-ml=={new_version}")
+            print(f"\n📦 Package URL: https://pypi.org/project/endia/{new_version}/")
+            print(f"📥 Install with: pip install endia=={new_version}")
         else:
             print("\n📦 Package built in dist/ - manual upload required")
 

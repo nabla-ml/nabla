@@ -71,7 +71,7 @@ gradients = foo_grads([nd.randn((10, 5))])
 ## Installation
 
 ```bash
-pip install endia-ml
+pip install endia
 ```
 
 ## Indices and tables

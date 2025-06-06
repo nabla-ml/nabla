@@ -8,8 +8,8 @@ While Mojo already offers extensive support for NVIDIA/AMD GPUs, Endia is still 
 
 <p align="center">
   <a href="https://endiaml.com/docs/get_started">Endia API</a> •
-  <a href="https://github.com/endia-ml/endia/blob/main/changelog.md">Changelog</a> •
-  <a href="https://github.com/endia-ml/endia/issues">Report Bug</a>
+  <a href="https://github.com/endia/endia/blob/main/changelog.md">Changelog</a> •
+  <a href="https://github.com/endia/endia/issues">Report Bug</a>
 </p>
 
 ## Installation (v25.3)
@@ -111,7 +111,7 @@ Contributions welcome! Discuss significant changes in Issues first. Submit PRs f
 
 ## License
 
-Endia is licensed under the [Apache-2.0 license with LLVM Exeptions](https://github.com/endia-ml/endia/blob/main/LICENSE).
+Endia is licensed under the [Apache-2.0 license with LLVM Exeptions](https://github.com/endia/endia/blob/main/LICENSE).
 
 ---
 

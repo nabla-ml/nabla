@@ -5,13 +5,13 @@
 **📦 Now available on PyPI!**
 
 ```bash
-pip install endia-ml
+pip install endia
 ```
 
 For development installation:
 
 ```bash
-git clone https://github.com/endia-ml/endia.git
+git clone https://github.com/endia/endia.git
 cd endia
 pip install -e ".[dev]"
 ```

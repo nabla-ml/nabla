@@ -54,7 +54,7 @@ html_use_modindex = True
 
 html_theme_options = {
     # Repository integration
-    "repository_url": "https://github.com/endia-ml/endia",
+    "repository_url": "https://github.com/endia/endia",
     "repository_branch": "main",
     "use_repository_button": True,
     "use_issues_button": True,
@@ -73,7 +73,7 @@ html_theme_options = {
     # Extra footer content
     "extra_footer": """
     <div>
-      <a href="https://github.com/endia-ml/endia">Endia</a> - Built with
+      <a href="https://github.com/endia/endia">Endia</a> - Built with
       <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
       <a href="https://github.com/executablebooks/sphinx-book-theme">Sphinx Book Theme</a>
     </div>

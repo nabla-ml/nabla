@@ -2,7 +2,7 @@
 
 This section contains practical examples demonstrating Endia's capabilities across different domains.
 
-You can find all the source examples in the [`examples/`](https://github.com/endia-ml/endia/tree/main/examples) directory of the GitHub repository.
+You can find all the source examples in the [`examples/`](https://github.com/endia/endia/tree/main/examples) directory of the GitHub repository.
 
 ```{note}
 The examples directory includes both beginner-friendly introductions and advanced usage patterns to help you get the most out of Endia.

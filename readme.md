@@ -1,5 +1,5 @@
-[![Development Status](https://img.shields.io/badge/status-pre--alpha-red)](https://github.com/endia-ml/endia)
-[![PyPI version](https://badge.fury.io/py/endia-ml.svg)](https://badge.fury.io/py/endia-ml)
+[![Development Status](https://img.shields.io/badge/status-pre--alpha-red)](https://github.com/endia/endia)
+[![PyPI version](https://badge.fury.io/py/endia.svg)](https://badge.fury.io/py/endia)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
@@ -16,10 +16,10 @@ Endia is a Python library that provides three key features:
 **📦 Now available on PyPI!**
 
 ```bash
-pip install endia-ml
+pip install endia
 ```
 
-**Note:** Endia also includes an [experimental pure Mojo API](https://github.com/endia-ml/endia/tree/main/experimental) for native Mojo development.
+**Note:** Endia also includes an [experimental pure Mojo API](https://github.com/endia/endia/tree/main/experimental) for native Mojo development.
 
 ## Quick Start
 
@@ -48,7 +48,7 @@ For contributors and advanced users:
 
 ```bash
 # Clone and install in development mode
-git clone https://github.com/endia-ml/nd.git
+git clone https://github.com/endia/nd.git
 cd endia
 pip install -e ".[dev]"
 
@@ -81,7 +81,7 @@ Contributions welcome! Discuss significant changes in Issues first. Submit PRs f
 
 ## License
 
-Endia is licensed under the [Apache-2.0 license](https://github.com/endia-ml/endia/blob/main/LICENSE).
+Endia is licensed under the [Apache-2.0 license](https://github.com/endia/endia/blob/main/LICENSE).
 
 ---
 
