@@ -238,9 +238,11 @@ def broadcast_to(arg: Array, shape: Shape) -> Array:
     """Broadcast array to target shape."""
     if arg.shape == shape:
         return arg
-    if len(arg.shape) < len(shape):
-        new_shape = (1,) * (len(shape) - len(arg.shape)) + arg.shape
-        arg = reshape(arg, new_shape)
+    # if len(arg.shape) < len(shape):
+    #     new_shape = (1,) * (len(shape) - len(arg.shape)) + arg.shape
+    #     arg = reshape(arg, new_shape)
+    for _ in range(len(shape) - len(arg.shape)):
+        arg = unsqueeze(arg, [0])
     op = BroadcastToOp(shape)
     return op.forward(arg)
 
@@ -337,6 +339,10 @@ def broadcast_batch_dims(arg: Array, batch_dims: Shape) -> Array:
     """Broadcast array to target batch_dims."""
     if arg.batch_dims == batch_dims:
         return arg
+    
+    # for _ in range(len(batch_dims) - len(arg.batch_dims)):
+    #     arg = unsqueeze_batch_dims(arg, [0])
+
     op = BroadcastBatchDimsOp(batch_dims)
     return op.forward(arg)
 
