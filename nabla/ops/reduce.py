@@ -85,7 +85,7 @@ class ReduceSumOp(ReductionOperation):
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
-        return sum(tangents[0], axes=self.axes, keep_dims=self.keep_dims)
+        return sum(tangents[0], axes=self.axes, keep_dims=False)
 
 
 # noqa: A001 - Intentionally shadowing built-in 'sum' for API consistency
@@ -264,7 +264,7 @@ class SumBatchDimsOp(ReductionOperation):
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
-        return sum_batch_dims(tangents[0], axes=self.axes, keep_dims=self.keep_dims)
+        return sum_batch_dims(tangents[0], axes=self.axes, keep_dims=True)
 
 
 def sum_batch_dims(
