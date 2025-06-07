@@ -45,21 +45,10 @@ class ReduceSumOp(ReductionOperation):
         self.keep_dims = keep_dims
 
     def maxpr(self, args: list[Value], output: Array) -> None:
-        axes = self.axes
-        if axes is None:
-            # Sum over all axes
-            output_symbol = args[0]
-            for axis in range(len(args[0].shape) - 1, -1, -1):
-                output_symbol = ops.sum(output_symbol, axis=axis, keepdims=True)
-        else:
-            if isinstance(axes, int):
-                axes = [axes]
+        output_symbol = args[0]
 
-            axes = sorted(axes, reverse=True)
-            output_symbol = args[0]
-
-            for axis in axes:
-                output_symbol = ops.sum(output_symbol, axis=axis, keepdims=True)
+        for axis in self.axes:
+            output_symbol = ops.sum(output_symbol, axis=axis)
 
         output.tensor_value = output_symbol
 
@@ -111,8 +100,15 @@ def sum(
             axes = [axes]
         elif isinstance(axes, list | tuple):
             axes = [int(axis) for axis in axes]
+        
+        axes = [axis if axis < 0 else axis - len(arg.shape) for axis in axes]
 
-    axes = [axis if axis < 0 else axis - len(arg.shape) for axis in axes]
+    else:
+        axes = []
+        for i in range(-len(arg.shape), 0):
+            axes.append(i)
+
+    sorted(axes)
     op = ReduceSumOp(arg.shape, axes, keep_dims=keep_dims)
     res = op.forward(arg)
 
@@ -120,8 +116,8 @@ def sum(
 
     if not keep_dims:
         # manually use the squeeze operation to squeeze remaining axes 
-        for i, axis in enumerate(sorted(op.axes)):
-            res = squeeze(res, [axis + i]) # axes always negative
+        for axis in axes:
+            res = squeeze(res, [axis]) # axes always negative
             
     return res
 
@@ -286,13 +282,18 @@ def sum_batch_dims(
 
         batch_dims_len = len(arg.batch_dims)
         axes = [axis if axis < 0 else axis - batch_dims_len for axis in axes]
+    else:
+        axes = []
+        for i in range(-len(arg.batch_dims), 0):
+            axes.append(i)
 
+    sorted(axes)
     op = SumBatchDimsOp(arg.batch_dims, axes, keep_dims)
     res = op.forward(arg)
 
     # print("DEBUG sum_batch_dims:",res.batch_dims, res.shape, op.axes, keep_dims)
     if not keep_dims:
-        for i, axis in enumerate(sorted(op.axes)):
-            res = squeeze_batch_dims(res, [axis + i]) # axes always negative
+        for axis in axes:
+            res = squeeze_batch_dims(res, [axis]) # axes always negative
             
     return res

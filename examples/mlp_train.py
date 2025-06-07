@@ -218,7 +218,7 @@ def train_step_adamw(
 
     # Extract parameter gradients (skip x and targets)
     # After VJP refactoring, gradients is a tuple containing the gradient list
-    all_gradients = gradients[0]  # Extract the gradient list from the tuple
+    all_gradients = gradients  # Extract the gradient list from the tuple
     param_gradients = all_gradients[2:]  # Skip x and targets gradients
 
     # AdamW optimizer update

@@ -218,7 +218,7 @@ def train_step_adamw(
 
     # Backward pass
     cotangent = [nb.array([np.float32(1.0)])]
-    gradients = jitted_vjp_fn(cotangent)[0]
+    gradients = jitted_vjp_fn(cotangent)
 
     # Extract parameter gradients (skip x and targets)
     param_gradients = gradients[2:]

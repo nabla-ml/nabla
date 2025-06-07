@@ -26,6 +26,9 @@ from .operation import Operation, ViewOperation
 # Public API
 __all__ = [
     "transpose",
+    "permute",
+    "move_axis_to_front",
+    "move_axis_from_front",
     "reshape",
     "broadcast_to",
     "broadcast_batch_dims",
@@ -100,6 +103,178 @@ def transpose(arg: Array, axis_1: int = -2, axis_2: int = -1) -> Array:
     op = TransposeOp(axis_1, axis_2)
     return op.forward(arg)
 
+
+class PermuteOp(ViewOperation):
+    """Permute (reorder) the dimensions of a tensor according to given axes."""
+
+    def __init__(self, axes: tuple[int, ...]):
+        """Initialize permute operation.
+        
+        Args:
+            axes: Tuple of axis indices specifying the new order.
+                  Must be a permutation of range(ndim).
+        """
+        super().__init__(f"permute[axes={axes}]")
+        self.axes = tuple(axes)
+
+    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
+        """Compute output shape after permutation."""
+        if len(input_shapes) != 1:
+            raise ValueError(f"Permute operation requires 1 input shape, got {len(input_shapes)}")
+        
+        input_shape = input_shapes[0]
+        
+        # Validate axes - should now be all negative and same length as input
+        if len(self.axes) != len(input_shape):
+            raise ValueError(f"Number of axes {len(self.axes)} must match input dimensions {len(input_shape)}")
+        
+        # Convert to positive indices for validation
+        positive_axes = [ax + len(input_shape) for ax in self.axes]
+        if sorted(positive_axes) != list(range(len(input_shape))):
+            raise ValueError(f"Axes {self.axes} must be a permutation of negative indices corresponding to {list(range(len(input_shape)))}")
+        
+        # Reorder dimensions according to axes (convert negative to positive for indexing)
+        return tuple(input_shape[axis + len(input_shape)] for axis in self.axes)
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        """Max computation: permute the tensor."""
+        # Convert negative axes to positive for ops.transpose
+        positive_axes = [ax + len(args[0].shape) for ax in self.axes]
+        output.tensor_value = ops.transpose(args[0], tuple(positive_axes))
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        """Eager computation: permute using numpy."""
+        # Handle batch dimensions properly like transpose does
+        offset = len(args[0].batch_dims)
+        
+        # Since self.axes are negative indices relative to the array shape,
+        # we need to adjust them for the full numpy array including batch dims
+        full_shape_len = offset + len(args[0].shape)
+        
+        # Convert our negative axes (relative to array shape) to work with full numpy array
+        numpy_axes = []
+        for ax in self.axes:
+            # ax is negative relative to args[0].shape, convert to positive
+            array_pos_ax = ax + len(args[0].shape)
+            # Now convert to position in full numpy array (including batch dims)
+            numpy_pos_ax = offset + array_pos_ax
+            numpy_axes.append(numpy_pos_ax)
+        
+        # Prepend batch dimension indices (they stay in their original positions)
+        full_axes = list(range(offset)) + numpy_axes
+        
+        np_result = np.transpose(args[0].to_numpy(), full_axes)
+        output.impl = Tensor.from_numpy(np_result)
+
+    def vjp_rule(self, primals: list[Array], cotangent: Array, output: Array) -> list[Array]:
+        """VJP rule: reverse the permutation."""
+        # Create inverse permutation for negative indices
+        inv_axes = [0] * len(self.axes)
+        for i, axis in enumerate(self.axes):
+            # Convert negative axis to positive index for inverse mapping
+            pos_axis = axis + len(self.axes)
+            inv_axes[pos_axis] = i
+        
+        # Convert back to negative indices
+        inv_axes_negative = [-len(self.axes) + ax for ax in inv_axes]
+        
+        return [permute(cotangent, tuple(inv_axes_negative))]
+
+    def jvp_rule(self, primals: list[Array], tangents: list[Array], output: Array) -> Array:
+        """JVP rule: apply same permutation to tangent."""
+        return permute(tangents[0], self.axes)
+
+
+def permute(input_array: Array, axes: tuple[int, ...]) -> Array:
+    """Permute (reorder) the dimensions of a tensor.
+    
+    Args:
+        input_array: Input tensor
+        axes: Tuple specifying the new order of dimensions
+        
+    Returns:
+        Tensor with reordered dimensions
+        
+    Example:
+        >>> x = nb.ones((2, 3, 4))  # shape (2, 3, 4)
+        >>> y = permute(x, (2, 0, 1))  # shape (4, 2, 3)
+        >>> # Dimension 2 -> position 0, dimension 0 -> position 1, dimension 1 -> position 2
+    """
+    # always store axes to be fully negative 
+    axes = tuple(-len(input_array.shape) + ax if ax >= 0 else ax for ax in axes)
+    # but first we add oentailly missing axes which we treat as unpemruted
+    axes_new = []
+    for i in range(-len(input_array.shape), -len(axes)):
+        axes_new.append(i)
+
+    axes = axes_new + list(axes)  # prepend missing axes to the front
+
+    op = PermuteOp(axes)
+    return op.forward(input_array)
+
+
+def move_axis_to_front(input_array: Array, axis: int) -> Array:
+    """Move specified axis to the front (position 0), shifting others right.
+    
+    Args:
+        input_array: Input tensor
+        axis: Axis to move to front
+        
+    Returns:
+        Tensor with specified axis moved to front
+        
+    Example:
+        >>> x = nb.ones((2, 3, 4))  # shape (2, 3, 4)  
+        >>> y = move_axis_to_front(x, 2)  # shape (4, 2, 3)
+        >>> # axis 2 moved to front, others shifted: [2, 0, 1]
+    """
+    ndim = len(input_array.shape)
+    
+    # Normalize negative axis
+    if axis < 0:
+        axis = ndim + axis
+        
+    if axis < 0 or axis >= ndim:
+        raise ValueError(f"Axis {axis} out of bounds for array of dimension {ndim}")
+    
+    # Generate permutation: [axis, 0, 1, ..., axis-1, axis+1, ..., ndim-1]
+    axes = [axis] + [i for i in range(ndim) if i != axis]
+    
+    return permute(input_array, tuple(axes))
+
+
+def move_axis_from_front(input_array: Array, target_axis: int) -> Array:
+    """Move front axis (position 0) to specified target position.
+    
+    Args:
+        input_array: Input tensor (assumes front axis is the one to move)
+        target_axis: Target position for the front axis
+        
+    Returns:
+        Tensor with front axis moved to target position
+        
+    Example:
+        >>> x = nb.ones((4, 2, 3))  # front axis has size 4
+        >>> y = move_axis_from_front(x, 2)  # shape (2, 3, 4)
+        >>> # front axis moved to position 2: [1, 2, 0]
+    """
+    ndim = len(input_array.shape)
+    
+    # Normalize negative axis
+    if target_axis < 0:
+        target_axis = ndim + target_axis
+        
+    if target_axis < 0 or target_axis >= ndim:
+        raise ValueError(f"Target axis {target_axis} out of bounds for array of dimension {ndim}")
+    
+    if target_axis == 0:
+        return input_array  # Already at front
+    
+    # Generate permutation to move front to target_axis
+    # [1, 2, ..., target_axis, 0, target_axis+1, ..., ndim-1]  
+    axes = list(range(1, target_axis + 1)) + [0] + list(range(target_axis + 1, ndim))
+    
+    return permute(input_array, tuple(axes))
 
 class ReshapeOp(ViewOperation):
     """Reshape operation."""

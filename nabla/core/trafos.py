@@ -807,61 +807,6 @@ def pushfwd(
     return tree_unflatten(tree_flatten(outputs)[1], output_tangents)
 
 
-def _prepare_vmap_inputs(
-    inputs: list[Array], adapted_in_axes: list[int]
-) -> list[Array]:
-    """Prepare inputs for vmap by handling batching and axis transposition."""
-    batched_inputs = []
-    inputs = make_traced(inputs)
-
-    for i, inp in enumerate(inputs):
-        if adapted_in_axes[i] is None:
-            from ..ops.view import unsqueeze
-
-            batched_inp = unsqueeze(inp, [0])
-        else:
-            axis = adapted_in_axes[i]
-            batched_inp = inp
-            if axis != 0:
-                from ..ops.view import transpose
-
-                batched_inp = transpose(inp, axis, 0)
-
-        from ..ops.unary import incr_batch_dim_ctr
-
-        batched_inp = incr_batch_dim_ctr(batched_inp)
-        batched_inputs.append(batched_inp)
-
-    return batched_inputs
-
-
-def _prepare_vmap_outputs(
-    outputs: list[Array], adapted_out_axes: list[int]
-) -> list[Array]:
-    """Prepare outputs from vmap by handling unbatching and axis transposition."""
-    unbatched_outputs = []
-
-    for i, out in enumerate(outputs):
-        from ..ops.unary import decr_batch_dim_ctr
-
-        unbatched_output = decr_batch_dim_ctr(out)
-
-        if adapted_out_axes[i] is None:
-            from ..ops.view import squeeze
-
-            unbatched_output = squeeze(unbatched_output, [0])
-        else:
-            axis = adapted_out_axes[i]
-            if axis != 0:
-                # Move axis 0 back to the original position
-                from ..ops.view import transpose
-
-                unbatched_output = transpose(unbatched_output, 0, axis)
-
-        unbatched_outputs.append(unbatched_output)
-
-    return unbatched_outputs
-
 
 def xpr(fn: Callable[..., Any], *primals) -> str:
     """Get a JAX-like string representation of the function's computation graph.
@@ -886,6 +831,10 @@ def xpr(fn: Callable[..., Any], *primals) -> str:
         inputs_pytree = primals
         is_single_arg = False
 
+    any_arg_traced = any(
+        getattr(arg, "traced", False) for arg in _extract_arrays_from_pytree(inputs_pytree)
+    )
+
     # Make traced copies of all inputs
     traced_inputs_pytree = make_traced_pytree(inputs_pytree)
 
@@ -909,8 +858,9 @@ def xpr(fn: Callable[..., Any], *primals) -> str:
     trace = Trace(input_arrays, output_arrays)
 
     # Make everything untraced before returning
-    make_untraced_pytree(traced_inputs_pytree)
-    make_untraced_pytree(outputs)
+    # make_untraced_pytree(traced_inputs_pytree)
+    if not any_arg_traced:
+        make_untraced_pytree(outputs)
 
     return str(trace)
 
@@ -950,6 +900,10 @@ def vjp(
     else:
         inputs_pytree = primals
         is_single_arg = False
+
+    any_arg_traced = any(
+        getattr(arg, "traced", False) for arg in _extract_arrays_from_pytree(inputs_pytree)
+    )
 
     # Make traced copies of all inputs
     traced_inputs_pytree = make_traced_pytree(inputs_pytree)
@@ -991,17 +945,21 @@ def vjp(
         )
 
         # Only make gradients untraced if original cotangents were not traced
-        if not any_cotangent_traced:
+        if not any_cotangent_traced and not any_arg_traced:
             make_untraced_pytree(gradients)
 
-        # Always return as tuple to match JAX behavior
-        if is_single_arg:
-            return (gradients,)  # Wrap single gradient in tuple
-        else:
-            return gradients  # Already a tuple for multiple args
+        # # Always return as tuple to match JAX behavior
+        # if is_single_arg:
+        #     return (gradients,)  # Wrap single gradient in tuple
+        # else:
+        #     return gradients  # Already a tuple for multiple args
 
+        return gradients 
+    
     # Make outputs untraced before returning
-    make_untraced_pytree(outputs)
+    # make_untraced_pytree(outputs)
+    if not any_arg_traced:
+        make_untraced_pytree(outputs)
 
     # Return based on has_aux
     if has_aux:
@@ -1036,6 +994,13 @@ def jvp(
     # Handle inputs correctly based on structure
     is_multi_arg = isinstance(primals, tuple)
 
+    any_primal_traced = any(
+        getattr(arg, "traced", False) for arg in _extract_arrays_from_pytree(primals)
+    )
+    any_tangent_traced = any(
+        getattr(arg, "traced", False) for arg in _extract_arrays_from_pytree(tangents)
+    )
+
     # Validate primals and tangents match
     if is_multi_arg:
         if not isinstance(tangents, tuple) or len(primals) != len(tangents):
@@ -1061,200 +1026,140 @@ def jvp(
     output_tangents = pushfwd(traced_inputs_pytree, outputs, tangents)
 
     # Make everything untraced before returning
-    make_untraced_pytree(outputs)
-    make_untraced_pytree(output_tangents)
+    if not any_primal_traced and not any_tangent_traced:
+        make_untraced_pytree(outputs)
+        make_untraced_pytree(output_tangents)
 
     return outputs, output_tangents
 
 
-def vmap(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
-    """Vectorize a function over specified input axes.
-    This can be used as a function call like `vmap(func, in_axes=0)` or as a decorator `@vmap`.
 
+def _apply_batching_to_tree(tree: Any, axes: Any, is_input: bool = True) -> Any:
+    """Apply batching/unbatching to a pytree structure.
+    
     Args:
-        func: Function to vectorize
-        in_axes: Specification of axes to map over for inputs.
-            If an integer, all inputs are mapped over that axis.
-            If a tuple, should match the length of inputs with axis specifications.
-        out_axes: Specification of axes for outputs.
-            If an integer, all outputs are mapped over that axis.
-            If a tuple, should match the structure of outputs.
-
-    Returns:
-        Vectorized function that can handle batched inputs
-
-    Note:
-        Supports both calling conventions:
-
-        * List-style: vmapped_fn([x, y, z])
-        * Unpacked-style: vmapped_fn(x, y, z)
-
-    Example:
-        As a function call::
-
-            vmapped_func = vmap(my_func, in_axes=0, out_axes=0)
-
-        As a decorator::
-
-            @vmap
-            def my_func(x):
-                return x * 2
-
-        As a decorator with arguments::
-
-            @vmap(in_axes=1, out_axes=0)
-            def my_func(x):
-                return x * 2
+        tree: Pytree containing Arrays
+        axes: Axis specification matching tree structure
+        is_input: True for input batching, False for output unbatching
     """
-    # Handle being called as a decorator with arguments: @vmap(in_axes=1)
+    def _process_array(array: Array, axis: int | None) -> Array:
+        if is_input:
+            # Input batching
+            from nabla.ops.view import unsqueeze
+            from nabla.ops.unary import incr_batch_dim_ctr
+
+            if axis is None:
+                # Broadcast: add size-1 batch dimension
+                batched = unsqueeze(array, [0])
+            else:
+                # Move specified axis to position 0
+                if axis != 0:
+                    from ..ops.view import move_axis_to_front
+                    batched = move_axis_to_front(array, axis)
+                else:
+                    batched = array
+            
+            return incr_batch_dim_ctr(batched)
+        else:
+            # Output unbatching
+            from nabla.ops.view import squeeze
+            from nabla.ops.unary import decr_batch_dim_ctr
+            
+            unbatched = decr_batch_dim_ctr(array)
+            
+            if axis is None:
+                # Remove batch dimension
+                unbatched = squeeze(unbatched, [0])
+            else:
+                # Move axis 0 to specified position
+                if axis != 0:
+                    from ..ops.view import move_axis_from_front
+                    unbatched = move_axis_from_front(unbatched, axis)
+            
+            return unbatched
+    
+    def _recurse(tree_part: Any, axes_part: Any) -> Any:
+        if isinstance(tree_part, Array):
+            return _process_array(tree_part, axes_part)
+        elif isinstance(tree_part, dict):
+            return {k: _recurse(tree_part[k], axes_part[k]) for k in tree_part}
+        elif isinstance(tree_part, (list, tuple)):
+            result = [_recurse(t, a) for t, a in zip(tree_part, axes_part)]
+            return type(tree_part)(result)
+        else:
+            # Non-Array leaf, return unchanged
+            return tree_part
+    
+    return _recurse(tree, axes)
+
+def _broadcast_axis_spec(axis_spec: Any, num_items: int) -> tuple[Any, ...]:
+    """Broadcast axis specification to match number of items."""
+    if isinstance(axis_spec, (int, type(None))):
+        return tuple(axis_spec for _ in range(num_items))
+    elif isinstance(axis_spec, (list, tuple)):
+        if len(axis_spec) != num_items:
+            raise ValueError(f"Axis specification length {len(axis_spec)} != number of items {num_items}")
+        return tuple(axis_spec)
+    else:
+        raise ValueError(f"Invalid axis specification: {axis_spec}")
+
+
+def vmap(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
+    """Enhanced vmap with clean pytree support.
+    
+    This is a simplified, clean implementation that supports all JAX vmap features:
+    - Pytree inputs/outputs with matching axis specifications
+    - Broadcasting (axis=None) and batching (axis=int)
+    - Nested structures (tuples, lists, dicts)
+    - Both list-style and unpacked argument calling conventions
+    """
     if func is None:
         return lambda f: vmap(f, in_axes=in_axes, out_axes=out_axes)
-
-    # Helper function to standardize in_axes/out_axes to proper format
-    def _standardize_axes(axes, length, name):
-        if isinstance(axes, int) or axes is None:
-            return [axes] * length
-        elif isinstance(axes, tuple | list):
-            if len(axes) != length:
-                raise ValueError(
-                    f"{name} length {len(axes)} != argument length {length}"
-                )
-            return list(axes)
-        else:
-            raise ValueError(
-                f"{name} must be an integer, None, or a tuple/list, got {type(axes)}"
-            )
-
+    
     def vectorized_func(*args):
-        # Use common argument handling logic
+        # Handle calling conventions
         actual_args, is_list_style = _handle_args_consistently(args)
-
-        # Handle input structure
+        
         if not actual_args:
             raise ValueError("vmap requires at least one input argument")
-
-        # Standardize in_axes to match input structure
-        adapted_in_axes = _standardize_axes(in_axes, len(actual_args), "in_axes")
-
-        # Create traced copies of inputs
-        traced_args = []
-        for arg, axis in zip(actual_args, adapted_in_axes, strict=False):
-            # Extract arrays and prepare for batch mapping
-            arg_arrays = _extract_arrays_from_pytree(arg)
-            arg_structure = tree_flatten(arg)[1]
-
-            # Get axis for each array (replicate the axis value)
-            array_axes = [axis] * len(arg_arrays)
-
-            # Prepare arrays for batched execution
-            batched_arrays = _prepare_vmap_inputs(arg_arrays, array_axes)
-
-            # Reconstruct the original structure with batched arrays
-            traced_arg = tree_unflatten(arg_structure, batched_arrays)
-            traced_args.append(traced_arg)
-
-        # Call the original function with appropriate style
-        # print(xpr(func, *traced_args))  # Debug: print the computation graph
-        outputs = func(traced_args) if is_list_style else func(*traced_args)
-
-        # Handle output structure - could be single output or multiple
-        if not isinstance(outputs, list | tuple):
-            outputs_structure = [outputs]
+        
+        # Broadcast in_axes to match arguments
+        structured_in_axes = _broadcast_axis_spec(in_axes, len(actual_args))
+        
+        # Apply input batching
+        batched_args = []
+        for arg, axis_spec in zip(actual_args, structured_in_axes):
+            # Make traced first
+            # traced_arg = tree_map(lambda a: make_traced([a])[0] if isinstance(a, Array) else a, arg)
+            # Apply batching
+            # batched_arg = _apply_batching_to_tree(traced_arg, axis_spec, is_input=True)
+            batched_arg = _apply_batching_to_tree(arg, axis_spec, is_input=True)
+            batched_args.append(batched_arg)
+        
+        # Execute function
+        outputs = func(batched_args) if is_list_style else func(*batched_args)
+        
+        # Handle output structure
+        if not isinstance(outputs, (list, tuple)):
+            outputs_list = [outputs]
             is_single_output = True
         else:
-            outputs_structure = outputs
+            outputs_list = outputs
             is_single_output = False
-
-        # Standardize out_axes to match output structure
-        adapted_out_axes = _standardize_axes(
-            out_axes, len(outputs_structure) if not is_single_output else 1, "out_axes"
-        )
-
-        # Process each output
+        
+        # Broadcast out_axes to match outputs
+        structured_out_axes = _broadcast_axis_spec(out_axes, len(outputs_list))
+        
+        # Apply output unbatching
         unbatched_outputs = []
-        for out, out_axis in zip(
-            outputs_structure if not is_single_output else [outputs],
-            adapted_out_axes,
-            strict=False,
-        ):
-            # Extract arrays and prepare for unbatching
-            out_arrays = _extract_arrays_from_pytree(out)
-            out_structure = tree_flatten(out)[1]
-
-            # Get axis for each array
-            array_out_axes = [out_axis] * len(out_arrays)
-
-            # Prepare arrays for unbatched results
-            unbatched_arrays = _prepare_vmap_outputs(out_arrays, array_out_axes)
-
-            # Reconstruct the original structure with unbatched arrays
-            unbatched_out = tree_unflatten(out_structure, unbatched_arrays)
-            unbatched_outputs.append(unbatched_out)
-
-        # Return single output or tuple based on input structure
+        for output, axis_spec in zip(outputs_list, structured_out_axes):
+            unbatched_output = _apply_batching_to_tree(output, axis_spec, is_input=False)
+            unbatched_outputs.append(unbatched_output)
+        
         return unbatched_outputs[0] if is_single_output else tuple(unbatched_outputs)
-
+    
     return vectorized_func
 
-
-def _validate_staging_debug(original_args, traced_args, is_list_style):
-    """
-    TEMPORARY DEBUG FUNCTION: Validate that all inputs are properly staged.
-
-    This function checks if staging is correctly applied to inputs after
-    the staging operation in jit. It provides detailed debug output about
-    the staging status of each array.
-
-    Args:
-        original_args: Original input arguments before tracing/staging
-        traced_args: Arguments after tracing and staging
-        is_list_style: Whether using list-style arguments or not
-    """
-    print("=== STAGING VALIDATION DEBUG ===")
-
-    # Extract arrays for checking
-    if is_list_style:
-        # For list-style, traced_args should be a list of Arrays
-        arrays_to_check = traced_args
-        print(f"List-style: checking {len(arrays_to_check)} arrays")
-    else:
-        # For pytree-style, need to extract arrays from the structure
-        arrays_to_check = _extract_arrays_from_pytree(traced_args)
-        print(f"Pytree-style: extracted {len(arrays_to_check)} arrays")
-
-    staging_issues = []
-    properly_staged = 0
-
-    for i, array in enumerate(arrays_to_check):
-        if not isinstance(array, Array):
-            print(f"  Item {i}: Not an Array (type: {type(array)}) - SKIPPING")
-            continue
-
-        is_staged = getattr(array, "stage_realization", False)
-        is_traced = getattr(array, "traced", False)
-
-        print(
-            f"  Array {i}: staged={is_staged}, traced={is_traced}, name='{array.name}', shape={array.shape}"
-        )
-
-        if not is_staged:
-            staging_issues.append(f"Array {i} (name='{array.name}') is NOT staged")
-        else:
-            properly_staged += 1
-
-    print(
-        f"STAGING SUMMARY: {properly_staged}/{len(arrays_to_check)} arrays properly staged"
-    )
-
-    if staging_issues:
-        print("STAGING ISSUES FOUND:")
-        for issue in staging_issues:
-            print(f"  ❌ {issue}")
-        print("⚠️  WARNING: Some inputs may not be staged correctly!")
-    else:
-        print("✅ All arrays appear to be properly staged")
-
-    print("=== END STAGING VALIDATION ===")
 
 
 def jit(func: Callable[..., Any] = None) -> Callable[..., Any]:
