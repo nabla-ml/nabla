@@ -120,8 +120,8 @@ def sum(
 
     if not keep_dims:
         # manually use the squeeze operation to squeeze remaining axes 
-        for axis in sorted(op.axes, reverse=True):
-            res = squeeze(res, [axis])
+        for i, axis in enumerate(sorted(op.axes)):
+            res = squeeze(res, [axis + i]) # axes always negative
             
     return res
 
@@ -292,7 +292,7 @@ def sum_batch_dims(
 
     # print("DEBUG sum_batch_dims:",res.batch_dims, res.shape, op.axes, keep_dims)
     if not keep_dims:
-        # manually use the squeeze operation to squeeze remaining axes 
-        for axis in sorted(op.axes, reverse=True):
-            res = squeeze_batch_dims(res, [axis])
+        for i, axis in enumerate(sorted(op.axes)):
+            res = squeeze_batch_dims(res, [axis + i]) # axes always negative
+            
     return res

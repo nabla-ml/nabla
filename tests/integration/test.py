@@ -73,8 +73,21 @@ def test2():
     # print(grad)
 
 
+def test3():
+
+    print("Testing _std_basis...")
+    a = nb.arange((3, 2,))
+    b = nb.arange((2, 4,))
+    c = nb.arange((4, 1))
+
+    sizes, tangents = nb.core.trafos._std_basis([a, b, c])
+    print("sizes:", sizes)
+    print("tangents:")
+    for t in tangents:
+        print(t)
 
 
 if __name__ == "__main__":
     # test1()
-    test2()
+    # test2()
+    test3()
