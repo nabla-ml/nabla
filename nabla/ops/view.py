@@ -226,7 +226,7 @@ class BroadcastToOp(ViewOperation):
         )
         from .reduce import sum as sum_op  # Renamed to avoid shadowing built-in
 
-        return [sum_op(cotangent, axes=broadcasted_axes, keep_dims=False)]
+        return [sum_op(cotangent, axes=broadcasted_axes, keep_dims=True)]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
@@ -327,7 +327,7 @@ class BroadcastBatchDimsOp(ViewOperation):
         broadcasted_axes = self.get_broadcasted_axes(
             primals[0].batch_dims, output.batch_dims
         )
-        return [sum_batch_dims(cotangent, axes=broadcasted_axes, keep_dims=False)]
+        return [sum_batch_dims(cotangent, axes=broadcasted_axes, keep_dims=True)]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
@@ -340,8 +340,8 @@ def broadcast_batch_dims(arg: Array, batch_dims: Shape) -> Array:
     if arg.batch_dims == batch_dims:
         return arg
     
-    # for _ in range(len(batch_dims) - len(arg.batch_dims)):
-    #     arg = unsqueeze_batch_dims(arg, [0])
+    for _ in range(len(batch_dims) - len(arg.batch_dims)):
+        arg = unsqueeze_batch_dims(arg, [0])
 
     op = BroadcastBatchDimsOp(batch_dims)
     return op.forward(arg)
