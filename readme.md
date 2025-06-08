@@ -28,11 +28,11 @@ import nabla as nb
 
 # Example function using Nabla's array operations
 def foo(input):
-    return nb.sum(input ** 2, axis=0)
+    return nb.sum(input * input, axes=0)
 
 # Vectorize, differentiate, accelerate
-foo_grads = nb.jit(nb.grad(nb.vmap(foo)))
-gradients = foo_grads([nb.randn((10, 5))])
+foo_grads = nb.jit(nb.vmap(nb.grad(foo)))
+gradients = foo_grads(nb.randn((10, 5)))
 ```
 
 ## Roadmap
