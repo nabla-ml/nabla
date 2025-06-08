@@ -198,7 +198,9 @@ class SumBatchDimsOp(ReductionOperation):
         # output.impl = Tensor.from_numpy(np_result)
 
         axes = [ax - len(output.shape) for ax in self.axes]
-        np_result = np.sum(args[0].to_numpy(), axis=axes, keepdims=True)
+        np_result = np.sum(
+            args[0].to_numpy(), axis=tuple(axes) if axes else None, keepdims=True
+        )
         if np_result.ndim == 0:
             np_result = np.array(np_result)
         output.impl = Tensor.from_numpy(np_result)
@@ -218,7 +220,6 @@ class SumBatchDimsOp(ReductionOperation):
                 f"do not match cotangent batch_dims {cotangent.batch_dims}."
                 f"primal batch_dims: {primals[0].batch_dims}"
             )
-
 
         return [broadcast_batch_dims(cotangent, self.arg_batch_dims)]
 
@@ -248,7 +249,7 @@ def sum_batch_dims(
         for i in range(-len(arg.batch_dims), 0):
             axes.append(i)
 
-    sorted(axes)
+    axes = sorted(axes)
     op = SumBatchDimsOp(arg.batch_dims, axes, keep_dims)
     res = op.forward(arg)
 

@@ -104,6 +104,143 @@ def transpose(arg: Array, axis_1: int = -2, axis_2: int = -1) -> Array:
     return op.forward(arg)
 
 
+class TransposeBatchDimsOp(ViewOperation):
+    """Transpose operation to swap two batch dimensions."""
+
+    def __init__(self, axis_1: int = -2, axis_2: int = -1):
+        """Initialize transpose batch dims operation.
+
+        Args:
+            axis_1: First batch dimension axis to swap (negative indices preferred)
+            axis_2: Second batch dimension axis to swap (negative indices preferred)
+        """
+        super().__init__(f"transpose_batch_dims[permutation=({axis_1},{axis_2})]")
+        self.axis_1 = axis_1
+        self.axis_2 = axis_2
+
+    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
+        """Shape stays the same for batch dimension operations."""
+        if len(input_shapes) != 1:
+            raise ValueError(
+                f"Transpose batch dims operation requires 1 input shape, got {len(input_shapes)}"
+            )
+        return input_shapes[0]
+
+    def compute_output_batch_dims(self, *input_batch_dimss: tuple) -> tuple:
+        """Compute output batch_dims after transposing two axes."""
+        if len(input_batch_dimss) != 1:
+            raise ValueError(
+                f"Transpose batch dims operation requires 1 input batch_dims, got {len(input_batch_dimss)}"
+            )
+        input_batch_dims = input_batch_dimss[0]
+
+        if not input_batch_dims:
+            raise ValueError(
+                "Cannot transpose batch dims of an array with no batch dimensions"
+            )
+
+        # Convert negative indices to positive for validation and computation
+        axis_1 = self.axis_1 + len(input_batch_dims) if self.axis_1 < 0 else self.axis_1
+        axis_2 = self.axis_2 + len(input_batch_dims) if self.axis_2 < 0 else self.axis_2
+
+        # Validate axes are within bounds
+        if axis_1 < 0 or axis_1 >= len(input_batch_dims):
+            raise ValueError(
+                f"axis_1 {self.axis_1} is out of bounds for batch_dims {input_batch_dims}"
+            )
+        if axis_2 < 0 or axis_2 >= len(input_batch_dims):
+            raise ValueError(
+                f"axis_2 {self.axis_2} is out of bounds for batch_dims {input_batch_dims}"
+            )
+
+        # Create new batch_dims with axes swapped
+        new_batch_dims = list(input_batch_dims)
+        new_batch_dims[axis_1], new_batch_dims[axis_2] = (
+            new_batch_dims[axis_2],
+            new_batch_dims[axis_1],
+        )
+
+        return tuple(new_batch_dims)
+
+    def forward(self, *args: Array) -> Array:
+        """Override forward to handle single input."""
+        if len(args) != 1:
+            raise ValueError(
+                f"Transpose batch dims operation requires 1 argument, got {len(args)}"
+            )
+        return super().forward(*args)
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        """MAX graph implementation using ops.transpose."""
+        axis_1 = self.axis_1 - len(output.shape)
+        axis_2 = self.axis_2 - len(output.shape)
+
+        output.tensor_value = ops.transpose(args[0], axis_1, axis_2)
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        """Eager execution using NumPy transpose."""
+        input_array = args[0]
+
+        # Get the full tensor including batch dimensions
+        input_np = input_array.to_numpy()
+
+        axis_1 = self.axis_1 - len(args[0].shape)
+        axis_2 = self.axis_2 - len(args[0].shape)
+
+        # Create axes list for full transpose
+        total_dims = len(input_array.batch_dims) + len(input_array.shape)
+        axes = list(range(total_dims))
+
+        # Swap the two batch dimension axes
+        axes[axis_1], axes[axis_2] = axes[axis_2], axes[axis_1]
+
+        # Apply transpose
+        np_result = np.transpose(input_np, axes)
+        output.impl = Tensor.from_numpy(np_result)
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        """VJP rule: transpose is its own inverse."""
+        return [transpose_batch_dims(cotangent, self.axis_1, self.axis_2)]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        """JVP rule: apply same transpose to tangents."""
+        return transpose_batch_dims(tangents[0], self.axis_1, self.axis_2)
+
+
+def transpose_batch_dims(arg: Array, axis_1: int = -2, axis_2: int = -1) -> Array:
+    """Transpose batch dimensions along two axes.
+
+    This operation swaps two axes in the batch_dims of an Array, similar to how
+    regular transpose works on shape dimensions. The shape dimensions remain unchanged.
+
+    Args:
+        arg: Input array with batch dimensions to transpose
+        axis_1: First batch dimension axis to swap (default: -2)
+        axis_2: Second batch dimension axis to swap (default: -1)
+
+    Returns:
+        Array with specified batch dimensions transposed
+
+    Example:
+        >>> import nabla as nb
+        >>> # Array with batch_dims=(2, 3, 4) and shape=(5, 6)
+        >>> x = nb.ones((5, 6))
+        >>> x.batch_dims = (2, 3, 4)  # Simulated for example
+        >>> y = transpose_batch_dims(x, -3, -1)  # Swap first and last batch dims
+        >>> # Result has batch_dims=(4, 3, 2) and shape=(5, 6)
+    """
+    # Convert to negative indices for consistency with batch dimension handling
+    axis_1 = axis_1 if axis_1 < 0 else -len(arg.batch_dims) + axis_1
+    axis_2 = axis_2 if axis_2 < 0 else -len(arg.batch_dims) + axis_2
+
+    op = TransposeBatchDimsOp(axis_1, axis_2)
+    return op.forward(arg)
+
+
 class PermuteOp(ViewOperation):
     """Permute (reorder) the dimensions of a tensor according to given axes."""
 
@@ -1274,7 +1411,6 @@ class SqueezeBatchDimsOp(ViewOperation):
             res = ops.squeeze(res, ax)
         output.tensor_value = res
 
-
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         """Eager execution using NumPy squeeze."""
         axes = [ax - len(args[0].shape) for ax in self.axes]
@@ -1363,7 +1499,6 @@ class UnsqueezeBatchDimsOp(ViewOperation):
         for ax in axes:
             res = ops.unsqueeze(res, ax)
         output.tensor_value = res
-
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         """Eager execution using NumPy expand_dims."""

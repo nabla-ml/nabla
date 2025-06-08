@@ -203,8 +203,25 @@ def cos(arg: Array) -> Array:
 class IncrBatchDimCtr(UnaryOperation):
     """Increment batch dimension counter for debugging."""
 
-    def __init__(self):
+    def __init__(self, arg_batch_dims: tuple[int, ...], arg_shape: tuple[int, ...]):
         super().__init__("incr_batch_dim_ctr")
+        self.arg_batch_dims = arg_batch_dims
+        self.arg_shape = arg_shape
+
+    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
+        """Output shape is the same as input shape."""
+        if not self.arg_shape:
+            raise ValueError(
+                f"IncrBatchDimCtr requires a non-empty arg_shape, got {self.arg_shape}"
+            )
+        return self.arg_shape[1:]
+
+    def compute_output_batch_dims(self, *input_batch_dims):
+        if not self.arg_shape:
+            raise ValueError(
+                f"IncrBatchDimCtr requires a non-empty arg_shape, got {self.arg_shape}"
+            )
+        return self.arg_batch_dims + (self.arg_shape[0],)
 
     def maxpr(self, args: list[Value], output: Array) -> None:
         output.tensor_value = args[0]
@@ -225,20 +242,31 @@ class IncrBatchDimCtr(UnaryOperation):
 
 def incr_batch_dim_ctr(arg: Array) -> Array:
     """Increment batch dimension counter for debugging."""
-    res = IncrBatchDimCtr().forward(arg)
-    if len(res.shape) > 0:
-        res.batch_dims = res.batch_dims + (res.shape[0],)
-        res.shape = res.shape[1:]
-    else:
-        raise ValueError("Shape is empty, cannot increment batch dimension counter.")
-    return res
+    return IncrBatchDimCtr(arg.batch_dims, arg.shape).forward(arg)
 
 
 class DecrBatchDimCtr(UnaryOperation):
     """Decrement batch dimension counter for debugging."""
 
-    def __init__(self):
+    def __init__(self, arg_batch_dims: tuple[int, ...], arg_shape: tuple[int, ...]):
         super().__init__("decr_batch_dim_ctr")
+        self.arg_batch_dims = arg_batch_dims
+        self.arg_shape = arg_shape
+
+    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
+        """Output shape is the same as input shape."""
+        if not self.arg_batch_dims:
+            raise ValueError(
+                f"DecrBatchDimCtr requires a non-empty arg_batch_dims, got {self.arg_batch_dims}"
+            )
+        return (self.arg_batch_dims[-1],) + self.arg_shape
+
+    def compute_output_batch_dims(self, *input_batch_dims):
+        if not self.arg_batch_dims:
+            raise ValueError(
+                f"DecrBatchDimCtr requires a non-empty arg_batch_dims, got {self.arg_batch_dims}"
+            )
+        return self.arg_batch_dims[:-1]
 
     def maxpr(self, args: list[Value], output: Array) -> None:
         output.tensor_value = args[0]
@@ -259,15 +287,7 @@ class DecrBatchDimCtr(UnaryOperation):
 
 def decr_batch_dim_ctr(arg: Array) -> Array:
     """Decrement batch dimension counter for debugging."""
-    res = DecrBatchDimCtr().forward(arg)
-    if res.batch_dims:
-        res.shape = (res.batch_dims[-1],) + res.shape
-        res.batch_dims = res.batch_dims[:-1]
-    else:
-        raise ValueError(
-            f"Batch dimensions are empty, cannot decrement. arg_name: {arg.name}"
-        )
-    return res
+    return DecrBatchDimCtr(arg.batch_dims, arg.shape).forward(arg)
 
 
 class ReLUOp(UnaryOperation):

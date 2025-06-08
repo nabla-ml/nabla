@@ -95,7 +95,10 @@ def _apply_vmap_to_tree(
         if isinstance(tree_part, dict):
             return {k: _apply_recursive(tree_part[k], axes_part[k]) for k in tree_part}
         elif isinstance(tree_part, (list, tuple)):
-            result = [_apply_recursive(t, a) for t, a in zip(tree_part, axes_part, strict=False)]
+            result = [
+                _apply_recursive(t, a)
+                for t, a in zip(tree_part, axes_part, strict=False)
+            ]
             return type(tree_part)(result)
         elif isinstance(tree_part, Array):
             return batch_fn(tree_part, axes_part)
@@ -173,7 +176,9 @@ def vmap_approach1(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
                 structured_in_axes = in_axes
 
         # Validate that in_axes structure matches input arguments structure
-        for i, (arg, axis_spec) in enumerate(zip(actual_args, structured_in_axes, strict=False)):
+        for i, (arg, axis_spec) in enumerate(
+            zip(actual_args, structured_in_axes, strict=False)
+        ):
             try:
                 _validate_axes_structure(axis_spec, arg, f"in_axes[{i}]")
             except ValueError as e:

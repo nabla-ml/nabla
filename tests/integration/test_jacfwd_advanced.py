@@ -71,7 +71,9 @@ def test_multiple_inputs_multiple_outputs():
 
         if JAX_AVAILABLE:
             # Compare results
-            for i, (jax_jac, nabla_jac) in enumerate(zip(jac_jax_both, jac_nabla_both, strict=False)):
+            for i, (jax_jac, nabla_jac) in enumerate(
+                zip(jac_jax_both, jac_nabla_both, strict=False)
+            ):
                 np.testing.assert_allclose(nabla_jac.to_numpy(), jax_jac, rtol=1e-6)
             print("✅ Multi-input/output (both args) results match!")
 
@@ -228,7 +230,9 @@ def test_complex_composition():
             print(f"  d/d_arg{i}: shape {jac.shape}\n{jac.to_numpy()}")
 
         if JAX_AVAILABLE:
-            for i, (jax_jac, nabla_jac) in enumerate(zip(jac_jax_both, jac_nabla_both, strict=False)):
+            for i, (jax_jac, nabla_jac) in enumerate(
+                zip(jac_jax_both, jac_nabla_both, strict=False)
+            ):
                 np.testing.assert_allclose(nabla_jac.to_numpy(), jax_jac, rtol=1e-5)
             print("✅ Complex composition results match!")
 

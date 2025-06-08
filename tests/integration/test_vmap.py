@@ -62,10 +62,6 @@ def test_examples():
     # Example 3: Nested tuple inputs
     def nested_func(x, y_z_tuple):
         y, z = y_z_tuple
-        print("Debug - Inside nested_func:")
-        print(f"  x.shape: {x.shape}")
-        print(f"  y.shape: {y.shape}")
-        print(f"  z.shape: {z.shape}")
         result = nb.matmul(x, nb.matmul(y, z))
         return result
 
@@ -336,24 +332,17 @@ def test_advanced_nested_vmap_patterns():
         print("Testing batch processing with different axis specifications...")
 
         def process_batch_element(x, weights):
-            """Process batch elements with shared weights.
+            """Process individual batch elements with shared weights.
 
-            Note: When called through vmap, this function receives:
-            - x: shape (5, 3) with batch_dims=(5,) - the full batch
-            - weights: shape (3,) with batch_dims=(5,) - broadcasted to match batch
+            Note: When called through vmap with in_axes=[0, None], this function receives:
+            - x: shape (3,) - individual sample from the batch
+            - weights: shape (3,) - broadcasted shared weights
 
-            The function processes all batch elements simultaneously, not one by one.
+            The function processes one sample at a time.
             """
-            print(
-                f"Debug - process_batch_element: x.shape={x.shape}, weights.shape={weights.shape}"
-            )
-            print(
-                f"Debug - x.batch_dims={x.batch_dims}, weights.batch_dims={weights.batch_dims}"
-            )
             result = nb.sum(
-                x * weights, axes=[1]
-            )  # Sum over feature dimension, keep batch dimension
-            print(f"Debug - process_batch_element result shape: {result.shape}")
+                x * weights, axes=[0]
+            )  # Sum over feature dimension for 1D arrays
             return result
 
         # Test data
@@ -365,28 +354,19 @@ def test_advanced_nested_vmap_patterns():
             """Wrapper to use list-style arguments."""
             return process_batch_element(args[0], args[1])
 
-        # Simple test first to debug vmap behavior
-        print("Debug - Testing simple vmap behavior:")
-
+        # Simple test first to verify vmap behavior
         def simple_test_func(args):
             x, w = args[0], args[1]
-            print(f"  simple_test_func: x.shape={x.shape}, w.shape={w.shape}")
-            print(f"  x.batch_dims={x.batch_dims}, w.batch_dims={w.batch_dims}")
-            # Sum over the last axis (features), keeping batch dimension
-            return nb.sum(x, axes=[1])
+            # Sum over the last axis (features) - for 1D input, this is axis 0
+            return nb.sum(x, axes=[0])
 
         simple_result = nb.vmap(simple_test_func, in_axes=[0, None])(
             [batch_data, shared_weights]
         )
-        print(f"  simple_result.shape={simple_result.shape}")
-        print(f"  simple_result.to_numpy()={simple_result.to_numpy()}")
 
         processed_batch = nb.vmap(
             process_with_list_args, in_axes=[0, None], out_axes=0
         )([batch_data, shared_weights])
-
-        print(f"Debug - processed_batch.shape: {processed_batch.shape}")
-        print(f"Debug - processed_batch type: {type(processed_batch)}")
 
         # Expected shape: (5,) - one result per batch element
         assert processed_batch.shape == (5,), (
@@ -397,8 +377,6 @@ def test_advanced_nested_vmap_patterns():
         expected_results = np.sum(
             batch_data.to_numpy() * shared_weights.to_numpy(), axis=1
         )
-        print(f"Debug - processed_batch.to_numpy(): {processed_batch.to_numpy()}")
-        print(f"Debug - expected_results: {expected_results}")
         assert np.allclose(processed_batch.to_numpy(), expected_results, rtol=1e-5), (
             "Batch processing results don't match expected values"
         )

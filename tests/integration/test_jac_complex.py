@@ -57,7 +57,9 @@ def test_vector_to_scalar_jacobian():
     jac_jax_flat = flatten_nested(jac_jax)
 
     # now we compare the values and the shapes on by one int ehf lattened outptus
-    for i, (jac_nb_item, jac_jax_item) in enumerate(zip(jac_nb_flat, jac_jax_flat, strict=False)):
+    for i, (jac_nb_item, jac_jax_item) in enumerate(
+        zip(jac_nb_flat, jac_jax_flat, strict=False)
+    ):
         match = np.allclose(jac_nb_item.to_numpy(), jac_jax_item)
         print(f"Jacobian output {i} match: {match}")
         # print(f"Nabla shape: {jac_nb_item.shape}, JAX shape: {jac_jax_item.shape}")
