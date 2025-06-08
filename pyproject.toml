@@ -80,8 +80,9 @@ warn_unused_configs = true
 ignore_missing_imports = true
 # files = "src/nabla, tests"
 
-[tool.setuptools]
-packages = ["nabla", "nabla.core", "nabla.ops", "nabla.utils", "nabla.nn"]
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["tests*"]
 
 [tool.setuptools.package-data]
 "nabla" = ["**/*.mojo", "**/*.py"]
