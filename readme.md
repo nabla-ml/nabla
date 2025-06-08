@@ -65,14 +65,13 @@ ruff check nabla/ --fix
 ```text
 nabla/
 ├── nabla/                     # Core Python library
-│   ├── core/                  # Function transformations and array operations
-│   ├── ops/                   # Mathematical operations (binary, unary, linalg)
-│   ├── kernels/               # Internal CPU/GPU Mojo kernels (not the built-in MAX kernels)
-│   ├── nn/                    # Neural network layers and utilities
+│   ├── core/                  # Function transformations and core array class
+│   ├── ops/                   # Mathematical operations (binary, unary, linalg, etc.)
+│   ├── nn/                    # Neural network modules and models
 │   └── utils/                 # Utilities (broadcasting, formatting, types)
 ├── tests/                     # Comprehensive test suite
-├── examples/                  # MLP training and other examples
-└── experimental/              # Pure Mojo API
+├── examples/                  # Towards MLP training and other usage examples
+└── experimental/              # An alternative pure Mojo API (WIP!)
 ```
 
 ## Contributing

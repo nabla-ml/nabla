@@ -83,41 +83,6 @@ class MatMulOp(BinaryOperation):
     def __init__(self):
         super().__init__("dot_general")
 
-    # def forward(self, *args: Array) -> Array:
-    #     """Forward pass for matrix multiplication with compatible signature."""
-    #     if len(args) != 2:
-    #         raise ValueError(
-    #             f"Matrix multiplication requires 2 arguments, got {len(args)}"
-    #         )
-    #     arg1, arg2 = args[0], args[1]
-
-    #     self._validate_inputs(arg1, arg2)
-
-    #     # if arg1 or arg2 are respectively of rank 1, i.e, a vector, then we msut first reshape them to be 2d matrices
-    #     if len(arg1.shape) == 1:
-    #         arg1 = ops.reshape(arg1, (1, arg1.shape[0]))
-    #     if len(arg2.shape) == 1:
-    #         arg2 = ops.reshape(arg2, (arg2.shape[0], 1)) # basically a transpose
-
-    #     output_shape = self.compute_output_shape(arg1.shape, arg2.shape)
-
-    #     res = Array(
-    #         shape=output_shape,
-    #         dtype=arg1.dtype,
-    #         device=arg1.device,
-    #         materialize=False,
-    #         name=self.name,
-    #     )
-
-    #     res.set_maxpr(self.maxpr)
-    #     res.add_arguments(arg1, arg2)
-    #     res.vjp_rule = self.vjp_rule
-    #     res.jvp_rule = self.jvp_rule
-
-    #     if not res.stage_realization:
-    #         self.eagerxpr([arg1, arg2], res)
-
-    #     return res
 
     def forward(self, *args: Array) -> Array:
         """Forward pass for binary operations."""
@@ -316,9 +281,7 @@ def matmul(arg0: Array, arg1: Array) -> Array:
     return _matmul_op.forward(arg0, arg1)
 
 
-# --- Numpy-based convolution helper functions (modified for asymmetric padding) ---
-# These seem okay for their purpose, assuming groups=1.
-
+# --- Convolution operations using im2col and col2im ---
 
 def im2col(
     input_data,
@@ -880,6 +843,27 @@ class Conv2DOp(BinaryOperation):
         return add(res1, res2)
 
 
+def conv2d(
+    input_arr: Array,
+    filter_arr: Array,
+    stride=(1, 1),
+    dilation=(1, 1),
+    padding=0,
+    groups=1,
+) -> Array:
+    norm_stride = _normalize_tuple(stride, 2, "stride")
+    norm_dilation = _normalize_tuple(dilation, 2, "dilation")
+    norm_padding = _normalize_padding_arg(padding, "padding")
+
+    cache_key = (norm_stride, norm_dilation, norm_padding, groups)
+    if cache_key not in _conv2d_op_cache:
+        _conv2d_op_cache[cache_key] = Conv2DOp(
+            norm_stride, norm_dilation, norm_padding, groups
+        )
+    return _conv2d_op_cache[cache_key].forward(input_arr, filter_arr)
+
+
+
 class Conv2DTransposeOp(BinaryOperation):
     """2D Convolution transpose operation with batching support."""
 
@@ -1374,51 +1358,7 @@ def _conv2d_transpose_filter_gradient(
                                 H_out_T
                             ):  # Iterate over grad_output spatial
                                 for w_grad_idx in range(W_out_T):
-                                    # Map (h_grad_idx, w_grad_idx) and (kh, kw) to indices in input_arr
-                                    # This is from the definition of conv_transpose
-                                    # Y[i] = sum_j X[k] W[i-k*S] (simplified 1D conv)
-                                    # Y_T[y] = sum_x X_T[x] W_T [y - x*S_orig] (simplified conv_transpose)
-                                    # dL/dW_T[k] = sum_x X_T[x] dL/dY_T[ x*S_orig + k*D_orig - P_fwd_orig ]
-                                    # This is: filter_grad[k] = sum_{x_idx} X[x_idx] * dY[f(x_idx, k)]
-                                    # Iterate over X spatial (input_arr)
-                                    # This matches JAX grad_rhs for conv_transpose(lhs, rhs, ...):
-                                    # conv_general_dilated(lhs=lhs, rhs=gradient, ...)
-                                    # Here lhs=input_arr, rhs=grad_output
-                                    # Strides of this conv = (1,1)
-                                    # LHS Dilation (on input_arr) = self.stride (of conv_transpose)
-                                    # RHS Dilation (on grad_output/kernel) = self.dilation (of conv_transpose)
-                                    # Padding for this conv?
-                                    # The loop structure of _conv2d_filter_gradient is better:
-                                    # sum_val += IMAGE_ELEMENT * KERNEL_ELEMENT
-                                    # Here, Image=input_nchw, Kernel=grad_nchw (conceptually)
-                                    # Output=filter_grad_np.
-                                    # Iterate image (input_nchw) with padding. Correlate with kernel (grad_nchw).
-                                    # This implies:
-                                    #   Padded Image: input_nchw with some padding P_new
-                                    #   Kernel: grad_nchw
-                                    #   Strides: (1,1)
-                                    #   Dilation for Image (LHS): self.stride
-                                    #   Dilation for Kernel (RHS): self.dilation
-                                    # This is getting too complex for quick fix. Sticking to existing loop structure.
-                                    # The h_in_eff, w_in_eff must be indices into input_group_nchw_slice
-                                    # h_grad_idx, w_grad_idx are indices into grad_nchw
-
-                                    # This sum is for filter_grad[kh_idx, kw_idx, co_t_idx, ci_t_g_idx]
-                                    # The roles of input and grad_output are swapped compared to _conv2d_filter_gradient
-                                    # Effectively, grad_output is the "image" and input_arr is the "filter"
-                                    # Input for this step: grad_nchw (as image)
-                                    # Kernel for this step: input_group_nchw_slice (as kernel)
-                                    # Strides for this step: self.dilation
-                                    # Dilations for this step: self.stride
-                                    # Padding for grad_nchw: to make output K_H, K_W
-                                    # This is the point of confusion.
-                                    # Let's use the structure from a reliable source or simplify.
-                                    # The original formula from provided code:
-                                    # h_in = h_out * stride_h - pad_top + kh * dil_h
-                                    # sum_val += input_nchw[n, c_in, h_in, w_in] * grad_nchw[n, c_out, h_out, w_out]
-                                    # This seems more like: correlate(input_nchw_processed_by_convT_params, grad_nchw)
-                                    # This formula IS for dL/dW_T = sum_{spatial_grad} X_T[ f(spatial_grad, k) ] * dL/dY_T[spatial_grad]
-
+                                    
                                     h_input_eff = int(
                                         h_grad_idx * stride[0]
                                         - p_fwd_top
@@ -1451,32 +1391,6 @@ def _conv2d_transpose_filter_gradient(
 
     return NablaArray.from_numpy(filter_grad_np)
 
-
-_matmul_op = MatMulOp()
-
-
-def matmul(arg0: Array, arg1: Array) -> Array:
-    return _matmul_op.forward(arg0, arg1)
-
-
-def conv2d(
-    input_arr: Array,
-    filter_arr: Array,
-    stride=(1, 1),
-    dilation=(1, 1),
-    padding=0,
-    groups=1,
-) -> Array:
-    norm_stride = _normalize_tuple(stride, 2, "stride")
-    norm_dilation = _normalize_tuple(dilation, 2, "dilation")
-    norm_padding = _normalize_padding_arg(padding, "padding")
-
-    cache_key = (norm_stride, norm_dilation, norm_padding, groups)
-    if cache_key not in _conv2d_op_cache:
-        _conv2d_op_cache[cache_key] = Conv2DOp(
-            norm_stride, norm_dilation, norm_padding, groups
-        )
-    return _conv2d_op_cache[cache_key].forward(input_arr, filter_arr)
 
 
 def conv2d_transpose(

@@ -205,46 +205,6 @@ class SumBatchDimsOp(ReductionOperation):
     ) -> list[Array]:
         from .view import broadcast_batch_dims
 
-        # The VJP for sum_batch_dims needs to reverse the batch dimension reduction
-        # The target should be the primal's batch_dims (before the sum was applied)
-        # target_batch_dims = primals[0].batch_dims
-        # cotangent_batch_dims = cotangent.batch_dims
-        
-        # # Handle dimension mismatches that occur with higher-order derivatives
-        # result = cotangent
-        
-        # # If cotangent has more batch dimensions than target, we need to sum out extras
-        # if len(cotangent_batch_dims) > len(target_batch_dims):
-        #     # Calculate how many dimensions to sum out
-        #     excess_dims = len(cotangent_batch_dims) - len(target_batch_dims)
-            
-        #     # Sum out the excess dimensions from the front (left side)
-        #     # This handles the case where vmap has added extra batch dimensions
-        #     for _ in range(excess_dims):
-        #         result = sum_batch_dims(result, axes=[0], keep_dims=False)
-                
-        # # If cotangent batch_dims don't match target after summing, check compatibility
-        # result_batch_dims = result.batch_dims
-        
-        # # Compare shapes element by element to identify any remaining mismatches
-        # if len(result_batch_dims) == len(target_batch_dims):
-        #     # Check if any dimensions are incompatible
-        #     axes_to_sum = []
-        #     for i, (result_dim, target_dim) in enumerate(zip(result_batch_dims, target_batch_dims)):
-        #         # If dimensions don't match and can't be broadcast, we need to sum
-        #         if result_dim != target_dim and result_dim != 1 and target_dim != 1:
-        #             # This dimension needs to be summed out
-        #             axes_to_sum.append(i)
-            
-        #     # Sum out incompatible dimensions
-        #     if axes_to_sum:
-        #         # Sum in reverse order to avoid index shifting
-        #         for axis in reversed(axes_to_sum):
-        #             result = sum_batch_dims(result, axes=[axis], keep_dims=False)
-        
-        # # Now broadcast to the target batch_dims
-        # return [broadcast_batch_dims(result, target_batch_dims)]
-
         if len(cotangent.batch_dims) > len(primals[0].batch_dims):
             return [cotangent]
         
@@ -291,9 +251,8 @@ def sum_batch_dims(
     op = SumBatchDimsOp(arg.batch_dims, axes, keep_dims)
     res = op.forward(arg)
 
-    # print("DEBUG sum_batch_dims:",res.batch_dims, res.shape, op.axes, keep_dims)
     if not keep_dims:
         for axis in axes:
-            res = squeeze_batch_dims(res, [axis]) # axes always negative
+            res = squeeze_batch_dims(res, [axis]) 
             
     return res
