@@ -213,7 +213,6 @@ class SumBatchDimsOp(ReductionOperation):
                 f"primal batch_dims: {primals[0].batch_dims}"
             )
 
-        from .view import broadcast_batch_dims
 
         return [broadcast_batch_dims(cotangent, self.arg_batch_dims)]
 

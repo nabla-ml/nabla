@@ -1,6 +1,7 @@
 import jax
 import jax.numpy as jnp
 import numpy as np
+
 import nabla as nb
 
 
@@ -10,11 +11,11 @@ def test_vector_to_scalar_jacobian():
     # Define functions for both Nabla and JAX
     def func_nb(x):
         # return (x * x).sum([0]) #y#x * x * y * y * y
-        return nb.sin(x)  # * x#nb.sin(x)#nb.unsqueeze(x, [0])
+        return nb.sin(x) * x  # nb.sin(x)#nb.unsqueeze(x, [0])
 
     def func_jax(x):
         # return (x * x).sum([0])#y#x * x * y * y * y
-        return jnp.sin(x)  # * x#jnp.sin(x)#jnp.expand_dims(x, axis=0)
+        return jnp.sin(x) * x  # jnp.sin(x)#jnp.expand_dims(x, axis=0)
 
     # Test data - use compatible shapes and values
     x_nb = nb.arange((2, 3))

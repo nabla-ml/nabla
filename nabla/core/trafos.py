@@ -1069,7 +1069,7 @@ def _check_in_axes_size(tree: Any, axes: Any) -> int:
             for k in tree_part:
                 _collect_sizes(tree_part[k], axes_part[k])
         elif isinstance(tree_part, (list, tuple)):
-            for t, a in zip(tree_part, axes_part):
+            for t, a in zip(tree_part, axes_part, strict=False):
                 _collect_sizes(t, a)
         # Non-Array leaves are ignored
 
@@ -1107,8 +1107,8 @@ def _apply_batching_to_tree(
     def _process_array(array: Array, axis: int | None) -> Array:
         if is_input:
             # Input batching
-            from nabla.ops.view import unsqueeze
             from nabla.ops.unary import incr_batch_dim_ctr
+            from nabla.ops.view import unsqueeze
 
             if axis is None:
                 # Broadcast: add batch dimension with correct size
@@ -1136,8 +1136,8 @@ def _apply_batching_to_tree(
             return incr_batch_dim_ctr(batched)
         else:
             # Output unbatching
-            from nabla.ops.view import squeeze
             from nabla.ops.unary import decr_batch_dim_ctr
+            from nabla.ops.view import squeeze
 
             unbatched = decr_batch_dim_ctr(array)
 
@@ -1159,7 +1159,7 @@ def _apply_batching_to_tree(
         elif isinstance(tree_part, dict):
             return {k: _recurse(tree_part[k], axes_part[k]) for k in tree_part}
         elif isinstance(tree_part, (list, tuple)):
-            result = [_recurse(t, a) for t, a in zip(tree_part, axes_part)]
+            result = [_recurse(t, a) for t, a in zip(tree_part, axes_part, strict=False)]
             return type(tree_part)(result)
         else:
             # Non-Array leaf, return unchanged
@@ -1209,7 +1209,7 @@ def vmap(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
 
         # Apply input batching with proper batch size
         batched_args = []
-        for arg, axis_spec in zip(actual_args, structured_in_axes):
+        for arg, axis_spec in zip(actual_args, structured_in_axes, strict=False):
             # Apply batching with the discovered batch size
             batched_arg = _apply_batching_to_tree(
                 arg, axis_spec, is_input=True, batch_size=batch_size
@@ -1232,7 +1232,7 @@ def vmap(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
 
         # Apply output unbatching
         unbatched_outputs = []
-        for output, axis_spec in zip(outputs_list, structured_out_axes):
+        for output, axis_spec in zip(outputs_list, structured_out_axes, strict=False):
             unbatched_output = _apply_batching_to_tree(
                 output, axis_spec, is_input=False
             )
@@ -1604,7 +1604,7 @@ def jacfwd(
 
         jacobian_components = []
         for j, (arg, tangents_for_arg) in enumerate(
-            zip(flat_diff_args, split_tangents)
+            zip(flat_diff_args, split_tangents, strict=False)
         ):
             output_shape = flat_output[0].shape
             arg_shape = arg.shape
@@ -1638,3 +1638,121 @@ def jacfwd(
             return jacobian, None
 
     return jacfwd_fn
+
+
+def grad(
+    fun: Callable = None,
+    argnums: int | Sequence[int] = 0,
+    has_aux: bool = False,
+    holomorphic: bool = False,
+    allow_int: bool = False,
+    reduce_axes: Sequence = (),
+    mode: str = "reverse",  # Additional parameter: "reverse" or "forward"
+) -> Callable[..., Any]:
+    """
+    Creates a function that evaluates the gradient of fun.
+
+    This is a convenience wrapper around jacrev/jacfwd that matches JAX's grad API.
+    By default uses reverse-mode autodiff (jacrev) but can be configured to use
+    forward-mode (jacfwd) via the mode parameter.
+
+    Parameters:
+        fun: Function to be differentiated. Should return a scalar.
+        argnums: Which positional argument(s) to differentiate with respect to (default 0).
+        has_aux: Whether fun returns (output, aux) pair (default False).
+        holomorphic: Whether fun is holomorphic - currently ignored (default False).
+        allow_int: Whether to allow integer inputs - currently ignored (default False).
+        reduce_axes: Axes to reduce over - currently ignored (default ()).
+        mode: "reverse" (default) for jacrev or "forward" for jacfwd.
+
+    Returns:
+        A function that computes the gradient of fun.
+
+    Examples:
+        # As a function call
+        grad_tanh = grad(tanh)
+        result = grad_tanh(0.2)
+
+        # As a decorator
+        @grad
+        def my_loss(x):
+            return x**2
+
+        result = my_loss(3.0)  # Returns gradient, not function value
+
+        # With options
+        grad_fn = grad(my_func, argnums=1, mode="forward")
+    """
+
+    # Handle being used as a decorator without arguments
+    if fun is None:
+        return lambda f: grad(
+            f,
+            argnums=argnums,
+            has_aux=has_aux,
+            holomorphic=holomorphic,
+            allow_int=allow_int,
+            reduce_axes=reduce_axes,
+            mode=mode,
+        )
+
+    # Choose the underlying autodiff function based on mode
+    if mode == "reverse":
+        autodiff_fn = jacrev
+    elif mode == "forward":
+        autodiff_fn = jacfwd
+    else:
+        raise ValueError(f"Invalid mode '{mode}'. Must be 'reverse' or 'forward'.")
+
+    # Create the jacobian function with the specified parameters
+    jac_fn = autodiff_fn(
+        fun,
+        argnums=argnums,
+        has_aux=has_aux,
+        holomorphic=holomorphic,
+        allow_int=allow_int,
+    )
+
+    def grad_fn(*args: Any) -> Any:
+        """
+        The actual gradient function that gets returned.
+
+        Validates that the function returns a scalar output before computing the gradient,
+        matching JAX's grad behavior exactly.
+        """
+        # First, check that the function returns a scalar by running it once
+        if has_aux:
+            test_output, _ = fun(*args)
+        else:
+            test_output = fun(*args)
+
+        # Extract arrays and check for scalar output
+        from .array import Array
+
+        if isinstance(test_output, Array):
+            if test_output.shape != ():
+                raise ValueError(
+                    f"Gradient only defined for scalar-output functions. "
+                    f"Output had shape: {test_output.shape}"
+                )
+        else:
+            # Handle non-Array outputs (should be rare)
+            import numpy as np
+
+            test_array = np.asarray(test_output)
+            if test_array.shape != ():
+                raise ValueError(
+                    f"Gradient only defined for scalar-output functions. "
+                    f"Output had shape: {test_array.shape}"
+                )
+
+        # If we get here, output is scalar, so compute the jacobian
+        result = jac_fn(*args)
+
+        if has_aux:
+            jacobian, aux = result
+            return jacobian, aux
+        else:
+            return result
+
+    return grad_fn

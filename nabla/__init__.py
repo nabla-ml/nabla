@@ -27,8 +27,9 @@ from max.dtype import DType
 
 from .core.array import Array
 from .core.trafos import (
-    jacrev,
+    grad,
     jacfwd,
+    jacrev,
     jit,
     jvp,
     vjp,
@@ -123,6 +124,7 @@ __all__ = [
     "jit",
     "jacrev",
     "jacfwd",
+    "grad",
     # Utilities
     "device",
     "cpu",

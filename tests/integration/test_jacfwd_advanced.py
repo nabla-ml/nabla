@@ -13,6 +13,7 @@ except ImportError:
     print("JAX not available - skipping comparison")
 
 import numpy as np
+
 import nabla as nb
 
 
@@ -45,7 +46,7 @@ def test_multiple_inputs_multiple_outputs():
 
         # Jacobian w.r.t. both arguments
         jac_jax_both = jax.jacfwd(multi_io_func_jax, argnums=(0, 1))(x_jax, y_jax)
-        print(f"JAX jacfwd result (both args):")
+        print("JAX jacfwd result (both args):")
         for i, jac in enumerate(jac_jax_both):
             print(f"  d/d_arg{i}: shape {jac.shape}\n{jac}")
 
@@ -57,7 +58,7 @@ def test_multiple_inputs_multiple_outputs():
         # Jacobian w.r.t. both arguments
         jac_nabla_fn_both = nb.jacfwd(multi_io_func_nabla, argnums=(0, 1))
         jac_nabla_both = jac_nabla_fn_both(x_nabla, y_nabla)
-        print(f"Nabla jacfwd result (both args):")
+        print("Nabla jacfwd result (both args):")
         for i, jac in enumerate(jac_nabla_both):
             print(f"  d/d_arg{i}: shape {jac.shape}\n{jac.to_numpy()}")
 
@@ -70,7 +71,7 @@ def test_multiple_inputs_multiple_outputs():
 
         if JAX_AVAILABLE:
             # Compare results
-            for i, (jax_jac, nabla_jac) in enumerate(zip(jac_jax_both, jac_nabla_both)):
+            for i, (jax_jac, nabla_jac) in enumerate(zip(jac_jax_both, jac_nabla_both, strict=False)):
                 np.testing.assert_allclose(nabla_jac.to_numpy(), jax_jac, rtol=1e-6)
             print("✅ Multi-input/output (both args) results match!")
 
@@ -211,7 +212,7 @@ def test_complex_composition():
         y_jax = jnp.array(y_np)
 
         jac_jax_both = jax.jacfwd(complex_func_jax, argnums=(0, 1))(x_jax, y_jax)
-        print(f"JAX jacfwd result (both args):")
+        print("JAX jacfwd result (both args):")
         for i, jac in enumerate(jac_jax_both):
             print(f"  d/d_arg{i}: shape {jac.shape}\n{jac}")
 
@@ -222,12 +223,12 @@ def test_complex_composition():
     try:
         jac_nabla_fn_both = nb.jacfwd(complex_func_nabla, argnums=(0, 1))
         jac_nabla_both = jac_nabla_fn_both(x_nabla, y_nabla)
-        print(f"Nabla jacfwd result (both args):")
+        print("Nabla jacfwd result (both args):")
         for i, jac in enumerate(jac_nabla_both):
             print(f"  d/d_arg{i}: shape {jac.shape}\n{jac.to_numpy()}")
 
         if JAX_AVAILABLE:
-            for i, (jax_jac, nabla_jac) in enumerate(zip(jac_jax_both, jac_nabla_both)):
+            for i, (jax_jac, nabla_jac) in enumerate(zip(jac_jax_both, jac_nabla_both, strict=False)):
                 np.testing.assert_allclose(nabla_jac.to_numpy(), jax_jac, rtol=1e-5)
             print("✅ Complex composition results match!")
 

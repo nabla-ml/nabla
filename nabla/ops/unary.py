@@ -35,6 +35,7 @@ __all__ = [
     "relu",
     "log",
     "exp",
+    "sqrt",
 ]
 
 
@@ -391,6 +392,20 @@ class ExpOp(UnaryOperation):
 def exp(arg: Array) -> Array:
     """Element-wise exponential function."""
     return _exp_op.forward(arg)
+
+
+def sqrt(arg: Array) -> Array:
+    """Element-wise square root function.
+
+    Implemented as pow(arg, 0.5) for compatibility with the automatic
+    differentiation system.
+    """
+    from .binary import pow
+    from .creation import array
+
+    # Create 0.5 as a scalar Array
+    half = array([0.5], dtype=arg.dtype)
+    return pow(arg, half)
 
 
 # Add global instances

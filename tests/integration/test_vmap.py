@@ -13,8 +13,9 @@ Main improvements over current implementation:
 Key principle: Keep it simple, but complete.
 """
 
-import nabla as nb
 import numpy as np
+
+import nabla as nb
 
 
 def test_examples():
@@ -61,7 +62,7 @@ def test_examples():
     # Example 3: Nested tuple inputs
     def nested_func(x, y_z_tuple):
         y, z = y_z_tuple
-        print(f"Debug - Inside nested_func:")
+        print("Debug - Inside nested_func:")
         print(f"  x.shape: {x.shape}")
         print(f"  y.shape: {y.shape}")
         print(f"  z.shape: {z.shape}")

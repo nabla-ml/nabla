@@ -22,17 +22,19 @@ Two main approaches to consider:
 """
 
 from __future__ import annotations
+
 from collections.abc import Callable
 from typing import Any
+
 from nabla.core.array import Array
 from nabla.core.trafos import (
-    tree_flatten,
-    tree_unflatten,
-    tree_map,
     _extract_arrays_from_pytree,
+    _handle_args_consistently,
     make_traced,
     make_untraced,
-    _handle_args_consistently,
+    tree_flatten,
+    tree_map,
+    tree_unflatten,
 )
 
 # ===== APPROACH 1: Direct Pytree Structure Matching =====
@@ -72,7 +74,7 @@ def _validate_axes_structure(axes: Any, tree: Any, name: str) -> None:
                 raise ValueError(
                     f"{name} at {path} must be {type(tree_part)} of length {len(tree_part)}"
                 )
-            for i, (a, t) in enumerate(zip(axes_part, tree_part)):
+            for i, (a, t) in enumerate(zip(axes_part, tree_part, strict=False)):
                 _check_structure(a, t, f"{path}[{i}]")
         elif isinstance(tree_part, Array):
             if not isinstance(axes_part, (int, type(None))):
@@ -93,7 +95,7 @@ def _apply_vmap_to_tree(
         if isinstance(tree_part, dict):
             return {k: _apply_recursive(tree_part[k], axes_part[k]) for k in tree_part}
         elif isinstance(tree_part, (list, tuple)):
-            result = [_apply_recursive(t, a) for t, a in zip(tree_part, axes_part)]
+            result = [_apply_recursive(t, a) for t, a in zip(tree_part, axes_part, strict=False)]
             return type(tree_part)(result)
         elif isinstance(tree_part, Array):
             return batch_fn(tree_part, axes_part)
@@ -111,8 +113,8 @@ def vmap_approach1(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
 
     def _prepare_input_batch(array: Array, axis: int | None) -> Array:
         """Prepare a single array for batching."""
-        from nabla.ops.view import unsqueeze, transpose
         from nabla.ops.unary import incr_batch_dim_ctr
+        from nabla.ops.view import transpose, unsqueeze
 
         if axis is None:
             # Broadcast case: add a size-1 batch dimension
@@ -129,8 +131,8 @@ def vmap_approach1(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
 
     def _prepare_output_unbatch(array: Array, axis: int | None) -> Array:
         """Prepare a single output array for unbatching."""
-        from nabla.ops.view import squeeze, transpose
         from nabla.ops.unary import decr_batch_dim_ctr
+        from nabla.ops.view import squeeze, transpose
 
         # Decrement batch dimension counter
         unbatched = decr_batch_dim_ctr(array)
@@ -171,7 +173,7 @@ def vmap_approach1(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
                 structured_in_axes = in_axes
 
         # Validate that in_axes structure matches input arguments structure
-        for i, (arg, axis_spec) in enumerate(zip(actual_args, structured_in_axes)):
+        for i, (arg, axis_spec) in enumerate(zip(actual_args, structured_in_axes, strict=False)):
             try:
                 _validate_axes_structure(axis_spec, arg, f"in_axes[{i}]")
             except ValueError as e:
@@ -181,7 +183,7 @@ def vmap_approach1(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
 
         # Apply batching to inputs using pytree structure
         traced_batched_args = []
-        for arg, axis_spec in zip(actual_args, structured_in_axes):
+        for arg, axis_spec in zip(actual_args, structured_in_axes, strict=False):
             # Make arrays traced first
             traced_arg = tree_map(lambda a: make_traced([a])[0], arg)
             # Apply batching according to axis specification
@@ -226,7 +228,7 @@ def vmap_approach1(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
 
         # Apply unbatching to outputs
         unbatched_outputs = []
-        for output, axis_spec in zip(outputs_to_process, axes_to_process):
+        for output, axis_spec in zip(outputs_to_process, axes_to_process, strict=False):
             try:
                 _validate_axes_structure(axis_spec, output, "out_axes")
             except ValueError as e:
@@ -275,7 +277,7 @@ def _standardize_axes_enhanced(axes: Any, trees: list[Any], name: str) -> list[A
 
         # Validate each axis specification against its corresponding tree
         standardized = []
-        for i, (axis_spec, tree) in enumerate(zip(axes, trees)):
+        for i, (axis_spec, tree) in enumerate(zip(axes, trees, strict=False)):
             try:
                 _validate_axes_structure(axis_spec, tree, f"{name}[{i}]")
                 standardized.append(axis_spec)
@@ -333,7 +335,7 @@ def vmap_approach2(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
 
         # Process each input argument
         batched_args = []
-        for arg, axis_spec in zip(actual_args, standardized_in_axes):
+        for arg, axis_spec in zip(actual_args, standardized_in_axes, strict=False):
             # Extract flat arrays and axis info
             flat_axes, tree_structure = _extract_axis_info_from_pytree(arg, axis_spec)
             arg_arrays = _extract_arrays_from_pytree(arg)
@@ -374,7 +376,7 @@ def vmap_approach2(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
 
         # Process each output
         unbatched_outputs = []
-        for output, axis_spec in zip(outputs_list, standardized_out_axes):
+        for output, axis_spec in zip(outputs_list, standardized_out_axes, strict=False):
             # Extract flat arrays and axis info for output
             flat_out_axes, out_tree_structure = _extract_axis_info_from_pytree(
                 output, axis_spec
@@ -472,7 +474,6 @@ def _vmap_simple_path(func, actual_args, is_list_style, in_axes, out_axes):
     """Optimized path for simple axis specifications."""
     # This would be similar to the current implementation but cleaner
     from nabla.core.trafos import (
-        _standardize_axes,
         _prepare_vmap_inputs,
         _prepare_vmap_outputs,
     )
@@ -485,7 +486,7 @@ def _vmap_simple_path(func, actual_args, is_list_style, in_axes, out_axes):
 
     # Process inputs (simplified for flat arrays)
     batched_args = []
-    for arg, axis in zip(actual_args, adapted_in_axes):
+    for arg, axis in zip(actual_args, adapted_in_axes, strict=False):
         arg_arrays = _extract_arrays_from_pytree(arg)
         arg_structure = tree_flatten(arg)[1]
 
@@ -513,7 +514,7 @@ def _vmap_simple_path(func, actual_args, is_list_style, in_axes, out_axes):
         adapted_out_axes = list(out_axes)
 
     unbatched_outputs = []
-    for output, axis in zip(outputs_list, adapted_out_axes):
+    for output, axis in zip(outputs_list, adapted_out_axes, strict=False):
         output_arrays = _extract_arrays_from_pytree(output)
         output_structure = tree_flatten(output)[1]
 

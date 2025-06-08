@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Comprehensive tests for permute functionality."""
 
-import nabla as nb
 import numpy as np
-from nabla.ops.view import permute, move_axis_to_front, move_axis_from_front
+
+import nabla as nb
+from nabla.ops.view import move_axis_from_front, move_axis_to_front, permute
 
 
 def test_permute_basic():
@@ -91,12 +92,12 @@ def test_move_axis_edge_cases():
     x = nb.ones((2, 3, 4))
     y = move_axis_to_front(x, 0)
     print(f"Move axis 0 to front: {x.shape} -> {y.shape}")
-    assert y.shape == x.shape, f"Should be unchanged"
+    assert y.shape == x.shape, "Should be unchanged"
 
     # Test moving from front to front (should be no-op)
     z = move_axis_from_front(y, 0)
     print(f"Move from front to position 0: {y.shape} -> {z.shape}")
-    assert z.shape == y.shape, f"Should be unchanged"
+    assert z.shape == y.shape, "Should be unchanged"
 
     # Test negative indices
     w = move_axis_to_front(x, -2)  # Move second-to-last to front
