@@ -28,6 +28,7 @@ from max.dtype import DType
 from .core.array import Array
 from .core.trafos import (
     jacrev,
+    jacfwd,
     jit,
     jvp,
     vjp,
@@ -121,6 +122,7 @@ __all__ = [
     "vmap",
     "jit",
     "jacrev",
+    "jacfwd",
     # Utilities
     "device",
     "cpu",

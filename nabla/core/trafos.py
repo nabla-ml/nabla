@@ -1328,8 +1328,6 @@ def jacrev(
         # Extract flat input arguments for reshaping
         flat_diff_args = _extract_arrays_from_pytree(diff_args)
 
-        # print("grads:", grads)  
-
         splits = []
         for i in range(len(flat_diff_args)):  # For each input argument
             if isinstance(grads, list) and len(grads) > 0:
@@ -1342,8 +1340,6 @@ def jacrev(
             else:
                 # Direct case
                 input_grads = grads[i] if isinstance(grads, tuple) else grads
-
-            # print("input grad:", grads[i])
 
             # Split this input's gradients by output components (now traced!)
             splits.append(split(input_grads, sizes=sizes, axis=0))
@@ -1394,3 +1390,200 @@ def jacrev(
             return final_jac, aux
 
     return jacrev_fn
+
+
+
+def jacfwd(
+    func: Callable[..., Any],
+    argnums: int | tuple[int, ...] | list[int] = 0,
+    has_aux: bool = False,
+    holomorphic: bool = False,
+    allow_int: bool = False,
+) -> Callable[..., Any]:
+    """
+    Prototype implementation of jacfwd using forward-mode autodiff.
+    
+    This computes the Jacobian using the pattern:
+    vmap(jvp(func, primals, tangents), in_axes=(primal_axes, tangent_axes))
+    
+    where primal_axes are None (broadcast) and tangent_axes are 0 (vectorize).
+    
+    Args:
+        func: Function to differentiate
+        argnums: Which arguments to differentiate with respect to
+        has_aux: Whether function returns auxiliary data
+        holomorphic: Ignored (for JAX compatibility)
+        allow_int: Ignored (for JAX compatibility)
+        
+    Returns:
+        Function that computes the Jacobian using forward-mode autodiff
+    """
+    
+    def jacfwd_fn(*args: Any) -> Any:
+        # print(f"\n=== JACFWD PROTOTYPE ===")
+        # print(f"Input args shapes: {[arg.shape if hasattr(arg, 'shape') else type(arg).__name__ for arg in args]}")
+        
+        # Normalize argnums to a tuple of integers (same as jacrev)
+        if isinstance(argnums, int):
+            selected_argnums = (argnums,)
+        else:
+            selected_argnums = tuple(argnums)
+
+        # Validate argnums (same as jacrev)
+        for argnum in selected_argnums:
+            if argnum >= len(args) or argnum < -len(args):
+                raise ValueError(
+                    f"argnum {argnum} is out of bounds for function with {len(args)} arguments"
+                )
+
+        # Normalize negative indices (same as jacrev)
+        normalized_argnums = tuple(
+            argnum if argnum >= 0 else len(args) + argnum for argnum in selected_argnums
+        )
+        # print(f"Differentiating w.r.t. arguments: {normalized_argnums}")
+
+        # Extract the arguments to differentiate with respect to (same as jacrev)
+        diff_args = tuple(args[i] for i in normalized_argnums)
+        # print(f"Diff args shapes: {[arg.shape for arg in diff_args]}")
+
+        # Create a function that takes only the differentiated arguments (same as jacrev)
+        def partial_func(*diff_args_inner):
+            # Reconstruct the full argument list
+            full_args = list(args)
+            for i, arg in zip(normalized_argnums, diff_args_inner, strict=False):
+                full_args[i] = arg
+            return func(*full_args)
+
+        # Generate standard basis vectors for the INPUT arguments (key difference from jacrev)
+        flat_diff_args = _extract_arrays_from_pytree(diff_args)
+        if not isinstance(flat_diff_args, list):
+            flat_diff_args = [flat_diff_args]
+        
+        # print(f"Flat diff args shapes: {[arg.shape for arg in flat_diff_args]}")
+        
+        # Create standard basis vectors for inputs (this is the key difference from jacrev)
+        sizes, std_basis_vectors = _std_basis(flat_diff_args)
+        # print(f"Standard basis sizes: {sizes}")
+        # print(f"Standard basis vectors shape: {std_basis_vectors[0].shape if std_basis_vectors else 'None'}")        # Create the JVP function that we'll vmap over
+        # This function takes the individual arguments from diff_args + one tangent per input
+        def jvp_func(*args):
+            """
+            JVP function that computes output tangents.
+            
+            For single input: args = (primal, tangent_vector)
+            For multi-input: args = (primal1, primal2, ..., tangent1, tangent2, ...)
+            
+            The tangent vectors come from _std_basis and are already properly shaped.
+            """
+            num_primals = len(diff_args)
+            primals = args[:num_primals]  # First N arguments are primals
+            tangent_vectors = args[num_primals:]  # Last N arguments are tangents
+            
+            # print(f"    jvp_func called with {len(primals)} primals, {len(tangent_vectors)} tangents")
+            # print(f"    primal shapes: {[p.shape for p in primals]}")
+            # print(f"    tangent shapes: {[t.shape for t in tangent_vectors]}")
+            
+            # The tangent vectors from _std_basis are already properly shaped for each input
+            # We just need to structure them correctly for jvp
+            if len(primals) == 1:
+                # Single input case
+                tangents_tuple = tangent_vectors[0]
+                primals_tuple = primals[0]
+            else:
+                # Multi-input case
+                tangents_tuple = tuple(tangent_vectors)
+                primals_tuple = tuple(primals)
+            
+            # Compute JVP: jvp(partial_func, primals, tangents)
+            primal_out, tangent_out = jvp(partial_func, primals_tuple, tangents_tuple)
+            
+            return tangent_out  # Return tangent output directly
+
+        # Set up the arguments for vmap
+        # We need to structure arguments as: *diff_args, *std_basis_vectors
+        # And in_axes as: tuple of None for each primal + 0 for each tangent vector
+        
+        # Create in_axes: None for each primal argument, 0 for each tangent vector
+        primals_axes = tuple(None for _ in diff_args)  # Broadcast all primal arguments
+        tangents_axes = tuple(0 for _ in std_basis_vectors)  # Vectorize all tangent arguments
+        vmap_in_axes = primals_axes + tangents_axes
+        
+        # print(f"vmap primals: {[p.shape for p in diff_args]}")
+        # print(f"vmap std_basis_vectors: {[v.shape for v in std_basis_vectors]}")
+        # print(f"vmap in_axes: {vmap_in_axes}")
+        # print(f"Number of arguments to vmap: {len(diff_args) + len(std_basis_vectors)}")
+
+        # Apply vmap to vectorize the JVP computation
+        vmap_jvp = vmap(jvp_func, in_axes=vmap_in_axes)
+        
+        # Apply the vectorized JVP
+        # Pass individual primal arguments + all tangent vectors
+        # print(f"Calling vmap_jvp with {len(diff_args)} primals + {len(std_basis_vectors)} tangents")
+        output_tangents = vmap_jvp(*diff_args, *std_basis_vectors)
+        
+        # print(f"Output tangents shape: {output_tangents.shape if hasattr(output_tangents, 'shape') else type(output_tangents)}")
+        
+        # Process the output tangents to get the proper Jacobian structure
+        # For jacfwd, the output_tangents has shape (total_input_elements, *output_shape)
+        # We need to split it by input argument and reshape properly
+        
+        # Import split function for proper jacobian structuring
+        from nabla.ops.view import reshape, split
+        
+        # Get output structure by running the function once
+        test_output = partial_func(*diff_args)
+        flat_output = _extract_arrays_from_pytree(test_output)
+        if not isinstance(flat_output, list):
+            flat_output = [flat_output]
+        
+        # print(f"Output shape: {[out.shape for out in flat_output]}")
+        
+        # The key insight: output_tangents has shape (total_basis_vectors, *output_shape)
+        # For multi-input case, we need to organize by input argument
+        
+        if len(diff_args) == 1:
+            # Single input case - output_tangents is already in the right format
+            jacobian = output_tangents
+        else:
+            # Multi-input case - need to split and reorganize
+            # output_tangents has shape (total_elements, *output_shape)
+            # We need to split by sizes and create separate jacobians for each input
+            
+            # Split the output tangents by the sizes from _std_basis
+            split_tangents = split(output_tangents, sizes=sizes, axis=0)
+            
+            jacobian_components = []
+            for j, (arg, tangents_for_arg) in enumerate(zip(flat_diff_args, split_tangents)):
+                # tangents_for_arg has shape (arg_elements, *output_shape)
+                # We need to reshape it to (output_shape, arg_shape)
+                
+                # For each output component (assuming single output for now)
+                if len(flat_output) == 1:
+                    output_shape = flat_output[0].shape
+                    arg_shape = arg.shape
+                    
+                    # Reshape to proper Jacobian format: output_shape + input_shape
+                    target_shape = output_shape + arg_shape
+                    jacobian_component = reshape(tangents_for_arg, target_shape)
+                    jacobian_components.append(jacobian_component)
+                else:
+                    # Multiple outputs - more complex handling needed
+                    # For now, assume single output
+                    raise NotImplementedError("Multiple outputs not yet implemented")
+            
+            # Return as tuple for multiple inputs
+            jacobian = tuple(jacobian_components)
+        
+        # print(f"Final jacobian structure: {type(jacobian)}")
+        # if hasattr(jacobian, 'shape'):
+        #     print(f"Final jacobian shape: {jacobian.shape}")
+        # elif isinstance(jacobian, (tuple, list)):
+        #     print(f"Final jacobian shapes: {[j.shape if hasattr(j, 'shape') else type(j) for j in jacobian]}")
+        
+        if not has_aux:
+            return jacobian
+        else:
+            # TODO: Handle auxiliary data properly
+            return jacobian, None
+
+    return jacfwd_fn

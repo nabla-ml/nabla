@@ -85,7 +85,7 @@ class ReduceSumOp(ReductionOperation):
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
-        return sum(tangents[0], axes=self.axes, keep_dims=False)
+        return sum(tangents[0], axes=self.axes, keep_dims=True)
 
 
 # noqa: A001 - Intentionally shadowing built-in 'sum' for API consistency
