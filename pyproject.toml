@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nabla_ml"
-version = "25.06021607"
+version = "25.06081309"
 authors = [
     { name = "TilliFe", email = "tillmann.fehrenbach@gmail.com" },
 ]
@@ -81,7 +81,7 @@ ignore_missing_imports = true
 # files = "src/nabla, tests"
 
 [tool.setuptools]
-packages = ["nabla", "nabla.core", "nabla.ops", "nabla.utils", "nabla.nn", "nabla.kernels"]
+packages = ["nabla", "nabla.core", "nabla.ops", "nabla.utils", "nabla.nn"]
 
 [tool.setuptools.package-data]
 "nabla" = ["**/*.mojo", "**/*.py"]
