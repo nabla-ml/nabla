@@ -161,9 +161,9 @@ class TestUnaryOperations:
             grads_jax = vjp_fn_jax(cotangent_jax)
 
             # assert len(grads_nb) == 1, f"Expected 1 gradient, got {len(grads_nb)}"
-            assert allclose_recursive(
-                grads_nb, grads_jax[0], rtol_grad, atol_grad
-            ), f"VJP grad mismatch for {op_name}, shapes {shapes_tuple}"
+            assert allclose_recursive(grads_nb, grads_jax[0], rtol_grad, atol_grad), (
+                f"VJP grad mismatch for {op_name}, shapes {shapes_tuple}"
+            )
 
     @pytest.mark.parametrize(
         "op_name, nb_func, jax_func, constraints_fn, op_symbol", UNARY_OPERATIONS

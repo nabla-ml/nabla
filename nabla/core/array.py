@@ -73,7 +73,6 @@ class Array:
         else:
             self.impl = None
 
-
     @classmethod
     def from_impl(cls, impl: Tensor, name: str = "") -> Array:
         """Create Array from existing Tensor implementation."""
@@ -199,7 +198,7 @@ class Array:
 
         return div(self, other)
 
-    def __matmul__(self, other: Array) -> Array:
+    def __matmul__(self, other) -> Array:
         """Matrix multiplication operator (@)."""
         from ..ops.linalg import matmul
 
@@ -210,6 +209,31 @@ class Array:
         from ..ops.unary import negate
 
         return negate(self)
+
+    # Reverse operators for when Array is on the right-hand side
+    def __radd__(self, other) -> Array:
+        """Reverse addition operator (other + self)."""
+        from ..ops.binary import add
+
+        return add(other, self)
+
+    def __rmul__(self, other) -> Array:
+        """Reverse multiplication operator (other * self)."""
+        from ..ops.binary import mul
+
+        return mul(other, self)
+
+    def __rsub__(self, other) -> Array:
+        """Reverse subtraction operator (other - self)."""
+        from ..ops.binary import sub
+
+        return sub(other, self)
+
+    def __rtruediv__(self, other) -> Array:
+        """Reverse division operator (other / self)."""
+        from ..ops.binary import div
+
+        return div(other, self)
 
     def __getitem__(self, key) -> Array:
         """Array slicing using standard Python syntax.

@@ -83,7 +83,6 @@ class MatMulOp(BinaryOperation):
     def __init__(self):
         super().__init__("dot_general")
 
-
     def forward(self, *args: Array) -> Array:
         """Forward pass for binary operations."""
         if len(args) != 2:
@@ -276,12 +275,17 @@ class MatMulOp(BinaryOperation):
 _matmul_op = MatMulOp()
 
 
-def matmul(arg0: Array, arg1: Array) -> Array:
+def matmul(arg0, arg1) -> Array:
     """Matrix multiplication with broadcasting support."""
+    from .binary import _ensure_array
+
+    arg0 = _ensure_array(arg0)
+    arg1 = _ensure_array(arg1)
     return _matmul_op.forward(arg0, arg1)
 
 
 # --- Convolution operations using im2col and col2im ---
+
 
 def im2col(
     input_data,
@@ -863,7 +867,6 @@ def conv2d(
     return _conv2d_op_cache[cache_key].forward(input_arr, filter_arr)
 
 
-
 class Conv2DTransposeOp(BinaryOperation):
     """2D Convolution transpose operation with batching support."""
 
@@ -1358,7 +1361,6 @@ def _conv2d_transpose_filter_gradient(
                                 H_out_T
                             ):  # Iterate over grad_output spatial
                                 for w_grad_idx in range(W_out_T):
-                                    
                                     h_input_eff = int(
                                         h_grad_idx * stride[0]
                                         - p_fwd_top
@@ -1390,7 +1392,6 @@ def _conv2d_transpose_filter_gradient(
     from ..core.array import Array as NablaArray
 
     return NablaArray.from_numpy(filter_grad_np)
-
 
 
 def conv2d_transpose(

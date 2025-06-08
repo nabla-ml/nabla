@@ -66,10 +66,9 @@ class ReduceSumOp(ReductionOperation):
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
-        
         if len(cotangent.shape) > len(primals[0].shape):
             return [cotangent]
-        
+
         if output.shape != cotangent.shape:
             raise ValueError(
                 f"In VJP rule for ReduceSumOp, "
@@ -77,7 +76,7 @@ class ReduceSumOp(ReductionOperation):
                 f"does not match cotangent shape {cotangent.shape}."
                 f"primal shape: {primals[0].shape}, "
             )
-        
+
         from .view import broadcast_to
 
         return [broadcast_to(cotangent, self.arg_shape)]
@@ -100,7 +99,7 @@ def sum(
             axes = [axes]
         elif isinstance(axes, list | tuple):
             axes = [int(axis) for axis in axes]
-        
+
         axes = [axis if axis < 0 else axis - len(arg.shape) for axis in axes]
 
     else:
@@ -115,10 +114,10 @@ def sum(
     # print("DEBUG sum:", res.shape, res.batch_dims, op.axes, keep_dims)
 
     if not keep_dims:
-        # manually use the squeeze operation to squeeze remaining axes 
+        # manually use the squeeze operation to squeeze remaining axes
         for axis in axes:
-            res = squeeze(res, [axis]) # axes always negative
-            
+            res = squeeze(res, [axis])  # axes always negative
+
     return res
 
 
@@ -140,9 +139,7 @@ class SumBatchDimsOp(ReductionOperation):
         return input_shapes[0]
 
     def compute_output_batch_dims(self, *input_batch_dims):
-        return self._compute_reduction_shape(
-            input_batch_dims[0], self.axes
-        )
+        return self._compute_reduction_shape(input_batch_dims[0], self.axes)
 
     def maxpr(self, args: list[Value], output: Array) -> None:
         axes = self.axes
@@ -207,7 +204,7 @@ class SumBatchDimsOp(ReductionOperation):
 
         if len(cotangent.batch_dims) > len(primals[0].batch_dims):
             return [cotangent]
-        
+
         if output.batch_dims != cotangent.batch_dims:
             raise ValueError(
                 f"In VJP rule for SumBatchDimsOp, "
@@ -219,7 +216,6 @@ class SumBatchDimsOp(ReductionOperation):
         from .view import broadcast_batch_dims
 
         return [broadcast_batch_dims(cotangent, self.arg_batch_dims)]
-    
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
@@ -253,6 +249,6 @@ def sum_batch_dims(
 
     if not keep_dims:
         for axis in axes:
-            res = squeeze_batch_dims(res, [axis]) 
-            
+            res = squeeze_batch_dims(res, [axis])
+
     return res

@@ -8,7 +8,6 @@ def flatten_nested(nested):
     if isinstance(nested, (list, tuple)):
         return [item for sublist in nested for item in flatten_nested(sublist)]
     return [nested]
-    
 
 
 def test_vector_to_scalar_jacobian():
@@ -24,7 +23,7 @@ def test_vector_to_scalar_jacobian():
     # Test data - use compatible shapes and values
     x_nb = nb.arange((2, 3))
     y_nb = nb.arange((3,))
-    
+
     # Convert to JAX arrays with same values
     x_jax = jnp.array(x_nb.to_numpy())
     y_jax = jnp.array(y_nb.to_numpy())
@@ -36,13 +35,12 @@ def test_vector_to_scalar_jacobian():
     # Forward pass comparison
     result_nb = func_nb(x_nb, y_nb)
     result_jax = func_jax(x_jax, y_jax)
-    
+
     # Compare forward pass values
     forward_match_0 = np.allclose(result_nb[0].to_numpy(), result_jax[0])
     forward_match_1 = np.allclose(result_nb[1].to_numpy(), result_jax[1])
     print(f"Forward pass output 0 match: {forward_match_0}")
     print(f"Forward pass output 1 match: {forward_match_1}")
-    
 
     # FIRST ORDER DERIVATIVES
     print("Nabla Jacobians:")
@@ -63,6 +61,7 @@ def test_vector_to_scalar_jacobian():
         print(f"Jacobian output {i} match: {match}")
         # print(f"Nabla shape: {jac_nb_item.shape}, JAX shape: {jac_jax_item.shape}")
         # print(f"Nabla value: {jac_nb_item.to_numpy()}, JAX value: {jac_jax_item}\n")
+
 
 if __name__ == "__main__":
     test_vector_to_scalar_jacobian()

@@ -263,7 +263,9 @@ def decr_batch_dim_ctr(arg: Array) -> Array:
         res.shape = (res.batch_dims[-1],) + res.shape
         res.batch_dims = res.batch_dims[:-1]
     else:
-        raise ValueError(f"Batch dimensions are empty, cannot decrement. arg_name: {arg.name}")
+        raise ValueError(
+            f"Batch dimensions are empty, cannot decrement. arg_name: {arg.name}"
+        )
     return res
 
 

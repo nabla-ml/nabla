@@ -1,10 +1,7 @@
-
-
-import nabla as nb 
+import nabla as nb
 
 
 def test1():
-
     def foo(x):
         x = nb.broadcast_to(x, (4, 2, 3))
         return x
@@ -27,7 +24,6 @@ def test1():
 
 
 def test2():
-
     def foo(x):
         # x = nb.broadcast_batch_dims(x, (2, 3))
         # x = x * y
@@ -55,7 +51,6 @@ def test2():
     print("XPR:")
     print(nb.xpr(foo, x))
 
-
     # values, vjp_fn = nb.vjp(foo, x, y)
     # print("\nvalues:")
     # print(values)
@@ -74,10 +69,19 @@ def test2():
 
 
 def test3():
-
     print("Testing _std_basis...")
-    a = nb.arange((3, 2,))
-    b = nb.arange((2, 4,))
+    a = nb.arange(
+        (
+            3,
+            2,
+        )
+    )
+    b = nb.arange(
+        (
+            2,
+            4,
+        )
+    )
     c = nb.arange((4, 1))
 
     sizes, tangents = nb.core.trafos._std_basis([a, b, c])

@@ -250,7 +250,7 @@ class ReductionOperation(UnaryOperation):
         axes: int | list[int] | tuple[int, ...] | None,
     ) -> tuple:
         """Compute the output shape for a reduction operation.
-        
+
         Always preserves dimensions (sets reduced axes to size 1).
         Dimension removal should be handled separately by squeeze operations.
         """

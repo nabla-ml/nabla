@@ -230,7 +230,7 @@ def _std_basis(args: list[Array]) -> tuple[list[int], list[Array]]:
         # for _ in range(max_rank - len(batched_shape)):
         #     batched_shape = (1,) + batched_shape
 
-        batched_shape =  (num_total_arg_elements,) + arg.shape
+        batched_shape = (num_total_arg_elements,) + arg.shape
 
         from numpy import zeros as np_zeros
 
@@ -261,6 +261,7 @@ def _std_basis(args: list[Array]) -> tuple[list[int], list[Array]]:
         # print(tangent)
 
         from ..ops.view import broadcast_batch_dims
+
         tangent = broadcast_batch_dims(tangent, arg.batch_dims)
 
         # print(tangent)
@@ -272,6 +273,8 @@ def _std_basis(args: list[Array]) -> tuple[list[int], list[Array]]:
 
         tangents.append(tangent)
         sizes.append(num_elements)
+
+    # print("done computing std basis")
 
     return sizes, tangents
 
@@ -751,9 +754,7 @@ def _compute_pushfwd(inputs, outputs, tangents, trace=None):
             else:
                 from ..ops.creation import zeros_like
 
-                arg_tangents.append(
-                    zeros_like(arg)
-                )
+                arg_tangents.append(zeros_like(arg))
 
         try:
             node.tangent = node.jvp_rule(node.args, arg_tangents, node)
@@ -807,7 +808,6 @@ def pushfwd(
     return tree_unflatten(tree_flatten(outputs)[1], output_tangents)
 
 
-
 def xpr(fn: Callable[..., Any], *primals) -> str:
     """Get a JAX-like string representation of the function's computation graph.
 
@@ -832,7 +832,8 @@ def xpr(fn: Callable[..., Any], *primals) -> str:
         is_single_arg = False
 
     any_arg_traced = any(
-        getattr(arg, "traced", False) for arg in _extract_arrays_from_pytree(inputs_pytree)
+        getattr(arg, "traced", False)
+        for arg in _extract_arrays_from_pytree(inputs_pytree)
     )
 
     # Make traced copies of all inputs
@@ -902,7 +903,8 @@ def vjp(
         is_single_arg = False
 
     any_arg_traced = any(
-        getattr(arg, "traced", False) for arg in _extract_arrays_from_pytree(inputs_pytree)
+        getattr(arg, "traced", False)
+        for arg in _extract_arrays_from_pytree(inputs_pytree)
     )
 
     # Make traced copies of all inputs
@@ -954,8 +956,8 @@ def vjp(
         # else:
         #     return gradients  # Already a tuple for multiple args
 
-        return gradients 
-    
+        return gradients
+
     # Make outputs untraced before returning
     # make_untraced_pytree(outputs)
     if not any_arg_traced:
@@ -1033,15 +1035,75 @@ def jvp(
     return outputs, output_tangents
 
 
+def _check_in_axes_size(tree: Any, axes: Any) -> int:
+    """Check that all non-None axes have the same size and return that size.
 
-def _apply_batching_to_tree(tree: Any, axes: Any, is_input: bool = True) -> Any:
+    Args:
+        tree: Pytree containing Arrays
+        axes: Axis specification matching tree structure
+
+    Returns:
+        The common batch size for all non-None axes
+
+    Raises:
+        ValueError: If axes with non-None values have different sizes
+    """
+    batch_sizes = []
+
+    def _collect_sizes(tree_part: Any, axes_part: Any) -> None:
+        if isinstance(tree_part, Array):
+            if axes_part is not None:
+                if axes_part < 0:
+                    # Handle negative indexing
+                    axis = len(tree_part.shape) + axes_part
+                else:
+                    axis = axes_part
+
+                if axis >= len(tree_part.shape):
+                    raise ValueError(
+                        f"Axis {axes_part} out of bounds for array with shape {tree_part.shape}"
+                    )
+
+                batch_sizes.append(tree_part.shape[axis])
+        elif isinstance(tree_part, dict):
+            for k in tree_part:
+                _collect_sizes(tree_part[k], axes_part[k])
+        elif isinstance(tree_part, (list, tuple)):
+            for t, a in zip(tree_part, axes_part):
+                _collect_sizes(t, a)
+        # Non-Array leaves are ignored
+
+    _collect_sizes(tree, axes)
+
+    if not batch_sizes:
+        # No non-None axes found, return 1 as default batch size
+        return 1
+
+    # Check all batch sizes are the same
+    first_size = batch_sizes[0]
+    for size in batch_sizes[1:]:
+        if size != first_size:
+            raise ValueError(
+                f"Inconsistent batch sizes along specified axes: got sizes {batch_sizes}. "
+                f"All non-None axes must have the same size."
+            )
+
+    return first_size
+
+
+def _apply_batching_to_tree(
+    tree: Any, axes: Any, is_input: bool = True, batch_size: int | None = None
+) -> Any:
     """Apply batching/unbatching to a pytree structure.
-    
+
     Args:
         tree: Pytree containing Arrays
         axes: Axis specification matching tree structure
         is_input: True for input batching, False for output unbatching
+        batch_size: The batch size to use for broadcasting (axis=None case).
+                   If None, uses size 1 for input batching.
     """
+
     def _process_array(array: Array, axis: int | None) -> Array:
         if is_input:
             # Input batching
@@ -1049,24 +1111,36 @@ def _apply_batching_to_tree(tree: Any, axes: Any, is_input: bool = True) -> Any:
             from nabla.ops.unary import incr_batch_dim_ctr
 
             if axis is None:
-                # Broadcast: add size-1 batch dimension
-                batched = unsqueeze(array, [0])
+                # Broadcast: add batch dimension with correct size
+                if batch_size is not None and batch_size > 1:
+                    # Broadcast to the proper batch size
+                    from nabla.ops.view import broadcast_to
+
+                    # Add a size-1 dimension first
+                    batched = unsqueeze(array, [0])
+                    # Then broadcast to the correct batch size
+                    new_shape = (batch_size,) + array.shape
+                    batched = broadcast_to(batched, new_shape)
+                else:
+                    # Default behavior: add size-1 batch dimension
+                    batched = unsqueeze(array, [0])
             else:
                 # Move specified axis to position 0
                 if axis != 0:
                     from ..ops.view import move_axis_to_front
+
                     batched = move_axis_to_front(array, axis)
                 else:
                     batched = array
-            
+
             return incr_batch_dim_ctr(batched)
         else:
             # Output unbatching
             from nabla.ops.view import squeeze
             from nabla.ops.unary import decr_batch_dim_ctr
-            
+
             unbatched = decr_batch_dim_ctr(array)
-            
+
             if axis is None:
                 # Remove batch dimension
                 unbatched = squeeze(unbatched, [0])
@@ -1074,10 +1148,11 @@ def _apply_batching_to_tree(tree: Any, axes: Any, is_input: bool = True) -> Any:
                 # Move axis 0 to specified position
                 if axis != 0:
                     from ..ops.view import move_axis_from_front
+
                     unbatched = move_axis_from_front(unbatched, axis)
-            
+
             return unbatched
-    
+
     def _recurse(tree_part: Any, axes_part: Any) -> Any:
         if isinstance(tree_part, Array):
             return _process_array(tree_part, axes_part)
@@ -1089,8 +1164,9 @@ def _apply_batching_to_tree(tree: Any, axes: Any, is_input: bool = True) -> Any:
         else:
             # Non-Array leaf, return unchanged
             return tree_part
-    
+
     return _recurse(tree, axes)
+
 
 def _broadcast_axis_spec(axis_spec: Any, num_items: int) -> tuple[Any, ...]:
     """Broadcast axis specification to match number of items."""
@@ -1098,7 +1174,9 @@ def _broadcast_axis_spec(axis_spec: Any, num_items: int) -> tuple[Any, ...]:
         return tuple(axis_spec for _ in range(num_items))
     elif isinstance(axis_spec, (list, tuple)):
         if len(axis_spec) != num_items:
-            raise ValueError(f"Axis specification length {len(axis_spec)} != number of items {num_items}")
+            raise ValueError(
+                f"Axis specification length {len(axis_spec)} != number of items {num_items}"
+            )
         return tuple(axis_spec)
     else:
         raise ValueError(f"Invalid axis specification: {axis_spec}")
@@ -1106,7 +1184,7 @@ def _broadcast_axis_spec(axis_spec: Any, num_items: int) -> tuple[Any, ...]:
 
 def vmap(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
     """Enhanced vmap with clean pytree support.
-    
+
     This is a simplified, clean implementation that supports all JAX vmap features:
     - Pytree inputs/outputs with matching axis specifications
     - Broadcasting (axis=None) and batching (axis=int)
@@ -1115,30 +1193,32 @@ def vmap(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
     """
     if func is None:
         return lambda f: vmap(f, in_axes=in_axes, out_axes=out_axes)
-    
+
     def vectorized_func(*args):
         # Handle calling conventions
         actual_args, is_list_style = _handle_args_consistently(args)
-        
+
         if not actual_args:
             raise ValueError("vmap requires at least one input argument")
-        
+
         # Broadcast in_axes to match arguments
         structured_in_axes = _broadcast_axis_spec(in_axes, len(actual_args))
-        
-        # Apply input batching
+
+        # Check that all non-None axes have the same size and get the batch size
+        batch_size = _check_in_axes_size(actual_args, structured_in_axes)
+
+        # Apply input batching with proper batch size
         batched_args = []
         for arg, axis_spec in zip(actual_args, structured_in_axes):
-            # Make traced first
-            # traced_arg = tree_map(lambda a: make_traced([a])[0] if isinstance(a, Array) else a, arg)
-            # Apply batching
-            # batched_arg = _apply_batching_to_tree(traced_arg, axis_spec, is_input=True)
-            batched_arg = _apply_batching_to_tree(arg, axis_spec, is_input=True)
+            # Apply batching with the discovered batch size
+            batched_arg = _apply_batching_to_tree(
+                arg, axis_spec, is_input=True, batch_size=batch_size
+            )
             batched_args.append(batched_arg)
-        
+
         # Execute function
         outputs = func(batched_args) if is_list_style else func(*batched_args)
-        
+
         # Handle output structure
         if not isinstance(outputs, (list, tuple)):
             outputs_list = [outputs]
@@ -1146,20 +1226,21 @@ def vmap(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
         else:
             outputs_list = outputs
             is_single_output = False
-        
+
         # Broadcast out_axes to match outputs
         structured_out_axes = _broadcast_axis_spec(out_axes, len(outputs_list))
-        
+
         # Apply output unbatching
         unbatched_outputs = []
         for output, axis_spec in zip(outputs_list, structured_out_axes):
-            unbatched_output = _apply_batching_to_tree(output, axis_spec, is_input=False)
+            unbatched_output = _apply_batching_to_tree(
+                output, axis_spec, is_input=False
+            )
             unbatched_outputs.append(unbatched_output)
-        
-        return unbatched_outputs[0] if is_single_output else tuple(unbatched_outputs)
-    
-    return vectorized_func
 
+        return unbatched_outputs[0] if is_single_output else tuple(unbatched_outputs)
+
+    return vectorized_func
 
 
 def jit(func: Callable[..., Any] = None) -> Callable[..., Any]:
@@ -1392,7 +1473,6 @@ def jacrev(
     return jacrev_fn
 
 
-
 def jacfwd(
     func: Callable[..., Any],
     argnums: int | tuple[int, ...] | list[int] = 0,
@@ -1402,27 +1482,27 @@ def jacfwd(
 ) -> Callable[..., Any]:
     """
     Prototype implementation of jacfwd using forward-mode autodiff.
-    
+
     This computes the Jacobian using the pattern:
     vmap(jvp(func, primals, tangents), in_axes=(primal_axes, tangent_axes))
-    
+
     where primal_axes are None (broadcast) and tangent_axes are 0 (vectorize).
-    
+
     Args:
         func: Function to differentiate
         argnums: Which arguments to differentiate with respect to
         has_aux: Whether function returns auxiliary data
         holomorphic: Ignored (for JAX compatibility)
         allow_int: Ignored (for JAX compatibility)
-        
+
     Returns:
         Function that computes the Jacobian using forward-mode autodiff
     """
-    
+
     def jacfwd_fn(*args: Any) -> Any:
         # print(f"\n=== JACFWD PROTOTYPE ===")
         # print(f"Input args shapes: {[arg.shape if hasattr(arg, 'shape') else type(arg).__name__ for arg in args]}")
-        
+
         # Normalize argnums to a tuple of integers (same as jacrev)
         if isinstance(argnums, int):
             selected_argnums = (argnums,)
@@ -1458,33 +1538,28 @@ def jacfwd(
         flat_diff_args = _extract_arrays_from_pytree(diff_args)
         if not isinstance(flat_diff_args, list):
             flat_diff_args = [flat_diff_args]
-        
+
         # print(f"Flat diff args shapes: {[arg.shape for arg in flat_diff_args]}")
-        
+
         # Create standard basis vectors for inputs (this is the key difference from jacrev)
         sizes, std_basis_vectors = _std_basis(flat_diff_args)
+
         # print(f"Standard basis sizes: {sizes}")
         # print(f"Standard basis vectors shape: {std_basis_vectors[0].shape if std_basis_vectors else 'None'}")        # Create the JVP function that we'll vmap over
         # This function takes the individual arguments from diff_args + one tangent per input
         def jvp_func(*args):
             """
             JVP function that computes output tangents.
-            
+
             For single input: args = (primal, tangent_vector)
             For multi-input: args = (primal1, primal2, ..., tangent1, tangent2, ...)
-            
+
             The tangent vectors come from _std_basis and are already properly shaped.
             """
             num_primals = len(diff_args)
             primals = args[:num_primals]  # First N arguments are primals
             tangent_vectors = args[num_primals:]  # Last N arguments are tangents
-            
-            # print(f"    jvp_func called with {len(primals)} primals, {len(tangent_vectors)} tangents")
-            # print(f"    primal shapes: {[p.shape for p in primals]}")
-            # print(f"    tangent shapes: {[t.shape for t in tangent_vectors]}")
-            
-            # The tangent vectors from _std_basis are already properly shaped for each input
-            # We just need to structure them correctly for jvp
+
             if len(primals) == 1:
                 # Single input case
                 tangents_tuple = tangent_vectors[0]
@@ -1493,93 +1568,69 @@ def jacfwd(
                 # Multi-input case
                 tangents_tuple = tuple(tangent_vectors)
                 primals_tuple = tuple(primals)
-            
+
             # Compute JVP: jvp(partial_func, primals, tangents)
             primal_out, tangent_out = jvp(partial_func, primals_tuple, tangents_tuple)
-            
+
             return tangent_out  # Return tangent output directly
 
-        # Set up the arguments for vmap
-        # We need to structure arguments as: *diff_args, *std_basis_vectors
-        # And in_axes as: tuple of None for each primal + 0 for each tangent vector
-        
         # Create in_axes: None for each primal argument, 0 for each tangent vector
         primals_axes = tuple(None for _ in diff_args)  # Broadcast all primal arguments
-        tangents_axes = tuple(0 for _ in std_basis_vectors)  # Vectorize all tangent arguments
+        tangents_axes = tuple(
+            0 for _ in std_basis_vectors
+        )  # Vectorize all tangent arguments
         vmap_in_axes = primals_axes + tangents_axes
-        
-        # print(f"vmap primals: {[p.shape for p in diff_args]}")
-        # print(f"vmap std_basis_vectors: {[v.shape for v in std_basis_vectors]}")
-        # print(f"vmap in_axes: {vmap_in_axes}")
-        # print(f"Number of arguments to vmap: {len(diff_args) + len(std_basis_vectors)}")
 
         # Apply vmap to vectorize the JVP computation
+        # print(f"vmap in_axes: {vmap_in_axes}")
         vmap_jvp = vmap(jvp_func, in_axes=vmap_in_axes)
-        
-        # Apply the vectorized JVP
-        # Pass individual primal arguments + all tangent vectors
-        # print(f"Calling vmap_jvp with {len(diff_args)} primals + {len(std_basis_vectors)} tangents")
+
         output_tangents = vmap_jvp(*diff_args, *std_basis_vectors)
-        
-        # print(f"Output tangents shape: {output_tangents.shape if hasattr(output_tangents, 'shape') else type(output_tangents)}")
-        
-        # Process the output tangents to get the proper Jacobian structure
-        # For jacfwd, the output_tangents has shape (total_input_elements, *output_shape)
-        # We need to split it by input argument and reshape properly
-        
-        # Import split function for proper jacobian structuring
+
         from nabla.ops.view import reshape, split
-        
+
         # Get output structure by running the function once
         test_output = partial_func(*diff_args)
         flat_output = _extract_arrays_from_pytree(test_output)
         if not isinstance(flat_output, list):
             flat_output = [flat_output]
-        
-        # print(f"Output shape: {[out.shape for out in flat_output]}")
-        
-        # The key insight: output_tangents has shape (total_basis_vectors, *output_shape)
-        # For multi-input case, we need to organize by input argument
-        
-        if len(diff_args) == 1:
-            # Single input case - output_tangents is already in the right format
-            jacobian = output_tangents
-        else:
-            # Multi-input case - need to split and reorganize
-            # output_tangents has shape (total_elements, *output_shape)
-            # We need to split by sizes and create separate jacobians for each input
-            
-            # Split the output tangents by the sizes from _std_basis
-            split_tangents = split(output_tangents, sizes=sizes, axis=0)
-            
-            jacobian_components = []
-            for j, (arg, tangents_for_arg) in enumerate(zip(flat_diff_args, split_tangents)):
-                # tangents_for_arg has shape (arg_elements, *output_shape)
-                # We need to reshape it to (output_shape, arg_shape)
-                
-                # For each output component (assuming single output for now)
-                if len(flat_output) == 1:
-                    output_shape = flat_output[0].shape
-                    arg_shape = arg.shape
-                    
-                    # Reshape to proper Jacobian format: output_shape + input_shape
-                    target_shape = output_shape + arg_shape
-                    jacobian_component = reshape(tangents_for_arg, target_shape)
-                    jacobian_components.append(jacobian_component)
-                else:
-                    # Multiple outputs - more complex handling needed
-                    # For now, assume single output
-                    raise NotImplementedError("Multiple outputs not yet implemented")
-            
-            # Return as tuple for multiple inputs
-            jacobian = tuple(jacobian_components)
-        
-        # print(f"Final jacobian structure: {type(jacobian)}")
-        # if hasattr(jacobian, 'shape'):
-        #     print(f"Final jacobian shape: {jacobian.shape}")
-        # elif isinstance(jacobian, (tuple, list)):
-        #     print(f"Final jacobian shapes: {[j.shape if hasattr(j, 'shape') else type(j) for j in jacobian]}")
-        
+
+        # Split the output tangents by the sizes from _std_basis
+        split_tangents = split(output_tangents, sizes=sizes, axis=0)
+
+        # print("\n\nSPLIT TANGENTS")
+        # print(split_tangents)
+        # print("\n\n")
+
+        jacobian_components = []
+        for j, (arg, tangents_for_arg) in enumerate(
+            zip(flat_diff_args, split_tangents)
+        ):
+            output_shape = flat_output[0].shape
+            arg_shape = arg.shape
+
+            # Reshape to proper Jacobian format: output_shape + input_shape
+            target_shape = arg_shape + output_shape
+            jacobian_component = reshape(tangents_for_arg, target_shape)
+
+            # reshaped_grad = grad.reshape(shape)
+            perm_axes = []
+            for k in range(len(output_shape)):
+                perm_axes.append(k + len(arg_shape))
+            for k in range(len(arg_shape)):
+                perm_axes.append(k)
+
+            from ..ops.view import permute
+
+            jacobian_component = permute(jacobian_component, perm_axes)
+            jacobian_components.append(jacobian_component)
+
+        # Return as tuple for multiple inputs
+        if len(jacobian_components) == 1:
+            jacobian_components = jacobian_components[0]
+
+        jacobian = jacobian_components
+
         if not has_aux:
             return jacobian
         else:
