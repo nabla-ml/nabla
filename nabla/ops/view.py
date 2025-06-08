@@ -560,11 +560,11 @@ class SqueezeOp(ViewOperation):
         return super().forward(*args)
 
     def maxpr(self, args: list[Value], output: Array) -> None:
-        res_value = args[0]
-        for i, ax in enumerate(self.axes):
-            adjusted_axis = ax - i
-            res_value = ops.squeeze(res_value, adjusted_axis)
-        output.tensor_value = res_value
+        axis = tuple(self.axes) if self.axes else None
+        res = args[0]
+        for ax in axis:
+            res = ops.squeeze(res, ax)
+        output.tensor_value = res
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         axis = tuple(self.axes) if self.axes else None
@@ -1268,8 +1268,12 @@ class SqueezeBatchDimsOp(ViewOperation):
 
     def maxpr(self, args: list[Value], output: Array) -> None:
         """MAX graph implementation using ops.squeeze."""
-        axes = [ax - len(args[0].shape) for ax in self.axes]
-        output.tensor_value = ops.squeeze(args[0], axes=axes)
+        axes = [ax - len(output.shape) for ax in self.axes]
+        res = args[0]
+        for ax in axes:
+            res = ops.squeeze(res, ax)
+        output.tensor_value = res
+
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         """Eager execution using NumPy squeeze."""
@@ -1354,8 +1358,12 @@ class UnsqueezeBatchDimsOp(ViewOperation):
 
     def maxpr(self, args: list[Value], output: Array) -> None:
         """MAX graph implementation using ops.unsqueeze."""
-        axes = [ax - len(args[0].shape) for ax in self.axes] if self.axes else None
-        output.tensor_value = ops.unsqueeze(args[0], axes=axes)
+        axes = [ax - len(output.shape) for ax in self.axes] if self.axes else None
+        res = args[0]
+        for ax in axes:
+            res = ops.unsqueeze(res, ax)
+        output.tensor_value = res
+
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         """Eager execution using NumPy expand_dims."""

@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 from .array import Array
@@ -223,58 +223,66 @@ def _std_basis(args: list[Array]) -> tuple[list[int], list[Array]]:
     for i, arg in enumerate(args):
         num_elements = 1
 
-        for dim in arg.shape:
-            num_elements *= dim
-
-        # batched_shape = arg.batch_dims + arg.shape
-        # for _ in range(max_rank - len(batched_shape)):
-        #     batched_shape = (1,) + batched_shape
-
-        batched_shape = (num_total_arg_elements,) + arg.shape
-
-        from numpy import zeros as np_zeros
-
-        np_tangent = np_zeros(batched_shape, dtype=arg.dtype.to_numpy()).flatten()
-
-        # num_els_batch_dims = 1
-        # for dim in arg.batch_dims:
-        #     num_els_batch_dims *= dim
-
-        # for i in range(num_elements):
-        #     offset = batch_ctr * num_elements
-
-        offset = batch_ctr * num_elements
-
-        for j in range(num_elements):
-            # offset = j * num_elements
-            idx = offset + j * num_elements + j
-            np_tangent[idx] = 1.0
-            # offset += num_elements
+        if arg.shape == ():
+            from ..ops.creation import ones_like
+            tangent = ones_like(arg)
+            tangents.append(tangent)
+            sizes.append(1)
             batch_ctr += 1
+        
+        else:
+            for dim in arg.shape:
+                num_elements *= dim
 
-        np_tangent = np_tangent.reshape(batched_shape)
-        tangent = Array.from_numpy(np_tangent)
-        # tangent.batch_dims = arg.batch_dims
-        # tangent.shape = tangent.shape[len(arg.batch_dims) :]
+            # batched_shape = arg.batch_dims + arg.shape
+            # for _ in range(max_rank - len(batched_shape)):
+            #     batched_shape = (1,) + batched_shape
 
-        # print(tangent)
-        # print(tangent)
+            batched_shape = (num_total_arg_elements,) + arg.shape
 
-        from ..ops.view import broadcast_batch_dims
+            from numpy import zeros as np_zeros
 
-        tangent = broadcast_batch_dims(tangent, arg.batch_dims)
+            np_tangent = np_zeros(batched_shape, dtype=arg.dtype.to_numpy()).flatten()
 
-        # print(tangent)
+            # num_els_batch_dims = 1
+            # for dim in arg.batch_dims:
+            #     num_els_batch_dims *= dim
 
-        # from ..ops.unary import incr_batch_dim_ctr
+            # for i in range(num_elements):
+            #     offset = batch_ctr * num_elements
 
-        # for _ in range(len(arg.batch_dims)):
-        #     tangent = incr_batch_dim_ctr(tangent)
+            offset = batch_ctr * num_elements
 
-        tangents.append(tangent)
-        sizes.append(num_elements)
+            for j in range(num_elements):
+                # offset = j * num_elements
+                idx = offset + j * num_elements + j
+                np_tangent[idx] = 1.0
+                # offset += num_elements
+                batch_ctr += 1
 
-    # print("done computing std basis")
+            np_tangent = np_tangent.reshape(batched_shape)
+            tangent = Array.from_numpy(np_tangent)
+            # tangent.batch_dims = arg.batch_dims
+            # tangent.shape = tangent.shape[len(arg.batch_dims) :]
+
+            # print(tangent)
+        
+
+            from ..ops.view import broadcast_batch_dims
+
+            tangent = broadcast_batch_dims(tangent, arg.batch_dims)
+
+            # from ..ops.unary import incr_batch_dim_ctr
+
+            # for _ in range(len(arg.batch_dims)):
+            #     tangent = incr_batch_dim_ctr(tangent)
+
+            tangents.append(tangent)
+            sizes.append(num_elements)
+
+        print(tangent)
+
+    print("done computing std basis")
 
     return sizes, tangents
 
@@ -1066,11 +1074,21 @@ def _check_in_axes_size(tree: Any, axes: Any) -> int:
 
                 batch_sizes.append(tree_part.shape[axis])
         elif isinstance(tree_part, dict):
-            for k in tree_part:
-                _collect_sizes(tree_part[k], axes_part[k])
+            if isinstance(axes_part, dict):
+                for k in tree_part:
+                    _collect_sizes(tree_part[k], axes_part[k])
+            else:
+                # Broadcast axes_part to all dict values
+                for k in tree_part:
+                    _collect_sizes(tree_part[k], axes_part)
         elif isinstance(tree_part, (list, tuple)):
-            for t, a in zip(tree_part, axes_part, strict=False):
-                _collect_sizes(t, a)
+            if isinstance(axes_part, (list, tuple)):
+                for t, a in zip(tree_part, axes_part, strict=False):
+                    _collect_sizes(t, a)
+            else:
+                # Broadcast axes_part to all sequence elements
+                for t in tree_part:
+                    _collect_sizes(t, axes_part)
         # Non-Array leaves are ignored
 
     _collect_sizes(tree, axes)
@@ -1157,10 +1175,19 @@ def _apply_batching_to_tree(
         if isinstance(tree_part, Array):
             return _process_array(tree_part, axes_part)
         elif isinstance(tree_part, dict):
-            return {k: _recurse(tree_part[k], axes_part[k]) for k in tree_part}
+            if isinstance(axes_part, dict):
+                return {k: _recurse(tree_part[k], axes_part[k]) for k in tree_part}
+            else:
+                # Broadcast axes_part to all dict values
+                return {k: _recurse(tree_part[k], axes_part) for k in tree_part}
         elif isinstance(tree_part, (list, tuple)):
-            result = [_recurse(t, a) for t, a in zip(tree_part, axes_part, strict=False)]
-            return type(tree_part)(result)
+            if isinstance(axes_part, (list, tuple)):
+                result = [_recurse(t, a) for t, a in zip(tree_part, axes_part, strict=False)]
+                return type(tree_part)(result)
+            else:
+                # Broadcast axes_part to all sequence elements
+                result = [_recurse(t, axes_part) for t in tree_part]
+                return type(tree_part)(result)
         else:
             # Non-Array leaf, return unchanged
             return tree_part
@@ -1333,7 +1360,6 @@ def jacrev(
     """
 
     def jacrev_fn(*args: Any) -> Any:
-        # print("\nSTART JACREV FN")
         # Normalize argnums to a tuple of integers
         if isinstance(argnums, int):
             selected_argnums = (argnums,)
@@ -1352,8 +1378,16 @@ def jacrev(
             argnum if argnum >= 0 else len(args) + argnum for argnum in selected_argnums
         )
 
-        # Extract the arguments to differentiate with respect to
+        # Extract the arguments to differentiate with respect to (as pytrees)
         diff_args = tuple(args[i] for i in normalized_argnums)
+
+        # Handle single vs multiple differentiated arguments (same pattern as vjp)
+        if len(diff_args) == 1:
+            diff_inputs_pytree = diff_args[0]
+            is_single_diff_arg = True
+        else:
+            diff_inputs_pytree = diff_args
+            is_single_diff_arg = False
 
         # Create a function that takes only the differentiated arguments
         def partial_func(*diff_args_inner):
@@ -1363,112 +1397,56 @@ def jacrev(
                 full_args[i] = arg
             return func(*full_args)
 
-        # Compute VJP - delegate has_aux handling to vjp
+        # Compute VJP for the differentiated arguments
         vjp_result = vjp(partial_func, *diff_args, has_aux=has_aux)
 
         if has_aux:
-            y, pullback, aux = vjp_result
+            y, pullback_func, aux = vjp_result
         else:
-            y, pullback = vjp_result
+            y, pullback_func = vjp_result
 
-        # Flatten output arrays for std_basis generation
+        # Generate standard basis vectors for outputs
         flat_y = _extract_arrays_from_pytree(y)
         if not isinstance(flat_y, list):
             flat_y = [flat_y]
 
-        # Generate standard basis vectors and get sizes for split operations
         sizes, std_basis_vectors = _std_basis(flat_y)
 
-        # print("std_basis_vectors:", std_basis_vectors)
-        # print("sizes:", sizes)
-
-        # print("INTERNAL")
-        # print(xpr(vmap(pullback), std_basis_vectors))
-
-        # Compute Jacobian using vmap over pullback
-        # print("\n   CALL INNER\n")
-        grads = vmap(pullback)(std_basis_vectors)
-        # print("inner xpr:")
-        # print(xpr(vmap(pullback), std_basis_vectors))
-        # print("\n   END INNER\n")
-
-        # CRITICAL: Check if std_basis_vectors were traced (indicating composition with other transformations)
-        std_basis_arrays = _extract_arrays_from_pytree(std_basis_vectors)
-        any_std_basis_traced = any(
-            getattr(arr, "traced", False) for arr in std_basis_arrays
-        )
-
-        # Make grads traced to capture subsequent operations in the computation graph
-        if not any_std_basis_traced:
-            # Only make traced if original std_basis wasn't traced (avoid double tracing)
-            grads = make_traced_pytree(grads)
-
-        # Import split function for proper jacobian structuring
-        from ..ops.view import reshape, split
-
-        # Extract flat input arguments for reshaping
-        flat_diff_args = _extract_arrays_from_pytree(diff_args)
-
-        splits = []
-        for i in range(len(flat_diff_args)):  # For each input argument
-            if isinstance(grads, list) and len(grads) > 0:
-                if isinstance(grads[0], tuple):
-                    # Multiple inputs: extract i-th input's gradients from each batch
-                    input_grads = grads[0][i]  # All batched gradients for input i
-                else:
-                    # Single input case
-                    input_grads = grads[0] if len(flat_diff_args) == 1 else grads[i]
+        # Helper function that takes primals and cotangent
+        def pullback_helper(primals_pytree, cotangent):
+            """Helper function for vmap that takes primals and cotangent.
+            
+            Args:
+                primals_pytree: The differentiated arguments (as pytree)
+                cotangent: Single cotangent vector from std_basis
+            """
+            # Extract args based on structure (same pattern as vjp)
+            if is_single_diff_arg:
+                traced_args = (primals_pytree,)
             else:
-                # Direct case
-                input_grads = grads[i] if isinstance(grads, tuple) else grads
+                traced_args = primals_pytree
 
-            # Split this input's gradients by output components (now traced!)
-            splits.append(split(input_grads, sizes=sizes, axis=0))
+            # Compute VJP for this primal configuration
+            vjp_result_inner = vjp(partial_func, *traced_args, has_aux=has_aux)
+            if has_aux:
+                _, pullback_inner, _ = vjp_result_inner
+            else:
+                _, pullback_inner = vjp_result_inner
+                
+            # Apply pullback to cotangent
+            gradients = pullback_inner(cotangent)
+            return gradients
+        
+        # Apply vmap with simple in_axes=(None, 0)
+        # None: broadcast primals (diff_inputs_pytree)
+        # 0: vectorize cotangents (std_basis_vectors)
+        jacobian = vmap(pullback_helper, in_axes=(None, 0))(diff_inputs_pytree, std_basis_vectors)
 
-        # Reshape jacobian components to proper out_shape + arg_shape format (now traced!)
-        cotangents = []
-        for j in range(len(flat_y)):  # For each output component
-            arg_jacs = []
-            for i in range(len(flat_diff_args)):  # For each input argument
-                grad = splits[i][j]  # j-th output component for i-th input
-                batch_dims = flat_y[j].batch_dims
-                out_shape = flat_y[j].shape
-                arg_shape = flat_diff_args[i].shape
-
-                # print("out_shape:", out_shape, "in_shape:", arg_shape)
-
-                # Only remove (1,) from output shape when we have batch dimensions (from vmap)
-                # This handles the case where scalar functions return (1,) instead of ()
-                if len(batch_dims) > 0 and len(out_shape) == 1 and out_shape[0] == 1:
-                    out_shape = ()
-                # Never remove (1,) from arg_shape - it represents valid jacobian structure
-
-                # Jacobian shape should be output_shape + input_shape
-                target_shape = out_shape + arg_shape
-                reshaped_grad = reshape(grad, target_shape)  # Now traced!
-                arg_jacs.append(reshaped_grad)
-
-            if len(arg_jacs) == 1:
-                arg_jacs = arg_jacs[0]  # Single input case, return single jacobian
-
-            cotangents.append(arg_jacs)
-
-        final_jac = cotangents
-        # print(len(cotangents))
-
-        if len(cotangents) == 1:
-            final_jac = cotangents[0]
-
-        # Make final jacobian untraced unless we're in a composition context
-        if not any_std_basis_traced:
-            make_untraced_pytree(final_jac)
-
-        # print("\nEND JACREV FN\n")
-
+        # Handle has_aux
         if not has_aux:
-            return final_jac
+            return jacobian
         else:
-            return final_jac, aux
+            return jacobian, aux
 
     return jacrev_fn
 
@@ -1500,33 +1478,36 @@ def jacfwd(
     """
 
     def jacfwd_fn(*args: Any) -> Any:
-        # print(f"\n=== JACFWD PROTOTYPE ===")
-        # print(f"Input args shapes: {[arg.shape if hasattr(arg, 'shape') else type(arg).__name__ for arg in args]}")
-
-        # Normalize argnums to a tuple of integers (same as jacrev)
+        # Normalize argnums to a tuple of integers
         if isinstance(argnums, int):
             selected_argnums = (argnums,)
         else:
             selected_argnums = tuple(argnums)
 
-        # Validate argnums (same as jacrev)
+        # Validate argnums
         for argnum in selected_argnums:
             if argnum >= len(args) or argnum < -len(args):
                 raise ValueError(
                     f"argnum {argnum} is out of bounds for function with {len(args)} arguments"
                 )
 
-        # Normalize negative indices (same as jacrev)
+        # Normalize negative indices
         normalized_argnums = tuple(
             argnum if argnum >= 0 else len(args) + argnum for argnum in selected_argnums
         )
-        # print(f"Differentiating w.r.t. arguments: {normalized_argnums}")
 
-        # Extract the arguments to differentiate with respect to (same as jacrev)
+        # Extract the arguments to differentiate with respect to (as pytrees)
         diff_args = tuple(args[i] for i in normalized_argnums)
-        # print(f"Diff args shapes: {[arg.shape for arg in diff_args]}")
 
-        # Create a function that takes only the differentiated arguments (same as jacrev)
+        # Handle single vs multiple differentiated arguments (same pattern as vjp)
+        if len(diff_args) == 1:
+            diff_inputs_pytree = diff_args[0]
+            is_single_diff_arg = True
+        else:
+            diff_inputs_pytree = diff_args
+            is_single_diff_arg = False
+
+        # Create a function that takes only the differentiated arguments
         def partial_func(*diff_args_inner):
             # Reconstruct the full argument list
             full_args = list(args)
@@ -1534,58 +1515,55 @@ def jacfwd(
                 full_args[i] = arg
             return func(*full_args)
 
-        # Generate standard basis vectors for the INPUT arguments (key difference from jacrev)
-        flat_diff_args = _extract_arrays_from_pytree(diff_args)
-        if not isinstance(flat_diff_args, list):
-            flat_diff_args = [flat_diff_args]
+        # Compute VJP for the differentiated arguments
+        vjp_result = vjp(partial_func, *diff_args, has_aux=has_aux)
 
-        # print(f"Flat diff args shapes: {[arg.shape for arg in flat_diff_args]}")
+        if has_aux:
+            y, pullback_func, aux = vjp_result
+        else:
+            y, pullback_func = vjp_result
 
-        # Create standard basis vectors for inputs (this is the key difference from jacrev)
-        sizes, std_basis_vectors = _std_basis(flat_diff_args)
+        # Generate standard basis vectors for outputs
+        flat_y = _extract_arrays_from_pytree(y)
+        if not isinstance(flat_y, list):
+            flat_y = [flat_y]
 
-        # print(f"Standard basis sizes: {sizes}")
-        # print(f"Standard basis vectors shape: {std_basis_vectors[0].shape if std_basis_vectors else 'None'}")        # Create the JVP function that we'll vmap over
-        # This function takes the individual arguments from diff_args + one tangent per input
-        def jvp_func(*args):
+        sizes, std_basis_vectors = _std_basis(flat_y)
+
+        # Helper function that takes primals and cotangent
+        def pullback_helper(primals_pytree, cotangent):
+            """Helper function for vmap that takes primals and cotangent.
+            
+            Args:
+                primals_pytree: The differentiated arguments (as pytree)
+                cotangent: Single cotangent vector from std_basis
             """
-            JVP function that computes output tangents.
-
-            For single input: args = (primal, tangent_vector)
-            For multi-input: args = (primal1, primal2, ..., tangent1, tangent2, ...)
-
-            The tangent vectors come from _std_basis and are already properly shaped.
-            """
-            num_primals = len(diff_args)
-            primals = args[:num_primals]  # First N arguments are primals
-            tangent_vectors = args[num_primals:]  # Last N arguments are tangents
-
-            if len(primals) == 1:
-                # Single input case
-                tangents_tuple = tangent_vectors[0]
-                primals_tuple = primals[0]
+            # Extract args based on structure (same pattern as vjp)
+            if is_single_diff_arg:
+                traced_args = (primals_pytree,)
             else:
-                # Multi-input case
-                tangents_tuple = tuple(tangent_vectors)
-                primals_tuple = tuple(primals)
+                traced_args = primals_pytree
 
-            # Compute JVP: jvp(partial_func, primals, tangents)
-            primal_out, tangent_out = jvp(partial_func, primals_tuple, tangents_tuple)
+            # Compute VJP for this primal configuration
+            vjp_result_inner = vjp(partial_func, *traced_args, has_aux=has_aux)
+            if has_aux:
+                _, pullback_inner, _ = vjp_result_inner
+            else:
+                _, pullback_inner = vjp_result_inner
+                
+            # Apply pullback to cotangent
+            gradients = pullback_inner(cotangent)
+            return gradients
+        
+        # Use simple axis specifications - vmap will broadcast them automatically
+        # None for primals (broadcast), 0 for cotangents (vectorize)
+        jacobian = vmap(pullback_helper, in_axes=(None, 0))(diff_inputs_pytree, std_basis_vectors)
 
-            return tangent_out  # Return tangent output directly
+        # flatten the jacoobians
+        output_tangents = _extract_arrays_from_pytree(jacobian)
 
-        # Create in_axes: None for each primal argument, 0 for each tangent vector
-        primals_axes = tuple(None for _ in diff_args)  # Broadcast all primal arguments
-        tangents_axes = tuple(
-            0 for _ in std_basis_vectors
-        )  # Vectorize all tangent arguments
-        vmap_in_axes = primals_axes + tangents_axes
-
-        # Apply vmap to vectorize the JVP computation
-        # print(f"vmap in_axes: {vmap_in_axes}")
-        vmap_jvp = vmap(jvp_func, in_axes=vmap_in_axes)
-
-        output_tangents = vmap_jvp(*diff_args, *std_basis_vectors)
+        # flatten the inputs 
+        flat_diff_args = _extract_arrays_from_pytree(diff_inputs_pytree)
 
         from nabla.ops.view import reshape, split
 

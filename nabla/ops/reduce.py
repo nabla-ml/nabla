@@ -142,57 +142,63 @@ class SumBatchDimsOp(ReductionOperation):
         return self._compute_reduction_shape(input_batch_dims[0], self.axes)
 
     def maxpr(self, args: list[Value], output: Array) -> None:
-        axes = self.axes
-        if isinstance(axes, int):
-            axes = [axes]
+        # first we must subtract len(output.shape) from each axis value
+        axes = [ax - len(output.shape) for ax in self.axes]
+        # if isinstance(axes, int):
+        #     axes = [axes]
 
-        axes = sorted(axes, reverse=True)
+        # axes = sorted(axes, reverse=True)
         output_symbol = args[0]
-
         for axis in axes:
             output_symbol = ops.sum(output_symbol, axis=axis)
 
         output.tensor_value = output_symbol
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        if isinstance(self.axes, list):
-            numpy_axes: int | tuple[int, ...] | None = tuple(self.axes)
-        else:
-            numpy_axes = self.axes
+        # if isinstance(self.axes, list):
+        #     numpy_axes: int | tuple[int, ...] | None = tuple(self.axes)
+        # else:
+        #     numpy_axes = self.axes
 
-        # SumBatchDimsOp operates on batch dimensions, which are the first dimensions of the array
-        # The axes parameter is relative to batch_dims, not the full array
-        # We need to convert batch_dims-relative axes to absolute array indices
-        if numpy_axes is not None:
-            if isinstance(numpy_axes, int):
-                numpy_axes = [numpy_axes]
-            elif isinstance(numpy_axes, list | tuple):
-                numpy_axes = [int(axis) for axis in numpy_axes]
+        # # SumBatchDimsOp operates on batch dimensions, which are the first dimensions of the array
+        # # The axes parameter is relative to batch_dims, not the full array
+        # # We need to convert batch_dims-relative axes to absolute array indices
+        # if numpy_axes is not None:
+        #     if isinstance(numpy_axes, int):
+        #         numpy_axes = [numpy_axes]
+        #     elif isinstance(numpy_axes, list | tuple):
+        #         numpy_axes = [int(axis) for axis in numpy_axes]
 
-            # Convert batch_dims-relative indices to absolute array indices
-            adjusted_axes = []
-            batch_dims_len = len(args[0].batch_dims)
+        #     # Convert batch_dims-relative indices to absolute array indices
+        #     adjusted_axes = []
+        #     batch_dims_len = len(args[0].batch_dims)
 
-            for axis in numpy_axes:
-                if axis < 0:
-                    # Negative axis relative to batch_dims
-                    # Convert to positive index within batch_dims range
-                    adjusted_axis = batch_dims_len + axis
-                else:
-                    # Positive axis relative to batch_dims - use as is
-                    adjusted_axis = axis
+        #     for axis in numpy_axes:
+        #         if axis < 0:
+        #             # Negative axis relative to batch_dims
+        #             # Convert to positive index within batch_dims range
+        #             adjusted_axis = batch_dims_len + axis
+        #         else:
+        #             # Positive axis relative to batch_dims - use as is
+        #             adjusted_axis = axis
 
-                # Validate the axis is within batch_dims range
-                if adjusted_axis < 0 or adjusted_axis >= batch_dims_len:
-                    raise IndexError(
-                        f"Axis {axis} is out of bounds for batch_dims with length {batch_dims_len}"
-                    )
+        #         # Validate the axis is within batch_dims range
+        #         if adjusted_axis < 0 or adjusted_axis >= batch_dims_len:
+        #             raise IndexError(
+        #                 f"Axis {axis} is out of bounds for batch_dims with length {batch_dims_len}"
+        #             )
 
-                adjusted_axes.append(adjusted_axis)
+        #         adjusted_axes.append(adjusted_axis)
 
-            numpy_axes = tuple(adjusted_axes)
+        #     numpy_axes = tuple(adjusted_axes)
 
-        np_result = np.sum(args[0].to_numpy(), axis=numpy_axes, keepdims=True)
+        # np_result = np.sum(args[0].to_numpy(), axis=numpy_axes, keepdims=True)
+        # if np_result.ndim == 0:
+        #     np_result = np.array(np_result)
+        # output.impl = Tensor.from_numpy(np_result)
+
+        axes = [ax - len(output.shape) for ax in self.axes]
+        np_result = np.sum(args[0].to_numpy(), axis=axes, keepdims=True)
         if np_result.ndim == 0:
             np_result = np.array(np_result)
         output.impl = Tensor.from_numpy(np_result)

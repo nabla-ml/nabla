@@ -35,7 +35,7 @@ def _ensure_array(value) -> Array:
     elif isinstance(value, int | float):
         from .creation import array
 
-        return array([value])
+        return array(value)
     else:
         raise TypeError(f"Cannot convert {type(value)} to Array")
 

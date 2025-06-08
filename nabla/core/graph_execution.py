@@ -33,7 +33,7 @@ class GraphTracer:
     @staticmethod
     def compute_node_hash(node: Array) -> int:
         """Compute a deterministic hash for a computation node."""
-        components = [node.name or "input", str(node.shape), str(node.dtype)]
+        components = [node.name or "input", str(node.batch_dims + node.shape), str(node.dtype)]
         node_str = "-".join(components)
         return hash(node_str)
 
@@ -110,7 +110,7 @@ class ModelFactory:
             input_types.append(
                 TensorType(
                     dtype=input_node.dtype,
-                    shape=input_node.shape,
+                    shape=input_node.batch_dims + input_node.shape,
                     device=DeviceRef.from_device(input_node.device),
                 )
             )
@@ -179,6 +179,7 @@ class ModelFactory:
                 except Exception as e:
                     raise ValueError(f"Failed to set graph output: {e}") from e
 
+            # print("Graph:", graph)
             session = InferenceSession(devices=devices)
 
             for node in trace:
