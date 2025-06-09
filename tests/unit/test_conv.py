@@ -1004,7 +1004,7 @@ def test_conv2d_transpose_forward(config: ConvTestConfig) -> dict[str, Any]:
                 dimension_numbers=("NCHW", "IOHW", "NCHW"),
             )
             expected_shape = np.transpose(jax_result, (0, 2, 3, 1)).shape
-        except:
+        except Exception:
             expected_shape = "Could not compute"
 
         return {

@@ -35,13 +35,6 @@ foo_grads = nb.jit(nb.vmap(nb.grad(foo)))
 gradients = foo_grads(nb.randn((10, 5)))
 ```
 
-## Roadmap
-
-- ✅ **Function Transformations**: `vmap`, `jit`, `vjp`, `jvp`, `grad`
-- ✅ **Mojo Kernel Integration**: CPU/GPU acceleration working
-- 👷 **Extended Operations**: Comprehensive math operations
-- 💡 **Enhanced Mojo API**: When Mojo/MAX ecosystem stabilizes
-
 ## Development Setup
 
 For contributors and advanced users:

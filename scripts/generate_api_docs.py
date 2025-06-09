@@ -26,7 +26,7 @@ class APIDocGenerator:
     def extract_docstring(self, node: ast.AST) -> Optional[str]:
         """Extract docstring from an AST node."""
         if (
-            isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef))
+            isinstance(node, ast.FunctionDef | ast.ClassDef | ast.AsyncFunctionDef)
             and node.body
             and isinstance(node.body[0], ast.Expr)
             and isinstance(node.body[0].value, ast.Constant)
@@ -79,7 +79,7 @@ class APIDocGenerator:
     def parse_python_file(self, file_path: Path) -> dict[str, Any]:
         """Parse a Python file and extract API information."""
         try:
-            with open(file_path, encoding="utf-8") as f:
+            with Path(file_path).open(encoding="utf-8") as f:
                 content = f.read()
 
             tree = ast.parse(content)
@@ -155,7 +155,7 @@ class APIDocGenerator:
     def get_module_exports(self, module_path: Path) -> list[str]:
         """Get __all__ exports from a module if available."""
         try:
-            with open(module_path, encoding="utf-8") as f:
+            with Path(module_path).open(encoding="utf-8") as f:
                 content = f.read()
 
             tree = ast.parse(content)
@@ -165,14 +165,12 @@ class APIDocGenerator:
                     and len(node.targets) == 1
                     and isinstance(node.targets[0], ast.Name)
                     and node.targets[0].id == "__all__"
-                ):
-                    if isinstance(node.value, ast.List):
-                        return [
-                            elt.value
-                            for elt in node.value.elts
-                            if isinstance(elt, ast.Constant)
-                            and isinstance(elt.value, str)
-                        ]
+                ) and isinstance(node.value, ast.List):
+                    return [
+                        elt.value
+                        for elt in node.value.elts
+                        if isinstance(elt, ast.Constant) and isinstance(elt.value, str)
+                    ]
         except Exception:
             pass
         return []
@@ -405,7 +403,7 @@ def {method_name}{method_sig}
 
         # Write category overview file
         output_file = self.docs_api_path / f"{category}.md"
-        with open(output_file, "w", encoding="utf-8") as f:
+        with output_file.open("w", encoding="utf-8") as f:
             f.write(doc)
 
         print(f"Generated {output_file}")
@@ -499,7 +497,7 @@ import nabla as nb
 
         # Write individual function file
         output_file = self.docs_api_path / f"{category}_{function_name}.md"
-        with open(output_file, "w", encoding="utf-8") as f:
+        with output_file.open("w", encoding="utf-8") as f:
             f.write(doc)
 
         print(f"Generated {output_file}")
@@ -636,7 +634,7 @@ results = batch_dot(a_batch, b_batch)  # 10 dot products""",
 
                     sig = inspect.signature(func)
                     func_info["signature"] = f"nabla.{function_name}{sig}"
-                except:
+                except Exception:
                     pass
 
                 # Get docstring
@@ -868,7 +866,7 @@ Nabla provides a comprehensive set of APIs for array operations, function transf
 """
 
         index_file = self.docs_api_path / "index.md"
-        with open(index_file, "w", encoding="utf-8") as f:
+        with index_file.open("w", encoding="utf-8") as f:
             f.write(index_content)
 
         print(f"Generated {index_file}")

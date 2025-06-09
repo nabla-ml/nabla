@@ -6,7 +6,7 @@ import nabla as nb
 
 
 def flatten_nested(nested):
-    if isinstance(nested, (list, tuple)):
+    if isinstance(nested, list | tuple):
         return [item for sublist in nested for item in flatten_nested(sublist)]
     return [nested]
 

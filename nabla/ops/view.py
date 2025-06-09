@@ -282,11 +282,11 @@ def compute_iterative_transpose_swaps(axes: tuple[int, ...]) -> list[tuple[int, 
         # Find where target_axis currently is in the current ordering
         try:
             y = current_axis_order.index(target_axis)
-        except ValueError:
+        except ValueError as e:
             # target_axis not found in current_axis_order, this shouldn't happen
             raise ValueError(
                 f"Target axis {target_axis} not found in current_axis_order {current_axis_order}"
-            )
+            ) from e
 
         # If already in the right position, skip
         if x == y:
@@ -1191,7 +1191,7 @@ class ConcatenateOp(Operation):
     def maxpr(self, args: list[Value], output: Array) -> None:
         """MAX graph implementation using ops.concat."""
         # Normalize axis for MAX operations, considering batch_dims
-        full_output_shape = output.batch_dims + output.shape
+        # full_output_shape = output.batch_dims + output.shape  # TODO: Use if needed
         axis = self.axis if self.axis >= 0 else len(output.shape) + self.axis
 
         # Adjust axis to account for batch_dims in the actual tensor
@@ -1259,7 +1259,7 @@ class ConcatenateOp(Operation):
 
         # Validate inputs have compatible properties
         first_arg = args[0]
-        for i, arg in enumerate(args[1:], 1):
+        for _i, arg in enumerate(args[1:], 1):
             if arg.dtype != first_arg.dtype:
                 raise ValueError(
                     f"All inputs must have the same dtype. Got {arg.dtype} vs {first_arg.dtype}"
@@ -1628,7 +1628,7 @@ class PadOp(Operation):
         slice_indices.extend(self.slices)
 
         # Add full slices for any remaining dimensions
-        for i in range(len(self.slices), len(output.shape)):
+        for _i in range(len(self.slices), len(output.shape)):
             slice_indices.append(slice(None))
 
         # Place small array into the target location

@@ -30,7 +30,7 @@ try:
             assert abs(float(out) - 11.0) < 1e-6, "Expected output 11.0"
         except Exception as e:
             print(f"✗ Failed: {e}")
-            assert False, f"Positional args should work: {e}"
+            raise AssertionError(f"Positional args should work: {e}") from e
 
         print("\n2. JAX vjp with keyword args:")
         try:
@@ -60,7 +60,7 @@ try:
             assert abs(float(out) - 11.0) < 1e-6, "Expected output 11.0"
         except Exception as e:
             print(f"✗ Failed with partial: {e}")
-            assert False, f"Partial should work: {e}"
+            raise AssertionError(f"Partial should work: {e}") from e
 
         try:
 
@@ -72,7 +72,7 @@ try:
             assert abs(float(out) - 11.0) < 1e-6, "Expected output 11.0"
         except Exception as e:
             print(f"✗ Failed with function wrapper: {e}")
-            assert False, f"Function wrapper should work: {e}"
+            raise AssertionError(f"Function wrapper should work: {e}") from e
 
 except ImportError:
 

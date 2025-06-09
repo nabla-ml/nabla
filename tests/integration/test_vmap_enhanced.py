@@ -67,8 +67,8 @@ def _validate_axes_structure(axes: Any, tree: Any, name: str) -> None:
                 if key not in axes_part:
                     raise ValueError(f"{name} missing key '{key}' at {path}")
                 _check_structure(axes_part[key], tree_part[key], f"{path}.{key}")
-        elif isinstance(tree_part, (list, tuple)):
-            if not isinstance(axes_part, (list, tuple)) or len(axes_part) != len(
+        elif isinstance(tree_part, list | tuple):
+            if not isinstance(axes_part, list | tuple) or len(axes_part) != len(
                 tree_part
             ):
                 raise ValueError(
@@ -77,7 +77,7 @@ def _validate_axes_structure(axes: Any, tree: Any, name: str) -> None:
             for i, (a, t) in enumerate(zip(axes_part, tree_part, strict=False)):
                 _check_structure(a, t, f"{path}[{i}]")
         elif isinstance(tree_part, Array):
-            if not isinstance(axes_part, (int, type(None))):
+            if not isinstance(axes_part, int | type(None)):
                 raise ValueError(
                     f"{name} at {path} must be int or None for Array, got {type(axes_part)}"
                 )
@@ -94,7 +94,7 @@ def _apply_vmap_to_tree(
     def _apply_recursive(tree_part: Any, axes_part: Any) -> Any:
         if isinstance(tree_part, dict):
             return {k: _apply_recursive(tree_part[k], axes_part[k]) for k in tree_part}
-        elif isinstance(tree_part, (list, tuple)):
+        elif isinstance(tree_part, list | tuple):
             result = [
                 _apply_recursive(t, a)
                 for t, a in zip(tree_part, axes_part, strict=False)
@@ -124,10 +124,7 @@ def vmap_approach1(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
             batched = unsqueeze(array, [0])
         else:
             # Move the specified axis to position 0
-            if axis != 0:
-                batched = transpose(array, axis, 0)
-            else:
-                batched = array
+            batched = transpose(array, axis, 0) if axis != 0 else array
 
         # Increment batch dimension counter for tracking
         return incr_batch_dim_ctr(batched)
@@ -162,11 +159,11 @@ def vmap_approach1(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
             # The in_axes specification is for the structure of the single argument
             structured_in_axes = (in_axes,)
         else:
-            if not isinstance(in_axes, (list, tuple)) or len(in_axes) != len(
+            if not isinstance(in_axes, list | tuple) or len(in_axes) != len(
                 actual_args
             ):
                 # Broadcast single axis spec to all arguments
-                if isinstance(in_axes, (int, type(None))):
+                if isinstance(in_axes, int | type(None)):
                     structured_in_axes = tuple(in_axes for _ in actual_args)
                 else:
                     raise ValueError(
@@ -204,9 +201,9 @@ def vmap_approach1(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
             outputs = func(*traced_batched_args)
 
         # Handle output structure and out_axes
-        if not isinstance(outputs, (list, tuple)):
+        if not isinstance(outputs, list | tuple):
             # Single output
-            if not isinstance(out_axes, (list, tuple)):
+            if not isinstance(out_axes, list | tuple):
                 structured_out_axes = out_axes
             else:
                 if len(out_axes) != 1:
@@ -217,9 +214,9 @@ def vmap_approach1(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
             is_single_output = True
         else:
             # Multiple outputs
-            if not isinstance(out_axes, (list, tuple)) or len(out_axes) != len(outputs):
+            if not isinstance(out_axes, list | tuple) or len(out_axes) != len(outputs):
                 # Broadcast single axis spec to all outputs
-                if isinstance(out_axes, (int, type(None))):
+                if isinstance(out_axes, int | type(None)):
                     structured_out_axes = tuple(out_axes for _ in outputs)
                 else:
                     raise ValueError(
@@ -271,10 +268,10 @@ Cons:
 
 def _standardize_axes_enhanced(axes: Any, trees: list[Any], name: str) -> list[Any]:
     """Enhanced version of axes standardization with proper pytree support."""
-    if isinstance(axes, (int, type(None))):
+    if isinstance(axes, int | type(None)):
         # Broadcast single axis to all trees
         return [axes for _ in trees]
-    elif isinstance(axes, (list, tuple)):
+    elif isinstance(axes, list | tuple):
         if len(axes) != len(trees):
             raise ValueError(
                 f"{name} length {len(axes)} != number of arguments {len(trees)}"
@@ -308,7 +305,7 @@ def _extract_axis_info_from_pytree(
             for key in sorted(struct.keys()):
                 axes_list.extend(_extract_axes_recursive(spec[key], struct[key]))
             return axes_list
-        elif isinstance(struct, (list, tuple)):
+        elif isinstance(struct, list | tuple):
             axes_list = []
             for i, item in enumerate(struct):
                 axes_list.extend(_extract_axes_recursive(spec[i], item))
@@ -361,13 +358,10 @@ def vmap_approach2(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
             batched_args.append(batched_arg)
 
         # Execute function
-        if is_list_style:
-            outputs = func(batched_args)
-        else:
-            outputs = func(*batched_args)
+        outputs = func(batched_args) if is_list_style else func(*batched_args)
 
         # Handle outputs
-        if not isinstance(outputs, (list, tuple)):
+        if not isinstance(outputs, list | tuple):
             outputs_list = [outputs]
             is_single_output = True
         else:
@@ -429,10 +423,10 @@ Cons:
 
 def _is_simple_axis_spec(axis_spec: Any) -> bool:
     """Check if axis specification is simple (int, None, or flat sequence)."""
-    if isinstance(axis_spec, (int, type(None))):
+    if isinstance(axis_spec, int | type(None)):
         return True
-    if isinstance(axis_spec, (list, tuple)):
-        return all(isinstance(x, (int, type(None))) for x in axis_spec)
+    if isinstance(axis_spec, list | tuple):
+        return all(isinstance(x, int | type(None)) for x in axis_spec)
     return False
 
 
@@ -451,9 +445,9 @@ def vmap_approach3(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
         all_args_simple = all(
             _is_simple_axis_spec(
                 in_axes
-                if isinstance(in_axes, (int, type(None)))
+                if isinstance(in_axes, int | type(None))
                 else in_axes[i]
-                if isinstance(in_axes, (list, tuple)) and i < len(in_axes)
+                if isinstance(in_axes, list | tuple) and i < len(in_axes)
                 else in_axes
             )
             for i in range(len(actual_args))
@@ -484,7 +478,7 @@ def _vmap_simple_path(func, actual_args, is_list_style, in_axes, out_axes):
     )
 
     # Standardize axes the simple way
-    if isinstance(in_axes, (int, type(None))):
+    if isinstance(in_axes, int | type(None)):
         adapted_in_axes = [in_axes] * len(actual_args)
     else:
         adapted_in_axes = list(in_axes)
@@ -506,14 +500,14 @@ def _vmap_simple_path(func, actual_args, is_list_style, in_axes, out_axes):
     outputs = func(batched_args) if is_list_style else func(*batched_args)
 
     # Process outputs (similar simplification)
-    if not isinstance(outputs, (list, tuple)):
+    if not isinstance(outputs, list | tuple):
         outputs_list = [outputs]
         is_single_output = True
     else:
         outputs_list = outputs
         is_single_output = False
 
-    if isinstance(out_axes, (int, type(None))):
+    if isinstance(out_axes, int | type(None)):
         adapted_out_axes = [out_axes] * len(outputs_list)
     else:
         adapted_out_axes = list(out_axes)
@@ -556,7 +550,7 @@ def test_examples():
 
     x = nb.randn((5, 3))
     vmap_simple = vmap_approach1(simple_func, in_axes=0, out_axes=0)
-    result1 = vmap_simple(x)
+    vmap_simple(x)
 
     # Example 2: Dictionary inputs (requires enhanced approaches)
     def dict_func(inputs):
@@ -569,24 +563,24 @@ def test_examples():
     vmap_dict = vmap_approach1(
         dict_func, in_axes={"a": 0, "b": None}, out_axes={"output": 0}
     )
-    result2 = vmap_dict(inputs)
+    vmap_dict(inputs)
 
     # Example 3: Nested tuple inputs
     def nested_func(inputs):
         x, (y, z) = inputs
         return nb.matmul(x, nb.matmul(y, z))
 
-    A, B, C, D = 2, 3, 4, 5
-    K = 6  # batch size
+    a, b, c, d = 2, 3, 4, 5
+    k = 6  # batch size
     inputs = (
-        nb.ones((K, A, B)),  # x: batched on axis 0
+        nb.ones((k, a, b)),  # x: batched on axis 0
         (
-            nb.ones((B, K, C)),  # y: batched on axis 1
-            nb.ones((C, K, D)),  # z: batched on axis 1 (changed from axis 2)
+            nb.ones((b, k, c)),  # y: batched on axis 1
+            nb.ones((c, k, d)),  # z: batched on axis 1 (changed from axis 2)
         ),
     )
     vmap_nested = vmap_approach1(nested_func, in_axes=(0, (1, 1)), out_axes=0)
-    result3 = vmap_nested(inputs)
+    vmap_nested(inputs)
 
     # Example 4: Mixed None and integer axes
     def broadcast_func(x, y):
@@ -595,7 +589,7 @@ def test_examples():
     x_batched = nb.randn((5, 3))
     y_scalar = nb.randn((3,))
     vmap_broadcast = vmap_approach1(broadcast_func, in_axes=(0, None), out_axes=0)
-    result4 = vmap_broadcast(x_batched, y_scalar)
+    vmap_broadcast(x_batched, y_scalar)
 
 
 # ===== RECOMMENDATIONS =====
@@ -604,7 +598,7 @@ Recommendation: Start with Approach 1 (Direct Pytree Matching)
 
 Reasons:
 1. Most closely matches JAX behavior and expectations
-2. Cleaner, more intuitive implementation  
+2. Cleaner, more intuitive implementation
 3. Better performance for nested structures
 4. Easier to extend and maintain
 5. More precise error messages

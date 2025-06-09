@@ -247,7 +247,7 @@ class Array:
         """
 
         # Handle single slice, integer, or ellipsis
-        if isinstance(key, (slice, int, type(...))):
+        if isinstance(key, slice | int | type(...)):
             key = (key,)
         elif not isinstance(key, tuple):
             raise TypeError(
@@ -273,12 +273,12 @@ class Array:
             key = expanded_key
 
         # Special case: if we have indices but the array is scalar, that's an error
-        if len(self.shape) == 0 and len(key) > 0:
-            # Check if all elements are just ellipsis that expanded to nothing
-            if not (len(key) == 1 and key[0] is ...):
-                raise IndexError(
-                    f"Too many indices for array: expected 0, got {len(key)}"
-                )
+        if (
+            len(self.shape) == 0
+            and len(key) > 0
+            and not (len(key) == 1 and key[0] is ...)
+        ):
+            raise IndexError(f"Too many indices for array: expected 0, got {len(key)}")
 
         # Convert integers to slices and build slice list
         # Track which dimensions should be squeezed (removed) due to integer indexing
@@ -325,6 +325,6 @@ class Array:
             arr.sum(axis=0)     # Sum along first axis
             arr.sum(axis=[0,1]) # Sum along first two axes
         """
-        from ..ops.reduce import sum
+        from ..ops.reduce import sum as array_sum
 
-        return sum(self, axes=axes, keep_dims=keep_dims)
+        return array_sum(self, axes=axes, keep_dims=keep_dims)

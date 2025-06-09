@@ -123,7 +123,6 @@ def update_version_in_file(new_version):
 
 def clean_and_build_package():
     """Clean and build package with PyPI-compatible metadata."""
-    import os
     import shutil
     import tempfile
 
@@ -137,9 +136,9 @@ def clean_and_build_package():
     license_temp_dir = None
     license_backup_path = None
     try:
-        if os.path.exists("LICENSE"):
+        if Path("LICENSE").exists():
             license_temp_dir = tempfile.mkdtemp()
-            license_backup_path = os.path.join(license_temp_dir, "LICENSE")
+            license_backup_path = Path(license_temp_dir) / "LICENSE"
             shutil.move("LICENSE", license_backup_path)
 
         # Build the package
@@ -152,9 +151,9 @@ def clean_and_build_package():
         return False
     finally:
         # Always restore the LICENSE file
-        if license_backup_path and os.path.exists(license_backup_path):
+        if license_backup_path and Path(license_backup_path).exists():
             shutil.move(license_backup_path, "LICENSE")
-        if license_temp_dir and os.path.exists(license_temp_dir):
+        if license_temp_dir and Path(license_temp_dir).exists():
             shutil.rmtree(license_temp_dir)
 
 

@@ -71,7 +71,7 @@ def test_multiple_inputs_multiple_outputs():
 
         if JAX_AVAILABLE:
             # Compare results
-            for i, (jax_jac, nabla_jac) in enumerate(
+            for _i, (jax_jac, nabla_jac) in enumerate(
                 zip(jac_jax_both, jac_nabla_both, strict=False)
             ):
                 np.testing.assert_allclose(nabla_jac.to_numpy(), jax_jac, rtol=1e-6)
@@ -91,29 +91,29 @@ def test_matrix_function():
     """Test function that operates on matrices using available Nabla operations."""
     print("\n=== Matrix Function ===")
 
-    def matrix_func_jax(X):
+    def matrix_func_jax(x):
         # Matrix operations: sum of squares (Frobenius norm squared)
-        return jnp.sum(X * X)
+        return jnp.sum(x * x)
 
-    def matrix_func_nabla(X):
+    def matrix_func_nabla(x):
         # Matrix operations: sum of squares (Frobenius norm squared)
-        return nb.sum(X * X)
+        return nb.sum(x * x)
 
     # Test input: 2x3 matrix
-    X_np = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    x_np = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
 
     if JAX_AVAILABLE:
         # JAX computation
-        X_jax = jnp.array(X_np)
-        jac_jax = jax.jacfwd(matrix_func_jax)(X_jax)
+        x_jax = jnp.array(x_np)
+        jac_jax = jax.jacfwd(matrix_func_jax)(x_jax)
         print(f"JAX jacfwd result: shape {jac_jax.shape}\n{jac_jax}")
 
     # Nabla computation
-    X_nabla = nb.array(X_np)
+    x_nabla = nb.array(x_np)
 
     try:
         jac_nabla_fn = nb.jacfwd(matrix_func_nabla)
-        jac_nabla = jac_nabla_fn(X_nabla)
+        jac_nabla = jac_nabla_fn(x_nabla)
         print(f"Nabla jacfwd result: shape {jac_nabla.shape}\n{jac_nabla.to_numpy()}")
 
         if JAX_AVAILABLE:
@@ -230,7 +230,7 @@ def test_complex_composition():
             print(f"  d/d_arg{i}: shape {jac.shape}\n{jac.to_numpy()}")
 
         if JAX_AVAILABLE:
-            for i, (jax_jac, nabla_jac) in enumerate(
+            for _i, (jax_jac, nabla_jac) in enumerate(
                 zip(jac_jax_both, jac_nabla_both, strict=False)
             ):
                 np.testing.assert_allclose(nabla_jac.to_numpy(), jax_jac, rtol=1e-5)

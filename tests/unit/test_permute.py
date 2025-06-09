@@ -221,21 +221,21 @@ def test_permute_error_cases():
     # Test invalid permutation - wrong length
     try:
         permute(x, (0, 1))  # Too few axes
-        assert False, "Should have raised ValueError"
+        raise AssertionError("Should have raised ValueError")
     except ValueError as e:
         print(f"✓ Caught expected error for wrong length: {e}")
 
     # Test invalid permutation - duplicate axes
     try:
         permute(x, (0, 1, 1))  # Duplicate axis
-        assert False, "Should have raised ValueError"
+        raise AssertionError("Should have raised ValueError")
     except ValueError as e:
         print(f"✓ Caught expected error for duplicate axes: {e}")
 
     # Test invalid permutation - out of range
     try:
         permute(x, (0, 1, 3))  # Axis 3 doesn't exist
-        assert False, "Should have raised ValueError"
+        raise AssertionError("Should have raised ValueError")
     except ValueError as e:
         print(f"✓ Caught expected error for out of range: {e}")
 
@@ -251,14 +251,14 @@ def test_move_axis_error_cases():
     # Test out of range axis
     try:
         move_axis_to_front(x, 5)  # Axis 5 doesn't exist
-        assert False, "Should have raised ValueError"
+        raise AssertionError("Should have raised ValueError")
     except ValueError as e:
         print(f"✓ Caught expected error for out of range axis: {e}")
 
     # Test out of range negative axis
     try:
         move_axis_to_front(x, -5)  # Too negative
-        assert False, "Should have raised ValueError"
+        raise AssertionError("Should have raised ValueError")
     except ValueError as e:
         print(f"✓ Caught expected error for negative out of range: {e}")
 

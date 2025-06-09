@@ -36,7 +36,7 @@ def test_examples():
     try:
         x = nb.randn((5, 3))
         vmap_simple = nb.vmap(simple_func, in_axes=0, out_axes=0)
-        result1 = vmap_simple(x)
+        vmap_simple(x)  # Execute but don't store result
         print("✓ Simple case passed")
     except Exception as e:
         print(f"✗ Simple case failed: {e}")
@@ -54,7 +54,7 @@ def test_examples():
         vmap_dict = nb.vmap(
             dict_func, in_axes=({"a": 0, "b": None},), out_axes=({"output": 0},)
         )
-        result2 = vmap_dict(inputs)
+        vmap_dict(inputs)  # Execute but don't store result
         print("✓ Dictionary case passed")
     except Exception as e:
         print(f"✗ Dictionary case failed: {e}")
@@ -67,16 +67,16 @@ def test_examples():
 
     print("Example 3: Nested tuple inputs")
     try:
-        A, B, C, D = 2, 3, 4, 5
-        K = 6  # batch size
-        x = nb.ones((K, A, B))  # x: batched on axis 0
-        y = nb.ones((B, K, C))  # y: batched on axis 1
-        z = nb.ones((C, D, K))  # z: batched on axis 2
+        a, b, c, d = 2, 3, 4, 5
+        k = 6  # batch size
+        x = nb.ones((k, a, b))  # x: batched on axis 0
+        y = nb.ones((b, k, c))  # y: batched on axis 1
+        z = nb.ones((c, d, k))  # z: batched on axis 2
 
         print(f"Original shapes: x={x.shape}, y={y.shape}, z={z.shape}")
 
         vmap_nested = nb.vmap(nested_func, in_axes=(0, (1, 2)), out_axes=0)
-        result3 = vmap_nested(x, (y, z))
+        vmap_nested(x, (y, z))  # Execute but don't store result
         print("✓ Nested tuple case passed")
     except Exception as e:
         print(f"✗ Nested tuple case failed: {e}")
@@ -90,7 +90,7 @@ def test_examples():
         x_batched = nb.randn((5, 3))
         y_scalar = nb.randn((3,))
         vmap_broadcast = nb.vmap(broadcast_func, in_axes=(0, None), out_axes=0)
-        result4 = vmap_broadcast(x_batched, y_scalar)
+        vmap_broadcast(x_batched, y_scalar)
         print("✓ Broadcasting case passed")
     except Exception as e:
         print(f"✗ Broadcasting case failed: {e}")
@@ -356,13 +356,11 @@ def test_advanced_nested_vmap_patterns():
 
         # Simple test first to verify vmap behavior
         def simple_test_func(args):
-            x, w = args[0], args[1]
+            x, _w = args[0], args[1]
             # Sum over the last axis (features) - for 1D input, this is axis 0
             return nb.sum(x, axes=[0])
 
-        simple_result = nb.vmap(simple_test_func, in_axes=[0, None])(
-            [batch_data, shared_weights]
-        )
+        nb.vmap(simple_test_func, in_axes=[0, None])([batch_data, shared_weights])
 
         processed_batch = nb.vmap(
             process_with_list_args, in_axes=[0, None], out_axes=0

@@ -37,7 +37,7 @@ _conv2d_transpose_op_cache = {}
 def _normalize_tuple(value, n, name):
     if isinstance(value, int):
         return (value,) * n
-    elif isinstance(value, (tuple, list)):
+    elif isinstance(value, tuple | list):
         if len(value) == n:
             return tuple(value)
         else:
@@ -53,7 +53,7 @@ def _normalize_tuple(value, n, name):
 def _normalize_padding_arg(padding_arg, name="padding"):
     if isinstance(padding_arg, int):  # single int for all sides
         return ((padding_arg, padding_arg), (padding_arg, padding_arg))
-    if isinstance(padding_arg, (tuple, list)):
+    if isinstance(padding_arg, tuple | list):
         if len(padding_arg) == 2:
             if all(
                 isinstance(x, int) for x in padding_arg
@@ -62,16 +62,17 @@ def _normalize_padding_arg(padding_arg, name="padding"):
                 return ((ph, ph), (pw, pw))
             # ((H_top, H_bottom), (W_left, W_right))
             elif all(
-                isinstance(x, (tuple, list))
+                isinstance(x, tuple | list)
                 and len(x) == 2
                 and all(isinstance(y, int) for y in x)
                 for x in padding_arg
             ):
                 return tuple(map(tuple, padding_arg))
-        elif len(padding_arg) == 4:  # (H_top, H_bottom, W_left, W_right)
-            if all(isinstance(x, int) for x in padding_arg):
-                pt, pb, pl, pr = padding_arg
-                return ((pt, pb), (pl, pr))
+        elif len(padding_arg) == 4 and all(
+            isinstance(x, int) for x in padding_arg
+        ):  # (H_top, H_bottom, W_left, W_right)
+            pt, pb, pl, pr = padding_arg
+            return ((pt, pb), (pl, pr))
     raise ValueError(
         f"{name} format is not recognized. Use int, (ph,pw), (pt,pb,pl,pr), or ((pt,pb),(pl,pr)). Got {padding_arg}"
     )
@@ -295,17 +296,17 @@ def im2col(
     dilation=(1, 1),
     padding=((0, 0), (0, 0)),
 ):
-    N, C, H, W = input_data.shape
+    n, c, h, w = input_data.shape
 
     stride_h, stride_w = stride
     dilation_h, dilation_w = dilation
     (pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right) = padding
 
     out_h = (
-        H + pad_h_top + pad_h_bottom - dilation_h * (filter_h - 1) - 1
+        h + pad_h_top + pad_h_bottom - dilation_h * (filter_h - 1) - 1
     ) // stride_h + 1
     out_w = (
-        W + pad_w_left + pad_w_right - dilation_w * (filter_w - 1) - 1
+        w + pad_w_left + pad_w_right - dilation_w * (filter_w - 1) - 1
     ) // stride_w + 1
 
     img = np.pad(
@@ -314,12 +315,13 @@ def im2col(
         mode="constant",
     )
 
-    col = np.ndarray((N, C, filter_h, filter_w, out_h, out_w), dtype=input_data.dtype)
+    col = np.ndarray((n, c, filter_h, filter_w, out_h, out_w), dtype=input_data.dtype)
 
     for j in range(filter_h):
-        j_lim = (
-            j * dilation_h + stride_h * out_h
-        )  # Corrected: remove stride_h * out_h; use img.shape
+        # j_lim = (
+        #     j * dilation_h + stride_h * out_h
+        # )  # Corrected: remove stride_h * out_h; use img.shape
+        # TODO: Use j_lim if needed for bounds checking
         j_end = j * dilation_h + (out_h - 1) * stride_h + 1
         for i in range(filter_w):
             i_end = i * dilation_w + (out_w - 1) * stride_w + 1
@@ -341,7 +343,7 @@ def col2im(
     dilation=(1, 1),
     padding=((0, 0), (0, 0)),
 ):
-    N, C, H, W = input_shape
+    n, c, h, w = input_shape
 
     stride_h, stride_w = stride
     dilation_h, dilation_w = dilation
@@ -352,8 +354,8 @@ def col2im(
     # W_col = (W + pad_w_left + pad_w_right - dilation_w * (filter_w - 1) - 1) // stride_w + 1
     # This is derived from col.shape[-2], col.shape[-1]
 
-    H_padded = H + pad_h_top + pad_h_bottom
-    W_padded = W + pad_w_left + pad_w_right
+    h_padded = h + pad_h_top + pad_h_bottom
+    w_padded = w + pad_w_left + pad_w_right
 
     # img needs to be large enough to hold all contributions before cropping.
     # Max extent: (out_h-1)*stride + (filter_h-1)*dilation + 1
@@ -361,7 +363,7 @@ def col2im(
     # Max extent for W: (col.shape[-1]-1)*stride_w + (filter_w-1)*dilation_w + 1
 
     img = np.zeros(
-        (N, C, H_padded, W_padded), dtype=col.dtype
+        (n, c, h_padded, w_padded), dtype=col.dtype
     )  # Simplified, ensure size is sufficient
     # np.add.at is better for accumulation
 
@@ -403,7 +405,7 @@ def col2im(
                 ]  # This is incorrect if slices don't align
                 # and problematic for overlapping regions. Use np.add.at
 
-    return img[:, :, pad_h_top : H + pad_h_top, pad_w_left : W + pad_w_left]
+    return img[:, :, pad_h_top : h + pad_h_top, pad_w_left : w + pad_w_left]
 
 
 def numpy_conv2d_im2col(
@@ -416,30 +418,30 @@ def numpy_conv2d_im2col(
 ):
     if groups != 1:
         # Basic grouped convolution: split input and filters, convolve, concatenate
-        N, C_in_tot, H, W = input_data.shape
-        C_out_tot, C_in_f_tot, filter_h, filter_w = filters.shape  # OIHW
+        n, c_in_tot, h, w = input_data.shape
+        c_out_tot, c_in_f_tot, filter_h, filter_w = filters.shape  # OIHW
 
-        if C_in_tot % groups != 0 or C_out_tot % groups != 0:
+        if c_in_tot % groups != 0 or c_out_tot % groups != 0:
             raise ValueError("Input/Output channels must be divisible by groups.")
 
-        C_in_group = C_in_tot // groups
-        C_out_group = C_out_tot // groups
+        c_in_group = c_in_tot // groups
+        c_out_group = c_out_tot // groups
 
         if (
-            C_in_f_tot != C_in_group
+            c_in_f_tot != c_in_group
         ):  # Filter C_in_f_tot is C_in per group for OIHW (O/G, I/G, H, W) if G splits O too
             # Or (O, I/G, H, W) if O is total, I is per group. JAX uses latter.
             # JAX Dimension Numbers: ('NCHW', 'OIHW', 'NCHW'), feature_group_count=groups
             # Filter shape (OIHW): (C_out, C_in/groups, KH, KW)
-            assert C_in_f_tot == C_in_group, (
-                f"Filter input channels {C_in_f_tot} per group != {C_in_group}"
+            assert c_in_f_tot == c_in_group, (
+                f"Filter input channels {c_in_f_tot} per group != {c_in_group}"
             )
 
         output_parts = []
         for g in range(groups):
-            input_group = input_data[:, g * C_in_group : (g + 1) * C_in_group, :, :]
+            input_group = input_data[:, g * c_in_group : (g + 1) * c_in_group, :, :]
             filter_group = filters[
-                g * C_out_group : (g + 1) * C_out_group, :, :, :
+                g * c_out_group : (g + 1) * c_out_group, :, :, :
             ]  # Slice output channels
 
             # Recursive call for single group
@@ -451,24 +453,24 @@ def numpy_conv2d_im2col(
 
         return np.concatenate(output_parts, axis=1)
 
-    N, C_in, H, W = input_data.shape
-    C_out, C_in_f, filter_h, filter_w = filters.shape  # OIHW
+    n, c_in, h, w = input_data.shape
+    c_out, c_in_f, filter_h, filter_w = filters.shape  # OIHW
 
-    assert C_in == C_in_f, f"Input channels {C_in} != filter input channels {C_in_f}"
+    assert c_in == c_in_f, f"Input channels {c_in} != filter input channels {c_in_f}"
 
     col = im2col(input_data, filter_h, filter_w, stride, dilation, padding)
     # col shape: (N, C_in, filter_h, filter_w, out_h, out_w)
     # Transpose to (N, out_h, out_w, C_in, filter_h, filter_w) then reshape
     col_reshaped = col.transpose(0, 4, 5, 1, 2, 3).reshape(
-        N * col.shape[-2] * col.shape[-1], -1
+        n * col.shape[-2] * col.shape[-1], -1
     )
 
-    W_col = filters.reshape(C_out, -1)  # (C_out, C_in * filter_h * filter_w)
+    w_col = filters.reshape(c_out, -1)  # (C_out, C_in * filter_h * filter_w)
 
-    out = np.dot(col_reshaped, W_col.T)  # (N*out_h*out_w, C_out)
+    out = np.dot(col_reshaped, w_col.T)  # (N*out_h*out_w, C_out)
     # Reshape to (N, out_h, out_w, C_out) then transpose to (N, C_out, out_h, out_w)
     out_h, out_w = col.shape[-2], col.shape[-1]
-    out = out.reshape(N, out_h, out_w, C_out).transpose(0, 3, 1, 2)
+    out = out.reshape(n, out_h, out_w, c_out).transpose(0, 3, 1, 2)
 
     return out
 
@@ -486,21 +488,21 @@ def numpy_transposed_conv2d_im2col(
     # input_data is NCHW (N, C_in_T, H_in, W_in)
     # output should be (N, C_out_T, H_out, W_out)
     if groups != 1:
-        N, C_in_T_tot, H_in, W_in = input_data.shape
-        C_out_T_tot, C_in_T_f_tot, filter_h, filter_w = (
+        n, c_in_t_tot, h_in, w_in = input_data.shape
+        c_out_t_tot, c_in_t_f_tot, filter_h, filter_w = (
             filters.shape
         )  # OIHW (Cout_T, Cin_T/groups, KH, KW)
 
-        if C_in_T_tot % groups != 0 or C_out_T_tot % groups != 0:
+        if c_in_t_tot % groups != 0 or c_out_t_tot % groups != 0:
             raise ValueError(
                 "Input/Output channels must be divisible by groups for transpose."
             )
 
-        C_in_T_group = C_in_T_tot // groups  # Cin_T per group for input
-        C_out_T_group = C_out_T_tot // groups  # Cout_T per group for output
+        c_in_t_group = c_in_t_tot // groups  # Cin_T per group for input
+        c_out_t_group = c_out_t_tot // groups  # Cout_T per group for output
 
         # Filter is (Cout_T_total, Cin_T_per_group, KH, KW)
-        assert C_in_T_f_tot == C_in_T_group, (
+        assert c_in_t_f_tot == c_in_t_group, (
             "Filter input channels mismatch for grouped transpose conv."
         )
 
@@ -508,11 +510,11 @@ def numpy_transposed_conv2d_im2col(
         for g in range(groups):
             # Each group takes a slice of input channels and slice of filter's output channels.
             # Input to this group: (N, Cin_T_group, H, W)
-            input_group = input_data[:, g * C_in_T_group : (g + 1) * C_in_T_group, :, :]
+            input_group = input_data[:, g * c_in_t_group : (g + 1) * c_in_t_group, :, :]
             # Filter for this group: (Cout_T_group, Cin_T_group, KH, KW)
             # Original filter is (Cout_T_total, Cin_T_group, KH,KW)
             # We need to select Cout_T_group from Cout_T_total for this specific group's output contribution
-            filter_group = filters[g * C_out_T_group : (g + 1) * C_out_T_group, :, :, :]
+            filter_group = filters[g * c_out_t_group : (g + 1) * c_out_t_group, :, :, :]
 
             group_out = numpy_transposed_conv2d_im2col(
                 input_group,
@@ -526,13 +528,13 @@ def numpy_transposed_conv2d_im2col(
             output_parts.append(group_out)
         return np.concatenate(output_parts, axis=1)
 
-    N, C_in, H, W = input_data.shape  # C_in is input channels to conv_transpose
-    C_out, C_in_f, filter_h, filter_w = (
+    n, c_in, h, w = input_data.shape  # C_in is input channels to conv_transpose
+    c_out, c_in_f, filter_h, filter_w = (
         filters.shape
     )  # C_out is output channels of conv_transpose
     # C_in_f is input channels for filter (should match C_in)
 
-    assert C_in == C_in_f, f"Input channels {C_in} != filter input channels {C_in_f}"
+    assert c_in == c_in_f, f"Input channels {c_in} != filter input channels {c_in_f}"
 
     (orig_pad_h_top, orig_pad_h_bottom), (orig_pad_w_left, orig_pad_w_right) = (
         padding  # P_fwd_equiv
@@ -544,25 +546,25 @@ def numpy_transposed_conv2d_im2col(
     # Calculate output shape based on Nabla's formula (P_fwd_equiv, output_padding)
     eff_k_h = (filter_h - 1) * dilation_h + 1
     eff_k_w = (filter_w - 1) * dilation_w + 1
-    target_H_out = (
-        (H - 1) * stride_h - (orig_pad_h_top + orig_pad_h_bottom) + eff_k_h + out_pad_h
-    )
-    target_W_out = (
-        (W - 1) * stride_w - (orig_pad_w_left + orig_pad_w_right) + eff_k_w + out_pad_w
-    )
+    # target_H_out = (
+    #     (H - 1) * stride_h - (orig_pad_h_top + orig_pad_h_bottom) + eff_k_h + out_pad_h
+    # )  # TODO: Use if needed for validation
+    # target_W_out = (
+    #     (W - 1) * stride_w - (orig_pad_w_left + orig_pad_w_right) + eff_k_w + out_pad_w
+    # )  # TODO: Use if needed for validation
 
     # Upsample input if stride > 1
     if stride_h > 1 or stride_w > 1:
         # Calculate shape of upsampled input
-        upsampled_h = (H - 1) * stride_h + 1
-        upsampled_w = (W - 1) * stride_w + 1
+        upsampled_h = (h - 1) * stride_h + 1
+        upsampled_w = (w - 1) * stride_w + 1
         upsampled = np.zeros(
-            (N, C_in, upsampled_h, upsampled_w), dtype=input_data.dtype
+            (n, c_in, upsampled_h, upsampled_w), dtype=input_data.dtype
         )
         upsampled[:, :, ::stride_h, ::stride_w] = input_data
     else:
         upsampled = input_data
-        upsampled_h, upsampled_w = H, W
+        upsampled_h, upsampled_w = h, w
 
     # Effective padding for the underlying regular convolution that implements transpose
     # P_internal_lo = K_eff - 1 - P_fwd_equiv_lo
@@ -1167,20 +1169,20 @@ def _conv2d_filter_gradient(
     input_nchw = np.transpose(input_np, (0, 3, 1, 2))
     grad_nchw = np.transpose(grad_np, (0, 3, 1, 2))
 
-    N, C_in_total, H_in, W_in = input_nchw.shape
-    _, C_out_total, H_out, W_out = grad_nchw.shape
-    K_H, K_W, C_in_group_filter, C_out_total_filter = filter_shape
+    n, c_in_total, h_in, w_in = input_nchw.shape
+    _, c_out_total, h_out, w_out = grad_nchw.shape
+    k_h, k_w, c_in_group_filter, c_out_total_filter = filter_shape
 
-    assert C_out_total_filter == C_out_total, (
-        f"Filter C_out {C_out_total_filter} != grad C_out {C_out_total}"
+    assert c_out_total_filter == c_out_total, (
+        f"Filter C_out {c_out_total_filter} != grad C_out {c_out_total}"
     )
-    assert C_in_total == C_in_group_filter * groups, (
-        f"Input C_in {C_in_total} != filter C_in/G {C_in_group_filter} * groups {groups}"
+    assert c_in_total == c_in_group_filter * groups, (
+        f"Input C_in {c_in_total} != filter C_in/G {c_in_group_filter} * groups {groups}"
     )
 
-    C_in_group = C_in_total // groups
-    C_out_group = (
-        C_out_total // groups
+    c_in_group = c_in_total // groups
+    c_out_group = (
+        c_out_total // groups
     )  # Used if C_out_total in filter_shape was C_out_group
 
     filter_grad_np = np.zeros(filter_shape, dtype=input_np.dtype)
@@ -1198,7 +1200,7 @@ def _conv2d_filter_gradient(
     for g in range(groups):
         # Input slice for this group
         input_group_slice = padded_input_nchw[
-            :, g * C_in_group : (g + 1) * C_in_group, :, :
+            :, g * c_in_group : (g + 1) * c_in_group, :, :
         ]
         # Filter output channels for this group (conceptual, filter has C_out_total)
         # grad_output is indexed over C_out_total.
@@ -1206,7 +1208,7 @@ def _conv2d_filter_gradient(
         # Cin_group_filter is actual Cin/G for the filter.
 
         for co_abs_idx in range(
-            C_out_total_filter
+            c_out_total_filter
         ):  # Iterate over all output channels of the filter
             # Determine which group this output channel conceptually belongs to,
             # to ensure it only correlates with inputs from that same group.
@@ -1217,12 +1219,12 @@ def _conv2d_filter_gradient(
             # This means this output channel co_abs_idx is produced using inputs from group g.
 
             current_filter_output_group = (
-                co_abs_idx // C_out_group
+                co_abs_idx // c_out_group
             )  # Which output group this co_abs_idx belongs to.
             if (
                 current_filter_output_group != g
                 and groups > 1
-                and C_out_total % groups == 0
+                and c_out_total % groups == 0
             ):  # And Cout also grouped
                 # This check is for depthwise-separable like structures where Cout is also grouped.
                 # For standard JAX feature_group_count, filter is (KH,KW,Cin/G, Cout_total),
@@ -1231,14 +1233,14 @@ def _conv2d_filter_gradient(
                 pass
 
             for ci_g_idx in range(
-                C_in_group_filter
+                c_in_group_filter
             ):  # Index within the filter's input channels (which is Cin_actual/G)
-                for kh in range(K_H):
-                    for kw in range(K_W):
+                for kh in range(k_h):
+                    for kw in range(k_w):
                         sum_val = 0.0
-                        for n_idx in range(N):
-                            for h_o in range(H_out):
-                                for w_o in range(W_out):
+                        for n_idx in range(n):
+                            for h_o in range(h_out):
+                                for w_o in range(w_out):
                                     h_rf = h_o * stride_h + kh * dil_h
                                     w_rf = w_o * stride_w + kw * dil_w
                                     # input_group_slice is already the correct group's input
@@ -1276,13 +1278,13 @@ def _conv2d_transpose_filter_gradient(
     input_nchw = np.transpose(input_np, (0, 3, 1, 2))  # (N, Cin_T_total, Hin_T, Win_T)
     grad_nchw = np.transpose(grad_np, (0, 3, 1, 2))  # (N, Cout_T_total, Hout_T, Wout_T)
 
-    N, C_in_T_total, H_in_T, W_in_T = input_nchw.shape
-    _, C_out_T_total, H_out_T, W_out_T = grad_nchw.shape
+    n, c_in_t_total, h_in_t, w_in_t = input_nchw.shape
+    _, c_out_t_total, h_out_t, w_out_t = grad_nchw.shape
 
-    K_H, K_W, C_out_T_filter, C_in_T_group_filter = filter_shape  # HWOI
+    k_h, k_w, c_out_t_filter, c_in_t_group_filter = filter_shape  # HWOI
 
-    assert C_out_T_filter == C_out_T_total, "Filter Cout_T mismatch"
-    assert C_in_T_total == C_in_T_group_filter * groups, (
+    assert c_out_t_filter == c_out_t_total, "Filter Cout_T mismatch"
+    assert c_in_t_total == c_in_t_group_filter * groups, (
         "Input Cin_T_total vs filter's Cin_T/G mismatch"
     )
 
@@ -1298,9 +1300,9 @@ def _conv2d_transpose_filter_gradient(
     # Output dims (filter grad) are K_H, K_W.
 
     # Strides for this conceptual conv are dilations of original Conv2DTransposeOp
-    s_new_h, s_new_w = dilation[0], dilation[1]
+    # s_new_h, s_new_w = dilation[0], dilation[1]  # TODO: Currently unused
     # Dilations for this conceptual conv are strides of original Conv2DTransposeOp
-    d_new_h, d_new_w = stride[0], stride[1]
+    # d_new_h, d_new_w = stride[0], stride[1]  # TODO: Currently unused, may be needed for padding calculation
 
     # Padding (P_fwd_equiv of original conv_transpose) needs to be transformed for this conceptual conv.
     # This is the padding applied to input_nchw (the "image") to get K_H x K_W output.
@@ -1339,28 +1341,28 @@ def _conv2d_transpose_filter_gradient(
     # Note: output_padding affects the shape of grad_output (dL/dY).
     # The loops should iterate over the actual spatial dimensions of grad_output.
 
-    C_in_T_group = C_in_T_total // groups
+    c_in_t_group = c_in_t_total // groups
 
     # This loop structure should be correct if indices are managed carefully.
     for g in range(groups):
         input_group_nchw_slice = input_nchw[
-            :, g * C_in_T_group : (g + 1) * C_in_T_group, :, :
+            :, g * c_in_t_group : (g + 1) * c_in_t_group, :, :
         ]
         # Filter grad (KH, KW, Cout_T_total, Cin_T_group)
         # Cin_T_group_filter is Cin_T_group.
 
-        for co_t_idx in range(C_out_T_filter):  # Index for Cout_T (filter_shape[2])
+        for co_t_idx in range(c_out_t_filter):  # Index for Cout_T (filter_shape[2])
             for ci_t_g_idx in range(
-                C_in_T_group_filter
+                c_in_t_group_filter
             ):  # Index for Cin_T/G (filter_shape[3])
-                for kh_idx in range(K_H):
-                    for kw_idx in range(K_W):
+                for kh_idx in range(k_h):
+                    for kw_idx in range(k_w):
                         sum_val = 0.0
-                        for n_idx in range(N):
+                        for n_idx in range(n):
                             for h_grad_idx in range(
-                                H_out_T
+                                h_out_t
                             ):  # Iterate over grad_output spatial
-                                for w_grad_idx in range(W_out_T):
+                                for w_grad_idx in range(w_out_t):
                                     h_input_eff = int(
                                         h_grad_idx * stride[0]
                                         - p_fwd_top
@@ -1373,8 +1375,8 @@ def _conv2d_transpose_filter_gradient(
                                     )
 
                                     if (
-                                        0 <= h_input_eff < H_in_T
-                                        and 0 <= w_input_eff < W_in_T
+                                        0 <= h_input_eff < h_in_t
+                                        and 0 <= w_input_eff < w_in_t
                                     ):
                                         sum_val += (
                                             input_group_nchw_slice[

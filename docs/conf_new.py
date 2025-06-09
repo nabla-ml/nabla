@@ -3,7 +3,7 @@
 
 # -- Project information -----------------------------------------------------
 project = "Nabla"
-copyright = "2025, Nabla Team"
+project_copyright = "2025, Nabla Team"
 author = "Nabla Team"
 release = "0.1.0"
 

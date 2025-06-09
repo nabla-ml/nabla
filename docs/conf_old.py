@@ -1,7 +1,7 @@
 # Configuration file for the Sphinx documentation builder.
 
-import os
 import sys
+from pathlib import Path
 from unittest.mock import MagicMock
 
 
@@ -28,12 +28,13 @@ for mod_name in MOCK_MODULES:
     sys.modules[mod_name] = Mock()
 
 # Add the project to Python path only if we're building locally
-if os.path.exists("../nabla"):
-    sys.path.insert(0, os.path.abspath("../"))
+
+if Path("../nabla").exists():
+    sys.path.insert(0, str(Path("../").resolve()))
 
 # -- Project information -----------------------------------------------------
 project = "Nabla"
-copyright = "2025, Nabla Team"
+project_copyright = "2025, Nabla Team"
 author = "Nabla Team"
 release = "0.1.0"
 

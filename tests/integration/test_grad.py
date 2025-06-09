@@ -312,7 +312,7 @@ def test_grad_scalar_validation():
         grad_fn = nb.grad(vector_func)
         grad_fn(x_nb)  # This should raise an error
         print("ERROR: Should have raised ValueError for non-scalar output!")
-        assert False, "Should have raised ValueError"
+        raise AssertionError("Should have raised ValueError")
     except ValueError as e:
         print(f"✅ Correctly raised ValueError: {e}")
         assert "Gradient only defined for scalar-output functions" in str(e)
@@ -329,7 +329,7 @@ def test_grad_scalar_validation():
         grad_fn_jax = jax.grad(vector_func_jax)
         grad_fn_jax(x_jax)  # This should also raise an error
         print("ERROR: JAX should have raised ValueError for non-scalar output!")
-        assert False, "JAX should have raised ValueError"
+        raise AssertionError("JAX should have raised ValueError")
     except Exception as e:
         print(f"✅ JAX also correctly raised error: {type(e).__name__}: {e}")
 

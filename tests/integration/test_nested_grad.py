@@ -9,12 +9,12 @@ def test_nested_grad_jit_vmap_jacrev():
     """Test nested transformations: jit(vmap(jacrev(func))) against JAX."""
 
     # Example function using Nabla's array operations
-    def foo_nabla(input):
-        return nb.sum(input * input, axes=0)
+    def foo_nabla(input_array):
+        return nb.sum(input_array * input_array, axes=0)
 
     # Example function using JAX's array operations
-    def foo_jax(input):
-        return jnp.sum(input * input, axis=0)
+    def foo_jax(input_array):
+        return jnp.sum(input_array * input_array, axis=0)
 
     # Fixed seed for reproducible testing
     np.random.seed(42)

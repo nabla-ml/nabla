@@ -32,10 +32,10 @@ def debug_multiplication():
     print("=== Debugging multiplication ===")
 
     print("\n1. Direct scalar multiplication:")
-    direct1 = test_mul_scalar(x[0])  # Single element
+    test_mul_scalar(x[0])  # Single element
 
     print("\n2. Direct array multiplication:")
-    direct2 = test_mul_array(x[0])  # Single element
+    test_mul_array(x[0])  # Single element
 
     print("\n3. Vmap scalar multiplication:")
     vmapped1 = vmap(test_mul_scalar, in_axes=0)

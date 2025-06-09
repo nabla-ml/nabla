@@ -220,7 +220,7 @@ def _std_basis(args: list[Array]) -> tuple[list[int], list[Array]]:
     sizes = list[int]()
     tangents: list[Array] = []
 
-    for i, arg in enumerate(args):
+    for _i, arg in enumerate(args):
         num_elements = 1
 
         if arg.shape == ():
@@ -1065,11 +1065,7 @@ def _check_in_axes_size(tree: Any, axes: Any) -> int:
                         f"Scalar arrays cannot be batched along a specific axis."
                     )
 
-                if axes_part < 0:
-                    # Handle negative indexing
-                    axis = len(tree_part.shape) + axes_part
-                else:
-                    axis = axes_part
+                axis = len(tree_part.shape) + axes_part if axes_part < 0 else axes_part
 
                 if axis >= len(tree_part.shape):
                     raise ValueError(
@@ -1085,8 +1081,8 @@ def _check_in_axes_size(tree: Any, axes: Any) -> int:
                 # Broadcast axes_part to all dict values
                 for k in tree_part:
                     _collect_sizes(tree_part[k], axes_part)
-        elif isinstance(tree_part, (list, tuple)):
-            if isinstance(axes_part, (list, tuple)):
+        elif isinstance(tree_part, list | tuple):
+            if isinstance(axes_part, list | tuple):
                 for t, a in zip(tree_part, axes_part, strict=False):
                     _collect_sizes(t, a)
             else:
@@ -1192,8 +1188,8 @@ def _apply_batching_to_tree(
             else:
                 # Broadcast axes_part to all dict values
                 return {k: _recurse(tree_part[k], axes_part) for k in tree_part}
-        elif isinstance(tree_part, (list, tuple)):
-            if isinstance(axes_part, (list, tuple)):
+        elif isinstance(tree_part, list | tuple):
+            if isinstance(axes_part, list | tuple):
                 result = [
                     _recurse(t, a) for t, a in zip(tree_part, axes_part, strict=False)
                 ]
@@ -1211,9 +1207,9 @@ def _apply_batching_to_tree(
 
 def _broadcast_axis_spec(axis_spec: Any, num_items: int) -> tuple[Any, ...]:
     """Broadcast axis specification to match number of items."""
-    if isinstance(axis_spec, (int, type(None))):
+    if isinstance(axis_spec, int | type(None)):
         return tuple(axis_spec for _ in range(num_items))
-    elif isinstance(axis_spec, (list, tuple)):
+    elif isinstance(axis_spec, list | tuple):
         if len(axis_spec) != num_items:
             raise ValueError(
                 f"Axis specification length {len(axis_spec)} != number of items {num_items}"
@@ -1261,7 +1257,7 @@ def vmap(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
         outputs = func(batched_args) if is_list_style else func(*batched_args)
 
         # Handle output structure
-        if not isinstance(outputs, (list, tuple)):
+        if not isinstance(outputs, list | tuple):
             outputs_list = [outputs]
             is_single_output = True
         else:
@@ -1831,10 +1827,7 @@ def jacrev(
     def jacrev_fn(*args: Any) -> Any:
         # print("\nSTART JACREV FN")
         # Normalize argnums to a tuple of integers
-        if isinstance(argnums, int):
-            selected_argnums = (argnums,)
-        else:
-            selected_argnums = tuple(argnums)
+        selected_argnums = (argnums,) if isinstance(argnums, int) else tuple(argnums)
 
         # Validate argnums
         for argnum in selected_argnums:
@@ -1886,7 +1879,7 @@ def jacrev(
         elif any(arr.shape == () for arr in std_basis_flat):
             # Mixed scalar/tensor outputs - create in_axes specification for each element
             # Note: std_basis_vectors is a list/tuple, so in_axes should match that structure
-            if isinstance(std_basis_vectors, (list, tuple)):
+            if isinstance(std_basis_vectors, list | tuple):
                 in_axes_spec = [
                     None if arr.shape == () else 0 for arr in std_basis_flat
                 ]
@@ -2011,10 +2004,7 @@ def jacfwd(
         # print(f"Input args shapes: {[arg.shape if hasattr(arg, 'shape') else type(arg).__name__ for arg in args]}")
 
         # Normalize argnums to a tuple of integers (same as jacrev)
-        if isinstance(argnums, int):
-            selected_argnums = (argnums,)
-        else:
-            selected_argnums = tuple(argnums)
+        selected_argnums = (argnums,) if isinstance(argnums, int) else tuple(argnums)
 
         # Validate argnums (same as jacrev)
         for argnum in selected_argnums:
@@ -2110,7 +2100,7 @@ def jacfwd(
         # print("\n\n")
 
         jacobian_components = []
-        for j, (arg, tangents_for_arg) in enumerate(
+        for _j, (arg, tangents_for_arg) in enumerate(
             zip(flat_diff_args, split_tangents, strict=False)
         ):
             output_shape = flat_output[0].shape

@@ -43,7 +43,7 @@ def im2col(input_data, filter_h, filter_w, stride=1, dilation=1, pad=0):
     col : ndarray
         Column matrix with shape (N, C, filter_h, filter_w, out_h, out_w)
     """
-    N, C, H, W = input_data.shape
+    n, c, h, w = input_data.shape
 
     # Handle stride and dilation as tuples
     if isinstance(stride, int):
@@ -61,13 +61,13 @@ def im2col(input_data, filter_h, filter_w, stride=1, dilation=1, pad=0):
     else:
         pad_h, pad_w = pad
 
-    out_h = (H + 2 * pad_h - dilation_h * (filter_h - 1) - 1) // stride_h + 1
-    out_w = (W + 2 * pad_w - dilation_w * (filter_w - 1) - 1) // stride_w + 1
+    out_h = (h + 2 * pad_h - dilation_h * (filter_h - 1) - 1) // stride_h + 1
+    out_w = (w + 2 * pad_w - dilation_w * (filter_w - 1) - 1) // stride_w + 1
 
     img = np.pad(
         input_data, ((0, 0), (0, 0), (pad_h, pad_h), (pad_w, pad_w)), mode="constant"
     )
-    col = np.ndarray((N, C, filter_h, filter_w, out_h, out_w), dtype=input_data.dtype)
+    col = np.ndarray((n, c, filter_h, filter_w, out_h, out_w), dtype=input_data.dtype)
 
     for j in range(filter_h):
         j_lim = j * dilation_h + stride_h * out_h
@@ -109,7 +109,7 @@ def col2im(col, input_shape, filter_h, filter_w, stride=1, dilation=1, pad=0):
     img : ndarray
         Reconstructed input data with shape (N, C, H, W)
     """
-    N, C, H, W = input_shape
+    n, c, h, w = input_shape
 
     # Handle stride and dilation as tuples
     if isinstance(stride, int):
@@ -127,11 +127,11 @@ def col2im(col, input_shape, filter_h, filter_w, stride=1, dilation=1, pad=0):
     else:
         pad_h, pad_w = pad
 
-    out_h = (H + 2 * pad_h - dilation_h * (filter_h - 1) - 1) // stride_h + 1
-    out_w = (W + 2 * pad_w - dilation_w * (filter_w - 1) - 1) // stride_w + 1
+    out_h = (h + 2 * pad_h - dilation_h * (filter_h - 1) - 1) // stride_h + 1
+    out_w = (w + 2 * pad_w - dilation_w * (filter_w - 1) - 1) // stride_w + 1
 
     img = np.zeros(
-        (N, C, H + 2 * pad_h + stride_h - 1, W + 2 * pad_w + stride_w - 1),
+        (n, c, h + 2 * pad_h + stride_h - 1, w + 2 * pad_w + stride_w - 1),
         dtype=col.dtype,
     )
 
@@ -146,7 +146,7 @@ def col2im(col, input_shape, filter_h, filter_w, stride=1, dilation=1, pad=0):
                 i * dilation_w : i_lim : stride_w,
             ] += col[:, :, j, i, :, :]
 
-    return img[:, :, pad_h : H + pad_h, pad_w : W + pad_w]
+    return img[:, :, pad_h : h + pad_h, pad_w : w + pad_w]
 
 
 def conv2d(input_data, filters, dilation=(1, 1), stride=(1, 1), padding=(0, 0)):
@@ -171,29 +171,29 @@ def conv2d(input_data, filters, dilation=(1, 1), stride=(1, 1), padding=(0, 0)):
     output : ndarray
         Convolution output with shape (N, C_out, out_h, out_w)
     """
-    N, C_in, H, W = input_data.shape
-    C_out, C_in_f, filter_h, filter_w = filters.shape
+    n, c_in, h, w = input_data.shape
+    c_out, c_in_f, filter_h, filter_w = filters.shape
 
-    assert C_in == C_in_f, f"Input channels {C_in} != filter input channels {C_in_f}"
+    assert c_in == c_in_f, f"Input channels {c_in} != filter input channels {c_in_f}"
 
     # Calculate output dimensions
     pad_h, pad_w = padding
     stride_h, stride_w = stride
     dilation_h, dilation_w = dilation
 
-    out_h = (H + 2 * pad_h - dilation_h * (filter_h - 1) - 1) // stride_h + 1
-    out_w = (W + 2 * pad_w - dilation_w * (filter_w - 1) - 1) // stride_w + 1
+    out_h = (h + 2 * pad_h - dilation_h * (filter_h - 1) - 1) // stride_h + 1
+    out_w = (w + 2 * pad_w - dilation_w * (filter_w - 1) - 1) // stride_w + 1
 
     # Convert input to column matrix
     col = im2col(input_data, filter_h, filter_w, stride, dilation, padding)
-    col = col.transpose(0, 4, 5, 1, 2, 3).reshape(N * out_h * out_w, -1)
+    col = col.transpose(0, 4, 5, 1, 2, 3).reshape(n * out_h * out_w, -1)
 
     # Reshape filters
-    W_col = filters.reshape(C_out, -1)
+    w_col = filters.reshape(c_out, -1)
 
     # Perform convolution via matrix multiplication
-    out = np.dot(col, W_col.T)
-    out = out.reshape(N, out_h, out_w, C_out).transpose(0, 3, 1, 2)
+    out = np.dot(col, w_col.T)
+    out = out.reshape(n, out_h, out_w, c_out).transpose(0, 3, 1, 2)
 
     return out
 
@@ -236,10 +236,10 @@ def transposed_conv2d(
     output : ndarray
         Transposed convolution output
     """
-    N, C_in, H, W = input_data.shape
-    C_out, C_in_f, filter_h, filter_w = filters.shape
+    n, c_in, h, w = input_data.shape
+    c_out, c_in_f, filter_h, filter_w = filters.shape
 
-    assert C_in == C_in_f, f"Input channels {C_in} != filter input channels {C_in_f}"
+    assert c_in == c_in_f, f"Input channels {c_in} != filter input channels {c_in_f}"
 
     pad_h, pad_w = padding
     stride_h, stride_w = stride
@@ -248,12 +248,12 @@ def transposed_conv2d(
     # Step 1: Upsample input by inserting (stride-1) zeros between elements
     if stride_h > 1 or stride_w > 1:
         # Calculate upsampled dimensions
-        upsampled_h = H + (H - 1) * (stride_h - 1)
-        upsampled_w = W + (W - 1) * (stride_w - 1)
+        upsampled_h = h + (h - 1) * (stride_h - 1)
+        upsampled_w = w + (w - 1) * (stride_w - 1)
 
         # Create upsampled array filled with zeros
         upsampled = np.zeros(
-            (N, C_in, upsampled_h, upsampled_w), dtype=input_data.dtype
+            (n, c_in, upsampled_h, upsampled_w), dtype=input_data.dtype
         )
 
         # Insert original values at strided positions
@@ -282,11 +282,11 @@ def transposed_conv2d(
     # Output padding adds zeros to the right and bottom of the output
     out_pad_h, out_pad_w = output_padding
     if out_pad_h > 0 or out_pad_w > 0:
-        N, C_out, H_out, W_out = result.shape
+        n, c_out, h_out, w_out = result.shape
         padded_result = np.zeros(
-            (N, C_out, H_out + out_pad_h, W_out + out_pad_w), dtype=result.dtype
+            (n, c_out, h_out + out_pad_h, w_out + out_pad_w), dtype=result.dtype
         )
-        padded_result[:, :, :H_out, :W_out] = result
+        padded_result[:, :, :h_out, :w_out] = result
         result = padded_result
 
     return result

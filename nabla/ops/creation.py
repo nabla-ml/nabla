@@ -62,7 +62,7 @@ def _validate_shape(shape: Shape) -> None:
 
 def _validate_numeric(value: float | int, name: str) -> None:
     """Validate numeric parameter."""
-    if not isinstance(value, (int, float)):
+    if not isinstance(value, int | float):
         raise TypeError(f"{name} must be numeric, got {type(value)}")
 
 
@@ -232,7 +232,7 @@ def array(
         np_data = np.array(data, dtype=DType.to_numpy(dtype))
     elif isinstance(data, np.ndarray):
         np_data = data.astype(DType.to_numpy(dtype))
-    elif isinstance(data, (int, float)):
+    elif isinstance(data, int | float):
         # Handle scalar values
         np_data = np.array(data, dtype=DType.to_numpy(dtype))
     else:
