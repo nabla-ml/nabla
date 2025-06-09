@@ -245,7 +245,6 @@ class Array:
             arr[-2:]        # Negative indices
             arr[..., :2]    # Ellipsis (all dimensions up to last)
         """
-        from ..ops.view import array_slice
 
         # Handle single slice, integer, or ellipsis
         if isinstance(key, (slice, int, type(...))):
@@ -282,7 +281,9 @@ class Array:
                 )
 
         # Convert integers to slices and build slice list
+        # Track which dimensions should be squeezed (removed) due to integer indexing
         slices = []
+        squeeze_axes = []
         for i, k in enumerate(key):
             if i >= len(self.shape):
                 raise IndexError(
@@ -295,6 +296,7 @@ class Array:
                     # Handle negative indexing
                     k = self.shape[i] + k
                 slices.append(slice(k, k + 1))
+                squeeze_axes.append(i)  # Mark this dimension for squeezing
             elif isinstance(k, slice):
                 slices.append(k)
             else:
@@ -302,7 +304,11 @@ class Array:
                     f"Array index {i} must be an integer or slice, got {type(k)}"
                 )
 
-        return array_slice(self, slices)
+        # Create ArraySliceOp with squeeze information
+        from ..ops.view import ArraySliceOp
+
+        op = ArraySliceOp(slices, squeeze_axes)
+        return op.forward(self)
 
     def sum(self, axes=None, keep_dims=False) -> Array:
         """Sum array elements over given axes.

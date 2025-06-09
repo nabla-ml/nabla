@@ -27,10 +27,9 @@ def test_vjp_single_arg():
 
     # Expected: df/dx = 2x + 2, so at x=[2,3] -> [6, 8]
     expected = np.array([6.0, 8.0])
-    # JAX always returns tuple, so access first element
-    actual_gradient = gradient[0]
-    assert np.allclose(actual_gradient.to_numpy(), expected), (
-        f"Expected {expected}, got {actual_gradient.to_numpy()}"
+    # Nabla returns gradient directly for single argument
+    assert np.allclose(gradient.to_numpy(), expected), (
+        f"Expected {expected}, got {gradient.to_numpy()}"
     )
     print("✓ Single argument test passed\n")
 
@@ -195,12 +194,11 @@ def test_vjp_nested_structures():
     print(f"Input data: {data}")
     print(f"Output: {outputs}")
     print(f"Gradient type: {type(gradient)}")
-    # Unpack the single-element tuple
-    actual_gradient = gradient[0]
-    print(f"Gradient keys: {list(actual_gradient.keys())}")
-    print(f"Gradient w.r.t. x: {actual_gradient['x']}")
-    print(f"Gradient w.r.t. y[0]: {actual_gradient['y'][0]}")
-    print(f"Gradient w.r.t. y[1]: {actual_gradient['y'][1]}")
+    # Nabla returns dict directly for single dict input
+    print(f"Gradient keys: {list(gradient.keys())}")
+    print(f"Gradient w.r.t. x: {gradient['x']}")
+    print(f"Gradient w.r.t. y[0]: {gradient['y'][0]}")
+    print(f"Gradient w.r.t. y[1]: {gradient['y'][1]}")
 
     # Expected: f = x * y[0] + x * y[1] = x * (y[0] + y[1])
     # df/dx = y[0] + y[1] = [4+6, 5+7] = [10, 12]
@@ -210,14 +208,14 @@ def test_vjp_nested_structures():
     expected_y0 = np.array([2.0, 3.0])
     expected_y1 = np.array([2.0, 3.0])
 
-    assert np.allclose(actual_gradient["x"].to_numpy(), expected_x), (
-        f"Expected {expected_x}, got {actual_gradient['x'].to_numpy()}"
+    assert np.allclose(gradient["x"].to_numpy(), expected_x), (
+        f"Expected {expected_x}, got {gradient['x'].to_numpy()}"
     )
-    assert np.allclose(actual_gradient["y"][0].to_numpy(), expected_y0), (
-        f"Expected {expected_y0}, got {actual_gradient['y'][0].to_numpy()}"
+    assert np.allclose(gradient["y"][0].to_numpy(), expected_y0), (
+        f"Expected {expected_y0}, got {gradient['y'][0].to_numpy()}"
     )
-    assert np.allclose(actual_gradient["y"][1].to_numpy(), expected_y1), (
-        f"Expected {expected_y1}, got {actual_gradient['y'][1].to_numpy()}"
+    assert np.allclose(gradient["y"][1].to_numpy(), expected_y1), (
+        f"Expected {expected_y1}, got {gradient['y'][1].to_numpy()}"
     )
     print("✓ Nested structures test passed\n")
 

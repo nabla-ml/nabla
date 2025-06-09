@@ -935,12 +935,13 @@ def vjp(
         outputs = full_outputs
         aux = None
 
-    def vjp_fn(cotangents: Any) -> tuple:
+    def vjp_fn(cotangents: Any) -> Any:
         """VJP function that computes gradients.
 
-        Returns gradients as a tuple to match JAX's behavior:
-        - Single argument: returns (gradient,)
-        - Multiple arguments: returns (grad1, grad2, ...)
+        Returns gradients in the same structure as the original inputs:
+        - Single argument: returns gradient directly (not wrapped in tuple)
+        - Multiple arguments: returns tuple of gradients
+        - Pytree inputs: returns gradients in same pytree structure
         """
         # Always ensure cotangents are traced for composability with other transformations
         traced_cotangents = make_traced_pytree(cotangents)
@@ -958,12 +959,8 @@ def vjp(
         if not any_cotangent_traced and not any_arg_traced:
             make_untraced_pytree(gradients)
 
-        # # Always return as tuple to match JAX behavior
-        # if is_single_arg:
-        #     return (gradients,)  # Wrap single gradient in tuple
-        # else:
-        #     return gradients  # Already a tuple for multiple args
-
+        # Return gradients in their natural structure - preserves input structure
+        # This is more intuitive than forced tuple wrapping
         return gradients
 
     # Make outputs untraced before returning
@@ -1061,6 +1058,13 @@ def _check_in_axes_size(tree: Any, axes: Any) -> int:
     def _collect_sizes(tree_part: Any, axes_part: Any) -> None:
         if isinstance(tree_part, Array):
             if axes_part is not None:
+                # Handle scalar arrays (shape = ()) - they cannot be batched with a specific axis
+                if len(tree_part.shape) == 0:
+                    raise ValueError(
+                        f"Cannot apply axis {axes_part} to scalar array with shape {tree_part.shape}. "
+                        f"Scalar arrays cannot be batched along a specific axis."
+                    )
+
                 if axes_part < 0:
                     # Handle negative indexing
                     axis = len(tree_part.shape) + axes_part
@@ -1875,11 +1879,24 @@ def jacrev(
         if not isinstance(std_basis_flat, list):
             std_basis_flat = [std_basis_flat]
 
-        # If all arrays in std_basis_vectors are scalars, use in_axes=None to broadcast
-        # Otherwise use in_axes=0 to vectorize along the first axis
+        # Handle mixed scalar/tensor outputs by creating appropriate in_axes specification
         if all(arr.shape == () for arr in std_basis_flat):
+            # All outputs are scalar - use in_axes=None to broadcast
             grads = vmap(pullback, in_axes=None)(std_basis_vectors)
+        elif any(arr.shape == () for arr in std_basis_flat):
+            # Mixed scalar/tensor outputs - create in_axes specification for each element
+            # Note: std_basis_vectors is a list/tuple, so in_axes should match that structure
+            if isinstance(std_basis_vectors, (list, tuple)):
+                in_axes_spec = [
+                    None if arr.shape == () else 0 for arr in std_basis_flat
+                ]
+                grads = vmap(pullback, in_axes=in_axes_spec)(std_basis_vectors)
+            else:
+                # Single element case - shouldn't happen with mixed outputs, but handle for completeness
+                in_axes_spec = None if std_basis_flat[0].shape == () else 0
+                grads = vmap(pullback, in_axes=in_axes_spec)(std_basis_vectors)
         else:
+            # All outputs are tensors - use in_axes=0 to vectorize along the first axis
             grads = vmap(pullback)(std_basis_vectors)
 
         # CRITICAL: Check if std_basis_vectors were traced (indicating composition with other transformations)

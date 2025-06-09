@@ -179,14 +179,12 @@ def test_dict_input():
             print(f"  Gradient w.r.t. y: {grad_dict['y']}")
 
         # Compare structures and values
-        # Both JAX and Nabla now return (dict_of_gradients,)
+        # JAX returns (dict_of_gradients,), Nabla returns dict directly
         jax_grad_dict = gradients_jax[0]
-        nabla_grad_dict = gradients_nabla[0]
+        nabla_grad_dict = gradients_nabla
 
-        assert isinstance(gradients_nabla, tuple), "Nabla should return tuple"
-        assert isinstance(nabla_grad_dict, dict), (
-            "Nabla should return dict inside tuple"
-        )
+        assert isinstance(gradients_nabla, dict), "Nabla should return dict directly"
+        assert isinstance(nabla_grad_dict, dict), "Nabla should return dict"
         assert isinstance(jax_grad_dict, dict), "JAX should return dict inside tuple"
         assert set(nabla_grad_dict.keys()) == set(jax_grad_dict.keys()), (
             "Gradient dict keys should match"
@@ -256,20 +254,22 @@ def test_nested_dict_input():
             print(f"  Gradient dict keys: {list(jax_grad_dict.keys())}")
             print(f"  Gradient nested keys: {list(jax_grad_dict['layer1'].keys())}")
             print(f"  Gradient w.r.t. weights: {jax_grad_dict['layer1']['weights']}")
-            print(f"  Gradient w.r.t. bias: {jax_grad_dict['layer1']['bias']}")
+            print(
+                f"  Gradient w.r.t. bias: {jax_grad_dict['layer1']['bias']}"
+            )  # Compare nested structures
+            jax_grad_dict = gradients_jax[0]
+            nabla_grad_dict = gradients_nabla
 
-        # Compare nested structures
-        jax_grad_dict = gradients_jax[0]
-        nabla_grad_dict = gradients_nabla[0]
-
-        assert isinstance(gradients_nabla, tuple), "Nabla should return tuple"
-        assert isinstance(nabla_grad_dict, dict), (
-            "Nabla should preserve dict structure inside tuple"
-        )
-        assert "layer1" in nabla_grad_dict, "Nabla should preserve nested structure"
-        assert set(nabla_grad_dict["layer1"].keys()) == set(
-            jax_grad_dict["layer1"].keys()
-        ), "Nested keys should match"
+            assert isinstance(gradients_nabla, dict), (
+                "Nabla should return dict directly"
+            )
+            assert isinstance(nabla_grad_dict, dict), (
+                "Nabla should preserve dict structure"
+            )
+            assert "layer1" in nabla_grad_dict, "Nabla should preserve nested structure"
+            assert set(nabla_grad_dict["layer1"].keys()) == set(
+                jax_grad_dict["layer1"].keys()
+            ), "Nested keys should match"
 
         assert np.allclose(
             nabla_grad_dict["layer1"]["weights"].to_numpy(),
@@ -332,12 +332,10 @@ def test_list_input():
 
         # Compare list structures
         jax_grad_list = gradients_jax[0]
-        nabla_grad_list = gradients_nabla[0]
+        nabla_grad_list = gradients_nabla
 
-        assert isinstance(gradients_nabla, tuple), "Nabla should return tuple"
-        assert isinstance(nabla_grad_list, list), (
-            "Nabla should preserve list structure inside tuple"
-        )
+        assert isinstance(gradients_nabla, list), "Nabla should return list directly"
+        assert isinstance(nabla_grad_list, list), "Nabla should preserve list structure"
         assert isinstance(jax_grad_list, list), "JAX should return list inside tuple"
         assert len(nabla_grad_list) == len(jax_grad_list), "List lengths should match"
 
@@ -407,22 +405,24 @@ def test_mixed_nested_structure():
             print(f"  Gradient w.r.t. y type: {type(jax_grad_dict['y'])}")
             if isinstance(jax_grad_dict["y"], list):
                 print(f"  Gradient w.r.t. y[0]: {jax_grad_dict['y'][0]}")
-                print(f"  Gradient w.r.t. y[1]: {jax_grad_dict['y'][1]}")
+                print(
+                    f"  Gradient w.r.t. y[1]: {jax_grad_dict['y'][1]}"
+                )  # Compare complex nested structures
+            jax_grad_dict = gradients_jax[0]
+            nabla_grad_dict = gradients_nabla
 
-        # Compare complex nested structures
-        jax_grad_dict = gradients_jax[0]
-        nabla_grad_dict = gradients_nabla[0]
-
-        assert isinstance(gradients_nabla, tuple), "Nabla should return tuple"
-        assert isinstance(nabla_grad_dict, dict), (
-            "Nabla should preserve dict structure inside tuple"
-        )
-        assert isinstance(nabla_grad_dict["y"], list), (
-            "Nabla should preserve nested list structure"
-        )
-        assert len(nabla_grad_dict["y"]) == len(jax_grad_dict["y"]), (
-            "Nested list lengths should match"
-        )
+            assert isinstance(gradients_nabla, dict), (
+                "Nabla should return dict directly"
+            )
+            assert isinstance(nabla_grad_dict, dict), (
+                "Nabla should preserve dict structure"
+            )
+            assert isinstance(nabla_grad_dict["y"], list), (
+                "Nabla should preserve nested list structure"
+            )
+            assert len(nabla_grad_dict["y"]) == len(jax_grad_dict["y"]), (
+                "Nested list lengths should match"
+            )
 
         # Check values
         assert np.allclose(nabla_grad_dict["x"].to_numpy(), jax_grad_dict["x"]), (

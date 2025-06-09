@@ -75,9 +75,17 @@ def test_complex_function():
     out_jax, vjp_jax = jax.vjp(jax_fn, x_jax)
     grads_jax = vjp_jax(cotangent_jax)
 
-    # Check structure and values
-    assert len(grads_nb) == len(grads_jax) == 1
-    assert np.allclose(grads_nb[0].to_numpy(), grads_jax[0], rtol=1e-5)
+    # Check structure and values - Nabla returns Array directly, JAX returns tuple
+    assert isinstance(grads_nb, nb.Array), (
+        f"Nabla should return Array, got {type(grads_nb)}"
+    )
+    assert isinstance(grads_jax, tuple), (
+        f"JAX should return tuple, got {type(grads_jax)}"
+    )
+    assert len(grads_jax) == 1, (
+        f"JAX should return 1-element tuple, got {len(grads_jax)}"
+    )
+    assert np.allclose(grads_nb.to_numpy(), grads_jax[0], rtol=1e-5)
     print("  ✓ Complex function: PASSED")
 
 
@@ -115,14 +123,23 @@ def test_list_inputs():
     out_jax, vjp_jax = jax.vjp(jax_fn, inputs_jax)
     grads_jax = vjp_jax(cotangent_jax)
 
-    # Check structure and values
-    assert len(grads_nb) == len(grads_jax) == 1
-    assert isinstance(grads_nb[0], list)
-    assert isinstance(grads_jax[0], list)
-    assert len(grads_nb[0]) == len(grads_jax[0]) == 3
+    # Check structure and values - Nabla returns list directly, JAX returns tuple with list
+    assert isinstance(grads_nb, list), (
+        f"Nabla should return list directly, got {type(grads_nb)}"
+    )
+    assert isinstance(grads_jax, tuple), (
+        f"JAX should return tuple, got {type(grads_jax)}"
+    )
+    assert len(grads_jax) == 1, (
+        f"JAX should return 1-element tuple, got {len(grads_jax)}"
+    )
+    assert isinstance(grads_jax[0], list), (
+        f"JAX tuple should contain list, got {type(grads_jax[0])}"
+    )
+    assert len(grads_nb) == len(grads_jax[0]) == 3
 
     for i in range(3):
-        assert np.allclose(grads_nb[0][i].to_numpy(), grads_jax[0][i], rtol=1e-5)
+        assert np.allclose(grads_nb[i].to_numpy(), grads_jax[0][i], rtol=1e-5)
 
     print("  ✓ List inputs: PASSED")
 

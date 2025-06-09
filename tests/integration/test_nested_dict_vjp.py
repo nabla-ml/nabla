@@ -35,10 +35,10 @@ def test_nested_dict_vjp():
         )
         return add(reduce_sum(l1_out), reduce_sum(l2_out))
 
-    # Compute VJP with single positional argument (JAX-compatible)
+    # Compute VJP with single positional argument
     output, vjp_fn = vjp(simple_forward, inputs)
-    gradients = vjp_fn(array([1.0]))  # Returns tuple of gradients
-    grad_dict = gradients[0]  # Unpack the single-element tuple
+    gradients = vjp_fn(array([1.0]))  # Returns dict directly for single dict input
+    grad_dict = gradients  # No unpacking needed
 
     print("✅ Nested dictionary VJP test:")
     print(

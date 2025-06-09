@@ -536,17 +536,16 @@ class PermuteBatchDimsOp(ViewOperation):
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
         # """VJP rule: reverse the permutation."""
-        # # Create inverse permutation for negative indices
-        # inv_axes = [0] * len(self.axes)
-        # for i, axis in enumerate(self.axes):
-        #     # Convert negative axis to positive index for inverse mapping
-        #     pos_axis = axis + len(self.axes)
-        #     inv_axes[pos_axis] = i
+        # Create inverse permutation for negative indices
+        inv_axes = [0] * len(self.axes)
+        for i, axis in enumerate(self.axes):
+            # Convert negative axis to positive index for inverse mapping
+            pos_axis = axis + len(self.axes)
+            inv_axes[pos_axis] = i
 
-        # # Convert back to negative indices
-        # inv_axes_negative = [-len(self.axes) + ax for ax in inv_axes]
-
-        return [permute_batch_dims(cotangent, self.axes)]
+        # Convert back to negative indices
+        inv_axes_negative = [-len(self.axes) + ax for ax in inv_axes]
+        return [permute_batch_dims(cotangent, tuple(inv_axes_negative))]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
@@ -1326,7 +1325,7 @@ def concatenate(args: list[Array], axis: int = 0) -> Array:
 class ArraySliceOp(ViewOperation):
     """Array slicing operation."""
 
-    def __init__(self, slices: list[slice]):
+    def __init__(self, slices: list[slice], squeeze_axes: list[int] = None):
         # Convert slices to a more manageable format
         slice_strs = []
         for s in slices:
@@ -1338,8 +1337,10 @@ class ArraySliceOp(ViewOperation):
             else:
                 slice_strs.append(f"{start}:{stop}")
 
-        super().__init__(f"array_slice[{','.join(slice_strs)}]")
+        squeeze_info = f"_squeeze{squeeze_axes}" if squeeze_axes else ""
+        super().__init__(f"array_slice[{','.join(slice_strs)}]{squeeze_info}")
         self.slices = slices
+        self.squeeze_axes = squeeze_axes or []
 
     def compute_output_shape(self, *input_shapes: tuple) -> tuple:
         """Compute output shape for array slice operation."""
@@ -1375,7 +1376,9 @@ class ArraySliceOp(ViewOperation):
                 else:
                     raise ValueError("Negative step not supported")
 
-                output_shape.append(output_size)
+                # Skip this dimension if it should be squeezed (JAX-compatible behavior)
+                if i not in self.squeeze_axes:
+                    output_shape.append(output_size)
             else:
                 # No slice for this dimension, keep original size
                 output_shape.append(dim_size)
@@ -1398,7 +1401,20 @@ class ArraySliceOp(ViewOperation):
             slice_indices.append(slice(s.start, s.stop, s.step))
 
         # Use ops.slice_tensor which follows NumPy slicing semantics
-        output.tensor_value = ops.slice_tensor(args[0], slice_indices)
+        result = ops.slice_tensor(args[0], slice_indices)
+
+        # Apply squeezing for JAX-compatible behavior
+        if self.squeeze_axes:
+            # Adjust squeeze axes to account for batch dimensions
+            squeeze_axes_adjusted = [
+                ax + len(output.batch_dims) for ax in self.squeeze_axes
+            ]
+            for ax in sorted(
+                squeeze_axes_adjusted, reverse=True
+            ):  # Squeeze in reverse order
+                result = ops.squeeze(result, ax)
+
+        output.tensor_value = result
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         """Eager execution using NumPy slicing."""
@@ -1420,32 +1436,56 @@ class ArraySliceOp(ViewOperation):
                 numpy_slices.append(slice(None))  # Full slice for remaining dimensions
 
         result = input_array[tuple(numpy_slices)]
+
+        # Apply squeezing for JAX-compatible behavior
+        if self.squeeze_axes:
+            # Adjust squeeze axes to account for batch dimensions
+            squeeze_axes_adjusted = [
+                ax + len(args[0].batch_dims) for ax in self.squeeze_axes
+            ]
+            result = np.squeeze(result, axis=tuple(squeeze_axes_adjusted))
+
         output.impl = Tensor.from_numpy(result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
         """Vector-Jacobian product rule for array slice."""
-        return [pad(cotangent, self.slices, primals[0].shape)]
+        # If we squeezed dimensions, we need to unsqueeze the cotangent first
+        if self.squeeze_axes:
+            from ..ops.view import unsqueeze
+
+            # Unsqueeze in the positions that were squeezed
+            unsqueeze_axes = self.squeeze_axes.copy()
+            cotangent_unsqueezed = unsqueeze(cotangent, unsqueeze_axes)
+        else:
+            cotangent_unsqueezed = cotangent
+
+        return [pad(cotangent_unsqueezed, self.slices, primals[0].shape)]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
         """Jacobian-vector product rule for array slice."""
-        return array_slice(tangents[0], self.slices)
+        # Apply the same slicing and squeezing to tangents
+        op = ArraySliceOp(self.slices, self.squeeze_axes)
+        return op.forward(tangents[0])
 
 
-def array_slice(arg: Array, slices: list[slice]) -> Array:
+def array_slice(
+    arg: Array, slices: list[slice], squeeze_axes: list[int] = None
+) -> Array:
     """Slice an array along specified dimensions.
 
     Args:
         arg: Input array to slice
         slices: List of slice objects defining the slicing for each dimension
+        squeeze_axes: List of axes that should be squeezed (for JAX compatibility)
 
     Returns:
         Sliced array
     """
-    op = ArraySliceOp(slices)
+    op = ArraySliceOp(slices, squeeze_axes)
     return op.forward(arg)
 
 

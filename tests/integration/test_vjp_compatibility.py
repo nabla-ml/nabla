@@ -46,22 +46,19 @@ def test_single_input_single_output():
         f"  JAX VJP structure: {type(grads_jax)}, len={len(grads_jax) if hasattr(grads_jax, '__len__') else 'N/A'}"
     )
 
-    # Both should return tuples with one element
-    assert isinstance(grads_nb, tuple), (
-        f"Nabla should return tuple, got {type(grads_nb)}"
+    # Nabla returns gradient directly, JAX returns tuple
+    assert isinstance(grads_nb, nb.Array), (
+        f"Nabla should return Array directly, got {type(grads_nb)}"
     )
     assert isinstance(grads_jax, tuple), (
         f"JAX should return tuple, got {type(grads_jax)}"
-    )
-    assert len(grads_nb) == 1, (
-        f"Nabla should return tuple with 1 element, got {len(grads_nb)}"
     )
     assert len(grads_jax) == 1, (
         f"JAX should return tuple with 1 element, got {len(grads_jax)}"
     )
 
     # Check values
-    assert np.allclose(grads_nb[0].to_numpy(), grads_jax[0]), (
+    assert np.allclose(grads_nb.to_numpy(), grads_jax[0]), (
         "Gradient values should match"
     )
     print("  ✓ Single input, single output: PASSED")
@@ -101,9 +98,9 @@ def test_multiple_inputs_single_output():
     print(f"  Nabla VJP structure: {type(grads_nb)}, len={len(grads_nb)}")
     print(f"  JAX VJP structure: {type(grads_jax)}, len={len(grads_jax)}")
 
-    # Both should return tuples with two elements
+    # Multiple arguments: Nabla returns tuple of gradients, JAX returns tuple
     assert isinstance(grads_nb, tuple), (
-        f"Nabla should return tuple, got {type(grads_nb)}"
+        f"Nabla should return tuple for multiple args, got {type(grads_nb)}"
     )
     assert isinstance(grads_jax, tuple), (
         f"JAX should return tuple, got {type(grads_jax)}"
@@ -166,30 +163,27 @@ def test_nested_structure():
     print(f"  Nabla VJP structure: {type(grads_nb)}, len={len(grads_nb)}")
     print(f"  JAX VJP structure: {type(grads_jax)}, len={len(grads_jax)}")
 
-    # Both should return tuples with one element (the dict)
-    assert isinstance(grads_nb, tuple), (
-        f"Nabla should return tuple, got {type(grads_nb)}"
+    # Single dict input: Nabla returns dict directly, JAX returns tuple with dict
+    assert isinstance(grads_nb, dict), (
+        f"Nabla should return dict directly for single dict input, got {type(grads_nb)}"
     )
     assert isinstance(grads_jax, tuple), (
         f"JAX should return tuple, got {type(grads_jax)}"
-    )
-    assert len(grads_nb) == 1, (
-        f"Nabla should return tuple with 1 element, got {len(grads_nb)}"
     )
     assert len(grads_jax) == 1, (
         f"JAX should return tuple with 1 element, got {len(grads_jax)}"
     )
 
     # Both should have the same dictionary structure
-    assert isinstance(grads_nb[0], dict), "Nabla gradient should be a dict"
+    assert isinstance(grads_nb, dict), "Nabla gradient should be a dict"
     assert isinstance(grads_jax[0], dict), "JAX gradient should be a dict"
-    assert set(grads_nb[0].keys()) == set(grads_jax[0].keys()), (
+    assert set(grads_nb.keys()) == set(grads_jax[0].keys()), (
         "Gradient dicts should have same keys"
     )
 
     # Check values
-    for key in grads_nb[0]:
-        assert np.allclose(grads_nb[0][key].to_numpy(), grads_jax[0][key]), (
+    for key in grads_nb:
+        assert np.allclose(grads_nb[key].to_numpy(), grads_jax[0][key]), (
             f"Gradient for {key} should match"
         )
 

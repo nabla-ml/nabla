@@ -44,6 +44,7 @@ from .ops.operation import (
     ViewOperation,
 )
 from .utils.max_interop import accelerator, cpu, device, device_ref
+from .utils.testing import allclose
 
 
 # Lazy loading for operations (imported on first access)
@@ -130,6 +131,7 @@ __all__ = [
     "cpu",
     "accelerator",
     "device_ref",
+    "allclose",
     # Types
     "DType",
 ] + list(_ops_registry.keys())  # Add all operation names

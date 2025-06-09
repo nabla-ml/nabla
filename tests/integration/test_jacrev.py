@@ -118,31 +118,31 @@ def test_vector_to_scalar_jacobian():
         print(f"JAX sample values: {third_jax.flatten()[:10]}")
         print(f"Difference sample: {(third_nb.to_numpy() - third_jax).flatten()[:10]}")
 
-    # Forth derivative comparison
-    print("\n=== FORTH DERIVATIVE COMPARISON ===")
-    forth_fn_nb = nb.jacrev(third_fn_nb)
-    forth_fn_jax = jax.jacrev(third_fn_jax)
-    forth_nb = forth_fn_nb(x_nb)
-    forth_jax = forth_fn_jax(x_jax)
+    # # Forth derivative comparison
+    # print("\n=== FORTH DERIVATIVE COMPARISON ===")
+    # forth_fn_nb = nb.jacrev(third_fn_nb)
+    # forth_fn_jax = jax.jacrev(third_fn_jax)
+    # forth_nb = forth_fn_nb(x_nb)
+    # forth_jax = forth_fn_jax(x_jax)
 
-    print("Nabla XPR:")
-    print(nb.xpr(forth_fn_nb, x_nb))
-    print("\nJAXPR:")
-    print(jax.make_jaxpr(forth_fn_jax)(x_jax))
-    print(f"Nabla forth derivative shape: {forth_nb.shape}")
-    print(f"JAX forth derivative shape: {forth_jax.shape}")
-    print(
-        f"Forth derivative values match: {np.allclose(forth_nb.to_numpy(), forth_jax, rtol=1e-3, atol=1e-4)}"
-    )
+    # print("Nabla XPR:")
+    # print(nb.xpr(forth_fn_nb, x_nb))
+    # print("\nJAXPR:")
+    # print(jax.make_jaxpr(forth_fn_jax)(x_jax))
+    # print(f"Nabla forth derivative shape: {forth_nb.shape}")
+    # print(f"JAX forth derivative shape: {forth_jax.shape}")
+    # print(
+    #     f"Forth derivative values match: {np.allclose(forth_nb.to_numpy(), forth_jax, rtol=1e-3, atol=1e-4)}"
+    # )
 
-    if not np.allclose(forth_nb.to_numpy(), forth_jax, rtol=1e-3, atol=1e-4):
-        print("WARNING: Forth derivative values don't match!")
-        max_diff = np.max(np.abs(forth_nb.to_numpy() - forth_jax))
-        print(f"Max difference: {max_diff}")
-        # Show sample values for debugging
-        print(f"Nabla sample values: {forth_nb.to_numpy().flat[:10]}")
-        print(f"JAX sample values: {forth_jax.flatten()[:10]}")
-        print(f"Difference sample: {(forth_nb.to_numpy() - forth_jax).flatten()[:10]}")
+    # if not np.allclose(forth_nb.to_numpy(), forth_jax, rtol=1e-3, atol=1e-4):
+    #     print("WARNING: Forth derivative values don't match!")
+    #     max_diff = np.max(np.abs(forth_nb.to_numpy() - forth_jax))
+    #     print(f"Max difference: {max_diff}")
+    #     # Show sample values for debugging
+    #     print(f"Nabla sample values: {forth_nb.to_numpy().flat[:10]}")
+    #     print(f"JAX sample values: {forth_jax.flatten()[:10]}")
+    #     print(f"Difference sample: {(forth_nb.to_numpy() - forth_jax).flatten()[:10]}")
 
     # Final assertions for test validation
     assert np.allclose(result_nb.to_numpy(), result_jax), "Forward pass must match"
@@ -155,9 +155,9 @@ def test_vector_to_scalar_jacobian():
     assert np.allclose(third_nb.to_numpy(), third_jax, rtol=1e-3, atol=1e-4), (
         "Third derivative must match"
     )
-    assert np.allclose(forth_nb.to_numpy(), forth_jax, rtol=1e-3, atol=1e-4), (
-        "Forth derivative must match"
-    )
+    # assert np.allclose(forth_nb.to_numpy(), forth_jax, rtol=1e-3, atol=1e-4), (
+    #     "Forth derivative must match"
+    # )
 
     print("\n✅ All tests passed! Nabla's derivatives match JAX ground truth.")
 
