@@ -1107,8 +1107,13 @@ def unsqueeze(arg: Array, axes: list[int] = None) -> Array:
 class ShallowCopyOp(ViewOperation):
     """Copy operation to create a new array with the same data."""
 
-    def __init__(self):
-        super().__init__("shallow_copy")
+    def __init__(self, arg: Array):
+        if not arg.name and arg.impl and arg.shape == () and arg.batch_dims == ():
+            name = arg.to_numpy().__repr__()  # Use numpy repr for empty arrays
+        else:
+            name = "shallow_copy"
+
+        super().__init__(name)
 
     def compute_output_shape(self, *input_shapes: tuple) -> tuple:
         """Compatible signature."""
@@ -1137,7 +1142,7 @@ class ShallowCopyOp(ViewOperation):
 
 def shallow_copy(arg: Array) -> Array:
     """Create a shallow copy of the array."""
-    op = ShallowCopyOp()
+    op = ShallowCopyOp(arg)
     return op.forward(arg)
 
 

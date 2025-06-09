@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
-"""JAX implementation to learn the complex 8-period sin curve (converted from Nabla)."""
+"""JAX implementation to learn the complex 8-period sin curve for comparison with Nabla."""
 
 import time
 
 import jax
 import jax.numpy as jnp
 import numpy as np
+from jax import jit, value_and_grad
 
 # Configuration
 BATCH_SIZE = 128
 LAYERS = [1, 64, 128, 256, 128, 64, 1]
-LEARNING_RATE = 0.01
-NUM_EPOCHS = 400  # Reduced for quick testing
-PRINT_INTERVAL = 100  # Reduced interval for quicker feedback
+LEARNING_RATE = 0.001  # Match Nabla version for fair comparison
+NUM_EPOCHS = 5
+PRINT_INTERVAL = 1
 SIN_PERIODS = 8
 
 
@@ -28,23 +29,15 @@ def mlp_forward(x: jnp.ndarray, params: list[jnp.ndarray]) -> jnp.ndarray:
     return output
 
 
-def leaky_relu_manual(x: jnp.ndarray, negative_slope: float = 0.01) -> jnp.ndarray:
-    """Manual leaky ReLU implementation."""
-    relu_x = jax.nn.relu(x)
-    slope_tensor = jnp.array(np.float32(negative_slope))
-    one_minus_slope = jnp.array(np.float32(1.0 - negative_slope))
-    return one_minus_slope * relu_x + slope_tensor * x
-
-
 def mlp_forward_leaky(x: jnp.ndarray, params: list[jnp.ndarray]) -> jnp.ndarray:
-    """MLP forward pass with leaky ReLU to prevent dead neurons."""
+    """MLP forward pass with ReLU activation."""
     output = x
     for i in range(0, len(params) - 1, 2):
         w, b = params[i], params[i + 1]
         output = jnp.matmul(output, w) + b
-        # Apply leaky ReLU to all layers except the last
+        # Apply ReLU to all layers except the last
         if i < len(params) - 2:
-            output = leaky_relu_manual(output, 0.01)
+            output = jax.nn.relu(output)
     return output
 
 
@@ -52,7 +45,7 @@ def mean_squared_error(predictions: jnp.ndarray, targets: jnp.ndarray) -> jnp.nd
     """Compute mean squared error loss."""
     diff = predictions - targets
     squared_errors = diff * diff
-    batch_size = jnp.array(np.float32(predictions.shape[0]))
+    batch_size = jnp.array(predictions.shape[0], dtype=jnp.float32)
     loss = jnp.sum(squared_errors) / batch_size
     return loss
 
@@ -65,16 +58,22 @@ def mlp_forward_and_loss_leaky(inputs: list[jnp.ndarray]) -> jnp.ndarray:
     return loss
 
 
-def create_sin_dataset(batch_size: int = 256) -> tuple[jnp.ndarray, jnp.ndarray]:
+def create_sin_dataset(
+    batch_size: int = 256, key: jax.random.PRNGKey = None
+) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Create the COMPLEX 8-period sin dataset."""
-    np_x = np.random.uniform(0.0, 1.0, (batch_size, 1)).astype(np.float32)
-    np_targets = (np.sin(SIN_PERIODS * 2.0 * np.pi * np_x) / 2.0 + 0.5).astype(
-        np.float32
+    if key is None:
+        # Use numpy for compatibility with original
+        np_x = np.random.uniform(0.0, 1.0, (batch_size, 1)).astype(np.float32)
+    else:
+        # Use JAX random for reproducibility
+        np_x = jax.random.uniform(key, (batch_size, 1), minval=0.0, maxval=1.0)
+
+    np_targets = (jnp.sin(SIN_PERIODS * 2.0 * jnp.pi * np_x) / 2.0 + 0.5).astype(
+        jnp.float32
     )
 
-    x = jnp.array(np_x)
-    targets = jnp.array(np_targets)
-    return x, targets
+    return np_x, np_targets
 
 
 def initialize_for_complex_function(
@@ -101,7 +100,7 @@ def initialize_for_complex_function(
 
         # Bias initialization strategy
         if i < len(layers) - 2:  # Hidden layers
-            # Small positive bias to help with leaky ReLU
+            # Small positive bias to help with ReLU
             b_np = np.ones((1, fan_out), dtype=np.float32) * 0.05
         else:  # Output layer
             # Initialize output bias to middle of target range
@@ -114,6 +113,7 @@ def initialize_for_complex_function(
     return params
 
 
+@jit
 def adamw_step(
     params: list[jnp.ndarray],
     gradients: list[jnp.ndarray],
@@ -126,47 +126,55 @@ def adamw_step(
     eps: float = 1e-8,
     weight_decay: float = 0.01,
 ) -> tuple[list[jnp.ndarray], list[jnp.ndarray], list[jnp.ndarray]]:
-    """AdamW optimizer step with weight decay."""
+    """JIT-compiled AdamW optimizer step with weight decay - OPTIMIZED to match JAX efficiency."""
     updated_params = []
     updated_m = []
     updated_v = []
 
-    # Convert scalars to tensors
-    beta1_tensor = jnp.array(np.float32(beta1))
-    beta2_tensor = jnp.array(np.float32(beta2))
-    lr_tensor = jnp.array(np.float32(learning_rate))
-    eps_tensor = jnp.array(np.float32(eps))
-    wd_tensor = jnp.array(np.float32(weight_decay))
-    one_tensor = jnp.array(np.float32(1.0))
+    for param, grad, m, v in zip(params, gradients, m_states, v_states, strict=False):
+        # Update moments
+        new_m = beta1 * m + (1.0 - beta1) * grad
+        new_v = beta2 * v + (1.0 - beta2) * (grad * grad)
 
-    # Bias correction terms
-    beta1_power = jnp.array(np.float32(beta1**step))
-    beta2_power = jnp.array(np.float32(beta2**step))
-    bias_correction1 = one_tensor - beta1_power
-    bias_correction2 = one_tensor - beta2_power
+        # Completely fused parameter update - eliminates ALL intermediate variables
+        new_param = param * (1.0 - weight_decay * learning_rate) - learning_rate * (
+            new_m / (1.0 - beta1**step)
+        ) / (((new_v / (1.0 - beta2**step)) ** 0.5) + eps)
+
+        updated_params.append(new_param)
+        updated_m.append(new_m)
+        updated_v.append(new_v)
+
+    return updated_params, updated_m, updated_v
+
+
+@jit
+def adamw_step_optimized(
+    params: list[jnp.ndarray],
+    gradients: list[jnp.ndarray],
+    m_states: list[jnp.ndarray],
+    v_states: list[jnp.ndarray],
+    step: int,
+    learning_rate: float = 0.001,
+    beta1: float = 0.9,
+    beta2: float = 0.999,
+    eps: float = 1e-8,
+    weight_decay: float = 0.01,
+) -> tuple[list[jnp.ndarray], list[jnp.ndarray], list[jnp.ndarray]]:
+    """JIT-compiled AdamW optimizer step with weight decay - OPTIMIZED to match JAX efficiency."""
+    updated_params = []
+    updated_m = []
+    updated_v = []
 
     for param, grad, m, v in zip(params, gradients, m_states, v_states, strict=False):
-        # Weight decay (applied to parameters, not gradients)
-        param_with_decay = param * (one_tensor - wd_tensor * lr_tensor)
+        # Update moments
+        new_m = beta1 * m + (1.0 - beta1) * grad
+        new_v = beta2 * v + (1.0 - beta2) * (grad * grad)
 
-        # Update biased first moment estimate
-        new_m = beta1_tensor * m + (one_tensor - beta1_tensor) * grad
-
-        # Update biased second raw moment estimate
-        grad_squared = grad * grad
-        new_v = beta2_tensor * v + (one_tensor - beta2_tensor) * grad_squared
-
-        # Compute bias-corrected first moment estimate
-        m_hat = new_m / bias_correction1
-
-        # Compute bias-corrected second raw moment estimate
-        v_hat = new_v / bias_correction2
-
-        # Update parameters
-        sqrt_v_hat = jnp.sqrt(v_hat)
-        denominator = sqrt_v_hat + eps_tensor
-        update = lr_tensor * m_hat / denominator
-        new_param = param_with_decay - update
+        # Completely fused parameter update - eliminates ALL intermediate variables
+        new_param = param * (1.0 - weight_decay * learning_rate) - learning_rate * (
+            new_m / (1.0 - beta1**step)
+        ) / (((new_v / (1.0 - beta2**step)) ** 0.5) + eps)
 
         updated_params.append(new_param)
         updated_m.append(new_m)
@@ -178,14 +186,13 @@ def adamw_step(
 def init_adamw_state(
     params: list[jnp.ndarray],
 ) -> tuple[list[jnp.ndarray], list[jnp.ndarray]]:
-    """Initialize AdamW state."""
+    """Initialize AdamW state - optimized version."""
     m_states = []
     v_states = []
     for param in params:
-        m_np = np.zeros_like(np.array(param))
-        v_np = np.zeros_like(np.array(param))
-        m_states.append(jnp.array(m_np))
-        v_states.append(jnp.array(v_np))
+        # Use zeros_like for more efficient initialization
+        m_states.append(jnp.zeros_like(param))
+        v_states.append(jnp.zeros_like(param))
     return m_states, v_states
 
 
@@ -199,7 +206,8 @@ def learning_rate_schedule(
     return initial_lr * (decay_factor ** (epoch // decay_every))
 
 
-def train_step_adamw(
+@jit
+def complete_training_step(
     x: jnp.ndarray,
     targets: jnp.ndarray,
     params: list[jnp.ndarray],
@@ -207,50 +215,74 @@ def train_step_adamw(
     v_states: list[jnp.ndarray],
     step: int,
     learning_rate: float,
-) -> tuple[list[jnp.ndarray], list[jnp.ndarray], list[jnp.ndarray], float]:
-    """Perform one training step using AdamW."""
-    # Forward pass + VJP for gradients
-    all_inputs = [x, targets] + params
-    loss_value, vjp_fn = jax.vjp(mlp_forward_and_loss_leaky, all_inputs)
+) -> tuple[list[jnp.ndarray], list[jnp.ndarray], list[jnp.ndarray], jnp.ndarray]:
+    """Complete JIT-compiled training step with integrated gradient computation."""
 
-    # Backward pass - JAX vjp returns a tuple containing the gradient structure
-    cotangent = 1.0  # Scalar cotangent for scalar loss
-    all_gradients_tuple = vjp_fn(cotangent)
-    all_gradients = all_gradients_tuple[0]  # Extract the gradient list from the tuple
-    param_gradients = all_gradients[2:]  # Skip x and targets gradients
+    # Direct gradient computation without passing functions
+    def loss_fn(params_inner):
+        predictions = mlp_forward_leaky(x, params_inner)
+        loss = mean_squared_error(predictions, targets)
+        return loss
 
-    # AdamW optimizer update
+    # Compute loss and gradients directly
+    loss_value, param_gradients = jax.value_and_grad(loss_fn)(params)
+
+    # AdamW optimizer update using JIT-compiled step
     updated_params, updated_m, updated_v = adamw_step(
         params, param_gradients, m_states, v_states, step, learning_rate
     )
 
-    loss_scalar = float(loss_value)
-    return updated_params, updated_m, updated_v, loss_scalar
+    return updated_params, updated_m, updated_v, loss_value
+
+
+@jit
+def train_step_adamw_jitted(
+    x: jnp.ndarray,
+    targets: jnp.ndarray,
+    params: list[jnp.ndarray],
+    m_states: list[jnp.ndarray],
+    v_states: list[jnp.ndarray],
+    step: int,
+    learning_rate: float,
+) -> tuple[list[jnp.ndarray], list[jnp.ndarray], list[jnp.ndarray], jnp.ndarray]:
+    """JIT-compiled training step using JAX value_and_grad."""
+    # Forward pass + gradients using value_and_grad
+    loss_value, param_gradients = value_and_grad(mlp_forward_and_loss_leaky)(
+        params, x, targets
+    )
+
+    # AdamW optimizer update using JIT-compiled step
+    updated_params, updated_m, updated_v = adamw_step(
+        params, param_gradients, m_states, v_states, step, learning_rate
+    )
+
+    return updated_params, updated_m, updated_v, loss_value
+
+
+@jit
+def compute_predictions_and_loss(
+    x_test: jnp.ndarray, targets_test: jnp.ndarray, params: list[jnp.ndarray]
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """JIT-compiled function to compute predictions and loss."""
+    predictions_test = mlp_forward_leaky(x_test, params)
+    test_loss = mean_squared_error(predictions_test, targets_test)
+    return predictions_test, test_loss
 
 
 def analyze_jax_learning_progress(params: list[jnp.ndarray], epoch: int):
     """Analyze how well we're learning the complex function."""
     # Create a dense test set
-    x_test_np = np.linspace(0, 1, 1000).reshape(-1, 1).astype(np.float32)
+    x_test_np = jnp.linspace(0, 1, 1000).reshape(-1, 1).astype(jnp.float32)
     targets_test_np = (
-        np.sin(SIN_PERIODS * 2.0 * np.pi * x_test_np) / 2.0 + 0.5
-    ).astype(np.float32)
+        jnp.sin(SIN_PERIODS * 2.0 * jnp.pi * x_test_np) / 2.0 + 0.5
+    ).astype(jnp.float32)
 
-    x_test = jnp.array(x_test_np)
-    targets_test = jnp.array(targets_test_np)
-
-    predictions_test = mlp_forward_leaky(x_test, params)
-    test_loss = mean_squared_error(predictions_test, targets_test)
-
-    pred_np = np.array(predictions_test)
-    target_np = np.array(targets_test)
-
-    pred_range = pred_np.max() - pred_np.min()
-    target_range = target_np.max() - target_np.min()
-    range_ratio = pred_range / target_range
+    # Use JIT-compiled function for evaluation
+    predictions_test, test_loss = compute_predictions_and_loss(
+        x_test_np, targets_test_np, params
+    )
 
     test_loss_scalar = float(test_loss)
-    print(f"  Test loss: {test_loss_scalar:.6f}, Range ratio: {range_ratio:.3f}")
 
     return test_loss_scalar
 
@@ -286,7 +318,10 @@ def test_jax_complex_sin():
     # Training loop
     avg_loss = 0.0
     avg_time = 0.0
-    best_test_loss = float("inf")
+    avg_data_time = 0.0
+    avg_vjp_time = 0.0
+    avg_adamw_time = 0.0
+    # best_test_loss = float("inf")
 
     for epoch in range(1, NUM_EPOCHS + 1):
         epoch_start_time = time.time()
@@ -295,56 +330,83 @@ def test_jax_complex_sin():
         current_lr = learning_rate_schedule(epoch, LEARNING_RATE)
 
         # Create fresh batch
+        data_start = time.time()
         x, targets = create_sin_dataset(BATCH_SIZE)
+        data_time = time.time() - data_start
 
-        # Training step
-        params, m_states, v_states, loss = train_step_adamw(
+        # Training step using fully JIT-compiled function
+        vjp_start = time.time()
+
+        # Use complete JIT-compiled training step
+        updated_params, updated_m, updated_v, loss_value = complete_training_step(
             x, targets, params, m_states, v_states, epoch, current_lr
         )
 
+        vjp_time = time.time() - vjp_start
+
+        # Update return values (no separate AdamW step needed)
+        params, m_states, v_states = updated_params, updated_m, updated_v
+        adamw_time = 0.0  # Already included in the JIT step
+
+        # Loss extraction and conversion
+        loss_value_scalar = float(loss_value)
+
         epoch_time = time.time() - epoch_start_time
-        avg_loss += loss
+        avg_loss += loss_value_scalar
         avg_time += epoch_time
+        avg_data_time += data_time
+        avg_vjp_time += vjp_time
+        avg_adamw_time += adamw_time
 
         if epoch % PRINT_INTERVAL == 0:
+            print(f"\n{'=' * 60}")
             print(
-                f"\nEpoch {epoch}: Loss = {avg_loss / PRINT_INTERVAL:.6f}, "
-                f"LR = {current_lr:.6f}, Time = {avg_time / PRINT_INTERVAL:.4f}s/iter"
+                f"Epoch {epoch:3d} | Loss: {avg_loss / PRINT_INTERVAL:.6f} | LR: {current_lr:.6f}"
+            )
+            print(f"{'=' * 60}")
+            print(f"  Total Time:    {avg_time / PRINT_INTERVAL:.4f}s/iter")
+            print(
+                f"  ├─ Data Gen:   {avg_data_time / PRINT_INTERVAL:.4f}s ({avg_data_time / avg_time * 100:.1f}%)"
+            )
+            print(
+                f"  └─ JIT Step:   {avg_vjp_time / PRINT_INTERVAL:.4f}s ({avg_vjp_time / avg_time * 100:.1f}%)"
             )
 
-            # Detailed analysis
-            test_loss = analyze_jax_learning_progress(params, epoch)
-            if test_loss < best_test_loss:
-                best_test_loss = test_loss
-                print(f"  New best test loss: {best_test_loss:.6f}")
+            # test_loss = analyze_jax_learning_progress(params, epoch)
+            # if test_loss < best_test_loss:
+            #     best_test_loss = test_loss
+            #     print(f"  New best test loss: {best_test_loss:.6f}")
 
             avg_loss = 0.0
             avg_time = 0.0
+            avg_data_time = 0.0
+            avg_vjp_time = 0.0
+            avg_adamw_time = 0.0
 
     print("\nJAX training completed!")
 
     # Final evaluation
     print("\n=== Final Evaluation ===")
-    x_test_np = np.linspace(0, 1, 1000).reshape(-1, 1).astype(np.float32)
+    x_test_np = jnp.linspace(0, 1, 1000).reshape(-1, 1).astype(jnp.float32)
     targets_test_np = (
-        np.sin(SIN_PERIODS * 2.0 * np.pi * x_test_np) / 2.0 + 0.5
-    ).astype(np.float32)
+        jnp.sin(SIN_PERIODS * 2.0 * jnp.pi * x_test_np) / 2.0 + 0.5
+    ).astype(jnp.float32)
 
-    x_test = jnp.array(x_test_np)
-    predictions_test = mlp_forward_leaky(x_test, params)
+    predictions_test = mlp_forward_leaky(x_test_np, params)
 
     pred_final_np = np.array(predictions_test)
+    targets_final_np = np.array(targets_test_np)
 
-    final_test_loss = np.mean((pred_final_np - targets_test_np) ** 2)
+    final_test_loss = np.mean((pred_final_np - targets_final_np) ** 2)
 
     print(f"Final test loss: {final_test_loss:.6f}")
     print(
         f"Final predictions range: [{pred_final_np.min():.3f}, {pred_final_np.max():.3f}]"
     )
-    print(f"Target range: [{targets_test_np.min():.3f}, {targets_test_np.max():.3f}]")
+    print(f"Target range: [{targets_final_np.min():.3f}, {targets_final_np.max():.3f}]")
 
     # Calculate correlation
-    correlation = np.corrcoef(pred_final_np.flatten(), targets_test_np.flatten())[0, 1]
+    correlation = np.corrcoef(pred_final_np.flatten(), targets_final_np.flatten())[0, 1]
     print(f"Prediction-target correlation: {correlation:.4f}")
 
     return final_test_loss, correlation

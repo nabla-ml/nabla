@@ -30,8 +30,8 @@ from nabla.core.array import Array
 from nabla.core.trafos import (
     _extract_arrays_from_pytree,
     _handle_args_consistently,
-    make_traced,
-    make_untraced,
+    make_traced_pytree,
+    make_untraced_pytree,
     tree_flatten,
     tree_map,
     tree_unflatten,
@@ -187,7 +187,7 @@ def vmap_approach1(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
         traced_batched_args = []
         for arg, axis_spec in zip(actual_args, structured_in_axes, strict=False):
             # Make arrays traced first
-            traced_arg = tree_map(lambda a: make_traced([a])[0], arg)
+            traced_arg = tree_map(lambda a: make_traced_pytree([a])[0], arg)
             # Apply batching according to axis specification
             batched_arg = _apply_vmap_to_tree(
                 traced_arg, axis_spec, _prepare_input_batch
@@ -240,7 +240,7 @@ def vmap_approach1(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
                 output, axis_spec, _prepare_output_unbatch
             )
             # Make untraced
-            tree_map(lambda a: make_untraced([a]), unbatched_output)
+            tree_map(lambda a: make_untraced_pytree([a]), unbatched_output)
             unbatched_outputs.append(unbatched_output)
 
         return unbatched_outputs[0] if is_single_output else tuple(unbatched_outputs)

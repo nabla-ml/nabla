@@ -146,11 +146,12 @@ class BinaryOperation(Operation):
             arg1.batch_dims, arg2.batch_dims
         )
         output_dtype = self.compute_output_dtype(arg1, arg2)
-        arg1_broadcasted = broadcast_to(arg1, output_shape)
-        arg2_broadcasted = broadcast_to(arg2, output_shape)
-
-        arg1_broadcasted = broadcast_batch_dims(arg1_broadcasted, output_batch_dims)
-        arg2_broadcasted = broadcast_batch_dims(arg2_broadcasted, output_batch_dims)
+        if arg1.traced:
+            arg1 = broadcast_to(arg1, output_shape)
+            arg1 = broadcast_batch_dims(arg1, output_batch_dims)
+        if arg2.traced:
+            arg2 = broadcast_to(arg2, output_shape)
+            arg2 = broadcast_batch_dims(arg2, output_batch_dims)
 
         res = Array(
             shape=output_shape,
@@ -162,13 +163,13 @@ class BinaryOperation(Operation):
         )
 
         res.set_maxpr(self.maxpr)
-        res.add_arguments(arg1_broadcasted, arg2_broadcasted)
+        res.add_arguments(arg1, arg2)
         res.vjp_rule = self.vjp_rule
         res.jvp_rule = self.jvp_rule
         res.custom_kernel_path = self.custom_kernel_path()
 
         if not res.stage_realization:
-            self.eagerxpr([arg1_broadcasted, arg2_broadcasted], res)
+            self.eagerxpr([arg1, arg2], res)
 
         return res
 

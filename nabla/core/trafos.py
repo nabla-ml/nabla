@@ -321,53 +321,32 @@ def make_untraced_pytree(tree: Any) -> None:
     tree_map(_make_untraced_array, tree)
 
 
-def make_traced(args: list[Array]) -> list[Array]:
-    """Create shallow copies of arrays and mark them as traced.
-
-    Args:
-        args: Arrays to copy and mark as traced
-
-    Returns:
-        Shallow copies of input arrays with tracing enabled
-    """
-    copied_args = []
-    from ..ops.view import shallow_copy
-
-    for arg in args:
-        copied_arg = shallow_copy(arg)
-        copied_arg.traced = True
-        copied_args.append(copied_arg)
-    return copied_args
-
-
-def make_untraced(args: list[Array]) -> None:
-    """Disable tracing for arrays by clearing their traced flag.
-
-    Args:
-        args: Arrays to disable tracing for
-    """
-    for arg in args:
-        arg.traced = False
-
-
-def make_staged(args: list[Array]) -> None:
+def make_staged_pytree(args: list[Array]) -> None:
     """Enable staged execution for arrays to optimize performance.
 
     Args:
         args: Arrays to enable staged execution for
     """
-    for arg in args:
-        arg.stage_realization = True  # Enable staged execution
+
+    def _make_staged_array(array: Array) -> Array:
+        array.stage_realization = True
+        return array
+
+    tree_map(_make_staged_array, args)
 
 
-def make_unstaged(args: list[Array]) -> None:
+def make_unstaged_pytree(args: list[Array]) -> None:
     """Disable staged execution for arrays.
 
     Args:
         args: Arrays to disable staged execution for
     """
-    for arg in args:
-        arg.stage_realization = False  # Disable staged execution
+
+    def _make_unstaged_array(array: Array) -> Array:
+        array.stage_realization = False
+        return array
+
+    tree_map(_make_unstaged_array, args)
 
 
 def _handle_args_consistently(args):
@@ -380,9 +359,9 @@ def _handle_args_consistently(args):
 def _prepare_traced_inputs(actual_args, is_list_style, apply_staging=False):
     """Prepare traced inputs for list-style or pytree-style arguments."""
     if is_list_style:
-        traced_args = make_traced(actual_args)
+        traced_args = make_traced_pytree(actual_args)
         if apply_staging:
-            make_staged(traced_args)
+            make_staged_pytree(traced_args)
         return traced_args, None
 
     if len(actual_args) == 1:
@@ -397,7 +376,7 @@ def _prepare_traced_inputs(actual_args, is_list_style, apply_staging=False):
     if apply_staging:
         # Apply staging to the TRACED arrays, not the original args
         arrays = _extract_arrays_from_pytree(traced_args)
-        make_staged(arrays)
+        make_staged_pytree(arrays)
 
     return traced_args, traced_inputs_pytree
 
@@ -407,20 +386,20 @@ def _clean_traced_outputs(outputs, is_list_style, remove_staging=False):
     if is_list_style:
         # For list-style, we expect a list of Arrays, but handle tuple case
         if isinstance(outputs, list):
-            make_untraced(outputs)
+            make_untraced_pytree(outputs)
             if remove_staging:
-                make_unstaged(outputs)
+                make_unstaged_pytree(outputs)
         else:
             # If it's not a list (e.g., tuple from VJP), treat as pytree
             make_untraced_pytree(outputs)
             if remove_staging:
                 output_arrays = _extract_arrays_from_pytree(outputs)
-                make_unstaged(output_arrays)
+                make_unstaged_pytree(output_arrays)
     else:
         make_untraced_pytree(outputs)
         if remove_staging:
             output_arrays = _extract_arrays_from_pytree(outputs)
-            make_unstaged(output_arrays)
+            make_unstaged_pytree(output_arrays)
     return outputs
 
 
@@ -447,7 +426,7 @@ class Trace:
         This is the recommended way to create traces as it ensures proper
         tracing setup before function execution.
         """
-        inputs = make_traced(inputs)
+        inputs = make_traced_pytree(inputs)
 
         # Create trace instance (this marks inputs as traced)
         trace = cls(inputs)
@@ -459,10 +438,10 @@ class Trace:
         output_arrays = _extract_arrays_from_pytree(outputs)
         trace.outputs = output_arrays
 
-        make_untraced(inputs)  # Detach inputs from the trace
+        make_untraced_pytree(inputs)  # Detach inputs from the trace
 
         # Handle outputs properly - make them untraced
-        make_untraced(output_arrays)
+        make_untraced_pytree(output_arrays)
 
         return trace
 
@@ -546,7 +525,23 @@ class Trace:
             var_names[node_id] = var_name
 
             # Build the operation description
-            op_name = node.name or "unknown"
+            # print node name or the type if no name is set
+
+            if node.name:
+                op_name = node.name
+            else:
+                # check if the arg is a constant scalar, then we can simply show it as the arg directly
+                if (
+                    isinstance(node, Array)
+                    and node.shape == ()
+                    and not node.batch_dims
+                    and node.impl
+                ):
+                    # This is a constant scalar, show the raw value
+                    op_name = str(node.to_numpy().item())
+                else:
+                    # Fallback to the type or some default name
+                    op_name = "external_const"
             type_annotation = format_shape_and_dtype(node)
 
             if node.args:
@@ -964,7 +959,6 @@ def vjp(
         return gradients
 
     # Make outputs untraced before returning
-    # make_untraced_pytree(outputs)
     if not any_arg_traced:
         make_untraced_pytree(outputs)
 
@@ -1313,6 +1307,9 @@ def jit(func: Callable[..., Any] = None) -> Callable[..., Any]:
         return lambda f: jit(f)
 
     def jit_func(*args):
+        any_arg_traced = any(
+            getattr(arg, "traced", False) for arg in _extract_arrays_from_pytree(args)
+        )
         # Use common argument handling logic
         actual_args, is_list_style = _handle_args_consistently(args)
 
@@ -1330,465 +1327,14 @@ def jit(func: Callable[..., Any] = None) -> Callable[..., Any]:
 
         realize_(output_arrays)
 
+        # make outpu_arrays untraced, but only if all the inptus were oringally untraced
+        if not any_arg_traced:
+            make_untraced_pytree(outputs)
+
         # Clean up outputs and return
         return _clean_traced_outputs(outputs, is_list_style, remove_staging=True)
 
     return jit_func
-
-
-# def jacrev(
-#     func: Callable[..., Any],
-#     argnums: int | tuple[int, ...] | list[int] = 0,
-#     has_aux: bool = False,
-#     holomorphic: bool = False,
-#     allow_int: bool = False,
-# ) -> Callable[..., Any]:
-#     """Compute the Jacobian of a function using reverse-mode autodiff.
-
-#     Args:
-#         func: Function to differentiate (should take positional arguments)
-#         argnums: Optional, integer or sequence of integers. Specifies which
-#             positional argument(s) to differentiate with respect to (default 0).
-#         has_aux: Optional, bool. Indicates whether `func` returns a pair where the
-#             first element is considered the output of the mathematical function to be
-#             differentiated and the second element is auxiliary data. Default False.
-#         holomorphic: Optional, bool. Indicates whether `func` is promised to be
-#             holomorphic. Default False. Currently ignored.
-#         allow_int: Optional, bool. Whether to allow differentiating with
-#             respect to integer valued inputs. Currently ignored.
-
-#     Returns:
-#         A function with the same arguments as `func`, that evaluates the Jacobian of
-#         `func` using reverse-mode automatic differentiation. If `has_aux` is True
-#         then a pair of (jacobian, auxiliary_data) is returned.
-
-#     Note:
-#         This follows JAX's jacrev API:
-#         - Only accepts positional arguments
-#         - For functions requiring keyword arguments, use functools.partial or lambda
-#         - Returns the Jacobian as a pytree structure matching the input structure
-#     """
-
-#     def jacrev_fn(*args: Any) -> Any:
-#         # Normalize argnums to a tuple of integers
-#         if isinstance(argnums, int):
-#             selected_argnums = (argnums,)
-#         else:
-#             selected_argnums = tuple(argnums)
-
-#         # Validate argnums
-#         for argnum in selected_argnums:
-#             if argnum >= len(args) or argnum < -len(args):
-#                 raise ValueError(
-#                     f"argnum {argnum} is out of bounds for function with {len(args)} arguments"
-#                 )
-
-#         # Normalize negative indices
-#         normalized_argnums = tuple(
-#             argnum if argnum >= 0 else len(args) + argnum for argnum in selected_argnums
-#         )
-
-#         # Extract the arguments to differentiate with respect to (as pytrees)
-#         diff_args = tuple(args[i] for i in normalized_argnums)
-
-#         # Handle single vs multiple differentiated arguments (same pattern as vjp)
-#         if len(diff_args) == 1:
-#             diff_inputs_pytree = diff_args[0]
-#             is_single_diff_arg = True
-#         else:
-#             diff_inputs_pytree = diff_args
-#             is_single_diff_arg = False
-
-#         # Create a function that takes only the differentiated arguments
-#         def partial_func(*diff_args_inner):
-#             # Reconstruct the full argument list
-#             full_args = list(args)
-#             for i, arg in zip(normalized_argnums, diff_args_inner, strict=False):
-#                 full_args[i] = arg
-#             return func(*full_args)
-
-#         # Compute VJP for the differentiated arguments
-#         vjp_result = vjp(partial_func, *diff_args, has_aux=has_aux)
-
-#         if has_aux:
-#             y, pullback_func, aux = vjp_result
-#         else:
-#             y, pullback_func = vjp_result
-
-#         # Generate standard basis vectors for outputs
-#         flat_y = _extract_arrays_from_pytree(y)
-#         if not isinstance(flat_y, list):
-#             flat_y = [flat_y]
-
-#         sizes, std_basis_vectors = _std_basis(flat_y)
-
-#         # Helper function that takes primals and cotangent
-#         def pullback_helper(primals_pytree, cotangent):
-#             """Helper function for vmap that takes primals and cotangent.
-
-#             Args:
-#                 primals_pytree: The differentiated arguments (as pytree)
-#                 cotangent: Single cotangent vector from std_basis
-#             """
-#             # Extract args based on structure (same pattern as vjp)
-#             if is_single_diff_arg:
-#                 traced_args = (primals_pytree,)
-#             else:
-#                 traced_args = primals_pytree
-
-#             # Compute VJP for this primal configuration
-#             vjp_result_inner = vjp(partial_func, *traced_args, has_aux=has_aux)
-#             if has_aux:
-#                 _, pullback_inner, _ = vjp_result_inner
-#             else:
-#                 _, pullback_inner = vjp_result_inner
-
-#             # Apply pullback to cotangent
-#             gradients = pullback_inner(cotangent)
-#             return gradients
-
-#         # Apply vmap with simple in_axes=(None, 0)
-#         # None: broadcast primals (diff_inputs_pytree)
-#         # 0: vectorize cotangents (std_basis_vectors)
-#         jacobian = vmap(pullback_helper, in_axes=(None, 0))(diff_inputs_pytree, std_basis_vectors)
-
-#         # Handle has_aux
-#         if not has_aux:
-#             return jacobian
-#         else:
-#             return jacobian, aux
-
-#     return jacrev_fn
-
-
-# def jacfwd(
-#     func: Callable[..., Any],
-#     argnums: int | tuple[int, ...] | list[int] = 0,
-#     has_aux: bool = False,
-#     holomorphic: bool = False,
-#     allow_int: bool = False,
-# ) -> Callable[..., Any]:
-#     """
-#     Prototype implementation of jacfwd using forward-mode autodiff.
-
-#     This computes the Jacobian using the pattern:
-#     vmap(jvp(func, primals, tangents), in_axes=(primal_axes, tangent_axes))
-
-#     where primal_axes are None (broadcast) and tangent_axes are 0 (vectorize).
-
-#     Args:
-#         func: Function to differentiate
-#         argnums: Which arguments to differentiate with respect to
-#         has_aux: Whether function returns auxiliary data
-#         holomorphic: Ignored (for JAX compatibility)
-#         allow_int: Ignored (for JAX compatibility)
-
-#     Returns:
-#         Function that computes the Jacobian using forward-mode autodiff
-#     """
-
-#     def jacfwd_fn(*args: Any) -> Any:
-#         # Normalize argnums to a tuple of integers
-#         if isinstance(argnums, int):
-#             selected_argnums = (argnums,)
-#         else:
-#             selected_argnums = tuple(argnums)
-
-#         # Validate argnums
-#         for argnum in selected_argnums:
-#             if argnum >= len(args) or argnum < -len(args):
-#                 raise ValueError(
-#                     f"argnum {argnum} is out of bounds for function with {len(args)} arguments"
-#                 )
-
-#         # Normalize negative indices
-#         normalized_argnums = tuple(
-#             argnum if argnum >= 0 else len(args) + argnum for argnum in selected_argnums
-#         )
-
-#         # Extract the arguments to differentiate with respect to (as pytrees)
-#         diff_args = tuple(args[i] for i in normalized_argnums)
-
-#         # Handle single vs multiple differentiated arguments (same pattern as vjp)
-#         if len(diff_args) == 1:
-#             diff_inputs_pytree = diff_args[0]
-#             is_single_diff_arg = True
-#         else:
-#             diff_inputs_pytree = diff_args
-#             is_single_diff_arg = False
-
-#         # Create a function that takes only the differentiated arguments
-#         def partial_func(*diff_args_inner):
-#             # Reconstruct the full argument list
-#             full_args = list(args)
-#             for i, arg in zip(normalized_argnums, diff_args_inner, strict=False):
-#                 full_args[i] = arg
-#             return func(*full_args)
-
-#         # Compute VJP for the differentiated arguments
-#         vjp_result = vjp(partial_func, *diff_args, has_aux=has_aux)
-
-#         if has_aux:
-#             y, pullback_func, aux = vjp_result
-#         else:
-#             y, pullback_func = vjp_result
-
-#         # Generate standard basis vectors for outputs
-#         flat_y = _extract_arrays_from_pytree(y)
-#         if not isinstance(flat_y, list):
-#             flat_y = [flat_y]
-
-#         sizes, std_basis_vectors = _std_basis(flat_y)
-
-#         # Helper function that takes primals and cotangent
-#         def pullback_helper(primals_pytree, cotangent):
-#             """Helper function for vmap tjhat takes primals and cotangent.
-
-#             Args:
-#                 primals_pytree: The differentiated arguments (as pytree)
-#                 cotangent: Single cotangent vector from std_basis
-#             """
-#             # Extract args based on structure (same pattern as vjp)
-#             if is_single_diff_arg:
-#                 traced_args = (primals_pytree,)
-#             else:
-#                 traced_args = primals_pytree
-
-#             # Compute VJP for this primal configuration
-#             vjp_result_inner = vjp(partial_func, *traced_args, has_aux=has_aux)
-#             if has_aux:
-#                 _, pullback_inner, _ = vjp_result_inner
-#             else:
-#                 _, pullback_inner = vjp_result_inner
-
-#             # Apply pullback to cotangent
-#             gradients = pullback_inner(cotangent)
-#             return gradients
-
-#         # Use simple axis specifications - vmap will broadcast them automatically
-#         # None for primals (broadcast), 0 for cotangents (vectorize)
-#         jacobian = vmap(pullback_helper, in_axes=(None, 0))(diff_inputs_pytree, std_basis_vectors)
-
-#         # flatten the jacoobians
-#         output_tangents = _extract_arrays_from_pytree(jacobian)
-
-#         # flatten the inputs
-#         flat_diff_args = _extract_arrays_from_pytree(diff_inputs_pytree)
-
-#         from nabla.ops.view import reshape, split
-
-#         # Get output structure by running the function once
-#         test_output = partial_func(*diff_args)
-#         flat_output = _extract_arrays_from_pytree(test_output)
-#         if not isinstance(flat_output, list):
-#             flat_output = [flat_output]
-
-#         # Split the output tangents by the sizes from _std_basis
-#         split_tangents = split(output_tangents, sizes=sizes, axis=0)
-
-#         # print("\n\nSPLIT TANGENTS")
-#         # print(split_tangents)
-#         # print("\n\n")
-
-#         jacobian_components = []
-#         for j, (arg, tangents_for_arg) in enumerate(
-#             zip(flat_diff_args, split_tangents, strict=False)
-#         ):
-#             output_shape = flat_output[0].shape
-#             arg_shape = arg.shape
-
-#             # Reshape to proper Jacobian format: output_shape + input_shape
-#             target_shape = arg_shape + output_shape
-#             jacobian_component = reshape(tangents_for_arg, target_shape)
-
-#             # reshaped_grad = grad.reshape(shape)
-#             perm_axes = []
-#             for k in range(len(output_shape)):
-#                 perm_axes.append(k + len(arg_shape))
-#             for k in range(len(arg_shape)):
-#                 perm_axes.append(k)
-
-#             from ..ops.view import permute
-
-#             jacobian_component = permute(jacobian_component, perm_axes)
-#             jacobian_components.append(jacobian_component)
-
-#         # Return as tuple for multiple inputs
-#         if len(jacobian_components) == 1:
-#             jacobian_components = jacobian_components[0]
-
-#         jacobian = jacobian_components
-
-#         if not has_aux:
-#             return jacobian
-#         else:
-#             # TODO: Handle auxiliary data properly
-#             return jacobian, None
-
-#     return jacfwd_fn
-
-
-# def jacrev(
-#     func: Callable[..., Any],
-#     argnums: int | tuple[int, ...] | list[int] = 0,
-#     has_aux: bool = False,
-#     holomorphic: bool = False,
-#     allow_int: bool = False,
-# ) -> Callable[..., Any]:
-#     """Compute the Jacobian of a function using reverse-mode autodiff.
-
-#     Args:
-#         func: Function to differentiate (should take positional arguments)
-#         argnums: Optional, integer or sequence of integers. Specifies which
-#             positional argument(s) to differentiate with respect to (default 0).
-#         has_aux: Optional, bool. Indicates whether `func` returns a pair where the
-#             first element is considered the output of the mathematical function to be
-#             differentiated and the second element is auxiliary data. Default False.
-#         holomorphic: Optional, bool. Indicates whether `func` is promised to be
-#             holomorphic. Default False. Currently ignored.
-#         allow_int: Optional, bool. Whether to allow differentiating with
-#             respect to integer valued inputs. Currently ignored.
-
-#     Returns:
-#         A function with the same arguments as `func`, that evaluates the Jacobian of
-#         `func` using reverse-mode automatic differentiation. If `has_aux` is True
-#         then a pair of (jacobian, auxiliary_data) is returned.
-
-#     Note:
-#         This follows JAX's jacrev API:
-#         - Only accepts positional arguments
-#         - For functions requiring keyword arguments, use functools.partial or lambda
-#         - Returns the Jacobian as a pytree structure matching the input structure
-#     """
-
-#     def jacrev_fn(*args: Any) -> Any:
-#         # print("\nSTART JACREV FN")
-#         # Normalize argnums to a tuple of integers
-#         if isinstance(argnums, int):
-#             selected_argnums = (argnums,)
-#         else:
-#             selected_argnums = tuple(argnums)
-
-#         # Validate argnums
-#         for argnum in selected_argnums:
-#             if argnum >= len(args) or argnum < -len(args):
-#                 raise ValueError(
-#                     f"argnum {argnum} is out of bounds for function with {len(args)} arguments"
-#                 )
-
-#         # Normalize negative indices
-#         normalized_argnums = tuple(
-#             argnum if argnum >= 0 else len(args) + argnum for argnum in selected_argnums
-#         )
-
-#         # Extract the arguments to differentiate with respect to
-#         diff_args = tuple(args[i] for i in normalized_argnums)
-
-#         # Create a function that takes only the differentiated arguments
-#         def partial_func(*diff_args_inner):
-#             # Reconstruct the full argument list
-#             full_args = list(args)
-#             for i, arg in zip(normalized_argnums, diff_args_inner, strict=False):
-#                 full_args[i] = arg
-#             return func(*full_args)
-
-#         # # Compute VJP - delegate has_aux handling to vjp
-#         # vjp_result = vjp(partial_func, *diff_args, has_aux=has_aux)
-
-#         # if has_aux:
-#         #     y, pullback, aux = vjp_result
-#         # else:
-#         #     y, pullback = vjp_result
-
-#         # Flatten output arrays for std_basis generation
-#         # flat_y = _extract_arrays_from_pytree(y)
-#         # if not isinstance(flat_y, list):
-#         #     flat_y = [flat_y]
-
-#         # Generate standard basis vectors and get sizes for split operations
-#         sizes, std_basis_vectors = _std_basis(flat_y)
-
-#         def pullback_helper(primals_pytree, cotangent):
-#             """Helper function for vmap that takes primals and cotangent.
-
-#             Args:
-#                 primals_pytree: The differentiated arguments (as pytree)
-#                 cotangent: Single cotangent vector from std_basis
-#             """
-#             # Compute VJP for this primal configuration
-#             vjp_result_inner = vjp(partial_func, *primals_pytree, has_aux=has_aux)
-#             if has_aux:
-#                 _, pullback_inner, _ = vjp_result_inner
-#             else:
-#                 _, pullback_inner = vjp_result_inner
-
-#             # Apply pullback to cotangent
-#             gradients = pullback_inner(cotangent)
-#             return gradients
-
-#         diff_inputs_pytree = diff_args[0] if len(diff_args) == 1 else diff_args
-#         jacobian = vmap(pullback_helper, in_axes=(None, 0))(diff_inputs_pytree, std_basis_vectors)
-
-#         # flatten the jacobian
-#         grads = _extract_arrays_from_pytree(jacobian)
-
-#         # CRITICAL: Check if std_basis_vectors were traced (indicating composition with other transformations)
-#         std_basis_arrays = _extract_arrays_from_pytree(std_basis_vectors)
-#         any_std_basis_traced = any(
-#             getattr(arr, "traced", False) for arr in std_basis_arrays
-#         )
-
-#         # Make grads traced to capture subsequent operations in the computation graph
-#         if not any_std_basis_traced:
-#             # Only make traced if original std_basis wasn't traced (avoid double tracing)
-#             grads = make_traced_pytree(grads)
-
-#         # Import split function for proper jacobian structuring
-#         from ..ops.view import reshape, split
-
-#         # Extract flat input arguments for reshaping
-#         flat_diff_args = _extract_arrays_from_pytree(diff_args)
-
-#         splits = []
-#         for grad in grads:
-#             splits.append(split(grad, sizes=sizes, axis=0))
-
-#         # Reshape jacobian components to proper out_shape + arg_shape format (now traced!)
-#         cotangents = []
-#         for j in range(len(flat_y)):
-#             arg_jacs = []
-#             for i in range(len(flat_diff_args)):
-#                 grad = splits[i][j]
-#                 batch_dims = flat_y[j].batch_dims
-#                 out_shape = flat_y[j].shape
-#                 arg_shape = flat_diff_args[i].shape
-
-#                 if len(batch_dims) > 0 and len(out_shape) == 1 and out_shape[0] == 1:
-#                     out_shape = ()
-
-#                 target_shape = out_shape + arg_shape
-#                 reshaped_grad = reshape(grad, target_shape)
-#                 arg_jacs.append(reshaped_grad)
-
-#             if len(arg_jacs) == 1:
-#                 arg_jacs = arg_jacs[0]
-
-#             cotangents.append(arg_jacs)
-
-#         final_jac = cotangents
-
-#         if len(cotangents) == 1:
-#             final_jac = cotangents[0]
-
-#         if not any_std_basis_traced:
-#             make_untraced_pytree(final_jac)
-
-#         if not has_aux:
-#             return final_jac
-#         else:
-#             return final_jac, aux
-
-#     return jacrev_fn
 
 
 def jacrev(

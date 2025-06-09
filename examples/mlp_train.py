@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Improved Nabla implementation to learn the complex 8-period sin curve."""
+"""Nabla implementation with JIT acceleration to learn the complex 8-period sin curve."""
 
 import time
 
@@ -10,9 +10,9 @@ import nabla as nb
 # Configuration
 BATCH_SIZE = 128
 LAYERS = [1, 64, 128, 256, 128, 64, 1]
-LEARNING_RATE = 0.01
-NUM_EPOCHS = 400  # Reduced for quick testing
-PRINT_INTERVAL = 100  # Reduced interval for quicker feedback
+LEARNING_RATE = 0.001  # Match JAX version for fair comparison
+NUM_EPOCHS = 5
+PRINT_INTERVAL = 1
 SIN_PERIODS = 8
 
 
@@ -28,23 +28,15 @@ def mlp_forward(x: nb.Array, params: list[nb.Array]) -> nb.Array:
     return output
 
 
-def leaky_relu_manual(x: nb.Array, negative_slope: float = 0.01) -> nb.Array:
-    """Manual leaky ReLU implementation since Nabla might not have it."""
-    relu_x = nb.relu(x)
-    slope_tensor = nb.array([np.float32(negative_slope)])
-    one_minus_slope = nb.array([np.float32(1.0 - negative_slope)])
-    return one_minus_slope * relu_x + slope_tensor * x
-
-
 def mlp_forward_leaky(x: nb.Array, params: list[nb.Array]) -> nb.Array:
-    """MLP forward pass with leaky ReLU to prevent dead neurons."""
+    """MLP forward pass with ReLU activation."""
     output = x
     for i in range(0, len(params) - 1, 2):
         w, b = params[i], params[i + 1]
         output = nb.matmul(output, w) + b
-        # Apply leaky ReLU to all layers except the last
+        # Apply ReLU to all layers except the last
         if i < len(params) - 2:
-            output = leaky_relu_manual(output, 0.01)
+            output = nb.relu(output)
     return output
 
 
@@ -52,7 +44,9 @@ def mean_squared_error(predictions: nb.Array, targets: nb.Array) -> nb.Array:
     """Compute mean squared error loss."""
     diff = predictions - targets
     squared_errors = diff * diff
-    batch_size = nb.array([np.float32(predictions.shape[0])])
+    batch_size = nb.array(
+        [np.float32(predictions.shape[0])]
+    )  # Wrap in nb.array like original
     loss = nb.sum(squared_errors) / batch_size
     return loss
 
@@ -74,6 +68,7 @@ def create_sin_dataset(batch_size: int = 256) -> tuple[nb.Array, nb.Array]:
 
     x = nb.Array.from_numpy(np_x)
     targets = nb.Array.from_numpy(np_targets)
+
     return x, targets
 
 
@@ -101,7 +96,7 @@ def initialize_for_complex_function(
 
         # Bias initialization strategy
         if i < len(layers) - 2:  # Hidden layers
-            # Small positive bias to help with leaky ReLU
+            # Small positive bias to help with ReLU
             b_np = np.ones((1, fan_out), dtype=np.float32) * 0.05
         else:  # Output layer
             # Initialize output bias to middle of target range
@@ -114,6 +109,7 @@ def initialize_for_complex_function(
     return params
 
 
+@nb.jit
 def adamw_step(
     params: list[nb.Array],
     gradients: list[nb.Array],
@@ -126,48 +122,57 @@ def adamw_step(
     eps: float = 1e-8,
     weight_decay: float = 0.01,
 ) -> tuple[list[nb.Array], list[nb.Array], list[nb.Array]]:
-    """AdamW optimizer step with weight decay."""
+    """JIT-compiled AdamW optimizer step with weight decay - OPTIMIZED to match JAX efficiency."""
     updated_params = []
     updated_m = []
     updated_v = []
 
-    # Convert scalars to tensors
-    beta1_tensor = nb.array([np.float32(beta1)])
-    beta2_tensor = nb.array([np.float32(beta2)])
-    lr_tensor = nb.array([np.float32(learning_rate)])
-    eps_tensor = nb.array([np.float32(eps)])
-    wd_tensor = nb.array([np.float32(weight_decay)])
-    one_tensor = nb.array([np.float32(1.0)])
+    for _i, (param, grad, m, v) in enumerate(
+        zip(params, gradients, m_states, v_states, strict=False)
+    ):
+        # Update moments
+        new_m = beta1 * m + (1.0 - beta1) * grad
+        new_v = beta2 * v + (1.0 - beta2) * (grad * grad)
 
-    # Bias correction terms
-    beta1_power = nb.array([np.float32(beta1**step)])
-    beta2_power = nb.array([np.float32(beta2**step)])
-    bias_correction1 = one_tensor - beta1_power
-    bias_correction2 = one_tensor - beta2_power
+        # Completely fused parameter update - eliminates ALL intermediate variables
+        new_param = param * (1.0 - weight_decay * learning_rate) - learning_rate * (
+            new_m / (1.0 - beta1**step)
+        ) / (((new_v / (1.0 - beta2**step)) ** 0.5) + eps)
+
+        updated_params.append(new_param)
+        updated_m.append(new_m)
+        updated_v.append(new_v)
+
+    return updated_params, updated_m, updated_v
+
+
+@nb.jit
+def adamw_step_optimized(
+    params: list[nb.Array],
+    gradients: list[nb.Array],
+    m_states: list[nb.Array],
+    v_states: list[nb.Array],
+    step: int,
+    learning_rate: float = 0.001,
+    beta1: float = 0.9,
+    beta2: float = 0.999,
+    eps: float = 1e-8,
+    weight_decay: float = 0.01,
+) -> tuple[list[nb.Array], list[nb.Array], list[nb.Array]]:
+    """JIT-compiled AdamW optimizer step with weight decay - OPTIMIZED to match JAX efficiency."""
+    updated_params = []
+    updated_m = []
+    updated_v = []
 
     for param, grad, m, v in zip(params, gradients, m_states, v_states, strict=False):
-        # Weight decay (applied to parameters, not gradients)
-        param_with_decay = param * (one_tensor - wd_tensor * lr_tensor)
+        # Update moments
+        new_m = beta1 * m + (1.0 - beta1) * grad
+        new_v = beta2 * v + (1.0 - beta2) * (grad * grad)
 
-        # Update biased first moment estimate
-        new_m = beta1_tensor * m + (one_tensor - beta1_tensor) * grad
-
-        # Update biased second raw moment estimate
-        grad_squared = grad * grad
-        new_v = beta2_tensor * v + (one_tensor - beta2_tensor) * grad_squared
-
-        # Compute bias-corrected first moment estimate
-        m_hat = new_m / bias_correction1
-
-        # Compute bias-corrected second raw moment estimate
-        v_hat = new_v / bias_correction2
-
-        # Update parameters
-        # sqrt_v_hat = nb.sqrt(v_hat)
-        sqrt_v_hat = v_hat**0.5  # Use ** 0.5 instead of sqrt for Nabla compatibility
-        denominator = sqrt_v_hat + eps_tensor
-        update = lr_tensor * m_hat / denominator
-        new_param = param_with_decay - update
+        # Completely fused parameter update - eliminates ALL intermediate variables
+        new_param = param * (1.0 - weight_decay * learning_rate) - learning_rate * (
+            new_m / (1.0 - beta1**step)
+        ) / (((new_v / (1.0 - beta2**step)) ** 0.5) + eps)
 
         updated_params.append(new_param)
         updated_m.append(new_m)
@@ -177,10 +182,11 @@ def adamw_step(
 
 
 def init_adamw_state(params: list[nb.Array]) -> tuple[list[nb.Array], list[nb.Array]]:
-    """Initialize AdamW state."""
+    """Initialize AdamW state - optimized version."""
     m_states = []
     v_states = []
     for param in params:
+        # Use zeros_like for more efficient initialization
         m_np = np.zeros_like(param.to_numpy())
         v_np = np.zeros_like(param.to_numpy())
         m_states.append(nb.Array.from_numpy(m_np))
@@ -198,7 +204,8 @@ def learning_rate_schedule(
     return initial_lr * (decay_factor ** (epoch // decay_every))
 
 
-def train_step_adamw(
+@nb.jit
+def train_step_adamw_jitted(
     x: nb.Array,
     targets: nb.Array,
     params: list[nb.Array],
@@ -206,27 +213,40 @@ def train_step_adamw(
     v_states: list[nb.Array],
     step: int,
     learning_rate: float,
-) -> tuple[list[nb.Array], list[nb.Array], list[nb.Array], float]:
-    """Perform one training step using AdamW."""
+) -> tuple[list[nb.Array], list[nb.Array], list[nb.Array], nb.Array]:
+    """JIT-compiled training step using Nabla VJP."""
     # Forward pass + VJP for gradients
     all_inputs = [x, targets] + params
     loss_values, vjp_fn = nb.vjp(mlp_forward_and_loss_leaky, all_inputs)
 
     # Backward pass
     cotangent = [nb.array([np.float32(1.0)])]
-    gradients = vjp_fn(cotangent)
-
-    # Extract parameter gradients (skip x and targets)
-    all_gradients = gradients  # Extract the gradient list from the tuple
+    all_gradients_tuple = vjp_fn(cotangent)
+    all_gradients = (
+        all_gradients_tuple[0]
+        if isinstance(all_gradients_tuple, tuple)
+        else all_gradients_tuple
+    )
     param_gradients = all_gradients[2:]  # Skip x and targets gradients
 
-    # AdamW optimizer update
+    # AdamW optimizer update using JIT-compiled step
     updated_params, updated_m, updated_v = adamw_step(
         params, param_gradients, m_states, v_states, step, learning_rate
     )
 
-    loss_scalar = loss_values[0].to_numpy().item()
+    loss_scalar = loss_values[0]
+
     return updated_params, updated_m, updated_v, loss_scalar
+
+
+@nb.jit
+def compute_predictions_and_loss(
+    x_test: nb.Array, targets_test: nb.Array, params: list[nb.Array]
+) -> tuple[nb.Array, nb.Array]:
+    """JIT-compiled function to compute predictions and loss."""
+    predictions_test = mlp_forward_leaky(x_test, params)
+    test_loss = mean_squared_error(predictions_test, targets_test)
+    return predictions_test, test_loss
 
 
 def analyze_nabla_learning_progress(params: list[nb.Array], epoch: int):
@@ -240,25 +260,27 @@ def analyze_nabla_learning_progress(params: list[nb.Array], epoch: int):
     x_test = nb.Array.from_numpy(x_test_np)
     targets_test = nb.Array.from_numpy(targets_test_np)
 
-    predictions_test = mlp_forward_leaky(x_test, params)
-    test_loss = mean_squared_error(predictions_test, targets_test)
-
-    pred_np = predictions_test.to_numpy()
-    target_np = targets_test.to_numpy()
-
-    pred_range = pred_np.max() - pred_np.min()
-    target_range = target_np.max() - target_np.min()
-    range_ratio = pred_range / target_range
+    # Use JIT-compiled function for evaluation
+    predictions_test, test_loss = compute_predictions_and_loss(
+        x_test, targets_test, params
+    )
 
     test_loss_scalar = test_loss.to_numpy().item()
-    print(f"  Test loss: {test_loss_scalar:.6f}, Range ratio: {range_ratio:.3f}")
 
     return test_loss_scalar
 
 
+@nb.jit
+def value_and_grad(func, args):
+    values, vjp_fn = nb.vjp(func, args)
+    cotangent = [nb.ones_like(values[0])]
+    gradients = vjp_fn(cotangent)
+    return values, gradients[2:]
+
+
 def test_nabla_complex_sin():
-    """Test Nabla implementation for complex sin learning."""
-    print("=== Learning COMPLEX 8-Period Sin Function with Nabla ===")
+    """Test Nabla implementation with JIT for complex sin learning."""
+    print("=== Learning COMPLEX 8-Period Sin Function with Nabla JIT ===")
     print(f"Architecture: {LAYERS}")
     print(f"Initial learning rate: {LEARNING_RATE}")
     print(f"Sin periods: {SIN_PERIODS}")
@@ -287,7 +309,10 @@ def test_nabla_complex_sin():
     # Training loop
     avg_loss = 0.0
     avg_time = 0.0
-    best_test_loss = float("inf")
+    avg_data_time = 0.0
+    avg_vjp_time = 0.0
+    avg_adamw_time = 0.0
+    # best_test_loss = float("inf")
 
     for epoch in range(1, NUM_EPOCHS + 1):
         epoch_start_time = time.time()
@@ -296,33 +321,72 @@ def test_nabla_complex_sin():
         current_lr = learning_rate_schedule(epoch, LEARNING_RATE)
 
         # Create fresh batch
+        data_start = time.time()
         x, targets = create_sin_dataset(BATCH_SIZE)
+        data_time = time.time() - data_start
 
-        # Training step
-        params, m_states, v_states, loss = train_step_adamw(
-            x, targets, params, m_states, v_states, epoch, current_lr
+        # Training step using JIT-compiled function
+        vjp_start = time.time()
+        all_inputs = [x, targets] + params
+
+        print(nb.xpr(value_and_grad, mlp_forward_and_loss_leaky, all_inputs))
+
+        # Use value_and_grad to compute loss and gradients
+        loss_values, param_gradients = value_and_grad(
+            mlp_forward_and_loss_leaky, all_inputs
         )
 
+        vjp_time = time.time() - vjp_start
+
+        # Optimizer step - use the JIT version
+        adamw_start = time.time()
+        updated_params, updated_m, updated_v = adamw_step(
+            params, param_gradients, m_states, v_states, epoch, current_lr
+        )
+        adamw_time = time.time() - adamw_start
+
+        # Update return values
+        params, m_states, v_states = updated_params, updated_m, updated_v
+
+        # Loss extraction and conversion
+        loss_value = loss_values[0].to_numpy().item()
+
         epoch_time = time.time() - epoch_start_time
-        avg_loss += loss
+        avg_loss += loss_value
         avg_time += epoch_time
+        avg_data_time += data_time
+        avg_vjp_time += vjp_time
+        avg_adamw_time += adamw_time
 
         if epoch % PRINT_INTERVAL == 0:
+            print(f"\n{'=' * 60}")
             print(
-                f"\nEpoch {epoch}: Loss = {avg_loss / PRINT_INTERVAL:.6f}, "
-                f"LR = {current_lr:.6f}, Time = {avg_time / PRINT_INTERVAL:.4f}s/iter"
+                f"Epoch {epoch:3d} | Loss: {avg_loss / PRINT_INTERVAL:.6f} | LR: {current_lr:.6f}"
+            )
+            print(f"{'=' * 60}")
+            print(f"  Total Time:    {avg_time / PRINT_INTERVAL:.4f}s/iter")
+            print(
+                f"  ├─ Data Gen:   {avg_data_time / PRINT_INTERVAL:.4f}s ({avg_data_time / avg_time * 100:.1f}%)"
+            )
+            print(
+                f"  ├─ VJP Comp:   {avg_vjp_time / PRINT_INTERVAL:.4f}s ({avg_vjp_time / avg_time * 100:.1f}%)"
+            )
+            print(
+                f"  └─ AdamW Step: {avg_adamw_time / PRINT_INTERVAL:.4f}s ({avg_adamw_time / avg_time * 100:.1f}%)"
             )
 
-            # Detailed analysis
-            test_loss = analyze_nabla_learning_progress(params, epoch)
-            if test_loss < best_test_loss:
-                best_test_loss = test_loss
-                print(f"  New best test loss: {best_test_loss:.6f}")
+            # test_loss = analyze_nabla_learning_progress(params, epoch)
+            # if test_loss < best_test_loss:
+            #     best_test_loss = test_loss
+            #     print(f"  New best test loss: {best_test_loss:.6f}")
 
             avg_loss = 0.0
             avg_time = 0.0
+            avg_data_time = 0.0
+            avg_vjp_time = 0.0
+            avg_adamw_time = 0.0
 
-    print("\nNabla training completed!")
+    print("\nNabla JIT training completed!")
 
     # Final evaluation
     print("\n=== Final Evaluation ===")
@@ -353,15 +417,15 @@ def test_nabla_complex_sin():
 
 if __name__ == "__main__":
     final_loss, correlation = test_nabla_complex_sin()
-    print("\n=== Nabla Summary ===")
+    print("\n=== Nabla JIT Summary ===")
     print(f"Final test loss: {final_loss:.6f}")
     print(f"Correlation with true function: {correlation:.4f}")
 
     if correlation > 0.95:
-        print("SUCCESS: Nabla learned the complex function very well! 🎉")
+        print("SUCCESS: Nabla JIT learned the complex function very well! 🎉")
     elif correlation > 0.8:
-        print("GOOD: Nabla learned the general shape well! 👍")
+        print("GOOD: Nabla JIT learned the general shape well! 👍")
     elif correlation > 0.5:
         print("PARTIAL: Some learning but needs improvement 🤔")
     else:
-        print("POOR: Nabla failed to learn the complex function 😞")
+        print("POOR: Nabla JIT failed to learn the complex function 😞")

@@ -107,6 +107,8 @@ class ModelFactory:
         inputs: list[Array], trace: list[Array], outputs: list[Array]
     ) -> Model:
         """Create a MAX model from the computation graph."""
+
+        # Timing: Input type preparation
         input_types = []
         devices = []
 
@@ -127,16 +129,13 @@ class ModelFactory:
                 custom_ops_paths.append(node.kernel_impl_path)
 
         try:
-            # custom_op_package_path = Path(__file__).parent.parent / "kernels"
+            # Timing: Graph construction
 
-            with (
-                Graph(
-                    "nabla_graph",
-                    input_types=input_types,
-                    # [custom_op_package_path] if custom_op_package_path.exists() else []
-                    custom_extensions=custom_ops_paths,  # if len(custom_ops_paths) > 0 else None
-                ) as graph
-            ):
+            with Graph(
+                "nabla_graph",
+                input_types=input_types,
+                custom_extensions=custom_ops_paths,
+            ) as graph:
                 input_symbols = graph.inputs
                 for i, input_node in enumerate(inputs):
                     input_node.tensor_value = input_symbols[i]
@@ -183,7 +182,6 @@ class ModelFactory:
                 except Exception as e:
                     raise ValueError(f"Failed to set graph output: {e}") from e
 
-            # print("Graph:", graph)
             session = InferenceSession(devices=devices)
 
             for node in trace:
@@ -191,6 +189,7 @@ class ModelFactory:
 
             try:
                 model = session.load(graph)
+
                 return model
             except Exception as e:
                 raise ValueError(f"Failed to load model: {e}") from e
@@ -261,7 +260,14 @@ def realize_(outputs: list[Array]) -> None:
         if any(tensor is None for tensor in tensor_inputs):
             raise ValueError("Some inputs have no implementation")
 
+        import time
+
+        # Timing: Model execution
+        execution_start = time.perf_counter()
+
         model_outputs = model.execute(*tensor_inputs)
+        execution_time = time.perf_counter() - execution_start
+        print(f"   \nModel execution time: {execution_time:.4f} seconds")
 
         for i, output in enumerate(output_list):
             output.impl = model_outputs[i]
