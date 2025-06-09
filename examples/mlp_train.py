@@ -9,10 +9,10 @@ import nabla as nb
 
 # Configuration
 BATCH_SIZE = 128
-LAYERS = [1, 64, 128, 128, 64, 1]
+LAYERS = [1, 64, 128, 256, 128, 64, 1]
 LEARNING_RATE = 0.01
-NUM_EPOCHS = 5000
-PRINT_INTERVAL = 200
+NUM_EPOCHS = 400  # Reduced for quick testing
+PRINT_INTERVAL = 100  # Reduced interval for quicker feedback
 SIN_PERIODS = 8
 
 
@@ -217,7 +217,6 @@ def train_step_adamw(
     gradients = vjp_fn(cotangent)
 
     # Extract parameter gradients (skip x and targets)
-    # After VJP refactoring, gradients is a tuple containing the gradient list
     all_gradients = gradients  # Extract the gradient list from the tuple
     param_gradients = all_gradients[2:]  # Skip x and targets gradients
 
