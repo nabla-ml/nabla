@@ -1,16 +1,19 @@
-import nabla as nb
 import jax
 import jax.numpy as jnp
 import numpy as np
+
+import nabla as nb
 
 
 # Example function using Nabla's array operations
 def foo_nabla(input):
     return nb.sum(input * input, axes=0)
 
+
 # Example function using JAX's array operations
 def foo_jax(input):
     return jnp.sum(input * input, axis=0)
+
 
 # random input for testing
 np_input = np.random.randn(2, 3, 4)

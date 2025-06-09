@@ -29,6 +29,9 @@ __all__ = [
     "permute",
     "move_axis_to_front",
     "move_axis_from_front",
+    "permute_batch_dims",
+    "move_axis_to_front_of_batch_dims",
+    "move_axis_from_front_of_batch_dims",
     "reshape",
     "broadcast_to",
     "broadcast_batch_dims",
@@ -241,6 +244,71 @@ def transpose_batch_dims(arg: Array, axis_1: int = -2, axis_2: int = -1) -> Arra
     return op.forward(arg)
 
 
+def compute_iterative_transpose_swaps(axes: tuple[int, ...]) -> list[tuple[int, int]]:
+    """Compute the sequence of axis swaps needed to implement a permutation.
+
+    This function implements the algorithm from the Mojo code to determine what
+    sequence of axis swaps (transposes) are needed to achieve a given permutation.
+    Returns a list of (axis1, axis2) tuples that should be swapped in order.
+
+    Args:
+        axes: Tuple of axis indices specifying the desired permutation.
+              All indices should be negative (e.g., -1, -2, -3, ...)
+
+    Returns:
+        List of (axis1, axis2) tuples representing the swaps to perform in order.
+        Each tuple contains two negative axis indices to be swapped.
+
+    The algorithm works as follows:
+    1. Initialize current_axis_order as [-num_dims, -num_dims+1, ..., -1]
+    2. For each target position x, find where target_axis currently is (y)
+    3. If x != y, record the swap (x_neg, y_neg) and update current_axis_order
+    4. Return the list of all recorded swaps
+    """
+    target_perm = list(axes)
+    num_dims = len(target_perm)
+
+    # Initialize current_axis_order as in Mojo: [-num_dims, -num_dims+1, ..., -1]
+    current_axis_order = []
+    for i in range(-num_dims, 0):
+        current_axis_order.append(i)
+
+    swaps = []
+
+    # For each target position x, move the correct axis there
+    for x in range(num_dims):
+        target_axis = target_perm[x]
+
+        # Find where target_axis currently is in the current ordering
+        try:
+            y = current_axis_order.index(target_axis)
+        except ValueError:
+            # target_axis not found in current_axis_order, this shouldn't happen
+            raise ValueError(
+                f"Target axis {target_axis} not found in current_axis_order {current_axis_order}"
+            )
+
+        # If already in the right position, skip
+        if x == y:
+            continue
+
+        # Convert to negative indices for the swap operation
+        x_neg = x - num_dims
+        y_neg = y - num_dims
+
+        # Record the swap
+        swaps.append((x_neg, y_neg))
+
+        # Update current_axis_order to reflect the swap
+        # Swap the elements at positions x and y
+        current_axis_order[x], current_axis_order[y] = (
+            current_axis_order[y],
+            current_axis_order[x],
+        )
+
+    return swaps
+
+
 class PermuteOp(ViewOperation):
     """Permute (reorder) the dimensions of a tensor according to given axes."""
 
@@ -280,10 +348,16 @@ class PermuteOp(ViewOperation):
         return tuple(input_shape[axis + len(input_shape)] for axis in self.axes)
 
     def maxpr(self, args: list[Value], output: Array) -> None:
-        """Max computation: permute the tensor."""
-        # Convert negative axes to positive for ops.transpose
-        positive_axes = [ax + len(args[0].shape) for ax in self.axes]
-        output.tensor_value = ops.transpose(args[0], tuple(positive_axes))
+        """Max computation: permute the tensor using iterative transpose."""
+        # Get the sequence of swaps needed for this permutation
+        swaps = compute_iterative_transpose_swaps(self.axes)
+
+        # Apply each swap in sequence
+        out_symbol = args[0]
+        for axis1, axis2 in swaps:
+            out_symbol = ops.transpose(out_symbol, axis1, axis2)
+
+        output.tensor_value = out_symbol
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         """Eager computation: permute using numpy."""
@@ -356,6 +430,168 @@ def permute(input_array: Array, axes: tuple[int, ...]) -> Array:
     return op.forward(input_array)
 
 
+class PermuteBatchDimsOp(ViewOperation):
+    """Permute (reorder) the batch dimensions of an array according to given axes."""
+
+    def __init__(self, axes: tuple[int, ...]):
+        """Initialize permute batch dims operation.
+
+        Args:
+            axes: Tuple of axis indices specifying the new order for batch_dims.
+                  Must be a permutation of range(-len(batch_dims), 0).
+                  All indices should be negative.
+        """
+        super().__init__(f"permute_batch_dims[axes={axes}]")
+        self.axes = tuple(axes)
+
+    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
+        """Shape stays the same for batch dimension operations."""
+        if len(input_shapes) != 1:
+            raise ValueError(
+                f"Permute batch dims operation requires 1 input shape, got {len(input_shapes)}"
+            )
+        return input_shapes[0]
+
+    def compute_output_batch_dims(self, *input_batch_dimss: tuple) -> tuple:
+        """Compute output batch_dims after permutation."""
+        if len(input_batch_dimss) != 1:
+            raise ValueError(
+                f"Permute batch dims operation requires 1 input batch_dims, got {len(input_batch_dimss)}"
+            )
+        input_batch_dims = input_batch_dimss[0]
+
+        if not input_batch_dims:
+            raise ValueError(
+                "Cannot permute batch dims of an array with no batch dimensions"
+            )
+
+        # Validate axes - should be all negative and same length as input batch_dims
+        if len(self.axes) != len(input_batch_dims):
+            raise ValueError(
+                f"Number of axes {len(self.axes)} must match input batch dimensions {len(input_batch_dims)}"
+            )
+
+        # Convert to positive indices for validation
+        positive_axes = [ax + len(input_batch_dims) for ax in self.axes]
+        if sorted(positive_axes) != list(range(len(input_batch_dims))):
+            raise ValueError(
+                f"Axes {self.axes} must be a permutation of negative indices corresponding to batch_dims range"
+            )
+
+        # Reorder batch dimensions according to axes (convert negative to positive for indexing)
+        return tuple(
+            input_batch_dims[axis + len(input_batch_dims)] for axis in self.axes
+        )
+
+    def forward(self, *args: Array) -> Array:
+        """Override forward to handle single input."""
+        if len(args) != 1:
+            raise ValueError(
+                f"Permute batch dims operation requires 1 argument, got {len(args)}"
+            )
+        return super().forward(*args)
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        """MAX graph implementation using ops.transpose."""
+        # Get the sequence of swaps needed for this permutation
+        swaps = compute_iterative_transpose_swaps(self.axes)
+        swaps = [
+            (axis1 - len(output.shape), axis2 - len(output.shape))
+            for axis1, axis2 in swaps
+        ]
+
+        # Apply each swap in sequence
+        out_symbol = args[0]
+        for axis1, axis2 in swaps:
+            out_symbol = ops.transpose(out_symbol, axis1, axis2)
+
+        output.tensor_value = out_symbol
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        """Eager execution using NumPy transpose."""
+        input_array = args[0]
+
+        # Get the full tensor including batch dimensions
+        input_np = input_array.to_numpy()
+
+        # Convert batch dimension axes to full tensor indices
+        # Following the pattern from other batch operations
+        numpy_axes = []
+        for ax in self.axes:
+            # ax is negative relative to batch_dims, convert to full tensor position
+            batch_pos_ax = ax - len(input_array.shape)
+            numpy_axes.append(batch_pos_ax)
+
+        # Add shape dimension indices (they stay in their original relative positions)
+        # They come after the batch dimensions in the permuted tensor
+        shape_offset = len(input_array.batch_dims)
+        shape_axes = list(range(shape_offset, shape_offset + len(input_array.shape)))
+        full_axes = numpy_axes + shape_axes
+
+        # Apply transpose
+        np_result = np.transpose(input_np, full_axes)
+        output.impl = Tensor.from_numpy(np_result)
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        # """VJP rule: reverse the permutation."""
+        # # Create inverse permutation for negative indices
+        # inv_axes = [0] * len(self.axes)
+        # for i, axis in enumerate(self.axes):
+        #     # Convert negative axis to positive index for inverse mapping
+        #     pos_axis = axis + len(self.axes)
+        #     inv_axes[pos_axis] = i
+
+        # # Convert back to negative indices
+        # inv_axes_negative = [-len(self.axes) + ax for ax in inv_axes]
+
+        return [permute_batch_dims(cotangent, self.axes)]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        """JVP rule: apply same permutation to tangent."""
+        return permute_batch_dims(tangents[0], self.axes)
+
+
+def permute_batch_dims(input_array: Array, axes: tuple[int, ...]) -> Array:
+    """Permute (reorder) the batch dimensions of an array.
+
+    This operation reorders the batch_dims of an Array according to the given axes,
+    similar to how regular permute works on shape dimensions. The shape dimensions
+    remain unchanged.
+
+    Args:
+        input_array: Input array with batch dimensions to permute
+        axes: Tuple specifying the new order of batch dimensions.
+              All indices should be negative and form a permutation.
+
+    Returns:
+        Array with batch dimensions reordered according to axes
+
+    Example:
+        >>> import nabla as nb
+        >>> # Array with batch_dims=(2, 3, 4) and shape=(5, 6)
+        >>> x = nb.ones((5, 6))
+        >>> x.batch_dims = (2, 3, 4)  # Simulated for example
+        >>> y = permute_batch_dims(x, (-1, -3, -2))  # Reorder as (4, 2, 3)
+        >>> # Result has batch_dims=(4, 2, 3) and shape=(5, 6)
+    """
+    # Convert to negative indices for consistency with batch dimension handling
+    axes = tuple(-len(input_array.batch_dims) + ax if ax >= 0 else ax for ax in axes)
+
+    # Handle case where fewer axes are provided - prepend missing axes to front
+    if len(axes) < len(input_array.batch_dims):
+        axes_new = []
+        for i in range(-len(input_array.batch_dims), -len(axes)):
+            axes_new.append(i)
+        axes = tuple(axes_new) + axes
+
+    op = PermuteBatchDimsOp(axes)
+    return op.forward(input_array)
+
+
 def move_axis_to_front(input_array: Array, axis: int) -> Array:
     """Move specified axis to the front (position 0), shifting others right.
 
@@ -420,6 +656,79 @@ def move_axis_from_front(input_array: Array, target_axis: int) -> Array:
     axes = list(range(1, target_axis + 1)) + [0] + list(range(target_axis + 1, ndim))
 
     return permute(input_array, tuple(axes))
+
+
+def move_axis_to_front_of_batch_dims(input_array: Array, axis: int) -> Array:
+    """Move specified batch dimension to the front (position 0), shifting others right.
+
+    Args:
+        input_array: Input tensor with batch dimensions
+        axis: Batch dimension to move to front (negative index)
+
+    Returns:
+        Tensor with specified batch dimension moved to front
+
+    Example:
+        >>> x = nb.ones((2, 3, 4))  # shape (2, 3, 4)
+        >>> x.batch_dims = (1, 0)  # Simulated for example
+        >>> y = move_axis_to_fron_of_batch_dims(x, -1)  # Move last batch dim to front
+        >>> # Result has batch_dims=(0, 1) and shape=(2, 3, 4)
+    """
+    ndim = len(input_array.batch_dims)
+
+    # Normalize negative axis
+    if axis >= 0:
+        axis = -len(input_array.batch_dims) + axis
+
+    if axis < -len(input_array.batch_dims) or axis >= 0:
+        raise ValueError(
+            f"Axis {axis} out of bounds for batch_dims of dimension {ndim}"
+        )
+
+    # Generate permutation: [axis, 0, 1, ..., axis-1, axis+1, ..., ndim-1]
+    axes = [axis] + [i for i in range(-len(input_array.batch_dims), 0) if i != axis]
+
+    return permute_batch_dims(input_array, tuple(axes))
+
+
+def move_axis_from_front_of_batch_dims(input_array: Array, target_axis: int) -> Array:
+    """Move front batch dimension (position 0) to specified target position.
+
+    Args:
+        input_array: Input tensor with batch dimensions (assumes front batch dim is the one to move)
+        target_axis: Target position for the front batch dimension (negative index)
+
+    Returns:
+        Tensor with front batch dimension moved to target position
+
+    Example:
+        >>> x = nb.ones((4, 2, 3))  # shape (4, 2, 3)
+        >>> x.batch_dims = (0, 1)  # Simulated for example
+        >>> y = move_axis_from_front_of_batch_dims(x, -1)  # Move front batch dim to last position
+        >>> # Result has batch_dims=(1, 0) and shape=(4, 2, 3)
+    """
+    ndim = len(input_array.batch_dims)
+
+    # Normalize negative axis
+    if target_axis >= 0:
+        target_axis = -len(input_array.batch_dims) + target_axis
+
+    if target_axis < -len(input_array.batch_dims) or target_axis >= 0:
+        raise ValueError(
+            f"Target axis {target_axis} out of bounds for batch_dims of dimension {ndim}"
+        )
+
+    if target_axis == 0:
+        return input_array  # Already at front
+
+    # Generate permutation to move front to target_axis
+    axes = (
+        list(range(-len(input_array.batch_dims) + 1, target_axis + 1))
+        + [0]
+        + list(range(target_axis + 1, 0))
+    )
+
+    return permute_batch_dims(input_array, tuple(axes))
 
 
 class ReshapeOp(ViewOperation):

@@ -1153,17 +1153,18 @@ def _apply_batching_to_tree(
 
             res = incr_batch_dim_ctr(batched)
 
-            from ..ops.view import transpose_batch_dims
+            from ..ops.view import move_axis_to_front_of_batch_dims
 
-            return transpose_batch_dims(res, 0, -1)
+            return move_axis_to_front_of_batch_dims(res, -1)
 
         else:
             # Output unbatching
             from nabla.ops.unary import decr_batch_dim_ctr
             from nabla.ops.view import squeeze
-            from ..ops.view import transpose_batch_dims
 
-            array = transpose_batch_dims(array, 0, -1)
+            from ..ops.view import move_axis_from_front_of_batch_dims
+
+            array = move_axis_from_front_of_batch_dims(array, -1)
             unbatched = decr_batch_dim_ctr(array)
 
             if axis is None:
