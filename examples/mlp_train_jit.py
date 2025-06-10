@@ -11,25 +11,13 @@ import nabla as nb
 BATCH_SIZE = 128
 LAYERS = [1, 64, 128, 256, 128, 64, 1]
 LEARNING_RATE = 0.001  # Match JAX version for fair comparison
-NUM_EPOCHS = 50000
-PRINT_INTERVAL = 1000
+NUM_EPOCHS = 1000
+PRINT_INTERVAL = 100
 SIN_PERIODS = 8
 
 
 def mlp_forward(x: nb.Array, params: list[nb.Array]) -> nb.Array:
     """MLP forward pass through all layers."""
-    output = x
-    for i in range(0, len(params) - 1, 2):
-        w, b = params[i], params[i + 1]
-        output = nb.matmul(output, w) + b
-        # Apply ReLU to all layers except the last
-        if i < len(params) - 2:
-            output = nb.relu(output)
-    return output
-
-
-def mlp_forward_leaky(x: nb.Array, params: list[nb.Array]) -> nb.Array:
-    """MLP forward pass with ReLU activation."""
     output = x
     for i in range(0, len(params) - 1, 2):
         w, b = params[i], params[i + 1]
@@ -51,30 +39,22 @@ def mean_squared_error(predictions: nb.Array, targets: nb.Array) -> nb.Array:
     return loss
 
 
-def mlp_forward_and_loss_leaky(inputs: list[nb.Array]) -> list[nb.Array]:
+def mlp_forward_and_loss(inputs: list[nb.Array]) -> list[nb.Array]:
     """Combined forward pass and loss computation for VJP with leaky ReLU."""
     x, targets, *params = inputs
-    predictions = mlp_forward_leaky(x, params)
+    predictions = mlp_forward(x, params)
     loss = mean_squared_error(predictions, targets)
     return [loss]
 
 
 def create_sin_dataset(batch_size: int = 256) -> tuple[nb.Array, nb.Array]:
     """Create the COMPLEX 8-period sin dataset."""
-    np_x = np.random.uniform(0.0, 1.0, (batch_size, 1)).astype(np.float32)
-    np_targets = (np.sin(SIN_PERIODS * 2.0 * np.pi * np_x) / 2.0 + 0.5).astype(
-        np.float32
-    )
-
-    x = nb.Array.from_numpy(np_x)
-    targets = nb.Array.from_numpy(np_targets)
-
+    x = nb.rand((batch_size, 1), lower=0.0, upper=1.0, dtype=nb.DType.float32)
+    targets = nb.sin(SIN_PERIODS * 2.0 * np.pi * x) / 2.0 + 0.5
     return x, targets
 
 
-def initialize_for_complex_function(
-    layers: list[int], seed: int = 42
-) -> list[nb.Array]:
+def initialize_params(layers: list[int], seed: int = 42) -> list[nb.Array]:
     """Initialize specifically for learning complex high-frequency functions."""
     np.random.seed(seed)
     params = []
@@ -109,45 +89,8 @@ def initialize_for_complex_function(
     return params
 
 
-@nb.sjit
+@nb.jit
 def adamw_step(
-    params: list[nb.Array],
-    gradients: list[nb.Array],
-    m_states: list[nb.Array],
-    v_states: list[nb.Array],
-    step: int,
-    learning_rate: float = 0.001,
-    beta1: float = 0.9,
-    beta2: float = 0.999,
-    eps: float = 1e-8,
-    weight_decay: float = 0.01,
-) -> tuple[list[nb.Array], list[nb.Array], list[nb.Array]]:
-    """JIT-compiled AdamW optimizer step with weight decay - OPTIMIZED to match JAX efficiency."""
-    updated_params = []
-    updated_m = []
-    updated_v = []
-
-    for _i, (param, grad, m, v) in enumerate(
-        zip(params, gradients, m_states, v_states, strict=False)
-    ):
-        # Update moments
-        new_m = beta1 * m + (1.0 - beta1) * grad
-        new_v = beta2 * v + (1.0 - beta2) * (grad * grad)
-
-        # Completely fused parameter update - eliminates ALL intermediate variables
-        new_param = param * (1.0 - weight_decay * learning_rate) - learning_rate * (
-            new_m / (1.0 - beta1**step)
-        ) / (((new_v / (1.0 - beta2**step)) ** 0.5) + eps)
-
-        updated_params.append(new_param)
-        updated_m.append(new_m)
-        updated_v.append(new_v)
-
-    return updated_params, updated_m, updated_v
-
-
-@nb.sjit
-def adamw_step_optimized(
     params: list[nb.Array],
     gradients: list[nb.Array],
     m_states: list[nb.Array],
@@ -204,73 +147,7 @@ def learning_rate_schedule(
     return initial_lr * (decay_factor ** (epoch // decay_every))
 
 
-@nb.sjit
-def train_step_adamw_jitted(
-    x: nb.Array,
-    targets: nb.Array,
-    params: list[nb.Array],
-    m_states: list[nb.Array],
-    v_states: list[nb.Array],
-    step: int,
-    learning_rate: float,
-) -> tuple[list[nb.Array], list[nb.Array], list[nb.Array], nb.Array]:
-    """JIT-compiled training step using Nabla VJP."""
-    # Forward pass + VJP for gradients
-    all_inputs = [x, targets] + params
-    loss_values, vjp_fn = nb.vjp(mlp_forward_and_loss_leaky, all_inputs)
-
-    # Backward pass
-    cotangent = [nb.array([np.float32(1.0)])]
-    all_gradients_tuple = vjp_fn(cotangent)
-    all_gradients = (
-        all_gradients_tuple[0]
-        if isinstance(all_gradients_tuple, tuple)
-        else all_gradients_tuple
-    )
-    param_gradients = all_gradients[2:]  # Skip x and targets gradients
-
-    # AdamW optimizer update using JIT-compiled step
-    updated_params, updated_m, updated_v = adamw_step(
-        params, param_gradients, m_states, v_states, step, learning_rate
-    )
-
-    loss_scalar = loss_values[0]
-
-    return updated_params, updated_m, updated_v, loss_scalar
-
-
-@nb.sjit
-def compute_predictions_and_loss(
-    x_test: nb.Array, targets_test: nb.Array, params: list[nb.Array]
-) -> tuple[nb.Array, nb.Array]:
-    """JIT-compiled function to compute predictions and loss."""
-    predictions_test = mlp_forward_leaky(x_test, params)
-    test_loss = mean_squared_error(predictions_test, targets_test)
-    return predictions_test, test_loss
-
-
-def analyze_nabla_learning_progress(params: list[nb.Array], epoch: int):
-    """Analyze how well we're learning the complex function."""
-    # Create a dense test set
-    x_test_np = np.linspace(0, 1, 1000).reshape(-1, 1).astype(np.float32)
-    targets_test_np = (
-        np.sin(SIN_PERIODS * 2.0 * np.pi * x_test_np) / 2.0 + 0.5
-    ).astype(np.float32)
-
-    x_test = nb.Array.from_numpy(x_test_np)
-    targets_test = nb.Array.from_numpy(targets_test_np)
-
-    # Use JIT-compiled function for evaluation
-    predictions_test, test_loss = compute_predictions_and_loss(
-        x_test, targets_test, params
-    )
-
-    test_loss_scalar = test_loss.to_numpy().item()
-
-    return test_loss_scalar
-
-
-@nb.sjit
+@nb.jit
 def value_and_grad(func, args):
     values, vjp_fn = nb.vjp(func, args)
     cotangent = [nb.ones_like(values[0])]
@@ -287,12 +164,12 @@ def test_nabla_complex_sin():
     print(f"Batch size: {BATCH_SIZE}")
 
     # Initialize for complex function learning
-    params = initialize_for_complex_function(LAYERS)
+    params = initialize_params(LAYERS)
     m_states, v_states = init_adamw_state(params)
 
     # Initial analysis
     x_init, targets_init = create_sin_dataset(BATCH_SIZE)
-    predictions_init = mlp_forward_leaky(x_init, params)
+    predictions_init = mlp_forward(x_init, params)
     initial_loss = mean_squared_error(predictions_init, targets_init)
 
     pred_init_np = predictions_init.to_numpy()
@@ -329,12 +206,10 @@ def test_nabla_complex_sin():
         vjp_start = time.time()
         all_inputs = [x, targets] + params
 
-        # print(nb.xpr(value_and_grad, mlp_forward_and_loss_leaky, all_inputs))
+        # print(nb.xpr(value_and_grad, mlp_forward_and_loss, all_inputs))
 
         # Use value_and_grad to compute loss and gradients
-        loss_values, param_gradients = value_and_grad(
-            mlp_forward_and_loss_leaky, all_inputs
-        )
+        loss_values, param_gradients = value_and_grad(mlp_forward_and_loss, all_inputs)
 
         vjp_time = time.time() - vjp_start
 
@@ -363,17 +238,16 @@ def test_nabla_complex_sin():
             print(
                 f"Epoch {epoch:3d} | Loss: {avg_loss / PRINT_INTERVAL:.6f} | Time: {avg_time / PRINT_INTERVAL:.4f}s"
             )
-            # print(f"{'=' * 60}")
-            # print(f"  Total Time:    {avg_time / PRINT_INTERVAL:.4f}s/iter")
-            # print(
-            #     f"  ├─ Data Gen:   {avg_data_time / PRINT_INTERVAL:.4f}s ({avg_data_time / avg_time * 100:.1f}%)"
-            # )
-            # print(
-            #     f"  ├─ VJP Comp:   {avg_vjp_time / PRINT_INTERVAL:.4f}s ({avg_vjp_time / avg_time * 100:.1f}%)"
-            # )
-            # print(
-            #     f"  └─ AdamW Step: {avg_adamw_time / PRINT_INTERVAL:.4f}s ({avg_adamw_time / avg_time * 100:.1f}%)"
-            # )
+            print(f"{'=' * 60}")
+            print(
+                f"  ├─ Data Gen:   {avg_data_time / PRINT_INTERVAL:.4f}s ({avg_data_time / avg_time * 100:.1f}%)"
+            )
+            print(
+                f"  ├─ VJP Comp:   {avg_vjp_time / PRINT_INTERVAL:.4f}s ({avg_vjp_time / avg_time * 100:.1f}%)"
+            )
+            print(
+                f"  └─ AdamW Step: {avg_adamw_time / PRINT_INTERVAL:.4f}s ({avg_adamw_time / avg_time * 100:.1f}%)"
+            )
 
             avg_loss = 0.0
             avg_time = 0.0
@@ -391,7 +265,7 @@ def test_nabla_complex_sin():
     ).astype(np.float32)
 
     x_test = nb.Array.from_numpy(x_test_np)
-    predictions_test = mlp_forward_leaky(x_test, params)
+    predictions_test = mlp_forward(x_test, params)
 
     pred_final_np = predictions_test.to_numpy()
 

@@ -94,9 +94,12 @@ def _create_filled_array(
 class RandomOp(Operation):
     """Base class for random number generators."""
 
-    def __init__(self, shape: Shape, device: Device, seed: int, op_name: str):
+    def __init__(
+        self, shape: Shape, dtype: DType, device: Device, seed: int, op_name: str
+    ):
         super().__init__(f"rng_{op_name}[shape={shape}]")
         self.shape = shape
+        self.dtype = dtype
         self.device = device
         self.seed = seed
 
@@ -114,7 +117,7 @@ class RandomOp(Operation):
 
         res = Array(
             shape=self.shape,
-            dtype=_DEFAULT_DTYPE,
+            dtype=self.dtype,
             device=self.device,
             materialize=False,
             name=self.name,
@@ -150,12 +153,13 @@ class RandNOp(RandomOp):
     def __init__(
         self,
         shape: Shape,
+        dtype: DType = _DEFAULT_DTYPE,
         mean: float = 0.0,
         std: float = 1.0,
         device: Device = _DEFAULT_CPU,
         seed: int = _DEFAULT_SEED,
     ):
-        super().__init__(shape, device, seed, "normal")
+        super().__init__(shape, dtype, device, seed, "normal")
         self.mean = mean
         self.std = std
 
@@ -188,12 +192,13 @@ class RandUniformOp(RandomOp):
     def __init__(
         self,
         shape: Shape,
+        dtype: DType = _DEFAULT_DTYPE,
         lower: float = 0.0,
         upper: float = 1.0,
         device: Device = _DEFAULT_CPU,
         seed: int = _DEFAULT_SEED,
     ):
-        super().__init__(shape, device, seed, "uniform")
+        super().__init__(shape, dtype, device, seed, "uniform")
         self.lower = lower
         self.upper = upper
 
@@ -266,6 +271,7 @@ def arange_like(template: Array) -> Array:
 
 def randn(
     shape: Shape,
+    dtype: DType = _DEFAULT_DTYPE,
     mean: float = 0.0,
     std: float = 1.0,
     device: Device = _DEFAULT_CPU,
@@ -273,7 +279,7 @@ def randn(
     batch_dims: Shape = (),
 ) -> Array:
     """Create array with normally distributed random values."""
-    array = RandNOp(shape, mean, std, device, seed).forward()
+    array = RandNOp(shape, dtype, mean, std, device, seed).forward()
     return broadcast_batch_dims(array, batch_dims) if batch_dims else array
 
 
@@ -281,11 +287,20 @@ def randn_like(
     template: Array, mean: float = 0.0, std: float = 1.0, seed: int = _DEFAULT_SEED
 ) -> Array:
     """Create an array with normally distributed random values like the template."""
-    return randn(template.shape, mean, std, template.device, seed, template.batch_dims)
+    return randn(
+        template.shape,
+        template.dtype,
+        mean,
+        std,
+        template.device,
+        seed,
+        template.batch_dims,
+    )
 
 
 def rand(
     shape: Shape,
+    dtype: DType = _DEFAULT_DTYPE,
     lower: float = 0.0,
     upper: float = 1.0,
     device: Device = _DEFAULT_CPU,
@@ -293,7 +308,7 @@ def rand(
     batch_dims: Shape = (),
 ) -> Array:
     """Create array with uniformly distributed random values."""
-    array = RandUniformOp(shape, lower, upper, device, seed).forward()
+    array = RandUniformOp(shape, dtype, lower, upper, device, seed).forward()
     return broadcast_batch_dims(array, batch_dims) if batch_dims else array
 
 
@@ -302,7 +317,13 @@ def rand_like(
 ) -> Array:
     """Create an array with uniformly distributed random values like the template."""
     return rand(
-        template.shape, lower, upper, template.device, seed, template.batch_dims
+        template.shape,
+        template.dtype,
+        lower,
+        upper,
+        template.device,
+        seed,
+        template.batch_dims,
     )
 
 
@@ -341,6 +362,7 @@ def ones_like(template: Array) -> Array:
 
 def xavier_uniform(
     shape: Shape,
+    dtype: DType = _DEFAULT_DTYPE,
     gain: float = 1.0,
     device: Device = _DEFAULT_CPU,
     seed: int = _DEFAULT_SEED,
@@ -358,11 +380,12 @@ def xavier_uniform(
 
     fan_in, fan_out = shape[-2], shape[-1]
     std = gain * np.sqrt(6.0 / (fan_in + fan_out))
-    return rand(shape, -std, std, device, seed, batch_dims)
+    return rand(shape, dtype, -std, std, device, seed, batch_dims)
 
 
 def xavier_normal(
     shape: Shape,
+    dtype: DType = _DEFAULT_DTYPE,
     gain: float = 1.0,
     device: Device = _DEFAULT_CPU,
     seed: int = _DEFAULT_SEED,
@@ -380,11 +403,12 @@ def xavier_normal(
 
     fan_in, fan_out = shape[-2], shape[-1]
     std = gain * np.sqrt(2.0 / (fan_in + fan_out))
-    return randn(shape, 0.0, std, device, seed, batch_dims)
+    return randn(shape, dtype, 0.0, std, device, seed, batch_dims)
 
 
 def he_uniform(
     shape: Shape,
+    dtype: DType = _DEFAULT_DTYPE,
     device: Device = _DEFAULT_CPU,
     seed: int = _DEFAULT_SEED,
     batch_dims: Shape = (),
@@ -399,11 +423,12 @@ def he_uniform(
 
     fan_in = shape[-2]
     bound = np.sqrt(6.0 / fan_in)
-    return rand(shape, -bound, bound, device, seed, batch_dims)
+    return rand(shape, dtype, -bound, bound, device, seed, batch_dims)
 
 
 def he_normal(
     shape: Shape,
+    dtype: DType = _DEFAULT_DTYPE,
     device: Device = _DEFAULT_CPU,
     seed: int = _DEFAULT_SEED,
     batch_dims: Shape = (),
@@ -418,11 +443,12 @@ def he_normal(
 
     fan_in = shape[-2]
     std = np.sqrt(2.0 / fan_in)
-    return randn(shape, 0.0, std, device, seed, batch_dims)
+    return randn(shape, dtype, 0.0, std, device, seed, batch_dims)
 
 
 def lecun_uniform(
     shape: Shape,
+    dtype: DType = _DEFAULT_DTYPE,
     device: Device = _DEFAULT_CPU,
     seed: int = _DEFAULT_SEED,
     batch_dims: Shape = (),
@@ -439,11 +465,12 @@ def lecun_uniform(
 
     fan_in = shape[-2]
     bound = np.sqrt(3.0 / fan_in)
-    return rand(shape, -bound, bound, device, seed, batch_dims)
+    return rand(shape, dtype, -bound, bound, device, seed, batch_dims)
 
 
 def lecun_normal(
     shape: Shape,
+    dtype: DType = _DEFAULT_DTYPE,
     device: Device = _DEFAULT_CPU,
     seed: int = _DEFAULT_SEED,
     batch_dims: Shape = (),
@@ -460,4 +487,4 @@ def lecun_normal(
 
     fan_in = shape[-2]
     std = np.sqrt(1.0 / fan_in)
-    return randn(shape, 0.0, std, device, seed, batch_dims)
+    return randn(shape, dtype, 0.0, std, device, seed, batch_dims)

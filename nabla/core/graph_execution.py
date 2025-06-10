@@ -251,12 +251,21 @@ class ModelFactory:
 
 def realize_(
     outputs: list[Array], dynamic_inputs: list[Array] | None = None
-) -> Model | None:
+) -> Model | None | tuple[Model, list[Array]]:
     """
     Realize (compute) the given output Arrays.
 
     This is the main entry point for executing computation graphs.
     Uses compilation caching for performance.
+
+    Args:
+        outputs: List of Arrays to realize
+        dynamic_inputs: Optional list of dynamic inputs for model compilation
+        return_trace_inputs: If True, return tuple of (model, trace_inputs) instead of just model
+
+    Returns:
+        If return_trace_inputs is False: Model or None
+        If return_trace_inputs is True: tuple of (Model, trace_inputs) or None
     """
     if not outputs:
         return
@@ -278,21 +287,14 @@ def realize_(
     model = global_execution_context.get_or_create(cache_key, create_model)
 
     if dynamic_inputs is not None:
-        return model
+        return model, inputs
 
     try:
         tensor_inputs = [input_node.impl for input_node in inputs]
         if any(tensor is None for tensor in tensor_inputs):
             raise ValueError("Some inputs have no implementation")
 
-        import time
-
-        # Timing: Model execution
-        execution_start = time.perf_counter()
-
         model_outputs = model.execute(*tensor_inputs)
-        execution_time = time.perf_counter() - execution_start
-        print(f"   \nModel execution time: {execution_time:.4f} seconds")
 
         for i, output in enumerate(output_list):
             output.impl = model_outputs[i]
