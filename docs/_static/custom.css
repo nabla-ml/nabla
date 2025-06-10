@@ -73,7 +73,7 @@ pre {
   background-color: #1a1a1a !important;
 }
 
-/* Sidebar improvements - add right padding for better visual separation */
+/* Sidebar improvements - add generous padding for better visual separation */
 .bd-sidebar,
 .bd-sidebar-primary,
 .bd-sidebar-secondary,
@@ -82,24 +82,24 @@ pre {
 }
 
 .bd-sidebar-primary {
-  padding-right: 1.5rem !important; /* Add extra padding to the right */
+  padding-right: 1.5rem !important; /* Half of the previous generous padding */
 }
 
-/* TOC (Right Sidebar) - add left padding for TOC items */
+/* TOC (Right Sidebar) - add moderate left padding for TOC items */
 .bd-sidebar-secondary .bd-toc ul {
-  padding-left: 1.5rem !important; /* Space the entire TOC list from the border */
+  padding-left: 1.5rem !important; /* Half of the previous padding */
 }
 
 .bd-sidebar-secondary .bd-toc li {
-  padding-left: 0.5rem !important; /* Additional space for each item */
+  padding-left: 0.5rem !important; /* Half of the previous padding */
 }
 
 .bd-sidebar-secondary .bd-toc a {
-  padding-left: 0.5rem !important; /* Space TOC links from the border */
+  padding-left: 0.5rem !important; /* Half of the previous padding */
 }
 
 .bd-sidebar-secondary .bd-toc .nav-link {
-  padding-left: 1rem !important; /* Ensure all TOC links have left padding */
+  padding-left: 1rem !important; /* Half of the previous padding */
 }
 
 /* Navigation backgrounds */
@@ -159,11 +159,6 @@ pre {
   margin-right: 0 !important;
 }
 
-/* Improve general spacing and typography */
-.bd-content {
-  padding: 2rem !important; /* More generous content padding */
-}
-
 /* Better focus states for accessibility */
 .toc-toggle:focus {
   outline: 2px solid var(--pst-color-primary, #007acc) !important;
@@ -178,7 +173,7 @@ pre {
 /* TOC styling */
 .bd-toc {
   background-color: var(--pst-color-sidebar-background) !important;
-  padding: 1rem !important;
+  padding: 1rem !important; /* Half of the previous TOC container padding */
 }
 
 /* Make TOC links more subtle */
@@ -284,7 +279,12 @@ pre {
   box-shadow: 1px 0 0 rgba(255, 255, 255, 0.05) !important;
 }
 
-/* TOC Items in Right Sidebar - Add Left Padding */
+/* Additional TOC spacing for better visual separation */
+.bd-toc .nav-item {
+  margin: 0.1rem 0 !important; /* Small vertical spacing between items */
+}
+
+/* TOC Items in Right Sidebar - Add moderate left padding */
 .bd-toc-nav.page-toc ul.nav.section-nav {
   padding-left: 0.5rem !important;
 }
@@ -297,13 +297,8 @@ pre {
   padding-left: 0.2rem !important;
 }
 
-/* Additional TOC spacing for better visual separation */
-.bd-toc .nav-item {
-  margin: 0.1rem 0 !important; /* Small vertical spacing between items */
-}
-
 .bd-sidebar-secondary .bd-toc {
-  padding-left: 0.5rem !important; /* Restore left padding to TOC container */
+  padding-left: 0.5rem !important; /* Half of the previous left padding to TOC container */
 }
 
 /* AGGRESSIVE OVERRIDE: Remove all blue TOC indicators */
