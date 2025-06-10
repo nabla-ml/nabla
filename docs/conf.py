@@ -42,7 +42,7 @@ exclude_patterns = [
 
 # -- Options for HTML output -------------------------------------------------
 html_theme = "sphinx_book_theme"
-html_title = "Nabla - GPU-Accelerated Array Computing"
+html_title = "Dynamic Neural Networks and Function Transformations in Python + Mojo"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
 html_js_files = ["custom.js", "seo.js"]
@@ -58,13 +58,13 @@ html_meta = {
     "keywords": "python, arrays, gpu, numpy, jax, mojo, machine learning, automatic differentiation, vectorization, jit",
     "author": "Nabla Team",
     "robots": "index, follow",
-    "og:title": "Nabla - GPU-Accelerated Array Computing",
+    "og:title": "Dynamic Neural Networks and Function Transformations in Python + Mojo",
     "og:description": "Python library for GPU-accelerated array computation with NumPy-like API and JAX-style transformations",
     "og:type": "website",
     "og:url": "https://nablaml.com/",
     "og:site_name": "Nabla Documentation",
     "twitter:card": "summary",
-    "twitter:title": "Nabla - GPU-Accelerated Array Computing",
+    "twitter:title": "Dynamic Neural Networks and Function Transformations in Python + Mojo",
     "twitter:description": "Python library for GPU-accelerated array computation with NumPy-like API and JAX-style transformations",
 }
 html_use_index = True
