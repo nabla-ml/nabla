@@ -1,7 +1,7 @@
 {
     "name": "Nabla Documentation",
     "short_name": "Nabla",
-    "description": "GPU-Accelerated Array Computing Library",
+    "description": "Dynamic Neural Networks and Function Transformations in Python + Mojo Library",
     "start_url": "/",
     "display": "standalone",
     "theme_color": "#000000",
