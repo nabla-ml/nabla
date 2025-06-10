@@ -21,7 +21,7 @@ api/index
 
 ## Installation
 
-**📦 Now available on PyPI!**
+**Now available on PyPI!**
 
 ```bash
 pip install nabla-ml

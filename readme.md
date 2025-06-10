@@ -13,7 +13,7 @@ Nabla is a Python library that provides three key features:
 
 ## Installation
 
-**📦 Now available on PyPI!**
+**Now available on PyPI!**
 
 ```bash
 pip install nabla-ml
