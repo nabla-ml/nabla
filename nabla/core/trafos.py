@@ -1307,9 +1307,10 @@ def jit(func: Callable[..., Any] = None, static: bool = False) -> Callable[..., 
         return lambda f: sjit(f)
 
     # Store the compiled model as a closure variable
-    cached_model = None
-    output_structure = None
-    param_to_model_index = None
+    if static:
+        cached_model = None
+        output_structure = None
+        param_to_model_index = None
 
     def jit_func(*args):
         nonlocal cached_model, output_structure, param_to_model_index
