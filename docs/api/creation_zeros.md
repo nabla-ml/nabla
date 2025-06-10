@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.zeros(shape: 'Shape', dtype: 'DType' = float32, device: 'Device' = Device(type=cpu,id=0)) -> 'Array'
+nabla.zeros(shape: 'Shape', dtype: 'DType' = float32, device: 'Device' = Device(type=cpu,id=0), batch_dims: 'Shape' = ()) -> 'Array'
 ```
 
 ## Description

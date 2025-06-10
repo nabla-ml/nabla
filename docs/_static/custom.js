@@ -1,58 +1,33 @@
-// Collapsible TOC (Table of Contents) functionality
+/* =================================================================
+   NABLA DOCUMENTATION - CUSTOM JAVASCRIPT
+   Force dark mode only and enhanced search
+   ================================================================= */
+
 document.addEventListener('DOMContentLoaded', function() {
-    // Create the toggle button
-    const toggleBtn = document.createElement('button');
-    toggleBtn.className = 'toc-toggle-btn';
-    toggleBtn.innerHTML = 'TOC';
-    toggleBtn.setAttribute('aria-label', 'Toggle Table of Contents');
-    toggleBtn.setAttribute('title', 'Toggle Table of Contents');
+    // Force dark mode immediately
+    document.documentElement.setAttribute('data-theme', 'dark');
+    document.body.setAttribute('data-theme', 'dark');
     
-    // Find the TOC sidebar
-    const tocSidebar = document.querySelector('.bd-toc');
-    const mainContent = document.querySelector('.bd-main');
+    // Hide any theme switcher buttons
+    const themeSwitchers = document.querySelectorAll('.theme-switch, .theme-toggle, .bd-theme-toggle, button[data-mode-switch]');
+    themeSwitchers.forEach(switcher => {
+        switcher.style.display = 'none';
+    });
     
-    if (tocSidebar && mainContent) {
-        // Add the toggle button to the page
-        document.body.appendChild(toggleBtn);
-        
-        // Check if user preference exists in localStorage
-        const tocHidden = localStorage.getItem('nabla-toc-hidden') === 'true';
-        
-        // Apply initial state
-        if (tocHidden) {
-            tocSidebar.classList.add('toc-hidden');
-            mainContent.classList.add('toc-hidden');
-            toggleBtn.innerHTML = 'Show TOC';
-        }
-        
-        // Toggle functionality
-        toggleBtn.addEventListener('click', function() {
-            const isHidden = tocSidebar.classList.contains('toc-hidden');
-            
-            if (isHidden) {
-                // Show TOC
-                tocSidebar.classList.remove('toc-hidden');
-                mainContent.classList.remove('toc-hidden');
-                toggleBtn.innerHTML = 'TOC';
-                localStorage.setItem('nabla-toc-hidden', 'false');
-            } else {
-                // Hide TOC
-                tocSidebar.classList.add('toc-hidden');
-                mainContent.classList.add('toc-hidden');
-                toggleBtn.innerHTML = 'Show TOC';
-                localStorage.setItem('nabla-toc-hidden', 'true');
+    // Prevent theme switching
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'data-theme') {
+                if (mutation.target.getAttribute('data-theme') !== 'dark') {
+                    mutation.target.setAttribute('data-theme', 'dark');
+                }
             }
         });
-        
-        // Keyboard accessibility
-        toggleBtn.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                toggleBtn.click();
-            }
-        });
-    }
+    });
     
+    observer.observe(document.documentElement, { attributes: true });
+    observer.observe(document.body, { attributes: true });
+
     // Enhanced search functionality
     const searchInput = document.querySelector('.bd-search input[type="search"]');
     if (searchInput) {

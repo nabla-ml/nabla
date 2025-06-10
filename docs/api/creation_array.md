@@ -3,12 +3,12 @@
 ## Signature
 
 ```python
-nabla.array(data: 'list | np.ndarray', dtype: 'DType' = float32, device: 'Device' = Device(type=cpu,id=0)) -> 'Array'
+nabla.array(data: 'list | np.ndarray | float | int', dtype: 'DType' = float32, device: 'Device' = Device(type=cpu,id=0), batch_dims: 'Shape' = ()) -> 'Array'
 ```
 
 ## Description
 
-Create an array from Python list or numpy array.
+Create an array from Python list, numpy array, or scalar value.
 
 ## Examples
 

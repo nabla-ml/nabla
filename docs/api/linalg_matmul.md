@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.matmul(arg0: nabla.core.array.Array, arg1: nabla.core.array.Array) -> nabla.core.array.Array
+nabla.matmul(arg0, arg1) -> nabla.core.array.Array
 ```
 
 ## Description

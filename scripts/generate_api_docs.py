@@ -292,6 +292,8 @@ def {method_name}{method_sig}
     def introspect_nabla_ops(self) -> dict[str, list[str]]:
         """Introspect Nabla to get all operations organized by category."""
         ops_categories = {
+            "array": [],
+            "trafos": [],
             "binary": [],
             "unary": [],
             "creation": [],
@@ -324,9 +326,12 @@ def {method_name}{method_sig}
                 category = category_map.get(module_name, "core")
                 ops_categories[category].extend(exports)
 
-        # Core transformations
-        core_trafos = ["Array", "jit", "vjp", "jvp", "vmap", "xpr"]
-        ops_categories["core"].extend(core_trafos)
+        # Core transformations (separate from Array class)
+        core_trafos = ["jit", "sjit", "vjp", "jvp", "vmap", "grad", "jacrev", "jacfwd", "xpr"]
+        ops_categories["trafos"].extend(core_trafos)
+        
+        # Array class
+        ops_categories["array"].append("Array")
 
         return ops_categories
 
@@ -342,7 +347,8 @@ def {method_name}{method_sig}
 
         # Generate documentation for each category
         category_docs = {
-            "core": "Core Components",
+            "array": "Array Class",
+            "trafos": "Function Transformations",
             "creation": "Array Creation",
             "unary": "Unary Operations",
             "binary": "Binary Operations",
@@ -411,13 +417,15 @@ def {method_name}{method_sig}
     def get_category_description(self, category: str) -> str:
         """Get description for a category."""
         descriptions = {
-            "core": "Core components of Nabla including the Array class and function transformations.",
+            "array": "The core Array class with its properties, methods, and operator overloading.",
+            "trafos": "Function transformations for compilation, vectorization, and automatic differentiation.",
             "creation": "Functions for creating new arrays with various initialization patterns.",
             "unary": "Element-wise unary operations that operate on a single array.",
             "binary": "Element-wise binary operations that operate on two arrays.",
             "reduction": "Operations that reduce arrays along specified dimensions.",
             "linalg": "Linear algebra operations including matrix multiplication and decompositions.",
             "manipulation": "Operations for reshaping, indexing, and manipulating array structure.",
+            "core": "Core components of Nabla.",
         }
         return descriptions.get(category, "Nabla operations.")
 
@@ -832,7 +840,8 @@ This page contains the complete API reference for Nabla, organized by functional
 :maxdepth: 2
 :caption: API Documentation
 
-core
+array
+trafos
 creation
 unary
 binary
@@ -845,11 +854,12 @@ manipulation
 
 ### Core Components
 
-- {doc}`core` - Array class and function transformations
+- {doc}`array` - The fundamental Array class with properties and methods
+- {doc}`trafos` - Function transformations (jit, vmap, grad, etc.)
+
+### Array Operations
+
 - {doc}`creation` - Array creation functions
-
-### Operations
-
 - {doc}`unary` - Element-wise unary operations (sin, cos, exp, etc.)
 - {doc}`binary` - Element-wise binary operations (add, multiply, etc.)
 - {doc}`reduction` - Reduction operations (sum, mean, etc.)
@@ -860,8 +870,8 @@ manipulation
 
 Nabla provides a comprehensive set of APIs for array operations, function transformations, and automatic differentiation:
 
-- **Core Array**: The fundamental `Array` class and its operations
-- **Function Transformations**: Tools like `jit`, `vmap`, `jvp`, and `vjp` for compilation and differentiation
+- **Array Class**: The fundamental `Array` class with its properties, methods, and operator overloading
+- **Function Transformations**: Tools like `jit`, `vmap`, `grad`, `vjp`, and `jvp` for compilation and differentiation
 - **Array Operations**: Creation, manipulation, and mathematical operations on arrays
 """
 

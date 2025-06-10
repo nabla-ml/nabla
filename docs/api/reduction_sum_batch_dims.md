@@ -8,5 +8,5 @@ nabla.sum_batch_dims(arg: 'Array', axes: 'int | list[int] | tuple[int, ...] | No
 
 ## Description
 
-sum array elements over given axes.
+sum array elements over given batch dimension axes.
 

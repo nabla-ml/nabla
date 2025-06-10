@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.arange(shape: 'Shape', dtype: 'DType' = float32, device: 'Device' = Device(type=cpu,id=0)) -> 'Array'
+nabla.arange(shape: 'Shape', dtype: 'DType' = float32, device: 'Device' = Device(type=cpu,id=0), batch_dims: 'Shape' = ()) -> 'Array'
 ```
 
 ## Description

@@ -4,7 +4,6 @@ Element-wise unary operations that operate on a single array.
 
 ```{toctree}
 :maxdepth: 1
-:caption: Functions
 
 unary_cast
 unary_cos
@@ -15,11 +14,12 @@ unary_log
 unary_negate
 unary_relu
 unary_sin
+unary_sqrt
 ```
 
 ## Quick Reference
 
-### {doc}`cast <unary_cast>`
+### `cast`
 
 ```python
 nabla.cast(arg: nabla.core.array.Array, dtype: max._core.dtype.DType) -> nabla.core.array.Array
@@ -27,7 +27,7 @@ nabla.cast(arg: nabla.core.array.Array, dtype: max._core.dtype.DType) -> nabla.c
 
 Cast array elements to a different data type.
 
-### {doc}`cos <unary_cos>`
+### `cos`
 
 ```python
 nabla.cos(arg: nabla.core.array.Array) -> nabla.core.array.Array
@@ -35,7 +35,7 @@ nabla.cos(arg: nabla.core.array.Array) -> nabla.core.array.Array
 
 Element-wise cosine function.
 
-### {doc}`decr_batch_dim_ctr <unary_decr_batch_dim_ctr>`
+### `decr_batch_dim_ctr`
 
 ```python
 nabla.decr_batch_dim_ctr(arg: nabla.core.array.Array) -> nabla.core.array.Array
@@ -43,7 +43,7 @@ nabla.decr_batch_dim_ctr(arg: nabla.core.array.Array) -> nabla.core.array.Array
 
 Nabla operation: `decr_batch_dim_ctr`
 
-### {doc}`exp <unary_exp>`
+### `exp`
 
 ```python
 nabla.exp(arg: nabla.core.array.Array) -> nabla.core.array.Array
@@ -51,7 +51,7 @@ nabla.exp(arg: nabla.core.array.Array) -> nabla.core.array.Array
 
 Element-wise exponential function.
 
-### {doc}`incr_batch_dim_ctr <unary_incr_batch_dim_ctr>`
+### `incr_batch_dim_ctr`
 
 ```python
 nabla.incr_batch_dim_ctr(arg: nabla.core.array.Array) -> nabla.core.array.Array
@@ -59,7 +59,7 @@ nabla.incr_batch_dim_ctr(arg: nabla.core.array.Array) -> nabla.core.array.Array
 
 Nabla operation: `incr_batch_dim_ctr`
 
-### {doc}`log <unary_log>`
+### `log`
 
 ```python
 nabla.log(arg: nabla.core.array.Array) -> nabla.core.array.Array
@@ -67,7 +67,7 @@ nabla.log(arg: nabla.core.array.Array) -> nabla.core.array.Array
 
 Element-wise natural logarithm.
 
-### {doc}`negate <unary_negate>`
+### `negate`
 
 ```python
 nabla.negate(arg: nabla.core.array.Array) -> nabla.core.array.Array
@@ -75,7 +75,7 @@ nabla.negate(arg: nabla.core.array.Array) -> nabla.core.array.Array
 
 Element-wise negation.
 
-### {doc}`relu <unary_relu>`
+### `relu`
 
 ```python
 nabla.relu(arg: nabla.core.array.Array) -> nabla.core.array.Array
@@ -83,11 +83,19 @@ nabla.relu(arg: nabla.core.array.Array) -> nabla.core.array.Array
 
 Element-wise rectified linear unit activation.
 
-### {doc}`sin <unary_sin>`
+### `sin`
 
 ```python
 nabla.sin(arg: nabla.core.array.Array, dtype: max._core.dtype.DType | None = None) -> nabla.core.array.Array
 ```
 
 Element-wise sine function.
+
+### `sqrt`
+
+```python
+nabla.sqrt(arg: nabla.core.array.Array) -> nabla.core.array.Array
+```
+
+Nabla operation: `sqrt`
 

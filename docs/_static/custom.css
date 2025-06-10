@@ -1,28 +1,405 @@
 /* =================================================================
-   NABLA DOCUMENTATION - MINIMAL THEME
-   Simple black and white background override only
+   NABLA DOCUMENTATION - DARK MODE ONLY THEME
+   Minimal design with improved spacing and subtle styling
    ================================================================= */
 
-/* Black and White Background Override */
+/* Force dark mode variables globally */
 :root {
-  /* Light Mode - Pure White */
-  --color-bg-primary: #ffffff;
+  --pst-color-background: #000000 !important;
+  --pst-color-surface: #000000 !important;
+  --pst-color-on-background: #ffffff !important;
+  --pst-color-border: #333333 !important;
+  --pst-color-text-muted: #888888 !important;
+  
+  /* Sidebar backgrounds */
+  --pst-color-sidebar-background: #000000 !important;
+  --pst-color-sidebar-background-hover: #111111 !important;
+  
+  /* Navigation backgrounds */
+  --pst-color-navbar-background: #000000 !important;
+  --pst-color-toc-background: #000000 !important;
 }
 
-[data-theme="dark"] {
-  /* Dark Mode - Pure Black */
-  --color-bg-primary: #000000;
+/* Force dark theme globally */
+html {
+  color-scheme: dark !important;
 }
 
-/* Apply background override */
-body {
-  background-color: var(--color-bg-primary) !important;
+html,
+body,
+body[data-theme="light"],
+body[data-theme="dark"] {
+  background-color: #000000 !important;
+  color: #ffffff !important;
 }
 
-/* NABLA Title Styling - left-aligned, bold, white */
+/* Hide any theme switcher elements */
+.theme-switch,
+.theme-toggle,
+.bd-theme-toggle,
+button[data-mode-switch],
+.pst-navbar-icon[title*="theme"],
+.pst-navbar-icon[title*="mode"] {
+  display: none !important;
+}
+
+/* Code snippet styling - make them stand out with slightly brighter background */
+pre, code {
+  background-color: #1a1a1a !important; /* Slightly brighter than pure black */
+}
+
+.highlight {
+  background-color: #1a1a1a !important;
+}
+
+/* Inline code styling */
+code {
+  background-color: #2a2a2a !important; /* Slightly different for inline code */
+  color: #e0e0e0 !important;
+  padding: 2px 4px !important;
+  border-radius: 3px !important;
+}
+
+/* Code block styling */
+pre {
+  background-color: #1a1a1a !important;
+  border: 1px solid #333333 !important;
+  border-radius: 6px !important;
+  padding: 1rem !important;
+}
+
+/* Syntax highlighting adjustments */
+.highlight pre {
+  background-color: #1a1a1a !important;
+}
+
+/* Sidebar improvements - add right padding for better visual separation */
+.bd-sidebar,
+.bd-sidebar-primary,
+.bd-sidebar-secondary,
+.bd-toc {
+  background-color: var(--pst-color-sidebar-background) !important;
+}
+
+.bd-sidebar-primary {
+  padding-right: 1.5rem !important; /* Add extra padding to the right */
+}
+
+/* TOC (Right Sidebar) - add left padding for TOC items */
+.bd-sidebar-secondary .bd-toc ul {
+  padding-left: 1.5rem !important; /* Space the entire TOC list from the border */
+}
+
+.bd-sidebar-secondary .bd-toc li {
+  padding-left: 0.5rem !important; /* Additional space for each item */
+}
+
+.bd-sidebar-secondary .bd-toc a {
+  padding-left: 0.5rem !important; /* Space TOC links from the border */
+}
+
+.bd-sidebar-secondary .bd-toc .nav-link {
+  padding-left: 1rem !important; /* Ensure all TOC links have left padding */
+}
+
+/* Navigation backgrounds */
+.bd-navbar,
+.navbar {
+  background-color: var(--pst-color-navbar-background) !important;
+}
+
+/* Content area background */
+.bd-main,
+.bd-content,
+.bd-article {
+  background-color: var(--pst-color-background) !important;
+}
+
+/* Fix the white border between sidebar and main content */
+.bd-container {
+  border: none !important;
+}
+
+.bd-sidebar-primary {
+  border-right: 1px solid var(--pst-color-border) !important;
+}
+
+.bd-main {
+  border-left: none !important;
+}
+
+/* NABLA Title Styling - hide when image logo is present */
 .logo__title {
-  text-align: left !important;
-  font-weight: 900 !important; /* Extra bold */
-  color: white !important;
-  margin-left: 0 !important;
+  display: none !important; /* Hide text when logo image is used */
+}
+
+/* Logo styling for image - full width in left sidebar */
+.navbar-brand img {
+  height: auto !important;
+  width: 100% !important; /* Full width of the sidebar */
+  max-width: 100% !important;
+  margin-right: 0 !important;
+  vertical-align: middle !important;
+}
+
+/* GitHub icon in navbar - make it bigger and properly aligned */
+.navbar-nav .nav-link svg,
+.navbar .nav-link svg {
+  width: 22px !important; /* 10% larger than ~20px */
+  height: 22px !important;
+  vertical-align: middle !important;
+}
+
+/* Adjust main content when sidebar is hidden */
+.bd-container {
+  max-width: none !important;
+}
+
+.bd-main {
+  margin-right: 0 !important;
+}
+
+/* Improve general spacing and typography */
+.bd-content {
+  padding: 2rem !important; /* More generous content padding */
+}
+
+/* Better focus states for accessibility */
+.toc-toggle:focus {
+  outline: 2px solid var(--pst-color-primary, #007acc) !important;
+  outline-offset: 2px !important;
+}
+
+/* Right sidebar TOC styling improvements */
+.bd-sidebar-secondary {
+  background-color: var(--pst-color-sidebar-background) !important;
+}
+
+/* TOC styling */
+.bd-toc {
+  background-color: var(--pst-color-sidebar-background) !important;
+  padding: 1rem !important;
+}
+
+/* Make TOC links more subtle */
+.bd-toc .nav-link {
+  color: var(--pst-color-text-muted, #666666) !important;
+  font-size: 0.875rem !important;
+  padding: 0.25rem 0.5rem !important;
+  border-radius: 3px !important;
+  transition: all 0.15s ease !important;
+  display: inline-block !important; /* Use adaptive width, not full width */
+  width: auto !important; /* Ensure no fixed width */
+}
+
+[data-theme="dark"] .bd-toc .nav-link {
+  color: #888888 !important;
+}
+
+.bd-toc .nav-link:hover,
+.bd-toc .nav-link.active {
+  background-color: #e8e8e8 !important; /* Brighter grey for better visibility */
+  color: var(--pst-color-on-background) !important;
+  border: none !important; /* Remove any borders */
+  border-left: none !important; /* Specifically remove left border */
+  display: inline-block !important; /* Use adaptive width */
+  width: auto !important; /* Ensure no fixed width */
+}
+
+[data-theme="dark"] .bd-toc .nav-link:hover,
+[data-theme="dark"] .bd-toc .nav-link.active {
+  background-color: #404040 !important; /* Brighter grey for dark mode */
+  color: #ffffff !important;
+  border: none !important; /* Remove any borders */
+  border-left: none !important; /* Specifically remove left border */
+  display: inline-block !important; /* Use adaptive width */
+  width: auto !important; /* Ensure no fixed width */
+}
+
+/* Override any default TOC highlighting */
+.bd-toc .nav-link::before,
+.bd-toc .nav-link:hover::before,
+.bd-toc .nav-link.active::before {
+  display: none !important; /* Hide any pseudo-elements that might create borders */
+}
+
+/* Remove any default border-left styling */
+.bd-sidebar-secondary .bd-toc .nav-link,
+.bd-sidebar-secondary .bd-toc .nav-link:hover,
+.bd-sidebar-secondary .bd-toc .nav-link.active {
+  border-left: none !important;
+  box-shadow: none !important;
+}
+
+/* Minimal footer styling */
+.bd-footer {
+  background-color: var(--pst-color-background) !important;
+  border-top: 1px solid var(--pst-color-border) !important;
+  padding: 1rem 0 !important;
+  margin-top: 3rem !important;
+  text-align: center !important;
+}
+
+.bd-footer-content {
+  text-align: center !important;
+  font-size: 0.875rem !important;
+  color: var(--pst-color-text-muted, #666666) !important;
+}
+
+[data-theme="dark"] .bd-footer-content {
+  color: #888888 !important;
+}
+
+/* Hide all default Sphinx footer content */
+.bd-footer .bd-footer-content p,
+.bd-footer .bd-footer-content .footer-items,
+.bd-footer .bd-footer-content .copyright,
+.bd-footer .bd-footer-content .prev-next-footer {
+  display: none !important;
+}
+
+/* Only show our custom extra footer */
+.bd-footer .bd-footer-content .bd-footer-content__inner div {
+  display: block !important;
+}
+
+/* Alternative approach - hide entire default footer content */
+.bd-footer-content:not(.bd-footer-content__inner) {
+  display: none !important;
+}
+
+/* Ensure our custom footer shows properly */
+.bd-footer .bd-footer-content__inner {
+  display: block !important;
+  text-align: center !important;
+}
+
+/* Improved sidebar border for better visual separation */
+.bd-sidebar-primary {
+  border-right: 1px solid var(--pst-color-border) !important;
+  box-shadow: 1px 0 0 rgba(0, 0, 0, 0.05) !important;
+}
+
+[data-theme="dark"] .bd-sidebar-primary {
+  box-shadow: 1px 0 0 rgba(255, 255, 255, 0.05) !important;
+}
+
+/* TOC Items in Right Sidebar - Add Left Padding */
+.bd-toc-nav.page-toc ul.nav.section-nav {
+  padding-left: 0.5rem !important;
+}
+
+.bd-toc-nav.page-toc .nav-item.toc-entry {
+  padding-left: 0.2rem !important;
+}
+
+.bd-toc-nav.page-toc .nav-link {
+  padding-left: 0.2rem !important;
+}
+
+/* Additional TOC spacing for better visual separation */
+.bd-toc .nav-item {
+  margin: 0.1rem 0 !important; /* Small vertical spacing between items */
+}
+
+.bd-sidebar-secondary .bd-toc {
+  padding-left: 0.5rem !important; /* Restore left padding to TOC container */
+}
+
+/* AGGRESSIVE OVERRIDE: Remove all blue TOC indicators */
+.bd-toc .nav-link,
+.bd-toc .nav-link:hover,
+.bd-toc .nav-link:focus,
+.bd-toc .nav-link.active,
+.bd-toc .nav-link:active {
+  border-left: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Remove any pseudo-elements that create blue indicators */
+.bd-toc .nav-link::before,
+.bd-toc .nav-link::after,
+.bd-toc .nav-link:hover::before,
+.bd-toc .nav-link:hover::after,
+.bd-toc .nav-link.active::before,
+.bd-toc .nav-link.active::after {
+  display: none !important;
+  content: none !important;
+  border: none !important;
+  background: none !important;
+}
+
+/* Override Bootstrap/theme active states */
+.nav > .active > .nav-link,
+.nav > .active > .nav-link:hover,
+.nav > .active > .nav-link:focus {
+  border-left: none !important;
+  box-shadow: none !important;
+}
+
+/* Remove PyData theme TOC active indicators */
+.bd-sidebar-secondary .nav .active > .nav-link::before {
+  display: none !important;
+}
+
+.bd-sidebar-secondary .nav .nav-link.active::before {
+  display: none !important;
+}
+
+/* Modern Search Bar Styling */
+.bd-search {
+  margin: 1rem 0 !important;
+}
+
+.bd-search .form-control {
+  background-color: #1a1a1a !important;
+  border: 1px solid #333333 !important;
+  border-radius: 8px !important; /* Squared with rounded corners */
+  color: #ffffff !important;
+  padding: 0.75rem 1rem !important;
+  font-size: 0.875rem !important;
+  transition: all 0.2s ease !important;
+}
+
+.bd-search .form-control:focus {
+  border-color: #555555 !important;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1) !important;
+  background-color: #222222 !important;
+  outline: none !important;
+}
+
+.bd-search .form-control::placeholder {
+  color: #888888 !important;
+}
+
+/* Dark Command Buttons for Search Shortcuts */
+.bd-search .search-button,
+.bd-search .search-keyboard-shortcut,
+.search-keyboard-shortcut,
+kbd {
+  background-color: #2a2a2a !important;
+  color: #ffffff !important;
+  border: 1px solid #444444 !important;
+  border-radius: 4px !important;
+  padding: 2px 6px !important;
+  font-size: 0.75rem !important;
+  font-family: monospace !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Search button styling specifically */
+.bd-search-container .search-button {
+  background-color: #2a2a2a !important;
+  color: #ffffff !important;
+  border: 1px solid #444444 !important;
+}
+
+/* Any search-related keyboard shortcuts */
+.search-hint kbd,
+.search-tooltip kbd {
+  background-color: #2a2a2a !important;
+  color: #ffffff !important;
+  border: 1px solid #444444 !important;
 }

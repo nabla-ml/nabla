@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.vjp(func: 'Callable[..., Any]', *primals) -> 'tuple[Any, Callable]'
+nabla.vjp(func: 'Callable[..., Any]', *primals, has_aux: 'bool' = False) -> 'tuple[Any, Callable]'
 ```
 
 ## Description
@@ -15,11 +15,17 @@ Compute vector-Jacobian product (reverse-mode autodiff).
 
 func: Function to differentiate (should take positional arguments)
 *primals: Positional arguments to the function (can be arbitrary pytrees)
+has_aux: Optional, bool. Indicates whether `func` returns a pair where the
+first element is considered the output of the mathematical function to be
+differentiated and the second element is auxiliary data. Default False.
 
 
 ## Returns
 
+If has_aux is False:
 Tuple of (outputs, vjp_function) where vjp_function computes gradients.
+If has_aux is True:
+Tuple of (outputs, vjp_function, aux) where aux is the auxiliary data.
 
 The vjp_function always returns gradients as a tuple (matching JAX behavior):
 - Single argument: vjp_fn(cotangent) -> (gradient,)
@@ -50,5 +56,6 @@ This follows JAX's vjp API exactly:
 
 ## See Also
 
-- {doc}`jvp <core_jvp>` - Jacobian-vector product
+- {doc}`jvp <trafos_jvp>` - Jacobian-vector product
+- {doc}`grad <trafos_grad>` - Automatic differentiation
 
