@@ -6,7 +6,7 @@ import time
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jax import value_and_grad
+from jax import jit, value_and_grad
 
 # Configuration
 BATCH_SIZE = 128
@@ -101,6 +101,7 @@ def initialize_for_complex_function(
     return params
 
 
+@jit
 def adamw_step(
     params: list[jnp.ndarray],
     gradients: list[jnp.ndarray],
@@ -135,6 +136,7 @@ def adamw_step(
     return updated_params, updated_m, updated_v
 
 
+@jit
 def adamw_step_optimized(
     params: list[jnp.ndarray],
     gradients: list[jnp.ndarray],
@@ -192,6 +194,7 @@ def learning_rate_schedule(
     return initial_lr * (decay_factor ** (epoch // decay_every))
 
 
+@jit
 def complete_training_step(
     x: jnp.ndarray,
     targets: jnp.ndarray,
@@ -220,6 +223,7 @@ def complete_training_step(
     return updated_params, updated_m, updated_v, loss_value
 
 
+@jit
 def train_step_adamw_jitted(
     x: jnp.ndarray,
     targets: jnp.ndarray,
@@ -243,6 +247,7 @@ def train_step_adamw_jitted(
     return updated_params, updated_m, updated_v, loss_value
 
 
+@jit
 def compute_predictions_and_loss(
     x_test: jnp.ndarray, targets_test: jnp.ndarray, params: list[jnp.ndarray]
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
