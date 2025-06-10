@@ -6,10 +6,10 @@ if __name__ == "__main__":
         const = nb.arange((2, 4))
         return nb.sin(x @ y + const)
 
-    a = nb.arange((2, 3))
-    b = nb.arange((3, 4))
+    a = nb.arange((3, 5, 1, 4, 2, 3))
+    b = nb.arange((1, 5, 3, 4, 3, 4))
 
-    foo_sjitted = nb.sjit(foo)
+    foo_sjitted = nb.sjit(foo, show_graph=True)
 
     res = foo_sjitted(a, b)
     print(res)

@@ -108,6 +108,7 @@ class ModelFactory:
         trace: list[Array],
         outputs: list[Array],
         dynamic_inputs: list[Array] | None = None,
+        show_graph: bool = False,
     ) -> Model:
         """Create a MAX model from the computation graph."""
 
@@ -202,6 +203,9 @@ class ModelFactory:
                 except Exception as e:
                     raise ValueError(f"Failed to set graph output: {e}") from e
 
+            if show_graph:
+                print(graph)
+
             session = InferenceSession(devices=devices)
 
             for node in trace:
@@ -250,7 +254,10 @@ class ModelFactory:
 
 
 def realize_(
-    outputs: list[Array], dynamic_inputs: list[Array] | None = None
+    outputs: list[Array],
+    dynamic_inputs: list[Array] | None = None,
+    show_graph: bool = False,
+    return_trace_inputs: bool = False,
 ) -> Model | None | tuple[Model, list[Array]]:
     """
     Realize (compute) the given output Arrays.
@@ -282,7 +289,9 @@ def realize_(
     inputs, trace, cache_key = GraphTracer.get_trace(output_list)
 
     def create_model() -> Model:
-        return ModelFactory.create_model(inputs, trace, output_list, dynamic_inputs)
+        return ModelFactory.create_model(
+            inputs, trace, output_list, dynamic_inputs, show_graph
+        )
 
     model = global_execution_context.get_or_create(cache_key, create_model)
 

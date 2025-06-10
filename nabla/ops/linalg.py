@@ -108,11 +108,12 @@ class MatMulOp(BinaryOperation):
             arg1.batch_dims, arg2.batch_dims
         )
         output_dtype = self.compute_output_dtype(arg1, arg2)
-        arg1_broadcasted = broadcast_to(arg1, output_shape[:-2] + arg1.shape[-2:])
-        arg2_broadcasted = broadcast_to(arg2, output_shape[:-2] + arg2.shape[-2:])
-
-        arg1_broadcasted = broadcast_batch_dims(arg1_broadcasted, output_batch_dims)
-        arg2_broadcasted = broadcast_batch_dims(arg2_broadcasted, output_batch_dims)
+        if arg1.traced:
+            arg1 = broadcast_to(arg1, output_shape[:-2] + arg1.shape[-2:])
+            arg1 = broadcast_batch_dims(arg1, output_batch_dims)
+        if arg2.traced:
+            arg2 = broadcast_to(arg2, output_shape[:-2] + arg2.shape[-2:])
+            arg2 = broadcast_batch_dims(arg2, output_batch_dims)
 
         res = Array(
             shape=output_shape,
@@ -124,18 +125,13 @@ class MatMulOp(BinaryOperation):
         )
 
         res.set_maxpr(self.maxpr)
-        res.add_arguments(arg1_broadcasted, arg2_broadcasted)
+        res.add_arguments(arg1, arg2)
         res.vjp_rule = self.vjp_rule
         res.jvp_rule = self.jvp_rule
         res.custom_kernel_path = self.custom_kernel_path()
 
         if not res.stage_realization:
-            self.eagerxpr([arg1_broadcasted, arg2_broadcasted], res)
-
-        # if arg1_has_rank_1:
-        #     res = ops.reshape(res, res.shape[:-2] + (res.shape[-1],))
-        # if arg2_has_rank_1:
-        #     res = ops.reshape(res, res.shape[:-2] + (res.shape[-2],))
+            self.eagerxpr([arg1, arg2], res)
 
         return res
 
@@ -176,76 +172,30 @@ class MatMulOp(BinaryOperation):
 
     def maxpr(self, args: list[Value], output: Array) -> None:
         x_val, y_val = args[0], args[1]
-        x_shape_orig, y_shape_orig = x_val.shape, y_val.shape
+        x_shape = x_val.shape
+        y_shape = y_val.shape
+        output_shape = output.batch_dims + output.shape
 
-        if x_shape_orig[-1] != y_shape_orig[-2]:
-            raise ValueError(
-                f"Shapes {x_shape_orig} and {y_shape_orig} are not compatible for matrix multiplication "
-                f"(K-dimension mismatch: {x_shape_orig[-1]} vs {y_shape_orig[-2]})"
-            )
-
-        output_shape_tuple = get_broadcasted_shape(
-            x_shape_orig,
-            y_shape_orig,
-            ignore_axes=[-2, -1],
-            replace_ignored_dims=[x_shape_orig[-2], y_shape_orig[-1]],
-        )
-
-        m_dim = output_shape_tuple[-2]
-        n_dim = output_shape_tuple[-1]
-        k_dim = x_shape_orig[-1]
-        output_batch_shape = output_shape_tuple[:-2]
-
-        x_target_shape = output_batch_shape + (m_dim, k_dim)
-        y_target_shape = output_batch_shape + (k_dim, n_dim)
-
-        x_val_b = (
-            ops.broadcast_to(x_val, x_target_shape)
-            if x_val.shape != x_target_shape
-            else x_val
-        )
-        y_val_b = (
-            ops.broadcast_to(y_val, y_target_shape)
-            if y_val.shape != y_target_shape
-            else y_val
-        )
-
-        num_batch_dims = len(output_batch_shape)
-
-        if num_batch_dims == 0:
-            shape_for_x = (1, 1, m_dim, k_dim)
-            shape_for_y = (1, 1, k_dim, n_dim)
-        elif num_batch_dims == 1:
-            b0 = int(output_batch_shape[0])
-            shape_for_x = (b0, 1, m_dim, k_dim)
-            shape_for_y = (b0, 1, k_dim, n_dim)
-        elif num_batch_dims == 2:
-            shape_for_x = x_val_b.shape
-            shape_for_y = y_val_b.shape
+        if len(output_shape) <= 4:
+            output.tensor_value = ops.matmul(args[0], args[1])
         else:
-            b_eff_1 = int(np.prod(output_batch_shape[:-1]))
-            b_eff_2 = int(output_batch_shape[-1])
-            shape_for_x = (b_eff_1, b_eff_2, m_dim, k_dim)
-            shape_for_y = (b_eff_1, b_eff_2, k_dim, n_dim)
-
-        x_for_matmul = (
-            ops.reshape(x_val_b, shape_for_x)
-            if x_val_b.shape != shape_for_x
-            else x_val_b
-        )
-        y_for_matmul = (
-            ops.reshape(y_val_b, shape_for_y)
-            if y_val_b.shape != shape_for_y
-            else y_val_b
-        )
-
-        matmul_result = ops.matmul(x_for_matmul, y_for_matmul)
-
-        output.tensor_value = (
-            ops.reshape(matmul_result, output_shape_tuple)
-            if matmul_result.shape != output_shape_tuple
-            else matmul_result
-        )
+            if x_shape[:-2] != y_shape[:-2]:
+                raise ValueError(
+                    f"Shapes {x_shape} and {y_shape} are not compatible for matrix multiplication "
+                    f"(batch dimensions mismatch: {x_shape[:-2]} vs {y_shape[:-2]})"
+                )
+            # now we can simpply reshape the args to a rank3 tensor respecitvely and then do a batche dmamtul on this one
+            new_shape_x = np.prod(x_shape[:-2]), x_shape[-2], x_shape[-1]
+            new_shape_y = np.prod(y_shape[:-2]), y_shape[-2], y_shape[-1]
+            x_val_b = ops.reshape(x_val, new_shape_x)
+            y_val_b = ops.reshape(y_val, new_shape_y)
+            matmul_result = ops.matmul(x_val_b, y_val_b)
+            reshaped_result = ops.reshape(
+                matmul_result,
+                tuple(args[0].shape[:-2])
+                + (matmul_result.shape[-2], matmul_result.shape[-1]),
+            )
+            output.tensor_value = reshaped_result
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         arg0_numpy = args[0].to_numpy()

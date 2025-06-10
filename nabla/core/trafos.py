@@ -1274,7 +1274,9 @@ def vmap(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
     return vectorized_func
 
 
-def jit(func: Callable[..., Any] = None, static: bool = False) -> Callable[..., Any]:
+def jit(
+    func: Callable[..., Any] = None, static: bool = False, show_graph: bool = False
+) -> Callable[..., Any]:
     """Just-in-time compile a function for performance optimization.
     This can be used as a function call like `jit(func)` or as a decorator `@jit`.
 
@@ -1339,7 +1341,7 @@ def jit(func: Callable[..., Any] = None, static: bool = False) -> Callable[..., 
                 from .graph_execution import realize_
 
                 cached_model, trace_inputs = realize_(
-                    flat_output_arrays, flat_input_arrays
+                    flat_output_arrays, flat_input_arrays, show_graph=show_graph
                 )
 
                 # Create mapping: function parameter index -> model input index
@@ -1392,7 +1394,7 @@ def jit(func: Callable[..., Any] = None, static: bool = False) -> Callable[..., 
             output_arrays = _extract_arrays_from_pytree(outputs)
             from .graph_execution import realize_
 
-            realize_(output_arrays)
+            realize_(output_arrays, show_graph=show_graph)
 
             # make outpu_arrays untraced, but only if all the inptus were oringally untraced
             if not any_arg_traced:
@@ -1404,7 +1406,9 @@ def jit(func: Callable[..., Any] = None, static: bool = False) -> Callable[..., 
 
 
 # creat alias sjit for jit with static = True
-def sjit(func: Callable[..., Any] = None) -> Callable[..., Any]:
+def sjit(
+    func: Callable[..., Any] = None, show_graph: bool = False
+) -> Callable[..., Any]:
     """
     Just-in-time compile a function for performance optimization with static=True.
     This is a simplified alias for jit with static=True, which is useful for
@@ -1429,7 +1433,7 @@ def sjit(func: Callable[..., Any] = None) -> Callable[..., Any]:
             def my_func(x):
                 return x * 2
     """
-    return jit(func, static=True)
+    return jit(func, static=True, show_graph=show_graph)
 
 
 def jacrev(
