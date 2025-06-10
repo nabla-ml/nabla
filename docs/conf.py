@@ -11,6 +11,7 @@ release = "0.1.0"
 extensions = [
     "myst_parser",
     "sphinx_design",
+    "sphinx_sitemap",  # Generate sitemap.xml for search engines
 ]
 
 # MyST parser settings
@@ -41,14 +42,31 @@ exclude_patterns = [
 
 # -- Options for HTML output -------------------------------------------------
 html_theme = "sphinx_book_theme"
-html_title = "Nabla"
+html_title = "Nabla - GPU-Accelerated Array Computing"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
-html_js_files = ["custom.js"]
-html_favicon = "_static/nabla-logo.png"
+html_js_files = ["custom.js", "seo.js"]
+html_favicon = "_static/favicon.svg"
 
-# GitHub Pages optimization
-html_baseurl = "/"
+# SEO Configuration
+html_baseurl = "https://nablaml.com/"  # Your actual domain
+sitemap_url_scheme = "{link}"
+
+# Essential meta tags for SEO
+html_meta = {
+    "description": "Python library for GPU-accelerated array computation with NumPy-like API, JAX-style transformations (vmap, grad, jit), and Mojo integration.",
+    "keywords": "python, arrays, gpu, numpy, jax, mojo, machine learning, automatic differentiation, vectorization, jit",
+    "author": "Nabla Team",
+    "robots": "index, follow",
+    "og:title": "Nabla - GPU-Accelerated Array Computing",
+    "og:description": "Python library for GPU-accelerated array computation with NumPy-like API and JAX-style transformations",
+    "og:type": "website",
+    "og:url": "https://nablaml.com/",
+    "og:site_name": "Nabla Documentation",
+    "twitter:card": "summary",
+    "twitter:title": "Nabla - GPU-Accelerated Array Computing",
+    "twitter:description": "Python library for GPU-accelerated array computation with NumPy-like API and JAX-style transformations",
+}
 html_use_index = True
 html_domain_indices = True
 html_use_modindex = True
@@ -85,3 +103,6 @@ html_theme_options = {
     </div>
     """,
 }
+
+# Global template context for SEO
+html_context = {"default_mode": "dark"}

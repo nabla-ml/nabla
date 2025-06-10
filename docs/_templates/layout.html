@@ -1,0 +1,23 @@
+{% extends "!layout.html" %}
+
+{%- block htmltitle %}
+{{ super() }}
+<!-- SEO Meta Tags -->
+<meta name="description" content="Python library for GPU-accelerated array computation with NumPy-like API, JAX-style transformations (vmap, grad, jit), and Mojo integration.">
+<meta name="keywords" content="python, arrays, gpu, numpy, jax, mojo, machine learning, automatic differentiation, vectorization, jit">
+<meta name="author" content="Nabla Team">
+<meta name="robots" content="index, follow">
+
+<!-- Open Graph / Facebook -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="{{ pageurl }}">
+<meta property="og:title" content="{% if title %}{{ title }} - {% endif %}Nabla - GPU-Accelerated Array Computing">
+<meta property="og:description" content="Python library for GPU-accelerated array computation with NumPy-like API and JAX-style transformations">
+<meta property="og:site_name" content="Nabla Documentation">
+
+<!-- Twitter -->
+<meta property="twitter:card" content="summary">
+<meta property="twitter:url" content="{{ pageurl }}">
+<meta property="twitter:title" content="{% if title %}{{ title }} - {% endif %}Nabla - GPU-Accelerated Array Computing">
+<meta property="twitter:description" content="Python library for GPU-accelerated array computation with NumPy-like API and JAX-style transformations">
+{%- endblock %}

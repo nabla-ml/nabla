@@ -327,9 +327,19 @@ def {method_name}{method_sig}
                 ops_categories[category].extend(exports)
 
         # Core transformations (separate from Array class)
-        core_trafos = ["jit", "sjit", "vjp", "jvp", "vmap", "grad", "jacrev", "jacfwd", "xpr"]
+        core_trafos = [
+            "jit",
+            "sjit",
+            "vjp",
+            "jvp",
+            "vmap",
+            "grad",
+            "jacrev",
+            "jacfwd",
+            "xpr",
+        ]
         ops_categories["trafos"].extend(core_trafos)
-        
+
         # Array class
         ops_categories["array"].append("Array")
 

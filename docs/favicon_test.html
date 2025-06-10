@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nabla Favicon Test</title>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            background: #000;
+            color: #fff;
+            line-height: 1.6;
+        }
+        .check { color: #4ade80; }
+        .error { color: #f87171; }
+        .section { 
+            margin: 1.5rem 0; 
+            padding: 1rem; 
+            background: #111; 
+            border-radius: 8px; 
+            border: 1px solid #333;
+        }
+        .favicon-preview {
+            display: inline-block;
+            width: 32px;
+            height: 32px;
+            margin: 0 8px;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background: #222;
+        }
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        .test-item {
+            padding: 1rem;
+            background: #1a1a1a;
+            border-radius: 6px;
+            text-align: center;
+        }
+        pre { 
+            background: #222; 
+            padding: 1rem; 
+            border-radius: 4px; 
+            overflow-x: auto; 
+            font-size: 0.875rem;
+        }
+        .logo-comparison {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🚀 Nabla Favicon Implementation Test</h1>
+    
+    <div class="section">
+        <h2>📱 Favicon Files Verification</h2>
+        <div id="favicon-files-check">Checking favicon files...</div>
+        
+        <div class="test-grid">
+            <div class="test-item">
+                <h4>Main Favicon (Dark)</h4>
+                <img src="_static/favicon-dark.svg" class="favicon-preview" alt="Main favicon">
+                <div>32x32 with background</div>
+            </div>
+            <div class="test-item">
+                <h4>Clean Favicon</h4>
+                <img src="_static/favicon.svg" class="favicon-preview" alt="Clean favicon">
+                <div>32x32 transparent</div>
+            </div>
+            <div class="test-item">
+                <h4>Small Favicon</h4>
+                <img src="_static/favicon-16x16.svg" class="favicon-preview" alt="Small favicon">
+                <div>16x16 optimized</div>
+            </div>
+            <div class="test-item">
+                <h4>Apple Touch Icon</h4>
+                <img src="_static/nabla-logo.png" style="width: 32px; height: 32px; margin: 0 8px;" alt="Apple touch icon">
+                <div>PNG fallback</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="section">
+        <h2>🔗 Favicon Links Verification</h2>
+        <div id="favicon-links-check">Checking favicon links in HTML head...</div>
+    </div>
+    
+    <div class="section">
+        <h2>🌐 Web Manifest Verification</h2>
+        <div id="manifest-check">Checking web manifest...</div>
+    </div>
+    
+    <div class="section">
+        <h2>🎨 Logo Comparison</h2>
+        <p>Your original SVG logo vs. the new favicon implementation:</p>
+        
+        <div class="logo-comparison">
+            <div>
+                <strong>Original Logo (Sidebar):</strong><br>
+                <img src="_static/nabla-logo.png" style="height: 45px;" alt="Sidebar logo">
+            </div>
+            <div>
+                <strong>New Favicon (Browser Tab):</strong><br>
+                <img src="_static/favicon-dark.svg" style="height: 45px;" alt="Favicon">
+            </div>
+        </div>
+        
+        <p><span class="check">✓</span> Both use the same underlying Nabla logo design with the geometric ∇ symbol</p>
+        <p><span class="check">✓</span> Sidebar keeps the original PNG for consistent display</p>
+        <p><span class="check">✓</span> Favicon uses optimized SVG for sharp rendering at all sizes</p>
+    </div>
+    
+    <div class="section">
+        <h2>📋 Implementation Details</h2>
+        <pre id="implementation-details">
+🎯 Favicon Implementation Summary:
+
+1. SVG Favicons Created:
+   • favicon-dark.svg - Main favicon with black background
+   • favicon.svg - Clean transparent version  
+   • favicon-16x16.svg - Optimized for small sizes
+
+2. Configuration Updated:
+   • Sphinx conf.py - Set html_favicon to favicon-dark.svg
+   • SEO script - Dynamic favicon link injection
+   • Web manifest - PWA-ready icon definitions
+
+3. Browser Support:
+   • Modern browsers - SVG favicon support
+   • Safari/iOS - Apple touch icon (PNG)
+   • Legacy browsers - Fallback to PNG
+   • PWA support - Web manifest icons
+
+4. File Locations:
+   • Source: docs/_static/favicon*.svg
+   • Built: _build/html/_static/favicon*.svg
+   • Configured in: conf.py and seo.js
+        </pre>
+    </div>
+
+    <script>
+        // Check favicon files accessibility
+        async function checkFaviconFiles() {
+            const filesCheck = document.getElementById('favicon-files-check');
+            const checks = [];
+            
+            const faviconFiles = [
+                '_static/favicon-dark.svg',
+                '_static/favicon.svg', 
+                '_static/favicon-16x16.svg',
+                '_static/site.webmanifest'
+            ];
+            
+            for (const file of faviconFiles) {
+                try {
+                    const response = await fetch(file);
+                    checks.push(response.ok ? 
+                        `<span class="check">✓</span> ${file} - Accessible` : 
+                        `<span class="error">✗</span> ${file} - Not accessible`);
+                } catch {
+                    checks.push(`<span class="error">✗</span> ${file} - Failed to load`);
+                }
+            }
+            
+            filesCheck.innerHTML = checks.join('<br>');
+        }
+        
+        // Check favicon links in HTML head
+        function checkFaviconLinks() {
+            const linksCheck = document.getElementById('favicon-links-check');
+            const checks = [];
+            
+            // Check for dynamically injected favicon links
+            const iconLinks = document.querySelectorAll('link[rel*="icon"], link[rel="manifest"]');
+            
+            if (iconLinks.length > 0) {
+                checks.push(`<span class="check">✓</span> Found ${iconLinks.length} favicon/manifest links`);
+                
+                iconLinks.forEach(link => {
+                    const rel = link.getAttribute('rel');
+                    const href = link.getAttribute('href');
+                    const type = link.getAttribute('type') || 'default';
+                    checks.push(`&nbsp;&nbsp;• ${rel}: ${href} (${type})`);
+                });
+            } else {
+                checks.push(`<span class="error">✗</span> No favicon links found in HTML head`);
+                checks.push(`&nbsp;&nbsp;Note: Links may be injected by JavaScript after page load`);
+            }
+            
+            linksCheck.innerHTML = checks.join('<br>');
+        }
+        
+        // Check web manifest
+        async function checkWebManifest() {
+            const manifestCheck = document.getElementById('manifest-check');
+            
+            try {
+                const response = await fetch('_static/site.webmanifest');
+                if (response.ok) {
+                    const manifest = await response.json();
+                    manifestCheck.innerHTML = `
+                        <span class="check">✓</span> Web manifest accessible<br>
+                        &nbsp;&nbsp;• Name: ${manifest.name}<br>
+                        &nbsp;&nbsp;• Short name: ${manifest.short_name}<br>
+                        &nbsp;&nbsp;• Icons: ${manifest.icons.length} defined<br>
+                        &nbsp;&nbsp;• Theme color: ${manifest.theme_color}
+                    `;
+                } else {
+                    manifestCheck.innerHTML = `<span class="error">✗</span> Web manifest not accessible`;
+                }
+            } catch (error) {
+                manifestCheck.innerHTML = `<span class="error">✗</span> Web manifest check failed: ${error.message}`;
+            }
+        }
+        
+        // Run all checks when page loads
+        window.addEventListener('DOMContentLoaded', function() {
+            // Wait a bit for SEO script to inject favicon links
+            setTimeout(() => {
+                checkFaviconFiles();
+                checkFaviconLinks();
+                checkWebManifest();
+            }, 1500);
+        });
+    </script>
+</body>
+</html>
