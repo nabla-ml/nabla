@@ -104,7 +104,10 @@ class ModelFactory:
 
     @staticmethod
     def create_model(
-        inputs: list[Array], trace: list[Array], outputs: list[Array]
+        inputs: list[Array],
+        trace: list[Array],
+        outputs: list[Array],
+        dynamic_inputs: list[Array] | None = None,
     ) -> Model:
         """Create a MAX model from the computation graph."""
 
@@ -113,6 +116,10 @@ class ModelFactory:
         devices = []
 
         for input_node in inputs:
+            if dynamic_inputs is not None and input_node not in dynamic_inputs:
+                # If the node can be treated as a constant, skip it and add it as a constant value later in the graph
+                continue
+
             input_types.append(
                 TensorType(
                     dtype=input_node.dtype,
@@ -129,16 +136,29 @@ class ModelFactory:
                 custom_ops_paths.append(node.kernel_impl_path)
 
         try:
-            # Timing: Graph construction
-
             with Graph(
                 "nabla_graph",
                 input_types=input_types,
                 custom_extensions=custom_ops_paths,
             ) as graph:
                 input_symbols = graph.inputs
+                j = 0
                 for i, input_node in enumerate(inputs):
-                    input_node.tensor_value = input_symbols[i]
+                    if (
+                        dynamic_inputs is not None
+                        and input_node not in dynamic_inputs
+                        and input_node.impl is not None
+                    ):
+                        from max.graph.ops import constant
+
+                        input_node.tensor_value = constant(
+                            input_node.to_numpy(),
+                            input_node.dtype,
+                            DeviceRef.from_device(input_node.device),
+                        )  # add tensor_value as constant weight to the graph
+                        j += 1
+                    else:
+                        input_node.tensor_value = input_symbols[i - j]
 
                 for node in trace:
                     node_name = node.name or "const"
@@ -229,7 +249,9 @@ class ModelFactory:
             raise ValueError(f"Validation error for node {node.name}: {e}") from e
 
 
-def realize_(outputs: list[Array]) -> None:
+def realize_(
+    outputs: list[Array], dynamic_inputs: list[Array] | None = None
+) -> Model | None:
     """
     Realize (compute) the given output Arrays.
 
@@ -251,9 +273,12 @@ def realize_(outputs: list[Array]) -> None:
     inputs, trace, cache_key = GraphTracer.get_trace(output_list)
 
     def create_model() -> Model:
-        return ModelFactory.create_model(inputs, trace, output_list)
+        return ModelFactory.create_model(inputs, trace, output_list, dynamic_inputs)
 
     model = global_execution_context.get_or_create(cache_key, create_model)
+
+    if dynamic_inputs is not None:
+        return model
 
     try:
         tensor_inputs = [input_node.impl for input_node in inputs]
@@ -284,3 +309,54 @@ def get_trace(nodes: Sequence[Array]) -> tuple[list[Array], list[Array], int]:
 
 def compute_node_hash(node: Array) -> int:
     return GraphTracer.compute_node_hash(node)
+
+
+# def sjit_prep(dynamic_inputs: list[Array], outputs: list[Array]) -> None:
+#     """
+#     Realize (compute) the given output Arrays.
+
+#     This is the main entry point for executing computation graphs.
+#     Uses compilation caching for performance.
+#     """
+#     if not outputs:
+#         return
+
+#     for output in outputs:
+#         if not isinstance(output, Array):
+#             raise TypeError(f"All outputs must be Array instances, got {type(output)}")
+
+#     output_list = [output for output in outputs if output.impl is None]
+
+#     if not output_list:
+#         return
+
+#     # copy every input via copy method
+#     from ..ops.view import shallow_copy
+
+#     inputs, trace, cache_key = GraphTracer.get_trace(output_list)
+
+#     def create_model() -> Model:
+#         return ModelFactory.create_model(inputs, trace, output_list)
+
+#     model = global_execution_context.get_or_create(cache_key, create_model)
+
+#     try:
+#         tensor_inputs = [input_node.impl for input_node in inputs]
+#         if any(tensor is None for tensor in tensor_inputs):
+#             raise ValueError("Some inputs have no implementation")
+
+#         import time
+
+#         # Timing: Model execution
+#         execution_start = time.perf_counter()
+
+#         model_outputs = model.execute(*tensor_inputs)
+#         execution_time = time.perf_counter() - execution_start
+#         print(f"   \nModel execution time: {execution_time:.4f} seconds")
+
+#         for i, output in enumerate(output_list):
+#             output.impl = model_outputs[i]
+#             output._numpy_cache = None
+
+#     except Exception as e:
+#         raise ValueError(f"Error executing computation: {e}") from e

@@ -11,8 +11,8 @@ import nabla as nb
 BATCH_SIZE = 128
 LAYERS = [1, 64, 128, 256, 128, 64, 1]
 LEARNING_RATE = 0.001  # Match JAX version for fair comparison
-NUM_EPOCHS = 5
-PRINT_INTERVAL = 1
+NUM_EPOCHS = 50000
+PRINT_INTERVAL = 1000
 SIN_PERIODS = 8
 
 
@@ -109,7 +109,7 @@ def initialize_for_complex_function(
     return params
 
 
-@nb.jit
+@nb.sjit
 def adamw_step(
     params: list[nb.Array],
     gradients: list[nb.Array],
@@ -146,7 +146,7 @@ def adamw_step(
     return updated_params, updated_m, updated_v
 
 
-@nb.jit
+@nb.sjit
 def adamw_step_optimized(
     params: list[nb.Array],
     gradients: list[nb.Array],
@@ -204,7 +204,7 @@ def learning_rate_schedule(
     return initial_lr * (decay_factor ** (epoch // decay_every))
 
 
-@nb.jit
+@nb.sjit
 def train_step_adamw_jitted(
     x: nb.Array,
     targets: nb.Array,
@@ -239,7 +239,7 @@ def train_step_adamw_jitted(
     return updated_params, updated_m, updated_v, loss_scalar
 
 
-@nb.jit
+@nb.sjit
 def compute_predictions_and_loss(
     x_test: nb.Array, targets_test: nb.Array, params: list[nb.Array]
 ) -> tuple[nb.Array, nb.Array]:
@@ -270,7 +270,7 @@ def analyze_nabla_learning_progress(params: list[nb.Array], epoch: int):
     return test_loss_scalar
 
 
-@nb.jit
+@nb.sjit
 def value_and_grad(func, args):
     values, vjp_fn = nb.vjp(func, args)
     cotangent = [nb.ones_like(values[0])]
@@ -329,7 +329,7 @@ def test_nabla_complex_sin():
         vjp_start = time.time()
         all_inputs = [x, targets] + params
 
-        print(nb.xpr(value_and_grad, mlp_forward_and_loss_leaky, all_inputs))
+        # print(nb.xpr(value_and_grad, mlp_forward_and_loss_leaky, all_inputs))
 
         # Use value_and_grad to compute loss and gradients
         loss_values, param_gradients = value_and_grad(
@@ -361,24 +361,19 @@ def test_nabla_complex_sin():
         if epoch % PRINT_INTERVAL == 0:
             print(f"\n{'=' * 60}")
             print(
-                f"Epoch {epoch:3d} | Loss: {avg_loss / PRINT_INTERVAL:.6f} | LR: {current_lr:.6f}"
+                f"Epoch {epoch:3d} | Loss: {avg_loss / PRINT_INTERVAL:.6f} | Time: {avg_time / PRINT_INTERVAL:.4f}s"
             )
-            print(f"{'=' * 60}")
-            print(f"  Total Time:    {avg_time / PRINT_INTERVAL:.4f}s/iter")
-            print(
-                f"  ├─ Data Gen:   {avg_data_time / PRINT_INTERVAL:.4f}s ({avg_data_time / avg_time * 100:.1f}%)"
-            )
-            print(
-                f"  ├─ VJP Comp:   {avg_vjp_time / PRINT_INTERVAL:.4f}s ({avg_vjp_time / avg_time * 100:.1f}%)"
-            )
-            print(
-                f"  └─ AdamW Step: {avg_adamw_time / PRINT_INTERVAL:.4f}s ({avg_adamw_time / avg_time * 100:.1f}%)"
-            )
-
-            # test_loss = analyze_nabla_learning_progress(params, epoch)
-            # if test_loss < best_test_loss:
-            #     best_test_loss = test_loss
-            #     print(f"  New best test loss: {best_test_loss:.6f}")
+            # print(f"{'=' * 60}")
+            # print(f"  Total Time:    {avg_time / PRINT_INTERVAL:.4f}s/iter")
+            # print(
+            #     f"  ├─ Data Gen:   {avg_data_time / PRINT_INTERVAL:.4f}s ({avg_data_time / avg_time * 100:.1f}%)"
+            # )
+            # print(
+            #     f"  ├─ VJP Comp:   {avg_vjp_time / PRINT_INTERVAL:.4f}s ({avg_vjp_time / avg_time * 100:.1f}%)"
+            # )
+            # print(
+            #     f"  └─ AdamW Step: {avg_adamw_time / PRINT_INTERVAL:.4f}s ({avg_adamw_time / avg_time * 100:.1f}%)"
+            # )
 
             avg_loss = 0.0
             avg_time = 0.0

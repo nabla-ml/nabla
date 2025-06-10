@@ -1337,6 +1337,111 @@ def jit(func: Callable[..., Any] = None) -> Callable[..., Any]:
     return jit_func
 
 
+def sjit(func: Callable[..., Any] = None) -> Callable[..., Any]:
+    """Just-in-time compile a function for performance optimization.
+    This can be used as a function call like `jit(func)` or as a decorator `@jit`.
+
+    Args:
+        func: Function to optimize with JIT compilation (should take positional arguments)
+
+    Returns:
+        JIT-compiled function with optimized execution
+
+    Note:
+        This follows JAX's jit API:
+
+        * Only accepts positional arguments
+        * For functions requiring keyword arguments, use functools.partial or lambda
+        * Supports both list-style (legacy) and unpacked arguments style (JAX-like)
+
+    Example:
+        As a function call::
+
+            fast_func = jit(my_func)
+
+        As a decorator::
+
+            @jit
+            def my_func(x):
+                return x * 2
+    """
+    # Handle being called as a decorator without arguments
+    if func is None:
+        return lambda f: sjit(f)
+
+    # Store the compiled model as a closure variable
+    cached_model = None
+    output_structure = None
+    param_to_model_index = None
+
+    def sjit_func(*args):
+        nonlocal cached_model, output_structure, param_to_model_index
+
+        any_arg_traced = any(
+            getattr(arg, "traced", False) for arg in _extract_arrays_from_pytree(args)
+        )
+        # Use common argument handling logic
+        actual_args, is_list_style = _handle_args_consistently(args)
+
+        # Prepare traced inputs with staging enabled
+        traced_args, _ = _prepare_traced_inputs(
+            actual_args, is_list_style, apply_staging=True
+        )
+
+        flat_input_arrays, _ = tree_flatten(traced_args)
+
+        # Check if we need to compile the model
+        if cached_model is None:
+            # Execute the function with traced inputs and appropriate style
+            outputs = func(traced_args) if is_list_style else func(*traced_args)
+
+            # Realize only the Arrays in the outputs
+            flat_output_arrays, output_structure = tree_flatten(outputs)
+            from .graph_execution import realize_
+
+            cached_model = realize_(flat_output_arrays, flat_input_arrays)
+
+            # Store the mapping from function parameters to model input order
+            # We need to get the trace inputs and figure out which ones are dynamic
+            from .graph_execution import GraphTracer
+
+            trace_inputs, _, _ = GraphTracer.get_trace(flat_output_arrays)
+
+            # Create mapping: function parameter index -> model input index
+            param_to_model_index = []
+            model_input_idx = 0
+            for trace_input in trace_inputs:
+                if trace_input in flat_input_arrays:
+                    func_param_idx = flat_input_arrays.index(trace_input)
+                    param_to_model_index.append((func_param_idx, model_input_idx))
+                    model_input_idx += 1
+
+            # make outpu_arrays untraced, but only if all the inptus were oringally untraced
+            if not any_arg_traced:
+                make_untraced_pytree(outputs)
+
+            outputs = _clean_traced_outputs(outputs, is_list_style, remove_staging=True)
+
+        # Use the cached model for execution
+        # Reorder inputs to match the model's expected order
+        function_param_tensors = [input_node.impl for input_node in flat_input_arrays]
+
+        # Reorder according to the mapping we stored during compilation
+        ordered_tensor_inputs = [None] * len(param_to_model_index)
+        for func_idx, model_idx in param_to_model_index:
+            ordered_tensor_inputs[model_idx] = function_param_tensors[func_idx]
+
+        model_outputs = cached_model.execute(*ordered_tensor_inputs)
+        output_arrays = [Array.from_impl(out) for out in model_outputs]
+        # Convert model outputs back to the original structure
+        outputs = tree_unflatten(output_structure, output_arrays)
+
+        # Clean up outputs and return
+        return outputs
+
+    return sjit_func
+
+
 def jacrev(
     func: Callable[..., Any],
     argnums: int | tuple[int, ...] | list[int] = 0,
