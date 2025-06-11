@@ -16,15 +16,16 @@
 """Activation functions for neural networks."""
 
 import numpy as np
+
 import nabla as nb
 
 
 def relu(x: nb.Array) -> nb.Array:
     """Rectified Linear Unit activation function.
-    
+
     Args:
         x: Input array
-        
+
     Returns:
         Array with ReLU applied element-wise
     """
@@ -33,11 +34,11 @@ def relu(x: nb.Array) -> nb.Array:
 
 def leaky_relu(x: nb.Array, negative_slope: float = 0.01) -> nb.Array:
     """Leaky ReLU activation function.
-    
+
     Args:
         x: Input array
         negative_slope: Slope for negative values
-        
+
     Returns:
         Array with Leaky ReLU applied element-wise
     """
@@ -49,10 +50,10 @@ def leaky_relu(x: nb.Array, negative_slope: float = 0.01) -> nb.Array:
 
 def sigmoid(x: nb.Array) -> nb.Array:
     """Sigmoid activation function.
-    
+
     Args:
         x: Input array
-        
+
     Returns:
         Array with sigmoid applied element-wise
     """
@@ -60,31 +61,31 @@ def sigmoid(x: nb.Array) -> nb.Array:
     # For numerical stability, use:
     # sigmoid(x) = exp(x) / (1 + exp(x)) for x >= 0
     # sigmoid(x) = 1 / (1 + exp(-x)) for x < 0
-    
+
     zeros = nb.zeros_like(x)
     positive_mask = x >= zeros
-    
+
     # For positive values: exp(x) / (1 + exp(x))
     exp_x = nb.exp(x)
     positive_part = exp_x / (nb.ones_like(x) + exp_x)
-    
+
     # For negative values: 1 / (1 + exp(-x))
     exp_neg_x = nb.exp(-x)
     negative_part = nb.ones_like(x) / (nb.ones_like(x) + exp_neg_x)
-    
+
     # Combine using where-like operation
     positive_mask_float = positive_mask.astype(x.dtype)
-    negative_mask_float = (nb.ones_like(positive_mask_float) - positive_mask_float)
-    
+    negative_mask_float = nb.ones_like(positive_mask_float) - positive_mask_float
+
     return positive_mask_float * positive_part + negative_mask_float * negative_part
 
 
 def tanh(x: nb.Array) -> nb.Array:
     """Hyperbolic tangent activation function.
-    
+
     Args:
         x: Input array
-        
+
     Returns:
         Array with tanh applied element-wise
     """
@@ -93,59 +94,56 @@ def tanh(x: nb.Array) -> nb.Array:
 
 def gelu(x: nb.Array) -> nb.Array:
     """Gaussian Error Linear Unit activation function.
-    
+
     GELU(x) = x * Φ(x) where Φ(x) is the CDF of standard normal distribution.
     Approximation: GELU(x) ≈ 0.5 * x * (1 + tanh(√(2/π) * (x + 0.044715 * x^3)))
-    
+
     Args:
         x: Input array
-        
+
     Returns:
         Array with GELU applied element-wise
     """
     # Constants for GELU approximation
     sqrt_2_over_pi = np.sqrt(2.0 / np.pi)
-    
+
     # GELU approximation
     x_cubed = x * x * x
     tanh_input = sqrt_2_over_pi * (x + 0.044715 * x_cubed)
     tanh_result = tanh(tanh_input)
-    
+
     half = nb.full_like(x, 0.5)
     one = nb.ones_like(x)
-    
+
     return half * x * (one + tanh_result)
 
 
 def swish(x: nb.Array, beta: float = 1.0) -> nb.Array:
     """Swish (SiLU) activation function.
-    
+
     Swish(x) = x * sigmoid(β * x)
     When β = 1, this is SiLU (Sigmoid Linear Unit).
-    
+
     Args:
         x: Input array
         beta: Scaling factor for sigmoid
-        
+
     Returns:
         Array with Swish applied element-wise
     """
-    if beta != 1.0:
-        scaled_x = x * beta
-    else:
-        scaled_x = x
-    
+    scaled_x = x * beta if beta != 1.0 else x
+
     return x * sigmoid(scaled_x)
 
 
 def silu(x: nb.Array) -> nb.Array:
     """Sigmoid Linear Unit (SiLU) activation function.
-    
+
     SiLU(x) = x * sigmoid(x) = Swish(x, β=1)
-    
+
     Args:
         x: Input array
-        
+
     Returns:
         Array with SiLU applied element-wise
     """
@@ -154,29 +152,31 @@ def silu(x: nb.Array) -> nb.Array:
 
 def softmax(x: nb.Array, axis: int = -1) -> nb.Array:
     """Softmax activation function.
-    
+
     Args:
         x: Input array
         axis: Axis along which to compute softmax
-        
+
     Returns:
         Array with softmax applied along specified axis
     """
     from ...ops.special import softmax as special_softmax
+
     return special_softmax(x, axis=axis)
 
 
 def log_softmax(x: nb.Array, axis: int = -1) -> nb.Array:
     """Log-softmax activation function.
-    
+
     Args:
         x: Input array
         axis: Axis along which to compute log-softmax
-        
+
     Returns:
         Array with log-softmax applied along specified axis
     """
     from ...ops.special import logsumexp
+
     log_sum_exp = logsumexp(x, axis=axis, keep_dims=True)
     return x - log_sum_exp
 
@@ -197,26 +197,28 @@ ACTIVATION_FUNCTIONS = {
 
 def get_activation(name: str):
     """Get activation function by name.
-    
+
     Args:
         name: Name of the activation function
-        
+
     Returns:
         Activation function
-        
+
     Raises:
         ValueError: If activation function is not found
     """
     if name not in ACTIVATION_FUNCTIONS:
         available = ", ".join(ACTIVATION_FUNCTIONS.keys())
-        raise ValueError(f"Unknown activation function '{name}'. Available: {available}")
-    
+        raise ValueError(
+            f"Unknown activation function '{name}'. Available: {available}"
+        )
+
     return ACTIVATION_FUNCTIONS[name]
 
 
 __all__ = [
     "relu",
-    "leaky_relu", 
+    "leaky_relu",
     "sigmoid",
     "tanh",
     "gelu",

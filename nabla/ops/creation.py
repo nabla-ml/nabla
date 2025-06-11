@@ -360,7 +360,9 @@ def ones_like(template: Array) -> Array:
 
 def full_like(template: Array, fill_value: float) -> Array:
     """Create an array filled with a specific value, with the same shape, dtype, and device as template."""
-    return _create_filled_array(template.shape, fill_value, template.dtype, template.device, template.batch_dims)
+    return _create_filled_array(
+        template.shape, fill_value, template.dtype, template.device, template.batch_dims
+    )
 
 
 # Neural Network Initialization Methods

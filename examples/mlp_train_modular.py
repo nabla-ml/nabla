@@ -2,19 +2,21 @@
 """Nabla implementation with JIT acceleration using modular nn components."""
 
 import time
+
 import numpy as np
+
 import nabla as nb
 
 # Import from the new modular nn structure
 from nabla.nn import (
-    mean_squared_error,
-    adamw_step, 
+    adamw_step,
+    create_sin_dataset,
     init_adamw_state,
-    learning_rate_schedule,
     initialize_mlp_params,
+    learning_rate_schedule,
+    mean_squared_error,
     mlp_forward,
     value_and_grad,
-    create_sin_dataset,
 )
 
 # Configuration

@@ -130,17 +130,17 @@ def mean(
     """Compute mean of array elements over given axes."""
     from .binary import div
     from .creation import array
-    
+
     # First compute the sum
     sum_result = sum(arg, axes=axes, keep_dims=keep_dims)
-    
+
     # Calculate the number of elements being averaged
     if axes is not None:
         if isinstance(axes, int):
             axes = [axes]
         elif isinstance(axes, list | tuple):
             axes = [int(axis) for axis in axes]
-        
+
         # Handle negative axes
         normalized_axes = []
         for axis in axes:
@@ -148,7 +148,7 @@ def mean(
                 normalized_axes.append(len(arg.shape) + axis)
             else:
                 normalized_axes.append(axis)
-        
+
         # Count elements along reduced axes
         count = 1
         for axis in normalized_axes:
@@ -159,10 +159,10 @@ def mean(
         count = 1
         for dim in arg.shape:
             count *= dim
-    
+
     # Create count as a scalar array
     count_array = array([float(count)], dtype=arg.dtype)
-    
+
     # Divide sum by count
     return div(sum_result, count_array)
 
@@ -296,43 +296,42 @@ class MaxOp(ReductionOperation):
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
-
-        from .view import broadcast_to
         from .binary import equal
-        
+        from .view import broadcast_to
+
         # Get the primal input
         primal = primals[0]
-        
+
         # Broadcast cotangent to match primal shape
         cotangent_broadcasted = broadcast_to(cotangent, self.arg_shape)
-        
+
         # Broadcast the output (max values) to match primal shape
         output_broadcasted = broadcast_to(output, self.arg_shape)
-        
+
         # Create mask where primal equals the max value (output)
         mask = equal(primal, output_broadcasted)
-        
+
         # Convert mask to float and multiply with broadcasted cotangent
         mask_float = mask.astype(primal.dtype)
         result = cotangent_broadcasted * mask_float
-        
+
         return [result]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
-        from .view import broadcast_to
         from .binary import equal, mul
-        
+        from .view import broadcast_to
+
         # Create mask where input equals the max value
         primal = primals[0]
         max_result = max(primal, axes=self.axes, keep_dims=True)
         max_broadcasted = broadcast_to(max_result, self.arg_shape)
         mask = equal(primal, max_broadcasted)
-        
+
         # Convert mask to float for arithmetic operations
         mask_float = mask.astype(primal.dtype)
-        
+
         # Apply mask to tangents and sum over the reduced axes
         masked_tangents = mul(tangents[0], mask_float)
         return sum(masked_tangents, axes=self.axes, keep_dims=True)
@@ -358,7 +357,7 @@ class ArgMaxOp(ReductionOperation):
 
     def maxpr(self, args: list[Value], output: Array) -> None:
         output_symbol = args[0]
-        
+
         # Apply argmax for each axis sequentially
         # Note: ops.argmax reduces along one axis and keeps the dimension (size 1)
         for axis in self.axes:
@@ -368,7 +367,7 @@ class ArgMaxOp(ReductionOperation):
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         primal = args[0].to_numpy()
-        
+
         # Handle different cases for argmax
         if len(self.axes) == 1:
             # Single axis case
@@ -384,7 +383,7 @@ class ArgMaxOp(ReductionOperation):
             np_result = primal
             for axis in self.axes:
                 np_result = np.argmax(np_result, axis=axis, keepdims=True)
-        
+
         if np_result.ndim == 0:
             np_result = np.array(np_result)
         output.impl = Tensor.from_numpy(np_result)
@@ -394,6 +393,7 @@ class ArgMaxOp(ReductionOperation):
     ) -> list[Array]:
         # ArgMax is not differentiable - return zero gradient
         from .creation import zeros_like
+
         return [zeros_like(primals[0])]
 
     def jvp_rule(
@@ -401,6 +401,7 @@ class ArgMaxOp(ReductionOperation):
     ) -> Array:
         # ArgMax is not differentiable - return zero tangent
         from .creation import zeros_like
+
         return zeros_like(output)
 
 
@@ -464,4 +465,3 @@ def argmax(
             res = squeeze(res, [axis])  # axes always negative
 
     return res
-

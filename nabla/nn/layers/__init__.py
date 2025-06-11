@@ -2,20 +2,20 @@
 # Nabla 2025 - Neural Network Layers
 # ===----------------------------------------------------------------------=== #
 
-from .linear import linear_forward, mlp_forward, mlp_forward_with_activations
 from .activations import (
-    relu,
-    leaky_relu,
-    sigmoid,
-    tanh,
+    ACTIVATION_FUNCTIONS,
     gelu,
-    swish,
+    get_activation,
+    leaky_relu,
+    log_softmax,
+    relu,
+    sigmoid,
     silu,
     softmax,
-    log_softmax,
-    get_activation,
-    ACTIVATION_FUNCTIONS,
+    swish,
+    tanh,
 )
+from .linear import linear_forward, mlp_forward, mlp_forward_with_activations
 
 __all__ = [
     "linear_forward",
@@ -23,7 +23,7 @@ __all__ = [
     "mlp_forward_with_activations",
     "relu",
     "leaky_relu",
-    "sigmoid", 
+    "sigmoid",
     "tanh",
     "gelu",
     "swish",

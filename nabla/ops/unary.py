@@ -270,35 +270,35 @@ class AbsOp(UnaryOperation):
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
         from .binary import greater_equal, mul
-        from .creation import zeros, ones
+        from .creation import ones, zeros
 
         # d/dx |x| = sign(x) = 1 if x > 0, -1 if x < 0, undefined at x = 0
         # We use the convention that sign(0) = 0
         zero = zeros((), dtype=primals[0].dtype)
         pos_mask = greater_equal(primals[0], zero)
         pos_mask_casted = cast(pos_mask, cotangent.dtype)
-        
+
         # Create sign: 1 for positive, -1 for negative
         ones_tensor = ones(primals[0].shape, dtype=cotangent.dtype)
         sign = 2.0 * pos_mask_casted - ones_tensor
-        
+
         return [mul(cotangent, sign)]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
         from .binary import greater_equal, mul
-        from .creation import zeros, ones
+        from .creation import ones, zeros
 
         # d/dx |x| = sign(x)
         zero = zeros((), dtype=primals[0].dtype)
         pos_mask = greater_equal(primals[0], zero)
         pos_mask_casted = cast(pos_mask, tangents[0].dtype)
-        
+
         # Create sign: 1 for positive, -1 for negative
         ones_tensor = ones(primals[0].shape, dtype=tangents[0].dtype)
         sign = 2.0 * pos_mask_casted - ones_tensor
-        
+
         return mul(tangents[0], sign)
 
 
@@ -369,9 +369,7 @@ class SigmoidOp(UnaryOperation):
         # For positive values: 1 / (1 + exp(-x))
         # For negative values: exp(x) / (1 + exp(x))
         np_result = np.where(
-            x >= 0,
-            1.0 / (1.0 + np.exp(-x)),
-            np.exp(x) / (1.0 + np.exp(x))
+            x >= 0, 1.0 / (1.0 + np.exp(-x)), np.exp(x) / (1.0 + np.exp(x))
         )
         # Ensure result is an array, not a scalar
         if np.isscalar(np_result):

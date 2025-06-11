@@ -15,7 +15,6 @@
 # ===----------------------------------------------------------------------=== #
 """SGD optimizer implementation."""
 
-import numpy as np
 import nabla as nb
 
 
@@ -28,10 +27,10 @@ def sgd_step(
     momentum: float = 0.0,
     weight_decay: float = 0.0,
     dampening: float = 0.0,
-    nesterov: bool = False
+    nesterov: bool = False,
 ) -> tuple[list[nb.Array], list[nb.Array]]:
     """Perform a single SGD optimization step.
-    
+
     Args:
         params: List of parameter arrays
         gradients: List of gradient arrays (same structure as params)
@@ -41,24 +40,24 @@ def sgd_step(
         weight_decay: Weight decay (L2 penalty)
         dampening: Dampening for momentum
         nesterov: Enable Nesterov momentum
-        
+
     Returns:
         Tuple of (updated_params, updated_momentum_states)
     """
     updated_params = []
     updated_momentum_states = []
-    
-    for i, (param, grad) in enumerate(zip(params, gradients)):
+
+    for i, (param, grad) in enumerate(zip(params, gradients, strict=False)):
         # Add weight decay
         if weight_decay != 0:
             grad = grad + weight_decay * param
-        
+
         # Initialize momentum state if needed
         if momentum_states is None or len(momentum_states) <= i:
             momentum_state = nb.zeros_like(param)
         else:
             momentum_state = momentum_states[i]
-        
+
         # Update momentum
         if momentum != 0:
             if i == 0 or momentum_states is None:
@@ -66,29 +65,26 @@ def sgd_step(
                 buf = grad
             else:
                 buf = momentum * momentum_state + (1 - dampening) * grad
-            
-            if nesterov:
-                grad = grad + momentum * buf
-            else:
-                grad = buf
-            
+
+            grad = grad + momentum * buf if nesterov else buf
+
             updated_momentum_states.append(buf)
         else:
             updated_momentum_states.append(momentum_state)
-        
+
         # Update parameters
         updated_param = param - learning_rate * grad
         updated_params.append(updated_param)
-    
+
     return updated_params, updated_momentum_states
 
 
 def init_sgd_state(params: list[nb.Array]) -> list[nb.Array]:
     """Initialize SGD momentum states.
-    
+
     Args:
         params: List of parameter arrays
-        
+
     Returns:
         List of zero-initialized momentum states
     """

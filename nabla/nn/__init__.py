@@ -16,64 +16,86 @@
 """Neural Network module for Nabla."""
 
 # Import submodules for easy access
-from . import losses
-from . import optim
-from . import init
-from . import layers
-from . import architectures
-from . import utils
+from . import architectures, init, layers, losses, optim, utils
+from .architectures import MLPBuilder, create_mlp_config
+from .init import he_normal, initialize_mlp_params, lecun_normal, xavier_normal
+from .layers import (
+    gelu,
+    leaky_relu,
+    linear_forward,
+    log_softmax,
+    mlp_forward,
+    mlp_forward_with_activations,
+    relu,
+    sigmoid,
+    silu,
+    softmax,
+    swish,
+    tanh,
+)
 
 # Import commonly used functions for convenience
 from .losses import (
-    mean_squared_error, mean_absolute_error, huber_loss,
-    cross_entropy_loss, sparse_cross_entropy_loss, 
-    binary_cross_entropy_loss, softmax_cross_entropy_loss
+    binary_cross_entropy_loss,
+    cross_entropy_loss,
+    huber_loss,
+    mean_absolute_error,
+    mean_squared_error,
+    softmax_cross_entropy_loss,
+    sparse_cross_entropy_loss,
 )
 from .optim import (
-    adamw_step, init_adamw_state, 
-    adam_step, init_adam_state,
-    sgd_step, init_sgd_state,
-    learning_rate_schedule, exponential_decay_schedule,
-    cosine_annealing_schedule, warmup_cosine_schedule
+    adam_step,
+    adamw_step,
+    cosine_annealing_schedule,
+    exponential_decay_schedule,
+    init_adam_state,
+    init_adamw_state,
+    init_sgd_state,
+    learning_rate_schedule,
+    sgd_step,
+    warmup_cosine_schedule,
 )
-from .init import initialize_mlp_params, he_normal, xavier_normal, lecun_normal
-from .layers import (
-    mlp_forward, linear_forward, mlp_forward_with_activations,
-    relu, leaky_relu, sigmoid, tanh, gelu, silu, swish, softmax, log_softmax
-)
-from .architectures import create_mlp_config, MLPBuilder
 from .utils import (
-    value_and_grad, create_sin_dataset, create_dataset,
-    accuracy, precision, recall, f1_score,
-    mean_squared_error_metric, mean_absolute_error_metric, 
-    r_squared, pearson_correlation,
-    dropout, l1_regularization, l2_regularization, 
-    elastic_net_regularization, gradient_clipping
+    accuracy,
+    create_dataset,
+    create_sin_dataset,
+    dropout,
+    elastic_net_regularization,
+    f1_score,
+    gradient_clipping,
+    l1_regularization,
+    l2_regularization,
+    mean_absolute_error_metric,
+    mean_squared_error_metric,
+    pearson_correlation,
+    precision,
+    r_squared,
+    recall,
+    value_and_grad,
 )
 
 __all__ = [
     # Submodules
     "losses",
-    "optim", 
+    "optim",
     "init",
     "layers",
     "architectures",
     "utils",
-    
     # Commonly used functions
     # Loss functions
     "mean_squared_error",
     "mean_absolute_error",
     "huber_loss",
-    "cross_entropy_loss", 
+    "cross_entropy_loss",
     "sparse_cross_entropy_loss",
     "binary_cross_entropy_loss",
     "softmax_cross_entropy_loss",
-    
     # Optimizers
     "adamw_step",
     "init_adamw_state",
-    "adam_step", 
+    "adam_step",
     "init_adam_state",
     "sgd_step",
     "init_sgd_state",
@@ -81,13 +103,11 @@ __all__ = [
     "exponential_decay_schedule",
     "cosine_annealing_schedule",
     "warmup_cosine_schedule",
-    
     # Initialization
     "initialize_mlp_params",
     "he_normal",
     "xavier_normal",
     "lecun_normal",
-    
     # Layers and activations
     "mlp_forward",
     "linear_forward",
@@ -96,23 +116,21 @@ __all__ = [
     "leaky_relu",
     "sigmoid",
     "tanh",
-    "gelu", 
+    "gelu",
     "silu",
     "swish",
     "softmax",
     "log_softmax",
-    
     # Architectures
     "create_mlp_config",
     "MLPBuilder",
-    
     # Utilities
     "value_and_grad",
     "create_sin_dataset",
     "create_dataset",
     "accuracy",
     "precision",
-    "recall", 
+    "recall",
     "f1_score",
     "mean_squared_error_metric",
     "mean_absolute_error_metric",

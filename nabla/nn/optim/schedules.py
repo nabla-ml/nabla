@@ -20,15 +20,17 @@ import math
 
 def constant_schedule(initial_lr: float = 0.001) -> callable:
     """Constant learning rate schedule.
-    
+
     Args:
         initial_lr: The learning rate to maintain
-        
+
     Returns:
         Function that takes epoch and returns learning rate
     """
+
     def schedule(epoch: int) -> float:
         return initial_lr
+
     return schedule
 
 
@@ -38,17 +40,19 @@ def exponential_decay_schedule(
     decay_every: int = 1000,
 ) -> callable:
     """Exponential decay learning rate schedule.
-    
+
     Args:
         initial_lr: Initial learning rate
         decay_factor: Factor to multiply learning rate by
         decay_every: Apply decay every N epochs
-        
+
     Returns:
         Function that takes epoch and returns learning rate
     """
+
     def schedule(epoch: int) -> float:
         return initial_lr * (decay_factor ** (epoch // decay_every))
+
     return schedule
 
 
@@ -58,17 +62,19 @@ def step_decay_schedule(
     step_size: int = 30,
 ) -> callable:
     """Step decay learning rate schedule.
-    
+
     Args:
         initial_lr: Initial learning rate
         decay_factor: Factor to multiply learning rate by at each step
         step_size: Number of epochs between each decay step
-        
+
     Returns:
         Function that takes epoch and returns learning rate
     """
+
     def schedule(epoch: int) -> float:
         return initial_lr * (decay_factor ** (epoch // step_size))
+
     return schedule
 
 
@@ -78,19 +84,21 @@ def cosine_annealing_schedule(
     period: int = 1000,
 ) -> callable:
     """Cosine annealing learning rate schedule.
-    
+
     Args:
         initial_lr: Initial learning rate
         min_lr: Minimum learning rate
         period: Number of epochs for one complete cosine cycle
-        
+
     Returns:
         Function that takes epoch and returns learning rate
     """
+
     def schedule(epoch: int) -> float:
         cycle_position = epoch % period
         cosine_factor = 0.5 * (1 + math.cos(math.pi * cycle_position / period))
         return min_lr + (initial_lr - min_lr) * cosine_factor
+
     return schedule
 
 
@@ -101,16 +109,17 @@ def warmup_cosine_schedule(
     min_lr: float = 1e-6,
 ) -> callable:
     """Warmup followed by cosine annealing schedule.
-    
+
     Args:
         initial_lr: Peak learning rate after warmup
         warmup_epochs: Number of epochs for linear warmup
         total_epochs: Total number of training epochs
         min_lr: Minimum learning rate
-        
+
     Returns:
         Function that takes epoch and returns learning rate
     """
+
     def schedule(epoch: int) -> float:
         if epoch < warmup_epochs:
             # Linear warmup
@@ -120,6 +129,7 @@ def warmup_cosine_schedule(
             progress = (epoch - warmup_epochs) / (total_epochs - warmup_epochs)
             cosine_factor = 0.5 * (1 + math.cos(math.pi * progress))
             return min_lr + (initial_lr - min_lr) * cosine_factor
+
     return schedule
 
 
@@ -131,16 +141,16 @@ def learning_rate_schedule(
     decay_every: int = 1000,
 ) -> float:
     """Learning rate schedule for complex function learning.
-    
+
     This is the original function from mlp_train_jit.py for backward compatibility.
     Consider using exponential_decay_schedule instead for new code.
-    
+
     Args:
         epoch: Current epoch number
         initial_lr: Initial learning rate
         decay_factor: Factor to multiply learning rate by
         decay_every: Apply decay every N epochs
-        
+
     Returns:
         Learning rate for the current epoch
     """

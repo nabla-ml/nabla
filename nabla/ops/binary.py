@@ -25,7 +25,18 @@ from ..core.array import Array
 from .operation import BinaryOperation
 
 # Public API
-__all__ = ["add", "mul", "sub", "div", "pow", "greater_equal", "equal", "not_equal", "maximum", "minimum"]
+__all__ = [
+    "add",
+    "mul",
+    "sub",
+    "div",
+    "pow",
+    "greater_equal",
+    "equal",
+    "not_equal",
+    "maximum",
+    "minimum",
+]
 
 
 def _ensure_array(value) -> Array:
@@ -368,7 +379,7 @@ class EqualOp(BinaryOperation):
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         arg0_np = args[0].to_numpy()
         arg1_np = args[1].to_numpy()
-        np_result = (arg0_np == arg1_np)
+        np_result = arg0_np == arg1_np
         # Ensure result is an array, not a scalar
         if np.isscalar(np_result):
             np_result = np.array(np_result)
@@ -409,7 +420,7 @@ class NotEqualOp(BinaryOperation):
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         arg0_np = args[0].to_numpy()
         arg1_np = args[1].to_numpy()
-        np_result = (arg0_np != arg1_np)
+        np_result = arg0_np != arg1_np
         # Ensure result is an array, not a scalar
         if np.isscalar(np_result):
             np_result = np.array(np_result)

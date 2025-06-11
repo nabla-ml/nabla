@@ -16,6 +16,7 @@
 """AdamW optimizer implementation."""
 
 import numpy as np
+
 import nabla as nb
 
 
@@ -33,23 +34,23 @@ def adamw_step(
     weight_decay: float = 0.01,
 ) -> tuple[list[nb.Array], list[nb.Array], list[nb.Array]]:
     """JIT-compiled AdamW optimizer step with weight decay.
-    
+
     AdamW decouples weight decay from the gradient-based update, applying
     weight decay directly to parameters rather than adding L2 regularization
     to the loss function.
-    
+
     Args:
         params: List of parameter arrays
         gradients: List of gradient arrays (same structure as params)
         m_states: List of first moment estimates
-        v_states: List of second moment estimates  
+        v_states: List of second moment estimates
         step: Current step number (for bias correction)
         learning_rate: Learning rate
         beta1: First moment decay rate
         beta2: Second moment decay rate
         eps: Small constant for numerical stability
         weight_decay: Weight decay coefficient
-        
+
     Returns:
         Tuple of (updated_params, updated_m_states, updated_v_states)
     """
@@ -65,9 +66,11 @@ def adamw_step(
         # Bias correction
         m_hat = new_m / (1.0 - beta1**step)
         v_hat = new_v / (1.0 - beta2**step)
-        
+
         # AdamW update: weight decay applied directly to parameters
-        new_param = param * (1.0 - weight_decay * learning_rate) - learning_rate * m_hat / (nb.sqrt(v_hat) + eps)
+        new_param = param * (
+            1.0 - weight_decay * learning_rate
+        ) - learning_rate * m_hat / (nb.sqrt(v_hat) + eps)
 
         updated_params.append(new_param)
         updated_m.append(new_m)
@@ -78,10 +81,10 @@ def adamw_step(
 
 def init_adamw_state(params: list[nb.Array]) -> tuple[list[nb.Array], list[nb.Array]]:
     """Initialize AdamW optimizer state.
-    
+
     Args:
         params: List of parameter arrays
-        
+
     Returns:
         Tuple of (m_states, v_states) - first and second moment estimates
     """

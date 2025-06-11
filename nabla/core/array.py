@@ -238,10 +238,13 @@ class Array:
         """Greater than or equal operator (>=)."""
         from ..ops.binary import greater_equal
 
-        return greater_equal(self, other)    # Hash and equality for making Arrays usable as dictionary keys
+        return greater_equal(
+            self, other
+        )  # Hash and equality for making Arrays usable as dictionary keys
+
     def __hash__(self) -> int:
         """Make Arrays hashable based on object identity.
-        
+
         This allows Arrays to be used as dictionary keys in optimizers.
         Two Arrays are considered equal only if they are the same object.
         """
@@ -403,7 +406,7 @@ class Array:
     # Comparison operators
     def __eq__(self, other) -> bool:
         """Object identity comparison for hashability.
-        
+
         This returns True only if both Arrays are the same object.
         For element-wise comparison, use nb.equal(a, b) explicitly.
         """
@@ -411,7 +414,7 @@ class Array:
 
     def __ne__(self, other) -> bool:
         """Object identity inequality comparison for hashability.
-        
+
         This returns True if the Arrays are different objects.
         For element-wise comparison, use nb.not_equal(a, b) explicitly.
         """

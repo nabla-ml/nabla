@@ -15,7 +15,6 @@
 # ===----------------------------------------------------------------------=== #
 """Adam optimizer implementation."""
 
-import numpy as np
 import nabla as nb
 
 
@@ -32,10 +31,10 @@ def adam_step(
     eps: float = 1e-8,
     weight_decay: float = 0.0,
     amsgrad: bool = False,
-    maximize: bool = False
+    maximize: bool = False,
 ) -> tuple[list[nb.Array], list[nb.Array], list[nb.Array]]:
     """Perform a single Adam optimization step.
-    
+
     Args:
         params: List of parameter arrays
         gradients: List of gradient arrays (same structure as params)
@@ -49,58 +48,60 @@ def adam_step(
         weight_decay: Weight decay (L2 penalty)
         amsgrad: Whether to use AMSGrad variant
         maximize: Maximize instead of minimize
-        
+
     Returns:
         Tuple of (updated_params, updated_m_states, updated_v_states)
     """
     updated_params = []
     updated_m_states = []
     updated_v_states = []
-    
+
     # Bias correction terms
-    bias_correction1 = 1 - beta1 ** step
-    bias_correction2 = 1 - beta2 ** step
-    
-    for param, grad, m_state, v_state in zip(params, gradients, m_states, v_states):
+    bias_correction1 = 1 - beta1**step
+    bias_correction2 = 1 - beta2**step
+
+    for param, grad, m_state, v_state in zip(
+        params, gradients, m_states, v_states, strict=False
+    ):
         # Add weight decay
         if weight_decay != 0:
             grad = grad + weight_decay * param
-        
+
         # Maximize by negating gradients
         if maximize:
             grad = -grad
-        
+
         # Update biased first moment estimate
         m_new = beta1 * m_state + (1 - beta1) * grad
-        
+
         # Update biased second raw moment estimate
         v_new = beta2 * v_state + (1 - beta2) * (grad * grad)
-        
+
         # Compute bias-corrected first moment estimate
         m_hat = m_new / bias_correction1
-        
+
         # Compute bias-corrected second raw moment estimate
         v_hat = v_new / bias_correction2
-        
+
         # Update parameters
         denom = nb.sqrt(v_hat) + eps
         step_size = learning_rate
-        
+
         updated_param = param - step_size * m_hat / denom
-        
+
         updated_params.append(updated_param)
         updated_m_states.append(m_new)
         updated_v_states.append(v_new)
-    
+
     return updated_params, updated_m_states, updated_v_states
 
 
 def init_adam_state(params: list[nb.Array]) -> tuple[list[nb.Array], list[nb.Array]]:
     """Initialize Adam optimizer states.
-    
+
     Args:
         params: List of parameter arrays
-        
+
     Returns:
         Tuple of (m_states, v_states) - zero-initialized moment estimates
     """
