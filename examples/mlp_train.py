@@ -101,7 +101,7 @@ def adamw_step(
     eps: float = 1e-8,
     weight_decay: float = 0.01,
 ) -> tuple[list[nb.Array], list[nb.Array], list[nb.Array]]:
-    """JIT-compiled AdamW optimizer step with weight decay - OPTIMIZED to match JAX efficiency."""
+    """AdamW optimizer step with weight decay - OPTIMIZED to match JAX efficiency."""
     updated_params = []
     updated_m = []
     updated_v = []
@@ -144,6 +144,48 @@ def learning_rate_schedule(
 ) -> float:
     """Learning rate schedule for complex function learning."""
     return initial_lr * (decay_factor ** (epoch // decay_every))
+
+
+def train_step_jitted(
+    x: nb.Array,
+    targets: nb.Array,
+    params: list[nb.Array],
+    m_states: list[nb.Array],
+    v_states: list[nb.Array],
+    step: int,
+    learning_rate: float,
+) -> tuple[list[nb.Array], list[nb.Array], list[nb.Array], nb.Array]:
+    """JIT-compiled training step combining gradient computation and optimizer update."""
+
+    # Define loss function that takes separate arguments (JAX style)
+    def loss_fn(*args):
+        x_batch, targets_batch = args[0], args[1]
+        param_list = list(args[2:])
+        return mlp_forward_and_loss([x_batch, targets_batch] + param_list)
+
+    # Compute gradients w.r.t. parameters (args 2 onwards)
+    param_indices = list(range(2, 2 + len(params)))
+    all_args = [x, targets] + params
+
+    loss_value, param_gradients = nb.value_and_grad(loss_fn, argnums=param_indices)(
+        *all_args
+    )
+
+    # AdamW optimizer update
+    updated_params, updated_m, updated_v = adamw_step(
+        params, param_gradients, m_states, v_states, step, learning_rate
+    )
+
+    return updated_params, updated_m, updated_v, loss_value
+
+
+def compute_predictions_and_loss(
+    x_test: nb.Array, targets_test: nb.Array, params: list[nb.Array]
+) -> tuple[nb.Array, nb.Array]:
+    """JIT-compiled function to compute predictions and loss."""
+    predictions_test = mlp_forward(x_test, params)
+    test_loss = mean_squared_error(predictions_test, targets_test)
+    return predictions_test, test_loss
 
 
 def test_nabla_complex_sin():
@@ -195,26 +237,17 @@ def test_nabla_complex_sin():
 
         # Training step using JIT-compiled function
         vjp_start = time.time()
-        all_inputs = [x, targets] + params
 
-        # print(nb.xpr(value_and_grad, mlp_forward_and_loss, all_inputs))
-
-        # Use value_and_grad to compute loss and gradients
-        # Only compute gradients w.r.t. parameters (indices 2 onwards)
-        param_indices = list(range(2, 2 + len(params)))
-        loss_values, param_gradients = nb.value_and_grad(mlp_forward_and_loss, argnums=param_indices)(all_inputs)
+        # Use JIT-compiled training step (combines gradient computation and optimizer update)
+        updated_params, updated_m, updated_v, loss_values = train_step_jitted(
+            x, targets, params, m_states, v_states, epoch, current_lr
+        )
 
         vjp_time = time.time() - vjp_start
 
-        # Optimizer step - use the JIT version
-        adamw_start = time.time()
-        updated_params, updated_m, updated_v = adamw_step(
-            params, param_gradients, m_states, v_states, epoch, current_lr
-        )
-        adamw_time = time.time() - adamw_start
-
-        # Update return values
+        # Update return values (no separate AdamW step needed)
         params, m_states, v_states = updated_params, updated_m, updated_v
+        adamw_time = 0.0  # Already included in the JIT step
 
         # Loss extraction and conversion
         loss_value = loss_values.to_numpy().item()
@@ -236,10 +269,7 @@ def test_nabla_complex_sin():
                 f"  ├─ Data Gen:   {avg_data_time / PRINT_INTERVAL:.4f}s ({avg_data_time / avg_time * 100:.1f}%)"
             )
             print(
-                f"  ├─ VJP Comp:   {avg_vjp_time / PRINT_INTERVAL:.4f}s ({avg_vjp_time / avg_time * 100:.1f}%)"
-            )
-            print(
-                f"  └─ AdamW Step: {avg_adamw_time / PRINT_INTERVAL:.4f}s ({avg_adamw_time / avg_time * 100:.1f}%)"
+                f"  └─ JIT Step:   {avg_vjp_time / PRINT_INTERVAL:.4f}s ({avg_vjp_time / avg_time * 100:.1f}%)"
             )
 
             avg_loss = 0.0
@@ -258,11 +288,16 @@ def test_nabla_complex_sin():
     ).astype(np.float32)
 
     x_test = nb.Array.from_numpy(x_test_np)
-    predictions_test = mlp_forward(x_test, params)
+    targets_test = nb.Array.from_numpy(targets_test_np)
+
+    # Use JIT-compiled function for evaluation
+    predictions_test, test_loss = compute_predictions_and_loss(
+        x_test, targets_test, params
+    )
 
     pred_final_np = predictions_test.to_numpy()
 
-    final_test_loss = np.mean((pred_final_np - targets_test_np) ** 2)
+    final_test_loss = test_loss.to_numpy().item()
 
     print(f"Final test loss: {final_test_loss:.6f}")
     print(

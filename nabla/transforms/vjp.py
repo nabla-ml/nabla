@@ -1,9 +1,11 @@
-from typing import Callable, Any
+from collections.abc import Callable
+from typing import Any
+
 from .utils import (
+    _extract_arrays_from_pytree,
     make_traced_pytree,
     make_untraced_pytree,
     pullback,
-    _extract_arrays_from_pytree,
 )
 
 
@@ -105,4 +107,3 @@ def vjp(
         return outputs, vjp_fn, aux
     else:
         return outputs, vjp_fn
-

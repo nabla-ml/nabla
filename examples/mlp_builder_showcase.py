@@ -4,8 +4,8 @@
 import numpy as np
 
 import nabla as nb
-from nabla.nn import MLPBuilder, create_sin_dataset, value_and_grad
 from nabla import value_and_grad
+from nabla.nn import MLPBuilder, create_sin_dataset
 
 # Configuration
 BATCH_SIZE = 128

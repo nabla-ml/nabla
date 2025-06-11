@@ -13,9 +13,9 @@ from jax import grad
 # Add nabla to path
 sys.path.insert(0, "/Users/tillife/Documents/CodingProjects/nabla")
 
-from nabla.transforms.vjp import vjp as nabla_vjp
 from nabla.ops.creation import array
 from nabla.ops.linalg import conv2d, conv2d_transpose
+from nabla.transforms.vjp import vjp as nabla_vjp
 
 
 class ConvTestConfig:

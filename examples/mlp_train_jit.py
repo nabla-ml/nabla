@@ -157,12 +157,20 @@ def train_step_jitted(
     learning_rate: float,
 ) -> tuple[list[nb.Array], list[nb.Array], list[nb.Array], nb.Array]:
     """JIT-compiled training step combining gradient computation and optimizer update."""
-    # Prepare inputs for value_and_grad
-    all_inputs = [x, targets] + params
+
+    # Define loss function that takes separate arguments (JAX style)
+    def loss_fn(*args):
+        x_batch, targets_batch = args[0], args[1]
+        param_list = list(args[2:])
+        return mlp_forward_and_loss([x_batch, targets_batch] + param_list)
+
+    # Compute gradients w.r.t. parameters (args 2 onwards)
     param_indices = list(range(2, 2 + len(params)))
-    
-    # Forward pass + gradients using value_and_grad
-    loss_value, param_gradients = nb.value_and_grad(mlp_forward_and_loss, argnums=param_indices)(all_inputs)
+    all_args = [x, targets] + params
+
+    loss_value, param_gradients = nb.value_and_grad(loss_fn, argnums=param_indices)(
+        *all_args
+    )
 
     # AdamW optimizer update
     updated_params, updated_m, updated_v = adamw_step(
@@ -285,7 +293,9 @@ def test_nabla_complex_sin():
     targets_test = nb.Array.from_numpy(targets_test_np)
 
     # Use JIT-compiled function for evaluation
-    predictions_test, test_loss = compute_predictions_and_loss(x_test, targets_test, params)
+    predictions_test, test_loss = compute_predictions_and_loss(
+        x_test, targets_test, params
+    )
 
     pred_final_np = predictions_test.to_numpy()
 

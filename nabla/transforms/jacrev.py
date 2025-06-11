@@ -1,13 +1,14 @@
-from typing import Callable, Any
+from collections.abc import Callable
+from typing import Any
+
 from .utils import (
-    make_traced_pytree,
-    make_untraced_pytree,
     _extract_arrays_from_pytree,
     _std_basis,
+    make_traced_pytree,
+    make_untraced_pytree,
 )
 from .vjp import vjp
 from .vmap import vmap
-
 
 
 def jacrev(

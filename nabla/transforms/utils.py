@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from typing import Any
 
 from ..core.array import Array
@@ -121,7 +121,6 @@ def _validate_length_match(list1, list2, name1, name2):
         raise ValueError(f"{name1} length {len(list1)} != {name2} length {len(list2)}")
 
 
-
 def _std_basis(args: list[Array]) -> tuple[list[int], list[Array]]:
     num_total_arg_elements = 0
     max_rank = 0
@@ -172,7 +171,6 @@ def _std_basis(args: list[Array]) -> tuple[list[int], list[Array]]:
             from ..ops.view import broadcast_batch_dims
 
             tangent = broadcast_batch_dims(tangent, arg.batch_dims)
-
 
             tangents.append(tangent)
             sizes.append(num_elements)
@@ -249,25 +247,31 @@ def _handle_args_consistently(args):
     return args, False
 
 
-def _prepare_traced_inputs(actual_args, is_list_style, apply_staging=False, with_conversion=False):
+def _prepare_traced_inputs(
+    actual_args, is_list_style, apply_staging=False, with_conversion=False
+):
     """Prepare traced inputs for list-style or pytree-style arguments."""
-    
+
     # Convert scalars to Arrays if requested
     if with_conversion:
+
         def convert_scalars_to_arrays(item):
             if isinstance(item, Array):
                 return item
-            elif isinstance(item, (list, tuple)):
-                return type(item)(convert_scalars_to_arrays(sub_item) for sub_item in item)
+            elif isinstance(item, list | tuple):
+                return type(item)(
+                    convert_scalars_to_arrays(sub_item) for sub_item in item
+                )
             elif isinstance(item, dict):
                 return {k: convert_scalars_to_arrays(v) for k, v in item.items()}
             else:
                 # Convert non-Array types (int, float, etc.) to Nabla Arrays
                 import nabla as nb
+
                 return nb.array(item)
-        
+
         actual_args = convert_scalars_to_arrays(actual_args)
-    
+
     if is_list_style:
         traced_args = make_traced_pytree(actual_args)
         if apply_staging:
@@ -289,8 +293,6 @@ def _prepare_traced_inputs(actual_args, is_list_style, apply_staging=False, with
         make_staged_pytree(arrays)
 
     return traced_args, traced_inputs_pytree
-
-
 
 
 def _clean_traced_outputs(outputs, is_list_style, remove_staging=False):

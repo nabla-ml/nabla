@@ -89,7 +89,9 @@ def test_nabla_modular_mlp():
         # Use modular value_and_grad to compute loss and gradients
         # Only compute gradients w.r.t. parameters (indices 2 onwards)
         param_indices = list(range(2, 2 + len(params)))
-        loss_values, param_gradients = value_and_grad(mlp_forward_and_loss, argnums=param_indices)(all_inputs)
+        loss_values, param_gradients = value_and_grad(
+            mlp_forward_and_loss, argnums=param_indices
+        )(all_inputs)
 
         vjp_time = time.time() - vjp_start
 

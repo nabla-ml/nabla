@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Simple test to compare static JIT vs regular JIT with the same setup."""
 
-import time
 import numpy as np
+
 import nabla as nb
 
 # Configuration - use simpler setup to isolate the issue
@@ -59,7 +59,7 @@ def initialize_params(layers: list[int], seed: int = 42) -> list[nb.Array]:
         std = (2.0 / fan_in) ** 0.5
         w_np = np.random.normal(0.0, std, (fan_in, fan_out)).astype(np.float32)
         b_np = np.zeros((1, fan_out), dtype=np.float32)
-        
+
         w = nb.Array.from_numpy(w_np)
         b = nb.Array.from_numpy(b_np)
         params.extend([w, b])
@@ -92,13 +92,15 @@ def adamw_step(
         # Bias correction
         bias_correction1 = 1.0 - beta1**step
         bias_correction2 = 1.0 - beta2**step
-        
+
         # Corrected moments
         m_corrected = new_m / bias_correction1
         v_corrected = new_v / bias_correction2
-        
+
         # Parameter update
-        new_param = param - learning_rate * (m_corrected / (v_corrected**0.5 + eps) + weight_decay * param)
+        new_param = param - learning_rate * (
+            m_corrected / (v_corrected**0.5 + eps) + weight_decay * param
+        )
 
         updated_params.append(new_param)
         updated_m.append(new_m)
@@ -133,9 +135,11 @@ def train_step_regular_jit(
     # Prepare inputs for value_and_grad
     all_inputs = [x, targets] + params
     param_indices = list(range(2, 2 + len(params)))
-    
+
     # Forward pass + gradients using value_and_grad
-    loss_value, param_gradients = nb.value_and_grad(mlp_forward_and_loss, argnums=param_indices)(all_inputs)
+    loss_value, param_gradients = nb.value_and_grad(
+        mlp_forward_and_loss, argnums=param_indices
+    )(all_inputs)
 
     # AdamW optimizer update
     updated_params, updated_m, updated_v = adamw_step(
@@ -159,9 +163,11 @@ def train_step_static_jit(
     # Prepare inputs for value_and_grad
     all_inputs = [x, targets] + params
     param_indices = list(range(2, 2 + len(params)))
-    
+
     # Forward pass + gradients using value_and_grad
-    loss_value, param_gradients = nb.value_and_grad(mlp_forward_and_loss, argnums=param_indices)(all_inputs)
+    loss_value, param_gradients = nb.value_and_grad(
+        mlp_forward_and_loss, argnums=param_indices
+    )(all_inputs)
 
     # AdamW optimizer update
     updated_params, updated_m, updated_v = adamw_step(
@@ -180,30 +186,30 @@ def test_jit_comparison():
 
     # Use the same data for both tests
     x, targets = create_sin_dataset(BATCH_SIZE)
-    
+
     for jit_type in ["Regular JIT", "Static JIT"]:
         print(f"\n=== {jit_type} ===")
-        
+
         # Initialize parameters (same seed for both)
         params = initialize_params(LAYERS, seed=42)
         m_states, v_states = init_adamw_state(params)
-        
+
         # Choose the JIT function
         if jit_type == "Regular JIT":
             train_step = train_step_regular_jit
         else:
             train_step = train_step_static_jit
-        
+
         # Training loop
         for epoch in range(1, NUM_EPOCHS + 1):
             # Use the same data for each epoch for exact comparison
             updated_params, updated_m, updated_v, loss_values = train_step(
                 x, targets, params, m_states, v_states, epoch, LEARNING_RATE
             )
-            
+
             params, m_states, v_states = updated_params, updated_m, updated_v
             loss_value = loss_values.to_numpy().item()
-            
+
             print(f"Epoch {epoch} - Loss: {loss_value:.6f}")
 
 

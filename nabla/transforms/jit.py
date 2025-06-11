@@ -1,15 +1,16 @@
-from typing import Callable, Any
+from collections.abc import Callable
+from typing import Any
+
 from ..core.array import Array
 from .utils import (
-    make_untraced_pytree,
+    _clean_traced_outputs,
     _extract_arrays_from_pytree,
     _handle_args_consistently,
     _prepare_traced_inputs,
-    _clean_traced_outputs,
+    make_untraced_pytree,
     tree_flatten,
     tree_unflatten,
 )
-import nabla as nb
 
 
 def jit(
@@ -67,7 +68,7 @@ def jit(
                 actual_args, is_list_style, apply_staging=True, with_conversion=True
             )
             flat_input_arrays = tree_flatten(traced_args)[0]
-            
+
             # Check if we need to compile the model
             if cached_model is None:
                 # Execute the function with traced inputs and appropriate style
@@ -98,10 +99,12 @@ def jit(
                 actual_args, is_list_style, apply_staging=False, with_conversion=True
             )
             current_flat_arrays = tree_flatten(current_traced_args)[0]
-            
+
             # Reorder inputs to match the model's expected order
-            function_param_tensors = [input_array.impl for input_array in current_flat_arrays]
-            
+            function_param_tensors = [
+                input_array.impl for input_array in current_flat_arrays
+            ]
+
             # Reorder according to the mapping we stored during compilation
             ordered_tensor_inputs = [None] * len(param_to_model_index)
             for func_idx, model_idx in param_to_model_index:
@@ -168,4 +171,3 @@ def sjit(
                 return x * 2
     """
     return jit(func, static=True, show_graph=show_graph)
-

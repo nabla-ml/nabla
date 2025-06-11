@@ -1,5 +1,6 @@
 import nabla as nb
 
+
 @nb.sjit
 def foo(x):
     """Simple function to test JIT compilation."""
@@ -7,6 +8,7 @@ def foo(x):
     result = x * x
     print(f"[DEBUG] Inside foo, result.impl = {result.impl is not None}")
     return result
+
 
 print("[DEBUG] Creating input array")
 a = nb.arange((2, 3))

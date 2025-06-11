@@ -1,9 +1,11 @@
-from typing import Callable, Any
+from collections.abc import Callable
+from typing import Any
+
+from .jvp import jvp
 from .utils import (
     _extract_arrays_from_pytree,
     _std_basis,
 )
-from .jvp import jvp
 from .vmap import vmap
 
 
@@ -169,4 +171,3 @@ def jacfwd(
             return jacobian, None
 
     return jacfwd_fn
-

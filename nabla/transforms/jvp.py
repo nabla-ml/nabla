@@ -1,11 +1,12 @@
-from typing import Callable, Any
+from collections.abc import Callable
+from typing import Any
+
 from .utils import (
+    _extract_arrays_from_pytree,
     make_traced_pytree,
     make_untraced_pytree,
     pushfwd,
-    _extract_arrays_from_pytree,
 )
-
 
 
 def jvp(
@@ -71,4 +72,3 @@ def jvp(
         make_untraced_pytree(output_tangents)
 
     return outputs, output_tangents
-

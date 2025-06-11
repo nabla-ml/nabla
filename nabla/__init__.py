@@ -26,7 +26,13 @@ from typing import Any
 from max.dtype import DType
 
 from .core.array import Array
-from . import core
+from .ops.operation import (
+    BinaryOperation,
+    Operation,
+    ReductionOperation,
+    UnaryOperation,
+    ViewOperation,
+)
 from .transforms import (
     grad,
     jacfwd,
@@ -38,13 +44,6 @@ from .transforms import (
     vjp,
     vmap,
     xpr,
-)
-from .ops.operation import (
-    BinaryOperation,
-    Operation,
-    ReductionOperation,
-    UnaryOperation,
-    ViewOperation,
 )
 from .utils.max_interop import accelerator, cpu, device, device_ref
 from .utils.testing import allclose
