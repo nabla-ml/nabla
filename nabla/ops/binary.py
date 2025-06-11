@@ -25,7 +25,7 @@ from ..core.array import Array
 from .operation import BinaryOperation
 
 # Public API
-__all__ = ["add", "mul", "sub", "div", "pow", "greater_equal"]
+__all__ = ["add", "mul", "sub", "div", "pow", "greater_equal", "equal", "not_equal", "maximum", "minimum"]
 
 
 def _ensure_array(value) -> Array:
@@ -232,20 +232,219 @@ class GreaterEqualOp(BinaryOperation):
         return greater_equal(tangents[0], tangents[1])
 
 
-def greater_equal(arg0: Array, arg1: Array) -> Array:
-    """Element-wise greater than or equal to operation."""
-    arg0 = _ensure_array(arg0)
-    arg1 = _ensure_array(arg1)
-    return _greater_equal_op.forward(arg0, arg1)
+class MaximumOp(BinaryOperation):
+    """Element-wise maximum operation."""
+
+    def __init__(self):
+        super().__init__("maximum")
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        output.tensor_value = ops.max(args[0], args[1])
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        np_result = np.maximum(args[0].to_numpy(), args[1].to_numpy())
+        # Ensure result is an array, not a scalar
+        if np.isscalar(np_result):
+            np_result = np.array(np_result)
+        output.impl = Tensor.from_numpy(np_result)
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        # Gradient flows to the larger input
+        # For equal inputs, we split the gradient (JAX convention)
+        x, y = primals
+        x_greater = greater_equal(x, y)
+        y_greater = greater_equal(y, x)
+
+        # Cast boolean masks to float for multiplication
+        from ..ops.unary import cast
+
+        x_mask = cast(x_greater, cotangent.dtype)
+        y_mask = cast(y_greater, cotangent.dtype)
+
+        # When x == y, both masks are True, so we need to split the gradient
+        both_equal = mul(x_mask, y_mask)
+        x_only = sub(x_mask, both_equal)
+        y_only = sub(y_mask, both_equal)
+
+        # Split gradient equally when inputs are equal
+        half_cotangent = mul(cotangent, 0.5)
+
+        grad_x = add(mul(cotangent, x_only), mul(half_cotangent, both_equal))
+        grad_y = add(mul(cotangent, y_only), mul(half_cotangent, both_equal))
+
+        return [grad_x, grad_y]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        x, y = primals
+        dx, dy = tangents
+        x_greater = greater_equal(x, y)
+
+        # Cast boolean mask to float for multiplication
+        from ..ops.unary import cast
+
+        x_mask = cast(x_greater, dx.dtype)
+        y_mask = sub(1.0, x_mask)
+
+        return add(mul(dx, x_mask), mul(dy, y_mask))
 
 
-# Global operation instances
+class MinimumOp(BinaryOperation):
+    """Element-wise minimum operation."""
+
+    def __init__(self):
+        super().__init__("minimum")
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        output.tensor_value = ops.min(args[0], args[1])
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        np_result = np.minimum(args[0].to_numpy(), args[1].to_numpy())
+        # Ensure result is an array, not a scalar
+        if np.isscalar(np_result):
+            np_result = np.array(np_result)
+        output.impl = Tensor.from_numpy(np_result)
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        # Gradient flows to the smaller input
+        # For equal inputs, we split the gradient (JAX convention)
+        x, y = primals
+        x_less_equal = greater_equal(y, x)  # x <= y
+        y_less_equal = greater_equal(x, y)  # y <= x
+
+        # Cast boolean masks to float for multiplication
+        from ..ops.unary import cast
+
+        x_mask = cast(x_less_equal, cotangent.dtype)
+        y_mask = cast(y_less_equal, cotangent.dtype)
+
+        # When x == y, both masks are True, so we need to split the gradient
+        both_equal = mul(x_mask, y_mask)
+        x_only = sub(x_mask, both_equal)
+        y_only = sub(y_mask, both_equal)
+
+        # Split gradient equally when inputs are equal
+        half_cotangent = mul(cotangent, 0.5)
+
+        grad_x = add(mul(cotangent, x_only), mul(half_cotangent, both_equal))
+        grad_y = add(mul(cotangent, y_only), mul(half_cotangent, both_equal))
+
+        return [grad_x, grad_y]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        x, y = primals
+        dx, dy = tangents
+        x_less_equal = greater_equal(y, x)  # x <= y
+
+        # Cast boolean mask to float for multiplication
+        from ..ops.unary import cast
+
+        x_mask = cast(x_less_equal, dx.dtype)
+        y_mask = sub(1.0, x_mask)
+
+        return add(mul(dx, x_mask), mul(dy, y_mask))
+
+
+class EqualOp(BinaryOperation):
+    """Element-wise equality comparison operation."""
+
+    def __init__(self):
+        super().__init__("equal")
+
+    def compute_output_dtype(self, arg0: Array, arg1: Array) -> DType:
+        """Equal returns boolean dtype."""
+        return DType.bool
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        output.tensor_value = ops.equal(args[0], args[1])
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        arg0_np = args[0].to_numpy()
+        arg1_np = args[1].to_numpy()
+        np_result = (arg0_np == arg1_np)
+        # Ensure result is an array, not a scalar
+        if np.isscalar(np_result):
+            np_result = np.array(np_result)
+        output.impl = Tensor.from_numpy(np_result)
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        from .creation import zeros
+
+        # Equal is not differentiable - return zero gradients
+        zero_grad_0 = zeros(primals[0].shape, dtype=primals[0].dtype)
+        zero_grad_1 = zeros(primals[1].shape, dtype=primals[1].dtype)
+        return [zero_grad_0, zero_grad_1]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        from .creation import zeros
+
+        # Equal is not differentiable
+        return zeros(output.shape, dtype=output.dtype)
+
+
+class NotEqualOp(BinaryOperation):
+    """Element-wise not-equal comparison operation."""
+
+    def __init__(self):
+        super().__init__("not_equal")
+
+    def compute_output_dtype(self, arg0: Array, arg1: Array) -> DType:
+        """Not equal returns boolean dtype."""
+        return DType.bool
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        output.tensor_value = ops.not_equal(args[0], args[1])
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        arg0_np = args[0].to_numpy()
+        arg1_np = args[1].to_numpy()
+        np_result = (arg0_np != arg1_np)
+        # Ensure result is an array, not a scalar
+        if np.isscalar(np_result):
+            np_result = np.array(np_result)
+        output.impl = Tensor.from_numpy(np_result)
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        from .creation import zeros
+
+        # Not equal is not differentiable - return zero gradients
+        zero_grad_0 = zeros(primals[0].shape, dtype=primals[0].dtype)
+        zero_grad_1 = zeros(primals[1].shape, dtype=primals[1].dtype)
+        return [zero_grad_0, zero_grad_1]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        from .creation import zeros
+
+        # Not equal is not differentiable
+        return zeros(output.shape, dtype=output.dtype)
+
+
+# Create operation instances
 _add_op = AddOp()
 _mul_op = MulOp()
 _sub_op = SubOp()
 _div_op = DivOp()
 _power_op = PowerOp()
 _greater_equal_op = GreaterEqualOp()
+_maximum_op = MaximumOp()
+_minimum_op = MinimumOp()
+_equal_op = EqualOp()
+_not_equal_op = NotEqualOp()
 
 
 def add(arg0, arg1) -> Array:
@@ -282,3 +481,38 @@ def pow(arg0, arg1) -> Array:
     arg0 = _ensure_array(arg0)
     arg1 = _ensure_array(arg1)
     return _power_op.forward(arg0, arg1)
+
+
+def greater_equal(arg0: Array, arg1: Array) -> Array:
+    """Element-wise greater than or equal to operation."""
+    arg0 = _ensure_array(arg0)
+    arg1 = _ensure_array(arg1)
+    return _greater_equal_op.forward(arg0, arg1)
+
+
+def maximum(arg0, arg1) -> Array:
+    """Element-wise maximum of two arrays or array and scalar."""
+    arg0 = _ensure_array(arg0)
+    arg1 = _ensure_array(arg1)
+    return _maximum_op.forward(arg0, arg1)
+
+
+def minimum(arg0, arg1) -> Array:
+    """Element-wise minimum of two arrays or array and scalar."""
+    arg0 = _ensure_array(arg0)
+    arg1 = _ensure_array(arg1)
+    return _minimum_op.forward(arg0, arg1)
+
+
+def equal(arg0, arg1) -> Array:
+    """Element-wise equality comparison."""
+    arg0 = _ensure_array(arg0)
+    arg1 = _ensure_array(arg1)
+    return _equal_op.forward(arg0, arg1)
+
+
+def not_equal(arg0, arg1) -> Array:
+    """Element-wise not-equal comparison."""
+    arg0 = _ensure_array(arg0)
+    arg1 = _ensure_array(arg1)
+    return _not_equal_op.forward(arg0, arg1)

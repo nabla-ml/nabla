@@ -63,6 +63,7 @@ def _build_ops_registry():
         "nabla.ops.view",
         "nabla.ops.linalg",
         "nabla.ops.reduce",
+        "nabla.ops.special",
     ]
 
     for module_name in ops_modules:

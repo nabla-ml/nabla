@@ -785,7 +785,37 @@ class ReshapeOp(ViewOperation):
 
 def reshape(arg: Array, shape: Shape) -> Array:
     """Reshape array to given shape."""
-    op = ReshapeOp(arg.shape, shape)
+    # Handle -1 dimension inference
+    if -1 in shape:
+        # Compute the inferred dimension
+        total_size = np.prod(arg.shape) if arg.shape else 1
+        known_size = 1
+        unknown_idx = -1
+        
+        for i, dim in enumerate(shape):
+            if dim == -1:
+                if unknown_idx != -1:
+                    raise ValueError("Can only specify one unknown dimension with -1")
+                unknown_idx = i
+            else:
+                known_size *= dim
+        
+        if unknown_idx == -1:
+            # No -1 found, use shape as is
+            target_shape = shape
+        else:
+            # Calculate the unknown dimension
+            if known_size == 0:
+                raise ValueError("Cannot infer shape when known dimensions have zero size")
+            if total_size % known_size != 0:
+                raise ValueError(f"Cannot reshape array of size {total_size} to shape {shape}")
+            
+            inferred_dim = total_size // known_size
+            target_shape = tuple(inferred_dim if dim == -1 else dim for dim in shape)
+    else:
+        target_shape = shape
+    
+    op = ReshapeOp(arg.shape, target_shape)
     return op.forward(arg)
 
 

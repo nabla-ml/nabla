@@ -210,6 +210,43 @@ class Array:
 
         return negate(self)
 
+    # Comparison operators
+    def __lt__(self, other) -> Array:
+        """Less than operator (<)."""
+        from ..ops.binary import greater_equal
+        from ..ops.unary import logical_not
+
+        # a < b is equivalent to not (a >= b)
+        return logical_not(greater_equal(self, other))
+
+    def __le__(self, other) -> Array:
+        """Less than or equal operator (<=)."""
+        from ..ops.binary import greater_equal
+
+        # a <= b is equivalent to b >= a
+        return greater_equal(other, self)
+
+    def __gt__(self, other) -> Array:
+        """Greater than operator (>)."""
+        from ..ops.binary import greater_equal
+        from ..ops.unary import logical_not
+
+        # a > b is equivalent to not (b >= a)
+        return logical_not(greater_equal(other, self))
+
+    def __ge__(self, other) -> Array:
+        """Greater than or equal operator (>=)."""
+        from ..ops.binary import greater_equal
+
+        return greater_equal(self, other)    # Hash and equality for making Arrays usable as dictionary keys
+    def __hash__(self) -> int:
+        """Make Arrays hashable based on object identity.
+        
+        This allows Arrays to be used as dictionary keys in optimizers.
+        Two Arrays are considered equal only if they are the same object.
+        """
+        return id(self)
+
     # Reverse operators for when Array is on the right-hand side
     def __radd__(self, other) -> Array:
         """Reverse addition operator (other + self)."""
@@ -310,6 +347,23 @@ class Array:
         op = ArraySliceOp(slices, squeeze_axes)
         return op.forward(self)
 
+    def astype(self, dtype: DType) -> Array:
+        """Convert array to a different data type.
+
+        Args:
+            dtype: Target data type
+
+        Returns:
+            New Array with the specified data type
+        """
+        if self.dtype == dtype:
+            return self  # No conversion needed
+
+        # Use nabla's cast operation
+        from ..ops.unary import cast
+
+        return cast(self, dtype)
+
     def sum(self, axes=None, keep_dims=False) -> Array:
         """Sum array elements over given axes.
 
@@ -328,3 +382,37 @@ class Array:
         from ..ops.reduce import sum as array_sum
 
         return array_sum(self, axes=axes, keep_dims=keep_dims)
+
+    def reshape(self, shape: Shape) -> Array:
+        """Change the shape of an array without changing its data.
+
+        Args:
+            shape: New shape for the array
+
+        Returns:
+            Array with the new shape
+
+        Examples:
+            arr.reshape((2, 3))     # Reshape to 2x3
+            arr.reshape((-1,))      # Flatten to 1D (note: -1 not yet supported)
+        """
+        from ..ops.view import reshape
+
+        return reshape(arg=self, shape=shape)
+
+    # Comparison operators
+    def __eq__(self, other) -> bool:
+        """Object identity comparison for hashability.
+        
+        This returns True only if both Arrays are the same object.
+        For element-wise comparison, use nb.equal(a, b) explicitly.
+        """
+        return isinstance(other, Array) and self is other
+
+    def __ne__(self, other) -> bool:
+        """Object identity inequality comparison for hashability.
+        
+        This returns True if the Arrays are different objects.
+        For element-wise comparison, use nb.not_equal(a, b) explicitly.
+        """
+        return not self.__eq__(other)

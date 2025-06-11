@@ -30,6 +30,10 @@ __all__ = [
     "cast",
     "sin",
     "cos",
+    "tanh",
+    "sigmoid",
+    "abs",
+    "logical_not",
     "incr_batch_dim_ctr",
     "decr_batch_dim_ctr",
     "relu",
@@ -198,6 +202,210 @@ class CosOp(UnaryOperation):
 def cos(arg: Array) -> Array:
     """Element-wise cosine."""
     return _cos_op.forward(arg)
+
+
+class TanhOp(UnaryOperation):
+    """Element-wise hyperbolic tangent operation."""
+
+    def __init__(self):
+        super().__init__("tanh")
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        output.tensor_value = ops.tanh(args[0])
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        np_result = np.tanh(args[0].to_numpy())
+        # Ensure result is an array, not a scalar
+        if np.isscalar(np_result):
+            np_result = np.array(np_result)
+        output.impl = Tensor.from_numpy(np_result)
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        from .binary import mul, sub
+        from .creation import ones
+
+        # d/dx tanh(x) = 1 - tanh²(x) = 1 - output²
+        ones_like_output = ones(output.shape, dtype=output.dtype)
+        tanh_squared = mul(output, output)
+        derivative = sub(ones_like_output, tanh_squared)
+        return [mul(cotangent, derivative)]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        from .binary import mul, sub
+        from .creation import ones
+
+        # d/dx tanh(x) = 1 - tanh²(x)
+        ones_like_output = ones(output.shape, dtype=output.dtype)
+        tanh_squared = mul(output, output)
+        derivative = sub(ones_like_output, tanh_squared)
+        return mul(tangents[0], derivative)
+
+
+def tanh(arg: Array) -> Array:
+    """Element-wise hyperbolic tangent."""
+    return _tanh_op.forward(arg)
+
+
+class AbsOp(UnaryOperation):
+    """Element-wise absolute value operation."""
+
+    def __init__(self):
+        super().__init__("abs")
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        output.tensor_value = ops.abs(args[0])
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        np_result = np.abs(args[0].to_numpy())
+        # Ensure result is an array, not a scalar
+        if np.isscalar(np_result):
+            np_result = np.array(np_result)
+        output.impl = Tensor.from_numpy(np_result)
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        from .binary import greater_equal, mul
+        from .creation import zeros, ones
+
+        # d/dx |x| = sign(x) = 1 if x > 0, -1 if x < 0, undefined at x = 0
+        # We use the convention that sign(0) = 0
+        zero = zeros((), dtype=primals[0].dtype)
+        pos_mask = greater_equal(primals[0], zero)
+        pos_mask_casted = cast(pos_mask, cotangent.dtype)
+        
+        # Create sign: 1 for positive, -1 for negative
+        ones_tensor = ones(primals[0].shape, dtype=cotangent.dtype)
+        sign = 2.0 * pos_mask_casted - ones_tensor
+        
+        return [mul(cotangent, sign)]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        from .binary import greater_equal, mul
+        from .creation import zeros, ones
+
+        # d/dx |x| = sign(x)
+        zero = zeros((), dtype=primals[0].dtype)
+        pos_mask = greater_equal(primals[0], zero)
+        pos_mask_casted = cast(pos_mask, tangents[0].dtype)
+        
+        # Create sign: 1 for positive, -1 for negative
+        ones_tensor = ones(primals[0].shape, dtype=tangents[0].dtype)
+        sign = 2.0 * pos_mask_casted - ones_tensor
+        
+        return mul(tangents[0], sign)
+
+
+def abs(arg: Array) -> Array:
+    """Element-wise absolute value."""
+    return _abs_op.forward(arg)
+
+
+class LogicalNotOp(UnaryOperation):
+    """Element-wise logical NOT operation for boolean arrays."""
+
+    def __init__(self):
+        super().__init__("logical_not")
+
+    def compute_output_dtype(self, arg: Array) -> DType:
+        """Logical NOT always returns boolean dtype."""
+        return DType.bool
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        # Use MAX's logical not operation
+        output.tensor_value = ops.logical_not(args[0])
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        np_result = np.logical_not(args[0].to_numpy())
+        # Ensure result is an array, not a scalar
+        if np.isscalar(np_result):
+            np_result = np.array(np_result)
+        output.impl = Tensor.from_numpy(np_result)
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        from .creation import zeros
+
+        # Logical NOT has zero derivative everywhere since it's not differentiable
+        # in the usual sense (it operates on discrete boolean values)
+        zero_grad = zeros(primals[0].shape, dtype=primals[0].dtype)
+        return [zero_grad]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        from .creation import zeros
+
+        # Logical NOT has zero derivative everywhere
+        return zeros(output.shape, dtype=output.dtype)
+
+
+def logical_not(arg: Array) -> Array:
+    """Element-wise logical NOT operation."""
+    return _logical_not_op.forward(arg)
+
+
+class SigmoidOp(UnaryOperation):
+    """Element-wise sigmoid operation."""
+
+    def __init__(self):
+        super().__init__("sigmoid")
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        # Sigmoid = 1 / (1 + exp(-x))
+        # Use MAX's built-in sigmoid if available, otherwise construct from primitives
+        output.tensor_value = ops.sigmoid(args[0])
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        # Numerically stable sigmoid implementation
+        x = args[0].to_numpy()
+        # For positive values: 1 / (1 + exp(-x))
+        # For negative values: exp(x) / (1 + exp(x))
+        np_result = np.where(
+            x >= 0,
+            1.0 / (1.0 + np.exp(-x)),
+            np.exp(x) / (1.0 + np.exp(x))
+        )
+        # Ensure result is an array, not a scalar
+        if np.isscalar(np_result):
+            np_result = np.array(np_result)
+        output.impl = Tensor.from_numpy(np_result)
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        from .binary import mul, sub
+        from .creation import ones
+
+        # d/dx sigmoid(x) = sigmoid(x) * (1 - sigmoid(x)) = output * (1 - output)
+        ones_like_output = ones(output.shape, dtype=output.dtype)
+        one_minus_output = sub(ones_like_output, output)
+        derivative = mul(output, one_minus_output)
+        return [mul(cotangent, derivative)]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        from .binary import mul, sub
+        from .creation import ones
+
+        # d/dx sigmoid(x) = sigmoid(x) * (1 - sigmoid(x))
+        ones_like_output = ones(output.shape, dtype=output.dtype)
+        one_minus_output = sub(ones_like_output, output)
+        derivative = mul(output, one_minus_output)
+        return mul(tangents[0], derivative)
+
+
+def sigmoid(arg: Array) -> Array:
+    """Element-wise sigmoid function."""
+    return _sigmoid_op.forward(arg)
 
 
 class IncrBatchDimCtr(UnaryOperation):
@@ -432,6 +640,10 @@ def sqrt(arg: Array) -> Array:
 _negate_op = NegateOp()
 _sin_op = SinOp()
 _cos_op = CosOp()
+_tanh_op = TanhOp()
+_abs_op = AbsOp()
+_logical_not_op = LogicalNotOp()
+_sigmoid_op = SigmoidOp()
 _log_op = LogOp()
 _exp_op = ExpOp()
 _relu_op = ReLUOp()
