@@ -73,6 +73,16 @@ class Array:
         else:
             self.impl = None
 
+    @property
+    def size(self) -> int:
+        """Return the total number of elements in the array."""
+        if not self.shape:
+            return 1  # Scalar array
+        size = 1
+        for dim in self.shape:
+            size *= dim
+        return size
+
     @classmethod
     def from_impl(cls, impl: Tensor, name: str = "") -> Array:
         """Create Array from existing Tensor implementation."""
@@ -274,6 +284,12 @@ class Array:
         from ..ops.binary import div
 
         return div(other, self)
+
+    def __rpow__(self, other) -> Array:
+        """Reverse power operator (other ** self)."""
+        from ..ops.binary import pow as power_op
+
+        return power_op(other, self)
 
     def __getitem__(self, key) -> Array:
         """Array slicing using standard Python syntax.

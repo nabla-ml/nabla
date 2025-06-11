@@ -28,12 +28,12 @@ PRINT_INTERVAL = 100
 SIN_PERIODS = 8
 
 
-def mlp_forward_and_loss(inputs: list[nb.Array]) -> list[nb.Array]:
+def mlp_forward_and_loss(inputs: list[nb.Array]) -> nb.Array:
     """Combined forward pass and loss computation for VJP with leaky ReLU."""
     x, targets, *params = inputs
     predictions = mlp_forward(x, params)
     loss = mean_squared_error(predictions, targets)
-    return [loss]
+    return loss
 
 
 def test_nabla_modular_mlp():
@@ -87,7 +87,9 @@ def test_nabla_modular_mlp():
         all_inputs = [x, targets] + params
 
         # Use modular value_and_grad to compute loss and gradients
-        loss_values, param_gradients = value_and_grad(mlp_forward_and_loss, all_inputs)
+        # Only compute gradients w.r.t. parameters (indices 2 onwards)
+        param_indices = list(range(2, 2 + len(params)))
+        loss_values, param_gradients = value_and_grad(mlp_forward_and_loss, argnums=param_indices)(all_inputs)
 
         vjp_time = time.time() - vjp_start
 
@@ -102,7 +104,7 @@ def test_nabla_modular_mlp():
         params, m_states, v_states = updated_params, updated_m, updated_v
 
         # Loss extraction and conversion
-        loss_value = loss_values[0].to_numpy().item()
+        loss_value = loss_values.to_numpy().item()
 
         epoch_time = time.time() - epoch_start_time
         avg_loss += loss_value

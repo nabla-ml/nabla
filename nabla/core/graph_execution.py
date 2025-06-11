@@ -257,7 +257,6 @@ def realize_(
     outputs: list[Array],
     dynamic_inputs: list[Array] | None = None,
     show_graph: bool = False,
-    return_trace_inputs: bool = False,
 ) -> Model | None | tuple[Model, list[Array]]:
     """
     Realize (compute) the given output Arrays.

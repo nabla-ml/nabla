@@ -26,13 +26,15 @@ from typing import Any
 from max.dtype import DType
 
 from .core.array import Array
-from .core.trafos import (
+from . import core
+from .transforms import (
     grad,
     jacfwd,
     jacrev,
     jit,
     jvp,
     sjit,
+    value_and_grad,
     vjp,
     vmap,
     xpr,
@@ -129,6 +131,7 @@ __all__ = [
     "jacrev",
     "jacfwd",
     "grad",
+    "value_and_grad",
     # Utilities
     "device",
     "cpu",

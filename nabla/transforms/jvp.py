@@ -1,0 +1,74 @@
+from typing import Callable, Any
+from .utils import (
+    make_traced_pytree,
+    make_untraced_pytree,
+    pushfwd,
+    _extract_arrays_from_pytree,
+)
+
+
+
+def jvp(
+    func: Callable[..., Any], primals, tangents, has_aux: bool = False
+) -> tuple[Any, Any] | tuple[Any, Any, Any]:
+    """Compute Jacobian-vector product (forward-mode autodiff).
+
+    Args:
+        func: Function to differentiate (should take positional arguments)
+        primals: Positional arguments to the function (can be arbitrary pytrees)
+        tangents: Tangent vectors for directional derivatives (matching structure of primals)
+        has_aux: Optional, bool. Indicates whether func returns a pair where the first element
+            is considered the output of the mathematical function to be differentiated and the
+            second element is auxiliary data. Default False.
+
+    Returns:
+        If has_aux is False, returns a (outputs, output_tangents) pair.
+        If has_aux is True, returns a (outputs, output_tangents, aux) tuple where aux is the
+        auxiliary data returned by func.
+
+    Note:
+        This follows JAX's jvp API:
+        - Only accepts positional arguments
+        - For functions requiring keyword arguments, use functools.partial or lambda
+    """
+    # Handle inputs correctly based on structure
+    is_multi_arg = isinstance(primals, tuple)
+
+    any_primal_traced = any(
+        getattr(arg, "traced", False) for arg in _extract_arrays_from_pytree(primals)
+    )
+    any_tangent_traced = any(
+        getattr(arg, "traced", False) for arg in _extract_arrays_from_pytree(tangents)
+    )
+
+    # Validate primals and tangents match
+    if is_multi_arg:
+        if not isinstance(tangents, tuple) or len(primals) != len(tangents):
+            raise ValueError(
+                f"primals and tangents must have the same structure and length, "
+                f"got {len(primals)} primals and {len(tangents) if isinstance(tangents, tuple) else 1} tangents"
+            )
+    elif isinstance(tangents, tuple):
+        raise ValueError(
+            "If primal is a single argument, tangent should also be a single argument"
+        )
+
+    # Make traced copies of all inputs
+    traced_inputs_pytree = make_traced_pytree(primals)
+
+    # Extract traced args based on structure
+    traced_args = traced_inputs_pytree if is_multi_arg else (traced_inputs_pytree,)
+
+    # Execute the function with traced inputs
+    outputs = func(*traced_args)
+
+    # Compute output tangents
+    output_tangents = pushfwd(traced_inputs_pytree, outputs, tangents)
+
+    # Make everything untraced before returning
+    if not any_primal_traced and not any_tangent_traced:
+        make_untraced_pytree(outputs)
+        make_untraced_pytree(output_tangents)
+
+    return outputs, output_tangents
+

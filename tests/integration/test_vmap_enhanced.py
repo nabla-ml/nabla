@@ -27,7 +27,7 @@ from collections.abc import Callable
 from typing import Any
 
 from nabla.core.array import Array
-from nabla.core.trafos import (
+from nabla.transforms.utils import (
     _extract_arrays_from_pytree,
     _handle_args_consistently,
     make_traced_pytree,

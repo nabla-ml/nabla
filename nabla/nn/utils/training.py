@@ -18,30 +18,6 @@
 import nabla as nb
 
 
-@nb.jit
-def value_and_grad(func, args):
-    """Compute function value and gradients simultaneously.
-
-    This is a convenient wrapper around VJP for training loops.
-    It computes both the function output and its gradients with respect
-    to the parameters.
-
-    Args:
-        func: Function to differentiate (should return list of outputs)
-        args: List of arguments to pass to func
-
-    Returns:
-        Tuple of (values, gradients) where:
-        - values: Output of func(args)
-        - gradients: Gradients w.r.t. parameters (skips first 2 args: x, targets)
-    """
-    values, vjp_fn = nb.vjp(func, args)
-    cotangent = [nb.ones_like(values[0])]
-    gradients = vjp_fn(cotangent)
-    # Skip the first two arguments (x, targets) and return only parameter gradients
-    return values, gradients[2:]
-
-
 def create_dataset(
     batch_size: int, input_dim: int, seed: int | None = None
 ) -> tuple[nb.Array, nb.Array]:

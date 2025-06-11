@@ -5,7 +5,7 @@ import sys
 
 sys.path.append("/Users/tillife/Documents/CodingProjects/nabla")
 
-from nabla.core.trafos import vjp
+from nabla.transforms.vjp import vjp
 from nabla.ops.binary import add, mul
 from nabla.ops.creation import array
 from nabla.ops.reduce import sum as reduce_sum
