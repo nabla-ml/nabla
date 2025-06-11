@@ -32,9 +32,7 @@ def mean_squared_error(predictions: nb.Array, targets: nb.Array) -> nb.Array:
     """Compute mean squared error loss."""
     diff = predictions - targets
     squared_errors = diff * diff
-    batch_size = nb.array(
-        [np.float32(predictions.shape[0])]
-    )  # Wrap in nb.array like original
+    batch_size = nb.array(predictions.shape[0], dtype=nb.DType.float32)
     loss = nb.sum(squared_errors) / batch_size
     return loss
 
@@ -54,7 +52,9 @@ def create_sin_dataset(batch_size: int = 256) -> tuple[nb.Array, nb.Array]:
     return x, targets
 
 
-def initialize_params(layers: list[int], seed: int = 42) -> list[nb.Array]:
+def initialize_for_complex_function(
+    layers: list[int], seed: int = 42
+) -> list[nb.Array]:
     """Initialize specifically for learning complex high-frequency functions."""
     np.random.seed(seed)
     params = []
@@ -111,7 +111,7 @@ def adamw_step(
         new_m = beta1 * m + (1.0 - beta1) * grad
         new_v = beta2 * v + (1.0 - beta2) * (grad * grad)
 
-        # Completely fused parameter update - eliminates ALL intermediate variables
+        # Completely fused parameter update - eliminates ALL intermediate variables (JAX style)
         new_param = param * (1.0 - weight_decay * learning_rate) - learning_rate * (
             new_m / (1.0 - beta1**step)
         ) / (((new_v / (1.0 - beta2**step)) ** 0.5) + eps)
@@ -158,19 +158,14 @@ def train_step_jitted(
 ) -> tuple[list[nb.Array], list[nb.Array], list[nb.Array], nb.Array]:
     """JIT-compiled training step combining gradient computation and optimizer update."""
 
-    # Define loss function that takes separate arguments (JAX style)
-    def loss_fn(*args):
-        x_batch, targets_batch = args[0], args[1]
-        param_list = list(args[2:])
-        return mlp_forward_and_loss([x_batch, targets_batch] + param_list)
+    # Direct gradient computation without passing functions (JAX style)
+    def loss_fn(params_inner):
+        predictions = mlp_forward(x, params_inner)
+        loss = mean_squared_error(predictions, targets)
+        return loss
 
-    # Compute gradients w.r.t. parameters (args 2 onwards)
-    param_indices = list(range(2, 2 + len(params)))
-    all_args = [x, targets] + params
-
-    loss_value, param_gradients = nb.value_and_grad(loss_fn, argnums=param_indices)(
-        *all_args
-    )
+    # Compute loss and gradients directly (JAX style)
+    loss_value, param_gradients = nb.value_and_grad(loss_fn)(params)
 
     # AdamW optimizer update
     updated_params, updated_m, updated_v = adamw_step(
@@ -199,7 +194,7 @@ def test_nabla_complex_sin():
     print(f"Batch size: {BATCH_SIZE}")
 
     # Initialize for complex function learning
-    params = initialize_params(LAYERS)
+    params = initialize_for_complex_function(LAYERS)
     m_states, v_states = init_adamw_state(params)
 
     # Initial analysis

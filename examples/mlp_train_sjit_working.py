@@ -32,7 +32,9 @@ def mean_squared_error(predictions: nb.Array, targets: nb.Array) -> nb.Array:
     """Compute mean squared error loss."""
     diff = predictions - targets
     squared_errors = diff * diff
-    batch_size = nb.array(predictions.shape[0], dtype=nb.DType.float32)
+    batch_size = nb.array(
+        float(predictions.shape[0])
+    )  # Convert to Python float then Nabla array
     loss = nb.sum(squared_errors) / batch_size
     return loss
 
@@ -52,9 +54,7 @@ def create_sin_dataset(batch_size: int = 256) -> tuple[nb.Array, nb.Array]:
     return x, targets
 
 
-def initialize_for_complex_function(
-    layers: list[int], seed: int = 42
-) -> list[nb.Array]:
+def initialize_params(layers: list[int], seed: int = 42) -> list[nb.Array]:
     """Initialize specifically for learning complex high-frequency functions."""
     np.random.seed(seed)
     params = []
@@ -87,40 +87,6 @@ def initialize_for_complex_function(
         params.extend([w, b])
 
     return params
-
-
-# def adamw_step(
-#     params: list[nb.Array],
-#     gradients: list[nb.Array],
-#     m_states: list[nb.Array],
-#     v_states: list[nb.Array],
-#     step: int,
-#     learning_rate: float = 0.001,
-#     beta1: float = 0.9,
-#     beta2: float = 0.999,
-#     eps: float = 1e-8,
-#     weight_decay: float = 0.01,
-# ) -> tuple[list[nb.Array], list[nb.Array], list[nb.Array]]:
-#     """AdamW optimizer step with weight decay - OPTIMIZED to match JAX efficiency."""
-#     updated_params = []
-#     updated_m = []
-#     updated_v = []
-
-#     for param, grad, m, v in zip(params, gradients, m_states, v_states, strict=False):
-#         # Update moments
-#         new_m = beta1 * m + (1.0 - beta1) * grad
-#         new_v = beta2 * v + (1.0 - beta2) * (grad * grad)
-
-#         # Completely fused parameter update - eliminates ALL intermediate variables (JAX style)
-#         new_param = param * (1.0 - weight_decay * learning_rate) - learning_rate * (
-#             new_m / (1.0 - beta1**step)
-#         ) / (((new_v / (1.0 - beta2**step)) ** 0.5) + eps)
-
-#         updated_params.append(new_param)
-#         updated_m.append(new_m)
-#         updated_v.append(new_v)
-
-#     return updated_params, updated_m, updated_v
 
 
 def adamw_step(
@@ -164,22 +130,6 @@ def adamw_step(
 
     return updated_params, updated_m, updated_v
 
-    # for param, grad, m, v in zip(params, gradients, m_states, v_states, strict=False):
-    #     # Update moments
-    #     new_m = beta1 * m + (1.0 - beta1) * grad
-    #     new_v = beta2 * v + (1.0 - beta2) * (grad * grad)
-
-    #     # Completely fused parameter update - eliminates ALL intermediate variables
-    #     new_param = param * (1.0 - weight_decay * learning_rate) - learning_rate * (
-    #         new_m / (1.0 - beta1**step)
-    #     ) #/ (((new_v / (1.0 - beta2**step)) ** 0.5) + eps) # this makes it unstabel. why??? TODO
-
-    #     updated_params.append(new_param)
-    #     updated_m.append(new_m)
-    #     updated_v.append(new_v)
-
-    # return updated_params, updated_m, updated_v
-
 
 def init_adamw_state(params: list[nb.Array]) -> tuple[list[nb.Array], list[nb.Array]]:
     """Initialize AdamW state - optimized version."""
@@ -217,14 +167,17 @@ def train_step_jitted(
     """JIT-compiled training step combining gradient computation and optimizer update."""
 
     # Define loss function that takes separate arguments (JAX style)
-    def loss_fn(*inner_params):
-        predictions = mlp_forward(x, inner_params)
+    def loss_fn(*args):
+        predictions = mlp_forward(x, args)
         loss = mean_squared_error(predictions, targets)
         return loss
 
-    loss_value, param_gradients = nb.value_and_grad(
-        loss_fn, argnums=list(range(len(params)))
-    )(*params)
+    # Compute gradients w.r.t. parameters (args 2 onwards)
+    param_indices = list(range(len(params)))
+
+    loss_value, param_gradients = nb.value_and_grad(loss_fn, argnums=param_indices)(
+        *params
+    )
 
     # AdamW optimizer update
     updated_params, updated_m, updated_v = adamw_step(
@@ -234,7 +187,7 @@ def train_step_jitted(
     return updated_params, updated_m, updated_v, loss_value
 
 
-@nb.sjit
+@nb.jit
 def compute_predictions_and_loss(
     x_test: nb.Array, targets_test: nb.Array, params: list[nb.Array]
 ) -> tuple[nb.Array, nb.Array]:
@@ -253,7 +206,7 @@ def test_nabla_complex_sin():
     print(f"Batch size: {BATCH_SIZE}")
 
     # Initialize for complex function learning
-    params = initialize_for_complex_function(LAYERS)
+    params = initialize_params(LAYERS)
     m_states, v_states = init_adamw_state(params)
 
     # Initial analysis
