@@ -29,7 +29,7 @@ def relu(x: nb.Array) -> nb.Array:
     Returns:
         Array with ReLU applied element-wise
     """
-    return nb.maximum(x, nb.zeros_like(x))
+    return nb.maximum(x, 0)
 
 
 def leaky_relu(x: nb.Array, negative_slope: float = 0.01) -> nb.Array:
