@@ -21,7 +21,7 @@ from max.driver import Tensor
 from max.graph import Value, ops
 
 from ..core.array import Array
-from ..utils.broadcasting import get_broadcasted_shape
+from ..utils.shape_utils import get_broadcasted_shape
 from .operation import BinaryOperation
 
 # Public API

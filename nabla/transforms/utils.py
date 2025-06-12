@@ -248,57 +248,29 @@ def _handle_args_consistently(args):
 
 
 def _prepare_traced_inputs(
-    actual_args,
-    is_list_style,
-    apply_staging=False,
-    with_conversion=False,
-    exclude_scalar_indices=None,
+    actual_args, is_list_style, apply_staging=False, with_conversion=False
 ):
     """Prepare traced inputs for list-style or pytree-style arguments."""
 
     # Convert scalars to Arrays if requested
     if with_conversion:
 
-        def convert_scalars_to_arrays(item, depth=0, index=None):
+        def convert_scalars_to_arrays(item):
             if isinstance(item, Array):
                 return item
             elif isinstance(item, list | tuple):
                 return type(item)(
-                    convert_scalars_to_arrays(sub_item, depth + 1, i)
-                    for i, sub_item in enumerate(item)
+                    convert_scalars_to_arrays(sub_item) for sub_item in item
                 )
             elif isinstance(item, dict):
-                return {
-                    k: convert_scalars_to_arrays(v, depth + 1, k)
-                    for k, v in item.items()
-                }
+                return {k: convert_scalars_to_arrays(v) for k, v in item.items()}
             else:
-                # Check if this scalar should be excluded from conversion
-                if (
-                    exclude_scalar_indices is not None
-                    and depth == 0
-                    and index in exclude_scalar_indices
-                ):
-                    return item  # Keep as scalar
                 # Convert non-Array types (int, float, etc.) to Nabla Arrays
                 import nabla as nb
 
                 return nb.array(item)
 
-        if is_list_style:
-            actual_args = convert_scalars_to_arrays(actual_args)
-        else:
-            # For non-list style, handle tuple of arguments
-            if exclude_scalar_indices is not None:
-                converted_args = []
-                for i, arg in enumerate(actual_args):
-                    if i in exclude_scalar_indices:
-                        converted_args.append(arg)  # Keep scalar unchanged
-                    else:
-                        converted_args.append(convert_scalars_to_arrays(arg))
-                actual_args = tuple(converted_args)
-            else:
-                actual_args = convert_scalars_to_arrays(actual_args)
+        actual_args = convert_scalars_to_arrays(actual_args)
 
     if is_list_style:
         traced_args = make_traced_pytree(actual_args)

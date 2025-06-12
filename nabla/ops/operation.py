@@ -181,7 +181,7 @@ class BinaryOperation(Operation):
             )
         shape1, shape2 = input_shapes[0], input_shapes[1]
 
-        from ..utils.broadcasting import get_broadcasted_shape
+        from ..utils.shape_utils import get_broadcasted_shape
 
         return get_broadcasted_shape(shape1, shape2)
 
@@ -208,7 +208,7 @@ class BinaryOperation(Operation):
             )
         shape1, shape2 = input_batch_dims[0], input_batch_dims[1]
 
-        from ..utils.broadcasting import get_broadcasted_shape
+        from ..utils.shape_utils import get_broadcasted_shape
 
         return get_broadcasted_shape(shape1, shape2)
 
