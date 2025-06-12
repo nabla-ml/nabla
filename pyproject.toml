@@ -4,18 +4,20 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nabla_ml"
-version = "25.06120930"
+version = "25.06121330"
 authors = [
     { name = "TilliFe", email = "tillmann.fehrenbach@gmail.com" },
 ]
 description = "Dynamic neural networks and function transformations in Python + Mojo"
 readme = "readme.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Operating System :: OS Independent",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
@@ -48,7 +50,7 @@ dev = [
 
 [tool.ruff]
 line-length = 88
-target-version = "py312"
+target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "N", "B", "C4", "A", "SIM", "PTH"]
