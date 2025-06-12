@@ -72,7 +72,6 @@ from .utils import (
     precision,
     r_squared,
     recall,
-    value_and_grad,
 )
 
 __all__ = [
@@ -125,7 +124,6 @@ __all__ = [
     "create_mlp_config",
     "MLPBuilder",
     # Utilities
-    "value_and_grad",
     "create_sin_dataset",
     "create_dataset",
     "accuracy",

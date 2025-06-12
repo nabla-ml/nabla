@@ -26,12 +26,10 @@ from .training import (
     compute_correlation,
     create_dataset,
     create_sin_dataset,
-    value_and_grad,
 )
 
 __all__ = [
     # Training utilities
-    "value_and_grad",
     "create_dataset",
     "create_sin_dataset",
     "compute_accuracy",

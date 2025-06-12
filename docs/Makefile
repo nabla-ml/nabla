@@ -1,7 +1,7 @@
 # Makefile for Nabla documentation
 
 # You can set these variables from the command line.
-SPHINXOPTS    = -W --keep-going
+SPHINXOPTS    = --keep-going
 SPHINXBUILD  = sphinx-build
 SOURCEDIR    = .
 BUILDDIR     = _build

@@ -1,8 +1,3 @@
-[![Development Status](https://img.shields.io/badge/status-pre--alpha-red)](https://github.com/nabla-ml/nabla)
-[![PyPI version](https://badge.fury.io/py/nabla-ml.svg)](https://badge.fury.io/py/nabla-ml)
-[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
-
 # NABLA
 
 Nabla is a Python library that provides three key features:
@@ -15,7 +10,6 @@ Nabla is a Python library that provides three key features:
 :maxdepth: 1
 
 tutorials/index
-examples/index
 api/index
 ```
 
@@ -67,11 +61,13 @@ ruff check nabla/ --fix
 nabla/
 ├── nabla/                     # Core Python library
 │   ├── core/                  # Function transformations and core array class
-│   ├── ops/                   # Mathematical operations (binary, unary, linalg, etc.)
 │   ├── nn/                    # Neural network modules and models
+│   ├── ops/                   # Mathematical operations (binary, unary, linalg, etc.)
+│   ├── transforms/            # Function transformations (vmap, grad, jit, etc.)
 │   └── utils/                 # Utilities (broadcasting, formatting, types)
 ├── tests/                     # Comprehensive test suite
-├── examples/                  # Towards MLP training and other usage examples
+├── tutorials/                 # Notebooks on Nabla usage for ML tasks
+├── examples/                  # Example scripts for common use cases
 └── experimental/              # An alternative pure Mojo API (WIP!)
 ```
 
@@ -86,3 +82,8 @@ Nabla is licensed under the [Apache-2.0 license](https://github.com/nabla-ml/nab
 ---
 
 *Thank you for checking out Nabla!*
+
+[![Development Status](https://img.shields.io/badge/status-pre--alpha-red)](https://github.com/nabla-ml/nabla)
+[![PyPI version](https://badge.fury.io/py/nabla-ml.svg)](https://badge.fury.io/py/nabla-ml)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)

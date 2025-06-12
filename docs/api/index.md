@@ -1,40 +1,30 @@
 # API Reference
 
-This page contains the complete API reference for Nabla, organized by functionality.
+This section provides detailed documentation for all Nabla modules and functions, 
+organized to match the internal structure of the library.
 
 ```{toctree}
-:maxdepth: 1
+:maxdepth: 2
+:caption: API Documentation
 
-array
-trafos
-creation
-unary
-binary
-reduction
-linalg
-manipulation
+core/index
+ops/index
+transforms/index
+nn/index
+utils/index
 ```
 
-## Quick Reference
+## Quick Navigation
 
 ### Core Components
+- **{doc}`core/index`** - Array operations and execution context
+- **{doc}`ops/index`** - Low-level operations and kernels
 
-- {doc}`array` - The fundamental Array class with properties and methods
-- {doc}`trafos` - Function transformations (jit, vmap, grad, etc.)
+### Function Transformations
+- **{doc}`transforms/index`** - grad, jit, vmap, and other transformations
 
-### Array Operations
+### Neural Networks
+- **{doc}`nn/index`** - Layers, losses, optimizers, and architectures
 
-- {doc}`creation` - Array creation functions
-- {doc}`unary` - Element-wise unary operations (sin, cos, exp, etc.)
-- {doc}`binary` - Element-wise binary operations (add, multiply, etc.)
-- {doc}`reduction` - Reduction operations (sum, mean, etc.)
-- {doc}`linalg` - Linear algebra operations
-- {doc}`manipulation` - Array view and manipulation operations
-
-## Overview
-
-Nabla provides a comprehensive set of APIs for array operations, function transformations, and automatic differentiation:
-
-- **Array Class**: The fundamental `Array` class with its properties, methods, and operator overloading
-- **Function Transformations**: Tools like `jit`, `vmap`, `grad`, `vjp`, and `jvp` for compilation and differentiation
-- **Array Operations**: Creation, manipulation, and mathematical operations on arrays
+### Utilities
+- **{doc}`utils/index`** - Helper functions and utilities

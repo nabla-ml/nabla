@@ -4,9 +4,12 @@ Generate complete API documentation for Nabla.
 
 This script introspects the Nabla codebase and generates static Markdown files
 for all API components, eliminating the need for autodoc during Sphinx builds.
+Supports @nodoc decorator to exclude items from documentation.
 """
 
 import ast
+import importlib
+import inspect
 import sys
 from pathlib import Path
 from typing import Any, Optional
@@ -22,6 +25,30 @@ class APIDocGenerator:
 
         # Add nabla to Python path for imports
         sys.path.insert(0, str(project_root))
+
+    def is_decorated_with_nodoc(self, node: ast.AST) -> bool:
+        """Check if a function or class has the @nodoc decorator."""
+        if not isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef)):
+            return False
+        
+        for decorator in node.decorator_list:
+            # Handle simple decorator names like @nodoc
+            if isinstance(decorator, ast.Name) and decorator.id in ('nodoc', 'no_doc', 'skip_doc'):
+                return True
+            # Handle module.nodoc style decorators
+            elif isinstance(decorator, ast.Attribute) and decorator.attr in ('nodoc', 'no_doc', 'skip_doc'):
+                return True
+        return False
+
+    def should_document_runtime(self, obj: Any, name: str) -> bool:
+        """Check if an object should be documented using runtime inspection."""
+        try:
+            # Import the docs utility to check the runtime decorator
+            from nabla.utils.docs import should_document
+            return should_document(obj, name)
+        except ImportError:
+            # Fallback to basic filtering if utils.docs is not available
+            return not name.startswith('_')
 
     def extract_docstring(self, node: ast.AST) -> Optional[str]:
         """Extract docstring from an AST node."""

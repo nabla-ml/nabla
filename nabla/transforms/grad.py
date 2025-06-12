@@ -52,16 +52,18 @@ def value_and_grad(
         A function that computes both the value and gradient of fun.
 
     Examples:
-        # As a function call
-        value_and_grad_fn = value_and_grad(my_loss)
-        value, grads = value_and_grad_fn(x)
+        Basic usage as a function call::
 
-        # As a decorator
-        @value_and_grad
-        def my_loss(x):
-            return x**2
+            value_and_grad_fn = value_and_grad(my_loss)
+            value, grads = value_and_grad_fn(x)
 
-        value, grads = my_loss(3.0)
+        Usage as a decorator::
+
+            @value_and_grad
+            def my_loss(x):
+                return x**2
+
+            value, grads = my_loss(3.0)
     """
 
     # Handle being used as a decorator without arguments
@@ -77,10 +79,10 @@ def value_and_grad(
 
     def value_and_grad_fn(*args: Any) -> Any:
         """
-        The actual value_and_grad function that gets returned.
+            The actual value_and_grad function that gets returned.
 
-        Validates that the function returns a scalar output, then computes
-        both the value and gradient using VJP with ones_like cotangent.
+            Validates that the function returns a scalar output, then computes
+            both the value and gradient using VJP with ones_like cotangent.
         """
         # Compute VJP to get both output and pullback function
         if has_aux:
@@ -133,20 +135,22 @@ def grad(
         reduce_axes: Axes to reduce over - currently ignored (default ()).
         mode: Kept for API compatibility but ignored (always uses reverse-mode VJP).
 
-    Returns:
-        A function that computes the gradient of fun.
+        Returns:
+            A function that computes the gradient of fun.
 
-    Examples:
-        # As a function call
-        grad_fn = grad(my_loss)
-        grads = grad_fn(x)
+        Examples:
+            Basic usage as a function call::
 
-        # As a decorator
-        @grad
-        def my_loss(x):
-            return x**2
+                grad_fn = grad(my_loss)
+                grads = grad_fn(x)
 
-        grads = my_loss(3.0)  # Returns gradient, not function value
+            Usage as a decorator::
+
+                @grad
+                def my_loss(x):
+                    return x**2
+
+                grads = my_loss(3.0)  # Returns gradient, not function value
     """
     # Handle decorator pattern: if fun is None, return a decorator
     if fun is None:
@@ -166,9 +170,9 @@ def grad(
 
     def grad_fn(*args: Any) -> Any:
         """
-        The actual gradient function that gets returned.
+            The actual gradient function that gets returned.
 
-        Just calls value_and_grad and returns only the gradient part.
+            Just calls value_and_grad and returns only the gradient part.
         """
         if has_aux:
             (value, aux), gradients = value_and_grad_fn(*args)

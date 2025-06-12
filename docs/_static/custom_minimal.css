@@ -1,0 +1,52 @@
+/* Minimal Custom CSS for Nabla Documentation */
+/* Using default Sphinx Book Theme styling for everything */
+
+/* Only essential notebook styling for Google Colab and download buttons */
+.notebook-buttons {
+    margin: 1rem 0;
+    text-align: left;
+}
+
+.colab-button {
+    display: inline-block;
+    background-color: #f9ab00;
+    color: #1a1a1a;
+    padding: 8px 16px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-weight: 500;
+    margin: 0.5rem 0.5rem 0.5rem 0;
+    transition: background-color 0.2s;
+}
+
+.colab-button:hover {
+    background-color: #e89400;
+    text-decoration: none;
+    color: #1a1a1a;
+}
+
+.colab-button:before {
+    content: "🚀 ";
+}
+
+.notebook-download {
+    display: inline-block;
+    background-color: #6c757d;
+    color: #ffffff;
+    padding: 8px 16px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-weight: 500;
+    margin: 0.5rem 0.5rem 0.5rem 0;
+    transition: background-color 0.2s;
+}
+
+.notebook-download:hover {
+    background-color: #5a6268;
+    text-decoration: none;
+    color: #ffffff;
+}
+
+.notebook-download:before {
+    content: "↓ ";
+}
