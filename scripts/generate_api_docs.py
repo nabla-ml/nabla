@@ -329,7 +329,7 @@ def {method_name}{method_sig}
         # Core transformations (separate from Array class)
         core_trafos = [
             "jit",
-            "sjit",
+            "djit",
             "vjp",
             "jvp",
             "vmap",

@@ -30,7 +30,7 @@ from .utils import (
 
 
 def jit(
-    func: Callable[..., Any] = None, static: bool = False, show_graph: bool = False
+    func: Callable[..., Any] = None, static: bool = True, show_graph: bool = False
 ) -> Callable[..., Any]:
     """Just-in-time compile a function for performance optimization.
     This can be used as a function call like `jit(func)` or as a decorator `@jit`.
@@ -158,32 +158,23 @@ def jit(
     return jit_func
 
 
-# create alias sjit for jit with static = True
-def sjit(
+def djit(
     func: Callable[..., Any] = None, show_graph: bool = False
 ) -> Callable[..., Any]:
-    """
-    Just-in-time compile a function for performance optimization with static=True.
-    This is a simplified alias for jit with static=True, which is useful for
-    functions that do not require dynamic shapes or inputs.
+    """Dynamic JIT compile a function for performance optimization.
+    This can be used as a function call like `djit(func)` or as a decorator `@djit`.
+
     Args:
         func: Function to optimize with JIT compilation (should take positional arguments)
+
     Returns:
         JIT-compiled function with optimized execution
+
     Note:
-        This follows JAX's jit API with static=True:
-        - Only accepts positional arguments
-        - For functions requiring keyword arguments, use functools.partial or lambda
-        - Supports both list-style (legacy) and unpacked arguments style (JAX-like)
-    Example:
-        As a function call::
+        This follows JAX's jit API:
 
-            fast_func = sjit(my_func)
-
-        As a decorator::
-
-            @sjit
-            def my_func(x):
-                return x * 2
+        * Only accepts positional arguments
+        * For functions requiring keyword arguments, use functools.partial or lambda
+        * Supports both list-style (legacy) and unpacked arguments style (JAX-like)
     """
-    return jit(func, static=True, show_graph=show_graph)
+    return jit(func, static=False, show_graph=show_graph)

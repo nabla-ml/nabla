@@ -10,7 +10,7 @@ trafos_jacfwd
 trafos_jacrev
 trafos_jit
 trafos_jvp
-trafos_sjit
+trafos_djit
 trafos_vjp
 trafos_vmap
 trafos_xpr
@@ -58,13 +58,13 @@ nabla.jvp(func: 'Callable[..., Any]', primals, tangents, has_aux: 'bool' = False
 
 Jacobian-vector product for forward-mode automatic differentiation.
 
-### `sjit`
+### `djit`
 
 ```python
-nabla.sjit(func: 'Callable[..., Any]' = None, show_graph: 'bool' = False) -> 'Callable[..., Any]'
+nabla.djit(func: 'Callable[..., Any]' = None, show_graph: 'bool' = False) -> 'Callable[..., Any]'
 ```
 
-Nabla operation: `sjit`
+Nabla operation: `djit`
 
 ### `vjp`
 

@@ -61,30 +61,10 @@ def initialize_for_complex_function(
 
     for i in range(len(layers) - 1):
         fan_in, fan_out = layers[i], layers[i + 1]
-
-        if i == 0:  # First layer - needs to capture high frequency
-            # Larger weights for first layer to capture high frequency patterns
-            std = (4.0 / fan_in) ** 0.5
-        elif i == len(layers) - 2:  # Output layer
-            # Conservative output layer
-            std = (0.5 / fan_in) ** 0.5
-        else:  # Hidden layers
-            # Standard He initialization
-            std = (2.0 / fan_in) ** 0.5
-
-        w_np = np.random.normal(0.0, std, (fan_in, fan_out)).astype(np.float32)
-
-        # Bias initialization strategy
-        if i < len(layers) - 2:  # Hidden layers
-            # Small positive bias to help with ReLU
-            b_np = np.ones((1, fan_out), dtype=np.float32) * 0.05
-        else:  # Output layer
-            # Initialize output bias to middle of target range
-            b_np = np.ones((1, fan_out), dtype=np.float32) * 0.5
-
-        w = nb.Array.from_numpy(w_np)
-        b = nb.Array.from_numpy(b_np)
-        params.extend([w, b])
+        w = nb.he_normal((fan_in, fan_out), seed=seed)
+        b = nb.zeros((fan_out,))
+        params.append(w)
+        params.append(b)
 
     return params
 
@@ -111,10 +91,18 @@ def adamw_step(
         new_m = beta1 * m + (1.0 - beta1) * grad
         new_v = beta2 * v + (1.0 - beta2) * (grad * grad)
 
-        # Completely fused parameter update - eliminates ALL intermediate variables (JAX style)
-        new_param = param * (1.0 - weight_decay * learning_rate) - learning_rate * (
-            new_m / (1.0 - beta1**step)
-        ) / (((new_v / (1.0 - beta2**step)) ** 0.5) + eps)
+        # Bias correction
+        bias_correction1 = 1.0 - beta1**step
+        bias_correction2 = 1.0 - beta2**step
+
+        # Corrected moments
+        m_corrected = new_m / bias_correction1
+        v_corrected = new_v / bias_correction2
+
+        # Parameter update with weight decay
+        new_param = param - learning_rate * (
+            m_corrected / (v_corrected**0.5 + eps) + weight_decay * param
+        )
 
         updated_params.append(new_param)
         updated_m.append(new_m)
@@ -147,7 +135,7 @@ def learning_rate_schedule(
 
 
 @nb.jit
-def train_step_jitted(
+def train_step(
     x: nb.Array,
     targets: nb.Array,
     params: list[nb.Array],
@@ -158,14 +146,15 @@ def train_step_jitted(
 ) -> tuple[list[nb.Array], list[nb.Array], list[nb.Array], nb.Array]:
     """JIT-compiled training step combining gradient computation and optimizer update."""
 
-    # Direct gradient computation without passing functions (JAX style)
-    def loss_fn(params_inner):
-        predictions = mlp_forward(x, params_inner)
+    # Define loss function that takes separate arguments (JAX style)
+    def loss_fn(*inner_params):
+        predictions = mlp_forward(x, inner_params)
         loss = mean_squared_error(predictions, targets)
         return loss
 
-    # Compute loss and gradients directly (JAX style)
-    loss_value, param_gradients = nb.value_and_grad(loss_fn)(params)
+    loss_value, param_gradients = nb.value_and_grad(
+        loss_fn, argnums=list(range(len(params)))
+    )(*params)
 
     # AdamW optimizer update
     updated_params, updated_m, updated_v = adamw_step(
@@ -236,7 +225,7 @@ def test_nabla_complex_sin():
         vjp_start = time.time()
 
         # Use JIT-compiled training step (combines gradient computation and optimizer update)
-        updated_params, updated_m, updated_v, loss_values = train_step_jitted(
+        updated_params, updated_m, updated_v, loss_values = train_step(
             x, targets, params, m_states, v_states, epoch, current_lr
         )
 

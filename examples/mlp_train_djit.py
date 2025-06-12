@@ -89,40 +89,6 @@ def initialize_for_complex_function(
     return params
 
 
-# def adamw_step(
-#     params: list[nb.Array],
-#     gradients: list[nb.Array],
-#     m_states: list[nb.Array],
-#     v_states: list[nb.Array],
-#     step: int,
-#     learning_rate: float = 0.001,
-#     beta1: float = 0.9,
-#     beta2: float = 0.999,
-#     eps: float = 1e-8,
-#     weight_decay: float = 0.01,
-# ) -> tuple[list[nb.Array], list[nb.Array], list[nb.Array]]:
-#     """AdamW optimizer step with weight decay - OPTIMIZED to match JAX efficiency."""
-#     updated_params = []
-#     updated_m = []
-#     updated_v = []
-
-#     for param, grad, m, v in zip(params, gradients, m_states, v_states, strict=False):
-#         # Update moments
-#         new_m = beta1 * m + (1.0 - beta1) * grad
-#         new_v = beta2 * v + (1.0 - beta2) * (grad * grad)
-
-#         # Completely fused parameter update - eliminates ALL intermediate variables (JAX style)
-#         new_param = param * (1.0 - weight_decay * learning_rate) - learning_rate * (
-#             new_m / (1.0 - beta1**step)
-#         ) / (((new_v / (1.0 - beta2**step)) ** 0.5) + eps)
-
-#         updated_params.append(new_param)
-#         updated_m.append(new_m)
-#         updated_v.append(new_v)
-
-#     return updated_params, updated_m, updated_v
-
-
 def adamw_step(
     params: list[nb.Array],
     gradients: list[nb.Array],
@@ -145,40 +111,16 @@ def adamw_step(
         new_m = beta1 * m + (1.0 - beta1) * grad
         new_v = beta2 * v + (1.0 - beta2) * (grad * grad)
 
-        # Bias correction
-        bias_correction1 = 1.0 - beta1**step
-        bias_correction2 = 1.0 - beta2**step
-
-        # Corrected moments
-        m_corrected = new_m / bias_correction1
-        v_corrected = new_v / bias_correction2
-
-        # Parameter update with weight decay
-        new_param = param - learning_rate * (
-            m_corrected / (v_corrected**0.5 + eps) + weight_decay * param
-        )
+        # Completely fused parameter update - eliminates ALL intermediate variables (JAX style)
+        new_param = param * (1.0 - weight_decay * learning_rate) - learning_rate * (
+            new_m / (1.0 - beta1**step)
+        ) / (((new_v / (1.0 - beta2**step)) ** 0.5) + eps)
 
         updated_params.append(new_param)
         updated_m.append(new_m)
         updated_v.append(new_v)
 
     return updated_params, updated_m, updated_v
-
-    # for param, grad, m, v in zip(params, gradients, m_states, v_states, strict=False):
-    #     # Update moments
-    #     new_m = beta1 * m + (1.0 - beta1) * grad
-    #     new_v = beta2 * v + (1.0 - beta2) * (grad * grad)
-
-    #     # Completely fused parameter update - eliminates ALL intermediate variables
-    #     new_param = param * (1.0 - weight_decay * learning_rate) - learning_rate * (
-    #         new_m / (1.0 - beta1**step)
-    #     ) #/ (((new_v / (1.0 - beta2**step)) ** 0.5) + eps) # this makes it unstabel. why??? TODO
-
-    #     updated_params.append(new_param)
-    #     updated_m.append(new_m)
-    #     updated_v.append(new_v)
-
-    # return updated_params, updated_m, updated_v
 
 
 def init_adamw_state(params: list[nb.Array]) -> tuple[list[nb.Array], list[nb.Array]]:
@@ -204,7 +146,7 @@ def learning_rate_schedule(
     return initial_lr * (decay_factor ** (epoch // decay_every))
 
 
-@nb.sjit
+@nb.jit
 def train_step_jitted(
     x: nb.Array,
     targets: nb.Array,
@@ -216,15 +158,14 @@ def train_step_jitted(
 ) -> tuple[list[nb.Array], list[nb.Array], list[nb.Array], nb.Array]:
     """JIT-compiled training step combining gradient computation and optimizer update."""
 
-    # Define loss function that takes separate arguments (JAX style)
-    def loss_fn(*inner_params):
-        predictions = mlp_forward(x, inner_params)
+    # Direct gradient computation without passing functions (JAX style)
+    def loss_fn(params_inner):
+        predictions = mlp_forward(x, params_inner)
         loss = mean_squared_error(predictions, targets)
         return loss
 
-    loss_value, param_gradients = nb.value_and_grad(
-        loss_fn, argnums=list(range(len(params)))
-    )(*params)
+    # Compute loss and gradients directly (JAX style)
+    loss_value, param_gradients = nb.value_and_grad(loss_fn)(params)
 
     # AdamW optimizer update
     updated_params, updated_m, updated_v = adamw_step(
@@ -234,7 +175,7 @@ def train_step_jitted(
     return updated_params, updated_m, updated_v, loss_value
 
 
-@nb.sjit
+@nb.jit
 def compute_predictions_and_loss(
     x_test: nb.Array, targets_test: nb.Array, params: list[nb.Array]
 ) -> tuple[nb.Array, nb.Array]:

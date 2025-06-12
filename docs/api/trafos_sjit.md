@@ -1,9 +1,9 @@
-# sjit
+# djit
 
 ## Signature
 
 ```python
-nabla.sjit(func: 'Callable[..., Any]' = None, show_graph: 'bool' = False) -> 'Callable[..., Any]'
+nabla.djit(func: 'Callable[..., Any]' = None, show_graph: 'bool' = False) -> 'Callable[..., Any]'
 ```
 
 ## Description
@@ -31,7 +31,7 @@ def matrix_computation(x, y):
     return nb.matmul(x, y) + nb.sin(x)
 
 # Static JIT compile the function
-fast_func = nb.sjit(matrix_computation)
+fast_func = nb.djit(matrix_computation)
 x = nb.randn((100, 100))
 y = nb.randn((100, 100))
 result = fast_func(x, y)
@@ -40,7 +40,7 @@ result = fast_func(x, y)
 ### Using as a decorator
 
 ```python
-@nb.sjit
+@nb.djit
 def neural_network_forward(params, x):
     """Forward pass through a neural network."""
     w1, b1, w2, b2 = params

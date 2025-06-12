@@ -321,7 +321,7 @@ def compute_node_hash(node: Array) -> int:
     return GraphTracer.compute_node_hash(node)
 
 
-# def sjit_prep(dynamic_inputs: list[Array], outputs: list[Array]) -> None:
+# def djit_prep(dynamic_inputs: list[Array], outputs: list[Array]) -> None:
 #     """
 #     Realize (compute) the given output Arrays.
 

@@ -34,12 +34,12 @@ from .ops.operation import (
     ViewOperation,
 )
 from .transforms import (
+    djit,
     grad,
     jacfwd,
     jacrev,
     jit,
     jvp,
-    sjit,
     value_and_grad,
     vjp,
     vmap,
@@ -126,7 +126,7 @@ __all__ = [
     "jvp",
     "vmap",
     "jit",
-    "sjit",
+    "djit",
     "jacrev",
     "jacfwd",
     "grad",

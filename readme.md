@@ -9,7 +9,7 @@ Nabla is a Python library that provides three key features:
 
 - Multidimensional Array computation (like NumPy) with strong GPU acceleration
 - Composable Function Transformations: `vmap`, `grad`, `jit`, and more
-- Deep integration with (custom) Mojo kernels
+- Deep integration with MAX and (custom) Mojo kernels
 
 ## Installation
 
@@ -59,11 +59,13 @@ ruff check nabla/ --fix
 nabla/
 ├── nabla/                     # Core Python library
 │   ├── core/                  # Function transformations and core array class
-│   ├── ops/                   # Mathematical operations (binary, unary, linalg, etc.)
 │   ├── nn/                    # Neural network modules and models
+│   ├── ops/                   # Mathematical operations (binary, unary, linalg, etc.)
+│   ├── transforms/            # Function transformations (vmap, grad, jit, etc.)
 │   └── utils/                 # Utilities (broadcasting, formatting, types)
 ├── tests/                     # Comprehensive test suite
-├── examples/                  # Towards MLP training and other usage examples
+├── tutorials/                 # Notebooks on Nabla usage for ML tasks
+├── examples/                  # Example scripts for common use cases
 └── experimental/              # An alternative pure Mojo API (WIP!)
 ```
 
