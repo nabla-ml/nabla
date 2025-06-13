@@ -18,10 +18,10 @@
 Utility functions and decorators for Nabla.
 """
 
-from .docs import nodoc, is_documentable, should_document
+from .docs import is_documentable, nodoc, should_document
 
 __all__ = [
     "nodoc",
-    "is_documentable", 
+    "is_documentable",
     "should_document",
 ]

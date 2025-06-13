@@ -48,7 +48,7 @@ extensions = [
     "sphinx.ext.mathjax",
     "myst_parser",
     "sphinx_design",
-    "nbsphinx",                 # Jupyter notebook support
+    "nbsphinx",  # Jupyter notebook support
     "IPython.sphinxext.ipython_console_highlighting",  # Better code highlighting
 ]
 
@@ -100,12 +100,12 @@ myst_enable_extensions = [
 
 # -- Notebook configuration ---------------------------------------------------
 # nbsphinx configuration for Jupyter notebooks
-nbsphinx_execute = 'never'  # Don't execute notebooks during build (pre-executed)
+nbsphinx_execute = "never"  # Don't execute notebooks during build (pre-executed)
 nbsphinx_allow_errors = True  # Allow notebooks with errors to be included
 nbsphinx_timeout = 120  # Execution timeout in seconds
 
 # Basic nbsphinx settings
-nbsphinx_codecell_lexer = 'ipython3'
+nbsphinx_codecell_lexer = "ipython3"
 
 # Prolog/epilog for notebooks with Google Colab links
 nbsphinx_prolog = """

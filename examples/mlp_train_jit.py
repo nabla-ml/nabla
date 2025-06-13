@@ -9,10 +9,10 @@ import nabla as nb
 
 # Configuration
 BATCH_SIZE = 128
-LAYERS = [1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1]
+LAYERS = [1, 64, 128, 256, 128, 64, 1]
 LEARNING_RATE = 0.001  # Match JAX version for fair comparison
-NUM_EPOCHS = 10
-PRINT_INTERVAL = 1
+NUM_EPOCHS = 1000
+PRINT_INTERVAL = 100
 SIN_PERIODS = 8
 
 
@@ -87,29 +87,24 @@ def adamw_step(
     updated_v = []
 
     for param, grad, m, v in zip(params, gradients, m_states, v_states, strict=False):
-        # # Update moments
-        # new_m = beta1 * m + (1.0 - beta1) * grad
-        # new_v = beta2 * v + (1.0 - beta2) * (grad * grad)
+        # Update moments
+        new_m = beta1 * m + (1.0 - beta1) * grad
+        new_v = beta2 * v + (1.0 - beta2) * (grad * grad)
 
-        # # Bias correction
-        # bias_correction1 = 1.0 - beta1**step
-        # bias_correction2 = 1.0 - beta2**step
+        # Bias correction
+        bias_correction1 = 1.0 - beta1**step
+        bias_correction2 = 1.0 - beta2**step
 
-        # # Corrected moments
-        # m_corrected = new_m / bias_correction1
-        # v_corrected = new_v / bias_correction2
+        # Corrected moments
+        m_corrected = new_m / bias_correction1
+        v_corrected = new_v / bias_correction2
 
-        # # Parameter update with weight decay
-        # new_param = param - learning_rate * (
-        #     m_corrected / (v_corrected**0.5 + eps) + weight_decay * param
-        # )
+        # Parameter update with weight decay
+        new_param = param - learning_rate * (
+            m_corrected / (v_corrected**0.5 + eps) + weight_decay * param
+        )
 
-        # make simpelr tmp. use basic sgd
-        # Create new arrays to avoid reference issues
-        new_m = m + nb.array(0.0, dtype=m.dtype)  # Copy m
-        new_v = v + nb.array(0.0, dtype=v.dtype)  # Copy v
-        new_param = param - learning_rate * grad
-
+        # Append updated values
         updated_params.append(new_param)
         updated_m.append(new_m)
         updated_v.append(new_v)

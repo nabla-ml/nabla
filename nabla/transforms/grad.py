@@ -79,10 +79,10 @@ def value_and_grad(
 
     def value_and_grad_fn(*args: Any) -> Any:
         """
-            The actual value_and_grad function that gets returned.
+        The actual value_and_grad function that gets returned.
 
-            Validates that the function returns a scalar output, then computes
-            both the value and gradient using VJP with ones_like cotangent.
+        Validates that the function returns a scalar output, then computes
+        both the value and gradient using VJP with ones_like cotangent.
         """
         # Compute VJP to get both output and pullback function
         if has_aux:
@@ -170,9 +170,9 @@ def grad(
 
     def grad_fn(*args: Any) -> Any:
         """
-            The actual gradient function that gets returned.
+        The actual gradient function that gets returned.
 
-            Just calls value_and_grad and returns only the gradient part.
+        Just calls value_and_grad and returns only the gradient part.
         """
         if has_aux:
             (value, aux), gradients = value_and_grad_fn(*args)

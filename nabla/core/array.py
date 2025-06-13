@@ -295,7 +295,7 @@ class Array:
         """Array slicing using standard Python syntax.
 
         Examples::
-        
+
             arr[1:3]        # Slice first dimension
             arr[:, 2:5]     # Slice second dimension
             arr[1:3, 2:5]   # Slice multiple dimensions
@@ -395,7 +395,7 @@ class Array:
             Array with the sum along the specified axes
 
         Examples::
-        
+
             arr.sum()           # Sum all elements
             arr.sum(axis=0)     # Sum along first axis
             arr.sum(axis=[0,1]) # Sum along first two axes
@@ -414,7 +414,7 @@ class Array:
             Array with the new shape
 
         Examples::
-        
+
             arr.reshape((2, 3))     # Reshape to 2x3
             arr.reshape((-1,))      # Flatten to 1D (note: -1 not yet supported)
         """

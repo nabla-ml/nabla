@@ -89,10 +89,10 @@ def vjp(
     def vjp_fn(cotangents: Any) -> Any:
         """VJP function that computes gradients.
 
-            Returns gradients in the same structure as the original inputs:
-            - Single argument: returns gradient directly (not wrapped in tuple)
-            - Multiple arguments: returns tuple of gradients
-            - Pytree inputs: returns gradients in same pytree structure
+        Returns gradients in the same structure as the original inputs:
+        - Single argument: returns gradient directly (not wrapped in tuple)
+        - Multiple arguments: returns tuple of gradients
+        - Pytree inputs: returns gradients in same pytree structure
         """
         # Always ensure cotangents are traced for composability with other transformations
         traced_cotangents = make_traced_pytree(cotangents)

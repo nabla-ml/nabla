@@ -8,8 +8,6 @@ Supports @nodoc decorator to exclude items from documentation.
 """
 
 import ast
-import importlib
-import inspect
 import sys
 from pathlib import Path
 from typing import Any, Optional
@@ -30,13 +28,25 @@ class APIDocGenerator:
         """Check if a function or class has the @nodoc decorator."""
         if not isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef)):
             return False
-        
+
         for decorator in node.decorator_list:
             # Handle simple decorator names like @nodoc
-            if isinstance(decorator, ast.Name) and decorator.id in ('nodoc', 'no_doc', 'skip_doc'):
-                return True
-            # Handle module.nodoc style decorators
-            elif isinstance(decorator, ast.Attribute) and decorator.attr in ('nodoc', 'no_doc', 'skip_doc'):
+            if (
+                isinstance(decorator, ast.Name)
+                and decorator.id
+                in (
+                    "nodoc",
+                    "no_doc",
+                    "skip_doc",
+                )
+                or isinstance(decorator, ast.Attribute)
+                and decorator.attr
+                in (
+                    "nodoc",
+                    "no_doc",
+                    "skip_doc",
+                )
+            ):
                 return True
         return False
 
@@ -45,10 +55,11 @@ class APIDocGenerator:
         try:
             # Import the docs utility to check the runtime decorator
             from nabla.utils.docs import should_document
+
             return should_document(obj, name)
         except ImportError:
             # Fallback to basic filtering if utils.docs is not available
-            return not name.startswith('_')
+            return not name.startswith("_")
 
     def extract_docstring(self, node: ast.AST) -> Optional[str]:
         """Extract docstring from an AST node."""

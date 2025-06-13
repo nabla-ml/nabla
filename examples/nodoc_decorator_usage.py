@@ -6,17 +6,17 @@ This file shows various ways to mark functions and classes as non-documentable.
 
 from nabla.utils.docs import nodoc
 
-
 # === PUBLIC API (will be documented) ===
+
 
 def public_function(x, y):
     """
     This is a public function that will appear in the documentation.
-    
+
     Args:
         x: First input
         y: Second input
-        
+
     Returns:
         The result of the operation
     """
@@ -26,24 +26,24 @@ def public_function(x, y):
 class PublicClass:
     """
     This is a public class that will appear in the documentation.
-    
+
     This class demonstrates the proper use of @nodoc for internal methods.
     """
-    
+
     def __init__(self, value):
         """Initialize the class with a value."""
         self.value = value
         self._internal_state = self._setup_internal_state()
-    
+
     def public_method(self):
         """This method will appear in the documentation."""
         return self._internal_processing()
-    
+
     @nodoc
     def _internal_processing(self):
         """This method won't appear in docs due to @nodoc decorator."""
         return self.value * 2
-    
+
     def _setup_internal_state(self):
         """This method won't appear in docs (starts with underscore)."""
         return {"initialized": True}
@@ -51,11 +51,12 @@ class PublicClass:
 
 # === INTERNAL API (will NOT be documented) ===
 
+
 @nodoc
 def _internal_helper(x, y):
     """
     This is an internal helper function that won't appear in documentation.
-    
+
     Even though it has a detailed docstring, the @nodoc decorator prevents
     it from being included in the generated documentation.
     """
@@ -66,13 +67,13 @@ def _internal_helper(x, y):
 class InternalUtilityClass:
     """
     This entire class is marked as internal and won't appear in documentation.
-    
+
     This is useful for implementation details that users shouldn't need to know about.
     """
-    
+
     def __init__(self):
         pass
-    
+
     def utility_method(self):
         """Even public-looking methods in @nodoc classes are excluded."""
         pass
@@ -80,22 +81,23 @@ class InternalUtilityClass:
 
 # === MIXED EXAMPLE ===
 
+
 class MixedVisibilityClass:
     """
     This class demonstrates mixing public and internal methods.
-    
+
     The class itself will be documented, but some methods will be excluded.
     """
-    
+
     def public_api_method(self):
         """This method will be documented."""
         return self._call_internal_method()
-    
+
     @nodoc
     def experimental_method(self):
         """
         This method is experimental and shouldn't be in public docs yet.
-        
+
         Use @nodoc for methods that are:
         - Experimental or unstable
         - Internal implementation details
@@ -103,7 +105,7 @@ class MixedVisibilityClass:
         - Deprecated functionality
         """
         pass
-    
+
     def _call_internal_method(self):
         """This won't be documented (starts with underscore)."""
         return "internal result"
@@ -114,10 +116,12 @@ class MixedVisibilityClass:
 # You can also use the aliases
 from nabla.utils.docs import no_doc, skip_doc
 
+
 @no_doc
 def another_internal_function():
     """Alternative decorator name."""
     pass
+
 
 @skip_doc
 def yet_another_internal_function():

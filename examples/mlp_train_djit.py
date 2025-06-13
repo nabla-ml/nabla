@@ -111,11 +111,20 @@ def adamw_step(
         new_m = beta1 * m + (1.0 - beta1) * grad
         new_v = beta2 * v + (1.0 - beta2) * (grad * grad)
 
-        # Completely fused parameter update - eliminates ALL intermediate variables (JAX style)
-        new_param = param * (1.0 - weight_decay * learning_rate) - learning_rate * (
-            new_m / (1.0 - beta1**step)
-        ) / (((new_v / (1.0 - beta2**step)) ** 0.5) + eps)
+        # Bias correction
+        bias_correction1 = 1.0 - beta1**step
+        bias_correction2 = 1.0 - beta2**step
 
+        # Corrected moments
+        m_corrected = new_m / bias_correction1
+        v_corrected = new_v / bias_correction2
+
+        # Parameter update with weight decay
+        new_param = param - learning_rate * (
+            m_corrected / (v_corrected**0.5 + eps) + weight_decay * param
+        )
+
+        # Append updated values
         updated_params.append(new_param)
         updated_m.append(new_m)
         updated_v.append(new_v)
@@ -146,7 +155,7 @@ def learning_rate_schedule(
     return initial_lr * (decay_factor ** (epoch // decay_every))
 
 
-@nb.jit
+@nb.djit
 def train_step_jitted(
     x: nb.Array,
     targets: nb.Array,
@@ -175,7 +184,7 @@ def train_step_jitted(
     return updated_params, updated_m, updated_v, loss_value
 
 
-@nb.jit
+@nb.djit
 def compute_predictions_and_loss(
     x_test: nb.Array, targets_test: nb.Array, params: list[nb.Array]
 ) -> tuple[nb.Array, nb.Array]:
