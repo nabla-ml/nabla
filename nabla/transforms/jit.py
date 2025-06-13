@@ -81,10 +81,6 @@ def _ultra_fast_extract_with_cache(args, structure):
 def _fast_extract_tensors_fallback(actual_args, is_list_style):
     """Fallback fast tensor extraction method."""
 
-
-def _fast_extract_tensors_fallback(actual_args, is_list_style):
-    """Fallback fast tensor extraction method."""
-
     # Convert to Arrays first, then extract tensors - matches compilation path
     def quick_convert_to_array(item):
         if isinstance(item, Array):
