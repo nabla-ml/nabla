@@ -29,6 +29,35 @@ from .utils import (
 )
 
 
+def _build_fast_input_extractors(actual_args, is_list_style):
+    """Build fast input extractors to minimize overhead in subsequent calls."""
+    # For now, return a simple marker - we'll optimize this further if needed
+    return is_list_style
+
+
+def _fast_extract_tensors(actual_args, is_list_style, extractors):
+    """Fast tensor extraction with minimal overhead."""
+    # Convert to Arrays first, then extract tensors - matches compilation path
+    def quick_convert_to_array(item):
+        if isinstance(item, Array):
+            return item
+        elif isinstance(item, (int, float)):
+            # Fast scalar to Array conversion
+            import nabla as nb
+            return nb.array(item)
+        elif isinstance(item, (list, tuple)):
+            return type(item)(quick_convert_to_array(sub_item) for sub_item in item)
+        else:
+            import nabla as nb
+            return nb.array(item)
+    
+    # Convert to Arrays first 
+    converted_args = quick_convert_to_array(actual_args)
+    # Then flatten to match the compilation path
+    flat_arrays = tree_flatten(converted_args)[0]
+    # Finally extract impl tensors
+    return [arr.impl for arr in flat_arrays]
+
 def jit(
     func: Callable[..., Any] = None, static: bool = True, show_graph: bool = False
 ) -> Callable[..., Any]:
@@ -68,27 +97,80 @@ def jit(
         cached_model = None
         output_structure = None
         param_to_model_index = None
+        # Pre-allocate fast path variables
+        _fast_conversion_cache = None
+        _fast_input_extractors = None
 
     def jit_func(*args):
-        nonlocal cached_model, output_structure, param_to_model_index
+        import time
+        nonlocal cached_model, output_structure, param_to_model_index, _fast_conversion_cache, _fast_input_extractors
 
+        # Common argument processing - needed for both static and non-static paths
         any_arg_traced = any(
             getattr(arg, "traced", False) for arg in _extract_arrays_from_pytree(args)
         )
-        # Use common argument handling logic
         actual_args, is_list_style = _handle_args_consistently(args)
 
         if static:
+            # Fast path optimization: skip most overhead for compiled models
+            if cached_model is not None:
+                # OPTIMIZED FAST PATH - minimal Python overhead
+                start_time = time.perf_counter()
+                
+                # Use cached conversion logic to minimize overhead
+                if _fast_conversion_cache is None:
+                    # First fast execution - build conversion cache
+                    _fast_input_extractors = _build_fast_input_extractors(actual_args, is_list_style)
+                    _fast_conversion_cache = True
+                    
+                    # Extract tensors for this run
+                    function_param_tensors = _fast_extract_tensors(actual_args, is_list_style, _fast_input_extractors)
+                else:
+                    # Ultra-fast path: direct extraction without full tracing
+                    function_param_tensors = _fast_extract_tensors(actual_args, is_list_style, _fast_input_extractors)
+                
+                # Pre-computed reordering (this was the biggest bottleneck!)
+                ordered_tensor_inputs = [function_param_tensors[func_idx] for func_idx, _ in param_to_model_index]
+                
+                reorder_time = time.perf_counter()
+                print(f"Static JIT - Fast reorder inputs: {(reorder_time - start_time) }s")
+
+                model_outputs = cached_model.execute(*ordered_tensor_inputs)
+                
+                execute_model_time = time.perf_counter()
+                print(f"Static JIT - Execute model: {(execute_model_time - reorder_time) }s")
+                
+                # Fast output conversion - avoid full tree operations
+                output_arrays = [Array.from_impl(out) for out in model_outputs]
+                outputs = tree_unflatten(output_structure, output_arrays)
+                
+                final_time = time.perf_counter()
+                print(f"Static JIT - Fast convert outputs: {(final_time - execute_model_time) }s")
+                print(f"Static JIT - Fast total time: {(final_time - start_time) }s")
+                
+                return outputs
+            
+            # COMPILATION PATH (first run)
+            start_time = time.perf_counter()
+            
             # For static JIT, use conversion to turn scalars into Arrays
             traced_args, _ = _prepare_traced_inputs(
                 actual_args, is_list_style, apply_staging=True, with_conversion=True
             )
             flat_input_arrays = tree_flatten(traced_args)[0]
+            
+            prepare_time = time.perf_counter()
+            print(f"Static JIT - Prepare traced inputs: {(prepare_time - start_time) }s")
 
             # Check if we need to compile the model
             if cached_model is None:
+                compile_start = time.perf_counter()
+                
                 # Execute the function with traced inputs and appropriate style
                 outputs = func(traced_args) if is_list_style else func(*traced_args)
+                
+                execute_time = time.perf_counter()
+                print(f"Static JIT - Execute function: {(execute_time - compile_start) }s")
 
                 # Realize only the Arrays in the outputs
                 flat_output_arrays, output_structure = tree_flatten(outputs)
@@ -97,6 +179,9 @@ def jit(
                 cached_model, trace_inputs = realize_(
                     flat_output_arrays, flat_input_arrays, show_graph=show_graph
                 )
+                
+                realize_time = time.perf_counter()
+                print(f"Static JIT - Realize model: {(realize_time - execute_time) }s")
 
                 # Create mapping: function parameter index -> model input index
                 param_to_model_index = []
@@ -107,9 +192,15 @@ def jit(
                         param_to_model_index.append((func_param_idx, model_input_idx))
                         model_input_idx += 1
 
+                mapping_time = time.perf_counter()
+                print(f"Static JIT - Create mapping: {(mapping_time - realize_time) }s")
+                print(f"Static JIT - Total compilation: {(mapping_time - compile_start) }s")
+
                 # Don't return here - fall through to execute the model on first run too
 
             # Use the cached model for execution (both first run and subsequent runs)
+            execution_start = time.perf_counter()
+            
             # Convert current args using the same conversion approach
             current_traced_args, _ = _prepare_traced_inputs(
                 actual_args, is_list_style, apply_staging=False, with_conversion=True
@@ -126,11 +217,24 @@ def jit(
             for func_idx, model_idx in param_to_model_index:
                 ordered_tensor_inputs[model_idx] = function_param_tensors[func_idx]
 
+            reorder_time = time.perf_counter()
+            print(f"Static JIT - Reorder inputs: {(reorder_time - execution_start) }s")
+
             model_outputs = cached_model.execute(*ordered_tensor_inputs)
+            
+            execute_model_time = time.perf_counter()
+            print(f"Static JIT - Execute model: {(execute_model_time - reorder_time) }s")
+            
             output_arrays = [Array.from_impl(out) for out in model_outputs]
 
             # Convert model outputs back to the original structure
             outputs = tree_unflatten(output_structure, output_arrays)
+            
+            final_time = time.perf_counter()
+            print(f"Static JIT - Convert outputs: {(final_time - execute_model_time) }s")
+            print(f"Static JIT - Total execution: {(final_time - execution_start) }s")
+            print(f"Static JIT - Total time: {(final_time - start_time) }s")
+            
             return outputs
 
         else:
