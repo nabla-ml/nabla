@@ -88,6 +88,10 @@ class MatMulOp(BinaryOperation):
         """Forward pass for binary operations."""
         if len(args) != 2:
             raise ValueError(f"Binary operation requires 2 arguments, got {len(args)}")
+        
+        # Move arrays to best device
+        from .operation import move_to_best_device
+        args = move_to_best_device(*args)
         arg1, arg2 = args[0], args[1]
 
         from ..ops.view import broadcast_batch_dims, broadcast_to
@@ -623,6 +627,10 @@ class Conv2DOp(BinaryOperation):
     def forward(self, *args: Array) -> Array:
         if len(args) != 2:
             raise ValueError(f"Conv2D operation requires 2 arguments, got {len(args)}")
+        
+        # Move arrays to best device
+        from .operation import move_to_best_device
+        args = move_to_best_device(*args)
         input_arr, filter_arr = args[0], args[1]
 
         self._validate_inputs(input_arr, filter_arr)  # Validates dtypes, devices
@@ -891,6 +899,10 @@ class Conv2DTransposeOp(BinaryOperation):
             raise ValueError(
                 f"Conv2DTranspose operation requires 2 arguments, got {len(args)}"
             )
+        
+        # Move arrays to best device
+        from .operation import move_to_best_device
+        args = move_to_best_device(*args)
         input_arr, filter_arr = args[0], args[1]
 
         self._validate_inputs(input_arr, filter_arr)

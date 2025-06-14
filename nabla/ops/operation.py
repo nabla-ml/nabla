@@ -127,6 +127,208 @@ class UnaryOperation(Operation):
             )
         return input_batch_dims[0]
 
+def move_to_best_device(*args: Array) -> tuple[Array, ...]:
+    """Move all arrays to the best available device."""
+    if len(args) <= 1:
+        return args
+
+    # We can use the following max api to access information abou the array.device:Device
+    # class max.driver.Device
+
+    # api
+    # property api
+
+    # Returns the API used to program the device.
+
+    # Possible values are:
+
+    # cpu for host devices.
+    # cuda for NVIDIA GPUs.
+    # hip for AMD GPUs.
+    # from max import driver
+
+    # device = driver.CPU()
+    # device.api
+
+    # can_access
+    # can_access
+
+    # Checks if this device can directly access memory of another device.
+
+    # from max import driver
+
+    # gpu0 = driver.Accelerator(id=0)
+    # gpu1 = driver.Accelerator(id=1)
+
+    # if gpu0.can_access(gpu1):
+    #     print("GPU0 can directly access GPU1 memory.")
+
+    # Parameters:
+
+    # other (Device ) – The other device to check peer access against.
+
+    # Returns:
+
+    # True if peer access is possible, False otherwise.
+
+    # Return type:
+
+    # bool
+
+    # cpu
+    # cpu = <nanobind.nb_func object>
+
+    # default_stream
+    # property default_stream
+
+    # Returns the default stream for this device.
+
+    # The default stream is initialized when the device object is created.
+
+    # Returns:
+
+    # The default execution stream for this device.
+
+    # Return type:
+
+    # DeviceStream
+
+    # id
+    # property id
+
+    # Returns a zero-based device id. For a CPU device this is always 0. For GPU accelerators this is the id of the device relative to this host. Along with the label, an id can uniquely identify a device, e.g. gpu:0, gpu:1.
+
+    # from max import driver
+
+    # device = driver.Accelerator()
+    # device_id = device.id
+
+    # Returns:
+
+    # The device ID.
+
+    # Return type:
+
+    # int
+
+    # is_compatible
+    # property is_compatible
+
+    # Returns whether this device is compatible with MAX.
+
+    # Returns:
+
+    # True if the device is compatible with MAX, False otherwise.
+
+    # Return type:
+
+    # bool
+
+    # is_host
+    # property is_host
+
+    # Whether this device is the CPU (host) device.
+
+    # from max import driver
+
+    # device = driver.CPU()
+    # device.is_host
+
+    # label
+    # property label
+
+    # Returns device label.
+
+    # Possible values are:
+
+    # cpu for host devices.
+    # gpu for accelerators.
+    # from max import driver
+
+    # device = driver.CPU()
+    # device.label
+
+    # stats
+    # property stats
+
+    # Returns utilization data for the device.
+
+    # from max import driver
+
+    # device = driver.CPU()
+    # stats = device.stats
+
+    # Returns:
+
+    # A dictionary containing device utilization statistics.
+
+    # Return type:
+
+    # dict
+
+    # synchronize
+    # synchronize
+
+    # Ensures all operations on this device complete before returning.
+
+    # Raises:
+
+    # ValueError – If any enqueued operations had an internal error.
+
+    # Task: create a small dictionary to track the devices, and how much data lives on each device by checking np.prod(array.shape). then go through all available devices in the dict and find the one where the most data lives, then move all other arrays to that device. this ensures that we move as little data as possible. however, there is one rule. if any array lives on an accelerator, we always move away from the cpu to the accelerator, even if it has less data. this is because the accelerator is always faster than the cpu, so we want to use it if possible.
+    import numpy as np
+    
+    # Track devices and data amounts
+    device_data = {}
+    accelerator_devices = set()
+    
+    for arg in args:
+        device = arg.device
+        data_size = np.prod(arg.shape)
+        device_data[device] = device_data.get(device, 0) + data_size
+        
+        # Check if this device is an accelerator (non-host device)
+        if not device.is_host:
+            accelerator_devices.add(device)
+    
+    # Determine best device according to the rules:
+    # 1. If any accelerator has data, choose the best accelerator considering peer access
+    # 2. Otherwise, choose the device (CPU) with most data
+    if accelerator_devices:
+        # For multi-accelerator scenarios, consider peer access costs
+        if len(accelerator_devices) > 1:
+            # Calculate effective data amount considering peer access
+            accelerator_scores = {}
+            for candidate_device in accelerator_devices:
+                # Base score is the data already on this device
+                base_score = device_data[candidate_device]
+                
+                # Add bonus for data that can be directly accessed from other accelerators
+                peer_accessible_data = 0
+                for other_device in accelerator_devices:
+                    if other_device != candidate_device and candidate_device.can_access(other_device):
+                        peer_accessible_data += device_data[other_device]
+                
+                # Weight peer-accessible data less than local data (avoid unnecessary moves)
+                accelerator_scores[candidate_device] = base_score + (peer_accessible_data * 0.1)
+            
+            best_device = max(accelerator_scores, key=accelerator_scores.get)
+        else:
+            # Single accelerator case - simple selection
+            best_device = max(accelerator_devices, key=lambda d: device_data[d])
+    else:
+        # Find device with most data (will be CPU in this case)
+        best_device = max(device_data, key=device_data.get)
+    
+    # Move all arrays to the best device
+    result_args = []
+    for arg in args:
+        if arg.device != best_device:
+            result_args.append(arg.to(best_device))
+        else:
+            result_args.append(arg)
+    
+    return tuple(result_args)
 
 class BinaryOperation(Operation):
     """Base class for binary operations."""
@@ -135,6 +337,9 @@ class BinaryOperation(Operation):
         """Forward pass for binary operations."""
         if len(args) != 2:
             raise ValueError(f"Binary operation requires 2 arguments, got {len(args)}")
+        
+        # Move arrays to best device
+        args = move_to_best_device(*args)
         arg1, arg2 = args[0], args[1]
 
         from ..ops.view import broadcast_batch_dims, broadcast_to

@@ -1296,6 +1296,10 @@ class ConcatenateOp(Operation):
         if len(args) == 0:
             raise ValueError("Concatenate operation requires at least 1 argument")
 
+        # Move arrays to best device
+        from .operation import move_to_best_device
+        args = move_to_best_device(*args)
+
         # Validate inputs have compatible properties
         first_arg = args[0]
         for _i, arg in enumerate(args[1:], 1):
