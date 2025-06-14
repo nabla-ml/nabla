@@ -17,9 +17,9 @@
 """Unary operations for the Nabla framework."""
 
 import numpy as np
-from max.driver import Tensor
+from max.driver import Device, Tensor
 from max.dtype import DType
-from max.graph import Value, ops
+from max.graph import DeviceRef, Value, ops
 
 from ..core.array import Array
 from .operation import UnaryOperation
@@ -40,6 +40,7 @@ __all__ = [
     "log",
     "exp",
     "sqrt",
+    "transfer_to",
 ]
 
 
@@ -632,6 +633,72 @@ def sqrt(arg: Array) -> Array:
     # Create 0.5 as a scalar Array
     half = array([0.5], dtype=arg.dtype)
     return binary_pow(arg, half)
+
+
+class TransferToOp(UnaryOperation):
+    """Transfer operation to a different device."""
+
+    def __init__(self, arg_device: Device, target_device: Device):
+        super().__init__(f"transfer_to[{target_device}]")
+        self.arg_device = arg_device
+        self.target_device = target_device
+
+    def forward(self, *args: Array) -> Array:
+        """Forward pass for unary operations."""
+        if len(args) != 1:
+            raise ValueError(f"Unary operation requires 1 argument, got {len(args)}")
+        arg = args[0]
+
+        output_shape = self.compute_output_shape(arg.shape)
+        output_batch_dims = self.compute_output_batch_dims(arg.batch_dims)
+        output_dtype = self.compute_output_dtype(arg)
+
+        res = Array(
+            shape=output_shape,
+            dtype=output_dtype,
+            device=self.target_device,
+            materialize=False,
+            name=self.name,
+            batch_dims=output_batch_dims,
+        )
+
+        res.set_maxpr(self.maxpr)
+        res.add_arguments(arg)
+        res.vjp_rule = self.vjp_rule
+        res.jvp_rule = self.jvp_rule
+        res.custom_kernel_path = self.custom_kernel_path()
+
+        if not res.stage_realization:
+            self.eagerxpr([arg], res)
+
+        return res
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        output.tensor_value = ops.transfer_to(
+            args[0], DeviceRef.from_device(self.target_device)
+        )
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        output.impl = args[0].impl
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        return [transfer_to(cotangent, self.arg_device)]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        return transfer_to(tangents[0], self.target_device)
+
+
+def transfer_to(arg: Array, device: Device) -> Array:
+    """Transfer an array to a different device."""
+    if not isinstance(device, Device):
+        raise TypeError(f"Device must be an instance of Device, got {type(device)}")
+    # if arg.device.id == device.id:
+    #     return arg
+    return TransferToOp(arg.device, device).forward(arg)
 
 
 # Add global instances

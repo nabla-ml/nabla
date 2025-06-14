@@ -81,3 +81,15 @@ def device_ref(device: Device) -> DeviceRef:
         A DeviceRef instance for the specified device.
     """
     return DeviceRef.from_device(device)
+
+
+def accelerator_count() -> int:
+    """
+    Get the number of available accelerators (GPUs).
+
+    Returns:
+        The number of available accelerators.
+    """
+    from max.driver import accelerator_count
+
+    return accelerator_count()

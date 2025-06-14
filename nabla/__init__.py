@@ -45,7 +45,7 @@ from .transforms import (
     vmap,
     xpr,
 )
-from .utils.max_interop import accelerator, cpu, device, device_ref
+from .utils.max_interop import accelerator, accelerator_count, cpu, device, device_ref
 from .utils.testing import allclose
 
 
@@ -137,6 +137,7 @@ __all__ = [
     "accelerator",
     "device_ref",
     "allclose",
+    "accelerator_count",
     # Types
     "DType",
 ] + list(_ops_registry.keys())  # Add all operation names

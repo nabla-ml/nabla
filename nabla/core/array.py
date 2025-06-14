@@ -172,10 +172,13 @@ class Array:
 
     def to(self, device: Device) -> Array:
         """Move Array to specified device."""
-        # if self.impl is None:
-        #     self.realize()
-        new_impl = self.impl.to(device)
-        return Array.from_impl(new_impl, name=self.name)
+        if self.impl:
+            new_impl = self.impl.to(device)
+            return Array.from_impl(new_impl, name=self.name)
+        else:
+            from ..ops.unary import transfer_to
+
+            return transfer_to(self, device)
 
     # Operator overloading methods
     def __add__(self, other) -> Array:
