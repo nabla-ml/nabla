@@ -1298,6 +1298,7 @@ class ConcatenateOp(Operation):
 
         # Move arrays to best device
         from .operation import move_to_best_device
+
         args = move_to_best_device(*args)
 
         # Validate inputs have compatible properties

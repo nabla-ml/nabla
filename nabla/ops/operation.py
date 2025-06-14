@@ -127,6 +127,7 @@ class UnaryOperation(Operation):
             )
         return input_batch_dims[0]
 
+
 def move_to_best_device(*args: Array) -> tuple[Array, ...]:
     """Move all arrays to the best available device."""
     if len(args) <= 1:
@@ -277,20 +278,20 @@ def move_to_best_device(*args: Array) -> tuple[Array, ...]:
 
     # Task: create a small dictionary to track the devices, and how much data lives on each device by checking np.prod(array.shape). then go through all available devices in the dict and find the one where the most data lives, then move all other arrays to that device. this ensures that we move as little data as possible. however, there is one rule. if any array lives on an accelerator, we always move away from the cpu to the accelerator, even if it has less data. this is because the accelerator is always faster than the cpu, so we want to use it if possible.
     import numpy as np
-    
+
     # Track devices and data amounts
     device_data = {}
     accelerator_devices = set()
-    
+
     for arg in args:
         device = arg.device
         data_size = np.prod(arg.shape)
         device_data[device] = device_data.get(device, 0) + data_size
-        
+
         # Check if this device is an accelerator (non-host device)
         if not device.is_host:
             accelerator_devices.add(device)
-    
+
     # Determine best device according to the rules:
     # 1. If any accelerator has data, choose the best accelerator considering peer access
     # 2. Otherwise, choose the device (CPU) with most data
@@ -302,16 +303,20 @@ def move_to_best_device(*args: Array) -> tuple[Array, ...]:
             for candidate_device in accelerator_devices:
                 # Base score is the data already on this device
                 base_score = device_data[candidate_device]
-                
+
                 # Add bonus for data that can be directly accessed from other accelerators
                 peer_accessible_data = 0
                 for other_device in accelerator_devices:
-                    if other_device != candidate_device and candidate_device.can_access(other_device):
+                    if other_device != candidate_device and candidate_device.can_access(
+                        other_device
+                    ):
                         peer_accessible_data += device_data[other_device]
-                
+
                 # Weight peer-accessible data less than local data (avoid unnecessary moves)
-                accelerator_scores[candidate_device] = base_score + (peer_accessible_data * 0.1)
-            
+                accelerator_scores[candidate_device] = base_score + (
+                    peer_accessible_data * 0.1
+                )
+
             best_device = max(accelerator_scores, key=accelerator_scores.get)
         else:
             # Single accelerator case - simple selection
@@ -319,7 +324,7 @@ def move_to_best_device(*args: Array) -> tuple[Array, ...]:
     else:
         # Find device with most data (will be CPU in this case)
         best_device = max(device_data, key=device_data.get)
-    
+
     # Move all arrays to the best device
     result_args = []
     for arg in args:
@@ -327,8 +332,9 @@ def move_to_best_device(*args: Array) -> tuple[Array, ...]:
             result_args.append(arg.to(best_device))
         else:
             result_args.append(arg)
-    
+
     return tuple(result_args)
+
 
 class BinaryOperation(Operation):
     """Base class for binary operations."""
@@ -337,7 +343,7 @@ class BinaryOperation(Operation):
         """Forward pass for binary operations."""
         if len(args) != 2:
             raise ValueError(f"Binary operation requires 2 arguments, got {len(args)}")
-        
+
         # Move arrays to best device
         args = move_to_best_device(*args)
         arg1, arg2 = args[0], args[1]
