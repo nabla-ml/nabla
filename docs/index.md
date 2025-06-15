@@ -60,11 +60,11 @@ ruff check nabla/ --fix
 ```text
 nabla/
 ├── nabla/                     # Core Python library
-│   ├── core/                  # Function transformations and core array class
+│   ├── core/                  # Core array class and MAX compiler integration
 │   ├── nn/                    # Neural network modules and models
 │   ├── ops/                   # Mathematical operations (binary, unary, linalg, etc.)
 │   ├── transforms/            # Function transformations (vmap, grad, jit, etc.)
-│   └── utils/                 # Utilities (broadcasting, formatting, types)
+│   └── utils/                 # Utilities (formatting, types, MAX-interop, etc.)
 ├── tests/                     # Comprehensive test suite
 ├── tutorials/                 # Notebooks on Nabla usage for ML tasks
 ├── examples/                  # Example scripts for common use cases
