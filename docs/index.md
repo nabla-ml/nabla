@@ -60,7 +60,7 @@ ruff check nabla/ --fix
 ```text
 nabla/
 ├── nabla/                     # Core Python library
-│   ├── core/                  # Core array class and MAX compiler integration
+│   ├── core/                  # Array class and MAX compiler integration
 │   ├── nn/                    # Neural network modules and models
 │   ├── ops/                   # Mathematical operations (binary, unary, linalg, etc.)
 │   ├── transforms/            # Function transformations (vmap, grad, jit, etc.)
@@ -68,7 +68,7 @@ nabla/
 ├── tests/                     # Comprehensive test suite
 ├── tutorials/                 # Notebooks on Nabla usage for ML tasks
 ├── examples/                  # Example scripts for common use cases
-└── experimental/              # An alternative pure Mojo API (WIP!)
+└── experimental/              # Core (pure) Mojo library (WIP!)
 ```
 
 ## Contributing
