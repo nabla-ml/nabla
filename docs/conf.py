@@ -115,10 +115,6 @@ nbsphinx_prolog = """
         <a href="https://colab.research.google.com/github/nabla-ml/nabla/blob/main/tutorials/{{ env.docname.split('/')[-1] }}.ipynb" class="colab-button" target="_blank">Open in Google Colab</a>
         <a href="{{ env.docname }}.ipynb" class="notebook-download" download>Download Notebook</a>
     </div>
-
-.. note::
-   This tutorial is available as an interactive Jupyter notebook.
-   You can run it in Google Colab (no setup required) or download it to run locally.
 """
 
 # Epilog to add download link
