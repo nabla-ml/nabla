@@ -211,6 +211,12 @@ class Array:
 
         return div(self, other)
 
+    def __floordiv__(self, other) -> Array:
+        """Floor division operator (//)."""
+        from ..ops.binary import floordiv
+
+        return floordiv(self, other)
+
     def __matmul__(self, other) -> Array:
         """Matrix multiplication operator (@)."""
         from ..ops.linalg import matmul
@@ -424,6 +430,23 @@ class Array:
         from ..ops.view import reshape
 
         return reshape(arg=self, shape=shape)
+
+    def permute(self, axes: tuple[int, ...]) -> Array:
+        """Permute the dimensions of the array.
+
+        Args:
+            axes: List of integers specifying the new order of dimensions
+
+        Returns:
+            Array with dimensions permuted according to the specified axes
+
+        Examples::
+
+            arr.permute([1, 0]) # If arr.shape is (2, 3), this will return an array with shape (3, 2)
+        """
+        from ..ops.view import permute
+
+        return permute(self, axes)
 
     # Comparison operators
     def __eq__(self, other) -> bool:

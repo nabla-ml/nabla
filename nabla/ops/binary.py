@@ -30,6 +30,7 @@ __all__ = [
     "mul",
     "sub",
     "div",
+    "floordiv",
     "pow",
     "greater_equal",
     "equal",
@@ -484,6 +485,22 @@ def div(arg0, arg1) -> Array:
     arg0 = _ensure_array(arg0)
     arg1 = _ensure_array(arg1)
     return _div_op.forward(arg0, arg1)
+
+
+def floordiv(arg0, arg1) -> Array:
+    """Element-wise floor division of two arrays or array and scalar.
+
+    Floor division is implemented as floor(a / b) which rounds towards
+    negative infinity, matching Python's // operator behavior.
+    """
+    from ..ops.unary import floor
+
+    arg0 = _ensure_array(arg0)
+    arg1 = _ensure_array(arg1)
+
+    # Perform regular division then floor
+    result = div(arg0, arg1)
+    return floor(result)
 
 
 # noqa: A001 - Intentionally shadowing built-in 'pow' for API consistency

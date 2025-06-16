@@ -43,6 +43,7 @@ __all__ = [
     "array_slice",
     "pad",
     "concatenate",
+    "stack",
 ]
 
 
@@ -1931,3 +1932,24 @@ def unsqueeze_batch_dims(arg: Array, axes: list[int] = None) -> Array:
 
     op = UnsqueezeBatchDimsOp(axes)
     return op.forward(arg)
+
+
+# let's creata stack function which first creates a lsit of arrays wiht a new axis (via unsqueeze) and then concatenates them along that axis
+def stack(arrays: list[Array], axis: int = 0) -> Array:
+    """Stack arrays along a new axis.
+
+    Args:
+        arrays: List of arrays to stack
+        axis: Axis along which to stack the arrays (default: 0)
+
+    Returns:
+        Stacked array
+    """
+    if not arrays:
+        raise ValueError("Stack operation requires at least one array")
+
+    # Unsqueeze each array to add a new dimension at the specified axis
+    unsqueezed_arrays = [unsqueeze(array, [axis]) for array in arrays]
+
+    # Use concatenate to stack them along the new axis
+    return concatenate(unsqueezed_arrays, axis=axis)

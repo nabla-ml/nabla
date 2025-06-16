@@ -33,6 +33,7 @@ __all__ = [
     "tanh",
     "sigmoid",
     "abs",
+    "floor",
     "logical_not",
     "incr_batch_dim_ctr",
     "decr_batch_dim_ctr",
@@ -306,6 +307,46 @@ class AbsOp(UnaryOperation):
 def abs(arg: Array) -> Array:
     """Element-wise absolute value."""
     return _abs_op.forward(arg)
+
+
+class FloorOp(UnaryOperation):
+    """Element-wise floor operation."""
+
+    def __init__(self):
+        super().__init__("floor")
+
+    def maxpr(self, args: list[Value], output: Array) -> None:
+        output.tensor_value = ops.floor(args[0])
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        np_result = np.floor(args[0].to_numpy())
+        # Ensure result is an array, not a scalar
+        if np.isscalar(np_result):
+            np_result = np.array(np_result)
+        output.impl = Tensor.from_numpy(np_result)
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        from .creation import zeros
+
+        # Floor function has zero derivative everywhere since it's piecewise constant
+        # between integers and non-differentiable at integer points
+        zero_grad = zeros(primals[0].shape, dtype=primals[0].dtype)
+        return [zero_grad]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        from .creation import zeros
+
+        # Floor function has zero derivative everywhere
+        return zeros(output.shape, dtype=output.dtype)
+
+
+def floor(arg: Array) -> Array:
+    """Element-wise floor function."""
+    return _floor_op.forward(arg)
 
 
 class LogicalNotOp(UnaryOperation):
@@ -707,6 +748,7 @@ _sin_op = SinOp()
 _cos_op = CosOp()
 _tanh_op = TanhOp()
 _abs_op = AbsOp()
+_floor_op = FloorOp()
 _logical_not_op = LogicalNotOp()
 _sigmoid_op = SigmoidOp()
 _log_op = LogOp()

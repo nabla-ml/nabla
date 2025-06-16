@@ -47,6 +47,8 @@ __all__ = [
     "he_normal",
     "lecun_uniform",
     "lecun_normal",
+    "glorot_uniform",
+    "triu",
 ]
 
 # Constants
@@ -496,3 +498,47 @@ def lecun_normal(
     fan_in = shape[-2]
     std = np.sqrt(1.0 / fan_in)
     return randn(shape, dtype, 0.0, std, device, seed, batch_dims)
+
+
+def glorot_uniform(
+    shape: Shape,
+    dtype: DType = _DEFAULT_DTYPE,
+    gain: float = 1.0,
+    device: Device = _DEFAULT_CPU,
+    seed: int = _DEFAULT_SEED,
+    batch_dims: Shape = (),
+) -> Array:
+    """Glorot/Xavier uniform initialization for sigmoid/tanh activations.
+
+    Samples from uniform distribution U(-a, a) where a = sqrt(6 / (fan_in + fan_out))
+    """
+    _validate_shape(shape)
+    if len(shape) < 2:
+        raise ValueError(
+            f"Glorot initialization requires at least 2D shape, got {shape}"
+        )
+
+    fan_in, fan_out = shape[-2], shape[-1]
+    bound = gain * np.sqrt(6.0 / (fan_in + fan_out))
+    return rand(shape, dtype, -bound, bound, device, seed, batch_dims)
+
+
+# I want to be able to write out sth like: nabla.triu(nb.ones((1, 1, target_seq_len, target_seq_len)), k=1)
+# q: please implement a function that does this (triu) and returns an array with the upper triangular part of the input array
+
+
+def triu(x, k=0):
+    """
+    Return the upper triangular part of an array.
+
+    Args:
+        x: Input array (batch, seq_len, seq_len)
+        k: Diagonal offset (0 = main diagonal, > 0 = above, < 0 = below)
+
+    Returns:
+        Upper triangular part of the input array
+    """
+    from .special import where
+
+    mask = arange((x.shape[-1],)) < arange((x.shape[-1],))[:, None] + k
+    return where(mask, x, array(0, dtype=x.dtype, device=x.device))
