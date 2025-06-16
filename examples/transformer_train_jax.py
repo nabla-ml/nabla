@@ -64,8 +64,8 @@ D_FF = 128  # Feed-forward network hidden dimension
 # Training Configuration
 BATCH_SIZE = 64  # Number of sequences per training batch
 LEARNING_RATE = 0.0005  # AdamW learning rate (reduced for stability)
-NUM_EPOCHS = 500  # Total training epochs (good balance for demonstration)
-PRINT_INTERVAL = 100  # Print progress every N epochs
+NUM_EPOCHS = 300  # Total training epochs (good balance for demonstration)
+PRINT_INTERVAL = 10  # Print progress every N epochs
 
 # ============================================================================
 # TRANSFORMER BUILDING BLOCKS
@@ -606,7 +606,7 @@ def init_adamw_state(params: dict[str, Any]) -> tuple[dict[str, Any], dict[str, 
 
 
 # CHANGED: This is a clean, explicit AdamW implementation using JAX pytrees.
-@jit
+# @jit
 def adamw_step(params, gradients, m_states, v_states, step, learning_rate):
     """
     AdamW optimizer step with bias correction and gradient clipping.
@@ -653,7 +653,7 @@ def adamw_step(params, gradients, m_states, v_states, step, learning_rate):
     return updated_params, updated_m, updated_v
 
 
-@jit
+# @jit
 def complete_training_step(
     encoder_in, decoder_in, targets, params, m_states, v_states, step
 ):
