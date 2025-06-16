@@ -12,7 +12,7 @@ from jax import jit, value_and_grad
 BATCH_SIZE = 128
 LAYERS = [1, 64, 128, 256, 128, 64, 1]
 LEARNING_RATE = 0.001  # Match Nabla version for fair comparison
-NUM_EPOCHS = 1000
+NUM_EPOCHS = 2000
 PRINT_INTERVAL = 100
 SIN_PERIODS = 8
 
@@ -47,12 +47,13 @@ def mlp_forward_and_loss(inputs: list[jnp.ndarray]) -> jnp.ndarray:
 
 
 def create_sin_dataset(
-    batch_size: int = 256, key: jax.random.PRNGKey = None
-) -> tuple[jnp.ndarray, jnp.ndarray]:
+    batch_size: int = 256, key: jax.Array | None = None
+) -> tuple[jax.Array, jax.Array]:
     """Create the COMPLEX 8-period sin dataset."""
     if key is None:
         # Use numpy for compatibility with original
         np_x = np.random.uniform(0.0, 1.0, (batch_size, 1)).astype(np.float32)
+        np_x = jnp.array(np_x)  # Convert to JAX array
     else:
         # Use JAX random for reproducibility
         np_x = jax.random.uniform(key, (batch_size, 1), minval=0.0, maxval=1.0)
