@@ -19,7 +19,7 @@ from __future__ import annotations
 import numpy as np
 from max.driver import Tensor
 from max.dtype import DType
-from max.graph import Value, ops
+from max.graph import TensorValue, ops
 
 from ..core.array import Array
 from .operation import BinaryOperation
@@ -58,7 +58,7 @@ class AddOp(BinaryOperation):
     def __init__(self):
         super().__init__("add")
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = ops.add(args[0], args[1])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
@@ -85,7 +85,7 @@ class MulOp(BinaryOperation):
     def __init__(self):
         super().__init__("mul")
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = ops.mul(args[0], args[1])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
@@ -112,8 +112,8 @@ class SubOp(BinaryOperation):
     def __init__(self):
         super().__init__("sub")
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
-        output.tensor_value = args[0] - args[1]
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+        output.tensor_value = ops.sub(args[0], args[1])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         np_result = np.subtract(args[0].to_numpy(), args[1].to_numpy())
@@ -141,7 +141,7 @@ class DivOp(BinaryOperation):
     def __init__(self):
         super().__init__("div")
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = ops.div(args[0], args[1])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
@@ -179,8 +179,8 @@ class PowerOp(BinaryOperation):
     def __init__(self):
         super().__init__("pow")
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
-        output.tensor_value = args[0] ** args[1]
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+        output.tensor_value = ops.pow(args[0], args[1])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         np_result = np.pow(args[0].to_numpy(), args[1].to_numpy())
@@ -223,7 +223,7 @@ class GreaterEqualOp(BinaryOperation):
         """Comparison operations return bool dtype."""
         return DType.bool
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = ops.greater_equal(args[0], args[1])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
@@ -250,7 +250,7 @@ class MaximumOp(BinaryOperation):
     def __init__(self):
         super().__init__("maximum")
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = ops.max(args[0], args[1])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
@@ -310,7 +310,7 @@ class MinimumOp(BinaryOperation):
     def __init__(self):
         super().__init__("minimum")
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = ops.min(args[0], args[1])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
@@ -374,7 +374,7 @@ class EqualOp(BinaryOperation):
         """Equal returns boolean dtype."""
         return DType.bool
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = ops.equal(args[0], args[1])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
@@ -415,7 +415,7 @@ class NotEqualOp(BinaryOperation):
         """Not equal returns boolean dtype."""
         return DType.bool
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = ops.not_equal(args[0], args[1])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:

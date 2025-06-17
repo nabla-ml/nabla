@@ -92,9 +92,9 @@ def jacrev(
         vjp_result = vjp(partial_func, *diff_args, has_aux=has_aux)
 
         if has_aux:
-            y, pullback, aux = vjp_result
+            y, pullback, aux = vjp_result  # type: ignore
         else:
-            y, pullback = vjp_result
+            y, pullback = vjp_result  # type: ignore
 
         # Flatten output arrays for std_basis generation
         flat_y = _extract_arrays_from_pytree(y)
@@ -102,7 +102,7 @@ def jacrev(
             flat_y = [flat_y]
 
         # Generate standard basis vectors and get sizes for split operations
-        sizes, std_basis_vectors = _std_basis(flat_y)
+        sizes, std_basis_vectors = _std_basis(flat_y)  # type: ignore
 
         std_basis_flat = _extract_arrays_from_pytree(std_basis_vectors)
         if not isinstance(std_basis_flat, list):
@@ -159,7 +159,7 @@ def jacrev(
                 input_grads = grads[i] if isinstance(grads, tuple) else grads
 
             # Split this input's gradients by output components (now traced!)
-            splits.append(split(input_grads, sizes=sizes, axis=0))
+            splits.append(split(input_grads, sizes=sizes, axis=0))  # type: ignore
 
         # Reshape jacobian components to proper out_shape + arg_shape format (now traced!)
         cotangents = []

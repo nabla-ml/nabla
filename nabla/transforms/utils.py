@@ -278,7 +278,13 @@ def _prepare_traced_inputs(
             make_staged_pytree(traced_args)
         return traced_args, None
 
-    if len(actual_args) == 1:
+    # Handle the case where actual_args might not have __len__
+    if hasattr(actual_args, "__len__"):
+        args_len = len(actual_args)  # type: ignore
+    else:
+        args_len = 1
+
+    if args_len == 1:
         inputs_pytree = actual_args[0]
         traced_inputs_pytree = make_traced_pytree(inputs_pytree)
         traced_args = (traced_inputs_pytree,)
@@ -772,8 +778,14 @@ def xpr(fn: Callable[..., Any], *primals) -> str:
     if not isinstance(input_arrays, list):
         input_arrays = [input_arrays] if input_arrays is not None else []
 
+    # Ensure we have proper Array lists (not Never)
+    if not input_arrays:
+        input_arrays = []
+    if not output_arrays:
+        output_arrays = []
+
     # Create trace with the computation graph
-    trace = Trace(input_arrays, output_arrays)
+    trace = Trace(input_arrays, output_arrays)  # type: ignore
 
     # Make everything untraced before returning
     # make_untraced_pytree(traced_inputs_pytree)

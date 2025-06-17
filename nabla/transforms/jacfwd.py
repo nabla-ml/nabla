@@ -91,7 +91,7 @@ def jacfwd(
         # print(f"Flat diff args shapes: {[arg.shape for arg in flat_diff_args]}")
 
         # Create standard basis vectors for inputs (this is the key difference from jacrev)
-        sizes, std_basis_vectors = _std_basis(flat_diff_args)
+        sizes, std_basis_vectors = _std_basis(flat_diff_args)  # type: ignore
 
         # print(f"Standard basis sizes: {sizes}")
         # print(f"Standard basis vectors shape: {std_basis_vectors[0].shape if std_basis_vectors else 'None'}")        # Create the JVP function that we'll vmap over
@@ -119,7 +119,8 @@ def jacfwd(
                 primals_tuple = tuple(primals)
 
             # Compute JVP: jvp(partial_func, primals, tangents)
-            primal_out, tangent_out = jvp(partial_func, primals_tuple, tangents_tuple)
+            jvp_result = jvp(partial_func, primals_tuple, tangents_tuple)
+            primal_out, tangent_out = jvp_result  # type: ignore
 
             return tangent_out  # Return tangent output directly
 
@@ -171,7 +172,7 @@ def jacfwd(
 
             from ..ops.view import permute
 
-            jacobian_component = permute(jacobian_component, perm_axes)
+            jacobian_component = permute(jacobian_component, tuple(perm_axes))
             jacobian_components.append(jacobian_component)
 
         # Return as tuple for multiple inputs

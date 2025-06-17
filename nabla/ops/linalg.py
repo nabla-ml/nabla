@@ -18,7 +18,7 @@
 
 import numpy as np
 from max.driver import Tensor
-from max.graph import Value, ops
+from max.graph import TensorValue, ops, TensorValue
 
 from ..core.array import Array
 from ..utils.shape_utils import get_broadcasted_shape
@@ -28,7 +28,6 @@ from .operation import BinaryOperation
 __all__ = ["matmul", "conv2d", "conv2d_transpose"]
 
 # Global operation instances
-_matmul_op = None
 _conv2d_op_cache = {}
 _conv2d_transpose_op_cache = {}
 
@@ -103,10 +102,12 @@ class MatMulOp(BinaryOperation):
         arg2_has_rank_1 = len(arg2.shape) == 1
         # if len(arg1.shape) == 1:
         if arg1_has_rank_1:
-            arg1 = ops.reshape(arg1, (1, arg1.shape[0]))
+            from .view import reshape
+
+            arg1 = reshape(arg1, (1, arg1.shape[0]))
         # if len(arg2.shape) == 1:
         if arg2_has_rank_1:
-            arg2 = ops.reshape(arg2, (arg2.shape[0], 1))
+            arg2 = reshape(arg2, (arg2.shape[0], 1))
 
         output_shape = self.compute_output_shape(arg1.shape, arg2.shape)
         output_batch_dims = self.compute_output_batch_dims(
@@ -175,7 +176,7 @@ class MatMulOp(BinaryOperation):
                 f"Shapes {arg1.shape} and {arg2.shape} are not compatible for matrix multiplication"
             )
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         x_val, y_val = args[0], args[1]
         x_shape = x_val.shape
         y_shape = y_val.shape
@@ -190,8 +191,18 @@ class MatMulOp(BinaryOperation):
                     f"(batch dimensions mismatch: {x_shape[:-2]} vs {y_shape[:-2]})"
                 )
             # now we can simpply reshape the args to a rank3 tensor respecitvely and then do a batche dmamtul on this one
-            new_shape_x = np.prod(x_shape[:-2]), x_shape[-2], x_shape[-1]
-            new_shape_y = np.prod(y_shape[:-2]), y_shape[-2], y_shape[-1]
+            batch_dims_x = [int(dim) for dim in x_shape[:-2]]
+            batch_dims_y = [int(dim) for dim in y_shape[:-2]]
+            new_shape_x = (
+                np.prod(batch_dims_x).item(),
+                int(x_shape[-2]),
+                int(x_shape[-1]),
+            )
+            new_shape_y = (
+                np.prod(batch_dims_y).item(),
+                int(y_shape[-2]),
+                int(y_shape[-1]),
+            )
             x_val_b = ops.reshape(x_val, new_shape_x)
             y_val_b = ops.reshape(y_val, new_shape_y)
             matmul_result = ops.matmul(x_val_b, y_val_b)
@@ -342,11 +353,7 @@ def col2im(
             )
 
             if target_shape_h == out_h and target_shape_w == out_w:
-                np.add.at(
-                    img,
-                    (slice(None), slice(None), img_slice_h, img_slice_w),
-                    col[:, :, j, i, :, :],
-                )
+                img[:, :, img_slice_h, img_slice_w] += col[:, :, j, i, :, :]
             else:  # Fallback for potential off-by-one, though slice arithmetic should be precise
                 # This case indicates an error in slice calculation or understanding
                 # For safety, one might iterate and add, but it's better to fix slicing.
@@ -673,19 +680,22 @@ class Conv2DOp(BinaryOperation):
                 f"Devices {input_arr.device} and {filter_arr.device} are incompatible"
             )
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         input_val, filter_val = args[0], args[1]
-        jax_padding = list(self.padding)
+        jax_padding = tuple(self.padding)
 
-        output.tensor_value = ops.conv_general_dilated(
-            input_val,  # lhs (NHWC)
-            filter_val,  # rhs (HWIO)
-            window_strides=self.stride,
+        output.tensor_value = ops.conv2d(
+            x=input_val,  # lhs (NHWC)
+            filter=filter_val,  # rhs (HWIO)
+            stride=self.stride,
+            # lhs_dilation=(1, 1),
+            # rhs_dilation=self.dilation,
+            dilation=self.dilation,
+            # dimension_numbers=("NHWC", "HWIO", "NHWC"),
+            # feature_group_count=self.groups,
             padding=jax_padding,
-            lhs_dilation=(1, 1),
-            rhs_dilation=self.dilation,
-            dimension_numbers=("NHWC", "HWIO", "NHWC"),
-            feature_group_count=self.groups,
+            groups=self.groups,
+            bias=None,  # No bias for now
         )
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
@@ -940,7 +950,7 @@ class Conv2DTransposeOp(BinaryOperation):
                 f"Devices {input_arr.device} and {filter_arr.device} are incompatible"
             )
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         input_val, filter_val = args[0], args[1]  # input (NHWC), filter (HWOI)
 
         # JAX conv_transpose takes padding as P_internal for its direct conv.
@@ -968,53 +978,42 @@ class Conv2DTransposeOp(BinaryOperation):
         # If a max.ops.conv_transpose exists that expects NHWC and HWOI, it's simpler.
         # Let's assume such an op exists or conv_general_dilated(transpose_kernel=True) is used.
 
-        if hasattr(
-            ops, "conv_transpose_nabla"
-        ):  # Hypothetical op matching Nabla semantics
-            output.tensor_value = ops.conv_transpose_nabla(
-                input_val,
-                filter_val,
-                strides=self.stride,
-                padding_fwd_equiv=self.padding,  # P_fwd_equiv
-                output_padding=self.output_padding,
-                rhs_dilation=self.dilation,  # Kernel Dilation
-                feature_group_count=self.groups,
-                dimension_numbers=("NHWC", "HWOI", "NHWC"),  # Nabla convention
-            )
-        else:  # Fallback: use JAX lax.conv_transpose, requires careful parameter mapping
-            # This path needs input NHWC->NCHW, filter HWOI->IOHW, output NCHW->NHWC
-            # and P_fwd_equiv -> P_internal or use output_shape.
-            # For simplicity, assume output.shape is the definite target.
-            # JAX padding arg needs to be compatible with output_shape. 'VALID' often used.
-            input_nchw = ops.transpose(input_val, (0, 3, 1, 2))
-            filter_iohw = ops.transpose(
-                filter_val, (3, 2, 0, 1)
-            )  # HWOI (KH,KW,Cout,Cin/G) -> IOHW (Cin/G,Cout,KH,KW)
+        # Use MAX's conv2d_transpose operation
+        # According to MAX docs: conv2d_transpose(x, filter, stride, dilation, padding, output_paddings, bias)
+        # x: NHWC input tensor
+        # filter: RSCF layout (kernel_height, kernel_width, out_channels, in_channels)
+        # Our filter is HWOI, so we need to convert HWOI -> RSCF
 
-            output_shape_nchw = (
-                output.shape[0],
-                output.shape[3],
-                output.shape[1],
-                output.shape[2],
-            )
+        input_val, filter_val = args[0], args[1]
 
-            # JAX lax.conv_transpose `padding` argument is for the internal direct convolution.
-            # When `output_shape` is specified, `padding` helps resolve alignment.
-            # 'VALID' means no padding for the internal direct convolution.
-            # JAX determines actual padding needed to achieve output_shape.
-            padding_for_jax_internal_conv = "VALID"
+        # Convert filter from HWOI to RSCF format
+        # HWOI: (height, width, out_channels, in_channels)
+        # RSCF: (kernel_height, kernel_width, out_channels, in_channels)
+        # These are actually the same layout, so no conversion needed
 
-            res_nchw = ops.conv_transpose(  # This is jax.lax.conv_transpose
-                input_nchw,
-                filter_iohw,
-                strides=self.stride,
-                padding=padding_for_jax_internal_conv,
-                rhs_dilation=self.dilation,  # Kernel Dilation
-                dimension_numbers=("NCHW", "IOHW", "NCHW"),  # JAX specific
-                feature_group_count=self.groups,
-                output_shape=output_shape_nchw,  # Target output shape
-            )
-            output.tensor_value = ops.transpose(res_nchw, (0, 2, 3, 1))
+        # Convert padding from our format to MAX format
+        # Our padding: (pad_h, pad_w) or (pad_top, pad_bottom, pad_left, pad_right)
+        if len(self.padding) == 2:
+            # Convert (pad_h, pad_w) to (pad_top, pad_bottom, pad_left, pad_right)
+            pad_h, pad_w = self.padding
+            max_padding = (pad_h, pad_h, pad_w, pad_w)
+        else:
+            max_padding = self.padding
+
+        # Convert output_padding from (pad_h, pad_w) to (pad_h, pad_w)
+        output_paddings = (
+            self.output_padding if len(self.output_padding) == 2 else (0, 0)
+        )
+
+        output.tensor_value = ops.conv2d_transpose(
+            input_val,
+            filter_val,
+            stride=self.stride,
+            dilation=self.dilation,
+            padding=max_padding,
+            output_paddings=output_paddings,
+            bias=None,  # No bias support for now
+        )
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         input_np = args[0].to_numpy()  # NHWC
@@ -1364,11 +1363,11 @@ def _conv2d_transpose_filter_gradient(
 def conv2d_transpose(
     input_arr: Array,
     filter_arr: Array,
-    stride=(1, 1),
-    dilation=(1, 1),
-    padding=0,
-    output_padding=0,
-    groups=1,
+    stride: int | tuple[int, int] = (1, 1),
+    dilation: int | tuple[int, int] = (1, 1),
+    padding: int | tuple[int, int] | tuple[tuple[int, int], tuple[int, int]] = 0,
+    output_padding: int | tuple[int, int] = 0,
+    groups: int = 1,
 ) -> Array:
     norm_stride = _normalize_tuple(stride, 2, "stride")
     norm_dilation = _normalize_tuple(dilation, 2, "dilation")

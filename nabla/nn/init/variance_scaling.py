@@ -37,7 +37,11 @@ def he_normal(shape: tuple[int, ...], seed: int | None = None) -> nb.Array:
     if seed is not None:
         np.random.seed(seed)
 
-    fan_in = shape[0] if len(shape) >= 2 else shape[0]
+    # Handle edge case of empty shape
+    if len(shape) == 0:
+        fan_in = 1
+    else:
+        fan_in = shape[0] if len(shape) >= 2 else shape[0]
     std = (2.0 / fan_in) ** 0.5
 
     weights = np.random.normal(0.0, std, shape).astype(np.float32)
@@ -60,7 +64,11 @@ def he_uniform(shape: tuple[int, ...], seed: int | None = None) -> nb.Array:
     if seed is not None:
         np.random.seed(seed)
 
-    fan_in = shape[0] if len(shape) >= 2 else shape[0]
+    # Handle edge case of empty shape
+    if len(shape) == 0:
+        fan_in = 1
+    else:
+        fan_in = shape[0] if len(shape) >= 2 else shape[0]
     bound = (6.0 / fan_in) ** 0.5
 
     weights = np.random.uniform(-bound, bound, shape).astype(np.float32)
@@ -83,7 +91,10 @@ def xavier_normal(shape: tuple[int, ...], seed: int | None = None) -> nb.Array:
     if seed is not None:
         np.random.seed(seed)
 
-    if len(shape) >= 2:
+    # Handle different shape configurations
+    if len(shape) == 0:
+        fan_in = fan_out = 1
+    elif len(shape) >= 2:
         fan_in, fan_out = shape[0], shape[1]
     else:
         fan_in = fan_out = shape[0]
@@ -110,7 +121,10 @@ def xavier_uniform(shape: tuple[int, ...], seed: int | None = None) -> nb.Array:
     if seed is not None:
         np.random.seed(seed)
 
-    if len(shape) >= 2:
+    # Handle different shape configurations
+    if len(shape) == 0:
+        fan_in = fan_out = 1
+    elif len(shape) >= 2:
         fan_in, fan_out = shape[0], shape[1]
     else:
         fan_in = fan_out = shape[0]
@@ -137,7 +151,11 @@ def lecun_normal(shape: tuple[int, ...], seed: int | None = None) -> nb.Array:
     if seed is not None:
         np.random.seed(seed)
 
-    fan_in = shape[0] if len(shape) >= 2 else shape[0]
+    # Handle edge case of empty shape
+    if len(shape) == 0:
+        fan_in = 1
+    else:
+        fan_in = shape[0] if len(shape) >= 2 else shape[0]
     std = (1.0 / fan_in) ** 0.5
 
     weights = np.random.normal(0.0, std, shape).astype(np.float32)

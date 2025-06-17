@@ -15,7 +15,7 @@
 # ===----------------------------------------------------------------------=== #
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Union
 
 from ..core.array import Array
 from .utils import _handle_args_consistently
@@ -200,7 +200,14 @@ def _broadcast_axis_spec(axis_spec: Any, num_items: int) -> tuple[Any, ...]:
         raise ValueError(f"Invalid axis specification: {axis_spec}")
 
 
-def vmap(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
+from typing import Any, Union
+
+
+def vmap(
+    func=None,
+    in_axes: Union[int, None, list, tuple] = 0,
+    out_axes: Union[int, None, list, tuple] = 0,
+) -> Callable[..., Any]:
     """Enhanced vmap with clean pytree support.
 
     This is a simplified, clean implementation that supports all JAX vmap features:

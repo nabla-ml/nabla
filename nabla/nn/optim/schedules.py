@@ -17,9 +17,10 @@
 """Learning rate schedules."""
 
 import math
+from collections.abc import Callable
 
 
-def constant_schedule(initial_lr: float = 0.001) -> callable:
+def constant_schedule(initial_lr: float = 0.001) -> Callable[[int], float]:
     """Constant learning rate schedule.
 
     Args:
@@ -39,7 +40,7 @@ def exponential_decay_schedule(
     initial_lr: float = 0.001,
     decay_factor: float = 0.95,
     decay_every: int = 1000,
-) -> callable:
+) -> Callable[[int], float]:
     """Exponential decay learning rate schedule.
 
     Args:
@@ -61,7 +62,7 @@ def step_decay_schedule(
     initial_lr: float = 0.001,
     decay_factor: float = 0.1,
     step_size: int = 30,
-) -> callable:
+) -> Callable[[int], float]:
     """Step decay learning rate schedule.
 
     Args:
@@ -83,7 +84,7 @@ def cosine_annealing_schedule(
     initial_lr: float = 0.001,
     min_lr: float = 1e-6,
     period: int = 1000,
-) -> callable:
+) -> Callable[[int], float]:
     """Cosine annealing learning rate schedule.
 
     Args:
@@ -108,7 +109,7 @@ def warmup_cosine_schedule(
     warmup_epochs: int = 100,
     total_epochs: int = 1000,
     min_lr: float = 1e-6,
-) -> callable:
+) -> Callable[[int], float]:
     """Warmup followed by cosine annealing schedule.
 
     Args:

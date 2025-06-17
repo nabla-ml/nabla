@@ -19,7 +19,7 @@
 import numpy as np
 from max.driver import Device, Tensor
 from max.dtype import DType
-from max.graph import DeviceRef, Value, ops
+from max.graph import DeviceRef, TensorValue, ops
 
 from ..core.array import Array
 from .operation import UnaryOperation
@@ -51,7 +51,7 @@ class NegateOp(UnaryOperation):
     def __init__(self):
         super().__init__("neg")
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = ops.negate(args[0])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
@@ -101,7 +101,7 @@ class CastOp(UnaryOperation):
             raise ValueError(f"Cast operation requires 1 argument, got {len(args)}")
         return super().forward(*args)
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = ops.cast(args[0], output.dtype)
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
@@ -137,7 +137,7 @@ class SinOp(UnaryOperation):
     def __init__(self):
         super().__init__("sin")
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = ops.sin(args[0])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
@@ -176,7 +176,7 @@ class CosOp(UnaryOperation):
     def __init__(self):
         super().__init__("cos")
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = ops.cos(args[0])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
@@ -212,7 +212,7 @@ class TanhOp(UnaryOperation):
     def __init__(self):
         super().__init__("tanh")
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = ops.tanh(args[0])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
@@ -258,7 +258,7 @@ class AbsOp(UnaryOperation):
     def __init__(self):
         super().__init__("abs")
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = ops.abs(args[0])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
@@ -315,7 +315,7 @@ class FloorOp(UnaryOperation):
     def __init__(self):
         super().__init__("floor")
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = ops.floor(args[0])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
@@ -359,7 +359,7 @@ class LogicalNotOp(UnaryOperation):
         """Logical NOT always returns boolean dtype."""
         return DType.bool
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         # Use MAX's logical not operation
         output.tensor_value = ops.logical_not(args[0])
 
@@ -400,7 +400,7 @@ class SigmoidOp(UnaryOperation):
     def __init__(self):
         super().__init__("sigmoid")
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         # Sigmoid = 1 / (1 + exp(-x))
         # Use MAX's built-in sigmoid if available, otherwise construct from primitives
         output.tensor_value = ops.sigmoid(args[0])
@@ -471,7 +471,7 @@ class IncrBatchDimCtr(UnaryOperation):
             )
         return self.arg_batch_dims + (self.arg_shape[0],)
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = args[0]
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
@@ -516,7 +516,7 @@ class DecrBatchDimCtr(UnaryOperation):
             )
         return self.arg_batch_dims[:-1]
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = args[0]
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
@@ -544,7 +544,7 @@ class ReLUOp(UnaryOperation):
     def __init__(self):
         super().__init__("relu")
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = ops.relu(args[0])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
@@ -591,7 +591,7 @@ class LogOp(UnaryOperation):
     def __init__(self):
         super().__init__("log")
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = ops.log(args[0])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
@@ -630,7 +630,7 @@ class ExpOp(UnaryOperation):
     def __init__(self):
         super().__init__("exp")
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = ops.exp(args[0])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
@@ -714,7 +714,7 @@ class TransferToOp(UnaryOperation):
 
         return res
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = ops.transfer_to(
             args[0], DeviceRef.from_device(self.target_device)
         )

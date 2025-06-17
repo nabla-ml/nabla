@@ -78,7 +78,9 @@ def compute_accuracy(
     pred_labels = predictions > threshold
     target_labels = targets > threshold
     correct = pred_labels == target_labels
-    accuracy = nb.mean(correct.astype(nb.DType.float32))
+    # Convert boolean to float for mean calculation
+    correct_float = nb.where(correct, 1.0, 0.0)
+    accuracy = nb.mean(correct_float)
     return accuracy.to_numpy().item()
 
 

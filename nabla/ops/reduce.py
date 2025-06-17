@@ -21,7 +21,7 @@ from __future__ import annotations
 import numpy as np
 from max.driver import Tensor
 from max.dtype import DType
-from max.graph import Value, ops
+from max.graph import TensorValue, ops
 
 from ..core.array import Array, Shape
 from .operation import ReductionOperation
@@ -29,6 +29,20 @@ from .view import squeeze, squeeze_batch_dims
 
 # Public API
 __all__ = ["sum", "sum_batch_dims", "mean", "max", "argmax"]
+
+
+def _normalize_axes(
+    axes: int | list[int] | tuple[int, ...] | None, ndim: int
+) -> list[int]:
+    """Normalize axes parameter to a list of integers."""
+    if axes is None:
+        return list(range(ndim))
+    elif isinstance(axes, int):
+        return [axes]
+    elif isinstance(axes, (list, tuple)):
+        return list(axes)
+    else:
+        raise TypeError(f"axes must be int, list, tuple, or None, got {type(axes)}")
 
 
 class SumOp(ReductionOperation):
@@ -45,10 +59,13 @@ class SumOp(ReductionOperation):
         self.axes = axes
         self.keep_dims = keep_dims
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output_symbol = args[0]
 
-        for axis in self.axes:
+        # Normalize axes to handle None, int, or collections
+        normalized_axes = _normalize_axes(self.axes, len(args[0].shape))
+
+        for axis in normalized_axes:
             output_symbol = ops.sum(output_symbol, axis=axis)
 
         output.tensor_value = output_symbol
@@ -176,7 +193,7 @@ class SumBatchDimsOp(ReductionOperation):
         axes: int | list[int] | tuple[int, ...] | None = None,
         keep_dims: bool = False,
     ):
-        super().__init__(f"sum_batch_dims[axes={axes}]", axes, keep_dims=True)
+        super().__init__(f"sum_batch_dims[axes={axes}]")
         self.arg_batch_dims = arg_batch_dims
         self.axes = axes
         self.keep_dims = keep_dims
@@ -187,9 +204,10 @@ class SumBatchDimsOp(ReductionOperation):
     def compute_output_batch_dims(self, *input_batch_dims):
         return self._compute_reduction_shape(input_batch_dims[0], self.axes)
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         # first we must subtract len(output.shape) from each axis value
-        axes = [ax - len(output.shape) for ax in self.axes]
+        normalized_axes = _normalize_axes(self.axes, len(args[0].shape))
+        axes = [ax - len(output.shape) for ax in normalized_axes]
         output_symbol = args[0]
         for axis in axes:
             output_symbol = ops.sum(output_symbol, axis=axis)
@@ -197,7 +215,8 @@ class SumBatchDimsOp(ReductionOperation):
         output.tensor_value = output_symbol
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        axes = [ax - len(output.shape) for ax in self.axes]
+        normalized_axes = _normalize_axes(self.axes, len(args[0].shape))
+        axes = [ax - len(output.shape) for ax in normalized_axes]
         np_result = np.sum(
             args[0].to_numpy(), axis=tuple(axes) if axes else None, keepdims=True
         )
@@ -274,10 +293,13 @@ class MaxOp(ReductionOperation):
         self.axes = axes
         self.keep_dims = keep_dims
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output_symbol = args[0]
 
-        for axis in self.axes:
+        # Normalize axes to handle None, int, or collections
+        normalized_axes = _normalize_axes(self.axes, len(args[0].shape))
+
+        for axis in normalized_axes:
             output_symbol = ops.max(output_symbol, axis=axis)
 
         output.tensor_value = output_symbol
@@ -355,12 +377,13 @@ class ArgMaxOp(ReductionOperation):
         """ArgMax always returns integer indices."""
         return DType.int64
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output_symbol = args[0]
 
         # Apply argmax for each axis sequentially
         # Note: ops.argmax reduces along one axis and keeps the dimension (size 1)
-        for axis in self.axes:
+        normalized_axes = _normalize_axes(self.axes, len(args[0].shape))
+        for axis in normalized_axes:
             output_symbol = ops.argmax(output_symbol, axis=axis)
 
         output.tensor_value = output_symbol
@@ -368,12 +391,15 @@ class ArgMaxOp(ReductionOperation):
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         primal = args[0].to_numpy()
 
+        # Normalize axes first
+        normalized_axes = _normalize_axes(self.axes, primal.ndim)
+
         # Handle different cases for argmax
-        if len(self.axes) == 1:
+        if len(normalized_axes) == 1:
             # Single axis case
-            axis = self.axes[0] if self.axes else None
+            axis = normalized_axes[0]
             np_result = np.argmax(primal, axis=axis, keepdims=True)
-        elif len(self.axes) == len(primal.shape):
+        elif len(normalized_axes) == len(primal.shape):
             # All axes case - flatten and argmax
             flat_array = primal.flatten()
             np_result = np.argmax(flat_array)
@@ -381,7 +407,7 @@ class ArgMaxOp(ReductionOperation):
         else:
             # Multiple specific axes - apply sequentially
             np_result = primal
-            for axis in self.axes:
+            for axis in normalized_axes:
                 np_result = np.argmax(np_result, axis=axis, keepdims=True)
 
         if np_result.ndim == 0:

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from max.engine import InferenceSession, Model
+from max.engine.api import Model, InferenceSession
 from max.graph import DeviceRef, Graph, TensorType
 
 from .array import Array
@@ -234,8 +234,14 @@ class ModelFactory:
             raise ValueError(f"Node {node.name} has no tensor value after execution")
 
         try:
-            tensor_shape = tuple(int(dim) for dim in node.tensor_value.shape)
-            tensor_dtype = node.tensor_value.dtype
+            # Handle different tensor value types with proper type checking
+            tensor_value = node.tensor_value
+            if hasattr(tensor_value, "shape") and hasattr(tensor_value, "dtype"):
+                tensor_shape = tuple(int(dim) for dim in tensor_value.shape)  # type: ignore
+                tensor_dtype = tensor_value.dtype  # type: ignore
+            else:
+                # For Value types that don't have shape/dtype, skip validation
+                return
 
             if node.batch_dims + node.shape != tensor_shape:
                 raise ValueError(
@@ -299,13 +305,15 @@ def realize_(
 
     try:
         tensor_inputs = [input_node.impl for input_node in inputs]
-        if any(tensor is None for tensor in tensor_inputs):
+        # Filter out None values and ensure we have valid tensors
+        valid_tensors = [tensor for tensor in tensor_inputs if tensor is not None]
+        if len(valid_tensors) != len(tensor_inputs):
             raise ValueError("Some inputs have no implementation")
 
-        model_outputs = model.execute(*tensor_inputs)
+        model_outputs = model.execute(*valid_tensors)
 
         for i, output in enumerate(output_list):
-            output.impl = model_outputs[i]
+            output.impl = model_outputs[i]  # type: ignore
             output._numpy_cache = None
 
     except Exception as e:

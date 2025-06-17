@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Optional
 
 from max.dtype import DType
-from max.graph import Value
+from max.graph import TensorValue
 
 from ..core.array import Array
 
@@ -46,7 +46,7 @@ class Operation(ABC):
         pass
 
     @abstractmethod
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         """MAX graph computation."""
         pass
 
@@ -119,13 +119,11 @@ class UnaryOperation(Operation):
         """Default: output dtype same as input dtype."""
         return arg.dtype
 
-    def compute_output_batch_dims(self, *input_batch_dims: int) -> int:
+    def compute_output_batch_dims(
+        self, input_batch_dims: tuple[int, ...]
+    ) -> tuple[int, ...]:
         """Default: output batch dims same as input batch dims."""
-        if len(input_batch_dims) != 1:
-            raise ValueError(
-                f"Unary operation requires 1 input batch dims, got {len(input_batch_dims)}"
-            )
-        return input_batch_dims[0]
+        return input_batch_dims
 
 
 def move_to_best_device(*args: Array) -> tuple[Array, ...]:
@@ -317,13 +315,13 @@ def move_to_best_device(*args: Array) -> tuple[Array, ...]:
                     peer_accessible_data * 0.1
                 )
 
-            best_device = max(accelerator_scores, key=accelerator_scores.get)
+            best_device = max(accelerator_scores, key=lambda d: accelerator_scores[d])
         else:
             # Single accelerator case - simple selection
             best_device = max(accelerator_devices, key=lambda d: device_data[d])
     else:
         # Find device with most data (will be CPU in this case)
-        best_device = max(device_data, key=device_data.get)
+        best_device = max(device_data, key=lambda d: device_data[d])
 
     # Move all arrays to the best device
     result_args = []

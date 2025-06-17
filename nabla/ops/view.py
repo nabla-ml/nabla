@@ -18,7 +18,7 @@
 
 import numpy as np
 from max.driver import Tensor
-from max.graph import Value, ops
+from max.graph import TensorValue, ops
 
 from ..core.array import Array, Shape
 from .operation import Operation, ViewOperation
@@ -78,7 +78,7 @@ class TransposeOp(ViewOperation):
         new_shape[axis_1], new_shape[axis_2] = new_shape[axis_2], new_shape[axis_1]
         return tuple(new_shape)
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = ops.transpose(args[0], self.axis_1, self.axis_2)
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
@@ -174,7 +174,7 @@ class TransposeBatchDimsOp(ViewOperation):
             )
         return super().forward(*args)
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         """MAX graph implementation using ops.transpose."""
         axis_1 = self.axis_1 - len(output.shape)
         axis_2 = self.axis_2 - len(output.shape)
@@ -348,7 +348,7 @@ class PermuteOp(ViewOperation):
         # Reorder dimensions according to axes (convert negative to positive for indexing)
         return tuple(input_shape[axis + len(input_shape)] for axis in self.axes)
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         """Max computation: permute the tensor using iterative transpose."""
         # Get the sequence of swaps needed for this permutation
         swaps = compute_iterative_transpose_swaps(self.axes)
@@ -425,7 +425,7 @@ def permute(input_array: Array, axes: tuple[int, ...]) -> Array:
     for i in range(-len(input_array.shape), -len(axes)):
         axes_new.append(i)
 
-    axes = axes_new + list(axes)  # prepend missing axes to the front
+    axes = tuple(axes_new + list(axes))  # prepend missing axes to the front
 
     op = PermuteOp(axes)
     return op.forward(input_array)
@@ -492,7 +492,7 @@ class PermuteBatchDimsOp(ViewOperation):
             )
         return super().forward(*args)
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         """MAX graph implementation using ops.transpose."""
         # Get the sequence of swaps needed for this permutation
         swaps = compute_iterative_transpose_swaps(self.axes)
@@ -762,7 +762,7 @@ class ReshapeOp(ViewOperation):
 
         return super().forward(arg)
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = ops.reshape(
             args[0], output.batch_dims + self.target_shape
         )
@@ -816,9 +816,11 @@ def reshape(arg: Array, shape: Shape) -> Array:
                 )
 
             inferred_dim = total_size // known_size
-            target_shape = tuple(inferred_dim if dim == -1 else dim for dim in shape)
+            target_shape = tuple(
+                int(inferred_dim if dim == -1 else dim) for dim in shape
+            )
     else:
-        target_shape = shape
+        target_shape = tuple(int(dim) for dim in shape)
 
     op = ReshapeOp(arg.shape, target_shape)
     return op.forward(arg)
@@ -871,7 +873,7 @@ class BroadcastToOp(ViewOperation):
 
         return broadcasted_axes
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = ops.broadcast_to(
             args[0], output.batch_dims + self.target_shape
         )
@@ -965,7 +967,7 @@ class BroadcastBatchDimsOp(ViewOperation):
 
         return broadcasted_axes
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = ops.broadcast_to(
             args[0], self.target_batch_dims + output.shape
         )
@@ -1007,7 +1009,7 @@ def broadcast_batch_dims(arg: Array, batch_dims: Shape) -> Array:
 class SqueezeOp(ViewOperation):
     """Squeeze operation to remove dimensions of size 1."""
 
-    def __init__(self, axes: list[int] = None):
+    def __init__(self, axes: list[int] | None = None):
         super().__init__(f"squeeze[axes={axes}]")
         self.axes = sorted(axes) if axes is not None else []
 
@@ -1039,10 +1041,10 @@ class SqueezeOp(ViewOperation):
             raise ValueError(f"Squeeze operation requires 1 argument, got {len(args)}")
         return super().forward(*args)
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
-        axis = tuple(self.axes) if self.axes else None
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         res = args[0]
-        for ax in axis:
+        # Use self.axes directly since it's already normalized to a list in __init__
+        for ax in self.axes:
             res = ops.squeeze(res, ax)
         output.tensor_value = res
 
@@ -1062,7 +1064,7 @@ class SqueezeOp(ViewOperation):
         return squeeze(tangents[0], self.axes)
 
 
-def squeeze(arg: Array, axes: list[int] = None) -> Array:
+def squeeze(arg: Array, axes: list[int] | None = None) -> Array:
     """Squeeze array by removing dimensions of size 1."""
     if axes is None:
         return arg
@@ -1077,7 +1079,7 @@ def squeeze(arg: Array, axes: list[int] = None) -> Array:
 class UnsqueezeOp(ViewOperation):
     """Unsqueeze operation to add dimensions of size 1."""
 
-    def __init__(self, axes: list[int] = None):
+    def __init__(self, axes: list[int] | None = None):
         super().__init__(f"unsqueeze[axes={axes}]")
         self.axes = sorted(axes) if axes is not None else []
 
@@ -1108,7 +1110,7 @@ class UnsqueezeOp(ViewOperation):
             )
         return super().forward(*args)
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         res_value = args[0]
         for ax in self.axes:
             res_value = ops.unsqueeze(res_value, ax)
@@ -1129,7 +1131,7 @@ class UnsqueezeOp(ViewOperation):
         return unsqueeze(tangents[0], self.axes)
 
 
-def unsqueeze(arg: Array, axes: list[int] = None) -> Array:
+def unsqueeze(arg: Array, axes: list[int] | None = None) -> Array:
     """Unsqueeze array by adding dimensions of size 1."""
     if axes is None:
         return arg
@@ -1158,7 +1160,7 @@ class ShallowCopyOp(ViewOperation):
             )
         return input_shapes[0]
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         output.tensor_value = args[0]
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
@@ -1228,7 +1230,7 @@ class ConcatenateOp(Operation):
         output_shape[axis] = total_size_along_axis
         return tuple(output_shape)
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         """MAX graph implementation using ops.concat."""
         # Normalize axis for MAX operations, considering batch_dims
         # full_output_shape = output.batch_dims + output.shape  # TODO: Use if needed
@@ -1370,7 +1372,7 @@ def concatenate(args: list[Array], axis: int = 0) -> Array:
 class ArraySliceOp(ViewOperation):
     """Array slicing operation."""
 
-    def __init__(self, slices: list[slice], squeeze_axes: list[int] = None):
+    def __init__(self, slices: list[slice], squeeze_axes: list[int] | None = None):
         # Convert slices to a more manageable format
         slice_strs = []
         for s in slices:
@@ -1430,7 +1432,7 @@ class ArraySliceOp(ViewOperation):
 
         return tuple(output_shape)
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         """MAX graph implementation using ops.slice_tensor."""
         # Build slice indices for MAX ops.slice_tensor
         # Need to account for batch_dims - slicing only applies to shape dimensions
@@ -1518,7 +1520,7 @@ class ArraySliceOp(ViewOperation):
 
 
 def array_slice(
-    arg: Array, slices: list[slice], squeeze_axes: list[int] = None
+    arg: Array, slices: list[slice], squeeze_axes: list[int] | None = None
 ) -> Array:
     """Slice an array along specified dimensions.
 
@@ -1648,7 +1650,7 @@ class PadOp(Operation):
 
         return self.target_shape
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         """MAX graph implementation using scatter operation."""
         raise NotImplementedError(
             "MAX graph implementation for pad is not yet implemented."
@@ -1753,7 +1755,7 @@ def pad(arg: Array, slices: list[slice], target_shape: Shape) -> Array:
 class SqueezeBatchDimsOp(ViewOperation):
     """Squeeze operation to remove batch dimensions of size 1."""
 
-    def __init__(self, axes: list[int] = None):
+    def __init__(self, axes: list[int] | None = None):
         super().__init__(f"squeeze_batch_dims[axes={axes}]")
         self.axes = sorted(axes) if axes is not None else []
 
@@ -1797,7 +1799,7 @@ class SqueezeBatchDimsOp(ViewOperation):
             )
         return super().forward(*args)
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         """MAX graph implementation using ops.squeeze."""
         axes = [ax - len(output.shape) for ax in self.axes]
         res = args[0]
@@ -1824,7 +1826,7 @@ class SqueezeBatchDimsOp(ViewOperation):
         return squeeze_batch_dims(tangents[0], self.axes)
 
 
-def squeeze_batch_dims(arg: Array, axes: list[int] = None) -> Array:
+def squeeze_batch_dims(arg: Array, axes: list[int] | None = None) -> Array:
     """Squeeze array by removing batch dimensions of size 1.
 
     Args:
@@ -1845,7 +1847,7 @@ def squeeze_batch_dims(arg: Array, axes: list[int] = None) -> Array:
 class UnsqueezeBatchDimsOp(ViewOperation):
     """Unsqueeze operation to add batch dimensions of size 1."""
 
-    def __init__(self, axes: list[int] = None):
+    def __init__(self, axes: list[int] | None = None):
         super().__init__(f"unsqueeze_batch_dims[axes={axes}]")
         self.axes = sorted(axes) if axes is not None else []
 
@@ -1886,18 +1888,26 @@ class UnsqueezeBatchDimsOp(ViewOperation):
             )
         return super().forward(*args)
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         """MAX graph implementation using ops.unsqueeze."""
-        axes = [ax - len(output.shape) for ax in self.axes] if self.axes else None
         res = args[0]
+        # Use self.axes directly since it's already normalized to a list in __init__
+        # Adjust axes for batch dimensions
+        axes = [ax - len(output.shape) for ax in self.axes] if self.axes else []
         for ax in axes:
             res = ops.unsqueeze(res, ax)
         output.tensor_value = res
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         """Eager execution using NumPy expand_dims."""
-        axes = [ax - len(args[0].shape) for ax in self.axes] if self.axes else None
-        np_result = np.expand_dims(args[0].to_numpy(), axis=axes)
+        if self.axes:
+            # Apply expand_dims for each axis sequentially
+            np_result = args[0].to_numpy()
+            axes = [ax - len(args[0].shape) for ax in self.axes]
+            for ax in axes:
+                np_result = np.expand_dims(np_result, axis=ax)
+        else:
+            np_result = args[0].to_numpy()
         output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
@@ -1913,7 +1923,7 @@ class UnsqueezeBatchDimsOp(ViewOperation):
         return unsqueeze_batch_dims(tangents[0], self.axes)
 
 
-def unsqueeze_batch_dims(arg: Array, axes: list[int] = None) -> Array:
+def unsqueeze_batch_dims(arg: Array, axes: list[int] | None = None) -> Array:
     """Unsqueeze array by adding batch dimensions of size 1.
 
     Args:

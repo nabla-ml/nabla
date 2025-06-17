@@ -20,15 +20,15 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 from max.driver import CPU, Device, Tensor
 from max.dtype import DType
-from max.graph import Value
+from max.graph import TensorValue, Value, TensorValueLike
 
 Shape = tuple[int, ...]
-MaxprCallable = Callable[[list[Value], "Array"], None]
+MaxprCallable = Callable[[list[TensorValue], "Array"], None]
 VJPRule = Callable[[list["Array"], "Array", "Array"], list["Array"]]
 JVPRule = Callable[[list["Array"], list["Array"], "Array"], "Array"]
 
@@ -37,6 +37,27 @@ _DEFAULT_CPU = CPU()
 
 class Array:
     """Core tensor-like array class with automatic differentiation support."""
+
+    # Class-level type annotations for better Pylance support
+    shape: Shape
+    batch_dims: Shape
+    dtype: DType
+    device: Device
+    name: str
+    args: list[Array]
+    visited: bool
+    tensor_value: Optional[Union[Value, TensorValue, TensorValueLike]]
+    maxpr: Optional[MaxprCallable]
+    vjp_rule: Optional[VJPRule]
+    jvp_rule: Optional[JVPRule]
+    traced: bool
+    _numpy_cache: Optional[np.ndarray]
+    tangent: Optional[Array]
+    cotangent: Optional[Array]
+    stage_realization: bool
+    kernel_impl_path: Optional[Path]
+    custom_kernel_path: Optional[Path]
+    impl: Optional[Tensor]
 
     def __init__(
         self,
@@ -54,7 +75,7 @@ class Array:
         self.name = name
         self.args: list[Array] = []
         self.visited: bool = False
-        self.tensor_value: Optional[Value] = None
+        self.tensor_value: Optional[Union[Value, TensorValue, TensorValueLike]] = None
         self.maxpr: Optional[MaxprCallable] = None
         self.vjp_rule: Optional[VJPRule] = None
         self.jvp_rule: Optional[JVPRule] = None
@@ -64,6 +85,7 @@ class Array:
         self.cotangent: Optional[Array] = None
         self.stage_realization: bool = False
         self.kernel_impl_path: Optional[Path] = None
+        self.custom_kernel_path: Optional[Path] = None
 
         # Debug print for newly created arrays
         # print(f"[DEBUG] Created array: name='{name}', shape={shape}, dtype={dtype}")
@@ -102,7 +124,10 @@ class Array:
         """Copy data from another Array."""
         if self.shape != other.shape or self.dtype != other.dtype:
             raise ValueError("Shape or dtype mismatch for copy")
-        self.impl = other.impl.copy()
+        if other.impl is not None:
+            self.impl = other.impl.copy()
+        else:
+            self.impl = None
 
     def add_arguments(self, *arg_nodes: Array) -> None:
         """Add an arguments to this Array's computation graph if traced."""
@@ -148,7 +173,7 @@ class Array:
             shape=np_array.shape,
             dtype=DType.from_numpy(np_array.dtype),
             device=_DEFAULT_CPU,
-            name=np_array.name if hasattr(np_array, "name") else "",
+            name=getattr(np_array, "name", ""),
         )
         array.impl = Tensor.from_numpy(np_array)
         array.device = array.impl.device
@@ -168,7 +193,15 @@ class Array:
         # self.realize()
         from ..utils.formatting import format_shape_and_dtype
 
-        return str(self.impl.to(CPU()).to_numpy()) + ":" + format_shape_and_dtype(self)
+        if self.impl is not None:
+            return (
+                str(self.impl.to(CPU()).to_numpy()) + ":" + format_shape_and_dtype(self)
+            )
+        else:
+            return (
+                f"Array(shape={self.shape}, dtype={self.dtype}, unrealized):"
+                + format_shape_and_dtype(self)
+            )
 
     def to(self, device: Device) -> Array:
         """Move Array to specified device."""

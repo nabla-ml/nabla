@@ -20,13 +20,16 @@ from typing import TYPE_CHECKING, Union
 
 import numpy as np
 
+# Import Array directly for runtime isinstance checks
+from ..core.array import Array
+
 if TYPE_CHECKING:
-    from ..core import Array
+    pass  # Array already imported above
 
 
 def allclose(
-    a: Union["Array", np.ndarray, float, int],
-    b: Union["Array", np.ndarray, float, int],
+    a: Union[Array, np.ndarray, float, int],
+    b: Union[Array, np.ndarray, float, int],
     rtol: float = 1e-05,
     atol: float = 1e-08,
     equal_nan: bool = False,
@@ -58,9 +61,9 @@ def allclose(
         True
     """
     # Convert Nabla Arrays to numpy arrays
-    if hasattr(a, "to_numpy"):
+    if isinstance(a, Array):
         a = a.to_numpy()
-    if hasattr(b, "to_numpy"):
+    if isinstance(b, Array):
         b = b.to_numpy()
 
     # Use numpy's allclose for the actual comparison

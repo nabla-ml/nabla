@@ -20,7 +20,7 @@ import threading
 from collections.abc import Callable
 from typing import Optional
 
-from max.engine import Model
+from max.engine.api import Model
 
 
 class ThreadSafeExecutionContext:

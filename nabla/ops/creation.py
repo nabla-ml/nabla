@@ -21,7 +21,7 @@ from __future__ import annotations
 import numpy as np
 from max.driver import CPU, Device, Tensor
 from max.dtype import DType
-from max.graph import DeviceRef, TensorType, Value, ops
+from max.graph import DeviceRef, TensorType, TensorValue, ops
 
 from ..core.array import Array, Shape
 from .operation import Operation
@@ -171,7 +171,7 @@ class RandNOp(RandomOp):
         if std <= 0:
             raise ValueError(f"Std must be positive, got {std}")
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         ops.random.set_seed(self.seed)
         output.tensor_value = ops.random.normal(
             TensorType(
@@ -212,7 +212,7 @@ class RandUniformOp(RandomOp):
                 f"Upper bound must be greater than lower bound, got {lower} and {upper}"
             )
 
-    def maxpr(self, args: list[Value], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
         ops.random.set_seed(self.seed)
         output.tensor_value = ops.random.uniform(
             TensorType(

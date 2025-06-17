@@ -26,7 +26,7 @@ from .vjp import vjp
 
 
 def value_and_grad(
-    fun: Callable = None,
+    fun: Callable | None = None,
     argnums: int | Sequence[int] = 0,
     has_aux: bool = False,
     holomorphic: bool = False,
@@ -86,9 +86,11 @@ def value_and_grad(
         """
         # Compute VJP to get both output and pullback function
         if has_aux:
-            output, vjp_fn, aux = vjp(fun, *args, has_aux=True)
+            vjp_result = vjp(fun, *args, has_aux=True)
+            output, vjp_fn, aux = vjp_result  # type: ignore
         else:
-            output, vjp_fn = vjp(fun, *args, has_aux=False)
+            vjp_result = vjp(fun, *args, has_aux=False)
+            output, vjp_fn = vjp_result  # type: ignore
 
         # Validate scalar output
         validate_scalar_output(output)
@@ -112,7 +114,7 @@ def value_and_grad(
 
 
 def grad(
-    fun: Callable = None,
+    fun: Callable | None = None,
     argnums: int | Sequence[int] = 0,
     has_aux: bool = False,
     holomorphic: bool = False,

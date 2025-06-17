@@ -15,7 +15,8 @@
 # ===----------------------------------------------------------------------=== #
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, overload
+from typing import Literal
 
 from .utils import (
     _extract_arrays_from_pytree,
@@ -25,9 +26,21 @@ from .utils import (
 )
 
 
+@overload
+def vjp(
+    func: Callable[..., Any], *primals, has_aux: Literal[False] = False
+) -> tuple[Any, Callable]: ...
+
+
+@overload
+def vjp(
+    func: Callable[..., Any], *primals, has_aux: Literal[True]
+) -> tuple[Any, Callable, Any]: ...
+
+
 def vjp(
     func: Callable[..., Any], *primals, has_aux: bool = False
-) -> tuple[Any, Callable]:
+) -> tuple[Any, Callable] | tuple[Any, Callable, Any]:
     """Compute vector-Jacobian product (reverse-mode autodiff).
 
     Args:

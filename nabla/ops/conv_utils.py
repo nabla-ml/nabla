@@ -17,9 +17,17 @@
 """Numpy-based convolution utilities for eager execution."""
 
 import numpy as np
+from typing import Union
 
 
-def im2col(input_data, filter_h, filter_w, stride=1, dilation=1, pad=0):
+def im2col(
+    input_data: np.ndarray,
+    filter_h: int,
+    filter_w: int,
+    stride: Union[int, tuple[int, int]] = 1,
+    dilation: Union[int, tuple[int, int]] = 1,
+    pad: Union[int, tuple[int, int]] = 0,
+) -> np.ndarray:
     """
     Convert input data to column matrix for convolution.
 
@@ -83,7 +91,15 @@ def im2col(input_data, filter_h, filter_w, stride=1, dilation=1, pad=0):
     return col
 
 
-def col2im(col, input_shape, filter_h, filter_w, stride=1, dilation=1, pad=0):
+def col2im(
+    col: np.ndarray,
+    input_shape: tuple[int, int, int, int],
+    filter_h: int,
+    filter_w: int,
+    stride: Union[int, tuple[int, int]] = 1,
+    dilation: Union[int, tuple[int, int]] = 1,
+    pad: Union[int, tuple[int, int]] = 0,
+) -> np.ndarray:
     """
     Convert column matrix back to input data shape.
 

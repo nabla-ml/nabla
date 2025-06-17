@@ -157,22 +157,36 @@ def spectral_normalization(
     # Initialize u if not provided
     if u is None:
         u_np = np.random.normal(0, 1, (out_features,)).astype(np.float32)
-        u = nb.Array.from_numpy(u_np)
+        u_init = nb.Array.from_numpy(u_np)
+    else:
+        u_init = u
 
     # Power iteration to find largest singular value
     for _ in range(n_iterations):
         # v = W^T @ u / ||W^T @ u||
-        v = nb.matmul(weight_2d.T, u.reshape((-1, 1))).reshape((-1,))
+        weight_t = nb.transpose(weight_2d)
+        u_reshaped = nb.reshape(u_init, (-1, 1))
+        v_temp = nb.matmul(weight_t, u_reshaped)
+        v = nb.reshape(v_temp, (-1,))
         v = v / (nb.sqrt(nb.sum(v * v)) + 1e-8)
 
         # u = W @ v / ||W @ v||
-        u = nb.matmul(weight_2d, v.reshape((-1, 1))).reshape((-1,))
-        u = u / (nb.sqrt(nb.sum(u * u)) + 1e-8)
+        v_reshaped = nb.reshape(v, (-1, 1))
+        u_temp = nb.matmul(weight_2d, v_reshaped)
+        u_init = nb.reshape(u_temp, (-1,))
+        u_init = u_init / (nb.sqrt(nb.sum(u_init * u_init)) + 1e-8)
 
     # Compute spectral norm: sigma = u^T @ W @ v
-    v = nb.matmul(weight_2d.T, u.reshape((-1, 1))).reshape((-1,))
+    weight_t = nb.transpose(weight_2d)
+    u_reshaped = nb.reshape(u_init, (-1, 1))
+    v_temp = nb.matmul(weight_t, u_reshaped)
+    v = nb.reshape(v_temp, (-1,))
     v = v / (nb.sqrt(nb.sum(v * v)) + 1e-8)
-    sigma = nb.sum(u * nb.matmul(weight_2d, v.reshape((-1, 1))).reshape((-1,)))
+
+    v_reshaped = nb.reshape(v, (-1, 1))
+    sigma_temp = nb.matmul(weight_2d, v_reshaped)
+    sigma_vec = nb.reshape(sigma_temp, (-1,))
+    sigma = nb.sum(u_init * sigma_vec)
 
     # Normalize weight by spectral norm
     normalized_weight_2d = weight_2d / (sigma + 1e-8)
@@ -183,7 +197,7 @@ def spectral_normalization(
     else:
         normalized_weight = normalized_weight_2d
 
-    return normalized_weight, u
+    return normalized_weight, u_init
 
 
 def gradient_clipping(
