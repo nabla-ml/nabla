@@ -15,7 +15,7 @@
 # ===----------------------------------------------------------------------=== #
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal, overload
 
 from .utils import (
     _extract_arrays_from_pytree,
@@ -23,6 +23,18 @@ from .utils import (
     make_untraced_pytree,
     pushfwd,
 )
+
+
+@overload
+def jvp(
+    func: Callable[..., Any], primals, tangents, has_aux: Literal[False] = False
+) -> tuple[Any, Any]: ...
+
+
+@overload  
+def jvp(
+    func: Callable[..., Any], primals, tangents, has_aux: Literal[True]
+) -> tuple[Any, Any, Any]: ...
 
 
 def jvp(

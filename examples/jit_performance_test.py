@@ -13,7 +13,7 @@ def simple_func(inputs):
 
 
 # Create JIT version without debug
-jitted_func = nb.jit(simple_func, debug=False)
+jitted_func = nb.jit(simple_func)
 
 # Test data
 x = nb.array([1.0, 2.0, 3.0])

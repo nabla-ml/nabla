@@ -168,7 +168,9 @@ def train_step(
 
     # Define loss function that takes separate arguments (JAX style)
     def loss_fn(*inner_params):
-        predictions = mlp_forward(x, inner_params)
+        # Convert unpacked params back to list for mlp_forward
+        param_list = list(inner_params)
+        predictions = mlp_forward(x, param_list)
         loss = mean_squared_error(predictions, targets)
         return loss
 
