@@ -14,7 +14,7 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-"""Test JIT compilation"""
+"""Test Dynamic JIT compilation"""
 
 import nabla as nb
 
@@ -46,5 +46,5 @@ def test_jit_with_if_else():
 
 
 if __name__ == "__main__":
-    print("Testing JIT Compilation")
+    print("Testing Dynamic JIT Compilation")
     test_jit_with_if_else()

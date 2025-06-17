@@ -1,19 +1,20 @@
 """
-🤖 EDUCATIONAL TRANSFORMER IMPLEMENTATION WITH JAX
+🤖 EDUCATIONAL TRANSFORMER IMPLEMENTATION WITH NABLA
 
 This script demonstrates a complete transformer (encoder-decoder) implementation
-from scratch using only raw JAX primitives. The goal is educational clarity
+from scratch using only raw Nabla primitives. The goal is educational clarity
 while maintaining proper performance optimizations.
 
 LEARNING OBJECTIVES:
 - Understand transformer architecture components (attention, feed-forward, layer norm)
-- See how encoder-decoder models wo    # Create one-hot by comparing target indices with vocabulary indices
+- See how encoder-decoder models work with one-hot encoding
+    # Create one-hot by comparing target indices with vocabulary indices
     one_hot_targets = nb.equal(targets_expanded, vocab_indices).astype(nb.DType.float32) for sequence-to-sequence tasks
-- Learn JAX best practices (JIT compilation, functional programming, pytrees)
+- Learn Nabla best practices (JIT compilation, functional programming, pytrees)
 - Experience end-to-end training of a neural sequence model
 
 TASK:     print("=" * 60)
-    print("🤖 TRAINING TRANSFORMER FROM SCRATCH WITH JAX")
+    print("🤖 TRAINING TRANSFORMER FROM SCRATCH WITH Nabla")
     print("=" * 60)
     print(f"📋 Task: Reverse sequences of {SOURCE_SEQ_LEN} integers")
     print(f"🏗️  Architecture: {NUM_LAYERS} layers, {D_MODEL} d_model, {NUM_HEADS} attention heads")
@@ -24,7 +25,7 @@ TASK:     print("=" * 60)
 - Output: [e, d, c, b, a, <END>]
 
 KEY FEATURES:
-✅ Pure JAX implementation (no high-level libraries)
+✅ Pure Nabla implementation (no high-level libraries)
 ✅ Full transformer with multi-head attention
 ✅ Proper masking and positional encoding
 ✅ JIT-compiled training steps for performance
@@ -456,7 +457,7 @@ def init_transformer_params() -> dict[str, Any]:
     Initialize all transformer parameters using Xavier/Glorot initialization.
 
     Args:
-        key: JAX random key for parameter initialization
+        key: Nabla random key for parameter initialization
 
     Returns:
         Dictionary containing all model parameters organized by component
@@ -825,7 +826,7 @@ def train_transformer():
     4. Final evaluation
     """
     print("=" * 60)
-    print("🤖 TRAINING TRANSFORMER FROM SCRATCH WITH JAX")
+    print("🤖 TRAINING TRANSFORMER FROM SCRATCH WITH Nabla")
     print("=" * 60)
     print(f"📋 Task: Reverse sequences of {SOURCE_SEQ_LEN} integers")
     print(
