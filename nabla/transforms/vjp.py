@@ -15,8 +15,7 @@
 # ===----------------------------------------------------------------------=== #
 
 from collections.abc import Callable
-from typing import Any, overload
-from typing import Literal
+from typing import Any, Literal, overload
 
 from .utils import (
     _extract_arrays_from_pytree,

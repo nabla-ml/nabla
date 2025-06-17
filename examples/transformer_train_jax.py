@@ -43,7 +43,7 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
-from jax import jit, random, value_and_grad
+from jax import random, value_and_grad
 
 # ============================================================================
 # CONFIGURATION

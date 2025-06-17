@@ -25,7 +25,7 @@ from typing import Optional, Union
 import numpy as np
 from max.driver import CPU, Device, Tensor
 from max.dtype import DType
-from max.graph import TensorValue, Value, TensorValueLike
+from max.graph import TensorValue, TensorValueLike, Value
 
 Shape = tuple[int, ...]
 MaxprCallable = Callable[[list[TensorValue], "Array"], None]

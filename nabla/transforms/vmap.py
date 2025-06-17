@@ -200,7 +200,7 @@ def _broadcast_axis_spec(axis_spec: Any, num_items: int) -> tuple[Any, ...]:
         raise ValueError(f"Invalid axis specification: {axis_spec}")
 
 
-from typing import Any, Union
+from typing import Any
 
 
 def vmap(

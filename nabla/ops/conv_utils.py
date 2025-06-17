@@ -16,8 +16,9 @@
 
 """Numpy-based convolution utilities for eager execution."""
 
-import numpy as np
 from typing import Union
+
+import numpy as np
 
 
 def im2col(

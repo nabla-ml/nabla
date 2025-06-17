@@ -18,7 +18,7 @@
 
 import numpy as np
 from max.driver import Tensor
-from max.graph import TensorValue, ops, TensorValue
+from max.graph import TensorValue, ops
 
 from ..core.array import Array
 from ..utils.shape_utils import get_broadcasted_shape

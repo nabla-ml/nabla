@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from max.engine.api import Model, InferenceSession
+from max.engine.api import InferenceSession, Model
 from max.graph import DeviceRef, Graph, TensorType
 
 from .array import Array
