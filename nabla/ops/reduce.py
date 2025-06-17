@@ -129,8 +129,6 @@ def sum(
     op = SumOp(arg.shape, axes, keep_dims=keep_dims)
     res = op.forward(arg)
 
-    # print("DEBUG sum:", res.shape, res.batch_dims, op.axes, keep_dims)
-
     if not keep_dims:
         # manually use the squeeze operation to squeeze remaining axes
         for axis in axes:

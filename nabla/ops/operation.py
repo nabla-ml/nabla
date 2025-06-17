@@ -33,7 +33,6 @@ class Operation(ABC):
 
     def __init__(self, name: str):
         self.name = name
-        # print(f"[DEBUG] Created operation: {name}")
 
     @abstractmethod
     def forward(self, *args: Array) -> Array:

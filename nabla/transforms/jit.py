@@ -226,7 +226,6 @@ def jit(
                 # Realize only the Arrays in the outputs
                 flat_output_arrays, output_structure_local = tree_flatten(outputs)
                 output_structure = output_structure_local  # Assign to nonlocal variable
-                print(f"DEBUG: Setting output_structure to {output_structure}")
                 from ..core.graph_execution import realize_
 
                 result = realize_(
@@ -281,7 +280,6 @@ def jit(
             output_arrays = [Array.from_impl(out) for out in model_outputs]  # type: ignore
 
             # Convert model outputs back to the original structure
-            print(f"DEBUG: About to use output_structure: {output_structure}")
             if output_structure is None:
                 # Single output case - return the first (and only) output array
                 outputs = output_arrays[0] if len(output_arrays) == 1 else output_arrays
