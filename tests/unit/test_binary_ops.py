@@ -19,7 +19,7 @@ Comparison Operations:
 Min/Max Operations:
     maximum, minimum
 
-TRANSFORMATION COMBINATIONS TESTED (21 total):
+TRANSFORMATION COMBINATIONS TESTED (19 total):
 ──────────────────────────────────────────────
 
 Level 0 - Baseline:
@@ -45,15 +45,13 @@ Level 3 - Triple Transformations:
 Level 4 - Higher-Order Differentiation:
    13. vjp(vjp(f))                     # Second-order reverse (Hessian-vector)
    14. jvp(vjp(f))                     # Mixed-mode differentiation
-   15. vmap(vjp(f))                    # [Duplicate of #9 for completeness]
-   16. vjp(jvp(f))                     # Mixed-mode differentiation
-   17. jvp(jvp(f))                     # Second-order forward
-   18. vmap(jvp(f))                    # [Duplicate of #10 for completeness]
+   15. vjp(jvp(f))                     # Mixed-mode differentiation
+   16. jvp(jvp(f))                     # Second-order forward
 
 Level 5 - Advanced Compositions:
-   19. vjp(vmap(f))                    # Differentiate vectorized function
-   20. jvp(vmap(f))                    # Forward-mode of vectorized function
-   21. vmap(vmap(f))                   # Double vectorization
+   17. vjp(vmap(f))                    # Differentiate vectorized function
+   18. jvp(vmap(f))                    # Forward-mode of vectorized function
+   19. vmap(vmap(f))                   # Double vectorization
 
 TENSOR RANK COMBINATIONS TESTED (10 total):
 ──────────────────────────────────────────
@@ -72,7 +70,7 @@ Mixed-Rank Broadcasting:
     (1,3) : vector   + tensor3D        # f([1,2,3,4], [2,2,3])
     (2,3) : matrix   + tensor3D        # f([[1,2,3],[4,5,6]], [2,2,3])
 
-Total Test Matrix: 11 operations × 21 transformations × 10 rank combinations = 2,310 individual tests
+Total Test Matrix: 11 operations × 19 transformations × 10 rank combinations = 2,090 individual tests
 
 CONSISTENCY CHECKING LOGIC:
 ─────────────────────────
