@@ -724,7 +724,7 @@ def adamw_step(params, gradients, m_states, v_states, step, learning_rate):
     return updated_params, updated_m, updated_v
 
 
-@nb.jit
+# @nb.jit
 def complete_training_step(
     encoder_in, decoder_in, targets, params, m_states, v_states, step
 ):

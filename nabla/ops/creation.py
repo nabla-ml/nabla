@@ -75,18 +75,57 @@ def _create_filled_array(
     dtype: DType = _DEFAULT_DTYPE,
     device: Device = _DEFAULT_CPU,
     batch_dims: Shape = (),
+    traced: bool = False,
 ) -> Array:
     """Create array filled with constant value using broadcasting."""
     _validate_shape(shape)
     _validate_shape(batch_dims)
 
-    # Create scalar with fill value
-    scalar = Array.from_numpy(np.array(fill_value, dtype=DType.to_numpy(dtype))).to(
-        device
-    )
+    # WORKAROUND: Handle scalar boolean tensors (MAX tensor bug)
+    # Workaround for MAX boolean tensor bug: ANY boolean tensor creation fails in MAX
+    # when creating the scalar seed value, so we need special handling for all boolean cases
+    if dtype == DType.bool:
+        # Create boolean array by starting with float and converting
+        try:
+            # Try creating (1,) boolean array first
+            scalar_1d = Array.from_numpy(
+                np.array([fill_value], dtype=DType.to_numpy(dtype))
+            ).to(device)
+            scalar_1d.traced = traced
 
-    # Broadcast to desired shape
-    array = broadcast_to(scalar, shape)
+            if not shape:
+                # For scalar boolean, reshape (1,) to ()
+                from .view import reshape
+
+                array = reshape(scalar_1d, ())
+            else:
+                # For non-scalar boolean, broadcast (1,) to target shape
+                array = broadcast_to(scalar_1d, shape)
+        except Exception:
+            # Fallback: create as float and convert to bool
+            scalar_float = Array.from_numpy(
+                np.array([fill_value], dtype=np.float32)
+            ).to(device)
+            scalar_float.traced = traced
+
+            if not shape:
+                # Convert scalar float to scalar bool
+                array = scalar_float.astype(dtype)
+            else:
+                # Broadcast float to shape, then convert to bool
+                float_array = broadcast_to(scalar_float, shape)
+                array = float_array.astype(dtype)
+    else:
+        # Original implementation for non-boolean types
+        scalar = Array.from_numpy(np.array(fill_value, dtype=DType.to_numpy(dtype))).to(
+            device
+        )
+        scalar.traced = traced
+
+        if not shape:
+            array = scalar
+        else:
+            array = broadcast_to(scalar, shape)
 
     if batch_dims:
         array = broadcast_batch_dims(array, batch_dims)
@@ -234,6 +273,7 @@ def array(
     dtype: DType = _DEFAULT_DTYPE,
     device: Device = _DEFAULT_CPU,
     batch_dims: Shape = (),
+    traced: bool = False,
 ) -> Array:
     """Create an array from Python list, numpy array, or scalar value."""
     if isinstance(data, list):
@@ -249,6 +289,7 @@ def array(
         )
 
     array = Array.from_numpy(np_data).to(device)
+    array.traced = traced
     return broadcast_batch_dims(array, batch_dims) if batch_dims else array
 
 
@@ -257,6 +298,7 @@ def arange(
     dtype: DType = _DEFAULT_DTYPE,
     device: Device = _DEFAULT_CPU,
     batch_dims: Shape = (),
+    traced: bool = False,
 ) -> Array:
     """Create an array with values from 0 to prod(shape)-1 reshaped to given shape."""
     _validate_shape(shape)
@@ -264,12 +306,19 @@ def arange(
     total_size = np.prod(shape) if shape else 1
     np_data = np.arange(total_size, dtype=DType.to_numpy(dtype)).reshape(shape)
     array = Array.from_numpy(np_data).to(device)
+    array.traced = traced
     return broadcast_batch_dims(array, batch_dims) if batch_dims else array
 
 
 def arange_like(template: Array) -> Array:
     """Create an array with values from 0 to prod(template.shape)-1 reshaped to template's shape."""
-    return arange(template.shape, template.dtype, template.device, template.batch_dims)
+    return arange(
+        template.shape,
+        template.dtype,
+        template.device,
+        template.batch_dims,
+        template.traced,
+    )
 
 
 def randn(
@@ -280,9 +329,11 @@ def randn(
     device: Device = _DEFAULT_CPU,
     seed: int = _DEFAULT_SEED,
     batch_dims: Shape = (),
+    traced: bool = False,
 ) -> Array:
     """Create array with normally distributed random values."""
     array = RandNOp(shape, dtype, mean, std, device, seed).forward()
+    array.traced = traced
     return broadcast_batch_dims(array, batch_dims) if batch_dims else array
 
 
@@ -290,7 +341,7 @@ def randn_like(
     template: Array, mean: float = 0.0, std: float = 1.0, seed: int = _DEFAULT_SEED
 ) -> Array:
     """Create an array with normally distributed random values like the template."""
-    return randn(
+    res = randn(
         template.shape,
         template.dtype,
         mean,
@@ -298,7 +349,9 @@ def randn_like(
         template.device,
         seed,
         template.batch_dims,
+        traced=template.traced,
     )
+    return res
 
 
 def rand(
@@ -309,9 +362,11 @@ def rand(
     device: Device = _DEFAULT_CPU,
     seed: int = _DEFAULT_SEED,
     batch_dims: Shape = (),
+    traced: bool = False,
 ) -> Array:
     """Create array with uniformly distributed random values."""
     array = RandUniformOp(shape, dtype, lower, upper, device, seed).forward()
+    array.traced = traced
     return broadcast_batch_dims(array, batch_dims) if batch_dims else array
 
 
@@ -319,7 +374,7 @@ def rand_like(
     template: Array, lower: float = 0.0, upper: float = 1.0, seed: int = _DEFAULT_SEED
 ) -> Array:
     """Create an array with uniformly distributed random values like the template."""
-    return rand(
+    res = rand(
         template.shape,
         template.dtype,
         lower,
@@ -327,7 +382,9 @@ def rand_like(
         template.device,
         seed,
         template.batch_dims,
+        traced=template.traced,
     )
+    return res
 
 
 def zeros(
@@ -335,9 +392,10 @@ def zeros(
     dtype: DType = _DEFAULT_DTYPE,
     device: Device = _DEFAULT_CPU,
     batch_dims: Shape = (),
+    traced: bool = False,
 ) -> Array:
     """Create an array filled with zeros."""
-    return _create_filled_array(shape, 0.0, dtype, device, batch_dims)
+    return _create_filled_array(shape, 0.0, dtype, device, batch_dims, traced=traced)
 
 
 def ones(
@@ -345,25 +403,43 @@ def ones(
     dtype: DType = _DEFAULT_DTYPE,
     device: Device = _DEFAULT_CPU,
     batch_dims: Shape = (),
+    traced: bool = False,
 ) -> Array:
     """Create an array filled with ones."""
-    return _create_filled_array(shape, 1.0, dtype, device, batch_dims)
+    return _create_filled_array(shape, 1.0, dtype, device, batch_dims, traced=traced)
 
 
 def zeros_like(template: Array) -> Array:
     """Create an array of zeros with the same shape, dtype, and device as template."""
-    return zeros(template.shape, template.dtype, template.device, template.batch_dims)
+    return zeros(
+        template.shape,
+        template.dtype,
+        template.device,
+        template.batch_dims,
+        traced=template.traced,
+    )
 
 
 def ones_like(template: Array) -> Array:
     """Create an array of ones with the same shape, dtype, and device as template."""
-    return ones(template.shape, template.dtype, template.device, template.batch_dims)
+    return ones(
+        template.shape,
+        template.dtype,
+        template.device,
+        template.batch_dims,
+        traced=template.traced,
+    )
 
 
 def full_like(template: Array, fill_value: float) -> Array:
     """Create an array filled with a specific value, with the same shape, dtype, and device as template."""
     return _create_filled_array(
-        template.shape, fill_value, template.dtype, template.device, template.batch_dims
+        template.shape,
+        fill_value,
+        template.dtype,
+        template.device,
+        template.batch_dims,
+        template.traced,
     )
 
 
@@ -377,6 +453,7 @@ def xavier_uniform(
     device: Device = _DEFAULT_CPU,
     seed: int = _DEFAULT_SEED,
     batch_dims: Shape = (),
+    traced: bool = False,
 ) -> Array:
     """Xavier/Glorot uniform initialization for sigmoid/tanh activations.
 
@@ -390,7 +467,7 @@ def xavier_uniform(
 
     fan_in, fan_out = shape[-2], shape[-1]
     std = gain * np.sqrt(6.0 / (fan_in + fan_out))
-    return rand(shape, dtype, -std, std, device, seed, batch_dims)
+    return rand(shape, dtype, -std, std, device, seed, batch_dims, traced=traced)
 
 
 def xavier_normal(
@@ -400,6 +477,7 @@ def xavier_normal(
     device: Device = _DEFAULT_CPU,
     seed: int = _DEFAULT_SEED,
     batch_dims: Shape = (),
+    traced: bool = False,
 ) -> Array:
     """Xavier/Glorot normal initialization for sigmoid/tanh activations.
 
@@ -413,7 +491,7 @@ def xavier_normal(
 
     fan_in, fan_out = shape[-2], shape[-1]
     std = gain * np.sqrt(2.0 / (fan_in + fan_out))
-    return randn(shape, dtype, 0.0, std, device, seed, batch_dims)
+    return randn(shape, dtype, 0.0, std, device, seed, batch_dims, traced=traced)
 
 
 def he_uniform(
@@ -422,6 +500,7 @@ def he_uniform(
     device: Device = _DEFAULT_CPU,
     seed: int = _DEFAULT_SEED,
     batch_dims: Shape = (),
+    traced: bool = False,
 ) -> Array:
     """He uniform initialization for ReLU activations.
 
@@ -433,7 +512,7 @@ def he_uniform(
 
     fan_in = shape[-2]
     bound = np.sqrt(6.0 / fan_in)
-    return rand(shape, dtype, -bound, bound, device, seed, batch_dims)
+    return rand(shape, dtype, -bound, bound, device, seed, batch_dims, traced=traced)
 
 
 def he_normal(
@@ -442,6 +521,7 @@ def he_normal(
     device: Device = _DEFAULT_CPU,
     seed: int = _DEFAULT_SEED,
     batch_dims: Shape = (),
+    traced: bool = False,
 ) -> Array:
     """He normal initialization for ReLU activations.
 
@@ -453,7 +533,7 @@ def he_normal(
 
     fan_in = shape[-2]
     std = np.sqrt(2.0 / fan_in)
-    return randn(shape, dtype, 0.0, std, device, seed, batch_dims)
+    return randn(shape, dtype, 0.0, std, device, seed, batch_dims, traced=traced)
 
 
 def lecun_uniform(
@@ -462,6 +542,7 @@ def lecun_uniform(
     device: Device = _DEFAULT_CPU,
     seed: int = _DEFAULT_SEED,
     batch_dims: Shape = (),
+    traced: bool = False,
 ) -> Array:
     """LeCun uniform initialization for SELU activations.
 
@@ -475,7 +556,7 @@ def lecun_uniform(
 
     fan_in = shape[-2]
     bound = np.sqrt(3.0 / fan_in)
-    return rand(shape, dtype, -bound, bound, device, seed, batch_dims)
+    return rand(shape, dtype, -bound, bound, device, seed, batch_dims, traced=traced)
 
 
 def lecun_normal(
@@ -484,6 +565,7 @@ def lecun_normal(
     device: Device = _DEFAULT_CPU,
     seed: int = _DEFAULT_SEED,
     batch_dims: Shape = (),
+    traced: bool = False,
 ) -> Array:
     """LeCun normal initialization for SELU activations.
 
@@ -497,7 +579,7 @@ def lecun_normal(
 
     fan_in = shape[-2]
     std = np.sqrt(1.0 / fan_in)
-    return randn(shape, dtype, 0.0, std, device, seed, batch_dims)
+    return randn(shape, dtype, 0.0, std, device, seed, batch_dims, traced=traced)
 
 
 def glorot_uniform(
@@ -507,6 +589,7 @@ def glorot_uniform(
     device: Device = _DEFAULT_CPU,
     seed: int = _DEFAULT_SEED,
     batch_dims: Shape = (),
+    traced: bool = False,
 ) -> Array:
     """Glorot/Xavier uniform initialization for sigmoid/tanh activations.
 
@@ -520,11 +603,7 @@ def glorot_uniform(
 
     fan_in, fan_out = shape[-2], shape[-1]
     bound = gain * np.sqrt(6.0 / (fan_in + fan_out))
-    return rand(shape, dtype, -bound, bound, device, seed, batch_dims)
-
-
-# I want to be able to write out sth like: nabla.triu(nb.ones((1, 1, target_seq_len, target_seq_len)), k=1)
-# q: please implement a function that does this (triu) and returns an array with the upper triangular part of the input array
+    return rand(shape, dtype, -bound, bound, device, seed, batch_dims, traced=traced)
 
 
 def triu(x, k=0):

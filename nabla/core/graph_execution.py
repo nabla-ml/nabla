@@ -286,7 +286,21 @@ def realize_(
         if not isinstance(output, Array):
             raise TypeError(f"All outputs must be Array instances, got {type(output)}")
 
-    output_list = [output for output in outputs if output.impl is None]
+    # For JIT compilation with mixed realized/unrealized outputs, we need all outputs
+    # to be part of the compiled model. Check if we have mixed states:
+    realized_outputs = [output for output in outputs if output.impl is not None]
+    unrealized_outputs = [output for output in outputs if output.impl is None]
+
+    if realized_outputs and unrealized_outputs:
+        # Mixed case - this typically happens with JIT(VMAP(...)) where some outputs
+        # are already realized during VMAP processing. We need to unrealize them
+        # so they can all be compiled together.
+        for output in realized_outputs:
+            output.impl = None  # Force unrealization
+        output_list = outputs  # Process all outputs
+    else:
+        # Normal case - only process unrealized outputs
+        output_list = unrealized_outputs
 
     if not output_list:
         return

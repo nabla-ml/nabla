@@ -236,12 +236,19 @@ class GreaterEqualOp(BinaryOperation):
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
-        return [0 * primals[0], 0 * primals[1]]
+        from .creation import zeros_like
+
+        return [
+            zeros_like(cotangent).astype(primals[0].dtype),
+            zeros_like(cotangent).astype(primals[1].dtype),
+        ]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
-        return greater_equal(tangents[0], tangents[1])
+        from .creation import zeros_like
+
+        return zeros_like(tangents[0]).astype(output.dtype)
 
 
 class MaximumOp(BinaryOperation):
@@ -389,20 +396,19 @@ class EqualOp(BinaryOperation):
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
-        from .creation import zeros
+        from .creation import zeros_like
 
-        # Equal is not differentiable - return zero gradients
-        zero_grad_0 = zeros(primals[0].shape, dtype=primals[0].dtype)
-        zero_grad_1 = zeros(primals[1].shape, dtype=primals[1].dtype)
-        return [zero_grad_0, zero_grad_1]
+        return [
+            zeros_like(cotangent).astype(primals[0].dtype),
+            zeros_like(cotangent).astype(primals[1].dtype),
+        ]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
-        from .creation import zeros
+        from .creation import zeros_like
 
-        # Equal is not differentiable
-        return zeros(output.shape, dtype=output.dtype)
+        return zeros_like(tangents[0])
 
 
 class NotEqualOp(BinaryOperation):
@@ -430,20 +436,19 @@ class NotEqualOp(BinaryOperation):
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
-        from .creation import zeros
+        from .creation import zeros_like
 
-        # Not equal is not differentiable - return zero gradients
-        zero_grad_0 = zeros(primals[0].shape, dtype=primals[0].dtype)
-        zero_grad_1 = zeros(primals[1].shape, dtype=primals[1].dtype)
-        return [zero_grad_0, zero_grad_1]
+        return [
+            zeros_like(cotangent).astype(primals[0].dtype),
+            zeros_like(cotangent).astype(primals[1].dtype),
+        ]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
-        from .creation import zeros
+        from .creation import zeros_like
 
-        # Not equal is not differentiable
-        return zeros(output.shape, dtype=output.dtype)
+        return zeros_like(tangents[0]).astype(output.dtype)
 
 
 # Create operation instances

@@ -226,10 +226,10 @@ class TanhOp(UnaryOperation):
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
         from .binary import mul, sub
-        from .creation import ones
+        from .creation import ones_like
 
         # d/dx tanh(x) = 1 - tanh²(x) = 1 - output²
-        ones_like_output = ones(output.shape, dtype=output.dtype)
+        ones_like_output = ones_like(output)
         tanh_squared = mul(output, output)
         derivative = sub(ones_like_output, tanh_squared)
         return [mul(cotangent, derivative)]
@@ -238,10 +238,10 @@ class TanhOp(UnaryOperation):
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
         from .binary import mul, sub
-        from .creation import ones
+        from .creation import ones_like
 
         # d/dx tanh(x) = 1 - tanh²(x)
-        ones_like_output = ones(output.shape, dtype=output.dtype)
+        ones_like_output = ones_like(output)
         tanh_squared = mul(output, output)
         derivative = sub(ones_like_output, tanh_squared)
         return mul(tangents[0], derivative)
@@ -272,7 +272,7 @@ class AbsOp(UnaryOperation):
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
         from .binary import greater_equal, mul
-        from .creation import ones, zeros
+        from .creation import ones_like, zeros
 
         # d/dx |x| = sign(x) = 1 if x > 0, -1 if x < 0, undefined at x = 0
         # We use the convention that sign(0) = 0
@@ -281,7 +281,7 @@ class AbsOp(UnaryOperation):
         pos_mask_casted = cast(pos_mask, cotangent.dtype)
 
         # Create sign: 1 for positive, -1 for negative
-        ones_tensor = ones(primals[0].shape, dtype=cotangent.dtype)
+        ones_tensor = ones_like(primals[0])
         sign = 2.0 * pos_mask_casted - ones_tensor
 
         return [mul(cotangent, sign)]
@@ -290,7 +290,7 @@ class AbsOp(UnaryOperation):
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
         from .binary import greater_equal, mul
-        from .creation import ones, zeros
+        from .creation import ones_like, zeros
 
         # d/dx |x| = sign(x)
         zero = zeros((), dtype=primals[0].dtype)
@@ -298,7 +298,7 @@ class AbsOp(UnaryOperation):
         pos_mask_casted = cast(pos_mask, tangents[0].dtype)
 
         # Create sign: 1 for positive, -1 for negative
-        ones_tensor = ones(primals[0].shape, dtype=tangents[0].dtype)
+        ones_tensor = ones_like(primals[0])
         sign = 2.0 * pos_mask_casted - ones_tensor
 
         return mul(tangents[0], sign)
@@ -328,20 +328,16 @@ class FloorOp(UnaryOperation):
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
-        from .creation import zeros
+        from .creation import zeros_like
 
-        # Floor function has zero derivative everywhere since it's piecewise constant
-        # between integers and non-differentiable at integer points
-        zero_grad = zeros(primals[0].shape, dtype=primals[0].dtype)
-        return [zero_grad]
+        return [zeros_like(cotangent)]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
-        from .creation import zeros
+        from .creation import zeros_like
 
-        # Floor function has zero derivative everywhere
-        return zeros(output.shape, dtype=output.dtype)
+        return zeros_like(tangents[0])
 
 
 def floor(arg: Array) -> Array:
@@ -373,20 +369,16 @@ class LogicalNotOp(UnaryOperation):
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
-        from .creation import zeros
+        from .creation import zeros_like
 
-        # Logical NOT has zero derivative everywhere since it's not differentiable
-        # in the usual sense (it operates on discrete boolean values)
-        zero_grad = zeros(primals[0].shape, dtype=primals[0].dtype)
-        return [zero_grad]
+        return [zeros_like(cotangent)]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
-        from .creation import zeros
+        from .creation import zeros_like
 
-        # Logical NOT has zero derivative everywhere
-        return zeros(output.shape, dtype=output.dtype)
+        return zeros_like(tangents[0])
 
 
 def logical_not(arg: Array) -> Array:
@@ -422,10 +414,10 @@ class SigmoidOp(UnaryOperation):
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
         from .binary import mul, sub
-        from .creation import ones
+        from .creation import ones_like
 
         # d/dx sigmoid(x) = sigmoid(x) * (1 - sigmoid(x)) = output * (1 - output)
-        ones_like_output = ones(output.shape, dtype=output.dtype)
+        ones_like_output = ones_like(output)
         one_minus_output = sub(ones_like_output, output)
         derivative = mul(output, one_minus_output)
         return [mul(cotangent, derivative)]
@@ -434,10 +426,10 @@ class SigmoidOp(UnaryOperation):
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
         from .binary import mul, sub
-        from .creation import ones
+        from .creation import ones_like
 
         # d/dx sigmoid(x) = sigmoid(x) * (1 - sigmoid(x))
-        ones_like_output = ones(output.shape, dtype=output.dtype)
+        ones_like_output = ones_like(output)
         one_minus_output = sub(ones_like_output, output)
         derivative = mul(output, one_minus_output)
         return mul(tangents[0], derivative)
@@ -674,6 +666,40 @@ def sqrt(arg: Array) -> Array:
     # Create 0.5 as a scalar Array
     half = array([0.5], dtype=arg.dtype)
     return binary_pow(arg, half)
+
+
+# class ZerosLikeOp(UnaryOperation):
+#     """Create an array of zeros with the same shape and dtype as the input."""
+
+#     def __init__(self):
+#         super().__init__("zeros_like")
+
+#     def compute_output_shape(self, *input_shapes: tuple) -> tuple:
+#         """Output shape is the same as input shape."""
+#         if len(input_shapes) != 1:
+#             raise ValueError(f"ZerosLikeOp requires 1 input shape, got {len(input_shapes)}")
+#         return input_shapes[0]
+
+#     def compute_output_dtype(self, arg: Array) -> DType:
+#         """Output dtype is the same as input dtype."""
+#         return arg.dtype
+
+#     def maxpr(self, args: list[TensorValue], output: Array) -> None:
+#         output.tensor_value = ops.shape_to_tensor(args[0].shape)
+
+#     def eagerxpr(self, args: list[Array], output: Array) -> None:
+#         np_result = np.zeros(args[0].shape, dtype=args[0].dtype.to_numpy())
+#         output.impl = Tensor.from_numpy(np_result)
+
+#     def vjp_rule(
+#         self, primals: list[Array], cotangent: Array, output: Array
+#     ) -> list[Array]:
+#         return [zeros_like(cotangent)]
+
+#     def jvp_rule(
+#         self, primals: list[Array], tangents: list[Array], output: Array
+#     ) -> Array:
+#         return zeros_like(tangents[0])
 
 
 class TransferToOp(UnaryOperation):

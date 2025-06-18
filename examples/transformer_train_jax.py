@@ -41,9 +41,9 @@ ARCHITECTURE DETAILS:
 import time
 from typing import Any
 
-import numpy as np
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax import value_and_grad
 
 # ============================================================================
@@ -127,11 +127,11 @@ def manual_softmax(x, axis=-1):
     # Subtract max for numerical stability
     x_max = jnp.max(x, axis=axis, keepdims=True)
     x_shifted = x - x_max
-    
+
     # Compute exp and sum
     exp_x = jnp.exp(x_shifted)
     sum_exp = jnp.sum(exp_x, axis=axis, keepdims=True)
-    
+
     return exp_x / sum_exp
 
 
@@ -142,10 +142,10 @@ def manual_log_softmax(x, axis=-1):
     # Subtract max for numerical stability
     x_max = jnp.max(x, axis=axis, keepdims=True)
     x_shifted = x - x_max
-    
+
     # Compute log(sum(exp(x)))
     log_sum_exp = jnp.log(jnp.sum(jnp.exp(x_shifted), axis=axis, keepdims=True))
-    
+
     return x_shifted - log_sum_exp
 
 
@@ -209,7 +209,9 @@ def scaled_dot_product_attention(q, k, v, mask=None):
 
     # Compute attention scores: Q @ K^T / sqrt(d_k)
     # Use manual sqrt implementation to match Nabla style
-    scores = jnp.matmul(q, k.transpose((0, 1, 3, 2))) / jnp.sqrt(jnp.array([d_k], dtype=jnp.float32))
+    scores = jnp.matmul(q, k.transpose((0, 1, 3, 2))) / jnp.sqrt(
+        jnp.array([d_k], dtype=jnp.float32)
+    )
 
     # Apply mask if provided (set masked positions to large negative value)
     # TODO: Fix mask application when proper masking is needed - commenting out to match Nabla
@@ -518,6 +520,7 @@ def init_transformer_params() -> dict[str, Any]:
     Returns:
         Dictionary containing all model parameters organized by component
     """
+
     def manual_glorot_uniform(shape):
         """Manual Xavier/Glorot uniform initialization to match Nabla style."""
         fan_in = shape[0] if len(shape) > 1 else 1
@@ -543,7 +546,9 @@ def init_transformer_params() -> dict[str, Any]:
     # --- Initialize Encoder Layers ---
     print(f"Initializing {NUM_LAYERS} encoder layers...")
     for layer_idx in range(NUM_LAYERS):
-        params["encoder"][f"layer_{layer_idx}"] = _init_encoder_layer_params(manual_glorot_uniform)
+        params["encoder"][f"layer_{layer_idx}"] = _init_encoder_layer_params(
+            manual_glorot_uniform
+        )
 
     # Final encoder layer norm (for Pre-Norm architecture)
     params["encoder"]["final_norm"] = {
@@ -554,7 +559,9 @@ def init_transformer_params() -> dict[str, Any]:
     # --- Initialize Decoder Layers ---
     print(f"Initializing {NUM_LAYERS} decoder layers...")
     for layer_idx in range(NUM_LAYERS):
-        params["decoder"][f"layer_{layer_idx}"] = _init_decoder_layer_params(manual_glorot_uniform)
+        params["decoder"][f"layer_{layer_idx}"] = _init_decoder_layer_params(
+            manual_glorot_uniform
+        )
 
     # Final decoder layer norm (for Pre-Norm architecture)
     params["decoder"]["final_norm"] = {
@@ -653,7 +660,6 @@ def _init_decoder_layer_params(glorot_uniform) -> dict[str, Any]:
         },  # After attention
         "norm2": {"gamma": jnp.ones(D_MODEL), "beta": jnp.zeros(D_MODEL)},  # After FFN
     }
-
 
 
 # --- 5. Data Generation ---
@@ -854,7 +860,9 @@ def predict_sequence(encoder_input, params):
     batch_size = encoder_input.shape[0]
 
     # Initialize with start token
-    decoder_tokens = [jnp.ones((batch_size,), dtype=jnp.int32)]  # Start with <START> token (1)
+    decoder_tokens = [
+        jnp.ones((batch_size,), dtype=jnp.int32)
+    ]  # Start with <START> token (1)
 
     # Generate tokens one by one (autoregressive generation)
     for position in range(1, TARGET_SEQ_LEN):
@@ -935,42 +943,44 @@ def train_transformer():
     start_time = time.time()
     print("Starting training loop...")
     epoch_start_time = time.time()
-    
+
     for epoch in range(1, NUM_EPOCHS + 1):
         # Generate training batch
         encoder_input, decoder_input, targets = create_reverse_dataset(BATCH_SIZE)
-        
+
         if epoch == 1:
             print(f"First batch generated at: {time.time() - epoch_start_time:.2f}s")
 
         # Perform one training step with detailed debugging for first epoch
         step_start = time.time()
-        
+
         if epoch == 1:
             # Debug first epoch step by step
             print("Breaking down first training step:")
-            
+
             # Test forward pass
             forward_start = time.time()
             logits = transformer_forward(encoder_input, decoder_input, params)
             forward_time = time.time() - forward_start
             print(f"  Forward pass: {forward_time:.2f}s")
-            
+
             # Test loss computation
             loss_start = time.time()
             loss_value = cross_entropy_loss(logits, targets)
             loss_time = time.time() - loss_start
             print(f"  Loss computation: {loss_time:.2f}s")
-            
+
             # Test gradient computation (this is likely the slow part)
             grad_start = time.time()
+
             def loss_fn(params_inner):
                 logits = transformer_forward(encoder_input, decoder_input, params_inner)
                 return cross_entropy_loss(logits, targets)
+
             loss_value, param_gradients = value_and_grad(loss_fn)(params)
             grad_time = time.time() - grad_start
             print(f"  Gradient computation: {grad_time:.2f}s")
-            
+
             # Test optimizer step
             opt_start = time.time()
             params, m_states, v_states = adamw_step(
@@ -978,16 +988,16 @@ def train_transformer():
             )[:3]
             opt_time = time.time() - opt_start
             print(f"  Optimizer step: {opt_time:.2f}s")
-            
+
             loss = loss_value
         else:
             # Use JIT for subsequent epochs
             params, m_states, v_states, loss = complete_training_step(
                 encoder_input, decoder_input, targets, params, m_states, v_states, epoch
             )
-        
+
         step_time = time.time() - step_start
-        
+
         if epoch == 1:
             print(f"Total first training step: {step_time:.2f}s")
 

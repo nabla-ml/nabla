@@ -31,7 +31,7 @@ def jvp(
 ) -> tuple[Any, Any]: ...
 
 
-@overload  
+@overload
 def jvp(
     func: Callable[..., Any], primals, tangents, has_aux: Literal[True]
 ) -> tuple[Any, Any, Any]: ...

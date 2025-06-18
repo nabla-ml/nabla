@@ -18,7 +18,9 @@ from collections.abc import Callable
 from typing import Any, Union
 
 from ..core.array import Array
-from .utils import _handle_args_consistently
+from .utils import (
+    _handle_args_consistently,
+)
 
 
 def _check_in_axes_size(tree: Any, axes: Any) -> int:

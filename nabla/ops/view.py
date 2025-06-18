@@ -578,6 +578,9 @@ def permute_batch_dims(input_array: Array, axes: tuple[int, ...]) -> Array:
         >>> y = permute_batch_dims(x, (-1, -3, -2))  # Reorder as (4, 2, 3)
         >>> # Result has batch_dims=(4, 2, 3) and shape=(5, 6)
     """
+    if len(axes) <= 1:
+        return input_array  # No permutation needed for single axis or empty
+
     # Convert to negative indices for consistency with batch dimension handling
     axes = tuple(-len(input_array.batch_dims) + ax if ax >= 0 else ax for ax in axes)
 

@@ -66,11 +66,23 @@ def tree_unflatten(structure: Any, leaves: list[Array]) -> Any:
 
     def _unflatten(struct: Any) -> Any:
         if struct is None:  # Array placeholder
-            return next(leaves_iter)
+            try:
+                return next(leaves_iter)
+            except StopIteration:
+                raise ValueError(
+                    f"Tree unflatten error: Not enough leaves. Expected structure: {structure}, Got {len(leaves)} leaves"
+                )
         elif isinstance(struct, dict):
             return {k: _unflatten(v) for k, v in struct.items()}
         elif isinstance(struct, list | tuple):
-            return type(struct)(_unflatten(item) for item in struct)
+            # Use list comprehension instead of generator to avoid StopIteration -> RuntimeError conversion
+            try:
+                result = [_unflatten(item) for item in struct]
+                return type(struct)(result)
+            except StopIteration:
+                raise ValueError(
+                    f"Tree unflatten error: Not enough leaves for sequence. Expected structure: {structure}, Got {len(leaves)} leaves"
+                )
         else:
             # Non-Array leaf
             return struct
@@ -264,11 +276,14 @@ def _prepare_traced_inputs(
                 )
             elif isinstance(item, dict):
                 return {k: convert_scalars_to_arrays(v) for k, v in item.items()}
-            else:
-                # Convert non-Array types (int, float, etc.) to Nabla Arrays
+            elif isinstance(item, (int, float, bool)):
+                # Only convert basic scalar types to Nabla Arrays
                 import nabla as nb
 
                 return nb.array(item)
+            else:
+                # Keep everything else (functions, numpy arrays, etc.) unchanged
+                return item
 
         actual_args = convert_scalars_to_arrays(actual_args)
 
@@ -581,9 +596,9 @@ def _compute_pullback(
             if inp.cotangent is not None:
                 gradient_arrays.append(inp.cotangent)
             else:
-                from ..ops.creation import zeros
+                from ..ops.creation import zeros_like
 
-                gradient_arrays.append(zeros(inp.shape, dtype=inp.dtype))
+                gradient_arrays.append(zeros_like(inp))
 
         return gradient_arrays
 
