@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 COMPREHENSIVE NABLA BINARY OPERATIONS TEST SUITE
 ================================================
@@ -113,9 +112,35 @@ from dataclasses import dataclass
 
 import jax
 import jax.numpy as jnp
-import numpy as np
+import pytest
 
 import nabla as nb
+
+# Import our new utility modules (handle both relative and absolute imports)
+try:
+    from .test_errors import ErrorSummary, ErrorType, enhanced_error_message
+    from .test_utils import (
+        cleanup_caches,
+        cleanup_jax_caches,
+        get_rank_combinations,
+        get_shape_for_rank,
+        get_test_data_for_ranks,
+        jax_arange,
+        run_test_with_consistency_check,
+        with_timeout,
+    )
+except ImportError:
+    # Fall back to absolute imports when running directly
+    import os
+
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    sys.path.insert(0, current_dir)
+    from test_utils import (
+        cleanup_caches,
+        get_rank_combinations,
+        get_test_data_for_ranks,
+        run_test_with_consistency_check,
+    )
 
 # ============================================================================
 # BINARY OPERATION DEFINITIONS
@@ -200,167 +225,7 @@ BINARY_OPERATIONS = {
 # SHARED UTILITIES (copied from test_add_comprehensive.py)
 # ============================================================================
 
-
-def jax_arange(shape, dtype=jnp.float32):
-    """Create JAX array matching nabla.arange"""
-    return jax.numpy.arange(np.prod(shape), dtype=dtype).reshape(shape)
-
-
-def get_shape_for_rank(rank):
-    """Get appropriate shape for given tensor rank"""
-    if rank == 0:
-        return ()  # scalar
-    elif rank == 1:
-        return (4,)  # vector
-    elif rank == 2:
-        return (2, 3)  # matrix
-    elif rank == 3:
-        return (2, 2, 3)  # 3D tensor
-    else:
-        raise ValueError(f"Unsupported rank: {rank}")
-
-
-def get_test_data_for_ranks(rank_x, rank_y):
-    """Get test data for specific tensor ranks"""
-    shape_x = get_shape_for_rank(rank_x)
-    shape_y = get_shape_for_rank(rank_y)
-
-    # Handle scalar case specially
-    if rank_x == 0:
-        x_nb = 1 + nb.array(2.5)
-        x_jax = 1 + jnp.array(2.5)
-    else:
-        x_nb = 1 + nb.arange(shape_x)
-        x_jax = 1 + jax_arange(shape_x)
-
-    if rank_y == 0:
-        y_nb = 1 + nb.array(1.5)
-        y_jax = 1 + jnp.array(1.5)
-    else:
-        y_nb = 1 + nb.arange(shape_y)
-        y_jax = 1 + jax_arange(shape_y)
-
-    return x_nb, y_nb, x_jax, y_jax
-
-
-def get_rank_combinations():
-    """Get all rank combinations to test"""
-    return [
-        (0, 0),  # scalar + scalar
-        (1, 1),  # vector + vector
-        (2, 2),  # matrix + matrix (original)
-        (3, 3),  # 3D + 3D
-        (0, 1),  # scalar + vector
-        (0, 2),  # scalar + matrix
-        (0, 3),  # scalar + 3D
-        (1, 2),  # vector + matrix
-        (1, 3),  # vector + 3D
-        (2, 3),  # matrix + 3D
-    ]
-
-
-def run_test_with_consistency_check(test_name, nabla_fn, jax_fn):
-    """
-    Run Nabla and JAX functions separately and check for consistency.
-
-    Returns True if:
-    - Both succeed and give same result (numeric or boolean arrays)
-    - Both fail consistently
-
-    Returns False if:
-    - Only one fails
-    - Results don't match when both succeed
-    """
-    nabla_result = None
-    jax_result = None
-    nabla_error = None
-    jax_error = None
-
-    # Try Nabla
-    try:
-        nabla_result = nabla_fn()
-    except Exception as e:
-        nabla_error = str(e)
-
-    # Try JAX
-    try:
-        jax_result = jax_fn()
-    except Exception as e:
-        jax_error = str(e)
-
-    # Case 1: Both succeeded - check if results match
-    if nabla_result is not None and jax_result is not None:
-        try:
-            # Handle tuple results (e.g., from VJP/JVP)
-            if isinstance(nabla_result, tuple) and isinstance(jax_result, tuple):
-                if len(nabla_result) != len(jax_result):
-                    print(f"✗ {test_name}: Tuple length mismatch")
-                    return False
-
-                for i, (nb_item, jax_item) in enumerate(zip(nabla_result, jax_result, strict=False)):
-                    if hasattr(nb_item, "to_numpy"):
-                        nb_numpy = nb_item.to_numpy()
-                    else:
-                        nb_numpy = np.array(nb_item)
-
-                    # Handle JAX float0 (zero tangent space) - convert to regular zeros
-                    if hasattr(jax_item, "dtype") and str(jax_item.dtype).startswith(
-                        "[('float0"
-                    ):
-                        # JAX float0 means zero gradient - convert to regular zeros
-                        jax_item = jnp.zeros_like(jax_item, dtype=jnp.float32)
-
-                    if not jnp.allclose(nb_numpy, jax_item):
-                        print(f"✗ {test_name}: Tuple item {i} doesn't match")
-                        return False
-
-                print(f"✓ {test_name}")
-                return True
-
-            # Handle single array results (numeric or boolean)
-            else:
-                if isinstance(nabla_result, nb.Array):
-                    nabla_numpy = nabla_result.to_numpy()
-                else:
-                    nabla_numpy = np.array(nabla_result)
-
-                # Handle JAX float0 (zero tangent space) - convert to regular zeros
-                if hasattr(jax_result, "dtype") and str(jax_result.dtype).startswith(
-                    "[('float0"
-                ):
-                    # JAX float0 means zero gradient - convert to regular zeros
-                    jax_result = jnp.zeros_like(jax_result, dtype=jnp.float32)
-
-                # Use array_equal for boolean arrays, allclose for numeric
-                if nabla_numpy.dtype == bool and jax_result.dtype == bool:
-                    arrays_match = np.array_equal(nabla_numpy, jax_result)
-                else:
-                    arrays_match = jnp.allclose(nabla_numpy, jax_result)
-
-                if arrays_match:
-                    print(f"✓ {test_name}")
-                    return True
-                else:
-                    print(f"✗ {test_name}: Results don't match")
-                    return False
-
-        except Exception as e:
-            print(f"✗ {test_name}: Comparison failed: {e}")
-            return False
-
-    # Case 2: Both failed - this is consistent behavior, so it's a pass
-    elif nabla_error is not None and jax_error is not None:
-        print(f"✓ {test_name} (both frameworks failed consistently)")
-        return True
-
-    # Case 3: Only one failed - this is a discrepancy
-    else:
-        if nabla_error is not None:
-            print(f"✗ {test_name}: Only Nabla failed: {nabla_error}")
-        else:
-            print(f"✗ {test_name}: Only JAX failed: {jax_error}")
-        return False
-
+# Note: Most utilities have been moved to test_utils.py for reusability
 
 # ============================================================================
 # PARAMETERIZED TEST FRAMEWORK
@@ -879,6 +744,9 @@ def run_operation_tests(operation_name: str, all_ranks: bool = False):
                 f"\nRank ({rank_x},{rank_y}): {passed_for_ranks}/{len(test_functions)} tests passed"
             )
 
+            # Clean up caches after each rank combination to prevent memory buildup
+            cleanup_caches()
+
         print(f"\n{'=' * 80}")
         print(
             f"OPERATION {operation.name.upper()} RESULTS: {total_passed}/{total_tests} tests passed"
@@ -925,6 +793,9 @@ def run_all_operations(all_ranks: bool = False):
         all_passed = all_passed and success
         total_passed_all += passed
         total_tests_all += total
+
+        # Clean up caches after each operation to prevent memory accumulation
+        cleanup_caches()
         print("\n")
 
     print("=" * 100)
@@ -965,3 +836,152 @@ if __name__ == "__main__":
     # Exit with 0 for successful script execution (test results are reported in output)
     # Only exit with 1 for actual script errors (handled by exceptions)
     sys.exit(0)
+
+# ============================================================================
+# PYTEST INTEGRATION
+# ============================================================================
+
+
+def pytest_generate_tests(metafunc):
+    """Generate pytest parameters for all operation/rank/transformation combinations"""
+    if "operation_name" in metafunc.fixturenames:
+        operations = list(BINARY_OPERATIONS.keys())
+        metafunc.parametrize("operation_name", operations)
+
+    if "rank_combination" in metafunc.fixturenames:
+        ranks = get_rank_combinations()
+        metafunc.parametrize("rank_combination", ranks)
+
+    if "transformation_index" in metafunc.fixturenames:
+        # 19 transformations (0-18)
+        transformations = list(range(19))
+        metafunc.parametrize("transformation_index", transformations)
+
+
+@pytest.fixture(autouse=True)
+def cleanup_after_test():
+    """Cleanup caches after each test to prevent memory issues"""
+    yield
+    cleanup_caches()
+
+
+class TestBinaryOperations:
+    """Pytest test class for binary operations"""
+
+    def test_binary_operation_transformation(
+        self, operation_name, rank_combination, transformation_index
+    ):
+        """Test a specific binary operation with specific ranks and transformation"""
+        operation = BINARY_OPERATIONS[operation_name]
+        rank_x, rank_y = rank_combination
+
+        # Get test functions for this operation
+        test_functions, set_ranks = create_binary_op_tests(operation)
+
+        # Set the ranks for this test
+        set_ranks(rank_x, rank_y)
+
+        # Get the specific test function
+        test_func = test_functions[transformation_index]
+
+        # Create a descriptive test name
+        test_desc = (
+            test_func.__doc__.split(":")[1].strip()
+            if test_func.__doc__ and ":" in test_func.__doc__
+            else test_func.__name__
+        )
+
+        # Run the test
+        success = test_func()
+
+        # Assert the test passed
+        assert success, (
+            f"Failed: {operation_name} - ranks({rank_x},{rank_y}) - {test_desc}"
+        )
+
+
+# ============================================================================
+# CONVENIENCE FUNCTIONS FOR PYTEST
+# ============================================================================
+
+
+def test_single_operation_all_ranks():
+    """Test a single operation with all ranks - useful for debugging"""
+    operation_name = "add"  # Change this to test different operations
+    success, passed, total = run_operation_tests(operation_name, all_ranks=True)
+    assert success, f"Operation {operation_name} failed: {passed}/{total} tests passed"
+
+
+def test_all_operations_default_ranks():
+    """Test all operations with default ranks (2,2) - faster smoke test"""
+    failed_operations = []
+
+    for op_name in BINARY_OPERATIONS:
+        success, passed, total = run_operation_tests(op_name, all_ranks=False)
+        if not success:
+            failed_operations.append(f"{op_name}: {passed}/{total}")
+
+    assert not failed_operations, f"Failed operations: {failed_operations}"
+
+
+@pytest.mark.benchmark
+def test_all_operations_all_ranks(capsys):
+    """Full comprehensive test - mark as benchmark since it's slow"""
+    import sys
+
+    print("\n" + "=" * 100)
+    print("🚀 STARTING COMPREHENSIVE BINARY OPERATIONS TEST SUITE")
+    print(
+        "📊 Testing: 11 operations × 19 transformations × 10 rank combinations = 2,090 tests"
+    )
+    print("⏱️  Expected duration: ~10 minutes")
+    print("=" * 100)
+    sys.stdout.flush()
+
+    all_passed = True
+    total_passed_all = 0
+    total_tests_all = 0
+
+    for i, op_name in enumerate(BINARY_OPERATIONS, 1):
+        print(f"\n[{i:2d}/11] 🔄 Testing operation: {op_name.upper()}")
+        sys.stdout.flush()
+
+        success, passed, total = run_operation_tests(op_name, all_ranks=True)
+        all_passed = all_passed and success
+        total_passed_all += passed
+        total_tests_all += total
+
+        # Show progress after each operation
+        overall_progress = (i / len(BINARY_OPERATIONS)) * 100
+        print(
+            f"[{i:2d}/11] ✅ {op_name}: {passed}/{total} tests passed | Overall: {overall_progress:.1f}% complete"
+        )
+        sys.stdout.flush()
+
+        # Clean up caches after each operation
+        cleanup_caches()
+
+    print("\n" + "=" * 100)
+    print("🏁 FINAL COMPREHENSIVE TEST RESULTS")
+    print("=" * 100)
+    overall_success_rate = (
+        (total_passed_all / total_tests_all) * 100 if total_tests_all > 0 else 0
+    )
+    print(f"📈 TOTAL TESTS PASSED: {total_passed_all}/{total_tests_all}")
+    print(f"🎯 OVERALL SUCCESS RATE: {overall_success_rate:.1f}%")
+
+    if all_passed:
+        print("🎉 ALL BINARY OPERATIONS PASSED!")
+    else:
+        print("❌ Some binary operations failed")
+    print("=" * 100)
+    sys.stdout.flush()
+
+    assert all_passed, (
+        f"Comprehensive test failed: {total_passed_all}/{total_tests_all} tests passed"
+    )
+
+
+# ============================================================================
+# LEGACY MAIN EXECUTION (kept for backward compatibility)
+# ============================================================================

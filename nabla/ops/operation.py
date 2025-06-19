@@ -201,7 +201,7 @@ class BinaryOperation(Operation):
         args = move_to_best_device(*args)
         arg1, arg2 = args[0], args[1]
 
-        from ..ops.view import broadcast_batch_dims, broadcast_to
+        from ..ops.view import broadcast_batch_dims, broadcast_to, unsqueeze
 
         self._validate_inputs(arg1, arg2)
 
@@ -210,6 +210,16 @@ class BinaryOperation(Operation):
             arg1.batch_dims, arg2.batch_dims
         )
         output_dtype = self.compute_output_dtype(arg1, arg2)
+
+        # TODO: The following makes everything a tiny bit slower, can we optiize this unsqueezing approach to make shapes of equal length?
+        if len(arg1.shape) < len(output_shape):
+            for _ in range(len(output_shape) - len(arg1.shape)):
+                arg1 = unsqueeze(arg1, [-len(arg1.shape) - 1])
+
+        if len(arg2.shape) < len(output_shape):
+            for _ in range(len(output_shape) - len(arg2.shape)):
+                arg2 = unsqueeze(arg2, [-len(arg2.shape) - 1])
+
         if arg1.traced:
             arg1 = broadcast_to(arg1, output_shape)
             arg1 = broadcast_batch_dims(arg1, output_batch_dims)
