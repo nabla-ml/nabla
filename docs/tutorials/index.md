@@ -13,3 +13,4 @@ mlp_training_cpu
 mlp_training_gpu
 jax_vs_nabla_mlp_cpu
 jax_vs_nabla_transformer_cpu
+```
