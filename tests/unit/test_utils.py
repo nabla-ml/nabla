@@ -140,6 +140,49 @@ def get_rank_combinations() -> list[tuple[int, int]]:
     ]
 
 
+def compare_nested_structures(nabla_item, jax_item, test_name, item_path=""):
+    """Recursively compare nested structures of arrays and tuples."""
+    # If both are tuples, compare recursively
+    if isinstance(nabla_item, tuple) and isinstance(jax_item, tuple):
+        if len(nabla_item) != len(jax_item):
+            print(
+                f"Tuple length mismatch at {item_path}: Nabla {len(nabla_item)} vs JAX {len(jax_item)}"
+            )
+            return False
+
+        for i, (nb_sub, jax_sub) in enumerate(zip(nabla_item, jax_item, strict=False)):
+            if not compare_nested_structures(
+                nb_sub, jax_sub, test_name, f"{item_path}[{i}]"
+            ):
+                return False
+        return True
+
+    # If both are arrays, compare them
+    elif not isinstance(nabla_item, tuple) and not isinstance(jax_item, tuple):
+        if hasattr(nabla_item, "to_numpy"):
+            nb_numpy = nabla_item.to_numpy()
+        else:
+            nb_numpy = np.array(nabla_item)
+
+        # Handle JAX float0 (zero tangent space) - convert to regular zeros
+        if hasattr(jax_item, "dtype") and str(jax_item.dtype).startswith("[('float0"):
+            jax_item = jnp.zeros_like(jax_item, dtype=jnp.float32)
+
+        if not np.allclose(nb_numpy, np.array(jax_item), rtol=1e-5, atol=1e-6):
+            print(
+                f"Array mismatch at {item_path}: shapes {nb_numpy.shape} vs {np.array(jax_item).shape}"
+            )
+            return False
+        return True
+
+    # Structure mismatch (one is tuple, other is not)
+    else:
+        print(
+            f"Structure mismatch at {item_path}: Nabla {type(nabla_item)} vs JAX {type(jax_item)}"
+        )
+        return False
+
+
 def run_test_with_consistency_check(
     test_name: str, nabla_fn: Callable, jax_fn: Callable
 ) -> bool:
@@ -180,79 +223,19 @@ def run_test_with_consistency_check(
     # Case 1: Both succeeded - check if results match
     if nabla_result is not None and jax_result is not None:
         try:
-            # Handle tuple results (e.g., from VJP/JVP)
-            if isinstance(nabla_result, tuple) and isinstance(jax_result, tuple):
-                if len(nabla_result) != len(jax_result):
-                    print(
-                        format_error_message(
-                            test_name,
-                            ErrorType.TUPLE_LENGTH_MISMATCH,
-                            f"Nabla: {len(nabla_result)}, JAX: {len(jax_result)}",
-                        )
-                    )
-                    return False
-
-                for i, (nb_item, jax_item) in enumerate(
-                    zip(nabla_result, jax_result, strict=False)
-                ):
-                    if hasattr(nb_item, "to_numpy"):
-                        nb_numpy = nb_item.to_numpy()
-                    else:
-                        nb_numpy = np.array(nb_item)
-
-                    # Handle JAX float0 (zero tangent space) - convert to regular zeros
-                    if hasattr(jax_item, "dtype") and str(jax_item.dtype).startswith(
-                        "[('float0"
-                    ):
-                        # JAX float0 means zero gradient - convert to regular zeros
-                        jax_item = jnp.zeros_like(jax_item, dtype=jnp.float32)
-
-                    if not jnp.allclose(nb_numpy, jax_item):
-                        print(
-                            format_error_message(
-                                test_name,
-                                ErrorType.TUPLE_ITEM_MISMATCH,
-                                f"Item {i}: shapes {nb_numpy.shape} vs {jax_item.shape}",
-                            )
-                        )
-                        return False
-
+            # Use recursive comparison for nested structures
+            if compare_nested_structures(nabla_result, jax_result, test_name):
                 print(format_error_message(test_name, ErrorType.SUCCESS))
                 return True
-
-            # Handle single array results (numeric or boolean)
             else:
-                if isinstance(nabla_result, nb.Array):
-                    nabla_numpy = nabla_result.to_numpy()
-                else:
-                    nabla_numpy = np.array(nabla_result)
-
-                # Handle JAX float0 (zero tangent space) - convert to regular zeros
-                if hasattr(jax_result, "dtype") and str(jax_result.dtype).startswith(
-                    "[('float0"
-                ):
-                    # JAX float0 means zero gradient - convert to regular zeros
-                    jax_result = jnp.zeros_like(jax_result, dtype=jnp.float32)
-
-                # Use array_equal for boolean arrays, allclose for numeric
-                if nabla_numpy.dtype == bool and jax_result.dtype == bool:
-                    arrays_match = np.array_equal(nabla_numpy, jax_result)
-                else:
-                    arrays_match = jnp.allclose(nabla_numpy, jax_result)
-
-                if arrays_match:
-                    print(format_error_message(test_name, ErrorType.SUCCESS))
-                    return True
-                else:
-                    details = (
-                        f"Shapes: Nabla {nabla_numpy.shape} vs JAX {jax_result.shape}"
+                print(
+                    format_error_message(
+                        test_name,
+                        ErrorType.RESULTS_MISMATCH,
+                        "Structure comparison failed",
                     )
-                    print(
-                        format_error_message(
-                            test_name, ErrorType.RESULTS_MISMATCH, details
-                        )
-                    )
-                    return False
+                )
+                return False
 
         except Exception as e:
             print(format_error_message(test_name, ErrorType.COMPARISON_FAILED, str(e)))

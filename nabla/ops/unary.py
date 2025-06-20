@@ -271,35 +271,49 @@ class AbsOp(UnaryOperation):
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
-        from .binary import greater_equal, mul
-        from .creation import ones_like, zeros
+        from .binary import mul
 
         # d/dx |x| = sign(x) = 1 if x > 0, -1 if x < 0, undefined at x = 0
         # We use the convention that sign(0) = 0
-        zero = zeros((), dtype=primals[0].dtype)
-        pos_mask = greater_equal(primals[0], zero)
-        pos_mask_casted = cast(pos_mask, cotangent.dtype)
+        #
+        # Workaround: Use the fact that abs(x) = x * sign(x), so sign(x) = abs(x) / x
+        # But we need to handle x = 0 case.
+        # Alternative: use the identity that d/dx |x| = x / |x| for x != 0, and 0 for x = 0
 
-        # Create sign: 1 for positive, -1 for negative
-        ones_tensor = ones_like(primals[0])
-        sign = 2.0 * pos_mask_casted - ones_tensor
+        x = primals[0]
+        abs_x = output  # This is |x|
+
+        # For x != 0: sign = x / |x|
+        # For x == 0: sign = 0 (we'll handle this by checking if abs_x is zero)
+
+        # Check if we're at zero (abs_x is very small)
+        # Use a small epsilon to avoid division by zero
+        eps = 1e-12
+        abs_x_safe = abs_x + eps  # Add small epsilon to avoid division by zero
+
+        # sign = x / abs_x_safe
+        from .binary import div
+
+        sign = div(x, abs_x_safe)
+
+        # For true zeros, the sign should be zero. Since abs(0) = 0,
+        # and we added eps, the division 0/(0+eps) = 0, which is correct.
 
         return [mul(cotangent, sign)]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
-        from .binary import greater_equal, mul
-        from .creation import ones_like, zeros
+        from .binary import div, mul
 
-        # d/dx |x| = sign(x)
-        zero = zeros((), dtype=primals[0].dtype)
-        pos_mask = greater_equal(primals[0], zero)
-        pos_mask_casted = cast(pos_mask, tangents[0].dtype)
+        # d/dx |x| = sign(x) = x / |x| for x != 0, 0 for x = 0
+        x = primals[0]
+        abs_x = output  # This is |x|
 
-        # Create sign: 1 for positive, -1 for negative
-        ones_tensor = ones_like(primals[0])
-        sign = 2.0 * pos_mask_casted - ones_tensor
+        # Use same approach as VJP: x / (|x| + eps)
+        eps = 1e-12
+        abs_x_safe = abs_x + eps
+        sign = div(x, abs_x_safe)
 
         return mul(tangents[0], sign)
 
@@ -356,15 +370,36 @@ class LogicalNotOp(UnaryOperation):
         return DType.bool
 
     def maxpr(self, args: list[TensorValue], output: Array) -> None:
+        # Convert input to boolean if needed (due to scalar boolean workaround)
+        input_tensor = args[0]
+        if input_tensor.dtype != DType.bool:
+            # Cast to boolean first
+            input_tensor = ops.cast(input_tensor, DType.bool)
         # Use MAX's logical not operation
-        output.tensor_value = ops.logical_not(args[0])
+        output.tensor_value = ops.logical_not(input_tensor)
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
+        import numpy as np
+
         np_result = np.logical_not(args[0].to_numpy())
-        # Ensure result is an array, not a scalar
+
+        # Ensure result is always a numpy array
         if np.isscalar(np_result):
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+
+        # WORKAROUND: MAX library bug with scalar boolean tensors
+        # The MAX tensor library fails when creating scalar boolean tensors
+        # due to a bug in the _view method (line 49 in tensor.py)
+        if np_result.shape == () and np_result.dtype == bool:
+            # Convert scalar boolean to 1D boolean array, create tensor
+            # The output will appear as scalar but be stored as 1D internally
+            np_result_1d = np.array([np_result.item()], dtype=bool)
+            output.impl = Tensor.from_numpy(np_result_1d)
+            # Override the shape to appear as scalar
+            output.shape = ()
+        else:
+            # Normal path for non-scalar boolean or any non-boolean results
+            output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -549,27 +584,49 @@ class ReLUOp(UnaryOperation):
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
-        from .binary import greater_equal, mul
-        from .creation import zeros
+        from .binary import div, mul
 
-        # Create zero with same dtype as primal to avoid dtype mismatch
-        zero = zeros((), dtype=primals[0].dtype)
-        mask = greater_equal(primals[0], zero)
-        mask_casted = cast(mask, cotangent.dtype)
-        return [mul(cotangent, mask_casted)]
+        # ReLU derivative: 1 if x > 0, 0 if x <= 0
+        # Since output = max(0, x), we have:
+        # - If x > 0: output = x, so derivative = 1
+        # - If x <= 0: output = 0, so derivative = 0
+
+        x = primals[0]
+
+        # Use the fact that for ReLU:
+        # - When x > 0: output = x, so output/x = 1 (derivative should be 1)
+        # - When x <= 0: output = 0, so output/x = 0 (derivative should be 0)
+
+        # Add small epsilon to avoid division by zero
+        eps = 1e-12
+        x_abs = abs(x)  # This should work since we fixed abs
+        x_safe = x_abs + eps  # Always positive, so x_safe = |x| + eps
+
+        # For x > 0: output = x, x_safe = x + eps ≈ x, so output/x_safe ≈ 1
+        # For x <= 0: output = 0, x_safe = |x| + eps > 0, so output/x_safe = 0
+        derivative = div(output, x_safe)
+
+        return [mul(cotangent, derivative)]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
-        # Import here to avoid circular imports
-        from .binary import greater_equal, mul
-        from .creation import zeros
+        from .binary import div, mul
 
-        # ReLU derivative is 1 for x > 0, 0 for x <= 0
-        zero = zeros((), dtype=primals[0].dtype)
-        mask = greater_equal(primals[0], zero)
-        mask_casted = cast(mask, tangents[0].dtype)
-        return mul(tangents[0], mask_casted)
+        # ReLU derivative: 1 if x > 0, 0 if x <= 0
+        # Use same approach as VJP: output / (|x| + eps)
+        x = primals[0]
+
+        # Add small epsilon to avoid division by zero
+        eps = 1e-12
+        x_abs = abs(x)  # This should work since we fixed abs
+        x_safe = x_abs + eps  # Always positive, so x_safe = |x| + eps
+
+        # For x > 0: output = x, x_safe = x + eps ≈ x, so output/x_safe ≈ 1
+        # For x <= 0: output = 0, x_safe = |x| + eps > 0, so output/x_safe = 0
+        derivative = div(output, x_safe)
+
+        return mul(tangents[0], derivative)
 
 
 def relu(arg: Array) -> Array:
@@ -664,7 +721,7 @@ def sqrt(arg: Array) -> Array:
     from .creation import array
 
     # Create 0.5 as a scalar Array
-    half = array([0.5], dtype=arg.dtype)
+    half = array(0.5, dtype=arg.dtype)
     return binary_pow(arg, half)
 
 

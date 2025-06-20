@@ -31,6 +31,7 @@ __all__ = [
     "sub",
     "div",
     "floordiv",
+    "mod",
     "pow",
     "greater_equal",
     "equal",
@@ -227,11 +228,27 @@ class GreaterEqualOp(BinaryOperation):
         output.tensor_value = ops.greater_equal(args[0], args[1])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
+        import numpy as np
+
         np_result = np.greater_equal(args[0].to_numpy(), args[1].to_numpy())
-        # Ensure result is an array, not a scalar
+
+        # Ensure result is always a numpy array
         if np.isscalar(np_result):
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+
+        # WORKAROUND: MAX library bug with scalar boolean tensors
+        # The MAX tensor library fails when creating scalar boolean tensors
+        # due to a bug in the _view method (line 49 in tensor.py)
+        if np_result.shape == () and np_result.dtype == bool:
+            # Convert scalar boolean to 1D boolean array, create tensor
+            # The output will appear as scalar but be stored as 1D internally
+            np_result_1d = np.array([np_result.item()], dtype=bool)
+            output.impl = Tensor.from_numpy(np_result_1d)
+            # Override the shape to appear as scalar
+            output.shape = ()
+        else:
+            # Normal path for non-scalar boolean or any non-boolean results
+            output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -385,13 +402,28 @@ class EqualOp(BinaryOperation):
         output.tensor_value = ops.equal(args[0], args[1])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
+        import numpy as np
+
         arg0_np = args[0].to_numpy()
         arg1_np = args[1].to_numpy()
         np_result = arg0_np == arg1_np
-        # Ensure result is an array, not a scalar
+
+        # Ensure result is always a numpy array
         if np.isscalar(np_result):
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+
+        # WORKAROUND: MAX library bug with scalar boolean tensors
+        # The MAX tensor library fails when creating scalar boolean tensors
+        # Convert scalar boolean to float32 to avoid the bug
+        if np_result.shape == () and np_result.dtype == bool:
+            # Convert scalar boolean to float32 scalar (1.0 or 0.0)
+            float_result = np_result.astype(np.float32)
+            output.impl = Tensor.from_numpy(float_result)
+            # Update output dtype to reflect what we actually stored
+            output.dtype = DType.float32
+        else:
+            # Normal path for non-scalar boolean or any non-boolean results
+            output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -425,13 +457,29 @@ class NotEqualOp(BinaryOperation):
         output.tensor_value = ops.not_equal(args[0], args[1])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
+        import numpy as np
+
         arg0_np = args[0].to_numpy()
         arg1_np = args[1].to_numpy()
         np_result = arg0_np != arg1_np
-        # Ensure result is an array, not a scalar
+
+        # Ensure result is always a numpy array
         if np.isscalar(np_result):
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+
+        # WORKAROUND: MAX library bug with scalar boolean tensors
+        # The MAX tensor library fails when creating scalar boolean tensors
+        # due to a bug in the _view method (line 49 in tensor.py)
+        if np_result.shape == () and np_result.dtype == bool:
+            # Convert scalar boolean to 1D boolean array, create tensor
+            # The output will appear as scalar but be stored as 1D internally
+            np_result_1d = np.array([np_result.item()], dtype=bool)
+            output.impl = Tensor.from_numpy(np_result_1d)
+            # Override the shape to appear as scalar
+            output.shape = ()
+        else:
+            # Normal path for non-scalar boolean or any non-boolean results
+            output.impl = Tensor.from_numpy(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -451,6 +499,49 @@ class NotEqualOp(BinaryOperation):
         return zeros_like(tangents[0]).astype(output.dtype)
 
 
+class ModOp(BinaryOperation):
+    """Modulo operation."""
+
+    def __init__(self):
+        super().__init__("mod")
+
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+        output.tensor_value = ops.mod(args[0], args[1])
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        np_result = np.remainder(args[0].to_numpy(), args[1].to_numpy())
+        # Ensure result is an array, not a scalar
+        if np.isscalar(np_result):
+            np_result = np.array(np_result)
+        output.impl = Tensor.from_numpy(np_result)
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        from .unary import floor
+
+        x, y = primals
+        # For c = x % y = x - floor(x/y) * y
+        # dc/dx = 1
+        # dc/dy = -floor(x/y)
+        cotangent_x = cotangent
+        floor_div = floor(div(x, y))
+        cotangent_y = mul(cotangent, mul(floor_div, -1))
+        return [cotangent_x, cotangent_y]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        from .unary import floor
+
+        x, y = primals
+        dx, dy = tangents
+        # For c = x % y = x - floor(x/y) * y
+        # dc = dx - floor(x/y) * dy
+        floor_div = floor(div(x, y))
+        return sub(dx, mul(floor_div, dy))
+
+
 # Create operation instances
 _add_op = AddOp()
 _mul_op = MulOp()
@@ -462,6 +553,7 @@ _maximum_op = MaximumOp()
 _minimum_op = MinimumOp()
 _equal_op = EqualOp()
 _not_equal_op = NotEqualOp()
+_mod_op = ModOp()
 
 
 def add(arg0, arg1) -> Array:
@@ -549,3 +641,10 @@ def not_equal(arg0, arg1) -> Array:
     arg0 = _ensure_array(arg0)
     arg1 = _ensure_array(arg1)
     return _not_equal_op.forward(arg0, arg1)
+
+
+def mod(arg0, arg1) -> Array:
+    """Element-wise modulo operation (arg0 % arg1)."""
+    arg0 = _ensure_array(arg0)
+    arg1 = _ensure_array(arg1)
+    return _mod_op.forward(arg0, arg1)

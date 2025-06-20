@@ -175,7 +175,18 @@ class Array:
             device=_DEFAULT_CPU,
             name=getattr(np_array, "name", ""),
         )
-        array.impl = Tensor.from_numpy(np_array)
+
+        # WORKAROUND: Handle scalar boolean arrays to avoid MAX library bug
+        # The MAX library's tensor.view(DType.bool) fails for scalar tensors
+        if np_array.dtype == bool and np_array.shape == ():
+            # For scalar boolean, convert to float32 to avoid the bug
+            float_array = np_array.astype(np.float32)
+            array.impl = Tensor.from_numpy(float_array)
+            # Update the dtype to reflect what we actually stored
+            array.dtype = DType.float32
+        else:
+            array.impl = Tensor.from_numpy(np_array)
+
         array.device = array.impl.device
         array._numpy_cache = np_array
         return array
@@ -261,6 +272,12 @@ class Array:
         from ..ops.unary import negate
 
         return negate(self)
+
+    def __mod__(self, other) -> Array:
+        """Modulo operator (%)."""
+        from ..ops.binary import mod
+
+        return mod(self, other)
 
     # Comparison operators
     def __lt__(self, other) -> Array:

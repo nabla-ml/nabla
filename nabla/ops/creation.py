@@ -283,13 +283,25 @@ def array(
     elif isinstance(data, int | float):
         # Handle scalar values
         np_data = np.array(data, dtype=DType.to_numpy(dtype))
+    elif isinstance(data, (np.bool_, bool)):
+        # Handle numpy boolean and Python boolean scalars
+        np_data = np.array(data, dtype=DType.to_numpy(dtype))
     else:
         raise TypeError(
             f"Data must be a list, numpy array, or scalar, got {type(data)}"
         )
 
-    array = Array.from_numpy(np_data).to(device)
-    array.traced = traced
+    # Special handling for boolean scalar tensors (MAX bug workaround)
+    if np_data.shape == () and dtype == DType.bool:
+        # For scalar boolean, create as float and convert
+        float_array = Array.from_numpy(np_data.astype(np.float32)).to(device)
+        float_array.traced = traced
+        array = float_array.astype(DType.bool)
+
+    else:
+        array = Array.from_numpy(np_data).to(device)
+        array.traced = traced
+
     return broadcast_batch_dims(array, batch_dims) if batch_dims else array
 
 
