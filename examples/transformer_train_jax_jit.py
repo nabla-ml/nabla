@@ -1,5 +1,5 @@
 """
-🤖 EDUCATIONAL TRANSFORMER IMPLEMENTATION WITH JAX (jitted mode)
+🤖 EDUCATIONAL TRANSFORMER IMPLEMENTATION WITH JAX
 
 This script demonstrates a complete transformer (encoder-decoder) implementation
 from scratch using only raw JAX primitives. The goal is educational clarity
@@ -217,8 +217,8 @@ def scaled_dot_product_attention(q, k, v, mask=None):
     if mask is not None:
         scores = jnp.where(mask == 0, -1e9, scores)
 
-    # Apply softmax to get attention weights (manual softmax to match Nabla)
-    attention_weights = manual_softmax(scores, axis=-1)
+    # Apply softmax to get attention weights
+    attention_weights = jax.nn.softmax(scores, axis=-1)
 
     # Apply attention weights to values
     output = jnp.matmul(attention_weights, v)
@@ -500,8 +500,8 @@ def cross_entropy_loss(logits, targets):
     # Create one-hot by comparing target indices with vocabulary indices
     one_hot_targets = jnp.equal(targets_expanded, vocab_indices).astype(jnp.float32)
 
-    # Compute log probabilities and cross-entropy using manual log_softmax
-    log_probs = manual_log_softmax(logits)
+    # Compute log probabilities and cross-entropy
+    log_probs = jax.nn.log_softmax(logits)
     cross_entropy = -jnp.sum(one_hot_targets * log_probs)
 
     # Average over batch size
@@ -816,6 +816,7 @@ def adamw_step(params, gradients, m_states, v_states, step, learning_rate):
     return updated_params, updated_m, updated_v
 
 
+@jax.jit
 def complete_training_step(
     encoder_in, decoder_in, targets, params, m_states, v_states, step
 ):
@@ -937,69 +938,33 @@ def train_transformer():
 
     print("✅ Setup complete! Starting training...\n")
 
-    # Training loop
-    start_time = time.time()
-    print("Starting training loop...")
-    epoch_start_time = time.time()
+    # JIT warmup phase (exclude from timing)
+    print("🔥 JIT warmup (3 steps)...")
+    for warmup_step in range(3):
+        encoder_input, decoder_input, targets = create_reverse_dataset(BATCH_SIZE)
+        params, m_states, v_states, _ = complete_training_step(
+            encoder_input,
+            decoder_input,
+            targets,
+            params,
+            m_states,
+            v_states,
+            warmup_step + 1,
+        )
+    print("✅ Warmup complete! Starting timed training...\n")
 
+    # Training loop (timed after warmup)
+    start_time = time.time()
     for epoch in range(1, NUM_EPOCHS + 1):
         # Generate training batch
         encoder_input, decoder_input, targets = create_reverse_dataset(BATCH_SIZE)
 
-        if epoch == 1:
-            print(f"First batch generated at: {time.time() - epoch_start_time:.2f}s")
+        # Perform one training step (JIT-compiled for speed)
+        params, m_states, v_states, loss = complete_training_step(
+            encoder_input, decoder_input, targets, params, m_states, v_states, epoch
+        )
 
-        # Perform one training step with detailed debugging for first epoch
-        step_start = time.time()
-
-        if epoch == 1:
-            # Debug first epoch step by step
-            print("Breaking down first training step:")
-
-            # Test forward pass
-            forward_start = time.time()
-            logits = transformer_forward(encoder_input, decoder_input, params)
-            forward_time = time.time() - forward_start
-            print(f"  Forward pass: {forward_time:.2f}s")
-
-            # Test loss computation
-            loss_start = time.time()
-            loss_value = cross_entropy_loss(logits, targets)
-            loss_time = time.time() - loss_start
-            print(f"  Loss computation: {loss_time:.2f}s")
-
-            # Test gradient computation (this is likely the slow part)
-            grad_start = time.time()
-
-            def loss_fn(params_inner):
-                logits = transformer_forward(encoder_input, decoder_input, params_inner)
-                return cross_entropy_loss(logits, targets)
-
-            loss_value, param_gradients = value_and_grad(loss_fn)(params)
-            grad_time = time.time() - grad_start
-            print(f"  Gradient computation: {grad_time:.2f}s")
-
-            # Test optimizer step
-            opt_start = time.time()
-            params, m_states, v_states = adamw_step(
-                params, param_gradients, m_states, v_states, epoch, LEARNING_RATE
-            )[:3]
-            opt_time = time.time() - opt_start
-            print(f"  Optimizer step: {opt_time:.2f}s")
-
-            loss = loss_value
-        else:
-            # Use JIT for subsequent epochs
-            params, m_states, v_states, loss = complete_training_step(
-                encoder_input, decoder_input, targets, params, m_states, v_states, epoch
-            )
-
-        step_time = time.time() - step_start
-
-        if epoch == 1:
-            print(f"Total first training step: {step_time:.2f}s")
-
-        # Print progress (similar to Nabla style)
+        # Print progress
         if epoch % PRINT_INTERVAL == 0:
             elapsed = time.time() - start_time
             print(f"Epoch {epoch:5d} | Loss: {float(loss):.4f} | Time: {elapsed:.1f}s")

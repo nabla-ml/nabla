@@ -67,7 +67,7 @@ D_FF = 128  # Feed-forward network hidden dimension
 # Training Configuration
 BATCH_SIZE = 64  # Number of sequences per training batch
 LEARNING_RATE = 0.0005  # AdamW learning rate (reduced for stability)
-NUM_EPOCHS = 300  # Total training epochs (good balance for demonstration)
+NUM_EPOCHS = 500  # Total training epochs (good balance for demonstration)
 PRINT_INTERVAL = 10  # Print progress every N epochs
 
 # ============================================================================
@@ -143,12 +143,9 @@ def scaled_dot_product_attention(q, k, v, mask=None):
     )
 
     # Apply mask if provided (set masked positions to large negative value)
-    # TODO: Fix mask application when nb.where properly supports array comparisons
-    # For now, skip masking to allow basic transformer functionality
-    # if mask is not None:
-    #     mask_value = nb.full_like(scores, -1e9)
-    #     mask_condition = mask == nb.zeros_like(mask)
-    #     scores = nb.where(mask_condition, mask_value, scores)
+    if mask is not None:
+        # mask is boolean, so we need to check where mask is False (0)
+        scores = nb.where(mask, scores, nb.full_like(scores, -1e9))
 
     # Apply softmax to get attention weights
     attention_weights = nb.softmax(scores, axis=-1)
@@ -724,7 +721,6 @@ def adamw_step(params, gradients, m_states, v_states, step, learning_rate):
     return updated_params, updated_m, updated_v
 
 
-# @nb.jit
 def complete_training_step(
     encoder_in, decoder_in, targets, params, m_states, v_states, step
 ):

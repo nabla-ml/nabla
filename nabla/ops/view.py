@@ -1376,6 +1376,12 @@ class ArraySliceOp(ViewOperation):
     """Array slicing operation."""
 
     def __init__(self, slices: list[slice], squeeze_axes: list[int] | None = None):
+        # Store original slices for reference
+        self.original_slices = slices.copy()
+
+        # Check if we have negative steps - if so, we'll need special handling
+        self.has_negative_steps = any(s.step is not None and s.step < 0 for s in slices)
+
         # Convert slices to a more manageable format
         slice_strs = []
         for s in slices:
@@ -1423,8 +1429,18 @@ class ArraySliceOp(ViewOperation):
                 # Calculate output size for this dimension
                 if step > 0:
                     output_size = max(0, (stop - start + step - 1) // step)
+                elif step < 0:
+                    # Handle negative step - reverse direction
+                    # For negative step, we need start > stop (conceptually)
+                    # But we need to handle the actual range calculation
+                    if start >= stop:
+                        # For negative step with start >= stop, we go from start down to stop+1
+                        output_size = max(0, (start - stop + (-step) - 1) // (-step))
+                    else:
+                        # Invalid range for negative step
+                        output_size = 0
                 else:
-                    raise ValueError("Negative step not supported")
+                    raise ValueError("Step cannot be zero")
 
                 # Skip this dimension if it should be squeezed (JAX-compatible behavior)
                 if i not in self.squeeze_axes:
@@ -1437,6 +1453,15 @@ class ArraySliceOp(ViewOperation):
 
     def maxpr(self, args: list[TensorValue], output: Array) -> None:
         """MAX graph implementation using ops.slice_tensor."""
+
+        # Check for negative steps - not supported in JIT mode yet
+        if self.has_negative_steps:
+            raise NotImplementedError(
+                "Negative step slicing (e.g., [::-1]) is not yet supported in JIT-compiled functions "
+                "due to MAX engine limitations. Use eager execution instead, or avoid negative steps "
+                "in JIT-compiled code."
+            )
+
         # Build slice indices for MAX ops.slice_tensor
         # Need to account for batch_dims - slicing only applies to shape dimensions
         slice_indices = []
@@ -1450,7 +1475,11 @@ class ArraySliceOp(ViewOperation):
             s = self.slices[i]
             slice_indices.append(slice(s.start, s.stop, s.step))
 
-        # Use ops.slice_tensor which follows NumPy slicing semantics
+        # Add full slices for any remaining dimensions
+        for _ in range(len(self.slices), len(args[0].shape)):
+            slice_indices.append(slice(None))
+
+        # Apply the slicing
         result = ops.slice_tensor(args[0], slice_indices)
 
         # Apply squeezing for JAX-compatible behavior
@@ -1622,10 +1651,11 @@ class PadOp(Operation):
                 stop = s.stop if s.stop is not None else dim_size
                 step = s.step if s.step is not None else 1
 
-                if step != 1:
-                    raise NotImplementedError(
-                        "Stepped slicing not yet supported in pad"
-                    )
+                # Handle step sizes - now supported!
+                # if step != 1:
+                #     raise NotImplementedError(
+                #         "Stepped slicing not yet supported in pad"
+                #     )
 
                 # Handle negative indices
                 if start < 0:
@@ -1637,8 +1667,12 @@ class PadOp(Operation):
                 start = max(0, min(start, dim_size))
                 stop = max(start, min(stop, dim_size))
 
-                # Calculate output size for this dimension
-                output_size = stop - start
+                # Calculate output size for this dimension, accounting for step
+                if step == 1:
+                    output_size = stop - start
+                else:
+                    # For stepped slicing: number of elements = ceil((stop - start) / step)
+                    output_size = (stop - start + step - 1) // step
                 expected_shape.append(output_size)
             else:
                 # No slice for this dimension, keep original size
@@ -1654,10 +1688,74 @@ class PadOp(Operation):
         return self.target_shape
 
     def maxpr(self, args: list[TensorValue], output: Array) -> None:
-        """MAX graph implementation using scatter operation."""
-        raise NotImplementedError(
-            "MAX graph implementation for pad is not yet implemented."
+        """MAX graph implementation using range->reshape->broadcast->slice->scatter approach."""
+        import numpy as np
+
+        input_tensor = args[0]
+
+        # Step 1: Calculate total elements in output shape
+        total_elements = int(np.prod(output.shape))
+
+        # Step 2: Create flat index tensor using ops.range with int32 dtype
+        from max.dtype import DType
+
+        flat_indices = ops.range(0, total_elements, 1, dtype=DType.int32)
+
+        # Step 3: Reshape to output shape
+        reshaped_indices = ops.reshape(flat_indices, output.shape)
+
+        # Step 4: Broadcast to include batch dims if needed
+        if output.batch_dims:
+            # Need to broadcast to batch_dims + output.shape
+            target_shape = list(output.batch_dims) + list(output.shape)
+            broadcasted_indices = ops.broadcast_to(reshaped_indices, target_shape)
+        else:
+            broadcasted_indices = reshaped_indices
+
+        # Step 5: Slice the index tensor using self.slices to get target indices
+        slice_indices = []
+
+        # Add full slices for batch dimensions
+        for _ in range(len(output.batch_dims)):
+            slice_indices.append(slice(None))
+
+        # Add the actual slices for shape dimensions
+        for s in self.slices:
+            slice_indices.append(slice(s.start, s.stop, s.step))
+
+        # Add full slices for any remaining dimensions
+        for _ in range(len(self.slices), len(output.shape)):
+            slice_indices.append(slice(None))
+
+        # Slice to get the indices where input should go
+        sliced_indices = ops.slice_tensor(broadcasted_indices, slice_indices)
+
+        # Step 6: Flatten the sliced indices
+        flattened_indices = ops.reshape(sliced_indices, [-1])
+
+        # Step 7: Create flat zero tensor for scattering
+        total_output_elements = int(
+            np.prod(list(output.batch_dims) + list(output.shape))
         )
+        from max.graph import DeviceRef
+
+        zero_scalar = ops.constant(
+            0.0, dtype=output.dtype, device=DeviceRef.from_device(output.device)
+        )
+        flat_zeros = ops.broadcast_to(zero_scalar, [total_output_elements])
+
+        # Step 8: Flatten input tensor
+        input_flattened = ops.reshape(input_tensor, [-1])
+
+        # Step 9: Use scatter to place input values at target indices
+        # scatter(input, updates, indices, axis) - scatter along axis=0 (first axis) of flat tensor
+        scattered_flat = ops.scatter(
+            flat_zeros, input_flattened, flattened_indices, axis=0
+        )
+
+        # Step 10: Reshape result back to target shape
+        final_shape = list(output.batch_dims) + list(output.shape)
+        output.tensor_value = ops.reshape(scattered_flat, final_shape)
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         """Eager execution using NumPy."""

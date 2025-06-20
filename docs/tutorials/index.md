@@ -11,5 +11,5 @@ value_and_grads_cpu
 value_and_grads_gpu
 mlp_training_cpu
 mlp_training_gpu
-nabla_vs_jax
-```
+jax_vs_nabla_mlp_cpu
+jax_vs_nabla_transformer_cpu

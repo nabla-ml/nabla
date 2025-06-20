@@ -1,18 +1,20 @@
 """
-🤖 EDUCATIONAL TRANSFORMER IMPLEMENTATION WITH JAX (jitted mode)
+🤖 EDUCATIONAL TRANSFORMER IMPLEMENTATION WITH NABLA (jitted mode)
 
 This script demonstrates a complete transformer (encoder-decoder) implementation
-from scratch using only raw JAX primitives. The goal is educational clarity
+from scratch using only raw Nabla primitives. The goal is educational clarity
 while maintaining proper performance optimizations.
 
 LEARNING OBJECTIVES:
 - Understand transformer architecture components (attention, feed-forward, layer norm)
-- See how encoder-decoder models work for sequence-to-sequence tasks
-- Learn JAX best practices (JIT compilation, functional programming, pytrees)
+- See how encoder-decoder models work with one-hot encoding
+    # Create one-hot by comparing target indices with vocabulary indices
+    one_hot_targets = nb.equal(targets_expanded, vocab_indices).astype(nb.DType.float32) for sequence-to-sequence tasks
+- Learn Nabla best practices (JIT compilation, functional programming, pytrees)
 - Experience end-to-end training of a neural sequence model
 
 TASK:     print("=" * 60)
-    print("🤖 TRAINING TRANSFORMER FROM SCRATCH WITH JAX")
+    print("🤖 TRAINING TRANSFORMER FROM SCRATCH WITH Nabla")
     print("=" * 60)
     print(f"📋 Task: Reverse sequences of {SOURCE_SEQ_LEN} integers")
     print(f"🏗️  Architecture: {NUM_LAYERS} layers, {D_MODEL} d_model, {NUM_HEADS} attention heads")
@@ -23,7 +25,7 @@ TASK:     print("=" * 60)
 - Output: [e, d, c, b, a, <END>]
 
 KEY FEATURES:
-✅ Pure JAX implementation (no high-level libraries)
+✅ Pure Nabla implementation (no high-level libraries)
 ✅ Full transformer with multi-head attention
 ✅ Proper masking and positional encoding
 ✅ JIT-compiled training steps for performance
@@ -41,10 +43,10 @@ ARCHITECTURE DETAILS:
 import time
 from typing import Any
 
-import jax
-import jax.numpy as jnp
 import numpy as np
-from jax import value_and_grad
+
+import nabla as nb
+from nabla.nn.layers.activations import log_softmax
 
 # ============================================================================
 # CONFIGURATION
@@ -73,7 +75,7 @@ PRINT_INTERVAL = 10  # Print progress every N epochs
 # ============================================================================
 
 
-def positional_encoding(max_seq_len: int, d_model: int) -> jnp.ndarray:
+def positional_encoding(max_seq_len: int, d_model: int) -> nb.Array:
     """
     Create sinusoidal positional encodings for transformer inputs.
 
@@ -89,13 +91,13 @@ def positional_encoding(max_seq_len: int, d_model: int) -> jnp.ndarray:
         Positional encoding matrix of shape (1, max_seq_len, d_model)
     """
     # Create position indices: [0, 1, 2, ..., max_seq_len-1]
-    position = jnp.arange(max_seq_len).reshape(
+    position = nb.arange((max_seq_len,)).reshape(
         (max_seq_len, 1)
     )  # Shape: (max_seq_len, 1)
 
     # Create dimension indices for pairs: [0, 1, 2, ..., d_model//2-1]
     half_d_model = d_model // 2
-    dim_indices = jnp.arange(half_d_model).reshape(
+    dim_indices = nb.arange((half_d_model,)).reshape(
         (1, half_d_model)
     )  # Shape: (1, d_model//2)
 
@@ -106,90 +108,18 @@ def positional_encoding(max_seq_len: int, d_model: int) -> jnp.ndarray:
     angles = position / scaling_factors  # Shape: (max_seq_len, d_model//2)
 
     # Calculate sine and cosine
-    sin_vals = jnp.sin(angles)  # Shape: (max_seq_len, d_model//2)
-    cos_vals = jnp.cos(angles)  # Shape: (max_seq_len, d_model//2)
+    sin_vals = nb.sin(angles)  # Shape: (max_seq_len, d_model//2)
+    cos_vals = nb.cos(angles)  # Shape: (max_seq_len, d_model//2)
 
     # Interleave sine and cosine: [sin, cos, sin, cos, ...]
     # Stack and reshape to create the correct pattern
-    stacked = jnp.stack(
+    stacked = nb.stack(
         [sin_vals, cos_vals], axis=2
     )  # Shape: (max_seq_len, d_model//2, 2)
     pe = stacked.reshape((max_seq_len, d_model))  # Shape: (max_seq_len, d_model)
 
     # Add batch dimension
     return pe.reshape((1, max_seq_len, d_model))
-
-
-def manual_softmax(x, axis=-1):
-    """
-    Manual softmax implementation to match Nabla's approach.
-    """
-    # Subtract max for numerical stability
-    x_max = jnp.max(x, axis=axis, keepdims=True)
-    x_shifted = x - x_max
-
-    # Compute exp and sum
-    exp_x = jnp.exp(x_shifted)
-    sum_exp = jnp.sum(exp_x, axis=axis, keepdims=True)
-
-    return exp_x / sum_exp
-
-
-def manual_log_softmax(x, axis=-1):
-    """
-    Manual log softmax implementation to match Nabla's approach.
-    """
-    # Subtract max for numerical stability
-    x_max = jnp.max(x, axis=axis, keepdims=True)
-    x_shifted = x - x_max
-
-    # Compute log(sum(exp(x)))
-    log_sum_exp = jnp.log(jnp.sum(jnp.exp(x_shifted), axis=axis, keepdims=True))
-
-    return x_shifted - log_sum_exp
-
-
-def manual_embedding_lookup(token_ids, embedding_matrix):
-    """
-    Perform embedding lookup manually using where operations to match Nabla style.
-
-    Args:
-        token_ids: (batch_size, seq_len) - token indices
-        embedding_matrix: (vocab_size, d_model) - embedding vectors
-
-    Returns:
-        embeddings: (batch_size, seq_len, d_model)
-    """
-    batch_size, seq_len = token_ids.shape
-    vocab_size, d_model = embedding_matrix.shape
-
-    # Initialize output with zeros
-    output = jnp.zeros((batch_size, seq_len, d_model))
-
-    # For each token in vocabulary, use where to select appropriate embeddings
-    for token_idx in range(vocab_size):
-        # Create condition: token_ids == token_idx
-        token_idx_array = jnp.array([token_idx], dtype=jnp.int32)
-        token_idx_broadcast = jnp.broadcast_to(token_idx_array, token_ids.shape)
-        condition = jnp.equal(token_ids, token_idx_broadcast)
-
-        # Expand condition to match embedding dimensions (batch, seq_len, d_model)
-        condition_expanded = jnp.broadcast_to(
-            condition.reshape((batch_size, seq_len, 1)), (batch_size, seq_len, d_model)
-        )
-
-        # Get the embedding vector for this token (1, 1, d_model)
-        token_embedding = embedding_matrix[token_idx : token_idx + 1, :].reshape(
-            (1, 1, d_model)
-        )
-        token_embedding_expanded = jnp.broadcast_to(
-            token_embedding, (batch_size, seq_len, d_model)
-        )
-
-        # Use where to select this embedding where condition is true
-        output = jnp.where(condition_expanded, token_embedding_expanded, output)
-
-    return output
 
 
 def scaled_dot_product_attention(q, k, v, mask=None):
@@ -208,20 +138,20 @@ def scaled_dot_product_attention(q, k, v, mask=None):
     d_k = q.shape[-1]  # Dimension of key vectors
 
     # Compute attention scores: Q @ K^T / sqrt(d_k)
-    # Use manual sqrt implementation to match Nabla style
-    scores = jnp.matmul(q, k.transpose((0, 1, 3, 2))) / jnp.sqrt(
-        jnp.array([d_k], dtype=jnp.float32)
+    scores = nb.matmul(q, k.permute((0, 1, 3, 2))) / nb.sqrt(
+        nb.array([d_k], dtype=nb.DType.float32)
     )
 
     # Apply mask if provided (set masked positions to large negative value)
     if mask is not None:
-        scores = jnp.where(mask == 0, -1e9, scores)
+        # mask is boolean, so we need to check where mask is False (0)
+        scores = nb.where(mask, scores, nb.full_like(scores, -1e9))
 
-    # Apply softmax to get attention weights (manual softmax to match Nabla)
-    attention_weights = manual_softmax(scores, axis=-1)
+    # Apply softmax to get attention weights
+    attention_weights = nb.softmax(scores, axis=-1)
 
     # Apply attention weights to values
-    output = jnp.matmul(attention_weights, v)
+    output = nb.matmul(attention_weights, v)
     return output
 
 
@@ -248,26 +178,26 @@ def multi_head_attention(x, xa, params, mask=None):
     d_head = d_model // num_heads
 
     # Linear projections: (batch, seq_len, d_model) -> (batch, seq_len, d_model)
-    q_linear = jnp.matmul(x, params["w_q"])
-    k_linear = jnp.matmul(xa, params["w_k"])
-    v_linear = jnp.matmul(xa, params["w_v"])
+    q_linear = nb.matmul(x, params["w_q"])
+    k_linear = nb.matmul(xa, params["w_k"])
+    v_linear = nb.matmul(xa, params["w_v"])
 
     # Reshape and transpose for multi-head attention
     # (batch, seq_len, d_model) -> (batch, num_heads, seq_len, d_head)
-    q = q_linear.reshape(batch_size, seq_len, num_heads, d_head).transpose((0, 2, 1, 3))
-    k = k_linear.reshape(batch_size, -1, num_heads, d_head).transpose((0, 2, 1, 3))
-    v = v_linear.reshape(batch_size, -1, num_heads, d_head).transpose((0, 2, 1, 3))
+    q = q_linear.reshape((batch_size, seq_len, num_heads, d_head)).permute((0, 2, 1, 3))
+    k = k_linear.reshape((batch_size, -1, num_heads, d_head)).permute((0, 2, 1, 3))
+    v = v_linear.reshape((batch_size, -1, num_heads, d_head)).permute((0, 2, 1, 3))
 
     # Apply scaled dot-product attention
     attention_output = scaled_dot_product_attention(q, k, v, mask)
 
     # Concatenate heads: (batch, num_heads, seq_len, d_head) -> (batch, seq_len, d_model)
-    attention_output = attention_output.transpose((0, 2, 1, 3)).reshape(
-        batch_size, seq_len, d_model
+    attention_output = attention_output.permute((0, 2, 1, 3)).reshape(
+        (batch_size, seq_len, d_model)
     )
 
     # Final linear projection
-    return jnp.matmul(attention_output, params["w_o"])
+    return nb.matmul(attention_output, params["w_o"])
 
 
 def feed_forward(x, params):
@@ -282,10 +212,10 @@ def feed_forward(x, params):
         Feed-forward output (batch, seq_len, d_model)
     """
     # First linear transformation with ReLU activation
-    hidden = jax.nn.relu(jnp.matmul(x, params["w1"]) + params["b1"])
+    hidden = nb.relu(nb.matmul(x, params["w1"]) + params["b1"])
 
     # Second linear transformation (output layer)
-    output = jnp.matmul(hidden, params["w2"]) + params["b2"]
+    output = nb.matmul(hidden, params["w2"]) + params["b2"]
 
     return output
 
@@ -302,12 +232,12 @@ def layer_norm(x, params, eps=1e-6):
     Returns:
         Layer normalized output (batch, seq_len, d_model)
     """
-    # Compute mean and variance manually to match Nabla's approach
-    mean = jnp.mean(x, axis=-1, keepdims=True)
-    variance = jnp.mean((x - mean) * (x - mean), axis=-1, keepdims=True)
+    # Compute mean and standard deviation across the last dimension (d_model)
+    mean = nb.mean(x, axes=[-1], keep_dims=True)
+    variance = nb.mean((x - mean) * (x - mean), axes=[-1], keep_dims=True)
 
     # Normalize and apply learnable scale/shift parameters
-    normalized = (x - mean) / jnp.sqrt(variance + eps)
+    normalized = (x - mean) / nb.sqrt(variance + eps)
     return params["gamma"] * normalized + params["beta"]
 
 
@@ -332,13 +262,13 @@ def encoder_layer(x, params, mask):
         Encoder layer output (batch, seq_len, d_model)
     """
     # Pre-norm: normalize then apply attention, then residual
-    norm_x = layer_norm(x, params["norm1"])
-    attention_output = multi_head_attention(norm_x, norm_x, params["mha"], mask)
+    normed_x = layer_norm(x, params["norm1"])
+    attention_output = multi_head_attention(normed_x, normed_x, params["mha"], mask)
     x = x + attention_output
 
     # Pre-norm: normalize then apply FFN, then residual
-    norm_x = layer_norm(x, params["norm2"])
-    ffn_output = feed_forward(norm_x, params["ffn"])
+    normed_x = layer_norm(x, params["norm2"])
+    ffn_output = feed_forward(normed_x, params["ffn"])
     x = x + ffn_output
 
     return x
@@ -364,22 +294,22 @@ def decoder_layer(x, encoder_output, params, look_ahead_mask, padding_mask):
         Decoder layer output (batch, target_seq_len, d_model)
     """
     # 1. Pre-norm masked self-attention
-    norm_x = layer_norm(x, params["norm1"])
+    normed_x = layer_norm(x, params["norm1"])
     masked_attention_output = multi_head_attention(
-        norm_x, norm_x, params["masked_mha"], look_ahead_mask
+        normed_x, normed_x, params["masked_mha"], look_ahead_mask
     )
     x = x + masked_attention_output
 
     # 2. Pre-norm cross-attention
-    norm_x = layer_norm(x, params["norm2"])
+    normed_x = layer_norm(x, params["norm2"])
     cross_attention_output = multi_head_attention(
-        norm_x, encoder_output, params["cross_mha"], padding_mask
+        normed_x, encoder_output, params["cross_mha"], padding_mask
     )
     x = x + cross_attention_output
 
     # 3. Pre-norm feed-forward
-    norm_x = layer_norm(x, params["norm3"])
-    ffn_output = feed_forward(norm_x, params["ffn"])
+    normed_x = layer_norm(x, params["norm3"])
+    ffn_output = feed_forward(normed_x, params["ffn"])
     x = x + ffn_output
 
     return x
@@ -405,16 +335,20 @@ def transformer_forward(encoder_inputs, decoder_inputs, params):
     # Create causal mask for decoder self-attention (prevents looking at future tokens)
     target_seq_len = decoder_inputs.shape[1]
 
-    # Create proper causal mask using manual approach to match Nabla
-    positions = jnp.arange(target_seq_len)  # [0, 1, 2, ..., seq_len-1]
-    pos_i = positions.reshape((target_seq_len, 1))  # Column vector
-    pos_j = positions.reshape((1, target_seq_len))  # Row vector
+    # Create proper causal mask using available Nabla operations
+    # We need a lower triangular matrix where mask[i,j] = 1 if j <= i, else 0
+
+    # Create position indices
+    positions = nb.arange((target_seq_len,))  # [0, 1, 2, ..., seq_len-1]
+    pos_i = nb.reshape(positions, (target_seq_len, 1))  # Column vector
+    pos_j = nb.reshape(positions, (1, target_seq_len))  # Row vector
 
     # Create causal mask: allow attention to position j if j <= i
-    causal_mask = pos_i >= pos_j  # Shape: (seq_len, seq_len)
+    # This is equivalent to pos_i >= pos_j
+    causal_mask = nb.greater_equal(pos_i, pos_j)  # Shape: (seq_len, seq_len)
 
     # Add batch and head dimensions: (1, 1, seq_len, seq_len)
-    look_ahead_mask = causal_mask.reshape((1, 1, target_seq_len, target_seq_len))
+    look_ahead_mask = nb.reshape(causal_mask, (1, 1, target_seq_len, target_seq_len))
 
     # Get sequence lengths
     encoder_seq_len = encoder_inputs.shape[1]
@@ -422,9 +356,11 @@ def transformer_forward(encoder_inputs, decoder_inputs, params):
 
     # --- ENCODER PROCESSING ---
     # Convert token ids to embeddings and add positional encoding
-    encoder_embeddings = manual_embedding_lookup(
+    batch_size = encoder_inputs.shape[0]
+    encoder_embeddings = embedding_lookup(
         encoder_inputs, params["encoder"]["embedding"]
     )
+
     encoder_pos_enc = params["pos_encoding"][
         :, :encoder_seq_len, :
     ]  # (1, enc_seq_len, d_model)
@@ -436,12 +372,12 @@ def transformer_forward(encoder_inputs, decoder_inputs, params):
         layer_params = params["encoder"][f"layer_{layer_idx}"]
         encoder_output = encoder_layer(encoder_output, layer_params, mask=None)
 
-    # Final encoder layer norm (important for Pre-Norm architecture)
+    # Final layer norm for encoder (Pre-Norm architecture)
     encoder_output = layer_norm(encoder_output, params["encoder"]["final_norm"])
 
     # --- DECODER PROCESSING ---
     # Convert token ids to embeddings and add positional encoding
-    decoder_embeddings = manual_embedding_lookup(
+    decoder_embeddings = embedding_lookup(
         decoder_inputs, params["decoder"]["embedding"]
     )
     decoder_pos_enc = params["pos_encoding"][
@@ -461,11 +397,11 @@ def transformer_forward(encoder_inputs, decoder_inputs, params):
             padding_mask=None,
         )
 
-    # Final decoder layer norm (important for Pre-Norm architecture)
+    # Final layer norm for decoder (Pre-Norm architecture)
     decoder_output = layer_norm(decoder_output, params["decoder"]["final_norm"])
 
     # Final linear projection to vocabulary size
-    logits = jnp.matmul(
+    logits = nb.matmul(
         decoder_output, params["output_linear"]
     )  # (batch, dec_seq_len, vocab_size)
 
@@ -483,7 +419,8 @@ def cross_entropy_loss(logits, targets):
     Returns:
         Average cross-entropy loss across batch
     """
-    # Convert targets to one-hot encoding manually to match Nabla approach
+    # Convert targets to one-hot encoding
+    # Create one-hot encoding using basic primitives without .at/.set
     batch_size, seq_len = targets.shape
     vocab_size = logits.shape[-1]
 
@@ -493,16 +430,16 @@ def cross_entropy_loss(logits, targets):
     )  # (batch_size, seq_len, 1)
 
     # Create vocabulary indices for comparison
-    vocab_indices = jnp.arange(vocab_size, dtype=jnp.int32).reshape(
+    vocab_indices = nb.arange((vocab_size,), dtype=nb.DType.int32).reshape(
         (1, 1, vocab_size)
     )  # (1, 1, vocab_size)
 
     # Create one-hot by comparing target indices with vocabulary indices
-    one_hot_targets = jnp.equal(targets_expanded, vocab_indices).astype(jnp.float32)
+    one_hot_targets = nb.equal(targets_expanded, vocab_indices).astype(nb.DType.float32)
 
-    # Compute log probabilities and cross-entropy using manual log_softmax
-    log_probs = manual_log_softmax(logits)
-    cross_entropy = -jnp.sum(one_hot_targets * log_probs)
+    # Compute log probabilities and cross-entropy
+    log_probs = log_softmax(logits)
+    cross_entropy = -nb.sum(one_hot_targets * log_probs)
 
     # Average over batch size
     batch_size = logits.shape[0]
@@ -514,30 +451,21 @@ def cross_entropy_loss(logits, targets):
 
 def init_transformer_params() -> dict[str, Any]:
     """
-    Initialize all transformer parameters using manual initialization to match Nabla.
+    Initialize all transformer parameters using Xavier/Glorot initialization.
+
+    Args:
+        key: Nabla random key for parameter initialization
 
     Returns:
         Dictionary containing all model parameters organized by component
     """
-
-    def manual_glorot_uniform(shape):
-        """Manual Xavier/Glorot uniform initialization to match Nabla style."""
-        fan_in = shape[0] if len(shape) > 1 else 1
-        fan_out = shape[1] if len(shape) > 1 else shape[0]
-        limit = jnp.sqrt(6.0 / (fan_in + fan_out))
-        return jnp.array(np.random.uniform(-limit, limit, shape).astype(np.float32))
-
-    def manual_randn(shape):
-        """Manual random normal initialization to match Nabla style."""
-        return jnp.array(np.random.randn(*shape).astype(np.float32))
-
     # Initialize main parameter structure with flexible typing
     params: dict[str, Any] = {"encoder": {}, "decoder": {}}
 
     # --- Embedding Layers ---
     print("Initializing embedding layers...")
-    params["encoder"]["embedding"] = manual_randn((VOCAB_SIZE, D_MODEL))
-    params["decoder"]["embedding"] = manual_randn((VOCAB_SIZE, D_MODEL))
+    params["encoder"]["embedding"] = nb.randn((VOCAB_SIZE, D_MODEL))
+    params["decoder"]["embedding"] = nb.randn((VOCAB_SIZE, D_MODEL))
 
     # --- Positional Encoding (Fixed, not trainable) ---
     params["pos_encoding"] = positional_encoding(MAX_SEQ_LEN, D_MODEL)
@@ -545,119 +473,98 @@ def init_transformer_params() -> dict[str, Any]:
     # --- Initialize Encoder Layers ---
     print(f"Initializing {NUM_LAYERS} encoder layers...")
     for layer_idx in range(NUM_LAYERS):
-        params["encoder"][f"layer_{layer_idx}"] = _init_encoder_layer_params(
-            manual_glorot_uniform
-        )
+        params["encoder"][f"layer_{layer_idx}"] = _init_encoder_layer_params()
 
-    # Final encoder layer norm (for Pre-Norm architecture)
+    # Final encoder layer norm (important for Pre-Norm architecture)
     params["encoder"]["final_norm"] = {
-        "gamma": jnp.ones(D_MODEL),
-        "beta": jnp.zeros(D_MODEL),
+        "gamma": nb.ones((D_MODEL,)),
+        "beta": nb.zeros((D_MODEL,)),
     }
 
     # --- Initialize Decoder Layers ---
     print(f"Initializing {NUM_LAYERS} decoder layers...")
     for layer_idx in range(NUM_LAYERS):
-        params["decoder"][f"layer_{layer_idx}"] = _init_decoder_layer_params(
-            manual_glorot_uniform
-        )
+        params["decoder"][f"layer_{layer_idx}"] = _init_decoder_layer_params()
 
-    # Final decoder layer norm (for Pre-Norm architecture)
+    # Final decoder layer norm (important for Pre-Norm architecture)
     params["decoder"]["final_norm"] = {
-        "gamma": jnp.ones(D_MODEL),
-        "beta": jnp.zeros(D_MODEL),
+        "gamma": nb.ones((D_MODEL,)),
+        "beta": nb.zeros((D_MODEL,)),
     }
 
     # --- Output Projection Layer ---
     print("Initializing output projection layer...")
-    params["output_linear"] = manual_glorot_uniform((D_MODEL, VOCAB_SIZE))
+    params["output_linear"] = nb.glorot_uniform((D_MODEL, VOCAB_SIZE))
 
     return params
 
 
-def _init_encoder_layer_params(glorot_uniform) -> dict[str, Any]:
+def _init_encoder_layer_params() -> dict[str, Any]:
     """Initialize parameters for a single encoder layer."""
     return {
         # Multi-head self-attention
         "mha": {
-            "w_q": glorot_uniform((D_MODEL, D_MODEL)),  # Query projection
-            "w_k": glorot_uniform((D_MODEL, D_MODEL)),  # Key projection
-            "w_v": glorot_uniform((D_MODEL, D_MODEL)),  # Value projection
-            "w_o": glorot_uniform((D_MODEL, D_MODEL)),  # Output projection
+            "w_q": nb.glorot_uniform((D_MODEL, D_MODEL)),  # Query projection
+            "w_k": nb.glorot_uniform((D_MODEL, D_MODEL)),  # Key projection
+            "w_v": nb.glorot_uniform((D_MODEL, D_MODEL)),  # Value projection
+            "w_o": nb.glorot_uniform((D_MODEL, D_MODEL)),  # Output projection
         },
         # Feed-forward network
         "ffn": {
-            "w1": glorot_uniform((D_MODEL, D_FF)),  # First linear layer
-            "b1": jnp.zeros(D_FF),  # First bias
-            "w2": glorot_uniform((D_FF, D_MODEL)),  # Second linear layer
-            "b2": jnp.zeros(D_MODEL),  # Second bias
+            "w1": nb.glorot_uniform((D_MODEL, D_FF)),  # First linear layer
+            "b1": nb.zeros((D_FF,)),  # First bias
+            "w2": nb.glorot_uniform((D_FF, D_MODEL)),  # Second linear layer
+            "b2": nb.zeros((D_MODEL,)),  # Second bias
         },
         # Layer normalization parameters
         "norm1": {
-            "gamma": jnp.ones(D_MODEL),
-            "beta": jnp.zeros(D_MODEL),
+            "gamma": nb.ones((D_MODEL,)),
+            "beta": nb.zeros((D_MODEL,)),
         },  # After attention
-        "norm2": {"gamma": jnp.ones(D_MODEL), "beta": jnp.zeros(D_MODEL)},  # After FFN
+        "norm2": {
+            "gamma": nb.ones((D_MODEL,)),
+            "beta": nb.zeros((D_MODEL,)),
+        },  # After FFN
     }
 
 
-def _init_decoder_layer_params(glorot_uniform) -> dict[str, Any]:
+def _init_decoder_layer_params() -> dict[str, Any]:
     """Initialize parameters for a single decoder layer."""
     return {
         # Masked multi-head self-attention
         "masked_mha": {
-            "w_q": glorot_uniform((D_MODEL, D_MODEL)),
-            "w_k": glorot_uniform((D_MODEL, D_MODEL)),
-            "w_v": glorot_uniform((D_MODEL, D_MODEL)),
-            "w_o": glorot_uniform((D_MODEL, D_MODEL)),
+            "w_q": nb.glorot_uniform((D_MODEL, D_MODEL)),
+            "w_k": nb.glorot_uniform((D_MODEL, D_MODEL)),
+            "w_v": nb.glorot_uniform((D_MODEL, D_MODEL)),
+            "w_o": nb.glorot_uniform((D_MODEL, D_MODEL)),
         },
         # Cross-attention (encoder-decoder attention)
         "cross_mha": {
-            "w_q": glorot_uniform((D_MODEL, D_MODEL)),  # Query from decoder
-            "w_k": glorot_uniform((D_MODEL, D_MODEL)),  # Key from encoder
-            "w_v": glorot_uniform((D_MODEL, D_MODEL)),  # Value from encoder
-            "w_o": glorot_uniform((D_MODEL, D_MODEL)),
+            "w_q": nb.glorot_uniform((D_MODEL, D_MODEL)),  # Query from decoder
+            "w_k": nb.glorot_uniform((D_MODEL, D_MODEL)),  # Key from encoder
+            "w_v": nb.glorot_uniform((D_MODEL, D_MODEL)),  # Value from encoder
+            "w_o": nb.glorot_uniform((D_MODEL, D_MODEL)),
         },
         # Feed-forward network
         "ffn": {
-            "w1": glorot_uniform((D_MODEL, D_FF)),
-            "b1": jnp.zeros(D_FF),
-            "w2": glorot_uniform((D_FF, D_MODEL)),
-            "b2": jnp.zeros(D_MODEL),
+            "w1": nb.glorot_uniform((D_MODEL, D_FF)),
+            "b1": nb.zeros((D_FF,)),
+            "w2": nb.glorot_uniform((D_FF, D_MODEL)),
+            "b2": nb.zeros((D_MODEL,)),
         },
         # Layer normalization parameters (decoder has 3 layer norms)
         "norm1": {
-            "gamma": jnp.ones(D_MODEL),
-            "beta": jnp.zeros(D_MODEL),
+            "gamma": nb.ones((D_MODEL,)),
+            "beta": nb.zeros((D_MODEL,)),
         },  # After masked attention
         "norm2": {
-            "gamma": jnp.ones(D_MODEL),
-            "beta": jnp.zeros(D_MODEL),
+            "gamma": nb.ones((D_MODEL,)),
+            "beta": nb.zeros((D_MODEL,)),
         },  # After cross attention
-        "norm3": {"gamma": jnp.ones(D_MODEL), "beta": jnp.zeros(D_MODEL)},  # After FFN
-    }
-    """Initialize parameters for a single encoder layer."""
-    return {
-        # Multi-head self-attention
-        "mha": {
-            "w_q": glorot_init(get_next_key(), (D_MODEL, D_MODEL)),  # Query projection
-            "w_k": glorot_init(get_next_key(), (D_MODEL, D_MODEL)),  # Key projection
-            "w_v": glorot_init(get_next_key(), (D_MODEL, D_MODEL)),  # Value projection
-            "w_o": glorot_init(get_next_key(), (D_MODEL, D_MODEL)),  # Output projection
-        },
-        # Feed-forward network
-        "ffn": {
-            "w1": glorot_init(get_next_key(), (D_MODEL, D_FF)),  # First linear layer
-            "b1": jnp.zeros(D_FF),  # First bias
-            "w2": glorot_init(get_next_key(), (D_FF, D_MODEL)),  # Second linear layer
-            "b2": jnp.zeros(D_MODEL),  # Second bias
-        },
-        # Layer normalization parameters
-        "norm1": {
-            "gamma": jnp.ones(D_MODEL),
-            "beta": jnp.zeros(D_MODEL),
-        },  # After attention
-        "norm2": {"gamma": jnp.ones(D_MODEL), "beta": jnp.zeros(D_MODEL)},  # After FFN
+        "norm3": {
+            "gamma": nb.ones((D_MODEL,)),
+            "beta": nb.zeros((D_MODEL,)),
+        },  # After FFN
     }
 
 
@@ -666,8 +573,7 @@ def _init_decoder_layer_params(glorot_uniform) -> dict[str, Any]:
 
 def create_reverse_dataset(batch_size):
     """
-    Create a dataset for the sequence reversal task using numpy then converting to JAX arrays.
-    Matches Nabla version approach.
+    Create a dataset for the sequence reversal task using numpy then converting to nabla.
 
     Task: Given a sequence [a, b, c, d], learn to output [d, c, b, a, <END>]
 
@@ -699,10 +605,10 @@ def create_reverse_dataset(batch_size):
     end_tokens_np = np.full((batch_size, 1), 2, dtype=np.int32)  # <END> token (2)
     target_np = np.concatenate([reversed_sequences_np, end_tokens_np], axis=1)
 
-    # Convert numpy arrays to JAX arrays
-    encoder_input = jnp.array(encoder_input_np)
-    decoder_input = jnp.array(decoder_input_np)
-    target = jnp.array(target_np)
+    # Convert numpy arrays to nabla arrays
+    encoder_input = nb.Array.from_numpy(encoder_input_np)
+    decoder_input = nb.Array.from_numpy(decoder_input_np)
+    target = nb.Array.from_numpy(target_np)
 
     return encoder_input, decoder_input, target
 
@@ -711,7 +617,7 @@ def create_reverse_dataset(batch_size):
 
 
 def init_adamw_state(params: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Initialize AdamW optimizer state (momentum and velocity) using manual approach like Nabla."""
+    """Initialize AdamW optimizer state (momentum and velocity)."""
     m_states = {}
     v_states = {}
 
@@ -723,8 +629,8 @@ def init_adamw_state(params: dict[str, Any]) -> tuple[dict[str, Any], dict[str, 
                 v_dict[key] = {}
                 init_zeros_like(value, m_dict[key], v_dict[key])
             else:
-                m_dict[key] = jnp.zeros_like(value)
-                v_dict[key] = jnp.zeros_like(value)
+                m_dict[key] = nb.zeros_like(value)
+                v_dict[key] = nb.zeros_like(value)
 
     init_zeros_like(params, m_states, v_states)
     return m_states, v_states
@@ -733,7 +639,6 @@ def init_adamw_state(params: dict[str, Any]) -> tuple[dict[str, Any], dict[str, 
 def adamw_step(params, gradients, m_states, v_states, step, learning_rate):
     """
     AdamW optimizer step with bias correction and gradient clipping.
-    Manual recursive implementation to match Nabla version.
 
     AdamW = Adam with decoupled weight decay:
     1. Clip gradients to prevent explosion
@@ -753,11 +658,11 @@ def adamw_step(params, gradients, m_states, v_states, step, learning_rate):
             if isinstance(value, dict):
                 calculate_grad_norm(value)
             else:
-                total_grad_norm_sq += jnp.sum(value * value)
+                total_grad_norm_sq += nb.sum(value * value)
 
     calculate_grad_norm(gradients)
-    grad_norm = jnp.sqrt(total_grad_norm_sq)
-    clip_factor = jnp.minimum(1.0, max_grad_norm / (grad_norm + 1e-8))
+    grad_norm = nb.sqrt(total_grad_norm_sq)
+    clip_factor = nb.minimum(1.0, max_grad_norm / (grad_norm + 1e-8))
 
     # Initialize output dictionaries
     updated_params = {}
@@ -805,7 +710,7 @@ def adamw_step(params, gradients, m_states, v_states, step, learning_rate):
 
                 # Parameter update with AdamW weight decay
                 updated_params_dict[key] = p - learning_rate * (
-                    m_corrected / (jnp.sqrt(v_corrected) + eps) + weight_decay * p
+                    m_corrected / (nb.sqrt(v_corrected) + eps) + weight_decay * p
                 )
 
     # Perform the recursive update
@@ -816,17 +721,18 @@ def adamw_step(params, gradients, m_states, v_states, step, learning_rate):
     return updated_params, updated_m, updated_v
 
 
+@nb.jit
 def complete_training_step(
     encoder_in, decoder_in, targets, params, m_states, v_states, step
 ):
-    """Complete JIT-compiled training step for maximum performance."""
+    """Complete training step."""
 
     def loss_fn(params_inner):
         logits = transformer_forward(encoder_in, decoder_in, params_inner)
         return cross_entropy_loss(logits, targets)
 
     # Compute loss and gradients
-    loss_value, param_gradients = value_and_grad(loss_fn)(params)
+    loss_value, param_gradients = nb.value_and_grad(loss_fn)(params)
 
     # Update parameters using AdamW
     updated_params, updated_m, updated_v = adamw_step(
@@ -834,6 +740,7 @@ def complete_training_step(
     )
 
     return updated_params, updated_m, updated_v, loss_value
+    # return params, m_states, v_states, loss_fn(params)
 
 
 # --- 7. Inference and Main Training Loop ---
@@ -842,7 +749,6 @@ def complete_training_step(
 def predict_sequence(encoder_input, params):
     """
     Generate a sequence using the trained transformer (autoregressive inference).
-    Manual implementation to match Nabla version approach.
 
     Args:
         encoder_input: Input sequence to reverse (seq_len,) or (1, seq_len)
@@ -852,28 +758,28 @@ def predict_sequence(encoder_input, params):
         Generated sequence including start token (TARGET_SEQ_LEN,)
     """
     # Ensure batch dimension exists
-    if encoder_input.ndim == 1:
+    if len(encoder_input.shape) == 1:
         encoder_input = encoder_input.reshape((1, encoder_input.shape[0]))
 
     batch_size = encoder_input.shape[0]
 
     # Initialize with start token
     decoder_tokens = [
-        jnp.ones((batch_size,), dtype=jnp.int32)
+        nb.ones((batch_size,), dtype=nb.DType.int32)
     ]  # Start with <START> token (1)
 
     # Generate tokens one by one (autoregressive generation)
     for position in range(1, TARGET_SEQ_LEN):
         # Build current decoder input by concatenating all generated tokens so far
-        current_decoder_input = jnp.stack(decoder_tokens, axis=1)  # (batch, position)
+        current_decoder_input = nb.stack(decoder_tokens, axis=1)  # (batch, position)
 
         # Pad with zeros to reach TARGET_SEQ_LEN
         padding_length = TARGET_SEQ_LEN - current_decoder_input.shape[1]
         if padding_length > 0:
-            padding = jnp.zeros(
+            padding = nb.zeros(
                 (batch_size, padding_length), dtype=current_decoder_input.dtype
             )
-            padded_decoder_input = jnp.concatenate(
+            padded_decoder_input = nb.concatenate(
                 [current_decoder_input, padding], axis=1
             )
         else:
@@ -883,13 +789,16 @@ def predict_sequence(encoder_input, params):
         logits = transformer_forward(encoder_input, padded_decoder_input, params)
 
         # Get logits for the current position we're predicting
+        # logits shape: (batch, seq_len, vocab_size)
+        # We want the logits for the last valid position (position - 1)
+        vocab_size = logits.shape[-1]
         next_token_logits = logits[:, position - 1, :]  # (batch, vocab_size)
 
         # Select the most likely next token
-        predicted_token = jnp.argmax(next_token_logits, axis=-1)  # (batch,)
+        predicted_token = nb.argmax(next_token_logits, axes=-1)  # (batch,)
 
         # Cast to same dtype as start tokens (int32)
-        predicted_token = predicted_token.astype(jnp.int32)
+        predicted_token = predicted_token.astype(nb.DType.int32)
 
         # Add predicted token to our sequence
         decoder_tokens.append(predicted_token)
@@ -898,7 +807,7 @@ def predict_sequence(encoder_input, params):
         # The END token should naturally appear at the end if trained properly
 
     # Convert list of tokens to final sequence
-    final_sequence = jnp.stack(decoder_tokens, axis=1)  # (batch, seq_len)
+    final_sequence = nb.stack(decoder_tokens, axis=1)  # (batch, seq_len)
 
     return final_sequence[0]  # Return first (and only) sequence
 
@@ -906,16 +815,15 @@ def predict_sequence(encoder_input, params):
 def train_transformer():
     """
     Main training loop for the transformer sequence reversal task.
-    Modified to match Nabla version approach without random keys.
 
     This function demonstrates:
     1. Parameter initialization
-    2. Training loop with manual parameter updates
+    2. Training loop with JIT-compiled steps
     3. Loss monitoring
     4. Final evaluation
     """
     print("=" * 60)
-    print("🤖 TRAINING TRANSFORMER FROM SCRATCH WITH JAX")
+    print("🤖 TRAINING TRANSFORMER FROM SCRATCH WITH Nabla")
     print("=" * 60)
     print(f"📋 Task: Reverse sequences of {SOURCE_SEQ_LEN} integers")
     print(
@@ -927,6 +835,10 @@ def train_transformer():
     )
     print()
 
+    # Initialize random keys
+    # key = nb.PRNGKey(42)
+    # key, init_key, data_key = nb.split(key, 3)
+
     # Initialize model parameters
     print("🔧 Initializing transformer parameters...")
     params = init_transformer_params()
@@ -937,72 +849,38 @@ def train_transformer():
 
     print("✅ Setup complete! Starting training...\n")
 
-    # Training loop
-    start_time = time.time()
-    print("Starting training loop...")
-    epoch_start_time = time.time()
+    # JIT warmup phase (exclude from timing)
+    print("🔥 JIT warmup (3 steps)...")
+    for warmup_step in range(3):
+        encoder_input, decoder_input, targets = create_reverse_dataset(BATCH_SIZE)
+        params, m_states, v_states, _ = complete_training_step(
+            encoder_input,
+            decoder_input,
+            targets,
+            params,
+            m_states,
+            v_states,
+            warmup_step + 1,
+        )
+    print("✅ Warmup complete! Starting timed training...\n")
 
+    # Training loop (timed after warmup)
+    start_time = time.time()
     for epoch in range(1, NUM_EPOCHS + 1):
         # Generate training batch
         encoder_input, decoder_input, targets = create_reverse_dataset(BATCH_SIZE)
 
-        if epoch == 1:
-            print(f"First batch generated at: {time.time() - epoch_start_time:.2f}s")
+        # Perform one training step (JIT-compiled for speed)
+        params, m_states, v_states, loss = complete_training_step(
+            encoder_input, decoder_input, targets, params, m_states, v_states, epoch
+        )
 
-        # Perform one training step with detailed debugging for first epoch
-        step_start = time.time()
-
-        if epoch == 1:
-            # Debug first epoch step by step
-            print("Breaking down first training step:")
-
-            # Test forward pass
-            forward_start = time.time()
-            logits = transformer_forward(encoder_input, decoder_input, params)
-            forward_time = time.time() - forward_start
-            print(f"  Forward pass: {forward_time:.2f}s")
-
-            # Test loss computation
-            loss_start = time.time()
-            loss_value = cross_entropy_loss(logits, targets)
-            loss_time = time.time() - loss_start
-            print(f"  Loss computation: {loss_time:.2f}s")
-
-            # Test gradient computation (this is likely the slow part)
-            grad_start = time.time()
-
-            def loss_fn(params_inner):
-                logits = transformer_forward(encoder_input, decoder_input, params_inner)
-                return cross_entropy_loss(logits, targets)
-
-            loss_value, param_gradients = value_and_grad(loss_fn)(params)
-            grad_time = time.time() - grad_start
-            print(f"  Gradient computation: {grad_time:.2f}s")
-
-            # Test optimizer step
-            opt_start = time.time()
-            params, m_states, v_states = adamw_step(
-                params, param_gradients, m_states, v_states, epoch, LEARNING_RATE
-            )[:3]
-            opt_time = time.time() - opt_start
-            print(f"  Optimizer step: {opt_time:.2f}s")
-
-            loss = loss_value
-        else:
-            # Use JIT for subsequent epochs
-            params, m_states, v_states, loss = complete_training_step(
-                encoder_input, decoder_input, targets, params, m_states, v_states, epoch
-            )
-
-        step_time = time.time() - step_start
-
-        if epoch == 1:
-            print(f"Total first training step: {step_time:.2f}s")
-
-        # Print progress (similar to Nabla style)
+        # Print progress
         if epoch % PRINT_INTERVAL == 0:
             elapsed = time.time() - start_time
-            print(f"Epoch {epoch:5d} | Loss: {float(loss):.4f} | Time: {elapsed:.1f}s")
+            print(
+                f"Epoch {epoch:5d} | Loss: {loss.to_numpy():.4f} | Time: {elapsed:.1f}s"
+            )
 
     total_time = time.time() - start_time
     print(f"\n✅ Training complete! Total time: {total_time:.1f}s")
@@ -1012,7 +890,6 @@ def train_transformer():
     print("🧪 FINAL EVALUATION")
     print("=" * 60)
 
-    # Test on a few examples
     num_test_examples = 3
 
     print("Testing on random sequences:")
@@ -1020,6 +897,7 @@ def train_transformer():
 
     correct_predictions = 0
     for i in range(num_test_examples):
+        # subkey, test_subkey = nb.split(subkey)
         test_encoder_input, _, test_target = create_reverse_dataset(1)
         test_encoder_input, test_target = test_encoder_input[0], test_target[0]
 
@@ -1031,7 +909,9 @@ def train_transformer():
         expected_content = test_target  # Already has content + end token
 
         # Check if correct
-        is_correct = jnp.array_equal(predicted_content, expected_content)
+        is_correct = np.array_equal(
+            predicted_content.to_numpy(), expected_content.to_numpy()
+        )
         if is_correct:
             correct_predictions += 1
 
@@ -1055,6 +935,49 @@ def train_transformer():
         print("🤔 The model needs more training or tuning.")
 
     print("\n" + "=" * 60)
+
+
+def embedding_lookup(token_ids, embedding_matrix):
+    """
+    Perform embedding lookup using nb.where for each token.
+
+    Args:
+        token_ids: (batch_size, seq_len) - token indices
+        embedding_matrix: (vocab_size, d_model) - embedding vectors
+
+    Returns:
+        embeddings: (batch_size, seq_len, d_model)
+    """
+    batch_size, seq_len = token_ids.shape
+    vocab_size, d_model = embedding_matrix.shape
+
+    # Initialize output with zeros
+    output = nb.zeros((batch_size, seq_len, d_model))
+
+    # For each token in vocabulary, use where to select appropriate embeddings
+    for token_idx in range(vocab_size):
+        # Create condition: token_ids == token_idx
+        token_idx_array = nb.array([token_idx], dtype=nb.DType.int32)
+        token_idx_broadcast = nb.broadcast_to(token_idx_array, token_ids.shape)
+        condition = nb.equal(token_ids, token_idx_broadcast)
+
+        # Expand condition to match embedding dimensions (batch, seq_len, d_model)
+        condition_expanded = nb.broadcast_to(
+            condition.reshape((batch_size, seq_len, 1)), (batch_size, seq_len, d_model)
+        )
+
+        # Get the embedding vector for this token (1, 1, d_model)
+        token_embedding = embedding_matrix[token_idx : token_idx + 1, :].reshape(
+            (1, 1, d_model)
+        )
+        token_embedding_expanded = nb.broadcast_to(
+            token_embedding, (batch_size, seq_len, d_model)
+        )
+
+        # Use where to select this embedding where condition is true
+        output = nb.where(condition_expanded, token_embedding_expanded, output)
+
+    return output
 
 
 if __name__ == "__main__":

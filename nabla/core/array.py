@@ -498,6 +498,93 @@ class Array:
 
         return permute(self, axes)
 
+    def at(self, key, value):
+        """Update array at specified indices/slices, returning new array."""
+        from ..ops.binary import add, sub
+        from ..ops.view import pad
+
+        # Convert value to Array if needed
+        if not isinstance(value, Array):
+            # Match the dtype of the original array
+            value_np = np.array(value, dtype=self.dtype.to_numpy())
+            value = Array.from_numpy(value_np)
+        else:
+            # If value is already an Array, ensure it matches our dtype
+            if value.dtype != self.dtype:
+                value_np = value.to_numpy().astype(self.dtype.to_numpy())
+                value = Array.from_numpy(value_np)
+
+        # Handle single slice, integer, or ellipsis
+        if isinstance(key, slice | int | type(...)):
+            key = (key,)
+        elif not isinstance(key, tuple):
+            raise TypeError(
+                f"Array indices must be integers, slices, ellipsis, or tuples, got {type(key)}"
+            )
+
+        # Handle ellipsis expansion (same logic as __getitem__)
+        if ... in key:
+            ellipsis_idx = key.index(...)
+            # Count non-ellipsis elements
+            non_ellipsis_count = len([k for k in key if k is not ...])
+            # Calculate how many slice(None) to insert
+            missing_dims = len(self.shape) - non_ellipsis_count
+            if missing_dims < 0:
+                missing_dims = 0  # Don't allow negative
+
+            # Build expanded key
+            expanded_key = (
+                key[:ellipsis_idx]
+                + (slice(None),) * missing_dims
+                + key[ellipsis_idx + 1 :]
+            )
+            key = expanded_key
+
+        # Convert integers to slices for pad operation, handling negative indices
+        slices = []
+        for i, k in enumerate(key):
+            if isinstance(k, int):
+                # Handle negative indexing before converting to slice
+                if k < 0:
+                    k = self.shape[i] + k
+                slices.append(slice(k, k + 1))
+            elif isinstance(k, slice):
+                slices.append(k)
+            else:
+                raise TypeError(f"Unsupported key type: {type(k)}")
+
+        # 1. Slice out the part being replaced (using converted slices for consistency)
+        sliced_part = self[tuple(slices)]
+
+        # 2. Ensure value has the same shape as sliced_part
+        if value.shape != sliced_part.shape:
+            # Try to reshape/broadcast value to match sliced shape
+            value_np = value.to_numpy()
+            try:
+                if value_np.size == np.prod(sliced_part.shape):
+                    # Reshape if same number of elements
+                    value = Array.from_numpy(value_np.reshape(sliced_part.shape))
+                else:
+                    # Try broadcasting
+                    value = Array.from_numpy(
+                        np.broadcast_to(value_np, sliced_part.shape)
+                    )
+            except:
+                raise ValueError(
+                    f"Cannot broadcast value shape {value.shape} to sliced shape {sliced_part.shape}"
+                )
+
+        # 3. Calculate the difference
+        diff = sub(value, sliced_part)
+
+        # 4. Pad the difference to full array shape (using converted slices)
+        padded_diff = pad(diff, slices, self.shape)
+
+        # 5. Add to original array
+        result = add(self, padded_diff)
+
+        return result
+
     # Comparison operators
     def __eq__(self, other) -> bool:
         """Object identity comparison for hashability.
@@ -514,3 +601,24 @@ class Array:
         For element-wise comparison, use nb.not_equal(a, b) explicitly.
         """
         return not self.__eq__(other)
+
+    def set(self, key, value) -> Array:
+        """Set values at specified indices/slices, returning a new array.
+
+        This is a functional operation that returns a new Array with the specified
+        values updated, leaving the original Array unchanged.
+
+        Args:
+            key: Index specification (int, slice, tuple of indices/slices, ellipsis)
+            value: Value(s) to set at the specified location
+
+        Returns:
+            New Array with updated values
+
+        Examples:
+            new_arr = arr.set(1, 99.0)              # Set single element
+            new_arr = arr.set((1, 2), 99.0)         # Set element at (1,2)
+            new_arr = arr.set(slice(1, 3), 99.0)    # Set slice
+            new_arr = arr.set(..., 99.0)            # Set with ellipsis
+        """
+        return self.at(key, value)

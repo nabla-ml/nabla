@@ -72,8 +72,37 @@ def _ultra_fast_extract_with_cache(args, structure):
             for sub_item, sub_struct in zip(item, substruct_list, strict=False):
                 extracted.extend(extract_with_structure(sub_item, sub_struct))
             return extracted
-        else:
+        elif isinstance(item, dict):
+            # Handle dictionaries by extracting arrays from all values
+            extracted = []
+            for key in sorted(item.keys()):  # Deterministic ordering
+                if isinstance(item[key], Array):
+                    extracted.append(item[key].impl)
+                elif isinstance(item[key], dict) or isinstance(item[key], (list, tuple)):
+                    extracted.extend(extract_with_structure(item[key], struct))
+                elif isinstance(item[key], (int, float)):
+                    extracted.append(nb.array(item[key]).impl)
+            return extracted
+        elif isinstance(item, (list, tuple)):
+            # Handle lists and tuples
+            extracted = []
+            for sub_item in item:
+                extracted.extend(extract_with_structure(sub_item, struct))
+            return extracted
+        elif isinstance(item, Array):
+            return [item.impl]
+        elif isinstance(item, (int, float)):
             return [nb.array(item).impl]
+        else:
+            # Try to convert to array as fallback, but handle dict error
+            try:
+                return [nb.array(item).impl]
+            except TypeError:
+                # If conversion fails, it might be a complex structure - use tree_flatten
+                from .utils import tree_flatten
+
+                flat_arrays, _ = tree_flatten(item)
+                return [arr.impl for arr in flat_arrays]
 
     return extract_with_structure(args, structure)
 
@@ -90,12 +119,21 @@ def _fast_extract_tensors_fallback(actual_args, is_list_style):
             import nabla as nb
 
             return nb.array(item)
+        elif isinstance(item, dict):
+            # Handle dictionaries by recursively converting values
+            return {k: quick_convert_to_array(v) for k, v in item.items()}
         elif isinstance(item, list | tuple):
             return type(item)(quick_convert_to_array(sub_item) for sub_item in item)
         else:
             import nabla as nb
 
-            return nb.array(item)
+            # Try to convert, but handle cases where conversion might fail
+            try:
+                return nb.array(item)
+            except TypeError:
+                # If it's a complex structure that can't be converted, return as is
+                # tree_flatten will handle extracting Arrays from it
+                return item
 
     # Convert to Arrays first
     converted_args = quick_convert_to_array(actual_args)
