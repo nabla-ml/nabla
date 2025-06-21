@@ -18,6 +18,7 @@
 
 import numpy as np
 from max.driver import Tensor
+from max.dtype import DType
 from max.graph import TensorValue, ops
 
 from ..core.array import Array, Shape
@@ -44,6 +45,8 @@ __all__ = [
     "pad",
     "concatenate",
     "stack",
+    # "scatter",
+    # "gather",
 ]
 
 
@@ -1697,7 +1700,6 @@ class PadOp(Operation):
         total_elements = int(np.prod(output.shape))
 
         # Step 2: Create flat index tensor using ops.range with int32 dtype
-        from max.dtype import DType
 
         flat_indices = ops.range(0, total_elements, 1, dtype=DType.int32)
 
@@ -2064,3 +2066,382 @@ def stack(arrays: list[Array], axis: int = 0) -> Array:
 
     # Use concatenate to stack them along the new axis
     return concatenate(unsqueezed_arrays, axis=axis)
+
+
+# class GatherOp(Operation):
+
+#     def __init__(self, axis: int = -1):
+#         """
+#         Initialize take operation.
+
+#         Args:
+#             axis: The dimension which indices indexes from input.
+#                   If negative, indexes relative to the end of the input tensor.
+#         """
+#         self.axis = axis
+
+#     def compute_output_shape(self, *input_shapes: tuple) -> tuple:
+#         """
+#         Compute the output shape for take operation.
+
+#         The output shape replaces the indexed dimension with the indices shape.
+
+#         Args:
+#             input_shapes: (input_shape, indices_shape)
+
+#         Returns:
+#             Output shape tuple
+#         """
+#         input_shape, indices_shape = input_shapes
+
+#         # Normalize negative axis
+#         axis = self.axis
+#         if axis < 0:
+#             axis += len(input_shape)
+
+#         if axis < 0 or axis >= len(input_shape):
+#             raise ValueError(f"Axis {self.axis} is out of bounds for input with {len(input_shape)} dimensions")
+
+#         # Output shape: input_shape with axis dimension replaced by indices_shape
+#         output_shape = (
+#             input_shape[:axis] +
+#             indices_shape +
+#             input_shape[axis + 1:]
+#         )
+
+#         return output_shape
+
+#     def compute_output_batch_dims(self, *input_batch_dims: tuple) -> tuple:
+#         """
+#         Compute output batch dims for gather operation.
+
+#         For gather with vmap, the output batch dims should be the broadcasted
+#         batch dimensions of both input array and indices.
+
+#         Args:
+#             input_batch_dims: (input_batch_dims, indices_batch_dims)
+
+#         Returns:
+#             Broadcasted batch dims of input array and indices
+#         """
+#         if len(input_batch_dims) != 2:
+#             raise ValueError(f"Gather operation requires 2 input batch dims, got {len(input_batch_dims)}")
+
+#         input_batch_dims_val, indices_batch_dims_val = input_batch_dims[0], input_batch_dims[1]
+
+#         # Use the standard broadcasting logic for batch dimensions
+#         from ..utils.shape_utils import get_broadcasted_shape
+#         return get_broadcasted_shape(input_batch_dims_val, indices_batch_dims_val)
+
+#     def maxpr(self, args: list[TensorValue], output: Array) -> None:
+#         """
+#         MAX graph implementation using max.graph.ops.gather.
+
+#         Args:
+#             args: [input_tensor, indices_tensor]
+#             output: Output array to store result
+#         """
+#         input_tensor, indices_tensor = args
+
+#         # Import MAX ops
+#         from max.graph import ops
+
+#         # Ensure indices are integers for MAX
+#         if indices_tensor.type.dtype.name != 'int64':
+#             indices_tensor = ops.cast(indices_tensor, ops.DType.int64)
+
+#         # Convert logical axis to physical axis (accounting for batch dimensions)
+#         # The axis parameter refers to the logical shape, but the actual tensor includes batch dims
+#         batch_offset = len(output.batch_dims)
+#         logical_rank = len(output.shape)
+
+#         # Normalize the axis relative to logical shape
+#         if self.axis < 0:
+#             logical_axis = self.axis + logical_rank
+#         else:
+#             logical_axis = self.axis
+
+#         # Convert to physical axis in the full tensor
+#         physical_axis = logical_axis + batch_offset
+
+#         # Use MAX's gather operation
+#         result = ops.gather(input_tensor, indices_tensor, axis=physical_axis)
+#         output.tensor_value = result
+
+#     def eagerxpr(self, args: list[Array], output: Array) -> None:
+#         # the axis is awlays negative, so no need to convert it
+
+#         input_array = args[0].to_numpy()
+#         indices_array = args[1].to_numpy()
+#         if indices_array.dtype.kind not in {'i', 'u'}:
+#             raise ValueError(
+#                 f"Indices array must be of integer type, got {indices_array.dtype}"
+#             )
+
+#         # Use numpy's advanced indexing to gather values
+#         result_np = input_array[tuple(indices_array)]
+#         output.impl = Tensor.from_numpy(result_np)
+
+#     def vjp_rule(self, primals: list[Array], cotangent: Array, output: Array) -> list[Array]:
+#         input_array, indices_array = primals
+
+#         target_shape = input_array.shape
+
+#         input_grad = scatter(
+#             target_shape=target_shape,
+#             indices=indices_array,
+#             values=cotangent,
+#             axis=self.axis
+#         )
+
+#         # Indices don't need gradients, but we need to return a zero array of the same shape
+#         from ..ops.creation import zeros
+#         indices_grad = zeros(indices_array.shape, dtype=input_array.dtype)
+
+#         return [input_grad, indices_grad]
+
+#     def jvp_rule(self, primals: list[Array], tangents: list[Array], output: Array) -> Array:
+#         input_tangent, indices_tangent = tangents
+#         return gather(input_tangent, indices=primals[1], axis=self.axis)
+
+
+#     def compute_output_dtype(self, arg1: Array, arg2: Array) -> DType:
+#         """Default: output dtype same as first input dtype."""
+#         return arg1.dtype
+
+#     def forward(self, *args: Array) -> Array:
+#         if len(args) != 2:
+#             raise ValueError(f"Scatter operation requires 2 arguments, got {len(args)}")
+
+#         # Move arrays to best device (like BinaryOperation does)
+#         from .operation import move_to_best_device
+#         args = move_to_best_device(*args)
+#         indices, values = args
+
+#         # compute shape difference length wise
+#         shape_diff = len(values.shape) - len(indices.shape)
+#         if shape_diff < 0:
+#             raise ValueError(
+#                 f"Indices shape {indices.shape} cannot be larger than values shape {values.shape}"
+#             )
+#         elif shape_diff > 0:
+#             indices = broadcast_to(indices, values.shape[:shape_diff] + indices.shape)
+
+#         output_shape = self.compute_output_shape(indices.shape, values.shape)
+#         output_batch_dims = self.compute_output_batch_dims(
+#             indices.batch_dims, values.batch_dims
+#         )
+#         output_dtype = self.compute_output_dtype(indices, values)
+
+#         res = Array(
+#             shape=output_shape,
+#             dtype=output_dtype,
+#             device=values.device,
+#             materialize=False,
+#             name=self.name,
+#             batch_dims=output_batch_dims,
+#         )
+
+#         res.set_maxpr(self.maxpr)
+#         res.add_arguments(indices, values)
+#         res.vjp_rule = self.vjp_rule
+#         res.jvp_rule = self.jvp_rule
+#         res.custom_kernel_path = self.custom_kernel_path()
+
+#         if not res.stage_realization:
+#             self.eagerxpr([indices, values], res)
+
+#         return res
+
+
+# def gather(input_array: Array, indices: Array, axis: int = -1) -> Array:
+#     if axis >= 0:
+#         # make negative
+#         axis = axis - len(input_array.shape)
+#     op = GatherOp(axis)
+#     return op.forward(input_array, indices)
+
+
+# class ScatterOp(Operation):
+
+#     def __init__(self, target_shape: tuple, axis: int = -1):
+#         """
+#         Initialize scatter operation.
+
+#         Args:
+#             target_shape: Shape of the output tensor
+#             axis: The dimension along which to scatter indices
+#         """
+#         self.target_shape = target_shape
+#         self.axis = axis
+
+#     def compute_output_shape(self, *input_shapes: tuple) -> tuple:
+#         """
+#         Compute the output shape for give operation.
+
+#         Args:
+#             input_shapes: (indices_shape, values_shape)
+
+#         Returns:
+#             target_shape (fixed by constructor)
+#         """
+#         # Convert Array objects to plain integers if needed (for JIT compatibility)
+#         shape_list = []
+#         for dim in self.target_shape:
+#             if hasattr(dim, 'to_numpy'):
+#                 # It's an Array object, convert to scalar
+#                 shape_list.append(int(dim.to_numpy().item()))
+#             else:
+#                 # It's already a plain integer
+#                 shape_list.append(int(dim))
+#         return tuple(shape_list)
+
+#     def compute_output_batch_dims(self, *input_batch_dims: tuple) -> tuple:
+#         """
+#         Compute output batch dims for scatter operation.
+
+#         Args:
+#             input_batch_dims: (indices_batch_dims, values_batch_dims)
+
+#         Returns:
+#             Broadcasted batch dims
+#         """
+#         if len(input_batch_dims) != 2:
+#             raise ValueError(f"Scatter operation requires 2 input batch dims, got {len(input_batch_dims)}")
+
+#         indices_batch_dims, values_batch_dims = input_batch_dims[0], input_batch_dims[1]
+
+#         from ..utils.shape_utils import get_broadcasted_shape
+
+#         return get_broadcasted_shape(indices_batch_dims, values_batch_dims)
+
+#     def maxpr(self, args: list[TensorValue], output: Array) -> None:
+#         """
+#         MAX graph implementation using max.graph.ops.scatter.
+
+#         For MAX scatter, we need to create a zero tensor and then scatter into it.
+
+#         Args:
+#             args: [indices_tensor, values_tensor]
+#             output: Output array to store result
+#         """
+#         indices_tensor, values_tensor = args
+
+#         from max.graph import ops
+
+#         # Convert logical axis to physical axis (accounting for batch dimensions)
+#         batch_offset = len(output.batch_dims)
+#         logical_rank = len(self.target_shape)
+
+#         # Normalize the axis relative to logical target shape
+#         if self.axis < 0:
+#             logical_axis = self.axis + logical_rank
+#         else:
+#             logical_axis = self.axis
+
+#         # Convert to physical axis in the full tensor
+#         physical_axis = logical_axis + batch_offset
+
+#         # Create zero tensor with full shape (batch_dims + target_shape)
+#         # Convert to plain integers in case we have Array objects
+#         batch_dims_ints = tuple(int(d) for d in output.batch_dims)
+#         target_shape_ints = tuple(
+#             int(d.to_numpy()) if hasattr(d, 'to_numpy') else int(d)
+#             for d in self.target_shape
+#         )
+#         full_target_shape = batch_dims_ints + target_shape_ints
+
+#         zero_tensor = ops.broadcast_to(
+#             ops.constant(0, dtype=values_tensor.dtype, device=values_tensor.device),
+#             full_target_shape
+#         )
+
+#         # Use MAX's scatter_nd operation for flexible indexing
+#         # scatter_nd expects indices with shape [num_updates, k] where k is the number of
+#         # dimensions we're indexing into (for partial indexing, k < rank)
+
+#         if physical_axis == 0:
+#             # For axis=0, reshape indices from [N] to [N, 1]
+#             # This means "N updates, each specifying 1 coordinate (along axis 0)"
+#             indices_reshaped = ops.unsqueeze(indices_tensor, axis=-1)
+#             result = ops.scatter_nd(zero_tensor, values_tensor, indices_reshaped)
+#         else:
+#             # For other axes, create proper index coordinates for scatter_nd
+#             # We need to create indices that specify the full coordinates
+#             # For now, let's try a simpler approach using scatter_nd with proper reshaping
+
+#             # Create indices for scatter_nd: [num_updates, 1] format for single-axis indexing
+#             indices_reshaped = ops.unsqueeze(indices_tensor, axis=-1)
+
+#             # For non-zero axes, we need to use scatter, but we need compatible shapes
+#             # Let's try scatter_nd by creating appropriate multi-dimensional indices
+#             if physical_axis == 1:
+#                 # For axis=1, we're indexing into the second dimension
+#                 # We need to handle this case specifically
+#                 # For now, fall back to regular scatter but handle rank mismatch
+#                 try:
+#                     result = ops.scatter_nd(zero_tensor, values_tensor, indices_reshaped)
+#                 except Exception:
+#                     # If scatter_nd fails, try the old scatter approach
+#                     result = ops.scatter(zero_tensor, values_tensor, indices_tensor, axis=physical_axis)
+#             else:
+#                 # For other axes, use scatter_nd with single-dimension indexing
+#                 result = ops.scatter_nd(zero_tensor, values_tensor, indices_reshaped)
+
+
+#         output.tensor_value = result
+
+#     def eagerxpr(self, args: list[Array], output: Array) -> None:
+#         pass
+
+#     def vjp_rule(self, primals: list[Array], cotangent: Array, output: Array) -> list[Array]:
+#         """
+#         Vector-Jacobian product rule for give operation.
+
+#         Args:
+#             primals: [indices, values] - the forward pass inputs
+#             cotangent: Gradient flowing back from output
+#             output: Forward pass output (for reference)
+
+#         Returns:
+#             [indices_grad, values_grad] where indices_grad is zero array
+#         """
+#         indices_array, values_array = primals
+
+#         # Indices don't need gradients, but we need to return a zero array of the same shape
+#         from ..ops.creation import zeros
+#         indices_grad = zeros(indices_array.shape, dtype=values_array.dtype)  # Use values dtype
+
+#         # Values gradient: gather the cotangent at the same indices
+#         values_grad = gather(cotangent, indices_array, axis=self.axis)
+
+#         return [indices_grad, values_grad]
+
+#     def jvp_rule(self, primals: list[Array], tangents: list[Array], output: Array) -> Array:
+#         """
+#         Jacobian-vector product rule for give operation.
+
+#         Args:
+#             primals: [indices, values] - the forward pass inputs
+#             tangents: [indices_tangent, values_tangent] - the tangent vectors
+#             output: Forward pass output (for reference)
+
+#         Returns:
+#             Output tangent
+#         """
+#         indices_tangent, values_tangent = tangents
+
+#         # Indices tangents are ignored (indices are discrete)
+#         # Apply the same scatter operation to values tangents
+#         return scatter(self.target_shape, primals[0], values_tangent, axis=self.axis)  # Use original indices
+
+#     def forward(self, *args: Array) -> Array:
+#         pass
+
+
+# def scatter(target_shape: tuple, indices: Array, values: Array, axis: int = -1) -> Array:
+#     if axis >= 0:
+#         # make negative
+#         axis = axis - len(target_shape)
+#     op = ScatterOp(target_shape, axis)
+#     return op.forward(indices, values)

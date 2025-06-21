@@ -78,7 +78,9 @@ def _ultra_fast_extract_with_cache(args, structure):
             for key in sorted(item.keys()):  # Deterministic ordering
                 if isinstance(item[key], Array):
                     extracted.append(item[key].impl)
-                elif isinstance(item[key], dict) or isinstance(item[key], (list, tuple)):
+                elif isinstance(item[key], dict) or isinstance(
+                    item[key], (list, tuple)
+                ):
                     extracted.extend(extract_with_structure(item[key], struct))
                 elif isinstance(item[key], (int, float)):
                     extracted.append(nb.array(item[key]).impl)

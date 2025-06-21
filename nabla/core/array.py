@@ -353,6 +353,8 @@ class Array:
     def __getitem__(self, key) -> Array:
         """Array slicing using standard Python syntax.
 
+        Supports both basic indexing (slices, integers) and advanced indexing (Array indices).
+
         Examples::
 
             arr[1:3]        # Slice first dimension
@@ -360,14 +362,29 @@ class Array:
             arr[1:3, 2:5]   # Slice multiple dimensions
             arr[-2:]        # Negative indices
             arr[..., :2]    # Ellipsis (all dimensions up to last)
+
+            # Advanced indexing with Array indices:
+            indices = nb.array([0, 2, 1])
+            arr[indices]    # Gather elements along first axis
+            arr[indices, :] # Gather rows
         """
 
-        # Handle single slice, integer, or ellipsis
+        # Check if this is advanced indexing with Array indices
+        if isinstance(key, Array):
+            # Single Array index - use gather along axis 0
+            from ..ops.indexing import gather
+
+            return gather(self, key, axis=0)
+        elif isinstance(key, tuple) and any(isinstance(k, Array) for k in key):
+            # Mixed indexing with Array indices in tuple
+            return self._handle_mixed_advanced_indexing(key)
+
+        # Handle single slice, integer, or ellipsis (original logic)
         if isinstance(key, slice | int | type(...)):
             key = (key,)
         elif not isinstance(key, tuple):
             raise TypeError(
-                f"Array indices must be integers, slices, ellipsis, or tuples, got {type(key)}"
+                f"Array indices must be integers, slices, ellipsis, Arrays, or tuples, got {type(key)}"
             )
 
         # Handle ellipsis expansion
@@ -622,3 +639,158 @@ class Array:
             new_arr = arr.set(..., 99.0)            # Set with ellipsis
         """
         return self.at(key, value)
+
+    def _handle_mixed_advanced_indexing(self, key: tuple) -> Array:
+        """Handle mixed indexing with Array indices and slices/integers.
+
+        Args:
+            key: Tuple containing mix of Array indices, slices, and integers
+
+        Returns:
+            Array result of advanced indexing
+        """
+        from ..ops.indexing import gather
+
+        # For now, implement a simplified version that handles the most common case:
+        # Array index in first position, followed by slices/integers
+        # More complex cases can be added later
+
+        # Find the first Array index
+        array_index_pos = None
+        for i, k in enumerate(key):
+            if isinstance(k, Array):
+                if array_index_pos is None:
+                    array_index_pos = i
+                else:
+                    # Multiple Array indices - more complex case
+                    raise NotImplementedError(
+                        "Multiple Array indices not yet supported. "
+                        "Use gather/scatter operations directly for complex indexing."
+                    )
+
+        if array_index_pos is None:
+            # No Array indices found - shouldn't reach here
+            raise ValueError("Expected Array index in mixed indexing")
+
+        array_index = key[array_index_pos]
+
+        if array_index_pos == 0:
+            # Array index in first position: arr[indices, slice1, slice2, ...]
+            remaining_key = key[1:]
+
+            # First apply gather along axis 0
+            gathered = gather(self, array_index, axis=0)
+
+            # Then apply remaining indexing if any
+            if remaining_key:
+                # The remaining key should be applied starting from the first dimension
+                # after the array-indexed dimension. Since we array-indexed dimension 0,
+                # the remaining key applies to dimensions 1, 2, 3, ... of the original shape
+                # which are dimensions 1, 2, 3, ... of the gathered result.
+                # So we need to prepend a slice(None) to cover the new first dimension from gather
+                full_key = (slice(None),) + remaining_key
+                return gathered[full_key]
+            else:
+                return gathered
+        else:
+            # Array index not in first position - more complex
+            # For now, we'll convert to a sequence of operations
+            # This is a simplified implementation
+            raise NotImplementedError(
+                f"Array index at position {array_index_pos} not yet supported. "
+                "Use gather operation directly or put Array index first."
+            )
+
+    def __setitem__(self, key, value) -> None:
+        """Array assignment using standard Python syntax.
+
+        Supports both basic assignment (slices, integers) and advanced assignment (Array indices).
+
+        Examples::
+
+            arr[1:3] = value        # Assign to slice
+            arr[:, 2:5] = value     # Assign to slice in second dimension
+
+            # Advanced indexing with Array indices:
+            indices = nb.array([0, 2, 1])
+            arr[indices] = value    # Scatter values to specified indices
+        """
+        # Convert value to Array if needed
+        if not isinstance(value, Array):
+            from ..ops.creation import array
+
+            value = array(value)
+
+        # Check if this is advanced indexing with Array indices
+        if isinstance(key, Array):
+            # Single Array index - use scatter along axis 0
+            self._setitem_with_array_index(key, value, axis=0)
+        elif isinstance(key, tuple) and any(isinstance(k, Array) for k in key):
+            # Mixed indexing with Array indices
+            self._setitem_mixed_advanced_indexing(key, value)
+        else:
+            # Basic indexing - not implemented for now
+            raise NotImplementedError(
+                "Basic slice assignment not yet implemented. "
+                "Use Array indices for scatter operations."
+            )
+
+    def _setitem_with_array_index(
+        self, indices: Array, values: Array, axis: int = 0
+    ) -> None:
+        """Helper method for setitem with Array indices.
+
+        Args:
+            indices: Array of indices where to place values
+            values: Array of values to place
+            axis: Axis along which to scatter
+        """
+        from ..ops.indexing import scatter
+
+        # Create new array by scattering values into a copy of self
+        # Note: This creates a new array rather than in-place modification
+        # In-place modification would require mutable arrays
+        new_array = scatter(
+            target_shape=self.shape, indices=indices, values=values, axis=axis
+        )
+
+        # Update self's implementation to point to new data
+        # This simulates in-place modification
+        self.impl = new_array.impl
+        self._numpy_cache = None  # Invalidate cache
+
+    def _setitem_mixed_advanced_indexing(self, key: tuple, value: Array) -> None:
+        """Helper method for mixed advanced indexing assignment.
+
+        Args:
+            key: Tuple containing mix of Array indices, slices, and integers
+            value: Array to assign
+        """
+        # For now, implement a simplified version
+        # Find the first Array index
+        array_index_pos = None
+        for i, k in enumerate(key):
+            if isinstance(k, Array):
+                if array_index_pos is None:
+                    array_index_pos = i
+                else:
+                    raise NotImplementedError(
+                        "Multiple Array indices not yet supported"
+                    )
+
+        if array_index_pos != 0:
+            raise NotImplementedError(
+                "Array index must be in first position for assignment"
+            )
+
+        array_index = key[0]
+        remaining_key = key[1:]
+
+        if remaining_key:
+            # Need to handle partial assignment like arr[indices, :, slice] = value
+            raise NotImplementedError(
+                "Mixed Array index with slices in assignment not yet supported"
+            )
+        else:
+            # Simple case: arr[indices] = value
+            self._setitem_with_array_index(array_index, value, axis=0)
