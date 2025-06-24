@@ -948,39 +948,39 @@ def embedding_lookup(token_ids, embedding_matrix):
     Returns:
         embeddings: (batch_size, seq_len, d_model)
     """
-    # batch_size, seq_len = token_ids.shape
-    # vocab_size, d_model = embedding_matrix.shape
+    batch_size, seq_len = token_ids.shape
+    vocab_size, d_model = embedding_matrix.shape
 
-    # # Initialize output with zeros
-    # output = nb.zeros((batch_size, seq_len, d_model))
+    # Initialize output with zeros
+    output = nb.zeros((batch_size, seq_len, d_model))
 
-    # # For each token in vocabulary, use where to select appropriate embeddings
-    # for token_idx in range(vocab_size):
-    #     # Create condition: token_ids == token_idx
-    #     token_idx_array = nb.array([token_idx], dtype=nb.DType.int32)
-    #     token_idx_broadcast = nb.broadcast_to(token_idx_array, token_ids.shape)
-    #     condition = nb.equal(token_ids, token_idx_broadcast)
+    # For each token in vocabulary, use where to select appropriate embeddings
+    for token_idx in range(vocab_size):
+        # Create condition: token_ids == token_idx
+        token_idx_array = nb.array([token_idx], dtype=nb.DType.int32)
+        token_idx_broadcast = nb.broadcast_to(token_idx_array, token_ids.shape)
+        condition = nb.equal(token_ids, token_idx_broadcast)
 
-    #     # Expand condition to match embedding dimensions (batch, seq_len, d_model)
-    #     condition_expanded = nb.broadcast_to(
-    #         condition.reshape((batch_size, seq_len, 1)), (batch_size, seq_len, d_model)
-    #     )
+        # Expand condition to match embedding dimensions (batch, seq_len, d_model)
+        condition_expanded = nb.broadcast_to(
+            condition.reshape((batch_size, seq_len, 1)), (batch_size, seq_len, d_model)
+        )
 
-    #     # Get the embedding vector for this token (1, 1, d_model)
-    #     token_embedding = embedding_matrix[token_idx : token_idx + 1, :].reshape(
-    #         (1, 1, d_model)
-    #     )
-    #     token_embedding_expanded = nb.broadcast_to(
-    #         token_embedding, (batch_size, seq_len, d_model)
-    #     )
+        # Get the embedding vector for this token (1, 1, d_model)
+        token_embedding = embedding_matrix[token_idx : token_idx + 1, :].reshape(
+            (1, 1, d_model)
+        )
+        token_embedding_expanded = nb.broadcast_to(
+            token_embedding, (batch_size, seq_len, d_model)
+        )
 
-    #     # Use where to select this embedding where condition is true
-    #     output = nb.where(condition_expanded, token_embedding_expanded, output)
+        # Use where to select this embedding where condition is true
+        output = nb.where(condition_expanded, token_embedding_expanded, output)
 
-    # return output
+    return output
 
-    # simpyl via advanced indexing
-    return embedding_matrix[token_ids]
+    # theoretically, we should do the following, but it is not supported in Nabla yet
+    # return embedding_matrix[token_ids]
 
 
 if __name__ == "__main__":

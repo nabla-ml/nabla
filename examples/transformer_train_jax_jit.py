@@ -160,36 +160,39 @@ def manual_embedding_lookup(token_ids, embedding_matrix):
     Returns:
         embeddings: (batch_size, seq_len, d_model)
     """
-    batch_size, seq_len = token_ids.shape
-    vocab_size, d_model = embedding_matrix.shape
+    # batch_size, seq_len = token_ids.shape
+    # vocab_size, d_model = embedding_matrix.shape
 
-    # Initialize output with zeros
-    output = jnp.zeros((batch_size, seq_len, d_model))
+    # # Initialize output with zeros
+    # output = jnp.zeros((batch_size, seq_len, d_model))
 
-    # For each token in vocabulary, use where to select appropriate embeddings
-    for token_idx in range(vocab_size):
-        # Create condition: token_ids == token_idx
-        token_idx_array = jnp.array([token_idx], dtype=jnp.int32)
-        token_idx_broadcast = jnp.broadcast_to(token_idx_array, token_ids.shape)
-        condition = jnp.equal(token_ids, token_idx_broadcast)
+    # # For each token in vocabulary, use where to select appropriate embeddings
+    # for token_idx in range(vocab_size):
+    #     # Create condition: token_ids == token_idx
+    #     token_idx_array = jnp.array([token_idx], dtype=jnp.int32)
+    #     token_idx_broadcast = jnp.broadcast_to(token_idx_array, token_ids.shape)
+    #     condition = jnp.equal(token_ids, token_idx_broadcast)
 
-        # Expand condition to match embedding dimensions (batch, seq_len, d_model)
-        condition_expanded = jnp.broadcast_to(
-            condition.reshape((batch_size, seq_len, 1)), (batch_size, seq_len, d_model)
-        )
+    #     # Expand condition to match embedding dimensions (batch, seq_len, d_model)
+    #     condition_expanded = jnp.broadcast_to(
+    #         condition.reshape((batch_size, seq_len, 1)), (batch_size, seq_len, d_model)
+    #     )
 
-        # Get the embedding vector for this token (1, 1, d_model)
-        token_embedding = embedding_matrix[token_idx : token_idx + 1, :].reshape(
-            (1, 1, d_model)
-        )
-        token_embedding_expanded = jnp.broadcast_to(
-            token_embedding, (batch_size, seq_len, d_model)
-        )
+    #     # Get the embedding vector for this token (1, 1, d_model)
+    #     token_embedding = embedding_matrix[token_idx : token_idx + 1, :].reshape(
+    #         (1, 1, d_model)
+    #     )
+    #     token_embedding_expanded = jnp.broadcast_to(
+    #         token_embedding, (batch_size, seq_len, d_model)
+    #     )
 
-        # Use where to select this embedding where condition is true
-        output = jnp.where(condition_expanded, token_embedding_expanded, output)
+    #     # Use where to select this embedding where condition is true
+    #     output = jnp.where(condition_expanded, token_embedding_expanded, output)
 
-    return output
+    # return output
+
+    # Simplified version using advanced indexing
+    return embedding_matrix[token_ids]
 
 
 def scaled_dot_product_attention(q, k, v, mask=None):

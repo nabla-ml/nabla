@@ -328,7 +328,6 @@ def realize_(
 
         for i, output in enumerate(output_list):
             output.impl = model_outputs[i]  # type: ignore
-            output._numpy_cache = None
 
     except Exception as e:
         raise ValueError(f"Error executing computation: {e}") from e

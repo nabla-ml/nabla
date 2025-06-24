@@ -107,45 +107,31 @@ class GatherOp(Operation):
         output.tensor_value = result
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        """
-        Eager computation using NumPy take operation.
+        values_np = args[0].to_numpy()
+        indices_np = args[1].to_numpy()
+        arg1_batch_dims = args[1].batch_dims
+        
+        # batched_indices = []
+        # for _ in range(len(args[0].batch_dims) - len(arg1_batch_dims)):
+        #     batched_indices.append(slice(None))
 
-        Args:
-            args: [input_array, indices_array]
-            output: Output array to store result
-        """
-        input_array, indices_array = args
+        # indexers = []
+        # for i in range(len(arg1_batch_dims)):
+        #     indexer_shape = [1] * (len(arg1_batch_dims) + 1)
+        #     indexer_shape[i] = arg1_batch_dims[i]
+        #     indexer = np.arange(arg1_batch_dims[i]).reshape(indexer_shape)
+        #     indexers.append(indexer)
 
-        input_np = input_array.to_numpy()
-        indices_np = indices_array.to_numpy()
+        # # Get the batch dimensions from the values tensor
+        # batched_indices.extend(indexers)
+        # batched_indices.append(indices_np)
 
-        if indices_np.dtype.kind not in {"i", "u"}:
-            raise ValueError(
-                f"Indices array must be of integer type, got {indices_np.dtype}"
-            )
+        # print(batched_indices)
 
-        # Handle batched case properly
-        if input_array.batch_dims or indices_array.batch_dims:
-            # For batched operations, we need to apply gather to each batch element
-            batch_size = input_np.shape[0]
-            results = []
-
-            for i in range(batch_size):
-                # Extract the i-th batch element from both arrays
-                input_batch_i = input_np[i]  # Shape: input_array.shape
-                indices_batch_i = indices_np[i]  # Shape: indices_array.shape
-
-                # Apply gather to this batch element
-                result_batch_i = np.take(input_batch_i, indices_batch_i, axis=self.axis)
-                results.append(result_batch_i)
-
-            # Stack the results back into a batch
-            result_np = np.stack(results, axis=0)
-        else:
-            # Non-batched case - direct numpy take
-            result_np = np.take(input_np, indices_np, axis=self.axis)
-
-        output.impl = Tensor.from_numpy(result_np)
+        # output.impl = Tensor.from_numpy(values_np[*batched_indices])
+        output.impl = Tensor.from_numpy(np.take(
+            values_np, indices_np, axis=self.axis
+        ))
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array

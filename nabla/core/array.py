@@ -51,7 +51,6 @@ class Array:
     vjp_rule: Optional[VJPRule]
     jvp_rule: Optional[JVPRule]
     traced: bool
-    _numpy_cache: Optional[np.ndarray]
     tangent: Optional[Array]
     cotangent: Optional[Array]
     stage_realization: bool
@@ -80,7 +79,6 @@ class Array:
         self.vjp_rule: Optional[VJPRule] = None
         self.jvp_rule: Optional[JVPRule] = None
         self.traced: bool = False
-        self._numpy_cache: Optional[np.ndarray] = None
         self.tangent: Optional[Array] = None
         self.cotangent: Optional[Array] = None
         self.stage_realization: bool = False
@@ -155,13 +153,11 @@ class Array:
             raise ValueError("Data is None after realization")
 
     def to_numpy(self) -> np.ndarray:
-        """Get NumPy representation with caching."""
+        """Get NumPy representation."""
         self.realize()  # Ensure the Array is realized before converting
-        if self._numpy_cache is None:
-            if self.impl is None:
-                raise ValueError("Cannot get NumPy array from None impl")
-            self._numpy_cache = self.impl.to_numpy()
-        return self._numpy_cache
+        if self.impl is None:
+            raise ValueError("Cannot get NumPy array from None impl")
+        return self.impl.to_numpy()
 
     @classmethod
     def from_numpy(cls, np_array: np.ndarray) -> Array:
@@ -188,7 +184,6 @@ class Array:
             array.impl = Tensor.from_numpy(np_array)
 
         array.device = array.impl.device
-        array._numpy_cache = np_array
         return array
 
     def get_arguments(self) -> list[Array]:
@@ -757,7 +752,6 @@ class Array:
         # Update self's implementation to point to new data
         # This simulates in-place modification
         self.impl = new_array.impl
-        self._numpy_cache = None  # Invalidate cache
 
     def _setitem_mixed_advanced_indexing(self, key: tuple, value: Array) -> None:
         """Helper method for mixed advanced indexing assignment.
