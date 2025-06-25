@@ -260,11 +260,11 @@ VIEW_OPERATIONS = {
         get_args=lambda r, c: (
             (
                 (get_test_data_for_rank(r, c.shape_generator)[0],),
-                {"shape": c.params["shape_fn"](c.shape_generator(r))},
+                {"shape": c.params["shape_fn"](c.shape_generator(r) if c.shape_generator else get_shape_for_rank(r))},
             ),
             (
                 (get_test_data_for_rank(r, c.shape_generator)[1],),
-                {"shape": c.params["shape_fn"](c.shape_generator(r))},
+                {"shape": c.params["shape_fn"](c.shape_generator(r) if c.shape_generator else get_shape_for_rank(r))},
             ),
         ),
         description="Broadcast a tensor to a new shape.",
@@ -853,7 +853,7 @@ def run_operation_tests(operation_name: str, all_configs: bool = False):
             set_rank_and_config_fn(rank, config)
 
             for i, test_func in enumerate(test_functions):
-                desc = test_func.__doc__.split(":")[1].strip()
+                desc = test_func.__doc__.split(":")[1].strip() if test_func.__doc__ else f"Test {i + 1}"
                 print(f"    {i + 1:2d}. {desc:<15}", end="")
 
                 try:

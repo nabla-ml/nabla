@@ -551,7 +551,7 @@ def run_operation_tests(operation_name: str):
         set_config_fn(config)
 
         for i, test_func in enumerate(test_functions):
-            desc = test_func.__doc__.split(":")[1].strip()
+            desc = test_func.__doc__.split(":")[1].strip() if test_func.__doc__ else "Unnamed Test"
             print(f"    {i + 1:2d}. {desc:<15}", end="")
 
             try:
