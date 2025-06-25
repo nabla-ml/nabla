@@ -669,12 +669,3 @@ if __name__ == "__main__":
         run_all_operations(all_configs=all_configs_arg)
     else:
         run_operation_tests(op_arg, all_configs=all_configs_arg)
-
-
-# ====================================================================================================
-# 🏁 FINAL SUMMARY
-# ====================================================================================================
-# TOTAL TESTS PASSED: 1504/1504
-# OVERALL SUCCESS RATE: 100.0%
-# 🎉 ALL REDUCTION OPERATIONS PASSED!
-# ====================================================================================================

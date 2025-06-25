@@ -510,6 +510,23 @@ class Array:
 
         return permute(self, axes)
 
+    def transpose(self, axes: tuple[int, ...]) -> Array:
+        """Permute the dimensions of the array.
+
+        Args:
+            axes: List of integers specifying the new order of dimensions
+
+        Returns:
+            Array with dimensions permuted according to the specified axes
+
+        Examples::
+
+            arr.permute([1, 0]) # If arr.shape is (2, 3), this will return an array with shape (3, 2)
+        """
+        from ..ops.view import permute
+
+        return permute(self, axes)
+
     def at(self, key, value):
         """Update array at specified indices/slices, returning new array."""
         from ..ops.binary import add, sub

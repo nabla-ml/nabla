@@ -1,79 +1,59 @@
 """
-COMPREHENSIVE NABLA INDEXING OPERATIONS TEST SUITE
-==================================================
+COMPREHENSIVE NABLA VIEW OPERATIONS TEST SUITE
+==============================================
+This test suite validates ALL view and shape manipulation operations in Nabla against
+JAX as a ground truth. It applies a rigorous testing methodology, covering 19
+function transformations (vjp, jvp, vmap, jit, and their compositions) across
+various tensor ranks and operation-specific configurations.
 
-This test suite validates ALL indexing operations in Nabla against JAX as ground truth.
-It covers advanced indexing, gather/scatter operations, and all function transformations
-(vjp, jvp, vmap, jit) across different scenarios to ensure robust behavior.
+The framework is designed to handle the complexity of view operations, which often
+have diverse function signatures (e.g., multiple keyword arguments, list inputs).
+It uses a flexible configuration system to test each operation under meaningful
+scenarios.
 
-INDEXING OPERATIONS TESTED (3 main categories):
-──────────────────────────────────────────────
-
-Advanced Indexing:
-    __getitem__ with Array indices, multi-dimensional indexing
-
-Gather Operations:
-    gather - selecting elements from arrays using indices
-
-Scatter Operations:
-    scatter - accumulating values into arrays at specified indices
+VIEW OPERATIONS TESTED:
+───────────────────────
+- transpose, permute, reshape, broadcast_to, squeeze, unsqueeze,
+- array_slice, pad, concatenate, stack, move_axis_to_front
 
 TRANSFORMATION COMBINATIONS TESTED (19 total):
 ──────────────────────────────────────────────
-(Same comprehensive 19 combinations as unary/binary operations suites)
-
-Level 0 - Baseline:
-    1. f(x)
-
-Level 1 - Single Transformations:
-    2. vjp(f), 3. jvp(f), 4. vmap(f), 5. jit(f)
-
-Level 2 - Double Transformations:
-    6. jit(vjp(f)), 7. jit(jvp(f)), 8. jit(vmap(f)),
-    9. vmap(vjp(f)), 10. vmap(jvp(f))
-
-Level 3 - Triple Transformations:
-    11. jit(vmap(vjp(f))), 12. jit(vmap(jvp(f)))
-
-Level 4 - Higher-Order Differentiation:
-    13. vjp(vjp(f)), 14. jvp(vjp(f)), 15. vjp(jvp(f)), 16. jvp(jvp(f))
-
-Level 5 - Advanced Compositions:
-    17. vjp(vmap(f)), 18. jvp(vmap(f)), 19. vmap(vmap(f))
-
-INDEXING SCENARIOS TESTED:
-─────────────────────────
-- Different tensor ranks (0D to 4D)
-- Various axis choices for gather/scatter
-- Different batch dimensions for vmap
-- Edge cases (empty indices, out-of-bounds, broadcasting)
-- Mixed data types (float32, float64, int32, int64)
+(Same 19 combinations as the unary/binary/reduction suites)
+Level 0: f(x)
+Level 1: vjp, jvp, vmap, jit
+Level 2: jit(vjp), jit(jvp), jit(vmap), vmap(vjp), vmap(jvp)
+Level 3: jit(vmap(vjp)), jit(vmap(jvp))
+Level 4: vjp(vjp), jvp(vjp), vjp(jvp), jvp(jvp)
+Level 5: vjp(vmap), jvp(vmap), vmap(vmap)
 
 CONSISTENCY CHECKING LOGIC:
 ─────────────────────────
-✅ PASS if both Nabla and JAX succeed and produce identical results
-✅ PASS if both fail consistently (expected for certain edge cases)
-❌ FAIL if only one framework fails or if results don't match
+Each test runs both the Nabla and JAX versions of an operation.
+✅ PASS if both succeed and results match, or if both fail consistently.
+❌ FAIL if one fails and the other succeeds, or if results differ.
 
-This ensures that Nabla's indexing operations behave identically to JAX across
-all transformation combinations, which is critical for automatic differentiation
-correctness in ML workloads.
+This ensures Nabla's behavior, including its differentiation rules and JIT
+compilation, is consistent with the industry-standard JAX.
 
 USAGE:
 ──────
-Run tests for a specific operation:
-    pytest test_view_ops.py -k "gather"
-    python test_view_ops.py gather
-
-Run tests for all operations:
+Run all view op tests:
     pytest test_view_ops.py
     python test_view_ops.py all
+
+Run a specific operation:
+    pytest test_view_ops.py -k "transpose"
+    python test_view_ops.py reshape
 """
 
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
+from functools import partial
 
+import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 import nabla as nb
@@ -87,967 +67,916 @@ try:
         run_test_with_consistency_check,
     )
 except ImportError:
+    # Fallback for direct execution
+    import os
+
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    sys.path.insert(0, current_dir)
     from test_utils import (
+        cleanup_caches,
         get_shape_for_rank,
+        jax_arange,
         run_test_with_consistency_check,
     )
 
-import numpy as np
-from jax import grad, jvp, vjp, vmap
-from jax import jit as jax_jit
+# ============================================================================
+# JAX HELPERS FOR NABLA-EQUIVALENT OPERATIONS
+# ============================================================================
+
+
+def jax_transpose_wrapper(x, axis_1, axis_2):
+    """JAX wrapper to mimic Nabla's transpose(x, axis_1, axis_2)."""
+    rank = len(x.shape)
+    if rank < 2:
+        return x  # Transpose is a no-op for scalars and vectors
+    axes = list(range(rank))
+    axis_1_pos = axis_1 if axis_1 >= 0 else rank + axis_1
+    axis_2_pos = axis_2 if axis_2 >= 0 else rank + axis_2
+    axes[axis_1_pos], axes[axis_2_pos] = axes[axis_2_pos], axes[axis_1_pos]
+    return jnp.transpose(x, axes=axes)
+
+
+def jax_pad_inverse_slice(arr, slices, target_shape):
+    """JAX equivalent of Nabla's pad, which is an inverse slice."""
+    return jnp.zeros(target_shape, dtype=arr.dtype).at[tuple(slices)].set(arr)
+
+
+def jax_unsqueeze_wrapper(x, axes):
+    """Wrapper to make jnp.expand_dims handle a list of axes like Nabla."""
+    res = x
+    # JAX requires axes to be sorted for sequential expansion
+    for axis in sorted(axes):
+        res = jnp.expand_dims(res, axis=axis)
+    return res
+
+
+def jax_squeeze_wrapper(x, axes):
+    """Wrapper to handle the `axes` keyword for jnp.squeeze."""
+    return jnp.squeeze(x, axis=tuple(axes))
+
+
+def jax_slice_wrapper(x, slices):
+    """Wrapper to handle slice arguments for JAX functions."""
+    return x[tuple(slices)]
+
+
+def jax_move_axis_wrapper(x, source, destination):
+    """JAX equivalent of np.moveaxis."""
+    return jnp.moveaxis(x, source, destination)
+
 
 # ============================================================================
-# INDEXING OPERATION DEFINITIONS
+# VIEW OPERATION & CONFIGURATION DEFINITIONS
 # ============================================================================
 
 
 @dataclass
-class IndexingOperation:
-    """Definition of an indexing operation for testing."""
+class ViewConfig:
+    """Defines a specific configuration for a view operation."""
+
+    description: str
+    params: dict
+    min_rank: int
+    shape_generator: Callable[[int], tuple[int, ...]] | None = None
+
+
+@dataclass
+class ViewOperation:
+    """Definition of a view operation for testing."""
 
     name: str
     nabla_fn: Callable
     jax_fn: Callable
+    get_args: Callable[[int, ViewConfig], tuple[tuple[tuple, dict], tuple[tuple, dict]]]
     description: str
-    needs_target_shape: bool = False  # True for scatter operations
-    min_rank: int = 1  # Minimum tensor rank needed
+    configs: list[ViewConfig]
+    is_differentiable: bool = True
+    is_list_input: bool = False
 
 
-def create_test_data_for_rank(rank: int, dtype=nb.DType.float32):
-    """Create test data with appropriate shape for given rank."""
-    shape = get_shape_for_rank(rank)
-    if rank == 0:
-        return nb.array(2.5, dtype=dtype)
-    else:
-        # Nabla's arange takes the final shape directly - no reshape needed!
-        data = nb.arange(shape, dtype=dtype)
-        return data
+def get_ranks_to_test() -> list[int]:
+    """Get all ranks to test for view operations."""
+    return [1, 2, 3]
 
 
-def create_jax_equivalent(nb_array):
-    """Create equivalent JAX array from Nabla array."""
-    return jnp.array(nb_array.to_numpy())
+def get_test_data_for_rank(
+    rank: int, shape_generator: Callable | None = None
+) -> tuple[nb.Array, jnp.ndarray]:
+    """Get test data for a specific tensor rank."""
+    shape = shape_generator(rank) if shape_generator else get_shape_for_rank(rank)
+    x_nb = (nb.arange(shape) + 1).astype(nb.DType.float32)
+    x_jax = (jax_arange(shape) + 1).astype("float32")
+    return x_nb, x_jax
 
 
-def create_valid_indices(shape: tuple, axis: int, num_indices: int = 3):
-    """Create valid indices for indexing into shape along axis."""
-    if len(shape) == 0 or axis >= len(shape):
-        return []
-
-    axis_size = shape[axis]
-    if axis_size <= 1:
-        return [0] if axis_size == 1 else []
-
-    # Create diverse indices within bounds
-    indices = [0, axis_size - 1]  # boundary cases
-    if axis_size > 2:
-        indices.append(axis_size // 2)  # middle
-
-    # Limit to requested number
-    return indices[:num_indices]
-
-
-# Define all indexing operations to test
-INDEXING_OPERATIONS = {
-    "gather": IndexingOperation(
-        "gather",
-        lambda arr, idx, axis=0: nb.gather(arr, idx, axis=axis),
-        lambda arr, idx, axis=0: jnp.take(arr, idx, axis=axis),
-        "Gather elements using indices",
-    ),
-    "scatter": IndexingOperation(
-        "scatter",
-        lambda target_shape, idx, values, axis=0: nb.scatter(
-            target_shape, idx, values, axis=axis
+# Define all view operations to test
+VIEW_OPERATIONS = {
+    "transpose": ViewOperation(
+        name="transpose",
+        nabla_fn=nb.transpose,
+        jax_fn=jax_transpose_wrapper,
+        get_args=lambda r, c: (
+            ((get_test_data_for_rank(r)[0],), c.params),
+            ((get_test_data_for_rank(r)[1],), c.params),
         ),
-        lambda target_shape, idx, values, axis=0: jnp.zeros(target_shape)
-        .at[jnp.arange(target_shape[axis])]
-        .add(values)
-        if axis == 0
-        else None,  # Simplified JAX scatter for axis=0
-        "Scatter/accumulate values at indices",
-        needs_target_shape=True,
+        description="Transpose two axes of a tensor.",
+        configs=[
+            ViewConfig(
+                "Swap last two axes (2D)", {"axis_1": -2, "axis_2": -1}, min_rank=2
+            ),
+            ViewConfig(
+                "Swap first and last (3D)", {"axis_1": 0, "axis_2": -1}, min_rank=3
+            ),
+        ],
+    ),
+    "permute": ViewOperation(
+        name="permute",
+        nabla_fn=nb.permute,
+        jax_fn=jnp.transpose,
+        get_args=lambda r, c: (
+            ((get_test_data_for_rank(r)[0],), c.params),
+            ((get_test_data_for_rank(r)[1],), c.params),
+        ),
+        description="Permute tensor dimensions.",
+        configs=[
+            ViewConfig("Reverse 2D", {"axes": (1, 0)}, min_rank=2),
+            ViewConfig("Reverse 3D", {"axes": (2, 1, 0)}, min_rank=3),
+        ],
+    ),
+    "move_axis_to_front": ViewOperation(
+        name="move_axis_to_front",
+        nabla_fn=nb.move_axis_to_front,
+        jax_fn=lambda x, axis: jax_move_axis_wrapper(x, axis, 0),
+        get_args=lambda r, c: (
+            ((get_test_data_for_rank(r)[0],), c.params),
+            ((get_test_data_for_rank(r)[1],), c.params),
+        ),
+        description="Move an axis to the front.",
+        configs=[ViewConfig("Move axis 1 to front", {"axis": 1}, min_rank=2)],
+    ),
+    "reshape": ViewOperation(
+        name="reshape",
+        nabla_fn=nb.reshape,
+        jax_fn=jnp.reshape,
+        get_args=lambda r, c: (
+            (
+                (get_test_data_for_rank(r, c.shape_generator)[0],),
+                {
+                    "shape": c.params["shape_fn"](
+                        c.shape_generator(r)
+                        if c.shape_generator
+                        else get_shape_for_rank(r)
+                    )
+                },
+            ),
+            (
+                (get_test_data_for_rank(r, c.shape_generator)[1],),
+                {
+                    "shape": c.params["shape_fn"](
+                        c.shape_generator(r)
+                        if c.shape_generator
+                        else get_shape_for_rank(r)
+                    )
+                },
+            ),
+        ),
+        description="Reshape a tensor to a new shape.",
+        configs=[
+            ViewConfig(
+                "Flatten", {"shape_fn": lambda s: (int(np.prod(s)),)}, min_rank=2
+            ),
+            ViewConfig(
+                "Unflatten",
+                {"shape_fn": lambda s: (2, int(np.prod(s) // 2))},
+                min_rank=1,
+                shape_generator=lambda r: (10,),
+            ),
+        ],
+    ),
+    "broadcast_to": ViewOperation(
+        name="broadcast_to",
+        nabla_fn=nb.broadcast_to,
+        jax_fn=jnp.broadcast_to,
+        get_args=lambda r, c: (
+            (
+                (get_test_data_for_rank(r, c.shape_generator)[0],),
+                {"shape": c.params["shape_fn"](c.shape_generator(r))},
+            ),
+            (
+                (get_test_data_for_rank(r, c.shape_generator)[1],),
+                {"shape": c.params["shape_fn"](c.shape_generator(r))},
+            ),
+        ),
+        description="Broadcast a tensor to a new shape.",
+        configs=[
+            ViewConfig(
+                "Broadcast vector to matrix",
+                shape_generator=lambda r: (3,),
+                params={"shape_fn": lambda s: (2, s[0])},
+                min_rank=1,
+            ),
+            ViewConfig(
+                "Add leading dimension",
+                shape_generator=lambda r: (2, 3),
+                params={"shape_fn": lambda s: (4, s[0], s[1])},
+                min_rank=2,
+            ),
+        ],
+    ),
+    "squeeze": ViewOperation(
+        name="squeeze",
+        nabla_fn=nb.squeeze,
+        jax_fn=jax_squeeze_wrapper,
+        get_args=lambda r, c: (
+            ((get_test_data_for_rank(r, c.shape_generator)[0],), c.params),
+            ((get_test_data_for_rank(r, c.shape_generator)[1],), c.params),
+        ),
+        description="Remove dimensions of size 1.",
+        configs=[
+            ViewConfig(
+                "Squeeze middle axis",
+                {"axes": [1]},
+                min_rank=3,
+                shape_generator=lambda r: (2, 1, 3),
+            ),
+            ViewConfig(
+                "Squeeze first axis",
+                {"axes": [0]},
+                min_rank=2,
+                shape_generator=lambda r: (1, 2, 3),
+            ),
+        ],
+    ),
+    "unsqueeze": ViewOperation(
+        name="unsqueeze",
+        nabla_fn=nb.unsqueeze,
+        jax_fn=jax_unsqueeze_wrapper,
+        get_args=lambda r, c: (
+            ((get_test_data_for_rank(r)[0],), c.params),
+            ((get_test_data_for_rank(r)[1],), c.params),
+        ),
+        description="Add a new dimension of size 1.",
+        configs=[
+            ViewConfig("Unsqueeze in middle", {"axes": [1]}, min_rank=2),
+            ViewConfig("Unsqueeze at end", {"axes": [-1]}, min_rank=1),
+        ],
+    ),
+    "array_slice": ViewOperation(
+        name="array_slice",
+        nabla_fn=nb.array_slice,
+        jax_fn=jax_slice_wrapper,
+        get_args=lambda r, c: (
+            ((get_test_data_for_rank(r, lambda r: (5, 6, 7))[0],), c.params),
+            ((get_test_data_for_rank(r, lambda r: (5, 6, 7))[1],), c.params),
+        ),
+        description="Slice a tensor.",
+        configs=[
+            ViewConfig(
+                "Slice with step",
+                {"slices": [slice(None), slice(0, None, 2)]},
+                min_rank=2,
+            ),
+            ViewConfig(
+                "Slice with negative indices",
+                {"slices": [slice(1, -1), slice(None)]},
+                min_rank=2,
+            ),
+        ],
+    ),
+    "pad": ViewOperation(
+        name="pad",
+        nabla_fn=nb.pad,
+        jax_fn=jax_pad_inverse_slice,
+        get_args=lambda r, c: (
+            ((get_test_data_for_rank(r, c.shape_generator)[0],), c.params),
+            ((get_test_data_for_rank(r, c.shape_generator)[1],), c.params),
+        ),
+        description="Pad a tensor (inverse slice).",
+        configs=[
+            ViewConfig(
+                "Pad matrix",
+                {"slices": [slice(1, 3), slice(2, 4)], "target_shape": (4, 5)},
+                min_rank=2,
+                shape_generator=lambda r: (2, 2),
+            ),
+        ],
+    ),
+    "concatenate": ViewOperation(
+        name="concatenate",
+        nabla_fn=nb.concatenate,
+        jax_fn=jnp.concatenate,
+        is_list_input=True,
+        get_args=lambda r, c: (
+            (
+                (
+                    [
+                        get_test_data_for_rank(r)[0],
+                        get_test_data_for_rank(r)[0] + 10,
+                    ],
+                ),
+                c.params,
+            ),
+            (
+                (
+                    [
+                        get_test_data_for_rank(r)[1],
+                        get_test_data_for_rank(r)[1] + 10,
+                    ],
+                ),
+                c.params,
+            ),
+        ),
+        description="Concatenate tensors along an axis.",
+        configs=[ViewConfig("Concat axis 1", {"axis": 1}, min_rank=2)],
+    ),
+    "stack": ViewOperation(
+        name="stack",
+        nabla_fn=nb.stack,
+        jax_fn=jnp.stack,
+        is_list_input=True,
+        get_args=lambda r, c: (
+            (
+                (
+                    [
+                        get_test_data_for_rank(r)[0],
+                        get_test_data_for_rank(r)[0] + 10,
+                    ],
+                ),
+                c.params,
+            ),
+            (
+                (
+                    [
+                        get_test_data_for_rank(r)[1],
+                        get_test_data_for_rank(r)[1] + 10,
+                    ],
+                ),
+                c.params,
+            ),
+        ),
+        description="Stack tensors along a new axis.",
+        configs=[ViewConfig("Stack axis 1", {"axis": 1}, min_rank=1)],
     ),
 }
 
-
 # ============================================================================
-# TRANSFORMATION COMBINATIONS
-# ============================================================================
-
-# Define ALL 19 transformation combinations as promised in docstring
-TRANSFORMATIONS = [
-    # Level 0 - Baseline (1 combination)
-    ("baseline", lambda f: f),
-    # Level 1 - Single Transformations (4 combinations)
-    (
-        "vjp",
-        lambda f: lambda *args, **kwargs: nb.vjp(lambda *a: f(*a, **kwargs), *args)[0],
-    ),  # Return primal from VJP
-    (
-        "jvp",
-        lambda f: lambda *args, **kwargs: nb.jvp(
-            lambda *a: f(*a, **kwargs), (args[0],), (nb.ones_like(args[0]),)
-        )[0],
-    ),  # Return primal from JVP - only differentiate w.r.t. first arg
-    ("vmap", lambda f: nb.vmap(f)),
-    ("jit", lambda f: nb.jit(f)),
-    # Level 2 - Double Transformations (5 combinations)
-    (
-        "jit_vjp",
-        lambda f: nb.jit(
-            lambda *args, **kwargs: nb.vjp(lambda *a: f(*a, **kwargs), *args)[0]
-        ),
-    ),
-    (
-        "jit_jvp",
-        lambda f: nb.jit(
-            lambda *args, **kwargs: nb.jvp(
-                lambda *a: f(*a, **kwargs), (args[0],), (nb.ones_like(args[0]),)
-            )[0]
-        ),
-    ),
-    ("jit_vmap", lambda f: nb.jit(nb.vmap(f))),
-    (
-        "vmap_vjp",
-        lambda f: nb.vmap(
-            lambda *args, **kwargs: nb.vjp(lambda *a: f(*a, **kwargs), *args)[0]
-        ),
-    ),
-    (
-        "vmap_jvp",
-        lambda f: nb.vmap(
-            lambda *args, **kwargs: nb.jvp(
-                lambda *a: f(*a, **kwargs), (args[0],), (nb.ones_like(args[0]),)
-            )[0]
-        ),
-    ),
-    # Level 3 - Triple Transformations (2 combinations)
-    (
-        "jit_vmap_vjp",
-        lambda f: nb.jit(
-            nb.vmap(
-                lambda *args, **kwargs: nb.vjp(lambda *a: f(*a, **kwargs), *args)[0]
-            )
-        ),
-    ),
-    (
-        "jit_vmap_jvp",
-        lambda f: nb.jit(
-            nb.vmap(
-                lambda *args, **kwargs: nb.jvp(
-                    lambda *a: f(*a, **kwargs), (args[0],), (nb.ones_like(args[0]),)
-                )[0]
-            )
-        ),
-    ),
-    # Level 4 - Higher-Order Differentiation (4 combinations)
-    (
-        "vjp_vjp",
-        lambda f: lambda *args, **kwargs: nb.vjp(
-            lambda *a: nb.vjp(lambda *b: f(*b, **kwargs), *a)[0], *args
-        )[0],
-    ),
-    (
-        "jvp_vjp",
-        lambda f: lambda *args, **kwargs: nb.jvp(
-            lambda *a: nb.vjp(lambda *b: f(*b, **kwargs), *a)[0],
-            (args[0],),
-            (nb.ones_like(args[0]),),
-        )[0],
-    ),
-    (
-        "vjp_jvp",
-        lambda f: lambda *args, **kwargs: nb.vjp(
-            lambda *a: nb.jvp(
-                lambda *b: f(*b, **kwargs), (a[0],), (nb.ones_like(a[0]),)
-            )[0],
-            *args,
-        )[0],
-    ),
-    (
-        "jvp_jvp",
-        lambda f: lambda *args, **kwargs: nb.jvp(
-            lambda *a: nb.jvp(
-                lambda *b: f(*b, **kwargs), (a[0],), (nb.ones_like(a[0]),)
-            )[0],
-            (args[0],),
-            (nb.ones_like(args[0]),),
-        )[0],
-    ),
-    # Level 5 - Advanced Compositions (3 combinations)
-    (
-        "vjp_vmap",
-        lambda f: lambda *args, **kwargs: nb.vjp(
-            lambda *a: nb.vmap(f)(*a, **kwargs), *args
-        )[0],
-    ),
-    (
-        "jvp_vmap",
-        lambda f: lambda *args, **kwargs: nb.jvp(
-            lambda *a: nb.vmap(f)(*a, **kwargs), (args[0],), (nb.ones_like(args[0]),)
-        )[0],
-    ),
-    ("vmap_vmap", lambda f: nb.vmap(nb.vmap(f))),
-]
-
-JAX_TRANSFORMATIONS = [
-    # Corresponding JAX transformations - ALL 19 combinations
-    ("baseline", lambda f: f),
-    # Level 1 - Single Transformations
-    (
-        "vjp",
-        lambda f: lambda *args, **kwargs: vjp(lambda *a: f(*a, **kwargs), *args)[0],
-    ),
-    (
-        "jvp",
-        lambda f: lambda *args, **kwargs: jvp(
-            lambda *a: f(*a, **kwargs), (args[0],), (jnp.ones_like(args[0]),)
-        )[0],
-    ),
-    ("vmap", lambda f: vmap(f)),
-    ("jit", lambda f: jax_jit(f)),
-    # Level 2 - Double Transformations
-    (
-        "jit_vjp",
-        lambda f: jax_jit(
-            lambda *args, **kwargs: vjp(lambda *a: f(*a, **kwargs), *args)[0]
-        ),
-    ),
-    (
-        "jit_jvp",
-        lambda f: jax_jit(
-            lambda *args, **kwargs: jvp(
-                lambda *a: f(*a, **kwargs), (args[0],), (jnp.ones_like(args[0]),)
-            )[0]
-        ),
-    ),
-    ("jit_vmap", lambda f: jax_jit(vmap(f))),
-    (
-        "vmap_vjp",
-        lambda f: vmap(
-            lambda *args, **kwargs: vjp(lambda *a: f(*a, **kwargs), *args)[0]
-        ),
-    ),
-    (
-        "vmap_jvp",
-        lambda f: vmap(
-            lambda *args, **kwargs: jvp(
-                lambda *a: f(*a, **kwargs), (args[0],), (jnp.ones_like(args[0]),)
-            )[0]
-        ),
-    ),
-    # Level 3 - Triple Transformations
-    (
-        "jit_vmap_vjp",
-        lambda f: jax_jit(
-            vmap(lambda *args, **kwargs: vjp(lambda *a: f(*a, **kwargs), *args)[0])
-        ),
-    ),
-    (
-        "jit_vmap_jvp",
-        lambda f: jax_jit(
-            vmap(
-                lambda *args, **kwargs: jvp(
-                    lambda *a: f(*a, **kwargs), (args[0],), (jnp.ones_like(args[0]),)
-                )[0]
-            )
-        ),
-    ),
-    # Level 4 - Higher-Order Differentiation
-    (
-        "vjp_vjp",
-        lambda f: lambda *args, **kwargs: vjp(
-            lambda *a: vjp(lambda *b: f(*b, **kwargs), *a)[0], *args
-        )[0],
-    ),
-    (
-        "jvp_vjp",
-        lambda f: lambda *args, **kwargs: jvp(
-            lambda *a: vjp(lambda *b: f(*b, **kwargs), *a)[0],
-            (args[0],),
-            (jnp.ones_like(args[0]),),
-        )[0],
-    ),
-    (
-        "vjp_jvp",
-        lambda f: lambda *args, **kwargs: vjp(
-            lambda *a: jvp(lambda *b: f(*b, **kwargs), (a[0],), (jnp.ones_like(a[0]),))[
-                0
-            ],
-            *args,
-        )[0],
-    ),
-    (
-        "jvp_jvp",
-        lambda f: lambda *args, **kwargs: jvp(
-            lambda *a: jvp(lambda *b: f(*b, **kwargs), (a[0],), (jnp.ones_like(a[0]),))[
-                0
-            ],
-            (args[0],),
-            (jnp.ones_like(args[0]),),
-        )[0],
-    ),
-    # Level 5 - Advanced Compositions
-    (
-        "vjp_vmap",
-        lambda f: lambda *args, **kwargs: vjp(lambda *a: vmap(f)(*a, **kwargs), *args)[
-            0
-        ],
-    ),
-    (
-        "jvp_vmap",
-        lambda f: lambda *args, **kwargs: jvp(
-            lambda *a: vmap(f)(*a, **kwargs), (args[0],), (jnp.ones_like(args[0]),)
-        )[0],
-    ),
-    ("vmap_vmap", lambda f: vmap(vmap(f))),
-]
-
-
-def apply_transformation(operation_fn, transform_name, transform_fn):
-    """Apply a transformation to an operation function."""
-    try:
-        return transform_fn(operation_fn)
-    except Exception:
-        # Some transformations may not be compatible with all operations
-        return None
-
-
-# ============================================================================
-# CORE TESTING FRAMEWORK
+# PARAMETERIZED TEST FRAMEWORK
 # ============================================================================
 
 
-class TestComprehensiveIndexing:
-    """Comprehensive tests for all indexing scenarios."""
+def create_op_tests(operation: ViewOperation):
+    """Create all 19 transformation tests for a given view operation."""
+    current_rank = 2
+    current_config = operation.configs[0]
 
-    @pytest.fixture(autouse=True)
-    def setup_method(self):
-        """Set up test data with various shapes and dtypes."""
-        # More challenging test shapes covering edge cases
-        self.test_shapes = [
-            (),  # scalar
-            (1,),  # size-1 1D
-            (7,),  # prime-sized 1D
-            (16,),  # power-of-2 1D
-            (1, 1),  # size-1 2D
-            (1, 7),  # mixed size-1 and normal
-            (3, 4),  # typical 2D
-            (13, 17),  # prime sizes 2D
-            (1, 1, 1),  # size-1 3D
-            (2, 1, 4),  # mixed size-1 in middle
-            (2, 3, 4),  # typical 3D
-            (7, 11, 13),  # all prime sizes 3D
-            (1, 2, 3, 4),  # mixed with size-1 4D
-            (2, 3, 4, 5),  # typical 4D
-            (8, 1, 16, 1),  # alternating size-1 4D
-            (3, 5, 7, 11),  # all prime sizes 4D
-        ]
+    def get_configured_functions():
+        """
+        Core helper that uses `partial` to create clean, tensor-only functions.
+        It handles standard f(*args) functions and adapts list-based functions
+        (like concatenate) to fit the test harness.
+        """
+        (primals_nb_orig, params_nb), (primals_jax_orig, params_jax) = (
+            operation.get_args(current_rank, current_config)
+        )
 
-        # All numeric dtypes for thorough testing
-        self.test_dtypes = [
-            nb.DType.float32,
-            nb.DType.float64,
-            nb.DType.int32,
-            nb.DType.int64,
-        ]
+        f_nb_partial = partial(operation.nabla_fn, **params_nb)
+        f_jax_partial = partial(operation.jax_fn, **params_jax)
 
-        # Challenging index patterns
-        self.index_patterns = {
-            "sequential": lambda n: list(range(min(n, 5))),
-            "reverse": lambda n: list(range(min(n, 5) - 1, -1, -1)),
-            "repeated": lambda n: [0, 0, min(n - 1, 2), min(n - 1, 2)]
-            if n > 1
-            else [0],
-            "sparse": lambda n: [0, min(n - 1, n // 2), min(n - 1, n - 1)]
-            if n > 2
-            else ([0, min(n - 1, 1)] if n > 1 else [0]),
-            "single": lambda n: [min(n - 1, n // 2)] if n > 0 else [],
-            "empty": lambda n: [],
-            "boundary": lambda n: [0, min(n - 1, n - 1)]
-            if n > 1
-            else ([0] if n > 0 else []),
-        }
-
-    def _create_test_array(self, shape, dtype=nb.DType.float32):
-        """Create test array with known pattern."""
-        if shape == ():
-            # Scalar
-            return nb.array(42.0, dtype=dtype)
+        if operation.is_list_input:
+            # Adapt list-input functions to the f(*args) pattern.
+            # Original primals: ([arr1, arr2],) -> New primals: (arr1, arr2)
+            primals_nb = tuple(primals_nb_orig[0])
+            primals_jax = tuple(primals_jax_orig[0])
+            # Wrap the function to accept *args and bundle them into a list.
+            f_nb = lambda *tensors: f_nb_partial(list(tensors))
+            f_jax = lambda *tensors: f_jax_partial(list(tensors))
         else:
-            # Use range to create predictable data
-            size = np.prod(shape)
-            data = np.arange(size, dtype=dtype.to_numpy()).reshape(shape)
-            return nb.array(data, dtype=dtype)
+            # Standard case
+            f_nb, f_jax = f_nb_partial, f_jax_partial
+            primals_nb, primals_jax = primals_nb_orig, primals_jax_orig
 
-    def _create_jax_equivalent(self, nb_array):
-        """Create equivalent JAX array."""
-        return jnp.array(nb_array.to_numpy())
+        return f_nb, primals_nb, f_jax, primals_jax
 
-    def test_gather_basic_correctness(self):
-        """Test basic gather operation correctness across shapes and dtypes."""
-        for shape in self.test_shapes:
-            if len(shape) == 0:  # Skip scalar for gather
-                continue
-
-            for dtype in self.test_dtypes:
-                # Test gather along different axes
-                for axis in range(len(shape)):
-                    if shape[axis] == 1:  # Skip if axis has size 1
-                        continue
-
-                    # Create test data
-                    nb_array = self._create_test_array(shape, dtype)
-                    jax_array = self._create_jax_equivalent(nb_array)
-
-                    # Create indices that are valid for this axis
-                    max_index = shape[axis] - 1
-                    if max_index <= 0:
-                        continue
-
-                    indices_data = [0, max_index, 0] if max_index > 0 else [0]
-                    if len(indices_data) > max_index + 1:
-                        indices_data = indices_data[: max_index + 1]
-
-                    nb_indices = nb.array(indices_data, dtype=nb.DType.int32)
-                    jax_indices = jnp.array(indices_data, dtype=jnp.int32)
-
-                    # Test gather
-                    nb_result = nb.gather(nb_array, nb_indices, axis=axis)
-                    jax_result = jnp.take(jax_array, jax_indices, axis=axis)
-
-                    np.testing.assert_allclose(
-                        nb_result.to_numpy(),
-                        jax_result,
-                        rtol=1e-6,
-                        err_msg=f"Gather mismatch for shape={shape}, dtype={dtype}, axis={axis}",
-                    )
-
-    def test_scatter_basic_correctness(self):
-        """Test basic scatter operation correctness across shapes and dtypes."""
-        for shape in self.test_shapes:
-            if len(shape) == 0:  # Skip scalar for scatter
-                continue
-
-            for dtype in self.test_dtypes:
-                # Test scatter along different axes
-                for axis in range(len(shape)):
-                    if shape[axis] == 1:  # Skip if axis has size 1
-                        continue
-
-                    # Create indices and values
-                    max_index = shape[axis] - 1
-                    if max_index <= 0:
-                        continue
-
-                    indices_data = [0, max_index] if max_index > 0 else [0]
-                    nb_indices = nb.array(indices_data, dtype=nb.DType.int32)
-
-                    # Create values with correct shape for scatter
-                    values_shape = list(shape)
-                    values_shape[axis] = len(indices_data)
-                    values_data = np.ones(values_shape, dtype=dtype.to_numpy()) * 999
-                    nb_values = nb.array(values_data, dtype=dtype)
-
-                    # Test scatter
-                    nb_result = nb.scatter(shape, nb_indices, nb_values, axis=axis)
-
-                    # Create expected result manually
-                    expected = np.zeros(shape, dtype=dtype.to_numpy())
-                    for i, idx in enumerate(indices_data):
-                        # Build slice for this index
-                        slices = [slice(None)] * len(shape)
-                        slices[axis] = idx  # type: ignore
-                        value_slices = [slice(None)] * len(shape)
-                        value_slices[axis] = i  # type: ignore
-                        expected[tuple(slices)] = values_data[tuple(value_slices)]
-
-                    np.testing.assert_allclose(
-                        nb_result.to_numpy(),
-                        expected,
-                        rtol=1e-6,
-                        err_msg=f"Scatter mismatch for shape={shape}, dtype={dtype}, axis={axis}",
-                    )
-
-    def test_gather_gradients(self):
-        """Test gather gradients against JAX."""
-        # Test on 2D array for simplicity
-        shape = (4, 3)
-        nb_array = self._create_test_array(shape, nb.DType.float32)
-        jax_array = self._create_jax_equivalent(nb_array)
-
-        indices_data = [0, 2, 1]
-        nb_indices = nb.array(indices_data, dtype=nb.DType.int32)
-        jax_indices = jnp.array(indices_data, dtype=jnp.int32)
-
-        # Define functions for gradient computation
-        def nb_gather_fn(x):
-            return nb.gather(x, nb_indices, axis=0).sum()
-
-        def jax_gather_fn(x):
-            return jnp.take(x, jax_indices, axis=0).sum()
-
-        # Compute gradients
-        nb_grad = nb.grad(nb_gather_fn)(nb_array)
-        jax_grad = grad(jax_gather_fn)(jax_array)
-
-        np.testing.assert_allclose(
-            nb_grad.to_numpy(), jax_grad, rtol=1e-6, err_msg="Gather gradient mismatch"
+    def test_1_baseline():
+        """Test: f(x, *params)"""
+        f_nb, primals_nb, f_jax, primals_jax = get_configured_functions()
+        return run_test_with_consistency_check(
+            "Baseline",
+            lambda: f_nb(*primals_nb),
+            lambda: f_jax(*primals_jax),
         )
 
-    def test_scatter_gradients(self):
-        """Test scatter gradients."""
-        # Test scatter gradient w.r.t. values
-        shape = (4, 3)
-        indices_data = [0, 2]
-        nb_indices = nb.array(indices_data, dtype=nb.DType.int32)
+    def test_2_vjp():
+        """Test: vjp(f)"""
+        f_nb, primals_nb, f_jax, primals_jax = get_configured_functions()
 
-        values_shape = (2, 3)
-        nb_values = self._create_test_array(values_shape, nb.DType.float32)
+        def nabla_fn():
+            value, vjp_fn = nb.vjp(f_nb, *primals_nb)
+            grad = vjp_fn(nb.ones_like(value))
+            # Normalize to tuple for consistent comparison
+            return value, grad if isinstance(grad, tuple) else (grad,)
 
-        def nb_scatter_fn(values):
-            return nb.scatter(shape, nb_indices, values, axis=0).sum()
+        def jax_fn():
+            value, vjp_fn = jax.vjp(f_jax, *primals_jax)
+            grad = vjp_fn(jnp.ones_like(value))
+            return value, grad
 
-        # Compute gradient
-        nb_grad = nb.grad(nb_scatter_fn)(nb_values)
+        return run_test_with_consistency_check("VJP", nabla_fn, jax_fn)
 
-        # Expected gradient should be all ones (since we sum the result)
-        expected_grad = np.ones(values_shape, dtype=np.float32)
-
-        np.testing.assert_allclose(
-            nb_grad.to_numpy(),
-            expected_grad,
-            rtol=1e-6,
-            err_msg="Scatter gradient mismatch",
+    def test_3_jvp():
+        """Test: jvp(f)"""
+        f_nb, primals_nb, f_jax, primals_jax = get_configured_functions()
+        tangents_nb = tuple(nb.ones_like(p) for p in primals_nb)
+        tangents_jax = tuple(jnp.ones_like(p) for p in primals_jax)
+        return run_test_with_consistency_check(
+            "JVP",
+            lambda: nb.jvp(f_nb, primals_nb, tangents_nb),
+            lambda: jax.jvp(f_jax, primals_jax, tangents_jax),
         )
 
-    def test_advanced_indexing_syntax(self):
-        """Test __getitem__ and __setitem__ syntax with Array indices."""
-        # Create test array
-        shape = (5, 4)
-        nb_array = self._create_test_array(shape, nb.DType.float32)
-        jax_array = self._create_jax_equivalent(nb_array)
-
-        # Test Array indexing
-        indices_data = [0, 3, 1]
-        nb_indices = nb.array(indices_data, dtype=nb.DType.int32)
-        jax_indices = jnp.array(indices_data, dtype=jnp.int32)
-
-        # Test __getitem__
-        nb_result = nb_array[nb_indices]
-        jax_result = jax_array[jax_indices]
-
-        np.testing.assert_allclose(
-            nb_result.to_numpy(),
-            jax_result,
-            rtol=1e-6,
-            err_msg="Advanced indexing __getitem__ mismatch",
+    def test_4_vmap():
+        """Test: vmap(f)"""
+        if operation.name in ["pad"]:
+            pytest.skip(f"VMAP is non-trivial for op '{operation.name}'")
+        f_nb, primals_nb, f_jax, primals_jax = get_configured_functions()
+        return run_test_with_consistency_check(
+            "VMAP",
+            lambda: nb.vmap(f_nb)(*primals_nb),
+            lambda: jax.vmap(f_jax)(*primals_jax),
         )
 
-    def test_jit_compatibility(self):
-        """Test that indexing operations work with JIT compilation."""
-        shape = (4, 3)
-        nb_array = self._create_test_array(shape, nb.DType.float32)
-        indices_data = [0, 2, 1]
-        nb_indices = nb.array(indices_data, dtype=nb.DType.int32)
-
-        # Define function to JIT
-        def gather_sum(arr, idx):
-            return nb.gather(arr, idx, axis=0).sum()
-
-        # Test without JIT
-        result_no_jit = gather_sum(nb_array, nb_indices)
-
-        # Test with JIT
-        jit_fn = nb.jit(gather_sum)
-        result_jit = jit_fn(nb_array, nb_indices)
-
-        np.testing.assert_allclose(
-            result_no_jit.to_numpy(),
-            result_jit.to_numpy(),
-            rtol=1e-6,
-            err_msg="JIT gather mismatch",
+    def test_5_jit():
+        """Test: jit(f)"""
+        f_nb, primals_nb, f_jax, primals_jax = get_configured_functions()
+        return run_test_with_consistency_check(
+            "JIT",
+            lambda: nb.djit(f_nb)(*primals_nb),
+            lambda: jax.jit(f_jax)(*primals_jax),
         )
 
-    def test_vmap_compatibility(self):
-        """Test that indexing operations work with vmap."""
-        # Create batch of arrays with DISTINCT dimensions to track axis movement
-        batch_shape = (3, 5, 7)  # 3 arrays of shape (5, 7) - all different sizes!
-        nb_arrays = self._create_test_array(batch_shape, nb.DType.float32)
+    # --- Full suite of 19 tests ---
+    def test_6_jit_vjp():
+        """Test: jit(vjp(f))"""
+        f_nb, primals_nb, f_jax, primals_jax = get_configured_functions()
 
-        # Create batch of indices - valid for axis 0 of shape (5, 7)
-        indices_batch = np.array(
-            [[0, 1], [1, 4], [0, 3]], dtype=np.int32
-        )  # Different indices per batch
-        nb_indices_batch = nb.array(indices_batch, dtype=nb.DType.int32)
+        def vjp_wrapper_nb(*args):
+            val, vjp_fn = nb.vjp(f_nb, *args)
+            grad = vjp_fn(nb.ones_like(val))
+            return val, grad if isinstance(grad, tuple) else (grad,)
 
-        # Create corresponding JAX arrays for comparison
-        jax_arrays = jnp.array(nb_arrays.to_numpy())
-        jax_indices_batch = jnp.array(indices_batch)
+        def vjp_wrapper_jax(*args):
+            val, vjp_fn = jax.vjp(f_jax, *args)
+            return val, vjp_fn(jnp.ones_like(val))
 
-        # Define function to vmap
-        def nb_gather_fn(arr, idx):
-            return nb.gather(arr, idx, axis=0)
-
-        def jax_gather_fn(arr, idx):
-            return jnp.take(arr, idx, axis=0)
-
-        # Apply vmap
-        nb_vmapped_fn = nb.vmap(nb_gather_fn, in_axes=(0, 0))
-        nb_result = nb_vmapped_fn(nb_arrays, nb_indices_batch)
-
-        jax_vmapped_fn = vmap(jax_gather_fn, in_axes=(0, 0))
-        jax_result = jax_vmapped_fn(jax_arrays, jax_indices_batch)
-
-        # Check shapes match
-        print(f"JAX result shape: {jax_result.shape}")
-        print(f"Nabla result shape: {nb_result.shape}")
-        print(f"JAX result:\n{jax_result}")
-        print(f"Nabla result:\n{nb_result.to_numpy()}")
-
-        # Expected shape: (3, 2, 7) - 3 batches, 2 indices each, 7 features
-        expected_shape = (3, 2, 7)
-        assert jax_result.shape == expected_shape, (
-            f"JAX shape mismatch: expected {expected_shape}, got {jax_result.shape}"
-        )
-        assert nb_result.shape == expected_shape, (
-            f"Nabla shape mismatch: expected {expected_shape}, got {nb_result.shape}"
+        return run_test_with_consistency_check(
+            "JIT(VJP)",
+            lambda: nb.djit(vjp_wrapper_nb)(*primals_nb),
+            lambda: jax.jit(vjp_wrapper_jax)(*primals_jax),
         )
 
-        # Check values match
-        np.testing.assert_allclose(
-            nb_result.to_numpy(),
-            jax_result,
-            rtol=1e-6,
-            err_msg="Vmap gather results don't match between Nabla and JAX",
+    def test_7_jit_jvp():
+        """Test: jit(jvp(f))"""
+        f_nb, primals_nb, f_jax, primals_jax = get_configured_functions()
+        tangents_nb = tuple(nb.ones_like(p) for p in primals_nb)
+        tangents_jax = tuple(jnp.ones_like(p) for p in primals_jax)
+
+        jitted_jvp_nb = nb.djit(lambda p, t: nb.jvp(f_nb, p, t))
+        jitted_jvp_jax = jax.jit(lambda p, t: jax.jvp(f_jax, p, t))
+
+        return run_test_with_consistency_check(
+            "JIT(JVP)",
+            lambda: jitted_jvp_nb(primals_nb, tangents_nb),
+            lambda: jitted_jvp_jax(primals_jax, tangents_jax),
         )
 
-    def test_mixed_transformations(self):
-        """Test combinations of jit, vmap, and grad with indexing operations."""
-        # Create test data
-        batch_shape = (2, 4, 3)  # 2 arrays of shape (4, 3)
-        nb_arrays = self._create_test_array(batch_shape, nb.DType.float32)
-
-        indices_data = [0, 3, 1]  # Valid indices for axis 0 of shape (4, 3)
-        nb_indices = nb.array(indices_data, dtype=nb.DType.int32)
-
-        # Define function that combines gather and reduction
-        def gather_and_sum(arr_batch, idx):
-            def single_gather_sum(arr):
-                return nb.gather(arr, idx, axis=0).sum()
-
-            # Apply to each array in batch
-            return nb.vmap(single_gather_sum)(arr_batch)
-
-        # Test with gradient
-        grad_fn = nb.grad(lambda x: gather_and_sum(x, nb_indices).sum())
-        gradient = grad_fn(nb_arrays)
-
-        # Test with JIT
-        jit_fn = nb.jit(gather_and_sum)
-        jit_result = jit_fn(nb_arrays, nb_indices)
-
-        # Verify shapes
-        assert gradient.shape == batch_shape, (
-            f"Gradient shape mismatch: {gradient.shape} vs {batch_shape}"
-        )
-        assert jit_result.shape == (2,), (
-            f"JIT result shape mismatch: {jit_result.shape} vs (2,)"
+    def test_8_jit_vmap():
+        """Test: jit(vmap(f))"""
+        if operation.name in ["pad"]:
+            pytest.skip(f"VMAP is non-trivial for op '{operation.name}'")
+        f_nb, primals_nb, f_jax, primals_jax = get_configured_functions()
+        return run_test_with_consistency_check(
+            "JIT(VMAP)",
+            lambda: nb.djit(nb.vmap(f_nb))(*primals_nb),
+            lambda: jax.jit(jax.vmap(f_jax))(*primals_jax),
         )
 
-    def test_edge_cases(self):
-        """Test edge cases and error conditions."""
-        # Test empty indices
-        shape = (3, 4)
-        nb_array = self._create_test_array(shape, nb.DType.float32)
-        empty_indices = nb.array([], dtype=nb.DType.int32)
+    def test_9_vmap_vjp():
+        """Test: vmap(vjp(f))"""
+        if operation.name in ["pad"]:
+            pytest.skip(f"VMAP is non-trivial for op '{operation.name}'")
+        f_nb, primals_nb, f_jax, primals_jax = get_configured_functions()
 
-        result = nb.gather(nb_array, empty_indices, axis=0)
-        assert result.shape == (0, 4), f"Empty gather shape mismatch: {result.shape}"
+        def vjp_wrapper_nb(*args):
+            val, vjp_fn = nb.vjp(f_nb, *args)
+            grad = vjp_fn(nb.ones_like(val))
+            return val, grad if isinstance(grad, tuple) else (grad,)
 
-        # Test single index
-        single_index = nb.array([1], dtype=nb.DType.int32)
-        result = nb.gather(nb_array, single_index, axis=0)
-        assert result.shape == (1, 4), f"Single gather shape mismatch: {result.shape}"
+        def vjp_wrapper_jax(*args):
+            val, vjp_fn = jax.vjp(f_jax, *args)
+            return val, vjp_fn(jnp.ones_like(val))
 
-        # Test out of bounds (should be handled gracefully)
-        try:
-            oob_indices = nb.array(
-                [0, 5, 1], dtype=nb.DType.int32
-            )  # 5 is out of bounds for axis of size 3
-            result = nb.gather(nb_array, oob_indices, axis=0)
-            # If no error, check that something reasonable happened
-            assert result.shape[0] == 3, (
-                "Out of bounds gather should still return correct outer shape"
-            )
-        except (IndexError, ValueError):
-            # Expected for out of bounds
-            pass
+        return run_test_with_consistency_check(
+            "VMAP(VJP)",
+            lambda: nb.vmap(vjp_wrapper_nb)(*primals_nb),
+            lambda: jax.vmap(vjp_wrapper_jax)(*primals_jax),
+        )
 
-    def test_broadcasting_behavior(self):
-        """Test broadcasting behavior in scatter operations."""
-        # Test broadcasting values in scatter
-        shape = (4, 3)
-        indices_data = [0, 2]
-        nb_indices = nb.array(indices_data, dtype=nb.DType.int32)
+    def test_10_vmap_jvp():
+        """Test: vmap(jvp(f))"""
+        if operation.name in ["pad"]:
+            pytest.skip(f"VMAP is non-trivial for op '{operation.name}'")
+        f_nb, primals_nb, f_jax, primals_jax = get_configured_functions()
 
-        # Create values that need broadcasting
-        scalar_value = nb.array(999.0, dtype=nb.DType.float32)
-        result = nb.scatter(shape, nb_indices, scalar_value, axis=0)
+        def jvp_wrapper_nb(*args):
+            tangents = tuple(nb.ones_like(p) for p in args)
+            return nb.jvp(f_nb, args, tangents)
 
-        # Check that both positions got the scalar value
-        result_np = result.to_numpy()
-        assert np.all(result_np[0] == 999.0), "Scalar broadcast failed for index 0"
-        assert np.all(result_np[2] == 999.0), "Scalar broadcast failed for index 2"
-        assert np.all(result_np[1] == 0.0), "Unindexed position should be zero"
-        assert np.all(result_np[3] == 0.0), "Unindexed position should be zero"
+        def jvp_wrapper_jax(*args):
+            tangents = tuple(jnp.ones_like(p) for p in args)
+            return jax.jvp(f_jax, args, tangents)
 
-    def test_different_index_dtypes(self):
-        """Test that different integer dtypes work for indices."""
-        shape = (4, 3)
-        nb_array = self._create_test_array(shape, nb.DType.float32)
+        return run_test_with_consistency_check(
+            "VMAP(JVP)",
+            lambda: nb.vmap(jvp_wrapper_nb)(*primals_nb),
+            lambda: jax.vmap(jvp_wrapper_jax)(*primals_jax),
+        )
 
-        for index_dtype in [nb.DType.int32, nb.DType.int64]:
-            indices = nb.array([0, 2, 1], dtype=index_dtype)
-            result = nb.gather(nb_array, indices, axis=0)
+    def test_11_jit_vmap_vjp():
+        """Test: jit(vmap(vjp(f)))"""
+        if operation.name in ["pad"]:
+            pytest.skip(f"VMAP is non-trivial for op '{operation.name}'")
+        f_nb, primals_nb, f_jax, primals_jax = get_configured_functions()
 
-            assert result.shape == (3, 3), (
-                f"Shape mismatch with {index_dtype}: {result.shape}"
-            )
+        def vjp_wrapper_nb(*args):
+            val, vjp_fn = nb.vjp(f_nb, *args)
+            grad = vjp_fn(nb.ones_like(val))
+            return val, grad if isinstance(grad, tuple) else (grad,)
 
-    def test_jit_vs_eager_consistency(self):
-        """
-        CRITICAL TEST: Verify that JIT (maxpr) and eager (eagerxpr) produce identical results.
+        def vjp_wrapper_jax(*args):
+            val, vjp_fn = jax.vjp(f_jax, *args)
+            return val, vjp_fn(jnp.ones_like(val))
 
-        This is essential because:
-        - JIT uses the maxpr method (MAX graph compilation)
-        - Eager uses the eagerxpr method (NumPy-based execution)
-        - Any divergence indicates a bug in one of the execution paths
-        """
-        for shape in [(4, 3), (5, 7), (3, 4, 2)]:  # Test multiple shapes
-            for dtype in [nb.DType.float32, nb.DType.float64]:
-                # Create test data
-                nb_array = self._create_test_array(shape, dtype)
-                indices_data = [0, min(shape[0] - 1, 2), 1] if shape[0] > 2 else [0]
-                nb_indices = nb.array(indices_data, dtype=nb.DType.int32)
+        return run_test_with_consistency_check(
+            "JIT(VMAP(VJP))",
+            lambda: nb.djit(nb.vmap(vjp_wrapper_nb))(*primals_nb),
+            lambda: jax.jit(jax.vmap(vjp_wrapper_jax))(*primals_jax),
+        )
 
-                # Test gather
-                def gather_fn(arr, idx):
-                    return nb.gather(arr, idx, axis=0)
+    def test_12_jit_vmap_jvp():
+        """Test: jit(vmap(jvp(f)))"""
+        if operation.name in ["pad"]:
+            pytest.skip(f"VMAP is non-trivial for op '{operation.name}'")
+        f_nb, primals_nb, f_jax, primals_jax = get_configured_functions()
 
-                # Run eager (eagerxpr)
-                eager_result = gather_fn(nb_array, nb_indices)
+        def jvp_wrapper_nb(*args):
+            tangents = tuple(nb.ones_like(p) for p in args)
+            return nb.jvp(f_nb, args, tangents)
 
-                # Run JIT (maxpr)
-                jit_fn = nb.jit(gather_fn)
-                jit_result = jit_fn(nb_array, nb_indices)
+        def jvp_wrapper_jax(*args):
+            tangents = tuple(jnp.ones_like(p) for p in args)
+            return jax.jvp(f_jax, args, tangents)
 
-                np.testing.assert_allclose(
-                    eager_result.to_numpy(),
-                    jit_result.to_numpy(),
-                    rtol=1e-12,  # Very tight tolerance
-                    err_msg=f"JIT vs Eager mismatch for gather: shape={shape}, dtype={dtype}",
-                )
+        return run_test_with_consistency_check(
+            "JIT(VMAP(JVP))",
+            lambda: nb.djit(nb.vmap(jvp_wrapper_nb))(*primals_nb),
+            lambda: jax.jit(jax.vmap(jvp_wrapper_jax))(*primals_jax),
+        )
 
-                # Test scatter if shape allows
-                if len(indices_data) > 0:
-                    values_shape = list(shape)
-                    values_shape[0] = len(indices_data)
-                    nb_values = self._create_test_array(tuple(values_shape), dtype)
+    def test_13_vjp_vjp():
+        """Test: vjp(vjp(f))"""
+        f_nb, primals_nb, f_jax, primals_jax = get_configured_functions()
 
-                    def scatter_fn(idx, vals):
-                        return nb.scatter(shape, idx, vals, axis=0)
+        def first_grad_nb(*args):
+            _val, vjp_fn = nb.vjp(f_nb, *args)
+            out = f_nb(*args)
+            grad = vjp_fn(nb.ones_like(out))
+            return grad if isinstance(grad, tuple) else (grad,)
 
-                    # Run eager
-                    eager_scatter = scatter_fn(nb_indices, nb_values)
+        def first_grad_jax(*args):
+            _val, vjp_fn = jax.vjp(f_jax, *args)
+            out = f_jax(*args)
+            grad = vjp_fn(jnp.ones_like(out))
+            return grad  # JAX vjp always returns a tuple of gradients
 
-                    # Run JIT
-                    jit_scatter_fn = nb.jit(scatter_fn)
-                    jit_scatter = jit_scatter_fn(nb_indices, nb_values)
+        def nabla_fn():
+            val, vjp_fn_2 = nb.vjp(first_grad_nb, *primals_nb)
+            # Cotangent must be a tuple matching the output of first_grad_nb
+            cotan_ones = tuple(nb.ones_like(c) for c in val)
+            grad2 = vjp_fn_2(cotan_ones)
+            return val, grad2 if isinstance(grad2, tuple) else (grad2,)
 
-                    np.testing.assert_allclose(
-                        eager_scatter.to_numpy(),
-                        jit_scatter.to_numpy(),
-                        rtol=1e-12,
-                        err_msg=f"JIT vs Eager mismatch for scatter: shape={shape}, dtype={dtype}",
-                    )
+        def jax_fn():
+            val, vjp_fn_2 = jax.vjp(first_grad_jax, *primals_jax)
+            cotan_ones = tuple(jnp.ones_like(c) for c in val)
+            return val, vjp_fn_2(cotan_ones)
 
-    def test_nested_transformations_comprehensive(self):
-        """
-        Test all 19 transformation combinations on indexing operations.
+        return run_test_with_consistency_check("VJP(VJP)", nabla_fn, jax_fn)
 
-        This ensures that complex nested transformations like jit(vmap(vjp(f)))
-        work correctly and that maxpr/eagerxpr paths are consistent.
-        """
-        # Test on simpler shapes to avoid timeout on complex transformations
-        test_shapes = [(3, 4), (4, 3)]
+    def test_14_jvp_vjp():
+        """Test: jvp(vjp(f))"""
+        f_nb, primals_nb, f_jax, primals_jax = get_configured_functions()
+        tangents_nb = tuple(nb.ones_like(p) for p in primals_nb)
+        tangents_jax = tuple(jnp.ones_like(p) for p in primals_jax)
 
-        for shape in test_shapes:
-            # Create test data
-            nb_array = self._create_test_array(shape, nb.DType.float32)
-            jax_array = self._create_jax_equivalent(nb_array)
+        def first_grad_nb(*args):
+            _val, vjp_fn = nb.vjp(f_nb, *args)
+            out = f_nb(*args)
+            grad = vjp_fn(nb.ones_like(out))
+            return grad if isinstance(grad, tuple) else (grad,)
 
-            indices_data = [0, min(shape[0] - 1, 2)] if shape[0] > 1 else [0]
-            nb_indices = nb.array(indices_data, dtype=nb.DType.int32)
-            jax_indices = jnp.array(indices_data, dtype=jnp.int32)
+        def first_grad_jax(*args):
+            _val, vjp_fn = jax.vjp(f_jax, *args)
+            out = f_jax(*args)
+            return vjp_fn(jnp.ones_like(out))
 
-            # Test gather with all transformations
-            operation = INDEXING_OPERATIONS["gather"]
+        return run_test_with_consistency_check(
+            "JVP(VJP)",
+            lambda: nb.jvp(first_grad_nb, primals_nb, tangents_nb),
+            lambda: jax.jvp(first_grad_jax, primals_jax, tangents_jax),
+        )
 
-            for transform_name, nabla_transform in TRANSFORMATIONS:
-                # Skip the most complex transformations on larger shapes to avoid timeout
-                if len(transform_name.split("_")) > 2 and np.prod(shape) > 12:
-                    continue
+    def test_15_vjp_jvp():
+        """Test: vjp(jvp(f))"""
+        f_nb, primals_nb, f_jax, primals_jax = get_configured_functions()
+        tangents_nb = tuple(nb.ones_like(p) for p in primals_nb)
+        tangents_jax = tuple(jnp.ones_like(p) for p in primals_jax)
 
-                # Find corresponding JAX transform
-                jax_transform = None
-                for jax_name, jax_tf in JAX_TRANSFORMATIONS:
-                    if jax_name == transform_name:
-                        jax_transform = jax_tf
-                        break
+        def jvp_wrapper_nb(*args):
+            return nb.jvp(f_nb, args, tangents_nb)
 
-                if jax_transform is None:
-                    continue
+        def jvp_wrapper_jax(*args):
+            return jax.jvp(f_jax, args, tangents_jax)
 
-                # Test the transformation
-                def nabla_op():
-                    try:
-                        transformed_fn = nabla_transform(operation.nabla_fn)
-                        return transformed_fn(nb_array, nb_indices, axis=0)
-                    except Exception as e:
-                        # Some complex transformations may not be supported yet
-                        raise e
+        def nabla_fn():
+            val, vjp_fn = nb.vjp(jvp_wrapper_nb, *primals_nb)
+            cotan = (nb.ones_like(val[0]), nb.ones_like(val[1]))
+            grad = vjp_fn(cotan)
+            return val, grad if isinstance(grad, tuple) else (grad,)
 
-                def jax_op():
-                    try:
-                        transformed_fn = jax_transform(operation.jax_fn)
-                        return transformed_fn(jax_array, jax_indices, axis=0)
-                    except Exception as e:
-                        raise e
+        def jax_fn():
+            val, vjp_fn = jax.vjp(jvp_wrapper_jax, *primals_jax)
+            cotan = (jnp.ones_like(val[0]), jnp.ones_like(val[1]))
+            return val, vjp_fn(cotan)
 
-                test_name = f"gather_{transform_name}_shape{shape}"
+        return run_test_with_consistency_check("VJP(JVP)", nabla_fn, jax_fn)
+
+    def test_16_jvp_jvp():
+        """Test: jvp(jvp(f))"""
+        f_nb, primals_nb, f_jax, primals_jax = get_configured_functions()
+        tangents_nb = tuple(nb.ones_like(p) for p in primals_nb)
+        tangents_jax = tuple(jnp.ones_like(p) for p in primals_jax)
+
+        def jvp_wrapper_nb(*args):
+            return nb.jvp(f_nb, args, tangents_nb)
+
+        def jvp_wrapper_jax(*args):
+            return jax.jvp(f_jax, args, tangents_jax)
+
+        return run_test_with_consistency_check(
+            "JVP(JVP)",
+            lambda: nb.jvp(jvp_wrapper_nb, primals_nb, tangents_nb),
+            lambda: jax.jvp(jvp_wrapper_jax, primals_jax, tangents_jax),
+        )
+
+    def test_17_vjp_vmap():
+        """Test: vjp(vmap(f))"""
+        if operation.name in ["pad"]:
+            pytest.skip(f"VMAP is non-trivial for op '{operation.name}'")
+        f_nb, primals_nb, f_jax, primals_jax = get_configured_functions()
+        vmapped_f_nb, vmapped_f_jax = nb.vmap(f_nb), jax.vmap(f_jax)
+
+        def nabla_fn():
+            val, vjp_fn = nb.vjp(vmapped_f_nb, *primals_nb)
+            grad = vjp_fn(nb.ones_like(val))
+            return val, grad if isinstance(grad, tuple) else (grad,)
+
+        def jax_fn():
+            val, vjp_fn = jax.vjp(vmapped_f_jax, *primals_jax)
+            return val, vjp_fn(jnp.ones_like(val))
+
+        return run_test_with_consistency_check("VJP(VMAP)", nabla_fn, jax_fn)
+
+    def test_18_jvp_vmap():
+        """Test: jvp(vmap(f))"""
+        if operation.name in ["pad"]:
+            pytest.skip(f"VMAP is non-trivial for op '{operation.name}'")
+        f_nb, primals_nb, f_jax, primals_jax = get_configured_functions()
+        tangents_nb = tuple(nb.ones_like(p) for p in primals_nb)
+        tangents_jax = tuple(jnp.ones_like(p) for p in primals_jax)
+        vmapped_f_nb, vmapped_f_jax = nb.vmap(f_nb), jax.vmap(f_jax)
+        return run_test_with_consistency_check(
+            "JVP(VMAP)",
+            lambda: nb.jvp(vmapped_f_nb, primals_nb, tangents_nb),
+            lambda: jax.jvp(vmapped_f_jax, primals_jax, tangents_jax),
+        )
+
+    def test_19_vmap_vmap():
+        """Test: vmap(vmap(f))"""
+        if operation.name in ["pad"]:
+            pytest.skip(f"VMAP is non-trivial for op '{operation.name}'")
+        f_nb, primals_nb, f_jax, primals_jax = get_configured_functions()
+
+        for p in primals_nb:
+            if len(p.shape) < 2:
+                pytest.skip("vmap(vmap) requires ndim >= 2 for all primals")
+
+        return run_test_with_consistency_check(
+            "VMAP(VMAP)",
+            lambda: nb.vmap(nb.vmap(f_nb))(*primals_nb),
+            lambda: jax.vmap(jax.vmap(f_jax))(*primals_jax),
+        )
+
+    def set_rank_and_config(rank, config):
+        nonlocal current_rank, current_config
+        current_rank = rank
+        current_config = config
+
+    test_functions = [
+        test_1_baseline,
+        test_2_vjp,
+        test_3_jvp,
+        test_4_vmap,
+        test_5_jit,
+        test_6_jit_vjp,
+        test_7_jit_jvp,
+        test_8_jit_vmap,
+        test_9_vmap_vjp,
+        test_10_vmap_jvp,
+        test_11_jit_vmap_vjp,
+        test_12_jit_vmap_jvp,
+        test_13_vjp_vjp,
+        test_14_jvp_vjp,
+        test_15_vjp_jvp,
+        test_16_jvp_jvp,
+        test_17_vjp_vmap,
+        test_18_jvp_vmap,
+        test_19_vmap_vmap,
+    ]
+    return test_functions, set_rank_and_config
+
+
+# ============================================================================
+# MAIN EXECUTION LOGIC & PYTEST INTEGRATION
+# ============================================================================
+
+
+def run_operation_tests(operation_name: str, all_configs: bool = False):
+    """Run all transformation tests for a specific view operation."""
+    if operation_name not in VIEW_OPERATIONS:
+        print(f"Unknown operation: {operation_name}", file=sys.stderr)
+        return False, 0, 0
+
+    operation = VIEW_OPERATIONS[operation_name]
+    print("=" * 80)
+    print(f"TESTING VIEW OPERATION: {operation.name.upper()}")
+    print("=" * 80)
+
+    test_functions, set_rank_and_config_fn = create_op_tests(operation)
+    ranks_to_test = get_ranks_to_test() if all_configs else [2, 3]
+
+    total_passed, total_run = 0, 0
+    failed_tests = []
+
+    for rank in ranks_to_test:
+        print(f"\n--- Testing Rank: {rank} ---")
+        valid_configs = [c for c in operation.configs if rank >= c.min_rank]
+        if not all_configs and valid_configs:
+            # Pick a representative config for this rank
+            valid_configs = [valid_configs[-1]]
+
+        if not valid_configs:
+            print(f"  > No valid configs for rank {rank}")
+            continue
+
+        for config in valid_configs:
+            print(f"\n  > Config: {config.description}")
+            set_rank_and_config_fn(rank, config)
+
+            for i, test_func in enumerate(test_functions):
+                desc = test_func.__doc__.split(":")[1].strip()
+                print(f"    {i + 1:2d}. {desc:<15}", end="")
 
                 try:
-                    success = run_test_with_consistency_check(
-                        test_name, nabla_op, jax_op
-                    )
-                    if not success:
-                        print(f"❌ FAILED: {test_name}")
+                    success = test_func()
+                    total_run += 1
+                    if success:
+                        total_passed += 1
                     else:
-                        print(f"✅ PASSED: {test_name}")
+                        failed_tests.append(
+                            f"Rank {rank}, Config '{config.description}', Test '{desc}'"
+                        )
+                except pytest.skip.Exception as e:
+                    print(f"SKIPPED ({e})")
                 except Exception as e:
-                    print(f"⚠️  SKIPPED: {test_name} - {str(e)[:100]}")
+                    # For easier debugging, print the full error in the runner
 
-    # ============================================================================
-    # SYSTEMATIC TRANSFORMATION TESTING
-    # ============================================================================
+                    print(f"ERROR ({type(e).__name__})")
+                    # traceback.print_exc() # Uncomment for full stack trace
+                    total_run += 1
+                    failed_tests.append(
+                        f"Rank {rank}, Config '{config.description}', Test '{desc}' (ERROR: {e})"
+                    )
+                finally:
+                    cleanup_caches()
 
-    def test_gather_all_transformations(self):
-        """Test gather operation with all transformation combinations."""
-        operation_name = "gather"
+    print(f"\n{'=' * 80}")
+    print(
+        f"OPERATION {operation.name.upper()} RESULTS: {total_passed}/{total_run} tests passed"
+    )
+    if failed_tests:
+        print("--- FAILED TESTS ---")
+        for failed in failed_tests:
+            print(f"  - {failed}")
 
-        # Test ranks 1-3 (skip 0 for indexing operations)
-        for rank in [1, 2, 3]:
-            for transform_name, _ in TRANSFORMATIONS:
-                success = self._test_single_indexing_operation(
-                    operation_name, transform_name, rank
-                )
-                if not success:
-                    # Don't fail immediately, just log
-                    print(f"FAILED: {operation_name}_{transform_name}_rank{rank}")
+    return total_passed == total_run and total_run > 0, total_passed, total_run
 
-    def test_gather_baseline_all_ranks(self):
-        """Test gather baseline operation across all ranks."""
-        operation_name = "gather"
-        transform_name = "baseline"
 
-        for rank in [1, 2, 3]:
-            success = self._test_single_indexing_operation(
-                operation_name, transform_name, rank
-            )
-            assert success, f"Baseline gather failed at rank {rank}"
+def run_all_operations(all_configs: bool = False):
+    """Run tests for all view operations."""
+    print("=" * 100)
+    print("COMPREHENSIVE VIEW OPERATIONS TEST SUITE")
+    print("=" * 100)
 
-    def test_gather_single_transformations(self):
-        """Test gather with the core transformations only (subset of all 19)."""
-        operation_name = "gather"
-        # Test only the core transformations first to ensure they work
-        core_transforms = ["baseline", "vjp", "jvp", "vmap", "jit"]
+    overall_success = True
+    total_passed_all, total_run_all = 0, 0
 
-        for transform_name in core_transforms:
-            for rank in [1, 2]:  # Test on simpler ranks first
-                success = self._test_single_indexing_operation(
-                    operation_name, transform_name, rank
-                )
-                assert success, (
-                    f"Core transform {transform_name} failed for gather at rank {rank}"
-                )
+    for op_name in VIEW_OPERATIONS:
+        success, passed, run = run_operation_tests(op_name, all_configs)
+        overall_success &= success
+        total_passed_all += passed
+        total_run_all += run
+        cleanup_caches()
 
-    def _test_single_indexing_operation(
-        self, operation_name: str, transform_name: str, rank: int
-    ):
-        """Test a single indexing operation with a specific transformation at given rank."""
+    print("\n" + "=" * 100)
+    print("🏁 FINAL SUMMARY")
+    print("=" * 100)
+    rate = (total_passed_all / total_run_all * 100) if total_run_all > 0 else 0
+    print(f"TOTAL TESTS PASSED: {total_passed_all}/{total_run_all}")
+    print(f"OVERALL SUCCESS RATE: {rate:.1f}%")
+    if overall_success:
+        print("🎉 ALL VIEW OPERATIONS PASSED!")
+    else:
+        print("❌ SOME VIEW OPERATIONS FAILED")
+    print("=" * 100)
+    return overall_success
 
-        if operation_name not in INDEXING_OPERATIONS:
-            return False
 
-        operation = INDEXING_OPERATIONS[operation_name]
+@pytest.fixture(autouse=True)
+def cleanup_after_test():
+    """Fixture to clean up caches after each individual test function."""
+    yield
+    cleanup_caches()
 
-        # Skip if operation requires higher rank than available
-        if rank < operation.min_rank:
-            return True  # Skip but don't fail
 
-        # Get transformation functions
-        nabla_transform = None
-        jax_transform = None
+# Create a flat list of all test combinations for pytest parametrization
+ALL_TEST_CASES = []
+for op_name, op_def in VIEW_OPERATIONS.items():
+    for rank in get_ranks_to_test():
+        for config_idx, config in enumerate(op_def.configs):
+            if rank >= config.min_rank:
+                for trans_idx in range(19):
+                    # Use a descriptive ID for easier test selection with -k
+                    test_id = f"{op_name}-rank{rank}-cfg{config.description.replace(' ', '_')}-trans{trans_idx}"
+                    ALL_TEST_CASES.append(
+                        pytest.param(op_name, rank, config, trans_idx, id=test_id)
+                    )
 
-        for name, transform in TRANSFORMATIONS:
-            if name == transform_name:
-                nabla_transform = transform
-                break
 
-        for name, transform in JAX_TRANSFORMATIONS:
-            if name == transform_name:
-                jax_transform = transform
-                break
+@pytest.mark.parametrize(
+    "operation_name, rank, config, transformation_index", ALL_TEST_CASES
+)
+def test_view_operation_transformation(
+    operation_name, rank, config, transformation_index
+):
+    """Pytest entry point for a specific view op/rank/config/transform."""
+    operation = VIEW_OPERATIONS[operation_name]
+    test_functions, set_rank_and_config_fn = create_op_tests(operation)
+    set_rank_and_config_fn(rank, config)
+    test_func = test_functions[transformation_index]
+    test_desc = test_func.__doc__.split(":")[1].strip()
 
-        if nabla_transform is None or jax_transform is None:
-            return False
-
-        # Create test data
-        nb_array = create_test_data_for_rank(rank, nb.DType.float32)
-        jax_array = create_jax_equivalent(nb_array)
-
-        # Create indices for gather operation (simplified for now)
-        if rank == 0:
-            return True  # Skip scalar indexing for now
-
-        shape = nb_array.shape
-        indices_data = create_valid_indices(shape, axis=0, num_indices=2)
-
-        if not indices_data:
-            return True  # Skip if no valid indices
-
-        nb_indices = nb.array(indices_data, dtype=nb.DType.int32)
-        jax_indices = jnp.array(indices_data, dtype=jnp.int32)
-
-        # Define the operation functions
-        def nabla_op():
-            transformed_fn = nabla_transform(operation.nabla_fn)
-            if transformed_fn is None:
-                raise ValueError("Transformation failed")
-            return transformed_fn(nb_array, nb_indices, axis=0)
-
-        def jax_op():
-            transformed_fn = jax_transform(operation.jax_fn)
-            if transformed_fn is None:
-                raise ValueError("Transformation failed")
-            return transformed_fn(jax_array, jax_indices, axis=0)
-
-        # Run the test with consistency checking
-        test_name = f"{operation_name}_{transform_name}_rank{rank}"
-        return run_test_with_consistency_check(test_name, nabla_op, jax_op)
+    try:
+        success = test_func()
+        assert success, (
+            f"Failed: {operation_name} - rank({rank}) - "
+            f"config('{config.description}') - transform({test_desc})"
+        )
+    except pytest.skip.Exception as e:
+        pytest.skip(
+            f"SKIPPED: {operation_name} - rank({rank}) - transform({test_desc}): {e}"
+        )
 
 
 if __name__ == "__main__":
-    pytest.main([__file__])
+    if len(sys.argv) < 2:
+        print(f"Usage: python {sys.argv[0]} <operation_name|all> [--all-configs]")
+        print(f"Available operations: {list(VIEW_OPERATIONS.keys())}")
+        sys.exit(1)
+
+    op_arg = sys.argv[1]
+    all_configs_arg = "--all-configs" in sys.argv
+
+    if op_arg == "all":
+        run_all_operations(all_configs=all_configs_arg)
+    else:
+        run_operation_tests(op_arg, all_configs=all_configs_arg)
