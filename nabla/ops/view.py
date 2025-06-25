@@ -628,6 +628,36 @@ def move_axis_to_front(input_array: Array, axis: int) -> Array:
     return permute(input_array, tuple(axes))
 
 
+def move_axis_to_back(input_array: Array, axis: int) -> Array:
+    """Move specified axis to the back (last position), shifting others left.
+
+    Args:
+        input_array: Input tensor
+        axis: Axis to move to back
+
+    Returns:
+        Tensor with specified axis moved to back
+
+    Example:
+        >>> x = nb.ones((2, 3, 4))  # shape (2, 3, 4)
+        >>> y = move_axis_to_back(x, 0)  # shape (3, 4, 2)
+        >>> # axis 0 moved to back, others shifted: [1, 2, 0]
+    """
+    ndim = len(input_array.shape)
+
+    # Normalize negative axis
+    if axis < 0:
+        axis = ndim + axis
+
+    if axis < 0 or axis >= ndim:
+        raise ValueError(f"Axis {axis} out of bounds for array of dimension {ndim}")
+
+    # Generate permutation: [0, 1, ..., axis-1, axis+1, ..., ndim-1, axis]
+    axes = [i for i in range(ndim) if i != axis] + [axis]
+
+    return permute(input_array, tuple(axes))
+
+
 def move_axis_from_front(input_array: Array, target_axis: int) -> Array:
     """Move front axis (position 0) to specified target position.
 
@@ -660,6 +690,41 @@ def move_axis_from_front(input_array: Array, target_axis: int) -> Array:
     # Generate permutation to move front to target_axis
     # [1, 2, ..., target_axis, 0, target_axis+1, ..., ndim-1]
     axes = list(range(1, target_axis + 1)) + [0] + list(range(target_axis + 1, ndim))
+
+    return permute(input_array, tuple(axes))
+
+
+def move_axis_from_back(input_array: Array, target_axis: int) -> Array:
+    """Move back axis (last position) to specified target position.
+
+    Args:
+        input_array: Input tensor (assumes back axis is the one to move)
+        target_axis: Target position for the back axis
+
+    Returns:
+        Tensor with back axis moved to target position
+
+    Example:
+        >>> x = nb.ones((4, 2, 3))  # back axis has size 3
+        >>> y = move_axis_from_back(x, 1)  # shape (2, 4, 3)
+        >>> # back axis moved to position 1: [0, 2, 1]
+    """
+    ndim = len(input_array.shape)
+
+    # Normalize negative axis
+    if target_axis < 0:
+        target_axis = ndim + target_axis
+
+    if target_axis < 0 or target_axis >= ndim:
+        raise ValueError(
+            f"Target axis {target_axis} out of bounds for array of dimension {ndim}"
+        )
+
+    if target_axis == ndim - 1:
+        return input_array  # Already at back
+
+    # Generate permutation to move back to target_axis
+    axes = list(range(0, target_axis)) + [ndim - 1] + list(range(target_axis, ndim - 1))
 
     return permute(input_array, tuple(axes))
 

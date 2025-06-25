@@ -110,7 +110,7 @@ class GatherOp(Operation):
         values_np = args[0].to_numpy()
         indices_np = args[1].to_numpy()
         arg1_batch_dims = args[1].batch_dims
-        
+
         # batched_indices = []
         # for _ in range(len(args[0].batch_dims) - len(arg1_batch_dims)):
         #     batched_indices.append(slice(None))
@@ -129,9 +129,7 @@ class GatherOp(Operation):
         # print(batched_indices)
 
         # output.impl = Tensor.from_numpy(values_np[*batched_indices])
-        output.impl = Tensor.from_numpy(np.take(
-            values_np, indices_np, axis=self.axis
-        ))
+        output.impl = Tensor.from_numpy(np.take(values_np, indices_np, axis=self.axis))
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -337,14 +335,14 @@ class ScatterOp(Operation):
         # For scatter_nd, we need to create multi-dimensional indices
         # Based on the axis, we need to reshape indices appropriately
         if axis_with_batch == 0:
-            # For axis=0, reshape indices from [...] to [..., 1] 
+            # For axis=0, reshape indices from [...] to [..., 1]
             # This specifies single coordinate along the first dimension
             indices_nd = ops.unsqueeze(indices_tensor, -1)
         else:
             # For other axes, we need to create full coordinate tuples
             # For now, let's fall back to regular scatter for non-zero axes
             # to maintain compatibility
-            
+
             # Expand indices to have the same rank as values if needed
             values_shape = values_tensor.type.shape
             indices_shape = indices_tensor.type.shape

@@ -118,6 +118,13 @@ def sum(
         elif isinstance(axes, list | tuple):
             axes = [int(axis) for axis in axes]
 
+        ndim = len(arg.shape)
+        for axis in axes:
+            if not -ndim <= axis < ndim:
+                raise ValueError(
+                    f"axis {axis} is out of bounds for array of dimension {ndim}"
+                )
+
         axes = [axis if axis < 0 else axis - len(arg.shape) for axis in axes]
 
     else:
@@ -125,7 +132,7 @@ def sum(
         for i in range(-len(arg.shape), 0):
             axes.append(i)
 
-    sorted(axes)
+    axes = sorted(axes)
     op = SumOp(arg.shape, axes, keep_dims=keep_dims)
     res = op.forward(arg)
 
@@ -157,8 +164,13 @@ def mean(
             axes = [int(axis) for axis in axes]
 
         # Handle negative axes
+        ndim = len(arg.shape)
         normalized_axes = []
         for axis in axes:
+            if not -ndim <= axis < ndim:
+                raise ValueError(
+                    f"axis {axis} is out of bounds for array of dimension {ndim}"
+                )
             if axis < 0:
                 normalized_axes.append(len(arg.shape) + axis)
             else:
@@ -176,7 +188,7 @@ def mean(
             count *= dim
 
     # Create count as a scalar array
-    count_array = array([float(count)], dtype=arg.dtype)
+    count_array = array(float(count), dtype=arg.dtype)
 
     # Divide sum by count
     return div(sum_result, count_array)
@@ -260,6 +272,13 @@ def sum_batch_dims(
             axes = [int(axis) for axis in axes]
 
         batch_dims_len = len(arg.batch_dims)
+        for axis in axes:
+            if not -batch_dims_len <= axis < batch_dims_len:
+                raise ValueError(
+                    f"axis {axis} is out of bounds for array with "
+                    f"{batch_dims_len} batch dimensions"
+                )
+
         axes = [axis if axis < 0 else axis - batch_dims_len for axis in axes]
     else:
         axes = []
@@ -357,78 +376,6 @@ class MaxOp(ReductionOperation):
         return sum(masked_tangents, axes=self.axes, keep_dims=True)
 
 
-class ArgMaxOp(ReductionOperation):
-    """ArgMax reduction operation."""
-
-    def __init__(
-        self,
-        arg_shape: Shape,
-        axes: int | list[int] | tuple[int, ...] | None = None,
-        keep_dims: bool = False,
-    ):
-        super().__init__(f"argmax[axes={axes}]", axes, keep_dims=True)
-        self.arg_shape = arg_shape
-        self.axes = axes
-        self.keep_dims = keep_dims
-
-    def compute_output_dtype(self, arg: Array) -> DType:
-        """ArgMax always returns integer indices."""
-        return DType.int64
-
-    def maxpr(self, args: list[TensorValue], output: Array) -> None:
-        output_symbol = args[0]
-
-        # Apply argmax for each axis sequentially
-        # Note: ops.argmax reduces along one axis and keeps the dimension (size 1)
-        normalized_axes = _normalize_axes(self.axes, len(args[0].shape))
-        for axis in normalized_axes:
-            output_symbol = ops.argmax(output_symbol, axis=axis)
-
-        output.tensor_value = output_symbol
-
-    def eagerxpr(self, args: list[Array], output: Array) -> None:
-        primal = args[0].to_numpy()
-
-        # Normalize axes first
-        normalized_axes = _normalize_axes(self.axes, primal.ndim)
-
-        # Handle different cases for argmax
-        if len(normalized_axes) == 1:
-            # Single axis case
-            axis = normalized_axes[0]
-            np_result = np.argmax(primal, axis=axis, keepdims=True)
-        elif len(normalized_axes) == len(primal.shape):
-            # All axes case - flatten and argmax
-            flat_array = primal.flatten()
-            np_result = np.argmax(flat_array)
-            np_result = np.array([[np_result]])  # Keep as 2D for consistency
-        else:
-            # Multiple specific axes - apply sequentially
-            np_result = primal
-            for axis in normalized_axes:
-                np_result = np.argmax(np_result, axis=axis, keepdims=True)
-
-        if np_result.ndim == 0:
-            np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
-
-    def vjp_rule(
-        self, primals: list[Array], cotangent: Array, output: Array
-    ) -> list[Array]:
-        # ArgMax is not differentiable - return zero gradient
-        from .creation import zeros_like
-
-        return [zeros_like(primals[0])]
-
-    def jvp_rule(
-        self, primals: list[Array], tangents: list[Array], output: Array
-    ) -> Array:
-        # ArgMax is not differentiable - return zero tangent
-        from .creation import zeros_like
-
-        return zeros_like(output)
-
-
 def max(
     arg: Array,
     axes: int | list[int] | tuple[int, ...] | None = None,
@@ -441,6 +388,13 @@ def max(
         elif isinstance(axes, list | tuple):
             axes = [int(axis) for axis in axes]
 
+        ndim = len(arg.shape)
+        for axis in axes:
+            if not -ndim <= axis < ndim:
+                raise ValueError(
+                    f"axis {axis} is out of bounds for array of dimension {ndim}"
+                )
+
         axes = [axis if axis < 0 else axis - len(arg.shape) for axis in axes]
 
     else:
@@ -448,7 +402,7 @@ def max(
         for i in range(-len(arg.shape), 0):
             axes.append(i)
 
-    sorted(axes)
+    axes = sorted(axes)
     op = MaxOp(arg.shape, axes, keep_dims=keep_dims)
     res = op.forward(arg)
 
@@ -460,32 +414,146 @@ def max(
     return res
 
 
+class ArgMaxOp(ReductionOperation):
+    """
+    ArgMax reduction operation. It is batch-aware and handles the physical axis.
+    This Op internally behaves as if keep_dims=True.
+    """
+
+    def __init__(
+        self,
+        arg_shape: Shape,
+        logical_axis: int | None,
+    ):
+        super().__init__(
+            f"argmax[axis={logical_axis}]",
+            axes=[logical_axis] if logical_axis is not None else None,
+            keep_dims=True,
+        )
+        self.arg_shape = arg_shape
+        self.logical_axis = logical_axis
+
+    def compute_output_dtype(self, arg: Array) -> DType:
+        return DType.int64
+
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+        input_symbol = args[0]
+        # physical_axis = self._get_physical_axis(output.batch_dims)
+
+        if self.logical_axis is None:
+            # Flatten everything except batch dims for reduction
+            tmp_shape = output.batch_dims + (-1,)
+            tmp_arg = ops.reshape(input_symbol, tmp_shape)
+            result = ops.argmax(tmp_arg, axis=-1)
+            res_shape = output.batch_dims + (1,) * len(self.arg_shape)
+            output.tensor_value = ops.reshape(result, res_shape)
+        else:
+            # Assume that logical axes is always negative
+            output.tensor_value = ops.argmax(input_symbol, axis=self.logical_axis)
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        primal = args[0].to_numpy()
+
+        if self.logical_axis is None:
+            tmp_shape = output.batch_dims + (-1,)
+            tmp_arg = primal.reshape(tmp_shape)
+            np_result = np.argmax(tmp_arg, axis=-1)
+            res_shape = output.batch_dims + (1,) * len(self.arg_shape)
+            res = np_result.reshape(res_shape)
+            if res.ndim == 0:
+                res = np.array(res)
+            output.impl = Tensor.from_numpy(res)
+        else:
+            # Assume that logical axes is always negative
+            res = np.argmax(primal, axis=self.logical_axis, keepdims=True)
+            if res.ndim == 0:
+                res = np.array(res)
+            output.impl = Tensor.from_numpy(res)
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        from .creation import zeros_like
+
+        return [zeros_like(primals[0])]
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        from .creation import zeros_like
+
+        return zeros_like(output)
+
+
 def argmax(
     arg: Array,
-    axes: int | list[int] | tuple[int, ...] | None = None,
+    axes: int | None = None,
     keep_dims: bool = False,
 ) -> Array:
-    """Find indices of maximum array elements over given axes."""
-    if axes is not None:
-        if isinstance(axes, int):
-            axes = [axes]
-        elif isinstance(axes, list | tuple):
-            axes = [int(axis) for axis in axes]
+    """
+    Find indices of maximum array elements over a given axis, matching JAX's API.
+    """
 
-        axes = [axis if axis < 0 else axis - len(arg.shape) for axis in axes]
+    logical_axis: int | None
+    ndim = len(arg.shape)
 
+    # 1. Validate the user-provided 'axes' argument
+    if axes is None:
+        logical_axis = None
+    elif isinstance(axes, int):
+        if not -ndim <= axes < ndim:
+            raise ValueError(
+                f"axis {axes} is out of bounds for array of dimension {ndim}"
+            )
+        logical_axis = axes
+    elif isinstance(axes, (list, tuple)):
+        if len(axes) > 1:
+            raise NotImplementedError("nabla.argmax does not support a tuple of axes.")
+        if not axes:
+            raise ValueError("axis must be an integer or None, not an empty sequence.")
+        axis_val = axes[0]
+        if not isinstance(axis_val, int):
+            raise TypeError(
+                f"axis must be an integer, but got {type(axis_val)} inside sequence."
+            )
+        if not -ndim <= axis_val < ndim:
+            raise ValueError(
+                f"axis {axis_val} is out of bounds for array of dimension {ndim}"
+            )
+        logical_axis = axis_val
     else:
-        axes = []
-        for i in range(-len(arg.shape), 0):
-            axes.append(i)
+        raise TypeError(f"Invalid type for axes: {type(axes)}")
 
-    sorted(axes)
-    op = ArgMaxOp(arg.shape, axes, keep_dims=keep_dims)
-    res = op.forward(arg)
+    if arg.shape == () or np.prod(arg.shape) == 1:
+        from .creation import zeros_like
 
+        return zeros_like(arg).astype(DType.int64)
+
+    # make axes always a negative value
+    if logical_axis is not None and logical_axis >= 0:
+        logical_axis = logical_axis - ndim
+
+    if logical_axis is not None and arg.stage_realization:
+        # If we are in JIT mode, we need to move the axis to the back
+        from .view import move_axis_from_back, move_axis_to_back
+
+        arg = move_axis_to_back(arg, logical_axis)
+        op = ArgMaxOp(arg.shape, -1)
+        res = op.forward(arg)
+        # move the axis back to its original position
+        res = move_axis_from_back(res, logical_axis)
+    else:
+        # If axes is None, we can directly use the ArgMaxOp with the original axis
+        op = ArgMaxOp(arg.shape, logical_axis)
+        res = op.forward(arg)
+
+    # 3. Handle keep_dims
     if not keep_dims:
-        # manually use the squeeze operation to squeeze remaining axes
-        for axis in axes:
-            res = squeeze(res, [axis])  # axes always negative
+        if logical_axis is None:
+            return res.reshape(())
+        else:
+            # Squeeze the original logical axis relative to the tensor's logical shape.
+            squeeze_axis = logical_axis if logical_axis >= 0 else ndim + logical_axis
+            res = squeeze(res, [squeeze_axis])
 
     return res
