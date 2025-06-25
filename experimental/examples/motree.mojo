@@ -24,22 +24,22 @@ fn test_motree() raises:
         (
             String("params"),
             nabla.motree(
-                (String("weight_1"), nabla.arange((2, 4))),
-                (String("bias_1"), nabla.arange((2, 5))),
+                (String("weight_1"), nabla.ndarange((2, 4))),
+                (String("bias_1"), nabla.ndarange((2, 5))),
             ),
         ),
         (
             String("velocities"),
             nabla.motree(
-                (String("weight_1"), nabla.arange((2, 4))),
-                (String("bias_1"), nabla.arange((2, 5))),
+                (String("weight_1"), nabla.ndarange((2, 4))),
+                (String("bias_1"), nabla.ndarange((2, 5))),
             ),
         ),
         (
             String("tangents"),
             nabla.motree(
-                (String("weight_1"), nabla.arange((2, 4))),
-                (String("bias_1"), nabla.arange((2, 5))),
+                (String("weight_1"), nabla.ndarange((2, 4))),
+                (String("bias_1"), nabla.ndarange((2, 5))),
             ),
         ),
     )
@@ -68,8 +68,8 @@ fn test_motree_func() raises:
     var grads = List[nabla.Array]()
 
     for _ in range(3):
-        params.append(nabla.arange((2, 4)))
-        grads.append(nabla.arange((2, 4)))
+        params.append(nabla.ndarange((2, 4)))
+        grads.append(nabla.ndarange((2, 4)))
 
     var args = nabla.motree(
         (String("params"), params),

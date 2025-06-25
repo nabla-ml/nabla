@@ -24,10 +24,10 @@ def foo(args: List[nabla.Array]) -> List[nabla.Array]:
 
 
 def test_vjp_jvp():
-    var x = nabla.arange((2, 3)) + 2
-    var y = nabla.arange((2, 3)) + 3
-    var v = nabla.arange((2, 3))
-    var w = nabla.arange((2, 3))
+    var x = nabla.ndarange((2, 3)) + 2
+    var y = nabla.ndarange((2, 3)) + 3
+    var v = nabla.ndarange((2, 3))
+    var w = nabla.ndarange((2, 3))
 
     # Step 1: Compute the gradient using JVP.
     def grad_fn(args: List[nabla.Array]) -> List[nabla.Array]:

@@ -133,7 +133,7 @@ def get_test_data_for_rank(
             x_jax = jnp.array(True)
         else:
             # Create alternating boolean pattern using modulo and equal
-            x_nb = nb.equal(nb.arange(shape) % 2, nb.array(0))
+            x_nb = nb.equal(nb.ndarange(shape) % 2, nb.array(0))
             x_jax = jax_arange(shape) % 2 == 0
     else:
         # Numeric data
@@ -144,11 +144,11 @@ def get_test_data_for_rank(
         else:
             if domain_positive:
                 # For log, sqrt - ensure positive values
-                x_nb = 1 + nb.arange(shape)
+                x_nb = 1 + nb.ndarange(shape)
                 x_jax = 1 + jax_arange(shape)
             else:
                 # Regular test data
-                x_nb = nb.arange(shape) + 1
+                x_nb = nb.ndarange(shape) + 1
                 x_jax = jax_arange(shape) + 1
 
     return x_nb, x_jax

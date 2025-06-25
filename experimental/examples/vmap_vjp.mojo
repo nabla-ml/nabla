@@ -24,8 +24,8 @@ def foo(args: List[nabla.Array]) -> List[nabla.Array]:
 
 
 def test_vmap_vjp():
-    var x = nabla.arange((3, 2, 3)) + 2
-    var y = nabla.arange((3, 2, 3)) + 3
+    var x = nabla.ndarange((3, 2, 3)) + 2
+    var y = nabla.ndarange((3, 2, 3)) + 3
 
     # Step 1: Compute the gradient using VJP.
     def reg_vjp(args: List[nabla.Array]) -> List[nabla.Array]:

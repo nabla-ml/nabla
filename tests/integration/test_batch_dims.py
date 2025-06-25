@@ -11,7 +11,7 @@
 #         x = nb.broadcast_to(x, (4, 2, 3))
 #         return x
 
-#     x = nb.arange((2, 3))
+#     x = nb.ndarange((2, 3))
 
 #     values, vjp_fn = nb.vjp(foo, x)
 #     cotangent = nb.ones_like(values)
@@ -42,7 +42,7 @@
 
 #     foo_vmapped = nb.vmap(nb.vmap(foo))
 
-#     x = nb.arange((2, 3))
+#     x = nb.ndarange((2, 3))
 
 #     # Test that the operation completes without error
 #     try:
@@ -56,9 +56,9 @@
 
 # def test_std_basis_function():
 #     """Test the _std_basis function for creating standard basis vectors."""
-#     a = nb.arange((3, 2))
-#     b = nb.arange((2, 4))
-#     c = nb.arange((4, 1))
+#     a = nb.ndarange((3, 2))
+#     b = nb.ndarange((2, 4))
+#     c = nb.ndarange((4, 1))
 
 #     sizes, tangents = nb.core.trafos._std_basis([a, b, c])
 

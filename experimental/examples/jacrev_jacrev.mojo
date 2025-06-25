@@ -18,8 +18,8 @@ import nabla
 
 
 fn test_jacrev_jacrev() raises:
-    var x = nabla.arange((2, 3)) + 2
-    var y = nabla.arange((2, 3)) + 3
+    var x = nabla.ndarange((2, 3)) + 2
+    var y = nabla.ndarange((2, 3)) + 3
 
     def foo(args: List[nabla.Array]) -> List[nabla.Array]:
         var x = args[0]

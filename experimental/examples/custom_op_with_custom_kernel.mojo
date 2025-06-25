@@ -64,6 +64,6 @@ fn custom_op(arg: nabla.Array) raises -> nabla.Array:
 
 fn test_custom_op_with_custom_kernel() raises -> None:
     # Test the custom op with a custom kernel
-    x = nabla.arange((2, 3))
+    x = nabla.ndarange((2, 3))
     res = custom_op(x)
     print(res)

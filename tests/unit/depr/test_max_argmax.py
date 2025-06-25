@@ -6,7 +6,7 @@ import nabla as nb
 
 
 def test_max():
-    a = nb.arange((2, 3, 4))
+    a = nb.ndarange((2, 3, 4))
     print("input:", a)
 
     def foo(x):
@@ -66,7 +66,7 @@ def test_max():
 
 
 def test_argmax():
-    a = nb.arange((2, 3, 4))
+    a = nb.ndarange((2, 3, 4))
     print("input:", a)
 
     def foo(x):

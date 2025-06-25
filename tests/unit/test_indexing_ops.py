@@ -68,7 +68,7 @@ def create_test_data_for_rank(rank: int):
         return nb.array(2.5)
     else:
         size = int(np.prod(shape))
-        data = nb.arange((size,), dtype=nb.DType.float32).reshape(shape) + 1
+        data = nb.ndarange((size,), dtype=nb.DType.float32).reshape(shape) + 1
         return data
 
 

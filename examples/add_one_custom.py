@@ -44,7 +44,7 @@ def add_one_custom(args: list[nb.Array]) -> list[nb.Array]:
 
 
 if __name__ == "__main__":
-    a = nb.arange((2, 3))
+    a = nb.ndarange((2, 3))
     print([a])
 
     jitted_add_one_custom = nb.jit(add_one_custom)

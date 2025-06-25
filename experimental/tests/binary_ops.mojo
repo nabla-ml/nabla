@@ -24,8 +24,8 @@ fn test_binary_op0() raises:
         var res = x + y
         return List(res)
 
-    var x = nabla.arange((2, 3, 4))
-    var y = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
+    var y = nabla.ndarange((2, 3, 4))
     var res = test_func([x, y])[0]
     _ = res.load(0)
 
@@ -45,8 +45,8 @@ fn test_binary_op1() raises:
         var res = x + y
         return List(res)
 
-    var x = nabla.arange((2, 3, 4))
-    var y = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
+    var y = nabla.ndarange((2, 3, 4))
     var res = test_func([x, y])[0]
     _ = res.load(0)
 
@@ -68,8 +68,8 @@ fn test_binary_op2() raises:
         var res = x + y
         return List(res)
 
-    var x = nabla.arange((2, 3, 4))
-    var y = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
+    var y = nabla.ndarange((2, 3, 4))
     var res = test_func([x, y])[0]
     _ = res.load(0)
 
@@ -93,8 +93,8 @@ fn test_binary_op3() raises:
         var res = x + y
         return List(res)
 
-    var x = nabla.arange((2, 3, 4))
-    var y = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
+    var y = nabla.ndarange((2, 3, 4))
     var res = test_func([x, y])[0]
     _ = res.load(0)
 
@@ -113,8 +113,8 @@ fn test_binary_op4() raises:
         var res = x + y
         return List(res)
 
-    var x = nabla.arange((3, 4))
-    var y = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((3, 4))
+    var y = nabla.ndarange((2, 3, 4))
     var res = test_func([x, y])[0]
     _ = res.load(0)
 
@@ -134,8 +134,8 @@ fn test_binary_op5() raises:
         var res = x + y
         return List(res)
 
-    var x = nabla.arange((4,))
-    var y = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((4,))
+    var y = nabla.ndarange((2, 3, 4))
     var res = test_func([x, y])[0]
     _ = res.load(0)
 
@@ -154,8 +154,8 @@ fn test_binary_op6() raises:
         var res = x + y
         return List(res)
 
-    var x = nabla.arange((2, 4))
-    var y = nabla.arange((3, 4))
+    var x = nabla.ndarange((2, 4))
+    var y = nabla.ndarange((3, 4))
     var res = test_func([x, y])[0]
     _ = res.load(0)
 
@@ -176,8 +176,8 @@ fn test_binary_op7() raises:
         var res = x + y
         return List(res)
 
-    var x = nabla.arange((2, 3))
-    var y = nabla.arange((3, 4))
+    var x = nabla.ndarange((2, 3))
+    var y = nabla.ndarange((3, 4))
     var res = test_func([x, y])[0]
     _ = res.load(0)
 

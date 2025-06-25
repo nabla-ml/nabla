@@ -1101,7 +1101,7 @@ def test_all_operations_all_ranks(capsys):
 
 # log requires positive inputs
 # sqrt requires non-negative inputs
-# Solution: Use 1 + nb.arange() to ensure positive test data
+# Solution: Use 1 + nb.ndarange() to ensure positive test data
 # Challenge 2: Non-differentiable Operations
 
 # logical_not should fail VJP/JVP consistently

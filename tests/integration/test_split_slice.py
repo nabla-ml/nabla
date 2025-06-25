@@ -18,8 +18,8 @@ def test_concatenate_basic():
     foo_vmapped = nb.vmap(foo, in_axes=(0, 0))
     foo_jax_vmapped = jax.vmap(foo_jax, in_axes=(0, 0))
 
-    a = nb.arange((2, 3, 4))
-    b = nb.arange((2, 3, 4)) + 1
+    a = nb.ndarange((2, 3, 4))
+    b = nb.ndarange((2, 3, 4)) + 1
 
     res = foo(a, b)
 
@@ -42,7 +42,7 @@ def test_array_slice_comprehensive():
     def test_slice_vjp_jvp(slice_func, slice_func_jax, test_name):
         """Helper function to test slice operations."""
         # Create test input
-        x = nb.arange((4, 6, 8))
+        x = nb.ndarange((4, 6, 8))
         x_jax = x.to_numpy()
 
         # Test forward pass
@@ -100,7 +100,7 @@ def test_array_slice_comprehensive():
         vmapped_slice_jax = jax.vmap(slice_func_jax, in_axes=0)
 
         # Create batched input (add batch dimension)
-        batched_x = nb.arange((3, 4, 6, 8))  # batch size 3
+        batched_x = nb.ndarange((3, 4, 6, 8))  # batch size 3
         batched_x_jax = batched_x.to_numpy()
 
         # Test vmapped forward pass
@@ -186,7 +186,7 @@ def test_1d_array_slicing():
     def test_1d_slice_vjp_jvp(slice_func, slice_func_jax, test_name):
         """Helper function for 1D slice testing."""
         # Create 1D test input
-        x = nb.arange((10,))
+        x = nb.ndarange((10,))
         x_jax = x.to_numpy()
 
         # Test forward pass
@@ -241,7 +241,7 @@ def test_small_array_slicing():
     def test_small_slice_vjp_jvp(slice_func, slice_func_jax, test_name, shape):
         """Helper function for small array slice testing."""
         # Create small test input
-        x = nb.arange(shape)
+        x = nb.ndarange(shape)
         x_jax = x.to_numpy()
 
         # Test forward pass

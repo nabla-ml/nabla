@@ -27,8 +27,8 @@ def simple_add(args):
 def test_simple_vmap_basic():
     """Test basic vmap functionality with broadcasting."""
     # Test simple vmap
-    a = nb.arange((3, 4), nb.DType.float32)  # shape (3, 4)
-    b = nb.arange((4,), nb.DType.float32)  # shape (4,)
+    a = nb.ndarange((3, 4), nb.DType.float32)  # shape (3, 4)
+    b = nb.ndarange((4,), nb.DType.float32)  # shape (4,)
 
     # This should vectorize over the first axis of a, and broadcast b
     vmapped_add = nb.vmap(simple_add, [0, None])
@@ -90,11 +90,11 @@ def test_vmap_with_sum():
 
     def foo(args: list[nb.Array]) -> list[nb.Array]:
         a = args[0]
-        c = nb.arange((2, 3, 4))
+        c = nb.ndarange((2, 3, 4))
         res = nb.sum(c * a * a, axes=[0])
         return [res]
 
-    a = nb.arange((2, 3, 4))
+    a = nb.ndarange((2, 3, 4))
 
     # First test the base function
     res = foo([a])
@@ -129,11 +129,11 @@ def test_vmap_expression_compilation():
 
     def foo(args: list[nb.Array]) -> list[nb.Array]:
         a = args[0]
-        c = nb.arange((2, 3, 4))
+        c = nb.ndarange((2, 3, 4))
         res = nb.sum(c * a * a, axes=[0])
         return [res]
 
-    a = nb.arange((2, 3, 4))
+    a = nb.ndarange((2, 3, 4))
     foo_vmapped = nb.vmap(foo)
 
     # Test that the expression can be compiled
@@ -201,8 +201,8 @@ def test_vmap_batched_matmul():
         return [nb.vmap(mm_prod, [0, None])([args[0], args[1]])[0]]
 
     # Test data
-    batch_a = nb.arange((2, 3, 4), nb.DType.float32)  # Batch of 2 matrices (3x4)
-    mat_b = nb.arange((4, 5), nb.DType.float32)  # Single matrix (4x5)
+    batch_a = nb.ndarange((2, 3, 4), nb.DType.float32)  # Batch of 2 matrices (3x4)
+    mat_b = nb.ndarange((4, 5), nb.DType.float32)  # Single matrix (4x5)
 
     # Test that expression can be compiled
     try:
@@ -302,8 +302,8 @@ def test_batched_matmul_parametrized():
 
     # Create test matrices
     batch_size, inner_dim = 2, 4  # Change these to test different dimensions
-    batch_a = nb.arange((batch_size, 3, inner_dim), nb.DType.float32)
-    mat_b = nb.arange((inner_dim, 5), nb.DType.float32)
+    batch_a = nb.ndarange((batch_size, 3, inner_dim), nb.DType.float32)
+    mat_b = nb.ndarange((inner_dim, 5), nb.DType.float32)
 
     result = batched_matmul([batch_a, mat_b])
 

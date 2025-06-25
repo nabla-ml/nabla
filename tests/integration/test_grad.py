@@ -16,7 +16,7 @@ def test_grad_reverse_mode():
         return (jnp.sin(x) * x).sum()  # Sum to make it scalar
 
     # Test data - use compatible shapes and values
-    x_nb = nb.arange((2, 3))
+    x_nb = nb.ndarange((2, 3))
     x_jax = jnp.array(x_nb.to_numpy())
 
     print("=== REVERSE MODE GRAD TEST ===")
@@ -90,7 +90,7 @@ def test_grad_forward_mode():
         return (jnp.sin(x) * x).sum()  # Sum to make it scalar
 
     # Test data
-    x_nb = nb.arange((2, 3))
+    x_nb = nb.ndarange((2, 3))
     x_jax = jnp.array(x_nb.to_numpy())
 
     print("\n\n=== FORWARD MODE GRAD TEST ===")

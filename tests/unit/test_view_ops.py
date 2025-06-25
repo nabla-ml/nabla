@@ -164,7 +164,7 @@ def get_test_data_for_rank(
 ) -> tuple[nb.Array, jnp.ndarray]:
     """Get test data for a specific tensor rank."""
     shape = shape_generator(rank) if shape_generator else get_shape_for_rank(rank)
-    x_nb = (nb.arange(shape) + 1).astype(nb.DType.float32)
+    x_nb = (nb.ndarange(shape) + 1).astype(nb.DType.float32)
     x_jax = (jax_arange(shape) + 1).astype("float32")
     return x_nb, x_jax
 

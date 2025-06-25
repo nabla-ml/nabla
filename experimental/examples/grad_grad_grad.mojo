@@ -29,7 +29,7 @@ fn test_grad_grad_grad() raises:
     var foo_d2 = nabla.grad(foo_d1)
     var foo_d3 = nabla.grad(foo_d2)
 
-    var args = [nabla.arange((2, 3)), nabla.arange((2, 3))]
+    var args = [nabla.ndarange((2, 3)), nabla.ndarange((2, 3))]
 
     var res = foo(args)
     # print(nabla.xpr(foo)(args))

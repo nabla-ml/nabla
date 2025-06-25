@@ -24,8 +24,8 @@ def foo(args: List[nabla.Array]) -> List[nabla.Array]:
 
 
 fn test_vmap_jacfwd() raises:
-    var x = nabla.arange((3, 2, 3)) + 2
-    var y = nabla.arange((3, 2, 3)) + 3
+    var x = nabla.ndarange((3, 2, 3)) + 2
+    var y = nabla.ndarange((3, 2, 3)) + 3
 
     def foo(args: List[nabla.Array]) -> List[nabla.Array]:
         var x = args[0]

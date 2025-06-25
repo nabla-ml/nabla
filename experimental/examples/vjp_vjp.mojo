@@ -27,10 +27,10 @@ fn test_vjp_vjp() raises -> None:
     print("\033[1;33m\nTEST VJP VJP\033[0m")
 
     # Define inputs
-    var x = nabla.arange((2, 3))
-    var y = nabla.arange((2, 3))
-    var v = nabla.arange((2, 3))
-    var w = nabla.arange((2, 3))
+    var x = nabla.ndarange((2, 3))
+    var y = nabla.ndarange((2, 3))
+    var v = nabla.ndarange((2, 3))
+    var w = nabla.ndarange((2, 3))
 
     # Step 1: Compute the gradient using VJP with cotangent ones
     def grad_fn(args: List[nabla.Array]) -> List[nabla.Array]:

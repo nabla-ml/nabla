@@ -142,7 +142,9 @@ def get_test_data_for_shapes(
     for i, shape in enumerate(shapes):
         # Use different constants to avoid trivial gradients
         # CORRECTED: nb.arange takes a shape tuple directly.
-        nabla_primals.append((nb.arange(shape) + i + 1).astype(nb.DType.float32) * 0.1)
+        nabla_primals.append(
+            (nb.ndarange(shape) + i + 1).astype(nb.DType.float32) * 0.1
+        )
         # JAX requires the number of elements, then a reshape. This was already correct.
         jax_primals.append(
             (jnp.arange(np.prod(shape)).reshape(shape) + i + 1).astype("float32") * 0.1

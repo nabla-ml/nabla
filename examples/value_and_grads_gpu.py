@@ -31,7 +31,7 @@ def value_and_grads(x, y):
 
 
 if __name__ == "__main__":
-    a = nb.arange(
+    a = nb.ndarange(
         (
             2,
             3,
@@ -39,7 +39,7 @@ if __name__ == "__main__":
     ).to(device)
     print(a, a.device)
 
-    b = nb.arange(
+    b = nb.ndarange(
         (
             2,
             3,

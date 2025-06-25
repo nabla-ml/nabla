@@ -120,7 +120,7 @@ def create_test_data_for_rank(rank: int, dtype=nb.DType.float32):
         return nb.array(2.5, dtype=dtype)
     else:
         # Nabla's arange takes the final shape directly - no reshape needed!
-        data = nb.arange(shape, dtype=dtype)
+        data = nb.ndarange(shape, dtype=dtype)
         return data
 
 

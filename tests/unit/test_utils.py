@@ -111,14 +111,14 @@ def get_test_data_for_ranks(
         x_nb = 1 + nb.array(2.5)
         x_jax = 1 + jnp.array(2.5)
     else:
-        x_nb = 1 + nb.arange(shape_x)
+        x_nb = 1 + nb.ndarange(shape_x)
         x_jax = 1 + jax_arange(shape_x)
 
     if rank_y == 0:
         y_nb = 1 + nb.array(1.5)
         y_jax = 1 + jnp.array(1.5)
     else:
-        y_nb = 1 + nb.arange(shape_y)
+        y_nb = 1 + nb.ndarange(shape_y)
         y_jax = 1 + jax_arange(shape_y)
 
     return x_nb, y_nb, x_jax, y_jax

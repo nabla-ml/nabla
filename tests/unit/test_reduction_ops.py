@@ -109,7 +109,7 @@ def get_ranks_to_test() -> list[int]:
 def get_test_data_for_rank(rank: int) -> tuple[nb.Array, jnp.ndarray]:
     """Get test data for a specific tensor rank."""
     shape = get_shape_for_rank(rank)
-    x_nb = (nb.arange(shape) - 5).astype(nb.DType.float32)  # Include negative values
+    x_nb = (nb.ndarange(shape) - 5).astype(nb.DType.float32)  # Include negative values
     x_jax = (jax_arange(shape) - 5).astype("float32")
     return x_nb, x_jax
 

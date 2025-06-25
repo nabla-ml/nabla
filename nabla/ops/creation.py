@@ -31,7 +31,8 @@ from .view import broadcast_batch_dims, broadcast_to
 __all__ = [
     "array",
     "arange",
-    "arange_like",
+    "ndarange",
+    "ndarange_like",
     "randn",
     "randn_like",
     "rand",
@@ -305,7 +306,140 @@ def array(
     return broadcast_batch_dims(array, batch_dims) if batch_dims else array
 
 
+class ArangeOp(Operation):
+    """Operation to create a 1D array with evenly spaced values."""
+
+    def __init__(
+        self,
+        start: float | int,
+        stop: float | int,
+        step: float | int,
+        dtype: DType,
+        device: Device,
+    ):
+        super().__init__(f"arange[start={start},stop={stop},step={step}]")
+        self.start = start
+        self.stop = stop
+        self.step = step
+        self.dtype = dtype
+        self.device = device
+
+        # Pre-compute the output shape using numpy's robust implementation
+        # This handles all edge cases like float steps, negative steps, etc.
+        self._np_arange_for_shape = np.arange(
+            start, stop, step, dtype=DType.to_numpy(dtype)
+        )
+        self.shape = self._np_arange_for_shape.shape
+
+    def forward(self, *args: Array) -> Array:
+        """Forward pass for the arange creation operation."""
+        if args:
+            raise ValueError(
+                f"Creation operation 'arange' requires 0 arguments, got {len(args)}"
+            )
+
+        res = Array(
+            shape=self.shape,
+            dtype=self.dtype,
+            device=self.device,
+            materialize=False,
+            name=self.name,
+        )
+
+        res.set_maxpr(self.maxpr)
+        res.vjp_rule = self.vjp_rule
+        res.jvp_rule = self.jvp_rule
+
+        if not res.stage_realization:
+            self.eagerxpr([], res)
+
+        return res
+
+    def compute_output_shape(self, *input_shapes) -> tuple:
+        return self.shape
+
+    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+        """Graph-mode execution using max.ops.arange."""
+        # This assumes an equivalent ops.arange exists in the MAX graph library.
+        # This is a common and expected operation for a backend.
+        output.tensor_value = ops.range(
+            start=self.start,
+            stop=self.stop,
+            step=self.step,
+            dtype=output.dtype,
+            device=DeviceRef.from_device(output.device),
+        )
+
+    def eagerxpr(self, args: list[Array], output: Array) -> None:
+        """Eager-mode execution using numpy."""
+        # We can reuse the numpy array we created for the shape calculation
+        output.impl = Tensor.from_numpy(self._np_arange_for_shape).to(output.device)
+
+    def vjp_rule(
+        self, primals: list[Array], cotangent: Array, output: Array
+    ) -> list[Array]:
+        # The arange operation does not depend on any Array inputs,
+        # so its gradient is not defined in this context.
+        raise NotImplementedError("VJP for 'arange' creation operation is not defined.")
+
+    def jvp_rule(
+        self, primals: list[Array], tangents: list[Array], output: Array
+    ) -> Array:
+        # The arange operation does not depend on any Array inputs,
+        # so its gradient is not defined in this context.
+        raise NotImplementedError("JVP for 'arange' creation operation is not defined.")
+
+
 def arange(
+    start: int | float,
+    stop: int | float | None = None,
+    step: int | float | None = None,
+    dtype: DType = _DEFAULT_DTYPE,
+    device: Device = _DEFAULT_CPU,
+    traced: bool = False,
+    batch_dims: Shape = (),
+) -> Array:
+    """
+    Return evenly spaced values within a given interval.
+
+    This function follows the JAX/NumPy `arange` API.
+
+    Args:
+        start: Start of interval. The interval includes this value.
+        stop: End of interval. The interval does not include this value. If None,
+            the range is `[0, start)`.
+        step: Spacing between values. The default step size is 1.
+        dtype: The data type of the output array.
+        device: The device to place the array on.
+        traced: Whether the operation should be traced in the graph.
+
+    Returns:
+        A 1D array of evenly spaced values.
+    """
+    # Handle the case where only one positional argument is provided, e.g., arange(5)
+    if stop is None:
+        stop = start
+        start = 0
+
+    if step is None:
+        step = 1
+
+    _validate_numeric(start, "start")
+    _validate_numeric(stop, "stop")
+    _validate_numeric(step, "step")
+
+    if step == 0:
+        raise ValueError("arange: step cannot be zero.")
+
+    op = ArangeOp(start=start, stop=stop, step=step, dtype=dtype, device=device)
+    array = op.forward()
+    array.traced = traced
+    if batch_dims:
+        array = broadcast_batch_dims(array, batch_dims)
+    return array
+
+
+def ndarange(
     shape: Shape,
     dtype: DType = _DEFAULT_DTYPE,
     device: Device = _DEFAULT_CPU,
@@ -313,18 +447,14 @@ def arange(
     traced: bool = False,
 ) -> Array:
     """Create an array with values from 0 to prod(shape)-1 reshaped to given shape."""
-    _validate_shape(shape)
-
-    total_size = np.prod(shape) if shape else 1
-    np_data = np.arange(total_size, dtype=DType.to_numpy(dtype)).reshape(shape)
-    array = Array.from_numpy(np_data).to(device)
-    array.traced = traced
-    return broadcast_batch_dims(array, batch_dims) if batch_dims else array
-
-
-def arange_like(template: Array) -> Array:
-    """Create an array with values from 0 to prod(template.shape)-1 reshaped to template's shape."""
     return arange(
+        0, int(np.prod(shape)), 1, dtype=dtype, device=device, traced=traced
+    ).reshape(shape)
+
+
+def ndarange_like(template: Array) -> Array:
+    """Create an array with values from 0 to prod(template.shape)-1 reshaped to template's shape."""
+    return ndarange(
         template.shape,
         template.dtype,
         template.device,
@@ -631,5 +761,5 @@ def triu(x, k=0):
     """
     from .special import where
 
-    mask = arange((x.shape[-1],)) < arange((x.shape[-1],))[:, None] + k
+    mask = ndarange((x.shape[-1],)) < ndarange((x.shape[-1],))[:, None] + k
     return where(mask, x, array(0, dtype=x.dtype, device=x.device))

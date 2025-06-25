@@ -29,7 +29,7 @@ fn test_jacrev_jacfwd_jacfwd() raises:
     var foo_d2 = nabla.jacfwd(foo_d1)
     var foo_d3 = nabla.jacfwd(foo_d2)
 
-    var args = [nabla.arange((2, 3)), nabla.arange((2, 3))]
+    var args = [nabla.ndarange((2, 3)), nabla.ndarange((2, 3))]
 
     var res = foo(args)
     # print(nabla.xpr(foo)(args))

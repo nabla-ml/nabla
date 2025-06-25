@@ -25,7 +25,7 @@ fn test_broadcast0() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -49,7 +49,7 @@ fn test_broadcast1() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -74,7 +74,7 @@ fn test_broadcast2() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -100,7 +100,7 @@ fn test_broadcast3() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -123,7 +123,7 @@ fn test_broadcast4() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3))
+    var x = nabla.ndarange((2, 3))
     var res = test_func(
         [
             x,
@@ -147,7 +147,7 @@ fn test_broadcast5() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3))
+    var x = nabla.ndarange((2, 3))
     var res = test_func(
         [
             x,
@@ -172,7 +172,7 @@ fn test_broadcast6() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3))
+    var x = nabla.ndarange((2, 3))
     var res = test_func(
         [
             x,
@@ -195,7 +195,7 @@ fn test_reshape0() raises:
             x,
         ]
 
-    var x = nabla.arange((6, 20))
+    var x = nabla.ndarange((6, 20))
     var res = test_func(
         [
             x,
@@ -219,7 +219,7 @@ fn test_reshape1() raises:
             x,
         ]
 
-    var x = nabla.arange((6, 20))
+    var x = nabla.ndarange((6, 20))
     var res = test_func(
         [
             x,
@@ -244,7 +244,7 @@ fn test_reshape2() raises:
             x,
         ]
 
-    var x = nabla.arange((6, 20))
+    var x = nabla.ndarange((6, 20))
     var res = test_func(
         [
             x,
@@ -267,7 +267,7 @@ fn test_reshape3() raises:
             x,
         ]
 
-    var x = nabla.arange((6, 20))
+    var x = nabla.ndarange((6, 20))
     var res = test_func(
         [
             x,
@@ -292,7 +292,7 @@ fn test_squeeze0() raises:
             x,
         ]
 
-    var x = nabla.arange((1, 2, 3, 4))
+    var x = nabla.ndarange((1, 2, 3, 4))
     var res = test_func(
         [
             x,
@@ -316,7 +316,7 @@ fn test_squeeze1() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 1, 3, 4))
+    var x = nabla.ndarange((2, 1, 3, 4))
     var res = test_func(
         [
             x,
@@ -341,7 +341,7 @@ fn test_squeeze2() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 1, 4))
+    var x = nabla.ndarange((2, 3, 1, 4))
     var res = test_func(
         [
             x,
@@ -367,7 +367,7 @@ fn test_squeeze3() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4, 1))
+    var x = nabla.ndarange((2, 3, 4, 1))
     var res = test_func(
         [
             x,
@@ -390,7 +390,7 @@ fn test_unsqueeze0() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -414,7 +414,7 @@ fn test_unsqueeze1() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -439,7 +439,7 @@ fn test_unsqueeze2() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -465,7 +465,7 @@ fn test_unsqueeze3() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -488,7 +488,7 @@ fn test_slice0() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -512,7 +512,7 @@ fn test_slice1() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -537,7 +537,7 @@ fn test_slice2() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -560,7 +560,7 @@ fn test_broadcast_vjp0() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3))
+    var x = nabla.ndarange((2, 3))
     var tangent = nabla.ones((4, 2, 3))
     var res = nabla.vjp(
         test_func,
@@ -590,7 +590,7 @@ fn test_broadcast_vjp1() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3))
+    var x = nabla.ndarange((2, 3))
     var tangent = nabla.ones((2, 4, 3))
     tangent = nabla.incr_batch_dim_ctr(tangent)
     var res = nabla.vjp(
@@ -620,7 +620,7 @@ fn test_broadcast_vjp2() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3))
+    var x = nabla.ndarange((2, 3))
     var tangent = nabla.ones((2, 4, 2, 3))
     tangent = nabla.incr_batch_dim_ctr(tangent)
     var res = nabla.vjp(
@@ -650,7 +650,7 @@ fn test_broadcast_jacrev0() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3))
+    var x = nabla.ndarange((2, 3))
     var res = nabla.jacrev(test_func)(
         [
             x,

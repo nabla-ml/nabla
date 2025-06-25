@@ -45,8 +45,8 @@ fn test_vmap() raises:
             res,
         ]
 
-    var batch_a = nabla.arange((2, 3, 4), DType.float32)
-    var mat_b = nabla.arange((4, 5), DType.float32)
+    var batch_a = nabla.ndarange((2, 3, 4), DType.float32)
+    var mat_b = nabla.ndarange((4, 5), DType.float32)
 
     print(nabla.xpr(batched_matmul)([batch_a, mat_b]))
     var res = batched_matmul([batch_a, mat_b])
@@ -71,8 +71,8 @@ def test_vmap2():
             ],
         )(args)
 
-    var a = nabla.arange((2, 3), DType.float32)
-    var b = nabla.arange((3, 4), DType.float32)
+    var a = nabla.ndarange((2, 3), DType.float32)
+    var b = nabla.ndarange((3, 4), DType.float32)
 
     var res = mm([a, b])[0]
     print(res)
@@ -86,7 +86,7 @@ def test_vmap3():
 
     var res = nabla.vmap(br_foo)(
         [
-            nabla.arange((2, 9), DType.float32),
+            nabla.ndarange((2, 9), DType.float32),
         ]
     )[0]
     print(res)
@@ -107,8 +107,8 @@ fn test_vmap4() raises:
     var mm_prod = nabla.vmap(mv_prod, [0, nabla.none])
     var batched_matmul = nabla.vmap(mm_prod, [0, nabla.none])
 
-    var batch_a = nabla.arange((2, 3, 4), DType.float32)
-    var mat_b = nabla.arange((4, 5), DType.float32)
+    var batch_a = nabla.ndarange((2, 3, 4), DType.float32)
+    var mat_b = nabla.ndarange((4, 5), DType.float32)
 
     var res = batched_matmul([batch_a, mat_b])[0]
     print(res)

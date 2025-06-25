@@ -91,13 +91,13 @@ def positional_encoding(max_seq_len: int, d_model: int) -> nb.Array:
         Positional encoding matrix of shape (1, max_seq_len, d_model)
     """
     # Create position indices: [0, 1, 2, ..., max_seq_len-1]
-    position = nb.arange((max_seq_len,)).reshape(
+    position = nb.ndarange((max_seq_len,)).reshape(
         (max_seq_len, 1)
     )  # Shape: (max_seq_len, 1)
 
     # Create dimension indices for pairs: [0, 1, 2, ..., d_model//2-1]
     half_d_model = d_model // 2
-    dim_indices = nb.arange((half_d_model,)).reshape(
+    dim_indices = nb.ndarange((half_d_model,)).reshape(
         (1, half_d_model)
     )  # Shape: (1, d_model//2)
 
@@ -339,7 +339,7 @@ def transformer_forward(encoder_inputs, decoder_inputs, params):
     # We need a lower triangular matrix where mask[i,j] = 1 if j <= i, else 0
 
     # Create position indices
-    positions = nb.arange((target_seq_len,))  # [0, 1, 2, ..., seq_len-1]
+    positions = nb.ndarange((target_seq_len,))  # [0, 1, 2, ..., seq_len-1]
     pos_i = nb.reshape(positions, (target_seq_len, 1))  # Column vector
     pos_j = nb.reshape(positions, (1, target_seq_len))  # Row vector
 
@@ -430,7 +430,7 @@ def cross_entropy_loss(logits, targets):
     )  # (batch_size, seq_len, 1)
 
     # Create vocabulary indices for comparison
-    vocab_indices = nb.arange((vocab_size,), dtype=nb.DType.int32).reshape(
+    vocab_indices = nb.ndarange((vocab_size,), dtype=nb.DType.int32).reshape(
         (1, 1, vocab_size)
     )  # (1, 1, vocab_size)
 

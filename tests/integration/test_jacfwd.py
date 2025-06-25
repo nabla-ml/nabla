@@ -18,8 +18,8 @@ def test_vector_to_scalar_jacobian():
         return jnp.sin(x) * x  # jnp.sin(x)#jnp.expand_dims(x, axis=0)
 
     # Test data - use compatible shapes and values
-    x_nb = nb.arange((2, 3))
-    y_nb = nb.arange((2, 3))
+    x_nb = nb.ndarange((2, 3))
+    y_nb = nb.ndarange((2, 3))
 
     # Convert to JAX arrays with same values
     x_jax = jnp.array(x_nb.to_numpy())

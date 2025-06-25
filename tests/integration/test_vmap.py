@@ -128,8 +128,8 @@ def test_nested_vmap_batched_matmul():
     try:
         # Start with simpler test - single matrix multiplication first
         print("Testing simple matrix multiplication...")
-        mat_a = nb.arange((2, 3), nb.DType.float32)  # 2x3 matrix
-        mat_b = nb.arange((3, 4), nb.DType.float32)  # 3x4 matrix
+        mat_a = nb.ndarange((2, 3), nb.DType.float32)  # 2x3 matrix
+        mat_b = nb.ndarange((3, 4), nb.DType.float32)  # 3x4 matrix
 
         simple_result = mm_prod([mat_a, mat_b])
         print(
@@ -147,10 +147,10 @@ def test_nested_vmap_batched_matmul():
         # Now test the simpler batched version
         print("Testing simple batched matrix multiplication...")
         batch_size = 2
-        batch_a = nb.arange(
+        batch_a = nb.ndarange(
             (batch_size, 2, 3), nb.DType.float32
         )  # Batch of 2x3 matrices
-        mat_b = nb.arange((3, 2), nb.DType.float32)  # Single 3x2 matrix
+        mat_b = nb.ndarange((3, 2), nb.DType.float32)  # Single 3x2 matrix
 
         print(f"Input shapes: batch_a={batch_a.shape}, mat_b={mat_b.shape}")
 

@@ -25,7 +25,7 @@ fn test_sum0() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -49,7 +49,7 @@ fn test_sum1() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -74,7 +74,7 @@ fn test_sum2() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -100,7 +100,7 @@ fn test_sum3() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -123,7 +123,7 @@ fn test_sum4() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -147,7 +147,7 @@ fn test_sum5() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -171,7 +171,7 @@ fn test_sum6() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -196,7 +196,7 @@ fn test_sum7() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -219,7 +219,7 @@ fn test_sum8() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -243,7 +243,7 @@ fn test_sum9() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -268,7 +268,7 @@ fn test_sum10() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -291,7 +291,7 @@ fn test_sum11() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -315,7 +315,7 @@ fn test_sum12() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -339,7 +339,7 @@ fn test_sum13() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
@@ -364,7 +364,7 @@ fn test_sum14() raises:
             x,
         ]
 
-    var x = nabla.arange((2, 3, 4))
+    var x = nabla.ndarange((2, 3, 4))
     var res = test_func(
         [
             x,
