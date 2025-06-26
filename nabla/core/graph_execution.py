@@ -34,9 +34,9 @@ class GraphTracer:
     def compute_node_hash(node: Array) -> int:
         """Compute a deterministic hash for a computation node."""
         components = [
-            node.name or "input",
-            str(node.batch_dims + node.shape),
             str(node.dtype),
+            str(node.batch_dims + node.shape),
+            "-", node.name or "input",
         ]
         node_str = "-".join(components)
         return hash(node_str)

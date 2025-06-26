@@ -2567,8 +2567,6 @@ __all__ = [
     "pad",
     "concatenate",
     "stack",
-    # "scatter",
-    # "gather",
 ]
 
 
