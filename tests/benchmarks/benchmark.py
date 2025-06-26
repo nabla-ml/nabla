@@ -50,10 +50,13 @@ import torch.nn.functional as F
 # Attempt to import Nabla and get its version
 try:
     import nabla as nb
+
     NABLA_VERSION = nb.__version__
 except ImportError:
-    print("WARNING: Nabla library not found or import failed. Nabla benchmarks will fail.")
-    nb = None # Placeholder
+    print(
+        "WARNING: Nabla library not found or import failed. Nabla benchmarks will fail."
+    )
+    nb = None  # Placeholder
     NABLA_VERSION = "Not Found"
 except AttributeError:
     NABLA_VERSION = "unknown (nabla imported but __version__ missing)"
@@ -94,8 +97,12 @@ class DataManager:
         self.apis = FrameworkAPIs(np, nb, jnp, torch)
 
     def get_tensor(self, shape: tuple, framework: str, dtype: str = "float32"):
-        if isinstance(shape[0], list): # Handle list-based shapes for MLP weights/biases
-            return [self.get_tensor(s, framework, dt) for s, dt in zip(shape[0], shape[1])]
+        if isinstance(
+            shape[0], list
+        ):  # Handle list-based shapes for MLP weights/biases
+            return [
+                self.get_tensor(s, framework, dt) for s, dt in zip(shape[0], shape[1], strict=False)
+            ]
 
         if dtype == "int64":
             high = shape[0] if len(shape) > 0 and isinstance(shape[0], int) else 100
@@ -107,12 +114,25 @@ class DataManager:
             data = self.rng.random(shape, dtype=np.float32)
 
         if framework == "nabla":
-            if nb is None: raise ImportError("Nabla not available for tensor creation.")
-            return nb.array(data) if not isinstance(data, list) else [nb.array(d) for d in data]
+            if nb is None:
+                raise ImportError("Nabla not available for tensor creation.")
+            return (
+                nb.array(data)
+                if not isinstance(data, list)
+                else [nb.array(d) for d in data]
+            )
         if framework == "jax":
-            return jnp.array(data) if not isinstance(data, list) else [jnp.array(d) for d in data]
+            return (
+                jnp.array(data)
+                if not isinstance(data, list)
+                else [jnp.array(d) for d in data]
+            )
         if framework == "torch":
-            return torch.from_numpy(data) if not isinstance(data, list) else [torch.from_numpy(d) for d in data]
+            return (
+                torch.from_numpy(data)
+                if not isinstance(data, list)
+                else [torch.from_numpy(d) for d in data]
+            )
         return data
 
 
@@ -132,6 +152,7 @@ class Pattern:
         if self.arg_dtypes is None:
             self.arg_dtypes = ["float32"] * len(self.arg_shapes)
 
+
 @dataclass
 class Transformation:
     name: str
@@ -142,13 +163,15 @@ class Transformation:
 
 def get_patterns_and_transforms(dims):
     N, D, B, S, E = dims["N"], dims["D"], dims["B"], dims["S"], dims["E"]
-    N_LAYERS_MLP = dims.get("N_LAYERS_MLP", 8) # Default to 8 if not specified
+    N_LAYERS_MLP = dims.get("N_LAYERS_MLP", 8)  # Default to 8 if not specified
 
     # Basic Patterns (Nabla functions will be guarded if nb is None)
     basic_patterns = [
         Pattern(
             name="Element-wise",
-            nabla_func=lambda x: nb.sum(nb.tanh(x) * nb.sin(x) / (nb.abs(x) + 1e-6)) if nb else None,
+            nabla_func=lambda x: nb.sum(nb.tanh(x) * nb.sin(x) / (nb.abs(x) + 1e-6))
+            if nb
+            else None,
             jax_func=lambda x: jnp.sum(jnp.tanh(x) * jnp.sin(x) / (jnp.abs(x) + 1e-6)),
             torch_func=lambda x: torch.sum(
                 torch.tanh(x) * torch.sin(x) / (torch.abs(x) + 1e-6)
@@ -166,7 +189,9 @@ def get_patterns_and_transforms(dims):
             name="Reduction",
             nabla_func=lambda x: nb.sum(
                 nb.sqrt(nb.mean((x - nb.mean(x, axes=1, keep_dims=True)) ** 2, axes=1))
-            ) if nb else None,
+            )
+            if nb
+            else None,
             jax_func=lambda x: jnp.sum(
                 jnp.sqrt(
                     jnp.mean((x - jnp.mean(x, axis=1, keepdims=True)) ** 2, axis=1)
@@ -180,7 +205,7 @@ def get_patterns_and_transforms(dims):
             arg_shapes=[(N, D)],
         ),
         Pattern(
-            name="MLP Layer", # Single MLP layer
+            name="MLP Layer",  # Single MLP layer
             nabla_func=lambda x, w, b: nb.sum(nb.relu(x @ w + b)) if nb else None,
             jax_func=lambda x, w, b: jnp.sum(jax.nn.relu(x @ w + b)),
             torch_func=lambda x, w, b: torch.sum(F.relu(x @ w + b)),
@@ -195,7 +220,13 @@ def get_patterns_and_transforms(dims):
         x = x + attn_out @ w_o
         x = x + nb.relu(x @ w_ff1) @ w_ff2
         stable_x = x - nb.max(x, axes=-1, keep_dims=True)
-        return -nb.sum(y * (stable_x - nb.log(nb.sum(nb.exp(stable_x), axes=-1, keep_dims=True)))) / B
+        return (
+            -nb.sum(
+                y
+                * (stable_x - nb.log(nb.sum(nb.exp(stable_x), axes=-1, keep_dims=True)))
+            )
+            / B
+        )
 
     def _jax_transformer_fwd(x, y, w_q, w_k, w_v, w_o, w_ff1, w_ff2):
         q, k, v = x @ w_q, x @ w_k, x @ w_v
@@ -227,10 +258,21 @@ def get_patterns_and_transforms(dims):
 
     transformer_pattern = Pattern(
         name="Transformer Bwd Pass",
-        nabla_func=nb.grad(_nabla_transformer_fwd, argnums=tuple(range(2, 8))) if nb else None,
+        nabla_func=nb.grad(_nabla_transformer_fwd, argnums=tuple(range(2, 8)))
+        if nb
+        else None,
         jax_func=jax.grad(_jax_transformer_fwd, argnums=range(2, 8)),
         torch_func=_torch_transformer_grad_wrapper,
-        arg_shapes=[(B, S, E), (B, S, E), (E, E), (E, E), (E, E), (E, E), (E, 4 * E), (4 * E, E)],
+        arg_shapes=[
+            (B, S, E),
+            (B, S, E),
+            (E, E),
+            (E, E),
+            (E, E),
+            (E, E),
+            (E, 4 * E),
+            (4 * E, E),
+        ],
     )
 
     # --- Deep MLP Pattern for testing JIT fusion ---
@@ -239,14 +281,17 @@ def get_patterns_and_transforms(dims):
             for i in range(layers_arg):
                 x = nb.relu(x @ weights[i] + biases[i])
             return nb.sum(x)
+
         def _jax_deep_mlp(x, weights, biases):
             for i in range(layers_arg):
                 x = jax_nn.relu(x @ weights[i] + biases[i])
             return jnp.sum(x)
+
         def _torch_deep_mlp(x, weights, biases):
             for i in range(layers_arg):
                 x = F.relu(x @ weights[i] + biases[i])
             return torch.sum(x)
+
         return (_nabla_deep_mlp if nb else None), _jax_deep_mlp, _torch_deep_mlp
 
     _nabla_mlp, _jax_mlp, _torch_mlp = _define_deep_mlp_funcs(layers_arg=N_LAYERS_MLP)
@@ -258,37 +303,86 @@ def get_patterns_and_transforms(dims):
         torch_func=_torch_mlp,
         arg_shapes=[
             (N, D),
-            ([[(D, D)] * N_LAYERS_MLP, ["float32"] * N_LAYERS_MLP]), # Weights
-            ([[(D,)] * N_LAYERS_MLP, ["float32"] * N_LAYERS_MLP]),   # Biases
+            ([[(D, D)] * N_LAYERS_MLP, ["float32"] * N_LAYERS_MLP]),  # Weights
+            ([[(D,)] * N_LAYERS_MLP, ["float32"] * N_LAYERS_MLP]),  # Biases
         ],
     )
 
     # --- Transformations ---
-    nabla_grad_placeholder = lambda f: (lambda *args, **kwargs: "Nabla Grad N/A") if nb is None or f is None else nb.grad(f)
-    nabla_jit_placeholder = lambda f: (lambda *args, **kwargs: "Nabla JIT N/A") if nb is None or f is None else nb.jit(f)
-    
+    nabla_grad_placeholder = (
+        lambda f: (lambda *args, **kwargs: "Nabla Grad N/A")
+        if nb is None or f is None
+        else nb.grad(f)
+    )
+    nabla_jit_placeholder = (
+        lambda f: (lambda *args, **kwargs: "Nabla JIT N/A")
+        if nb is None or f is None
+        else nb.jit(f)
+    )
+
     standard_transforms = [
-        Transformation(name="Eager", nabla_transform=lambda f: f, jax_transform=lambda f: f, torch_transform=lambda f: f),
-        Transformation(name="Grad", nabla_transform=nabla_grad_placeholder, jax_transform=jax.grad, torch_transform=torch.func.grad),
-        Transformation(name="JIT", nabla_transform=nabla_jit_placeholder, jax_transform=jax.jit, torch_transform=torch.compile),
-        Transformation(name="JIT(Grad)",
-                       nabla_transform=lambda f: nabla_jit_placeholder(nabla_grad_placeholder(f)),
-                       jax_transform=lambda f: jax.jit(jax.grad(f)),
-                       torch_transform=lambda f: torch.compile(torch.func.grad(f))),
+        Transformation(
+            name="Eager",
+            nabla_transform=lambda f: f,
+            jax_transform=lambda f: f,
+            torch_transform=lambda f: f,
+        ),
+        Transformation(
+            name="Grad",
+            nabla_transform=nabla_grad_placeholder,
+            jax_transform=jax.grad,
+            torch_transform=torch.func.grad,
+        ),
+        Transformation(
+            name="JIT",
+            nabla_transform=nabla_jit_placeholder,
+            jax_transform=jax.jit,
+            torch_transform=torch.compile,
+        ),
+        Transformation(
+            name="JIT(Grad)",
+            nabla_transform=lambda f: nabla_jit_placeholder(nabla_grad_placeholder(f)),
+            jax_transform=lambda f: jax.jit(jax.grad(f)),
+            torch_transform=lambda f: torch.compile(torch.func.grad(f)),
+        ),
     ]
     transformer_transforms = [
-        Transformation(name="Eager", nabla_transform=lambda f: f, jax_transform=lambda f: f, torch_transform=lambda f: f),
-        Transformation(name="JIT", nabla_transform=nabla_jit_placeholder, jax_transform=jax.jit, torch_transform=torch.compile),
+        Transformation(
+            name="Eager",
+            nabla_transform=lambda f: f,
+            jax_transform=lambda f: f,
+            torch_transform=lambda f: f,
+        ),
+        Transformation(
+            name="JIT",
+            nabla_transform=nabla_jit_placeholder,
+            jax_transform=jax.jit,
+            torch_transform=torch.compile,
+        ),
     ]
 
-    return basic_patterns, standard_transforms, transformer_pattern, transformer_transforms, deep_mlp_pattern
+    return (
+        basic_patterns,
+        standard_transforms,
+        transformer_pattern,
+        transformer_transforms,
+        deep_mlp_pattern,
+    )
 
 
 # ============================================================================
 # 3. BENCHMARK RUNNER CLASS
 # ============================================================================
 class BenchmarkRunner:
-    def __init__(self, config_name: str, data_manager: DataManager, timeit_runs: int, timeit_repeats: int, frameworks: list, **kwargs):
+    def __init__(
+        self,
+        config_name: str,
+        data_manager: DataManager,
+        timeit_runs: int,
+        timeit_repeats: int,
+        frameworks: list,
+        **kwargs,
+    ):
         self.config_name = config_name
         self.dm = data_manager
         self.timeit_runs = timeit_runs
@@ -296,125 +390,212 @@ class BenchmarkRunner:
         self.frameworks_to_run = frameworks
         self.kwargs = kwargs
         self.results = []
-        print(f"\n\n{bcolors.HEADER}{'=' * 80}\n {self.config_name.center(78)} \n {str(self.kwargs).center(78)} \n{'=' * 80}{bcolors.ENDC}")
+        print(
+            f"\n\n{bcolors.HEADER}{'=' * 80}\n {self.config_name.center(78)} \n {str(self.kwargs).center(78)} \n{'=' * 80}{bcolors.ENDC}"
+        )
 
     def run(self, patterns: list[Pattern], transforms: list[Transformation]):
         torch._dynamo.reset()
         for pattern_obj in patterns:
-            print(f"\n{bcolors.OKBLUE}{'-' * 20} PATTERN: {pattern_obj.name} {'-' * 20}{bcolors.ENDC}")
+            print(
+                f"\n{bcolors.OKBLUE}{'-' * 20} PATTERN: {pattern_obj.name} {'-' * 20}{bcolors.ENDC}"
+            )
             for trans in transforms:
                 print(f"  {bcolors.OKCYAN}--> TRANSFORM: {trans.name}{bcolors.ENDC}")
                 self._run_single_test(pattern_obj, trans, self.frameworks_to_run)
         return pd.DataFrame(self.results)
 
-    def _run_single_test(self, pattern_obj: Pattern, trans: Transformation, frameworks_to_run: list[str]):
-        actual_arg_dtypes = pattern_obj.arg_dtypes if pattern_obj.arg_dtypes is not None else ["float32"] * len(pattern_obj.arg_shapes)
-        
+    def _run_single_test(
+        self, pattern_obj: Pattern, trans: Transformation, frameworks_to_run: list[str]
+    ):
+        actual_arg_dtypes = (
+            pattern_obj.arg_dtypes
+            if pattern_obj.arg_dtypes is not None
+            else ["float32"] * len(pattern_obj.arg_shapes)
+        )
+
         args_nabla = None
-        if "Nabla" in frameworks_to_run and nb is not None and pattern_obj.nabla_func is not None:
+        if (
+            "Nabla" in frameworks_to_run
+            and nb is not None
+            and pattern_obj.nabla_func is not None
+        ):
             try:
-                args_nabla = tuple(self.dm.get_tensor(s, "nabla", dt) for s, dt in zip(pattern_obj.arg_shapes, actual_arg_dtypes, strict=True))
+                args_nabla = tuple(
+                    self.dm.get_tensor(s, "nabla", dt)
+                    for s, dt in zip(
+                        pattern_obj.arg_shapes, actual_arg_dtypes, strict=True
+                    )
+                )
             except Exception as e:
-                print(f"      {bcolors.WARNING}Nabla arg prep failed for {pattern_obj.name}: {e}{bcolors.ENDC}")
-                args_nabla = "Error" # Mark as error
+                print(
+                    f"      {bcolors.WARNING}Nabla arg prep failed for {pattern_obj.name}: {e}{bcolors.ENDC}"
+                )
+                args_nabla = "Error"  # Mark as error
 
         args_jax = None
         if "JAX" in frameworks_to_run and pattern_obj.jax_func is not None:
-             args_jax = tuple(self.dm.get_tensor(s, "jax", dt) for s, dt in zip(pattern_obj.arg_shapes, actual_arg_dtypes, strict=True))
+            args_jax = tuple(
+                self.dm.get_tensor(s, "jax", dt)
+                for s, dt in zip(pattern_obj.arg_shapes, actual_arg_dtypes, strict=True)
+            )
 
         args_torch = None
         if "PyTorch" in frameworks_to_run and pattern_obj.torch_func is not None:
-            args_torch = tuple(self.dm.get_tensor(s, "torch", dt) for s, dt in zip(pattern_obj.arg_shapes, actual_arg_dtypes, strict=True))
-
+            args_torch = tuple(
+                self.dm.get_tensor(s, "torch", dt)
+                for s, dt in zip(pattern_obj.arg_shapes, actual_arg_dtypes, strict=True)
+            )
 
         framework_funcs = {
-            "Nabla": (trans.nabla_transform(pattern_obj.nabla_func), args_nabla) if nb and pattern_obj.nabla_func else (None, None),
-            "JAX": (trans.jax_transform(pattern_obj.jax_func), args_jax) if pattern_obj.jax_func else (None, None),
-            "PyTorch": (trans.torch_transform(pattern_obj.torch_func), args_torch) if pattern_obj.torch_func else (None,None),
+            "Nabla": (trans.nabla_transform(pattern_obj.nabla_func), args_nabla)
+            if nb and pattern_obj.nabla_func
+            else (None, None),
+            "JAX": (trans.jax_transform(pattern_obj.jax_func), args_jax)
+            if pattern_obj.jax_func
+            else (None, None),
+            "PyTorch": (trans.torch_transform(pattern_obj.torch_func), args_torch)
+            if pattern_obj.torch_func
+            else (None, None),
         }
         for fw_name in frameworks_to_run:
             func_tuple = framework_funcs.get(fw_name)
             if func_tuple and func_tuple[0] is not None and func_tuple[1] != "Error":
-                self._measure_and_store(fw_name, *func_tuple, pattern_obj.name, trans.name)
+                self._measure_and_store(
+                    fw_name, *func_tuple, pattern_obj.name, trans.name
+                )
             elif func_tuple and func_tuple[1] == "Error":
-                 self.results.append({
-                    "Benchmark": self.config_name, "Pattern": pattern_obj.name, "Transform": trans.name,
-                    "Framework": fw_name, "Time (ms)": np.nan, "First Run Time (ms)": np.nan,
-                    "Error": "Argument Preparation Failed"
-                })
-            else: # Framework not requested, or function not available (e.g. Nabla not installed)
-                 if fw_name == "Nabla" and nb is None:
-                    print(f"      {bcolors.WARNING}Nabla not available, skipping {pattern_obj.name} - {trans.name}{bcolors.ENDC}")
-                 self.results.append({
-                    "Benchmark": self.config_name, "Pattern": pattern_obj.name, "Transform": trans.name,
-                    "Framework": fw_name, "Time (ms)": np.nan, "First Run Time (ms)": np.nan,
-                    "Error": "Skipped (FW N/A or Func N/A)"
-                })
+                self.results.append(
+                    {
+                        "Benchmark": self.config_name,
+                        "Pattern": pattern_obj.name,
+                        "Transform": trans.name,
+                        "Framework": fw_name,
+                        "Time (ms)": np.nan,
+                        "First Run Time (ms)": np.nan,
+                        "Error": "Argument Preparation Failed",
+                    }
+                )
+            else:  # Framework not requested, or function not available (e.g. Nabla not installed)
+                if fw_name == "Nabla" and nb is None:
+                    print(
+                        f"      {bcolors.WARNING}Nabla not available, skipping {pattern_obj.name} - {trans.name}{bcolors.ENDC}"
+                    )
+                self.results.append(
+                    {
+                        "Benchmark": self.config_name,
+                        "Pattern": pattern_obj.name,
+                        "Transform": trans.name,
+                        "Framework": fw_name,
+                        "Time (ms)": np.nan,
+                        "First Run Time (ms)": np.nan,
+                        "Error": "Skipped (FW N/A or Func N/A)",
+                    }
+                )
 
-
-    def _measure_and_store(self, fw_name, func_to_benchmark, args_tuple, pattern_name_str, trans_name_str):
+    def _measure_and_store(
+        self, fw_name, func_to_benchmark, args_tuple, pattern_name_str, trans_name_str
+    ):
         try:
             local_args_for_run = list(args_tuple)
 
             if fw_name == "PyTorch" and ("Grad" in trans_name_str):
                 # For Deep MLP, grad is w.r.t. x (args[0])
-                if "Deep MLP" in pattern_name_str: # Covers "Deep MLP (X Layers)"
-                    if isinstance(local_args_for_run[0], torch.Tensor) and local_args_for_run[0].is_floating_point():
-                        local_args_for_run[0] = local_args_for_run[0].clone().detach().requires_grad_(True)
-                elif pattern_name_str != "Transformer Bwd Pass": # Standard cases
-                    if len(local_args_for_run) > 0 and isinstance(local_args_for_run[0], torch.Tensor) and local_args_for_run[0].is_floating_point():
-                        local_args_for_run[0] = local_args_for_run[0].clone().detach().requires_grad_(True)
-            
+                if "Deep MLP" in pattern_name_str:  # Covers "Deep MLP (X Layers)"
+                    if (
+                        isinstance(local_args_for_run[0], torch.Tensor)
+                        and local_args_for_run[0].is_floating_point()
+                    ):
+                        local_args_for_run[0] = (
+                            local_args_for_run[0].clone().detach().requires_grad_(True)
+                        )
+                elif pattern_name_str != "Transformer Bwd Pass":  # Standard cases
+                    if (
+                        len(local_args_for_run) > 0
+                        and isinstance(local_args_for_run[0], torch.Tensor)
+                        and local_args_for_run[0].is_floating_point()
+                    ):
+                        local_args_for_run[0] = (
+                            local_args_for_run[0].clone().detach().requires_grad_(True)
+                        )
+
             final_args_for_run = tuple(local_args_for_run)
 
             if "Deep MLP" in pattern_name_str:
+
                 def func_base_call():
-                    return func_to_benchmark(final_args_for_run[0], final_args_for_run[1], final_args_for_run[2])
+                    return func_to_benchmark(
+                        final_args_for_run[0],
+                        final_args_for_run[1],
+                        final_args_for_run[2],
+                    )
             elif pattern_name_str == "Transformer Bwd Pass":
-                 def func_base_call():
+
+                def func_base_call():
                     return func_to_benchmark(*final_args_for_run)
             else:
+
                 def func_base_call():
                     return func_to_benchmark(*final_args_for_run)
 
             if fw_name == "JAX":
+
                 def func_call_wrapper_for_timing():
                     res = func_base_call()
                     jax.block_until_ready(jax.tree_util.tree_leaves(res))
                     return res
             elif fw_name == "PyTorch":
+
                 def func_call_wrapper_for_timing():
                     res = func_base_call()
                     torch.cpu.synchronize()
                     return res
-            else: # Nabla (or other assumed synchronous)
+            else:  # Nabla (or other assumed synchronous)
                 func_call_wrapper_for_timing = func_base_call
-            
+
             # First run
             start_time_first_run = time.perf_counter()
             result_first_run = func_call_wrapper_for_timing()
             first_run_ms = (time.perf_counter() - start_time_first_run) * 1000
 
             # Steady state
-            timer = timeit.Timer(stmt="func_call_wrapper_for_timing()", 
-                                 globals={"func_call_wrapper_for_timing": func_call_wrapper_for_timing})
+            timer = timeit.Timer(
+                stmt="func_call_wrapper_for_timing()",
+                globals={"func_call_wrapper_for_timing": func_call_wrapper_for_timing},
+            )
             times = timer.repeat(repeat=self.timeit_repeats, number=self.timeit_runs)
             steady_state_ms = (min(times) / self.timeit_runs) * 1000
 
-            print(f"      {fw_name:<8} First Run: {first_run_ms:8.3f} ms | Steady State: {steady_state_ms:8.3f} ms")
-            self.results.append({
-                "Benchmark": self.config_name, "Pattern": pattern_name_str, "Transform": trans_name_str,
-                "Framework": fw_name, "Time (ms)": steady_state_ms, "First Run Time (ms)": first_run_ms
-            })
+            print(
+                f"      {fw_name:<8} First Run: {first_run_ms:8.3f} ms | Steady State: {steady_state_ms:8.3f} ms"
+            )
+            self.results.append(
+                {
+                    "Benchmark": self.config_name,
+                    "Pattern": pattern_name_str,
+                    "Transform": trans_name_str,
+                    "Framework": fw_name,
+                    "Time (ms)": steady_state_ms,
+                    "First Run Time (ms)": first_run_ms,
+                }
+            )
         except Exception as e:
             # import traceback # Uncomment for debugging
             # traceback.print_exc()
-            print(f"      {bcolors.FAIL}{fw_name:<8} FAILED ({type(e).__name__}): {str(e)[:150]}{bcolors.ENDC}")
-            self.results.append({
-                "Benchmark": self.config_name, "Pattern": pattern_name_str, "Transform": trans_name_str,
-                "Framework": fw_name, "Time (ms)": np.nan, "First Run Time (ms)": np.nan,
-                "Error": str(e)[:100]
-            })
+            print(
+                f"      {bcolors.FAIL}{fw_name:<8} FAILED ({type(e).__name__}): {str(e)[:150]}{bcolors.ENDC}"
+            )
+            self.results.append(
+                {
+                    "Benchmark": self.config_name,
+                    "Pattern": pattern_name_str,
+                    "Transform": trans_name_str,
+                    "Framework": fw_name,
+                    "Time (ms)": np.nan,
+                    "First Run Time (ms)": np.nan,
+                    "Error": str(e)[:100],
+                }
+            )
 
 
 # ============================================================================
@@ -425,9 +606,15 @@ class ResultAnalyzer:
         self.df = df.copy()
         self.frameworks = frameworks
         if "First Run Time (ms)" not in self.df.columns and not self.df.empty:
-             self.df["First Run Time (ms)"] = np.nan
+            self.df["First Run Time (ms)"] = np.nan
 
-    def _build_analysis_table(self, pivot_df, time_metrics, speedup_metric_name, base_time_col_name="Time (ms)"):
+    def _build_analysis_table(
+        self,
+        pivot_df,
+        time_metrics,
+        speedup_metric_name,
+        base_time_col_name="Time (ms)",
+    ):
         pivot_df = pivot_df.dropna(how="all", axis=0).dropna(how="all", axis=1)
         if pivot_df.empty:
             return pd.DataFrame()
@@ -444,22 +631,34 @@ class ResultAnalyzer:
                     try:
                         time_val = pivot_df.loc[idx, (fw, metric_transform_name)]
                         fw_times_for_transform[fw] = time_val
-                        if pd.notna(time_val): has_data_for_row = True
+                        if pd.notna(time_val):
+                            has_data_for_row = True
                     except KeyError:
                         fw_times_for_transform[fw] = np.nan
                 metric_times[metric_transform_name] = fw_times_for_transform
-            
-            if not has_data_for_row: continue
+
+            if not has_data_for_row:
+                continue
 
             base_s = pd.Series(metric_times[time_metrics[0]])
-            opt_s = pd.Series(metric_times[time_metrics[1]]) # Series of optimized times (JIT or JIT(Grad))
-            
+            opt_s = pd.Series(
+                metric_times[time_metrics[1]]
+            )  # Series of optimized times (JIT or JIT(Grad))
+
             opt_times_series_for_best = opt_s.dropna()
-            best_fw = opt_times_series_for_best.idxmin() if not opt_times_series_for_best.empty else "N/A"
-            
+            best_fw = (
+                opt_times_series_for_best.idxmin()
+                if not opt_times_series_for_best.empty
+                else "N/A"
+            )
+
             speedups = pd.Series(index=base_s.index, dtype=float)
             for fw_ in base_s.index:
-                if pd.notna(base_s.get(fw_)) and pd.notna(opt_s.get(fw_)) and opt_s.get(fw_, np.nan) != 0:
+                if (
+                    pd.notna(base_s.get(fw_))
+                    and pd.notna(opt_s.get(fw_))
+                    and opt_s.get(fw_, np.nan) != 0
+                ):
                     speedups[fw_] = base_s.get(fw_) / opt_s.get(fw_)
                 else:
                     speedups[fw_] = np.nan
@@ -468,8 +667,8 @@ class ResultAnalyzer:
             row_for_optimized_metric = {
                 **row_dict,
                 "Metric": f"{time_metrics[1]} ({base_time_col_name})",
-                **metric_times[time_metrics[1]], # Adds Nabla, JAX, PyTorch times
-                "Best Framework": best_fw
+                **metric_times[time_metrics[1]],  # Adds Nabla, JAX, PyTorch times
+                "Best Framework": best_fw,
             }
 
             # Calculate and add Nabla comparison ratios
@@ -477,76 +676,122 @@ class ResultAnalyzer:
             jax_opt_time = opt_s.get("JAX", np.nan)
             pytorch_opt_time = opt_s.get("PyTorch", np.nan)
 
-            if pd.notna(nabla_opt_time) and nabla_opt_time > 1e-9: # Avoid division by zero or tiny numbers
+            if (
+                pd.notna(nabla_opt_time) and nabla_opt_time > 1e-9
+            ):  # Avoid division by zero or tiny numbers
                 if "JAX" in self.frameworks and pd.notna(jax_opt_time):
-                    row_for_optimized_metric["Nabla vs JAX (Ratio)"] = jax_opt_time / nabla_opt_time
+                    row_for_optimized_metric["Nabla vs JAX (Ratio)"] = (
+                        jax_opt_time / nabla_opt_time
+                    )
                 else:
                     row_for_optimized_metric["Nabla vs JAX (Ratio)"] = np.nan
-                
+
                 if "PyTorch" in self.frameworks and pd.notna(pytorch_opt_time):
-                    row_for_optimized_metric["Nabla vs PyTorch (Ratio)"] = pytorch_opt_time / nabla_opt_time
+                    row_for_optimized_metric["Nabla vs PyTorch (Ratio)"] = (
+                        pytorch_opt_time / nabla_opt_time
+                    )
                 else:
                     row_for_optimized_metric["Nabla vs PyTorch (Ratio)"] = np.nan
             else:
                 row_for_optimized_metric["Nabla vs JAX (Ratio)"] = np.nan
                 row_for_optimized_metric["Nabla vs PyTorch (Ratio)"] = np.nan
 
-            analysis_data.append({**row_dict, "Metric": f"{time_metrics[0]} ({base_time_col_name})", **metric_times[time_metrics[0]]})
+            analysis_data.append(
+                {
+                    **row_dict,
+                    "Metric": f"{time_metrics[0]} ({base_time_col_name})",
+                    **metric_times[time_metrics[0]],
+                }
+            )
             analysis_data.append(row_for_optimized_metric)
-            analysis_data.append({**row_dict, "Metric": speedup_metric_name, **speedups.to_dict()})
+            analysis_data.append(
+                {**row_dict, "Metric": speedup_metric_name, **speedups.to_dict()}
+            )
 
-        if not analysis_data: return pd.DataFrame()
-        final_df = pd.DataFrame(analysis_data).set_index(["Benchmark", "Pattern", "Metric"])
+        if not analysis_data:
+            return pd.DataFrame()
+        final_df = pd.DataFrame(analysis_data).set_index(
+            ["Benchmark", "Pattern", "Metric"]
+        )
         return final_df
 
     def display_table(self, analysis_df, title, subtitle):
         if analysis_df.empty:
-            print(f"\n{bcolors.WARNING}No data to display for '{title}' analysis.{bcolors.ENDC}")
+            print(
+                f"\n{bcolors.WARNING}No data to display for '{title}' analysis.{bcolors.ENDC}"
+            )
             return
 
-        print(f"\n\n{bcolors.HEADER}{'=' * 140}\n{title.center(140)}\n{'=' * 140}{bcolors.ENDC}") # Increased width
+        print(
+            f"\n\n{bcolors.HEADER}{'=' * 140}\n{title.center(140)}\n{'=' * 140}{bcolors.ENDC}"
+        )  # Increased width
         print(f"\n{subtitle}")
 
         for fw in self.frameworks:
-            if fw not in analysis_df.columns: analysis_df[fw] = np.nan
-        
+            if fw not in analysis_df.columns:
+                analysis_df[fw] = np.nan
+
         # Define column order, including new ratio columns
-        ordered_cols = self.frameworks + ["Best Framework", "Nabla vs JAX (Ratio)", "Nabla vs PyTorch (Ratio)"]
-        analysis_df = analysis_df.reindex(columns=[c for c in ordered_cols if c in analysis_df.columns])
+        ordered_cols = self.frameworks + [
+            "Best Framework",
+            "Nabla vs JAX (Ratio)",
+            "Nabla vs PyTorch (Ratio)",
+        ]
+        analysis_df = analysis_df.reindex(
+            columns=[c for c in ordered_cols if c in analysis_df.columns]
+        )
 
         # Fill NaNs for display
-        for col in ["Best Framework", "Nabla vs JAX (Ratio)", "Nabla vs PyTorch (Ratio)"]:
+        for col in [
+            "Best Framework",
+            "Nabla vs JAX (Ratio)",
+            "Nabla vs PyTorch (Ratio)",
+        ]:
             if col in analysis_df.columns:
-                analysis_df[col] = analysis_df[col].fillna(np.nan if "Ratio" in col else "")
+                analysis_df[col] = analysis_df[col].fillna(
+                    np.nan if "Ratio" in col else ""
+                )
 
-
-        styled_df = analysis_df.astype(object) 
+        styled_df = analysis_df.astype(object)
         for col in analysis_df.columns:
-            if col == "Best Framework": # Already handled by fillna("")
+            if col == "Best Framework":  # Already handled by fillna("")
                 styled_df[col] = analysis_df[col].fillna("")
                 continue
             for idx in analysis_df.index:
                 val = analysis_df.loc[idx, col]
-                metric_name_tuple_part = idx[2] if isinstance(idx, tuple) and len(idx) > 2 else ""
+                metric_name_tuple_part = (
+                    idx[2] if isinstance(idx, tuple) and len(idx) > 2 else ""
+                )
 
                 if pd.isna(val):
                     styled_df.loc[idx, col] = "-"
                 elif "Speedup" in metric_name_tuple_part or "Ratio" in col:
                     styled_df.loc[idx, col] = f"{val:.2f}x"
-                else: # Time
+                else:  # Time
                     styled_df.loc[idx, col] = f"{val:.3f}"
-        
-        with pd.option_context("display.max_rows", None, "display.width", 220, "display.float_format", '{:,.3f}'.format): # Increased width
+
+        with pd.option_context(
+            "display.max_rows",
+            None,
+            "display.width",
+            220,
+            "display.float_format",
+            "{:,.3f}".format,
+        ):  # Increased width
             print(styled_df.to_string())
 
     def process_and_display_analysis(self, time_column_name, analysis_title_suffix):
         if self.df.empty or time_column_name not in self.df.columns:
-            print(f"{bcolors.WARNING}No '{time_column_name}' data to analyze for {analysis_title_suffix}.{bcolors.ENDC}")
+            print(
+                f"{bcolors.WARNING}No '{time_column_name}' data to analyze for {analysis_title_suffix}.{bcolors.ENDC}"
+            )
             return
 
         df_subset = self.df.dropna(subset=[time_column_name])
         if df_subset.empty:
-            print(f"{bcolors.WARNING}No valid '{time_column_name}' data points to analyze for {analysis_title_suffix}.{bcolors.ENDC}")
+            print(
+                f"{bcolors.WARNING}No valid '{time_column_name}' data points to analyze for {analysis_title_suffix}.{bcolors.ENDC}"
+            )
             return
 
         pivot_df = df_subset.pivot_table(
@@ -554,60 +799,122 @@ class ResultAnalyzer:
             columns=["Framework", "Transform"],
             values=time_column_name,
         )
-        
-        if not pivot_df.empty:
-            current_frameworks_in_pivot = pivot_df.columns.get_level_values("Framework").unique()
-            frameworks_to_reindex = [fw for fw in self.frameworks if fw in current_frameworks_in_pivot]
-            if frameworks_to_reindex:
-                pivot_df = pivot_df.reindex(frameworks_to_reindex, axis=1, level="Framework")
 
-        all_transforms = df_subset["Transform"].unique() if "Transform" in df_subset else []
-        
+        if not pivot_df.empty:
+            current_frameworks_in_pivot = pivot_df.columns.get_level_values(
+                "Framework"
+            ).unique()
+            frameworks_to_reindex = [
+                fw for fw in self.frameworks if fw in current_frameworks_in_pivot
+            ]
+            if frameworks_to_reindex:
+                pivot_df = pivot_df.reindex(
+                    frameworks_to_reindex, axis=1, level="Framework"
+                )
+
+        all_transforms = (
+            df_subset["Transform"].unique() if "Transform" in df_subset else []
+        )
+
         if "Eager" in all_transforms and "JIT" in all_transforms:
             cols_to_select = []
             for fw in self.frameworks:
-                if (fw, "Eager") in pivot_df.columns: cols_to_select.append((fw, "Eager"))
-                if (fw, "JIT") in pivot_df.columns: cols_to_select.append((fw, "JIT"))
-            
+                if (fw, "Eager") in pivot_df.columns:
+                    cols_to_select.append((fw, "Eager"))
+                if (fw, "JIT") in pivot_df.columns:
+                    cols_to_select.append((fw, "JIT"))
+
             if cols_to_select:
                 # Filter pivot_df to only include patterns that have JIT results for at least one framework.
                 # This avoids building analysis tables for patterns where JIT might have failed everywhere.
-                valid_indices = pivot_df[[(fw, "JIT") for fw in self.frameworks if (fw, "JIT") in pivot_df.columns]].dropna(how='all').index
+                valid_indices = (
+                    pivot_df[
+                        [
+                            (fw, "JIT")
+                            for fw in self.frameworks
+                            if (fw, "JIT") in pivot_df.columns
+                        ]
+                    ]
+                    .dropna(how="all")
+                    .index
+                )
                 if not valid_indices.empty:
-                    fwd_pivot_filtered = pivot_df.loc[valid_indices, pd.MultiIndex.from_tuples(cols_to_select)]
-                    fwd_analysis = self._build_analysis_table(fwd_pivot_filtered, ["Eager", "JIT"], "JIT Speedup (x)", base_time_col_name=time_column_name)
-                    self.display_table(fwd_analysis, f"FORWARD PASS PERFORMANCE ANALYSIS ({analysis_title_suffix})", f"Compares Eager vs. JIT ({time_column_name}). 'Best Framework' is for JIT. Ratios are OtherTime/NablaTime.")
-
+                    fwd_pivot_filtered = pivot_df.loc[
+                        valid_indices, pd.MultiIndex.from_tuples(cols_to_select)
+                    ]
+                    fwd_analysis = self._build_analysis_table(
+                        fwd_pivot_filtered,
+                        ["Eager", "JIT"],
+                        "JIT Speedup (x)",
+                        base_time_col_name=time_column_name,
+                    )
+                    self.display_table(
+                        fwd_analysis,
+                        f"FORWARD PASS PERFORMANCE ANALYSIS ({analysis_title_suffix})",
+                        f"Compares Eager vs. JIT ({time_column_name}). 'Best Framework' is for JIT. Ratios are OtherTime/NablaTime.",
+                    )
 
         if "Grad" in all_transforms and "JIT(Grad)" in all_transforms:
             cols_to_select_grad = []
             for fw in self.frameworks:
-                if (fw, "Grad") in pivot_df.columns: cols_to_select_grad.append((fw, "Grad"))
-                if (fw, "JIT(Grad)") in pivot_df.columns: cols_to_select_grad.append((fw, "JIT(Grad)"))
-            
+                if (fw, "Grad") in pivot_df.columns:
+                    cols_to_select_grad.append((fw, "Grad"))
+                if (fw, "JIT(Grad)") in pivot_df.columns:
+                    cols_to_select_grad.append((fw, "JIT(Grad)"))
+
             if cols_to_select_grad:
-                valid_indices_grad = pivot_df[[(fw, "JIT(Grad)") for fw in self.frameworks if (fw, "JIT(Grad)") in pivot_df.columns]].dropna(how='all').index
+                valid_indices_grad = (
+                    pivot_df[
+                        [
+                            (fw, "JIT(Grad)")
+                            for fw in self.frameworks
+                            if (fw, "JIT(Grad)") in pivot_df.columns
+                        ]
+                    ]
+                    .dropna(how="all")
+                    .index
+                )
                 if not valid_indices_grad.empty:
-                    grad_pivot_filtered = pivot_df.loc[valid_indices_grad, pd.MultiIndex.from_tuples(cols_to_select_grad)]
-                    grad_analysis = self._build_analysis_table(grad_pivot_filtered, ["Grad", "JIT(Grad)"], "JIT(Grad) Speedup (x)", base_time_col_name=time_column_name)
-                    self.display_table(grad_analysis, f"GRADIENT PERFORMANCE ANALYSIS ({analysis_title_suffix})", f"Compares Eager Grad vs. JIT'd Grad ({time_column_name}). 'Best Framework' is for JIT(Grad). Ratios are OtherTime/NablaTime.")
+                    grad_pivot_filtered = pivot_df.loc[
+                        valid_indices_grad,
+                        pd.MultiIndex.from_tuples(cols_to_select_grad),
+                    ]
+                    grad_analysis = self._build_analysis_table(
+                        grad_pivot_filtered,
+                        ["Grad", "JIT(Grad)"],
+                        "JIT(Grad) Speedup (x)",
+                        base_time_col_name=time_column_name,
+                    )
+                    self.display_table(
+                        grad_analysis,
+                        f"GRADIENT PERFORMANCE ANALYSIS ({analysis_title_suffix})",
+                        f"Compares Eager Grad vs. JIT'd Grad ({time_column_name}). 'Best Framework' is for JIT(Grad). Ratios are OtherTime/NablaTime.",
+                    )
 
     def process_and_display(self):
         if self.df.empty:
             print(f"{bcolors.WARNING}No results to analyze.{bcolors.ENDC}")
             return
-        
-        if 'Transform' not in self.df.columns:
-            print(f"{bcolors.WARNING}Skipping detailed analysis as 'Transform' column is missing.{bcolors.ENDC}")
-            with pd.option_context("display.max_rows", None, "display.width", 200): print(self.df.to_string())
+
+        if "Transform" not in self.df.columns:
+            print(
+                f"{bcolors.WARNING}Skipping detailed analysis as 'Transform' column is missing.{bcolors.ENDC}"
+            )
+            with pd.option_context("display.max_rows", None, "display.width", 200):
+                print(self.df.to_string())
             return
-        
+
         self.process_and_display_analysis("Time (ms)", "Steady State")
-        
+
         if "First Run Time (ms)" in self.df.columns:
-            self.process_and_display_analysis("First Run Time (ms)", "First Run (incl. JIT Comp.)")
+            self.process_and_display_analysis(
+                "First Run Time (ms)", "First Run (incl. JIT Comp.)"
+            )
         else:
-            print(f"{bcolors.WARNING}'First Run Time (ms)' column not found, skipping its analysis.{bcolors.ENDC}")
+            print(
+                f"{bcolors.WARNING}'First Run Time (ms)' column not found, skipping its analysis.{bcolors.ENDC}"
+            )
+
 
 # ============================================================================
 # 5. MAIN EXECUTION
@@ -615,82 +922,167 @@ class ResultAnalyzer:
 def print_environment_info():
     print(f"{bcolors.BOLD}Environment Information:{bcolors.ENDC}")
     print(f"  - Python Version: {sys.version.split(' ')[0]}")
-    print(f"  - Platform: {platform.system()} {platform.release()} ({platform.machine()})")
+    print(
+        f"  - Platform: {platform.system()} {platform.release()} ({platform.machine()})"
+    )
     try:
         import cpuinfo
+
         print(f"  - CPU: {cpuinfo.get_cpu_info()['brand_raw']}")
     except ImportError:
         print("  - CPU: (Install 'py-cpuinfo' for details)")
 
-    print(f"  - Library Versions:\n    - Nabla:   {NABLA_VERSION}\n    - JAX:     {jax.__version__}\n    - PyTorch: {torch.__version__}\n    - NumPy:   {np.__version__}\n    - Pandas:  {pd.__version__}")
+    print(
+        f"  - Library Versions:\n    - Nabla:   {NABLA_VERSION}\n    - JAX:     {jax.__version__}\n    - PyTorch: {torch.__version__}\n    - NumPy:   {np.__version__}\n    - Pandas:  {pd.__version__}"
+    )
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Nabla/JAX/PyTorch Benchmarking Suite", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--benchmarks", nargs="+", default=["micro", "macro", "transformer"], choices=["micro", "macro", "transformer"], help="Which benchmarks to run.")
-    parser.add_argument("--frameworks", nargs="+", default=["Nabla", "JAX", "PyTorch"], choices=["Nabla", "JAX", "PyTorch"], help="Which frameworks to test.")
-    parser.add_argument("--runs", type=int, default=TIMEIT_RUNS_DEFAULT, help="Number of runs per timing loop.")
-    parser.add_argument("--repeats", type=int, default=TIMEIT_REPEATS_DEFAULT, help="Number of repeat timing loops.")
-    parser.add_argument("--output-csv", type=str, default=None, help="Path to save the raw timing results CSV file.")
+    parser = argparse.ArgumentParser(
+        description="Nabla/JAX/PyTorch Benchmarking Suite",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "--benchmarks",
+        nargs="+",
+        default=["micro", "macro", "transformer"],
+        choices=["micro", "macro", "transformer"],
+        help="Which benchmarks to run.",
+    )
+    parser.add_argument(
+        "--frameworks",
+        nargs="+",
+        default=["Nabla", "JAX", "PyTorch"],
+        choices=["Nabla", "JAX", "PyTorch"],
+        help="Which frameworks to test.",
+    )
+    parser.add_argument(
+        "--runs",
+        type=int,
+        default=TIMEIT_RUNS_DEFAULT,
+        help="Number of runs per timing loop.",
+    )
+    parser.add_argument(
+        "--repeats",
+        type=int,
+        default=TIMEIT_REPEATS_DEFAULT,
+        help="Number of repeat timing loops.",
+    )
+    parser.add_argument(
+        "--output-csv",
+        type=str,
+        default=None,
+        help="Path to save the raw timing results CSV file.",
+    )
     args = parser.parse_args()
 
     # Filter frameworks if Nabla is not available
     if nb is None and "Nabla" in args.frameworks:
-        print(f"{bcolors.WARNING}Nabla framework selected but not found. Removing Nabla from tests.{bcolors.ENDC}")
+        print(
+            f"{bcolors.WARNING}Nabla framework selected but not found. Removing Nabla from tests.{bcolors.ENDC}"
+        )
         args.frameworks = [fw for fw in args.frameworks if fw != "Nabla"]
         if not args.frameworks:
-            print(f"{bcolors.FAIL}No frameworks left to test after removing Nabla. Exiting.{bcolors.ENDC}")
+            print(
+                f"{bcolors.FAIL}No frameworks left to test after removing Nabla. Exiting.{bcolors.ENDC}"
+            )
             return
 
     print_environment_info()
     dm = DataManager(SEED)
     all_results_df = pd.DataFrame()
 
-    print(f"\n{bcolors.BOLD}Running benchmarks: {', '.join(args.benchmarks)}{bcolors.ENDC}")
-    print(f"\n{bcolors.BOLD}Testing frameworks: {', '.join(args.frameworks)}{bcolors.ENDC}")
-    print(f"\n{bcolors.BOLD}Timing config: {args.repeats} repeats, {args.runs} runs each.{bcolors.ENDC}")
+    print(
+        f"\n{bcolors.BOLD}Running benchmarks: {', '.join(args.benchmarks)}{bcolors.ENDC}"
+    )
+    print(
+        f"\n{bcolors.BOLD}Testing frameworks: {', '.join(args.frameworks)}{bcolors.ENDC}"
+    )
+    print(
+        f"\n{bcolors.BOLD}Timing config: {args.repeats} repeats, {args.runs} runs each.{bcolors.ENDC}"
+    )
 
-    common_kwargs = {"data_manager": dm, "timeit_runs": args.runs, "timeit_repeats": args.repeats, "frameworks": args.frameworks}
+    common_kwargs = {
+        "data_manager": dm,
+        "timeit_runs": args.runs,
+        "timeit_repeats": args.repeats,
+        "frameworks": args.frameworks,
+    }
 
     if "micro" in args.benchmarks:
         # Micro benchmark dimensions (N_LAYERS_MLP will default to 8 here as not specified)
         dims_micro = {"N": 4, "D": 8, "B": 0, "S": 0, "E": 0}
-        basic_ps_micro, std_ts_micro, _, _, mlp_p_micro = get_patterns_and_transforms(dims_micro)
+        basic_ps_micro, std_ts_micro, _, _, mlp_p_micro = get_patterns_and_transforms(
+            dims_micro
+        )
         # For micro, maybe only basic patterns, not the deep MLP which is N_LAYERS_MLP=8 by default
         # If we want a "micro" deep MLP, it would use the default 8 layers.
         # Let's stick to simple patterns for micro.
-        all_results_df = pd.concat([all_results_df, BenchmarkRunner("MICRO-BENCH", **common_kwargs, **dims_micro).run(basic_ps_micro, std_ts_micro)])
+        all_results_df = pd.concat(
+            [
+                all_results_df,
+                BenchmarkRunner("MICRO-BENCH", **common_kwargs, **dims_micro).run(
+                    basic_ps_micro, std_ts_micro
+                ),
+            ]
+        )
 
     if "macro" in args.benchmarks:
-        dims_macro = {"N": 512, "D": 1024, "B": 0, "S": 0, "E": 0, "N_LAYERS_MLP": 16} # Scaled + 16 layers
-        basic_ps_macro, std_ts_macro, _, _, mlp_p_macro = get_patterns_and_transforms(dims_macro)
+        dims_macro = {
+            "N": 512,
+            "D": 1024,
+            "B": 0,
+            "S": 0,
+            "E": 0,
+            "N_LAYERS_MLP": 16,
+        }  # Scaled + 16 layers
+        basic_ps_macro, std_ts_macro, _, _, mlp_p_macro = get_patterns_and_transforms(
+            dims_macro
+        )
         patterns_for_macro = basic_ps_macro + [mlp_p_macro]
-        all_results_df = pd.concat([all_results_df, BenchmarkRunner("MACRO-BENCH", **common_kwargs, **dims_macro).run(patterns_for_macro, std_ts_macro)])
+        all_results_df = pd.concat(
+            [
+                all_results_df,
+                BenchmarkRunner("MACRO-BENCH", **common_kwargs, **dims_macro).run(
+                    patterns_for_macro, std_ts_macro
+                ),
+            ]
+        )
 
     if "transformer" in args.benchmarks:
-        dims_transformer = {"N": 0, "D": 0, "B": 16, "S": 256, "E": 512} # Scaled
+        dims_transformer = {"N": 0, "D": 0, "B": 16, "S": 256, "E": 512}  # Scaled
         # N_LAYERS_MLP is irrelevant for transformer pattern, so get_patterns_and_transforms will use default for MLP if it were used
         _, _, trans_p, trans_ts, _ = get_patterns_and_transforms(dims_transformer)
-        all_results_df = pd.concat([all_results_df, BenchmarkRunner("TRANSFORMER", **common_kwargs, **dims_transformer).run([trans_p], trans_ts)])
+        all_results_df = pd.concat(
+            [
+                all_results_df,
+                BenchmarkRunner("TRANSFORMER", **common_kwargs, **dims_transformer).run(
+                    [trans_p], trans_ts
+                ),
+            ]
+        )
 
     if args.output_csv and not all_results_df.empty:
         all_results_df.to_csv(args.output_csv, index=False)
-        print(f"\n{bcolors.OKGREEN}Raw results saved to {args.output_csv}{bcolors.ENDC}")
+        print(
+            f"\n{bcolors.OKGREEN}Raw results saved to {args.output_csv}{bcolors.ENDC}"
+        )
     elif args.output_csv and all_results_df.empty:
-        print(f"\n{bcolors.WARNING}No results generated to save to {args.output_csv}{bcolors.ENDC}")
-
+        print(
+            f"\n{bcolors.WARNING}No results generated to save to {args.output_csv}{bcolors.ENDC}"
+        )
 
     if not all_results_df.empty:
         analyzer = ResultAnalyzer(all_results_df, args.frameworks)
         analyzer.process_and_display()
     else:
-        print(f"\n{bcolors.WARNING}No results were generated. Skipping analysis.{bcolors.ENDC}")
+        print(
+            f"\n{bcolors.WARNING}No results were generated. Skipping analysis.{bcolors.ENDC}"
+        )
 
 
 if __name__ == "__main__":
     main()
-
-
 
 
 # Current output:
@@ -713,8 +1105,8 @@ if __name__ == "__main__":
 
 
 # ================================================================================
-#                                   MICRO-BENCH                                   
-#                     {'N': 4, 'D': 8, 'B': 0, 'S': 0, 'E': 0}                    
+#                                   MICRO-BENCH
+#                     {'N': 4, 'D': 8, 'B': 0, 'S': 0, 'E': 0}
 # ================================================================================
 
 # -------------------- PATTERN: Element-wise --------------------
@@ -791,8 +1183,8 @@ if __name__ == "__main__":
 
 
 # ================================================================================
-#                                   MACRO-BENCH                                   
-#        {'N': 512, 'D': 1024, 'B': 0, 'S': 0, 'E': 0, 'N_LAYERS_MLP': 16}        
+#                                   MACRO-BENCH
+#        {'N': 512, 'D': 1024, 'B': 0, 'S': 0, 'E': 0, 'N_LAYERS_MLP': 16}
 # ================================================================================
 
 # -------------------- PATTERN: Element-wise --------------------
@@ -889,8 +1281,8 @@ if __name__ == "__main__":
 
 
 # ================================================================================
-#                                   TRANSFORMER                                   
-#                  {'N': 0, 'D': 0, 'B': 16, 'S': 256, 'E': 512}                  
+#                                   TRANSFORMER
+#                  {'N': 0, 'D': 0, 'B': 16, 'S': 256, 'E': 512}
 # ================================================================================
 
 # -------------------- PATTERN: Transformer Bwd Pass --------------------
@@ -905,12 +1297,12 @@ if __name__ == "__main__":
 
 
 # ============================================================================================================================================
-#                                               FORWARD PASS PERFORMANCE ANALYSIS (Steady State)                                              
+#                                               FORWARD PASS PERFORMANCE ANALYSIS (Steady State)
 # ============================================================================================================================================
 
 # Compares Eager vs. JIT (Time (ms)). 'Best Framework' is for JIT. Ratios are OtherTime/NablaTime.
 #                                                       Nabla      JAX PyTorch Best Framework Nabla vs JAX (Ratio) Nabla vs PyTorch (Ratio)
-# Benchmark   Pattern              Metric                                                                                                  
+# Benchmark   Pattern              Metric
 # MACRO-BENCH Deep MLP (16 Layers) Eager (Time (ms))   16.560   39.436  16.716                                   -                        -
 #                                  JIT (Time (ms))     13.437   36.531  15.076          Nabla                2.72x                    1.12x
 #                                  JIT Speedup (x)      1.23x    1.08x   1.11x                                   -                        -
@@ -944,12 +1336,12 @@ if __name__ == "__main__":
 
 
 # ============================================================================================================================================
-#                                                 GRADIENT PERFORMANCE ANALYSIS (Steady State)                                                
+#                                                 GRADIENT PERFORMANCE ANALYSIS (Steady State)
 # ============================================================================================================================================
 
 # Compares Eager Grad vs. JIT'd Grad (Time (ms)). 'Best Framework' is for JIT(Grad). Ratios are OtherTime/NablaTime.
 #                                                          Nabla      JAX PyTorch Best Framework Nabla vs JAX (Ratio) Nabla vs PyTorch (Ratio)
-# Benchmark   Pattern              Metric                                                                                                     
+# Benchmark   Pattern              Metric
 # MACRO-BENCH Deep MLP (16 Layers) Grad (Time (ms))       74.109   86.763  36.075                                   -                        -
 #                                  JIT(Grad) (Time (ms))  29.642   77.362  47.823          Nabla                2.61x                    1.61x
 #                                  JIT(Grad) Speedup (x)   2.50x    1.12x   0.75x                                   -                        -
@@ -980,12 +1372,12 @@ if __name__ == "__main__":
 
 
 # ============================================================================================================================================
-#                                       FORWARD PASS PERFORMANCE ANALYSIS (First Run (incl. JIT Comp.))                                       
+#                                       FORWARD PASS PERFORMANCE ANALYSIS (First Run (incl. JIT Comp.))
 # ============================================================================================================================================
 
 # Compares Eager vs. JIT (First Run Time (ms)). 'Best Framework' is for JIT. Ratios are OtherTime/NablaTime.
 #                                                                  Nabla      JAX   PyTorch Best Framework Nabla vs JAX (Ratio) Nabla vs PyTorch (Ratio)
-# Benchmark   Pattern              Metric                                                                                                               
+# Benchmark   Pattern              Metric
 # MACRO-BENCH Deep MLP (16 Layers) Eager (First Run Time (ms))    21.863   42.413    18.195                                   -                        -
 #                                  JIT (First Run Time (ms))    2639.288   89.128   906.384            JAX                0.03x                    0.34x
 #                                  JIT Speedup (x)                 0.01x    0.48x     0.02x                                   -                        -
@@ -1019,12 +1411,12 @@ if __name__ == "__main__":
 
 
 # ============================================================================================================================================
-#                                         GRADIENT PERFORMANCE ANALYSIS (First Run (incl. JIT Comp.))                                         
+#                                         GRADIENT PERFORMANCE ANALYSIS (First Run (incl. JIT Comp.))
 # ============================================================================================================================================
 
 # Compares Eager Grad vs. JIT'd Grad (First Run Time (ms)). 'Best Framework' is for JIT(Grad). Ratios are OtherTime/NablaTime.
 #                                                                      Nabla      JAX   PyTorch Best Framework Nabla vs JAX (Ratio) Nabla vs PyTorch (Ratio)
-# Benchmark   Pattern              Metric                                                                                                                   
+# Benchmark   Pattern              Metric
 # MACRO-BENCH Deep MLP (16 Layers) Grad (First Run Time (ms))         90.882   93.523    42.562                                   -                        -
 #                                  JIT(Grad) (First Run Time (ms))  2933.495  154.670  1618.582            JAX                0.05x                    0.55x
 #                                  JIT(Grad) Speedup (x)               0.03x    0.60x     0.03x                                   -                        -
