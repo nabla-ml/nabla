@@ -522,7 +522,11 @@ def run_operation_tests(operation_name: str, all_configs: bool = False):
             set_rank_and_config_fn(rank, config)
 
             for i, test_func in enumerate(test_functions):
-                desc = test_func.__doc__.split(":")[1].strip() if test_func.__doc__ else "Test"
+                desc = (
+                    test_func.__doc__.split(":")[1].strip()
+                    if test_func.__doc__
+                    else "Test"
+                )
                 print(f"    {i + 1:2d}. {desc:<15}", end="")
 
                 try:

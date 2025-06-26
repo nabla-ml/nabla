@@ -134,7 +134,11 @@ def _batch_input_pytree(tree: Any, axes: Any, batch_size: int) -> Any:
         if isinstance(tree_part, Array):
             return _process_array(tree_part, axes_part)
         if isinstance(tree_part, dict):
-            axes_map = axes_part if isinstance(axes_part, dict) else {k: axes_part for k in tree_part}
+            axes_map = (
+                axes_part
+                if isinstance(axes_part, dict)
+                else dict.fromkeys(tree_part, axes_part)
+            )
             return {k: _recurse(tree_part[k], axes_map[k]) for k in tree_part}
         if isinstance(tree_part, list | tuple):
             axes_list = (
@@ -180,15 +184,17 @@ def _unbatch_output_pytree(tree: Any, axes: Any) -> Any:
             # Remove the broadcasted batch dimension.
             return squeeze(unbatched, [0])
         # Move the batch dimension to its final position.
-        return (
-            move_axis_from_front(unbatched, axis) if axis != 0 else unbatched
-        )
+        return move_axis_from_front(unbatched, axis) if axis != 0 else unbatched
 
     def _recurse(tree_part: Any, axes_part: Any) -> Any:
         if isinstance(tree_part, Array):
             return _process_array(tree_part, axes_part)
         if isinstance(tree_part, dict):
-            axes_map = axes_part if isinstance(axes_part, dict) else {k: axes_part for k in tree_part}
+            axes_map = (
+                axes_part
+                if isinstance(axes_part, dict)
+                else dict.fromkeys(tree_part, axes_part)
+            )
             return {k: _recurse(tree_part[k], axes_map[k]) for k in tree_part}
         if isinstance(tree_part, list | tuple):
             axes_list = (
@@ -254,9 +260,7 @@ def vmap(
         batch_size = _check_in_axes_size(actual_args, structured_in_axes)
 
         # 2. Batch inputs by moving specified axes to the front
-        batched_args = _batch_input_pytree(
-            actual_args, structured_in_axes, batch_size
-        )
+        batched_args = _batch_input_pytree(actual_args, structured_in_axes, batch_size)
 
         # 3. Execute the wrapped function with batched inputs
         outputs = func(batched_args) if is_list_style else func(*batched_args)
@@ -267,18 +271,9 @@ def vmap(
             if not isinstance(outputs, list | tuple)
             else (list(outputs), False)
         )
-        structured_out_axes = _broadcast_axis_spec(
-            out_axes, len(outputs_list)
-        )
-        unbatched_outputs = _unbatch_output_pytree(
-            outputs_list, structured_out_axes
-        )
+        structured_out_axes = _broadcast_axis_spec(out_axes, len(outputs_list))
+        unbatched_outputs = _unbatch_output_pytree(outputs_list, structured_out_axes)
 
-        return (
-            unbatched_outputs[0]
-            if is_single_output
-            else tuple(unbatched_outputs)
-        )
+        return unbatched_outputs[0] if is_single_output else tuple(unbatched_outputs)
 
     return vectorized_func
-

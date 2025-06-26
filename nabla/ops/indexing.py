@@ -13,7 +13,6 @@ __all__ = ["gather", "scatter"]
 
 
 import numpy as np
-from max.driver import Tensor
 from max.dtype import DType
 from max.graph import TensorValue, ops
 
@@ -128,8 +127,8 @@ class GatherOp(Operation):
 
         # print(batched_indices)
 
-        # output.impl = Tensor.from_numpy(values_np[*batched_indices])
-        output.impl = Tensor.from_numpy(np.take(values_np, indices_np, axis=self.axis))
+        # output.impl_(values_np[*batched_indices])
+        output.impl_(np.take(values_np, indices_np, axis=self.axis))
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -413,7 +412,7 @@ class ScatterOp(Operation):
             # Non-batched case - direct numpy scatter
             self._scatter_single(result_np, indices_np, values_np, self.axis)
 
-        output.impl = Tensor.from_numpy(result_np)
+        output.impl_(result_np)
 
     def _scatter_single(
         self,

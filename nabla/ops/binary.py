@@ -17,7 +17,6 @@
 from __future__ import annotations
 
 import numpy as np
-from max.driver import Tensor
 from max.dtype import DType
 from max.graph import TensorValue, ops
 
@@ -67,7 +66,7 @@ class AddOp(BinaryOperation):
         # Ensure result is an array, not a scalar
         if np.isscalar(np_result):
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -94,7 +93,7 @@ class MulOp(BinaryOperation):
         # Ensure result is an array, not a scalar
         if np.isscalar(np_result):
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -121,7 +120,7 @@ class SubOp(BinaryOperation):
         # Ensure result is an array, not a scalar
         if np.isscalar(np_result):
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -150,7 +149,7 @@ class DivOp(BinaryOperation):
         # Ensure result is an array, not a scalar
         if np.isscalar(np_result):
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -188,7 +187,7 @@ class PowerOp(BinaryOperation):
         # Ensure result is an array, not a scalar
         if np.isscalar(np_result):
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -243,12 +242,12 @@ class GreaterEqualOp(BinaryOperation):
             # Convert scalar boolean to 1D boolean array, create tensor
             # The output will appear as scalar but be stored as 1D internally
             np_result_1d = np.array([np_result.item()], dtype=bool)
-            output.impl = Tensor.from_numpy(np_result_1d)
+            output.impl_(np_result_1d)
             # Override the shape to appear as scalar
             output.shape = ()
         else:
             # Normal path for non-scalar boolean or any non-boolean results
-            output.impl = Tensor.from_numpy(np_result)
+            output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -282,7 +281,7 @@ class MaximumOp(BinaryOperation):
         # Ensure result is an array, not a scalar
         if np.isscalar(np_result):
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -342,7 +341,7 @@ class MinimumOp(BinaryOperation):
         # Ensure result is an array, not a scalar
         if np.isscalar(np_result):
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -418,12 +417,12 @@ class EqualOp(BinaryOperation):
         if np_result.shape == () and np_result.dtype == bool:
             # Convert scalar boolean to float32 scalar (1.0 or 0.0)
             float_result = np_result.astype(np.float32)
-            output.impl = Tensor.from_numpy(float_result)
+            output.impl_(float_result)
             # Update output dtype to reflect what we actually stored
             output.dtype = DType.float32
         else:
             # Normal path for non-scalar boolean or any non-boolean results
-            output.impl = Tensor.from_numpy(np_result)
+            output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -474,12 +473,12 @@ class NotEqualOp(BinaryOperation):
             # Convert scalar boolean to 1D boolean array, create tensor
             # The output will appear as scalar but be stored as 1D internally
             np_result_1d = np.array([np_result.item()], dtype=bool)
-            output.impl = Tensor.from_numpy(np_result_1d)
+            output.impl_(np_result_1d)
             # Override the shape to appear as scalar
             output.shape = ()
         else:
             # Normal path for non-scalar boolean or any non-boolean results
-            output.impl = Tensor.from_numpy(np_result)
+            output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -513,7 +512,7 @@ class ModOp(BinaryOperation):
         # Ensure result is an array, not a scalar
         if np.isscalar(np_result):
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array

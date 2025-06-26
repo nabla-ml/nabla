@@ -90,7 +90,7 @@
 #         axes[self.axis_1], axes[self.axis_2] = axes[self.axis_2], axes[self.axis_1]
 
 #         np_result = np.transpose(args[0].to_numpy(), axes)
-#         output.impl = Tensor.from_numpy(np_result)
+#         output.impl_(np_result)
 
 #     def vjp_rule(
 #         self, primals: list[Array], cotangent: Array, output: Array
@@ -211,7 +211,7 @@
 
 #         # Apply transpose
 #         np_result = np.transpose(input_np, axes)
-#         output.impl = Tensor.from_numpy(np_result)
+#         output.impl_(np_result)
 
 #     def vjp_rule(
 #         self, primals: list[Array], cotangent: Array, output: Array
@@ -389,7 +389,7 @@
 #         full_axes = list(range(offset)) + numpy_axes
 
 #         np_result = np.transpose(args[0].to_numpy(), full_axes)
-#         output.impl = Tensor.from_numpy(np_result)
+#         output.impl_(np_result)
 
 #     def vjp_rule(
 #         self, primals: list[Array], cotangent: Array, output: Array
@@ -542,7 +542,7 @@
 
 #         # Apply transpose
 #         np_result = np.transpose(input_np, full_axes)
-#         output.impl = Tensor.from_numpy(np_result)
+#         output.impl_(np_result)
 
 #     def vjp_rule(
 #         self, primals: list[Array], cotangent: Array, output: Array
@@ -850,7 +850,7 @@
 #         np_result = np.reshape(
 #             args[0].to_numpy(), output.batch_dims + self.target_shape
 #         )
-#         output.impl = Tensor.from_numpy(np_result)
+#         output.impl_(np_result)
 
 #     def vjp_rule(
 #         self, primals: list[Array], cotangent: Array, output: Array
@@ -961,7 +961,7 @@
 #         np_result = np.broadcast_to(
 #             args[0].to_numpy(), shape=output.batch_dims + self.target_shape
 #         )
-#         output.impl = Tensor.from_numpy(np_result)
+#         output.impl_(np_result)
 
 #     def vjp_rule(
 #         self, primals: list[Array], cotangent: Array, output: Array
@@ -1055,7 +1055,7 @@
 #         np_result = np.broadcast_to(
 #             args[0].to_numpy(), shape=self.target_batch_dims + output.shape
 #         )
-#         output.impl = Tensor.from_numpy(np_result)
+#         output.impl_(np_result)
 
 #     def vjp_rule(
 #         self, primals: list[Array], cotangent: Array, output: Array
@@ -1130,7 +1130,7 @@
 #     def eagerxpr(self, args: list[Array], output: Array) -> None:
 #         axis = tuple(self.axes) if self.axes else None
 #         np_result = np.squeeze(args[0].to_numpy(), axis=axis)
-#         output.impl = Tensor.from_numpy(np_result)
+#         output.impl_(np_result)
 
 #     def vjp_rule(
 #         self, _primals: list[Array], cotangent: Array, _output: Array
@@ -1197,7 +1197,7 @@
 
 #     def eagerxpr(self, args: list[Array], output: Array) -> None:
 #         np_result = np.expand_dims(args[0].to_numpy(), axis=self.axes)
-#         output.impl = Tensor.from_numpy(np_result)
+#         output.impl_(np_result)
 
 #     def vjp_rule(
 #         self, primals: list[Array], cotangent: Array, output: Array
@@ -1330,7 +1330,7 @@
 #         # Adjust axis to account for batch_dims in the actual tensor
 #         axis_in_tensor = axis + len(output.batch_dims)
 #         result = np.concatenate(numpy_arrays, axis=axis_in_tensor)
-#         output.impl = Tensor.from_numpy(result)
+#         output.impl_(result)
 
 #     def vjp_rule(
 #         self, primals: list[Array], cotangent: Array, output: Array
@@ -1600,7 +1600,7 @@
 #             ]
 #             result = np.squeeze(result, axis=tuple(squeeze_axes_adjusted))
 
-#         output.impl = Tensor.from_numpy(result)
+#         output.impl_(result)
 
 #     def vjp_rule(
 #         self, primals: list[Array], cotangent: Array, output: Array
@@ -1857,7 +1857,7 @@
 #         # Place small array into the target location
 #         result_np[tuple(slice_indices)] = small_array.to_numpy()
 
-#         output.impl = Tensor.from_numpy(result_np)
+#         output.impl_(result_np)
 
 #     def vjp_rule(
 #         self, primals: list[Array], cotangent: Array, output: Array
@@ -1987,7 +1987,7 @@
 #         """Eager execution using NumPy squeeze."""
 #         axes = [ax - len(args[0].shape) for ax in self.axes]
 #         np_result = np.squeeze(args[0].to_numpy(), axis=tuple(axes))
-#         output.impl = Tensor.from_numpy(np_result)
+#         output.impl_(np_result)
 
 #     def vjp_rule(
 #         self, _primals: list[Array], cotangent: Array, _output: Array
@@ -2084,7 +2084,7 @@
 #                 np_result = np.expand_dims(np_result, axis=ax)
 #         else:
 #             np_result = args[0].to_numpy()
-#         output.impl = Tensor.from_numpy(np_result)
+#         output.impl_(np_result)
 
 #     def vjp_rule(
 #         self, primals: list[Array], cotangent: Array, output: Array
@@ -2253,7 +2253,7 @@
 
 # #         # Use numpy's advanced indexing to gather values
 # #         result_np = input_array[tuple(indices_array)]
-# #         output.impl = Tensor.from_numpy(result_np)
+# #         output.impl_(result_np)
 
 # #     def vjp_rule(self, primals: list[Array], cotangent: Array, output: Array) -> list[Array]:
 # #         input_array, indices_array = primals
@@ -2539,7 +2539,6 @@
 """View and shape manipulation operations."""
 
 import numpy as np
-from max.driver import Tensor
 from max.dtype import DType
 from max.graph import TensorValue, ops
 
@@ -2614,7 +2613,7 @@ class TransposeOp(ViewOperation):
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         if len(args[0].shape) < 2:
-            output.impl = args[0].impl
+            output._impl = args[0].impl
             return
 
         offset = len(args[0].batch_dims)
@@ -2622,7 +2621,7 @@ class TransposeOp(ViewOperation):
         axes[self.axis_1], axes[self.axis_2] = axes[self.axis_2], axes[self.axis_1]
 
         np_result = np.transpose(args[0].to_numpy(), axes)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -2746,7 +2745,7 @@ class TransposeBatchDimsOp(ViewOperation):
 
         # Apply transpose
         np_result = np.transpose(input_np, axes)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -2924,7 +2923,7 @@ class PermuteOp(ViewOperation):
         full_axes = list(range(offset)) + numpy_axes
 
         np_result = np.transpose(args[0].to_numpy(), full_axes)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -3077,7 +3076,7 @@ class PermuteBatchDimsOp(ViewOperation):
 
         # Apply transpose
         np_result = np.transpose(input_np, full_axes)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -3385,7 +3384,7 @@ class ReshapeOp(ViewOperation):
         np_result = np.reshape(
             args[0].to_numpy(), output.batch_dims + self.target_shape
         )
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -3496,7 +3495,7 @@ class BroadcastToOp(ViewOperation):
         np_result = np.broadcast_to(
             args[0].to_numpy(), shape=output.batch_dims + self.target_shape
         )
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -3590,7 +3589,7 @@ class BroadcastBatchDimsOp(ViewOperation):
         np_result = np.broadcast_to(
             args[0].to_numpy(), shape=self.target_batch_dims + output.shape
         )
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -3665,7 +3664,7 @@ class SqueezeOp(ViewOperation):
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         axis = tuple(self.axes) if self.axes else None
         np_result = np.squeeze(args[0].to_numpy(), axis=axis)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, _primals: list[Array], cotangent: Array, _output: Array
@@ -3732,7 +3731,7 @@ class UnsqueezeOp(ViewOperation):
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         np_result = np.expand_dims(args[0].to_numpy(), axis=self.axes)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -3759,10 +3758,10 @@ class ShallowCopyOp(ViewOperation):
     """Copy operation to create a new array with the same data."""
 
     def __init__(self, arg: Array):
-        if not arg.name and arg.impl and arg.shape == () and arg.batch_dims == ():
-            name = arg.to_numpy().__repr__()  # Use numpy repr for empty arrays
-        else:
-            name = "shallow_copy"
+        # if not arg.name and arg._impl and arg.shape == () and arg.batch_dims == ():
+        #     name = arg.to_numpy().__repr__()  # Use numpy repr for empty arrays
+        # else:
+        name = "shallow_copy"
 
         super().__init__(name)
 
@@ -3778,7 +3777,7 @@ class ShallowCopyOp(ViewOperation):
         output.tensor_value = args[0]
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        output.impl = args[0].impl
+        output.impl_(args[0]._impl)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -3865,7 +3864,7 @@ class ConcatenateOp(Operation):
         # Adjust axis to account for batch_dims in the actual tensor
         axis_in_tensor = axis + len(output.batch_dims)
         result = np.concatenate(numpy_arrays, axis=axis_in_tensor)
-        output.impl = Tensor.from_numpy(result)
+        output.impl_(result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -4139,7 +4138,7 @@ class ArraySliceOp(ViewOperation):
             ]
             result = np.squeeze(result, axis=tuple(squeeze_axes_adjusted))
 
-        output.impl = Tensor.from_numpy(result)
+        output.impl_(result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -4396,7 +4395,7 @@ class PadOp(Operation):
         # Place small array into the target location
         result_np[tuple(slice_indices)] = small_array.to_numpy()
 
-        output.impl = Tensor.from_numpy(result_np)
+        output.impl_(result_np)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -4526,7 +4525,7 @@ class SqueezeBatchDimsOp(ViewOperation):
         """Eager execution using NumPy squeeze."""
         axes = [ax - len(args[0].shape) for ax in self.axes]
         np_result = np.squeeze(args[0].to_numpy(), axis=tuple(axes))
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, _primals: list[Array], cotangent: Array, _output: Array
@@ -4623,7 +4622,7 @@ class UnsqueezeBatchDimsOp(ViewOperation):
                 np_result = np.expand_dims(np_result, axis=ax)
         else:
             np_result = args[0].to_numpy()
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array

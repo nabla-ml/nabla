@@ -19,7 +19,6 @@
 from __future__ import annotations
 
 import numpy as np
-from max.driver import Tensor
 from max.dtype import DType
 from max.graph import TensorValue, ops
 
@@ -79,7 +78,7 @@ class SumOp(ReductionOperation):
         np_result = np.sum(args[0].to_numpy(), axis=numpy_axes, keepdims=True)
         if np_result.ndim == 0:
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -232,7 +231,7 @@ class SumBatchDimsOp(ReductionOperation):
         )
         if np_result.ndim == 0:
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -330,7 +329,7 @@ class MaxOp(ReductionOperation):
         np_result = np.max(args[0].to_numpy(), axis=numpy_axes, keepdims=True)
         if np_result.ndim == 0:
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -462,13 +461,13 @@ class ArgMaxOp(ReductionOperation):
             res = np_result.reshape(res_shape)
             if res.ndim == 0:
                 res = np.array(res)
-            output.impl = Tensor.from_numpy(res)
+            output.impl_(res)
         else:
             # Assume that logical axes is always negative
             res = np.argmax(primal, axis=self.logical_axis, keepdims=True)
             if res.ndim == 0:
                 res = np.array(res)
-            output.impl = Tensor.from_numpy(res)
+            output.impl_(res)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array

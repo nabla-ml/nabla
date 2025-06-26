@@ -17,7 +17,7 @@
 """Unary operations for the Nabla framework."""
 
 import numpy as np
-from max.driver import Device, Tensor
+from max.driver import Device
 from max.dtype import DType
 from max.graph import DeviceRef, TensorValue, ops
 
@@ -59,7 +59,7 @@ class NegateOp(UnaryOperation):
         # Ensure result is an array, not a scalar
         if np.isscalar(np_result):
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -109,7 +109,7 @@ class CastOp(UnaryOperation):
         # Ensure result is an array, not a scalar
         if np.isscalar(np_result):
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -145,7 +145,7 @@ class SinOp(UnaryOperation):
         # Ensure result is an array, not a scalar
         if np.isscalar(np_result):
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -184,7 +184,7 @@ class CosOp(UnaryOperation):
         # Ensure result is an array, not a scalar
         if np.isscalar(np_result):
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -220,7 +220,7 @@ class TanhOp(UnaryOperation):
         # Ensure result is an array, not a scalar
         if np.isscalar(np_result):
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -266,7 +266,7 @@ class AbsOp(UnaryOperation):
         # Ensure result is an array, not a scalar
         if np.isscalar(np_result):
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -337,7 +337,7 @@ class FloorOp(UnaryOperation):
         # Ensure result is an array, not a scalar
         if np.isscalar(np_result):
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -394,12 +394,12 @@ class LogicalNotOp(UnaryOperation):
             # Convert scalar boolean to 1D boolean array, create tensor
             # The output will appear as scalar but be stored as 1D internally
             np_result_1d = np.array([np_result.item()], dtype=bool)
-            output.impl = Tensor.from_numpy(np_result_1d)
+            output.impl_(np_result_1d)
             # Override the shape to appear as scalar
             output.shape = ()
         else:
             # Normal path for non-scalar boolean or any non-boolean results
-            output.impl = Tensor.from_numpy(np_result)
+            output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -443,7 +443,7 @@ class SigmoidOp(UnaryOperation):
         # Ensure result is an array, not a scalar
         if np.isscalar(np_result):
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -502,7 +502,7 @@ class IncrBatchDimCtr(UnaryOperation):
         output.tensor_value = args[0]
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        output.impl = args[0].impl
+        output.impl_(args[0]._impl)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -547,7 +547,7 @@ class DecrBatchDimCtr(UnaryOperation):
         output.tensor_value = args[0]
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        output.impl = args[0].impl
+        output.impl_(args[0]._impl)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -579,7 +579,7 @@ class ReLUOp(UnaryOperation):
         # Ensure result is an array, not a scalar
         if np.isscalar(np_result):
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -651,7 +651,7 @@ class LogOp(UnaryOperation):
         # Ensure result is an array, not a scalar
         if np.isscalar(np_result):
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -687,7 +687,7 @@ class ExpOp(UnaryOperation):
         # Ensure result is an array, not a scalar
         if np.isscalar(np_result):
             np_result = np.array(np_result)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -746,7 +746,7 @@ def sqrt(arg: Array) -> Array:
 
 #     def eagerxpr(self, args: list[Array], output: Array) -> None:
 #         np_result = np.zeros(args[0].shape, dtype=args[0].dtype.to_numpy())
-#         output.impl = Tensor.from_numpy(np_result)
+#         output.impl_(np_result)
 
 #     def vjp_rule(
 #         self, primals: list[Array], cotangent: Array, output: Array
@@ -803,7 +803,7 @@ class TransferToOp(UnaryOperation):
         )
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        output.impl = args[0].impl
+        output.impl_(args[0]._impl)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array

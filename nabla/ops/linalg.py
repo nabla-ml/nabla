@@ -17,7 +17,6 @@
 """Linear algebra operations."""
 
 import numpy as np
-from max.driver import Tensor
 from max.graph import TensorValue, ops
 
 from ..core.array import Array
@@ -174,7 +173,7 @@ class MatMulOp(BinaryOperation):
         arg0_numpy = args[0].to_numpy()
         arg1_numpy = args[1].to_numpy()
         np_result = np.matmul(arg0_numpy, arg1_numpy)
-        output.impl = Tensor.from_numpy(np_result)
+        output.impl_(np_result)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -382,7 +381,7 @@ def matmul(arg0, arg1) -> Array:
 #             padding=(pad_h, pad_w), dilation=self.dilation, groups=self.groups
 #         )
 #         result_nhwc = np.transpose(result_torch.numpy(), (0, 2, 3, 1))
-#         output.impl = Tensor.from_numpy(result_nhwc)
+#         output.impl_(result_nhwc)
 
 #     def vjp_rule(self, primals: list[Array], cotangent: Array, output: Array) -> list[Array]:
 #         """VJP of Y = conv(X, W)"""
@@ -516,7 +515,7 @@ def matmul(arg0, arg1) -> Array:
 #             groups=self.groups, dilation=self.dilation
 #         )
 #         result_nhwc = np.transpose(result_torch.numpy(), (0, 2, 3, 1))
-#         output.impl = Tensor.from_numpy(result_nhwc)
+#         output.impl_(result_nhwc)
 
 #     def vjp_rule(self, primals: list[Array], cotangent: Array, output: Array) -> list[Array]:
 #         """VJP of Y = conv_transpose(X, W)"""

@@ -56,7 +56,7 @@ class Array:
     stage_realization: bool
     kernel_impl_path: Optional[Path]
     custom_kernel_path: Optional[Path]
-    impl: Optional[Tensor]
+    _impl: Optional[Union[np.ndarray, Tensor]]
 
     def __init__(
         self,
@@ -89,9 +89,24 @@ class Array:
         # print(f"[DEBUG] Created array: name='{name}', shape={shape}, dtype={dtype}")
 
         if materialize:
-            self.impl = Tensor(dtype, batch_dims + shape, device=device)
+            self._impl = Tensor(dtype, batch_dims + shape, device=device)
         else:
-            self.impl = None
+            self._impl = None
+
+    @property
+    def impl(self) -> Optional[Tensor]:
+        """Get the max.Tensor representation of this Array. If the underlying _impl field is a Numpy array, convert it to a Tensor."""
+        if isinstance(self._impl, Tensor):
+            return self._impl
+        elif isinstance(self._impl, np.ndarray):
+            # Convert numpy array to Tensor
+            return Tensor.from_numpy(self._impl)
+        else:
+            return None
+
+    def impl_(self, value: Optional[Union[np.ndarray, Tensor]]) -> None:
+        """Set the implementation of this Array to a Numpy array or Tensor."""
+        self._impl = value
 
     @property
     def size(self) -> int:
@@ -114,7 +129,7 @@ class Array:
         instance = cls(
             shape=impl.shape, dtype=impl.dtype, device=impl.device, materialize=True
         )
-        instance.impl = impl if impl else None
+        instance._impl = impl if impl else None
         instance.name = name
         return instance
 
@@ -122,10 +137,10 @@ class Array:
         """Copy data from another Array."""
         if self.shape != other.shape or self.dtype != other.dtype:
             raise ValueError("Shape or dtype mismatch for copy")
-        if other.impl is not None:
-            self.impl = other.impl.copy()
+        if other._impl is not None:
+            self._impl = other._impl.copy()
         else:
-            self.impl = None
+            self._impl = None
 
     def add_arguments(self, *arg_nodes: Array) -> None:
         """Add an arguments to this Array's computation graph if traced."""
@@ -143,21 +158,27 @@ class Array:
 
     def realize(self) -> None:
         """Force computation of this Array."""
-        if self.impl is not None:
+        if self._impl is not None:
             return
 
         from .graph_execution import realize_
 
         realize_([self])
-        if self.impl is None:
+        if self._impl is None:
             raise ValueError("Data is None after realization")
 
     def to_numpy(self) -> np.ndarray:
         """Get NumPy representation."""
         self.realize()  # Ensure the Array is realized before converting
-        if self.impl is None:
+        if self._impl is None:
             raise ValueError("Cannot get NumPy array from None impl")
-        return self.impl.to_numpy()
+        if isinstance(self._impl, np.ndarray):
+            return self._impl
+        if not isinstance(self._impl, Tensor):
+            raise TypeError(
+                f"Cannot convert Array with impl type {type(self._impl)} to NumPy array"
+            )
+        return self._impl.to_numpy()
 
     @classmethod
     def from_numpy(cls, np_array: np.ndarray) -> Array:
@@ -172,18 +193,18 @@ class Array:
             name=getattr(np_array, "name", ""),
         )
 
-        # WORKAROUND: Handle scalar boolean arrays to avoid MAX library bug
-        # The MAX library's tensor.view(DType.bool) fails for scalar tensors
-        if np_array.dtype == bool and np_array.shape == ():
-            # For scalar boolean, convert to float32 to avoid the bug
-            float_array = np_array.astype(np.float32)
-            array.impl = Tensor.from_numpy(float_array)
-            # Update the dtype to reflect what we actually stored
-            array.dtype = DType.float32
-        else:
-            array.impl = Tensor.from_numpy(np_array)
+        # # WORKAROUND: Handle scalar boolean arrays to avoid MAX library bug
+        # # The MAX library's tensor.view(DType.bool) fails for scalar tensors
+        # if np_array.dtype == bool and np_array.shape == ():
+        #     # For scalar boolean, convert to float32 to avoid the bug
+        #     float_array = np_array.astype(np.float32)
+        #     array._impl = float_array#Tensor.from_numpy(float_array)
+        #     # Update the dtype to reflect what we actually stored
+        #     array.dtype = DType.float32
+        # else:
+        array._impl = np_array  # Tensor.from_numpy(np_array)
 
-        array.device = array.impl.device
+        array.device = _DEFAULT_CPU
         return array
 
     def get_arguments(self) -> list[Array]:
@@ -211,8 +232,15 @@ class Array:
 
     def to(self, device: Device) -> Array:
         """Move Array to specified device."""
-        if self.impl:
-            new_impl = self.impl.to(device)
+        # if self._impl is not of type Tensor, we raise an error
+        if not isinstance(device, Device):
+            raise TypeError(f"Expected Device, got {type(device)}")
+        if self._impl is not None and not isinstance(self._impl, Tensor):
+            raise TypeError(
+                f"Cannot transfer Array with impl type {type(self._impl)} to device {device}"
+            )
+        if self._impl:
+            new_impl = self._impl.to(device)
             return Array.from_impl(new_impl, name=self.name)
         else:
             from ..ops.unary import transfer_to
@@ -768,7 +796,7 @@ class Array:
 
         # Update self's implementation to point to new data
         # This simulates in-place modification
-        self.impl = new_array.impl
+        self._impl = new_array._impl
 
     def _setitem_mixed_advanced_indexing(self, key: tuple, value: Array) -> None:
         """Helper method for mixed advanced indexing assignment.

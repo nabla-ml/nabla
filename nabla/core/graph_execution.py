@@ -36,7 +36,8 @@ class GraphTracer:
         components = [
             str(node.dtype),
             str(node.batch_dims + node.shape),
-            "-", node.name or "input",
+            "-",
+            node.name or "input",
         ]
         node_str = "-".join(components)
         return hash(node_str)
@@ -296,7 +297,7 @@ def realize_(
         # are already realized during VMAP processing. We need to unrealize them
         # so they can all be compiled together.
         for output in realized_outputs:
-            output.impl = None  # Force unrealization
+            output._impl = None  # Force unrealization
         output_list = outputs  # Process all outputs
     else:
         # Normal case - only process unrealized outputs

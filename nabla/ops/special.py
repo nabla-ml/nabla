@@ -16,9 +16,10 @@
 """Special functions for neural networks."""
 
 from ..core.array import Array
+from collections.abc import Callable
 
 # Public API
-__all__ = ["softmax", "logsumexp", "where"]
+__all__ = ["softmax", "logsumexp", "where", "cond"]
 
 
 def logsumexp(arg: Array, axis: int | None = None, keep_dims: bool = False) -> Array:
@@ -110,3 +111,30 @@ def where(condition: Array, x: Array, y: Array) -> Array:
     y_part = mul(inv_cond, y)
 
     return add(x_part, y_part)
+
+
+def cond(
+    condition: Array,
+    true_fn: Callable,
+    false_fn: Callable,
+    *args,
+    **kwargs
+) -> Array:
+    """Conditional execution based on a boolean condition.
+
+    Args:
+        condition: Boolean array determining which function to execute
+        true_fn: Function to execute if condition is True
+        false_fn: Function to execute if condition is False
+        *args, **kwargs: Arguments passed to the selected function
+
+    Returns:
+        Result of the executed function
+    """
+    from .unary import cast
+    from max.dtype import DType
+
+    # Convert condition to boolean if necessary
+    bool_condition = cast(condition, DType.bool)
+
+    return where(bool_condition, true_fn(*args, **kwargs), false_fn(*args, **kwargs))

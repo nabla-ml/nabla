@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 import numpy as np
-from max.driver import CPU, Device, Tensor
+from max.driver import CPU, Device
 from max.dtype import DType
 from max.graph import DeviceRef, TensorType, TensorValue, ops
 
@@ -91,7 +91,10 @@ def _create_filled_array(
             # Try creating (1,) boolean array first
             scalar_1d = Array.from_numpy(
                 np.array([fill_value], dtype=DType.to_numpy(dtype))
-            ).to(device)
+            )
+            if device != _DEFAULT_CPU:
+                # Move to the specified device if not CPU
+                scalar_1d = scalar_1d.to(device)
             scalar_1d.traced = traced
 
             if not shape:
@@ -118,9 +121,9 @@ def _create_filled_array(
                 array = float_array.astype(dtype)
     else:
         # Original implementation for non-boolean types
-        scalar = Array.from_numpy(np.array(fill_value, dtype=DType.to_numpy(dtype))).to(
-            device
-        )
+        scalar = Array.from_numpy(np.array(fill_value, dtype=DType.to_numpy(dtype)))
+        if device != _DEFAULT_CPU:
+            scalar = scalar.to(device)
         scalar.traced = traced
 
         if not shape:
@@ -226,7 +229,7 @@ class RandNOp(RandomOp):
         np_result = np.random.normal(
             loc=self.mean, scale=self.std, size=output.shape
         ).astype(DType.to_numpy(output.dtype))
-        output.impl = Tensor.from_numpy(np_result).to(output.device)
+        output.impl_(np_result)  # .to(output.device)
 
 
 class RandUniformOp(RandomOp):
@@ -266,7 +269,7 @@ class RandUniformOp(RandomOp):
         np_result = np.random.uniform(
             low=self.lower, high=self.upper, size=output.shape
         ).astype(DType.to_numpy(output.dtype))
-        output.impl = Tensor.from_numpy(np_result).to(output.device)
+        output.impl_(np_result)  # .to(output.device)
 
 
 def array(
@@ -300,7 +303,9 @@ def array(
         array = float_array.astype(DType.bool)
 
     else:
-        array = Array.from_numpy(np_data).to(device)
+        array = Array.from_numpy(np_data)
+        if device != _DEFAULT_CPU:
+            array = array.to(device)
         array.traced = traced
 
     return broadcast_batch_dims(array, batch_dims) if batch_dims else array
@@ -373,7 +378,7 @@ class ArangeOp(Operation):
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         """Eager-mode execution using numpy."""
         # We can reuse the numpy array we created for the shape calculation
-        output.impl = Tensor.from_numpy(self._np_arange_for_shape).to(output.device)
+        output.impl_(self._np_arange_for_shape)  # .to(output.device)
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
