@@ -1,25 +1,20 @@
 """
 =======================================================================================
-DEFINITIVE BENCHMARKING SUITE FOR NABLA, JAX, AND PYTORCH (CPU) - V15.4 (FAIR-COMPLEXITY & SCALED)
+DEFINITIVE BENCHMARKING SUITE FOR NABLA, JAX, AND PYTORCH (CPU) - V16.0 (ANALYSIS & SCALABILITY)
 =======================================================================================
-This version incorporates feedback to further refine benchmarking fairness and focus.
-It removes the conditional control flow benchmark, ensures robust testing of complex,
-JIT-friendly functions, corrects "First Run" timing to include JIT compilation
-overhead, resolves PyTorch MLP Grad argument prep, and implements correct asynchronous
-timing for JAX/PyTorch.
-This version also increases problem sizes for MACRO/TRANSFORMER benchmarks and MLP
-depth to better differentiate performance on more substantial workloads.
-Finally, it adds relative speed comparison columns for Nabla against JAX/PyTorch.
+This version enhances analysis with visual plots and robust summary scores, and introduces
+a new scalability benchmark to test performance across different problem sizes.
 
-Key Features:
-1.  REMOVED CONTROL FLOW BENCHMARK.
-2.  COMPLEXITY-AWARE JIT TEST: 'Deep MLP' (16 layers) and scaled 'Transformer'
-    remain key tests for JIT performance.
-3.  CORRECTED FIRST RUN TIMING: Includes JIT compilation.
-4.  PYTORCH MLP GRAD FIX: Resolved NameError, refined argument prep.
-5.  CORRECT ASYNC TIMING: Uses block_until_ready/synchronize in timeit loop.
-6.  SCALED WORKLOADS: Increased dimensions for MACRO, TRANSFORMER, and MLP depth.
-7.  RELATIVE SPEED COLUMNS: Shows Nabla performance vs JAX/PyTorch.
+Key Features (V16.0):
+1.  VISUAL ANALYSIS: Generates and saves bar charts comparing framework performance using
+    matplotlib and seaborn, making results easier to interpret.
+2.  SCALABILITY BENCHMARK: Adds a new 'scalability' benchmark that runs a core pattern
+    (MLP Layer) over a range of increasing input sizes to visualize scaling characteristics.
+3.  ROBUST SUMMARY SCORES: Implements a geometric mean of relative performance to calculate
+    a single, fair "overall score" for each framework within a benchmark category.
+4.  METHODOLOGY DOCUMENTATION: The core timing function is now heavily commented to explain
+    the rigorous methodology (warm-up, synchronization, best-of-n) for trustworthiness.
+5.  CLEAN INTEGRATION: All new features are cleanly added to the existing script structure.
 """
 
 import argparse
@@ -32,8 +27,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import NamedTuple
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import seaborn as sns
 
 # --- Framework Imports ---
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
@@ -82,7 +79,7 @@ class bcolors:
 
 
 # ============================================================================
-# 1. HELPER & DATA GENERATION CLASSES
+# 1. HELPER & DATA GENERATION CLASSES (Corrected Version)
 # ============================================================================
 class FrameworkAPIs(NamedTuple):
     numpy: np
@@ -97,43 +94,39 @@ class DataManager:
         self.apis = FrameworkAPIs(np, nb, jnp, torch)
 
     def get_tensor(self, shape: tuple, framework: str, dtype: str = "float32"):
-        if isinstance(
-            shape[0], list
-        ):  # Handle list-based shapes for MLP weights/biases
+        if isinstance(shape, list) or (
+            isinstance(shape, tuple) and len(shape) > 0 and isinstance(shape[0], list)
+        ):
             return [
-                self.get_tensor(s, framework, dt) for s, dt in zip(shape[0], shape[1], strict=False)
+                self.get_tensor(s, framework, dt)
+                for s, dt in zip(shape[0], shape[1], strict=False)
             ]
 
-        if dtype == "int64":
-            high = shape[0] if len(shape) > 0 and isinstance(shape[0], int) else 100
-            data = self.rng.integers(0, high, shape).astype(np.int64)
-        elif dtype == "int32":
-            high = shape[0] if len(shape) > 0 and isinstance(shape[0], int) else 100
-            data = self.rng.integers(0, high, shape, dtype=np.int32)
+        numpy_data = None
+        if shape == ():
+            if "int" in dtype:
+                numpy_data = self.rng.integers(0, 100, dtype=dtype)
+            else:
+                numpy_data = self.rng.random(dtype=np.float32)
         else:
-            data = self.rng.random(shape, dtype=np.float32)
+            if dtype == "int64":
+                high = shape[0] if len(shape) > 0 and isinstance(shape[0], int) else 100
+                numpy_data = self.rng.integers(0, high, shape).astype(np.int64)
+            elif dtype == "int32":
+                high = shape[0] if len(shape) > 0 and isinstance(shape[0], int) else 100
+                numpy_data = self.rng.integers(0, high, shape, dtype=np.int32)
+            else:
+                numpy_data = self.rng.random(shape, dtype=np.float32)
 
         if framework == "nabla":
             if nb is None:
                 raise ImportError("Nabla not available for tensor creation.")
-            return (
-                nb.array(data)
-                if not isinstance(data, list)
-                else [nb.array(d) for d in data]
-            )
+            return nb.array(numpy_data)
         if framework == "jax":
-            return (
-                jnp.array(data)
-                if not isinstance(data, list)
-                else [jnp.array(d) for d in data]
-            )
+            return jnp.array(numpy_data)
         if framework == "torch":
-            return (
-                torch.from_numpy(data)
-                if not isinstance(data, list)
-                else [torch.from_numpy(d) for d in data]
-            )
-        return data
+            return torch.from_numpy(np.array(numpy_data))
+        return numpy_data
 
 
 # ============================================================================
@@ -163,9 +156,8 @@ class Transformation:
 
 def get_patterns_and_transforms(dims):
     N, D, B, S, E = dims["N"], dims["D"], dims["B"], dims["S"], dims["E"]
-    N_LAYERS_MLP = dims.get("N_LAYERS_MLP", 8)  # Default to 8 if not specified
+    N_LAYERS_MLP = dims.get("N_LAYERS_MLP", 8)
 
-    # Basic Patterns (Nabla functions will be guarded if nb is None)
     basic_patterns = [
         Pattern(
             name="Element-wise",
@@ -205,7 +197,7 @@ def get_patterns_and_transforms(dims):
             arg_shapes=[(N, D)],
         ),
         Pattern(
-            name="MLP Layer",  # Single MLP layer
+            name="MLP Layer",
             nabla_func=lambda x, w, b: nb.sum(nb.relu(x @ w + b)) if nb else None,
             jax_func=lambda x, w, b: jnp.sum(jax.nn.relu(x @ w + b)),
             torch_func=lambda x, w, b: torch.sum(F.relu(x @ w + b)),
@@ -213,7 +205,6 @@ def get_patterns_and_transforms(dims):
         ),
     ]
 
-    # --- Transformer Pattern ---
     def _nabla_transformer_fwd(x, y, w_q, w_k, w_v, w_o, w_ff1, w_ff2):
         q, k, v = x @ w_q, x @ w_k, x @ w_v
         attn_out = nb.softmax(q @ k.transpose((0, 2, 1)) / (E**0.5), axis=-1) @ v
@@ -245,13 +236,10 @@ def get_patterns_and_transforms(dims):
 
     def _torch_transformer_grad_wrapper(x, y, w_q, w_k, w_v, w_o, w_ff1, w_ff2):
         params_list = [w_q, w_k, w_v, w_o, w_ff1, w_ff2]
-        cloned_params_for_grad = []
-        for p in params_list:
-            if p.is_floating_point():
-                p_clone = p.clone().detach().requires_grad_(True)
-                cloned_params_for_grad.append(p_clone)
-            else:
-                cloned_params_for_grad.append(p)
+        cloned_params_for_grad = [
+            p.clone().detach().requires_grad_(True) if p.is_floating_point() else p
+            for p in params_list
+        ]
         loss = _torch_transformer_loss(cloned_params_for_grad, x, y)
         grads = torch.autograd.grad(loss, cloned_params_for_grad)
         return grads
@@ -275,7 +263,6 @@ def get_patterns_and_transforms(dims):
         ],
     )
 
-    # --- Deep MLP Pattern for testing JIT fusion ---
     def _define_deep_mlp_funcs(layers_arg):
         def _nabla_deep_mlp(x, weights, biases):
             for i in range(layers_arg):
@@ -295,7 +282,6 @@ def get_patterns_and_transforms(dims):
         return (_nabla_deep_mlp if nb else None), _jax_deep_mlp, _torch_deep_mlp
 
     _nabla_mlp, _jax_mlp, _torch_mlp = _define_deep_mlp_funcs(layers_arg=N_LAYERS_MLP)
-
     deep_mlp_pattern = Pattern(
         name=f"Deep MLP ({N_LAYERS_MLP} Layers)",
         nabla_func=_nabla_mlp,
@@ -303,12 +289,11 @@ def get_patterns_and_transforms(dims):
         torch_func=_torch_mlp,
         arg_shapes=[
             (N, D),
-            ([[(D, D)] * N_LAYERS_MLP, ["float32"] * N_LAYERS_MLP]),  # Weights
-            ([[(D,)] * N_LAYERS_MLP, ["float32"] * N_LAYERS_MLP]),  # Biases
+            ([[(D, D)] * N_LAYERS_MLP, ["float32"] * N_LAYERS_MLP]),
+            ([[(D,)] * N_LAYERS_MLP, ["float32"] * N_LAYERS_MLP]),
         ],
     )
 
-    # --- Transformations ---
     nabla_grad_placeholder = (
         lambda f: (lambda *args, **kwargs: "Nabla Grad N/A")
         if nb is None or f is None
@@ -319,7 +304,6 @@ def get_patterns_and_transforms(dims):
         if nb is None or f is None
         else nb.jit(f)
     )
-
     standard_transforms = [
         Transformation(
             name="Eager",
@@ -337,13 +321,15 @@ def get_patterns_and_transforms(dims):
             name="JIT",
             nabla_transform=nabla_jit_placeholder,
             jax_transform=jax.jit,
-            torch_transform=torch.compile,
+            torch_transform=lambda f: torch.compile(f, mode="max-autotune"),
         ),
         Transformation(
             name="JIT(Grad)",
             nabla_transform=lambda f: nabla_jit_placeholder(nabla_grad_placeholder(f)),
             jax_transform=lambda f: jax.jit(jax.grad(f)),
-            torch_transform=lambda f: torch.compile(torch.func.grad(f)),
+            torch_transform=lambda f: torch.compile(
+                torch.func.grad(f), mode="max-autotune"
+            ),
         ),
     ]
     transformer_transforms = [
@@ -357,7 +343,209 @@ def get_patterns_and_transforms(dims):
             name="JIT",
             nabla_transform=nabla_jit_placeholder,
             jax_transform=jax.jit,
-            torch_transform=torch.compile,
+            torch_transform=lambda f: torch.compile(f, mode="max-autotune"),
+        ),
+    ]
+
+    def _nabla_mlp_simple(x, w, b):
+        return nb.sum(nb.relu(x @ w + b))
+
+    def _jax_mlp_simple(x, w, b):
+        return jnp.sum(jax.nn.relu(x @ w + b))
+
+    def _torch_mlp_simple(x, w, b):
+        return torch.sum(F.relu(x @ w + b))
+
+    vmap_pattern = Pattern(
+        name="Vmap (MLP Layer)",
+        nabla_func=nb.vmap(_nabla_mlp_simple, in_axes=(0, None, None)) if nb else None,
+        jax_func=jax.vmap(_jax_mlp_simple, in_axes=(0, None, None)),
+        torch_func=torch.func.vmap(_torch_mlp_simple, in_dims=(0, None, None)),
+        arg_shapes=[(N, D), (D, D), (D,)],
+    )
+    jvp_pattern = Pattern(
+        name="JVP (MLP Layer)",
+        nabla_func=lambda x, w, b, t_x: nb.jvp(
+            _nabla_mlp_simple, (x, w, b), (t_x, nb.ones_like(w), nb.ones_like(b))
+        )[1]
+        if nb
+        else None,
+        jax_func=lambda x, w, b, t_x: jax.jvp(
+            _jax_mlp_simple, (x, w, b), (t_x, jnp.ones_like(w), jnp.ones_like(b))
+        )[1],
+        torch_func=lambda x, w, b, t_x: torch.func.jvp(
+            _torch_mlp_simple, (x, w, b), (t_x, torch.ones_like(w), torch.ones_like(b))
+        )[1],
+        arg_shapes=[(N, D), (D, D), (D,), (N, D)],
+    )
+
+    def _nabla_vjp_wrapper(x, w, b, ct):
+        return nb.vjp(lambda x, w, b: nb.relu(x @ w + b), x, w, b)[1](ct)
+
+    def _jax_vjp_wrapper(x, w, b, ct):
+        return jax.vjp(lambda x, w, b: jax.nn.relu(x @ w + b), x, w, b)[1](ct)
+
+    def _torch_vjp_wrapper(x, w, b, ct):
+        return torch.func.vjp(lambda x, w, b: F.relu(x @ w + b), x, w, b)[1](ct)
+
+    vjp_pattern = Pattern(
+        name="VJP (MLP Layer)",
+        nabla_func=_nabla_vjp_wrapper if nb else None,
+        jax_func=_jax_vjp_wrapper,
+        torch_func=_torch_vjp_wrapper,
+        arg_shapes=[(N, D), (D, D), (D,), (N, D)],
+    )
+
+    def _nabla_hvp(x, w, b, t_x):
+        grad_fn = nb.grad(_nabla_mlp_simple, argnums=0)
+        return nb.jvp(lambda x_in: grad_fn(x_in, w, b), (x,), (t_x,))[1]
+
+    def _jax_hvp(x, w, b, t_x):
+        grad_fn = jax.grad(_jax_mlp_simple, argnums=0)
+        return jax.jvp(lambda x_in: grad_fn(x_in, w, b), (x,), (t_x,))[1]
+
+    def _torch_hvp(x, w, b, t_x):
+        grad_fn = torch.func.grad(_torch_mlp_simple, argnums=0)
+        return torch.func.jvp(lambda x_in: grad_fn(x_in, w, b), (x,), (t_x,))[1]
+
+    hvp_pattern = Pattern(
+        name="Hessian-Vector Product",
+        nabla_func=_nabla_hvp if nb else None,
+        jax_func=_jax_hvp,
+        torch_func=_torch_hvp,
+        arg_shapes=[(N, D), (D, D), (D,), (N, D)],
+    )
+
+    def _nabla_jvp_vjp(x, w, b, ct, t_x):
+        f = _nabla_mlp_simple
+        g = lambda xp, wp, bp: nb.vjp(f, xp, wp, bp)[1](ct)[0]
+        return nb.jvp(g, (x, w, b), (t_x, nb.ones_like(w), nb.ones_like(b)))[1]
+
+    def _jax_jvp_vjp(x, w, b, ct, t_x):
+        f = _jax_mlp_simple
+        g = lambda xp, wp, bp: jax.vjp(f, xp, wp, bp)[1](ct)[0]
+        return jax.jvp(g, (x, w, b), (t_x, jnp.ones_like(w), jnp.ones_like(b)))[1]
+
+    def _torch_jvp_vjp(x, w, b, ct, t_x):
+        f = _torch_mlp_simple
+        g = lambda xp, wp, bp: torch.func.vjp(f, xp, wp, bp)[1](ct)[0]
+        return torch.func.jvp(
+            g, (x, w, b), (t_x, torch.ones_like(w), torch.ones_like(b))
+        )[1]
+
+    jvp_vjp_pattern = Pattern(
+        name="JVP(VJP(MLP))",
+        nabla_func=_nabla_jvp_vjp if nb else None,
+        jax_func=_jax_jvp_vjp,
+        torch_func=_torch_jvp_vjp,
+        arg_shapes=[(N, D), (D, D), (D,), (), (N, D)],
+    )
+
+    def _nabla_vjp_jvp(x, w, b, t_x, ct):
+        f = _nabla_mlp_simple
+        g = lambda xp, wp, bp: nb.jvp(
+            f, (xp, wp, bp), (t_x, nb.ones_like(w), nb.ones_like(b))
+        )[1]
+        return nb.vjp(g, x, w, b)[1](ct)
+
+    def _jax_vjp_jvp(x, w, b, t_x, ct):
+        f = _jax_mlp_simple
+        g = lambda xp, wp, bp: jax.jvp(
+            f, (xp, wp, bp), (t_x, jnp.ones_like(w), jnp.ones_like(b))
+        )[1]
+        return jax.vjp(g, x, w, b)[1](ct)
+
+    def _torch_vjp_jvp(x, w, b, t_x, ct):
+        f = _torch_mlp_simple
+        g = lambda xp, wp, bp: torch.func.jvp(
+            f, (xp, wp, bp), (t_x, torch.ones_like(w), torch.ones_like(b))
+        )[1]
+        return torch.func.vjp(g, x, w, b)[1](ct)
+
+    vjp_jvp_pattern = Pattern(
+        name="VJP(JVP(MLP))",
+        nabla_func=_nabla_vjp_jvp if nb else None,
+        jax_func=_jax_vjp_jvp,
+        torch_func=_torch_vjp_jvp,
+        arg_shapes=[(N, D), (D, D), (D,), (N, D), ()],
+    )
+
+    def _nabla_jvp_jvp(x, w, b, t_x1, t_x2):
+        f = _nabla_mlp_simple
+        g = lambda xp, wp, bp: nb.jvp(
+            f, (xp, wp, bp), (t_x1, nb.ones_like(w), nb.ones_like(b))
+        )[1]
+        return nb.jvp(g, (x, w, b), (t_x2, nb.ones_like(w), nb.ones_like(b)))[1]
+
+    def _jax_jvp_jvp(x, w, b, t_x1, t_x2):
+        f = _jax_mlp_simple
+        g = lambda xp, wp, bp: jax.jvp(
+            f, (xp, wp, bp), (t_x1, jnp.ones_like(w), jnp.ones_like(b))
+        )[1]
+        return jax.jvp(g, (x, w, b), (t_x2, jnp.ones_like(w), jnp.ones_like(b)))[1]
+
+    def _torch_jvp_jvp(x, w, b, t_x1, t_x2):
+        f = _torch_mlp_simple
+        g = lambda xp, wp, bp: torch.func.jvp(
+            f, (xp, wp, bp), (t_x1, torch.ones_like(w), torch.ones_like(b))
+        )[1]
+        return torch.func.jvp(
+            g, (x, w, b), (t_x2, torch.ones_like(w), torch.ones_like(b))
+        )[1]
+
+    jvp_jvp_pattern = Pattern(
+        name="JVP(JVP(MLP))",
+        nabla_func=_nabla_jvp_jvp if nb else None,
+        jax_func=_jax_jvp_jvp,
+        torch_func=_torch_jvp_jvp,
+        arg_shapes=[(N, D), (D, D), (D,), (N, D), (N, D)],
+    )
+
+    def _nabla_vjp_vjp(x, w, b, ct1, ct2):
+        f = _nabla_mlp_simple
+        g = lambda xp, wp, bp: nb.vjp(f, xp, wp, bp)[1](ct1)[0]
+        return nb.vjp(g, x, w, b)[1](ct2)
+
+    def _jax_vjp_vjp(x, w, b, ct1, ct2):
+        f = _jax_mlp_simple
+        g = lambda xp, wp, bp: jax.vjp(f, xp, wp, bp)[1](ct1)[0]
+        return jax.vjp(g, x, w, b)[1](ct2)
+
+    def _torch_vjp_vjp(x, w, b, ct1, ct2):
+        f = _torch_mlp_simple
+        g = lambda xp, wp, bp: torch.func.vjp(f, xp, wp, bp)[1](ct1)[0]
+        return torch.func.vjp(g, x, w, b)[1](ct2)
+
+    vjp_vjp_pattern = Pattern(
+        name="VJP(VJP(MLP))",
+        nabla_func=_nabla_vjp_vjp if nb else None,
+        jax_func=_jax_vjp_vjp,
+        torch_func=_torch_vjp_vjp,
+        arg_shapes=[(N, D), (D, D), (D,), (), (N, D)],
+    )
+
+    advanced_patterns = [
+        vmap_pattern,
+        jvp_pattern,
+        vjp_pattern,
+        hvp_pattern,
+        jvp_vjp_pattern,
+        vjp_jvp_pattern,
+        jvp_jvp_pattern,
+        vjp_vjp_pattern,
+    ]
+    advanced_transforms = [
+        Transformation(
+            name="Eager",
+            nabla_transform=lambda f: f,
+            jax_transform=lambda f: f,
+            torch_transform=lambda f: f,
+        ),
+        Transformation(
+            name="JIT",
+            nabla_transform=nabla_jit_placeholder,
+            jax_transform=jax.jit,
+            torch_transform=lambda f: torch.compile(f, mode="max-autotune"),
         ),
     ]
 
@@ -367,6 +555,8 @@ def get_patterns_and_transforms(dims):
         transformer_pattern,
         transformer_transforms,
         deep_mlp_pattern,
+        advanced_patterns,
+        advanced_transforms,
     )
 
 
@@ -413,70 +603,56 @@ class BenchmarkRunner:
             if pattern_obj.arg_dtypes is not None
             else ["float32"] * len(pattern_obj.arg_shapes)
         )
-
-        args_nabla = None
-        if (
-            "Nabla" in frameworks_to_run
-            and nb is not None
-            and pattern_obj.nabla_func is not None
-        ):
-            try:
+        args_nabla, args_jax, args_torch = None, None, None
+        try:
+            if "Nabla" in frameworks_to_run and nb and pattern_obj.nabla_func:
                 args_nabla = tuple(
                     self.dm.get_tensor(s, "nabla", dt)
                     for s, dt in zip(
                         pattern_obj.arg_shapes, actual_arg_dtypes, strict=True
                     )
                 )
-            except Exception as e:
-                print(
-                    f"      {bcolors.WARNING}Nabla arg prep failed for {pattern_obj.name}: {e}{bcolors.ENDC}"
+            if "JAX" in frameworks_to_run and pattern_obj.jax_func:
+                args_jax = tuple(
+                    self.dm.get_tensor(s, "jax", dt)
+                    for s, dt in zip(
+                        pattern_obj.arg_shapes, actual_arg_dtypes, strict=True
+                    )
                 )
-                args_nabla = "Error"  # Mark as error
-
-        args_jax = None
-        if "JAX" in frameworks_to_run and pattern_obj.jax_func is not None:
-            args_jax = tuple(
-                self.dm.get_tensor(s, "jax", dt)
-                for s, dt in zip(pattern_obj.arg_shapes, actual_arg_dtypes, strict=True)
+            if "PyTorch" in frameworks_to_run and pattern_obj.torch_func:
+                args_torch = tuple(
+                    self.dm.get_tensor(s, "torch", dt)
+                    for s, dt in zip(
+                        pattern_obj.arg_shapes, actual_arg_dtypes, strict=True
+                    )
+                )
+        except Exception as e:
+            print(
+                f"      {bcolors.FAIL}Argument Preparation FAILED for {pattern_obj.name}: {e}{bcolors.ENDC}"
             )
-
-        args_torch = None
-        if "PyTorch" in frameworks_to_run and pattern_obj.torch_func is not None:
-            args_torch = tuple(
-                self.dm.get_tensor(s, "torch", dt)
-                for s, dt in zip(pattern_obj.arg_shapes, actual_arg_dtypes, strict=True)
+            self.results.append(
+                {
+                    "Benchmark": self.config_name,
+                    "Pattern": pattern_obj.name,
+                    "Transform": trans.name,
+                    "Framework": "All",
+                    "Error": "Argument Preparation Failed",
+                }
             )
+            return
 
         framework_funcs = {
-            "Nabla": (trans.nabla_transform(pattern_obj.nabla_func), args_nabla)
-            if nb and pattern_obj.nabla_func
-            else (None, None),
-            "JAX": (trans.jax_transform(pattern_obj.jax_func), args_jax)
-            if pattern_obj.jax_func
-            else (None, None),
-            "PyTorch": (trans.torch_transform(pattern_obj.torch_func), args_torch)
-            if pattern_obj.torch_func
-            else (None, None),
+            "Nabla": (trans.nabla_transform(pattern_obj.nabla_func), args_nabla),
+            "JAX": (trans.jax_transform(pattern_obj.jax_func), args_jax),
+            "PyTorch": (trans.torch_transform(pattern_obj.torch_func), args_torch),
         }
         for fw_name in frameworks_to_run:
             func_tuple = framework_funcs.get(fw_name)
-            if func_tuple and func_tuple[0] is not None and func_tuple[1] != "Error":
+            if func_tuple and func_tuple[0] and func_tuple[1]:
                 self._measure_and_store(
                     fw_name, *func_tuple, pattern_obj.name, trans.name
                 )
-            elif func_tuple and func_tuple[1] == "Error":
-                self.results.append(
-                    {
-                        "Benchmark": self.config_name,
-                        "Pattern": pattern_obj.name,
-                        "Transform": trans.name,
-                        "Framework": fw_name,
-                        "Time (ms)": np.nan,
-                        "First Run Time (ms)": np.nan,
-                        "Error": "Argument Preparation Failed",
-                    }
-                )
-            else:  # Framework not requested, or function not available (e.g. Nabla not installed)
+            else:
                 if fw_name == "Nabla" and nb is None:
                     print(
                         f"      {bcolors.WARNING}Nabla not available, skipping {pattern_obj.name} - {trans.name}{bcolors.ENDC}"
@@ -489,80 +665,54 @@ class BenchmarkRunner:
                         "Framework": fw_name,
                         "Time (ms)": np.nan,
                         "First Run Time (ms)": np.nan,
-                        "Error": "Skipped (FW N/A or Func N/A)",
+                        "Error": "Skipped (FW/Func N/A)",
                     }
                 )
 
     def _measure_and_store(
         self, fw_name, func_to_benchmark, args_tuple, pattern_name_str, trans_name_str
     ):
+        """
+        Measures and records the performance of a given function. This method follows a rigorous
+        procedure to ensure fair and accurate timing:
+        1.  WARM-UP RUN: A single, untimed call is made first. For JIT-compiled functions,
+            this triggers the compilation and caches the result. This ensures we are not
+            measuring the one-time compilation cost in our steady-state analysis. This run
+            is timed separately to report the "First Run Time (ms)" which includes overhead.
+        2.  SYNCHRONIZATION: For asynchronous frameworks (JAX, PyTorch), a synchronization
+            call (`jax.block_until_ready`, `torch.cpu.synchronize`) is placed *inside* the
+            function being timed. This forces the timer to wait until the computation is
+            actually finished, not just when the kernel was launched. This is critical for accuracy.
+        3.  STEADY-STATE TIMING: `timeit.Timer.repeat` is used to run the benchmark multiple
+            times. It performs `timeit_repeats` loops, and each loop executes the function
+            `timeit_runs` times. This helps get a stable measurement.
+        4.  BEST-OF-N: We take the `min()` of the results from the repeats. This is a standard
+            technique to reduce the impact of system noise and report the performance under
+            optimal conditions. The result is the average time per run from the fastest loop.
+        """
         try:
-            local_args_for_run = list(args_tuple)
 
-            if fw_name == "PyTorch" and ("Grad" in trans_name_str):
-                # For Deep MLP, grad is w.r.t. x (args[0])
-                if "Deep MLP" in pattern_name_str:  # Covers "Deep MLP (X Layers)"
-                    if (
-                        isinstance(local_args_for_run[0], torch.Tensor)
-                        and local_args_for_run[0].is_floating_point()
-                    ):
-                        local_args_for_run[0] = (
-                            local_args_for_run[0].clone().detach().requires_grad_(True)
-                        )
-                elif pattern_name_str != "Transformer Bwd Pass":  # Standard cases
-                    if (
-                        len(local_args_for_run) > 0
-                        and isinstance(local_args_for_run[0], torch.Tensor)
-                        and local_args_for_run[0].is_floating_point()
-                    ):
-                        local_args_for_run[0] = (
-                            local_args_for_run[0].clone().detach().requires_grad_(True)
-                        )
-
-            final_args_for_run = tuple(local_args_for_run)
-
-            if "Deep MLP" in pattern_name_str:
-
-                def func_base_call():
-                    return func_to_benchmark(
-                        final_args_for_run[0],
-                        final_args_for_run[1],
-                        final_args_for_run[2],
-                    )
-            elif pattern_name_str == "Transformer Bwd Pass":
-
-                def func_base_call():
-                    return func_to_benchmark(*final_args_for_run)
-            else:
-
-                def func_base_call():
-                    return func_to_benchmark(*final_args_for_run)
+            def func_base_call():
+                return func_to_benchmark(*args_tuple)
 
             if fw_name == "JAX":
 
                 def func_call_wrapper_for_timing():
                     res = func_base_call()
-                    jax.block_until_ready(jax.tree_util.tree_leaves(res))
-                    return res
+                    jax.block_until_ready(res)
             elif fw_name == "PyTorch":
 
                 def func_call_wrapper_for_timing():
                     res = func_base_call()
                     torch.cpu.synchronize()
-                    return res
-            else:  # Nabla (or other assumed synchronous)
+            else:
                 func_call_wrapper_for_timing = func_base_call
 
-            # First run
             start_time_first_run = time.perf_counter()
-            result_first_run = func_call_wrapper_for_timing()
+            func_call_wrapper_for_timing()
             first_run_ms = (time.perf_counter() - start_time_first_run) * 1000
 
-            # Steady state
-            timer = timeit.Timer(
-                stmt="func_call_wrapper_for_timing()",
-                globals={"func_call_wrapper_for_timing": func_call_wrapper_for_timing},
-            )
+            timer = timeit.Timer(stmt=func_call_wrapper_for_timing, globals=globals())
             times = timer.repeat(repeat=self.timeit_repeats, number=self.timeit_runs)
             steady_state_ms = (min(times) / self.timeit_runs) * 1000
 
@@ -580,8 +730,6 @@ class BenchmarkRunner:
                 }
             )
         except Exception as e:
-            # import traceback # Uncomment for debugging
-            # traceback.print_exc()
             print(
                 f"      {bcolors.FAIL}{fw_name:<8} FAILED ({type(e).__name__}): {str(e)[:150]}{bcolors.ENDC}"
             )
@@ -608,198 +756,15 @@ class ResultAnalyzer:
         if "First Run Time (ms)" not in self.df.columns and not self.df.empty:
             self.df["First Run Time (ms)"] = np.nan
 
-    def _build_analysis_table(
-        self,
-        pivot_df,
-        time_metrics,
-        speedup_metric_name,
-        base_time_col_name="Time (ms)",
-    ):
-        pivot_df = pivot_df.dropna(how="all", axis=0).dropna(how="all", axis=1)
-        if pivot_df.empty:
-            return pd.DataFrame()
-
-        analysis_data = []
-        for idx in pivot_df.index:
-            row_dict = {"Benchmark": idx[0], "Pattern": idx[1]}
-            metric_times = {}
-            has_data_for_row = False
-
-            for metric_transform_name in time_metrics:
-                fw_times_for_transform = {}
-                for fw in self.frameworks:
-                    try:
-                        time_val = pivot_df.loc[idx, (fw, metric_transform_name)]
-                        fw_times_for_transform[fw] = time_val
-                        if pd.notna(time_val):
-                            has_data_for_row = True
-                    except KeyError:
-                        fw_times_for_transform[fw] = np.nan
-                metric_times[metric_transform_name] = fw_times_for_transform
-
-            if not has_data_for_row:
-                continue
-
-            base_s = pd.Series(metric_times[time_metrics[0]])
-            opt_s = pd.Series(
-                metric_times[time_metrics[1]]
-            )  # Series of optimized times (JIT or JIT(Grad))
-
-            opt_times_series_for_best = opt_s.dropna()
-            best_fw = (
-                opt_times_series_for_best.idxmin()
-                if not opt_times_series_for_best.empty
-                else "N/A"
-            )
-
-            speedups = pd.Series(index=base_s.index, dtype=float)
-            for fw_ in base_s.index:
-                if (
-                    pd.notna(base_s.get(fw_))
-                    and pd.notna(opt_s.get(fw_))
-                    and opt_s.get(fw_, np.nan) != 0
-                ):
-                    speedups[fw_] = base_s.get(fw_) / opt_s.get(fw_)
-                else:
-                    speedups[fw_] = np.nan
-
-            # Row for the "optimized" metric (e.g., JIT times)
-            row_for_optimized_metric = {
-                **row_dict,
-                "Metric": f"{time_metrics[1]} ({base_time_col_name})",
-                **metric_times[time_metrics[1]],  # Adds Nabla, JAX, PyTorch times
-                "Best Framework": best_fw,
-            }
-
-            # Calculate and add Nabla comparison ratios
-            nabla_opt_time = opt_s.get("Nabla", np.nan)
-            jax_opt_time = opt_s.get("JAX", np.nan)
-            pytorch_opt_time = opt_s.get("PyTorch", np.nan)
-
-            if (
-                pd.notna(nabla_opt_time) and nabla_opt_time > 1e-9
-            ):  # Avoid division by zero or tiny numbers
-                if "JAX" in self.frameworks and pd.notna(jax_opt_time):
-                    row_for_optimized_metric["Nabla vs JAX (Ratio)"] = (
-                        jax_opt_time / nabla_opt_time
-                    )
-                else:
-                    row_for_optimized_metric["Nabla vs JAX (Ratio)"] = np.nan
-
-                if "PyTorch" in self.frameworks and pd.notna(pytorch_opt_time):
-                    row_for_optimized_metric["Nabla vs PyTorch (Ratio)"] = (
-                        pytorch_opt_time / nabla_opt_time
-                    )
-                else:
-                    row_for_optimized_metric["Nabla vs PyTorch (Ratio)"] = np.nan
-            else:
-                row_for_optimized_metric["Nabla vs JAX (Ratio)"] = np.nan
-                row_for_optimized_metric["Nabla vs PyTorch (Ratio)"] = np.nan
-
-            analysis_data.append(
-                {
-                    **row_dict,
-                    "Metric": f"{time_metrics[0]} ({base_time_col_name})",
-                    **metric_times[time_metrics[0]],
-                }
-            )
-            analysis_data.append(row_for_optimized_metric)
-            analysis_data.append(
-                {**row_dict, "Metric": speedup_metric_name, **speedups.to_dict()}
-            )
-
-        if not analysis_data:
-            return pd.DataFrame()
-        final_df = pd.DataFrame(analysis_data).set_index(
-            ["Benchmark", "Pattern", "Metric"]
-        )
-        return final_df
-
-    def display_table(self, analysis_df, title, subtitle):
-        if analysis_df.empty:
-            print(
-                f"\n{bcolors.WARNING}No data to display for '{title}' analysis.{bcolors.ENDC}"
-            )
-            return
-
-        print(
-            f"\n\n{bcolors.HEADER}{'=' * 140}\n{title.center(140)}\n{'=' * 140}{bcolors.ENDC}"
-        )  # Increased width
-        print(f"\n{subtitle}")
-
-        for fw in self.frameworks:
-            if fw not in analysis_df.columns:
-                analysis_df[fw] = np.nan
-
-        # Define column order, including new ratio columns
-        ordered_cols = self.frameworks + [
-            "Best Framework",
-            "Nabla vs JAX (Ratio)",
-            "Nabla vs PyTorch (Ratio)",
-        ]
-        analysis_df = analysis_df.reindex(
-            columns=[c for c in ordered_cols if c in analysis_df.columns]
-        )
-
-        # Fill NaNs for display
-        for col in [
-            "Best Framework",
-            "Nabla vs JAX (Ratio)",
-            "Nabla vs PyTorch (Ratio)",
-        ]:
-            if col in analysis_df.columns:
-                analysis_df[col] = analysis_df[col].fillna(
-                    np.nan if "Ratio" in col else ""
-                )
-
-        styled_df = analysis_df.astype(object)
-        for col in analysis_df.columns:
-            if col == "Best Framework":  # Already handled by fillna("")
-                styled_df[col] = analysis_df[col].fillna("")
-                continue
-            for idx in analysis_df.index:
-                val = analysis_df.loc[idx, col]
-                metric_name_tuple_part = (
-                    idx[2] if isinstance(idx, tuple) and len(idx) > 2 else ""
-                )
-
-                if pd.isna(val):
-                    styled_df.loc[idx, col] = "-"
-                elif "Speedup" in metric_name_tuple_part or "Ratio" in col:
-                    styled_df.loc[idx, col] = f"{val:.2f}x"
-                else:  # Time
-                    styled_df.loc[idx, col] = f"{val:.3f}"
-
-        with pd.option_context(
-            "display.max_rows",
-            None,
-            "display.width",
-            220,
-            "display.float_format",
-            "{:,.3f}".format,
-        ):  # Increased width
-            print(styled_df.to_string())
-
-    def process_and_display_analysis(self, time_column_name, analysis_title_suffix):
-        if self.df.empty or time_column_name not in self.df.columns:
-            print(
-                f"{bcolors.WARNING}No '{time_column_name}' data to analyze for {analysis_title_suffix}.{bcolors.ENDC}"
-            )
-            return
-
+    def _create_summary_df(self, time_column_name):
         df_subset = self.df.dropna(subset=[time_column_name])
         if df_subset.empty:
-            print(
-                f"{bcolors.WARNING}No valid '{time_column_name}' data points to analyze for {analysis_title_suffix}.{bcolors.ENDC}"
-            )
-            return
-
+            return pd.DataFrame()
         pivot_df = df_subset.pivot_table(
             index=["Benchmark", "Pattern"],
             columns=["Framework", "Transform"],
             values=time_column_name,
         )
-
         if not pivot_df.empty:
             current_frameworks_in_pivot = pivot_df.columns.get_level_values(
                 "Framework"
@@ -811,108 +776,307 @@ class ResultAnalyzer:
                 pivot_df = pivot_df.reindex(
                     frameworks_to_reindex, axis=1, level="Framework"
                 )
+        return pivot_df
 
-        all_transforms = (
-            df_subset["Transform"].unique() if "Transform" in df_subset else []
+    def _build_speedup_table(self, pivot_df, base_transform, jit_transform):
+        speedup_data = []
+        required_cols = []
+        for fw in self.frameworks:
+            if (fw, base_transform) in pivot_df.columns:
+                required_cols.append((fw, base_transform))
+            if (fw, jit_transform) in pivot_df.columns:
+                required_cols.append((fw, jit_transform))
+        if not required_cols:
+            return pd.DataFrame()
+        filtered_pivot = pivot_df.dropna(how="all", subset=required_cols)
+        if filtered_pivot.empty:
+            return pd.DataFrame()
+        for idx in filtered_pivot.index:
+            row_dict = {"Benchmark": idx[0], "Pattern": idx[1]}
+            has_data = False
+            for fw in self.frameworks:
+                try:
+                    eager_time = filtered_pivot.loc[idx, (fw, base_transform)]
+                    jit_time = filtered_pivot.loc[idx, (fw, jit_transform)]
+                    if pd.notna(eager_time) and pd.notna(jit_time) and jit_time > 1e-9:
+                        row_dict[f"{fw}"] = eager_time / jit_time
+                        has_data = True
+                    else:
+                        row_dict[f"{fw}"] = np.nan
+                except KeyError:
+                    row_dict[f"{fw}"] = np.nan
+            if has_data:
+                speedup_data.append(row_dict)
+        if not speedup_data:
+            return pd.DataFrame()
+        df = pd.DataFrame(speedup_data).set_index(["Benchmark", "Pattern"])
+        df.columns = [f"{c} Speedup (x)" for c in df.columns]
+        return df
+
+    def _build_comparison_table(self, pivot_df, transform_name):
+        comparison_data = []
+        try:
+            if not any(
+                transform_name in col
+                for col in pivot_df.columns.get_level_values("Transform")
+            ):
+                return pd.DataFrame()
+            jit_df = pivot_df.xs(transform_name, level="Transform", axis=1).dropna(
+                how="all"
+            )
+        except KeyError:
+            return pd.DataFrame()
+        for idx in jit_df.index:
+            row_dict = {"Benchmark": idx[0], "Pattern": idx[1]}
+            times = jit_df.loc[idx].dropna()
+            if times.empty:
+                continue
+            best_fw, best_time = times.idxmin(), times.min()
+            row_dict["Best Framework"] = best_fw
+            for fw in self.frameworks:
+                time = times.get(fw, np.nan)
+                row_dict[f"{fw} Time (ms)"] = time
+                if pd.notna(time) and best_time > 1e-9:
+                    row_dict[f"{fw} Rel. to Best"] = time / best_time
+                else:
+                    row_dict[f"{fw} Rel. to Best"] = np.nan
+            comparison_data.append(row_dict)
+        if not comparison_data:
+            return pd.DataFrame()
+        return pd.DataFrame(comparison_data).set_index(["Benchmark", "Pattern"])
+
+    def display_table(self, df, title):
+        if df.empty:
+            return
+        print(
+            f"\n\n{bcolors.HEADER}{'=' * 110}\n{title.center(110)}\n{'=' * 110}{bcolors.ENDC}"
         )
+        key_benchmarks = [
+            "TRANSFORMER",
+            "ADVANCED-BENCH",
+            "MACRO-BENCH",
+            "MICRO-BENCH",
+            "SCALABILITY-BENCH",
+        ]
+        benchmark_index = df.index.get_level_values("Benchmark").unique()
+        sorted_benchmarks = [b for b in key_benchmarks if b in benchmark_index]
+        other_benchmarks = [
+            b
+            for b in benchmark_index
+            if b not in sorted_benchmarks and not b.startswith("SCALABILITY")
+        ]
+        scalability_benchmarks = sorted(
+            [b for b in benchmark_index if b.startswith("SCALABILITY")]
+        )
+        df = df.reindex(
+            sorted_benchmarks + other_benchmarks + scalability_benchmarks,
+            level="Benchmark",
+        )
+        display_df = df.copy().astype(object)
+        if "Best Framework" in display_df.columns:
+            for idx in display_df.index:
+                best_fw = display_df.loc[idx, "Best Framework"]
+                if pd.notna(best_fw):
+                    time_col = f"{best_fw} Time (ms)"
+                    if time_col in display_df.columns and pd.notna(
+                        display_df.loc[idx, time_col]
+                    ):
+                        display_df.loc[idx, time_col] = (
+                            f"{display_df.loc[idx, time_col]:8.3f}*"
+                        )
+        formatters = {
+            c: (lambda x: f"{x:8.3f}" if isinstance(x, (int, float)) else x)
+            if "Time (ms)" in c
+            else (lambda x: f"{x:.2f}x" if pd.notna(x) else "-")
+            if "Speedup" in c or "Rel. to Best" in c
+            else (lambda x: f"{x}" if pd.notna(x) else "-")
+            for c in df.columns
+        }
+        with pd.option_context(
+            "display.max_rows",
+            None,
+            "display.width",
+            200,
+            "display.colheader_justify",
+            "right",
+        ):
+            print(display_df.to_string(formatters=formatters, na_rep="-"))
 
-        if "Eager" in all_transforms and "JIT" in all_transforms:
-            cols_to_select = []
-            for fw in self.frameworks:
-                if (fw, "Eager") in pivot_df.columns:
-                    cols_to_select.append((fw, "Eager"))
-                if (fw, "JIT") in pivot_df.columns:
-                    cols_to_select.append((fw, "JIT"))
+    def display_summary_score(self, pivot_df, transform_name, title):
+        try:
+            jit_df = pivot_df.xs(transform_name, level="Transform", axis=1).dropna(
+                how="all"
+            )
+        except KeyError:
+            return
+        if jit_df.empty:
+            return
+        best_times = jit_df.min(axis=1)
+        relative_perf = jit_df.div(best_times, axis=0)
+        geo_mean = relative_perf.apply(
+            lambda x: np.exp(np.log(x.dropna()).mean())
+        ).sort_values()
+        print(
+            f"\n\n{bcolors.HEADER}{'=' * 60}\n{title.center(60)}\n{'(Geometric Mean of Performance Relative to Best - Lower is Better)'.center(60)}\n{'=' * 60}{bcolors.ENDC}"
+        )
+        print(geo_mean.to_string(float_format="%.2fx"))
 
-            if cols_to_select:
-                # Filter pivot_df to only include patterns that have JIT results for at least one framework.
-                # This avoids building analysis tables for patterns where JIT might have failed everywhere.
-                valid_indices = (
-                    pivot_df[
-                        [
-                            (fw, "JIT")
-                            for fw in self.frameworks
-                            if (fw, "JIT") in pivot_df.columns
-                        ]
-                    ]
-                    .dropna(how="all")
-                    .index
+    def plot_comparison(
+        self, time_column_name, transform_name, benchmark_name, title_suffix
+    ):
+        pivot_df = self._create_summary_df(time_column_name)
+        if pivot_df.empty:
+            return
+        try:
+            df_to_plot = pivot_df.xs(transform_name, level="Transform", axis=1).dropna(
+                how="all"
+            )
+            if benchmark_name == "SCALABILITY-BENCH":
+                patterns_to_plot = [
+                    p
+                    for p in df_to_plot.index.get_level_values("Pattern")
+                    if "MLP Layer" in p
+                ]
+                df_to_plot = df_to_plot[
+                    df_to_plot.index.get_level_values("Pattern").isin(patterns_to_plot)
+                ]
+                df_to_plot["Size"] = (
+                    df_to_plot.index.get_level_values("Pattern")
+                    .str.extract(r"(\d+)x")
+                    .astype(int)
                 )
-                if not valid_indices.empty:
-                    fwd_pivot_filtered = pivot_df.loc[
-                        valid_indices, pd.MultiIndex.from_tuples(cols_to_select)
-                    ]
-                    fwd_analysis = self._build_analysis_table(
-                        fwd_pivot_filtered,
-                        ["Eager", "JIT"],
-                        "JIT Speedup (x)",
-                        base_time_col_name=time_column_name,
-                    )
-                    self.display_table(
-                        fwd_analysis,
-                        f"FORWARD PASS PERFORMANCE ANALYSIS ({analysis_title_suffix})",
-                        f"Compares Eager vs. JIT ({time_column_name}). 'Best Framework' is for JIT. Ratios are OtherTime/NablaTime.",
-                    )
-
-        if "Grad" in all_transforms and "JIT(Grad)" in all_transforms:
-            cols_to_select_grad = []
-            for fw in self.frameworks:
-                if (fw, "Grad") in pivot_df.columns:
-                    cols_to_select_grad.append((fw, "Grad"))
-                if (fw, "JIT(Grad)") in pivot_df.columns:
-                    cols_to_select_grad.append((fw, "JIT(Grad)"))
-
-            if cols_to_select_grad:
-                valid_indices_grad = (
-                    pivot_df[
-                        [
-                            (fw, "JIT(Grad)")
-                            for fw in self.frameworks
-                            if (fw, "JIT(Grad)") in pivot_df.columns
-                        ]
-                    ]
-                    .dropna(how="all")
-                    .index
+                df_to_plot = df_to_plot.reset_index().melt(
+                    id_vars=["Pattern", "Size"],
+                    var_name="Framework",
+                    value_name="Time (ms)",
                 )
-                if not valid_indices_grad.empty:
-                    grad_pivot_filtered = pivot_df.loc[
-                        valid_indices_grad,
-                        pd.MultiIndex.from_tuples(cols_to_select_grad),
-                    ]
-                    grad_analysis = self._build_analysis_table(
-                        grad_pivot_filtered,
-                        ["Grad", "JIT(Grad)"],
-                        "JIT(Grad) Speedup (x)",
-                        base_time_col_name=time_column_name,
-                    )
-                    self.display_table(
-                        grad_analysis,
-                        f"GRADIENT PERFORMANCE ANALYSIS ({analysis_title_suffix})",
-                        f"Compares Eager Grad vs. JIT'd Grad ({time_column_name}). 'Best Framework' is for JIT(Grad). Ratios are OtherTime/NablaTime.",
-                    )
+            else:
+                df_to_plot = df_to_plot.loc[benchmark_name]
+                df_to_plot = df_to_plot.stack().reset_index()
+                df_to_plot.columns = ["Pattern", "Framework", "Time (ms)"]
+        except KeyError:
+            print(
+                f"{bcolors.WARNING}\nCould not generate plot: Data for Transform='{transform_name}' and Benchmark='{benchmark_name}' not found.{bcolors.ENDC}"
+            )
+            return
+        if df_to_plot.empty:
+            print(
+                f"{bcolors.WARNING}\nCould not generate plot: No data points for '{benchmark_name}' after filtering.{bcolors.ENDC}"
+            )
+            return
+
+        plt.style.use("seaborn-v0_8-whitegrid")
+        fig, ax = plt.subplots(figsize=(12, 7))
+        if benchmark_name == "SCALABILITY-BENCH":
+            sns.lineplot(
+                data=df_to_plot,
+                x="Size",
+                y="Time (ms)",
+                hue="Framework",
+                marker="o",
+                ax=ax,
+                palette="viridis",
+            )
+            ax.set_xscale("log", base=2)
+            ax.set_yscale("log")
+            ax.set_xlabel("Matrix Size (N in N,N)", fontsize=12)
+            ax.set_title(
+                f"Framework Scaling: {title_suffix}", fontsize=16, weight="bold"
+            )
+        else:
+            sns.barplot(
+                data=df_to_plot,
+                x="Pattern",
+                y="Time (ms)",
+                hue="Framework",
+                ax=ax,
+                palette="viridis",
+            )
+            ax.set_xlabel("Benchmark Pattern", fontsize=12)
+            ax.tick_params(axis="x", rotation=15)
+            if df_to_plot["Time (ms)"].max() / df_to_plot["Time (ms)"].min() > 10:
+                ax.set_yscale("log")
+                ax.set_ylabel("Time (ms) - Lower is Better (Log Scale)", fontsize=12)
+            ax.set_title(
+                f"Framework Comparison: {benchmark_name} ({title_suffix})",
+                fontsize=16,
+                weight="bold",
+            )
+
+        ax.set_ylabel("Time (ms) - Lower is Better", fontsize=12)
+        ax.legend(title="Framework", fontsize=10)
+        fig.tight_layout()
+        filename = f"benchmark_{benchmark_name.lower().replace(' ', '_')}_{transform_name.lower().replace('(', '_').replace(')', '')}.png"
+        plt.savefig(filename)
+        print(f"\n{bcolors.OKGREEN}Generated plot: {filename}{bcolors.ENDC}")
 
     def process_and_display(self):
         if self.df.empty:
             print(f"{bcolors.WARNING}No results to analyze.{bcolors.ENDC}")
             return
 
-        if "Transform" not in self.df.columns:
-            print(
-                f"{bcolors.WARNING}Skipping detailed analysis as 'Transform' column is missing.{bcolors.ENDC}"
+        print(
+            f"\n{bcolors.OKBLUE}{bcolors.BOLD}--- STEADY STATE PERFORMANCE ---{bcolors.ENDC}"
+        )
+        pivot_steady = self._create_summary_df("Time (ms)")
+        if not pivot_steady.empty:
+            self.display_table(
+                self._build_speedup_table(pivot_steady, "Eager", "JIT"),
+                "INTRA-FRAMEWORK JIT SPEEDUP (Eager vs JIT)",
             )
-            with pd.option_context("display.max_rows", None, "display.width", 200):
-                print(self.df.to_string())
-            return
-
-        self.process_and_display_analysis("Time (ms)", "Steady State")
-
-        if "First Run Time (ms)" in self.df.columns:
-            self.process_and_display_analysis(
-                "First Run Time (ms)", "First Run (incl. JIT Comp.)"
+            self.display_table(
+                self._build_comparison_table(pivot_steady, "JIT"),
+                "CROSS-FRAMEWORK JIT COMPARISON (LOWER IS BETTER)",
             )
-        else:
-            print(
-                f"{bcolors.WARNING}'First Run Time (ms)' column not found, skipping its analysis.{bcolors.ENDC}"
+            self.display_table(
+                self._build_speedup_table(pivot_steady, "Grad", "JIT(Grad)"),
+                "INTRA-FRAMEWORK JIT SPEEDUP (Grad vs JIT(Grad))",
+            )
+            self.display_table(
+                self._build_comparison_table(pivot_steady, "JIT(Grad)"),
+                "CROSS-FRAMEWORK JIT COMPARISON (GRADIENT - LOWER IS BETTER)",
+            )
+            for bench_name in pivot_steady.index.get_level_values("Benchmark").unique():
+                if "SCALABILITY" in bench_name:
+                    continue
+                bench_pivot = pivot_steady.loc[bench_name]
+                self.display_summary_score(
+                    bench_pivot, "JIT", f"OVERALL JIT SCORE: {bench_name}"
+                )
+                self.display_summary_score(
+                    bench_pivot, "JIT(Grad)", f"OVERALL JIT(GRAD) SCORE: {bench_name}"
+                )
+
+        print(
+            f"\n{bcolors.OKBLUE}{bcolors.BOLD}--- FIRST RUN (COMPILATION OVERHEAD) PERFORMANCE ---{bcolors.ENDC}"
+        )
+        pivot_first_run = self._create_summary_df("First Run Time (ms)")
+        if not pivot_first_run.empty:
+            self.display_table(
+                self._build_comparison_table(pivot_first_run, "JIT"),
+                "CROSS-FRAMEWORK JIT COMPILATION TIME (FORWARD - LOWER IS BETTER)",
+            )
+            self.display_table(
+                self._build_comparison_table(pivot_first_run, "JIT(Grad)"),
+                "CROSS-FRAMEWORK JIT COMPILATION TIME (GRADIENT - LOWER IS BETTER)",
+            )
+
+        print(f"\n{bcolors.OKBLUE}{bcolors.BOLD}--- GENERATING PLOTS ---{bcolors.ENDC}")
+        benchmarks_to_plot = self.df["Benchmark"].unique()
+        for bench in benchmarks_to_plot:
+            if "SCALABILITY" in bench:
+                continue  # Skip individual size plots
+            self.plot_comparison("Time (ms)", "JIT", bench, "JIT Steady State")
+            if any(x in bench for x in ["MICRO", "MACRO", "ADVANCED"]):
+                self.plot_comparison(
+                    "Time (ms)", "JIT(Grad)", bench, "JIT(Grad) Steady State"
+                )
+        if any("SCALABILITY" in b for b in benchmarks_to_plot):
+            self.plot_comparison(
+                "Time (ms)",
+                "JIT(Grad)",
+                "SCALABILITY-BENCH",
+                "MLP Layer Gradient Scaling",
             )
 
 
@@ -929,9 +1093,8 @@ def print_environment_info():
         import cpuinfo
 
         print(f"  - CPU: {cpuinfo.get_cpu_info()['brand_raw']}")
-    except ImportError:
+    except:
         print("  - CPU: (Install 'py-cpuinfo' for details)")
-
     print(
         f"  - Library Versions:\n    - Nabla:   {NABLA_VERSION}\n    - JAX:     {jax.__version__}\n    - PyTorch: {torch.__version__}\n    - NumPy:   {np.__version__}\n    - Pandas:  {pd.__version__}"
     )
@@ -945,8 +1108,8 @@ def main():
     parser.add_argument(
         "--benchmarks",
         nargs="+",
-        default=["micro", "macro", "transformer"],
-        choices=["micro", "macro", "transformer"],
+        default=["micro", "macro", "transformer", "advanced"],
+        choices=["micro", "macro", "transformer", "advanced", "scalability", "all"],
         help="Which benchmarks to run.",
     )
     parser.add_argument(
@@ -971,35 +1134,33 @@ def main():
     parser.add_argument(
         "--output-csv",
         type=str,
-        default=None,
+        default="benchmark_results.csv",
         help="Path to save the raw timing results CSV file.",
     )
     args = parser.parse_args()
 
-    # Filter frameworks if Nabla is not available
+    if "all" in args.benchmarks:
+        args.benchmarks = ["micro", "macro", "transformer", "advanced", "scalability"]
     if nb is None and "Nabla" in args.frameworks:
         print(
             f"{bcolors.WARNING}Nabla framework selected but not found. Removing Nabla from tests.{bcolors.ENDC}"
         )
         args.frameworks = [fw for fw in args.frameworks if fw != "Nabla"]
         if not args.frameworks:
-            print(
-                f"{bcolors.FAIL}No frameworks left to test after removing Nabla. Exiting.{bcolors.ENDC}"
-            )
+            print(f"{bcolors.FAIL}No frameworks left to test. Exiting.{bcolors.ENDC}")
             return
 
     print_environment_info()
     dm = DataManager(SEED)
     all_results_df = pd.DataFrame()
-
     print(
         f"\n{bcolors.BOLD}Running benchmarks: {', '.join(args.benchmarks)}{bcolors.ENDC}"
     )
     print(
-        f"\n{bcolors.BOLD}Testing frameworks: {', '.join(args.frameworks)}{bcolors.ENDC}"
+        f"{bcolors.BOLD}Testing frameworks: {', '.join(args.frameworks)}{bcolors.ENDC}"
     )
     print(
-        f"\n{bcolors.BOLD}Timing config: {args.repeats} repeats, {args.runs} runs each.{bcolors.ENDC}"
+        f"{bcolors.BOLD}Timing config: {args.repeats} repeats, {args.runs} runs each.{bcolors.ENDC}"
     )
 
     common_kwargs = {
@@ -1010,66 +1171,99 @@ def main():
     }
 
     if "micro" in args.benchmarks:
-        # Micro benchmark dimensions (N_LAYERS_MLP will default to 8 here as not specified)
-        dims_micro = {"N": 4, "D": 8, "B": 0, "S": 0, "E": 0}
-        basic_ps_micro, std_ts_micro, _, _, mlp_p_micro = get_patterns_and_transforms(
-            dims_micro
-        )
-        # For micro, maybe only basic patterns, not the deep MLP which is N_LAYERS_MLP=8 by default
-        # If we want a "micro" deep MLP, it would use the default 8 layers.
-        # Let's stick to simple patterns for micro.
+        dims = {"N": 4, "D": 8, "B": 0, "S": 0, "E": 0}
+        patterns, transforms, _, _, _, _, _ = get_patterns_and_transforms(dims)
         all_results_df = pd.concat(
             [
                 all_results_df,
-                BenchmarkRunner("MICRO-BENCH", **common_kwargs, **dims_micro).run(
-                    basic_ps_micro, std_ts_micro
+                BenchmarkRunner("MICRO-BENCH", **common_kwargs, **dims).run(
+                    patterns, transforms
                 ),
             ]
         )
-
     if "macro" in args.benchmarks:
-        dims_macro = {
-            "N": 512,
-            "D": 1024,
-            "B": 0,
-            "S": 0,
-            "E": 0,
-            "N_LAYERS_MLP": 16,
-        }  # Scaled + 16 layers
-        basic_ps_macro, std_ts_macro, _, _, mlp_p_macro = get_patterns_and_transforms(
-            dims_macro
-        )
-        patterns_for_macro = basic_ps_macro + [mlp_p_macro]
+        dims = {"N": 512, "D": 1024, "B": 0, "S": 0, "E": 0, "N_LAYERS_MLP": 16}
+        b_p, s_t, _, _, mlp_p, _, _ = get_patterns_and_transforms(dims)
         all_results_df = pd.concat(
             [
                 all_results_df,
-                BenchmarkRunner("MACRO-BENCH", **common_kwargs, **dims_macro).run(
-                    patterns_for_macro, std_ts_macro
+                BenchmarkRunner("MACRO-BENCH", **common_kwargs, **dims).run(
+                    b_p + [mlp_p], s_t
                 ),
             ]
         )
-
     if "transformer" in args.benchmarks:
-        dims_transformer = {"N": 0, "D": 0, "B": 16, "S": 256, "E": 512}  # Scaled
-        # N_LAYERS_MLP is irrelevant for transformer pattern, so get_patterns_and_transforms will use default for MLP if it were used
-        _, _, trans_p, trans_ts, _ = get_patterns_and_transforms(dims_transformer)
+        dims = {"N": 0, "D": 0, "B": 16, "S": 256, "E": 512}
+        _, _, trans_p, trans_ts, _, _, _ = get_patterns_and_transforms(dims)
         all_results_df = pd.concat(
             [
                 all_results_df,
-                BenchmarkRunner("TRANSFORMER", **common_kwargs, **dims_transformer).run(
+                BenchmarkRunner("TRANSFORMER", **common_kwargs, **dims).run(
                     [trans_p], trans_ts
                 ),
             ]
         )
+    if "advanced" in args.benchmarks:
+        dims = {"N": 256, "D": 512, "B": 0, "S": 0, "E": 0}
+        _, _, _, _, _, adv_p, adv_t = get_patterns_and_transforms(dims)
+        all_results_df = pd.concat(
+            [
+                all_results_df,
+                BenchmarkRunner("ADVANCED-BENCH", **common_kwargs, **dims).run(
+                    adv_p, adv_t
+                ),
+            ]
+        )
+    if "scalability" in args.benchmarks:
+        scalability_results = []
+        for size in [64, 128, 256, 512, 1024, 2048]:
+            dims = {"N": size, "D": size, "B": 0, "S": 0, "E": 0}
+
+            def get_mlp_pattern(dims_dict):
+                N, D = dims_dict["N"], dims_dict["D"]
+                return Pattern(
+                    name=f"MLP Layer {N}x{D}",
+                    nabla_func=lambda x, w, b: nb.sum(nb.relu(x @ w + b))
+                    if nb
+                    else None,
+                    jax_func=lambda x, w, b: jnp.sum(jax.nn.relu(x @ w + b)),
+                    torch_func=lambda x, w, b: torch.sum(F.relu(x @ w + b)),
+                    arg_shapes=[(N, D), (D, D), (D,)],
+                )
+
+            nabla_grad_placeholder = (
+                lambda f: (lambda *args, **kwargs: "Nabla Grad N/A")
+                if nb is None or f is None
+                else nb.grad(f)
+            )
+            nabla_jit_placeholder = (
+                lambda f: (lambda *args, **kwargs: "Nabla JIT N/A")
+                if nb is None or f is None
+                else nb.jit(f)
+            )
+            jit_grad_transform = Transformation(
+                name="JIT(Grad)",
+                nabla_transform=lambda f: nabla_jit_placeholder(
+                    nabla_grad_placeholder(f)
+                ),
+                jax_transform=lambda f: jax.jit(jax.grad(f)),
+                torch_transform=lambda f: torch.compile(
+                    torch.func.grad(f), mode="max-autotune"
+                ),
+            )
+            runner = BenchmarkRunner(
+                f"SCALABILITY-BENCH (Size={size})", **common_kwargs, **dims
+            )
+            scalability_results.append(
+                runner.run([get_mlp_pattern(dims)], [jit_grad_transform])
+            )
+        if scalability_results:
+            all_results_df = pd.concat([all_results_df] + scalability_results)
 
     if args.output_csv and not all_results_df.empty:
         all_results_df.to_csv(args.output_csv, index=False)
         print(
             f"\n{bcolors.OKGREEN}Raw results saved to {args.output_csv}{bcolors.ENDC}"
-        )
-    elif args.output_csv and all_results_df.empty:
-        print(
-            f"\n{bcolors.WARNING}No results generated to save to {args.output_csv}{bcolors.ENDC}"
         )
 
     if not all_results_df.empty:
@@ -1085,7 +1279,8 @@ if __name__ == "__main__":
     main()
 
 
-# Current output:
+# Output on my machine:
+# ================================================================================
 # Environment Information:
 #   - Python Version: 3.12.4
 #   - Platform: Darwin 23.6.0 (arm64)
@@ -1097,10 +1292,8 @@ if __name__ == "__main__":
 #     - NumPy:   2.3.0
 #     - Pandas:  2.2.3
 
-# Running benchmarks: micro, macro, transformer
-
+# Running benchmarks: micro, macro, transformer, advanced
 # Testing frameworks: Nabla, JAX, PyTorch
-
 # Timing config: 3 repeats, 10 runs each.
 
 
@@ -1111,75 +1304,75 @@ if __name__ == "__main__":
 
 # -------------------- PATTERN: Element-wise --------------------
 #   --> TRANSFORM: Eager
-#       Nabla    First Run:    0.640 ms | Steady State:    0.050 ms
-#       JAX      First Run:  107.452 ms | Steady State:    0.031 ms
-#       PyTorch  First Run:    0.139 ms | Steady State:    0.006 ms
+#       Nabla    First Run:    0.316 ms | Steady State:    0.047 ms
+#       JAX      First Run:  103.006 ms | Steady State:    0.025 ms
+#       PyTorch  First Run:    0.147 ms | Steady State:    0.006 ms
 #   --> TRANSFORM: Grad
-#       Nabla    First Run:    0.758 ms | Steady State:    0.257 ms
-#       JAX      First Run:  244.627 ms | Steady State:    0.981 ms
-#       PyTorch  First Run:    8.742 ms | Steady State:    0.093 ms
+#       Nabla    First Run:    0.445 ms | Steady State:    0.231 ms
+#       JAX      First Run:  229.189 ms | Steady State:    0.935 ms
+#       PyTorch  First Run:    9.682 ms | Steady State:    0.089 ms
 #   --> TRANSFORM: JIT
-#       Nabla    First Run:  382.954 ms | Steady State:    0.098 ms
-#       JAX      First Run:   34.626 ms | Steady State:    0.005 ms
-#       PyTorch  First Run: 2625.361 ms | Steady State:    0.006 ms
+#       Nabla    First Run:  203.292 ms | Steady State:    0.100 ms
+#       JAX      First Run:   35.239 ms | Steady State:    0.004 ms
+#       PyTorch  First Run: 1975.524 ms | Steady State:    0.005 ms
 #   --> TRANSFORM: JIT(Grad)
-#       Nabla    First Run:  201.158 ms | Steady State:    0.029 ms
-#       JAX      First Run:   34.391 ms | Steady State:    0.004 ms
-#       PyTorch  First Run:  327.048 ms | Steady State:    0.041 ms
+#       Nabla    First Run:  203.329 ms | Steady State:    0.056 ms
+#       JAX      First Run:   46.474 ms | Steady State:    0.005 ms
+#       PyTorch  First Run:   96.668 ms | Steady State:    0.008 ms
 
 # -------------------- PATTERN: Matmul --------------------
 #   --> TRANSFORM: Eager
-#       Nabla    First Run:    0.380 ms | Steady State:    0.047 ms
-#       JAX      First Run:   41.016 ms | Steady State:    0.010 ms
-#       PyTorch  First Run:    1.290 ms | Steady State:    0.004 ms
+#       Nabla    First Run:    0.136 ms | Steady State:    0.017 ms
+#       JAX      First Run:   26.167 ms | Steady State:    0.009 ms
+#       PyTorch  First Run:    0.067 ms | Steady State:    0.002 ms
 #   --> TRANSFORM: Grad
-#       Nabla    First Run:    0.247 ms | Steady State:    0.083 ms
-#       JAX      First Run:   67.241 ms | Steady State:    0.447 ms
-#       PyTorch  First Run:    1.077 ms | Steady State:    0.042 ms
+#       Nabla    First Run:    0.213 ms | Steady State:    0.076 ms
+#       JAX      First Run:   51.149 ms | Steady State:    0.337 ms
+#       PyTorch  First Run:    0.243 ms | Steady State:    0.040 ms
 #   --> TRANSFORM: JIT
-#       Nabla    First Run:  188.645 ms | Steady State:    0.086 ms
-#       JAX      First Run:   19.281 ms | Steady State:    0.005 ms
-#       PyTorch  First Run:   22.218 ms | Steady State:    0.007 ms
+#       Nabla    First Run:  200.542 ms | Steady State:    0.075 ms
+#       JAX      First Run:   19.026 ms | Steady State:    0.005 ms
+#       PyTorch  First Run:   21.525 ms | Steady State:    0.006 ms
 #   --> TRANSFORM: JIT(Grad)
-#       Nabla    First Run:  190.360 ms | Steady State:    0.065 ms
-#       JAX      First Run:   23.168 ms | Steady State:    0.006 ms
-#       PyTorch  First Run:   73.546 ms | Steady State:    0.010 ms
+#       Nabla    First Run:  198.872 ms | Steady State:    0.080 ms
+#       JAX      First Run:   25.963 ms | Steady State:    0.007 ms
+#       PyTorch  First Run:   73.945 ms | Steady State:    0.010 ms
 
 # -------------------- PATTERN: Reduction --------------------
 #   --> TRANSFORM: Eager
-#       Nabla    First Run:    0.261 ms | Steady State:    0.088 ms
-#       JAX      First Run:   91.526 ms | Steady State:    0.037 ms
-#       PyTorch  First Run:    2.761 ms | Steady State:    0.008 ms
+#       Nabla    First Run:    0.288 ms | Steady State:    0.087 ms
+#       JAX      First Run:   86.985 ms | Steady State:    0.035 ms
+#       PyTorch  First Run:    0.131 ms | Steady State:    0.008 ms
 #   --> TRANSFORM: Grad
-#       Nabla    First Run:    0.776 ms | Steady State:    0.329 ms
-#       JAX      First Run:  196.079 ms | Steady State:    0.884 ms
-#       PyTorch  First Run:    3.922 ms | Steady State:    0.114 ms
+#       Nabla    First Run:    0.550 ms | Steady State:    0.311 ms
+#       JAX      First Run:  187.114 ms | Steady State:    0.840 ms
+#       PyTorch  First Run:    0.366 ms | Steady State:    0.092 ms
 #   --> TRANSFORM: JIT
-#       Nabla    First Run:  215.449 ms | Steady State:    0.152 ms
-#       JAX      First Run:   34.028 ms | Steady State:    0.006 ms
-#       PyTorch  First Run:   26.542 ms | Steady State:    0.007 ms
+#       Nabla    First Run:  264.055 ms | Steady State:    0.157 ms
+#       JAX      First Run:   34.440 ms | Steady State:    0.007 ms
+#       PyTorch  First Run:   26.298 ms | Steady State:    0.007 ms
 #   --> TRANSFORM: JIT(Grad)
-#       Nabla    First Run:  304.747 ms | Steady State:    0.072 ms
-#       JAX      First Run:   26.856 ms | Steady State:    0.005 ms
-#       PyTorch  First Run:  101.651 ms | Steady State:    0.017 ms
+#       Nabla    First Run:  205.870 ms | Steady State:    0.140 ms
+#       JAX      First Run:   36.828 ms | Steady State:    0.007 ms
+#       PyTorch  First Run:   79.173 ms | Steady State:    0.010 ms
 
 # -------------------- PATTERN: MLP Layer --------------------
 #   --> TRANSFORM: Eager
-#       Nabla    First Run:    0.148 ms | Steady State:    0.032 ms
-#       JAX      First Run:   41.489 ms | Steady State:    0.058 ms
-#       PyTorch  First Run:    1.419 ms | Steady State:    0.003 ms
+#       Nabla    First Run:    0.151 ms | Steady State:    0.035 ms
+#       JAX      First Run:   39.946 ms | Steady State:    0.053 ms
+#       PyTorch  First Run:    0.086 ms | Steady State:    0.003 ms
 #   --> TRANSFORM: Grad
-#       Nabla    First Run:    0.336 ms | Steady State:    0.160 ms
-#       JAX      First Run:  118.913 ms | Steady State:    0.845 ms
-#       PyTorch  First Run:    1.954 ms | Steady State:    0.056 ms
+#       Nabla    First Run:    0.292 ms | Steady State:    0.151 ms
+#       JAX      First Run:  111.068 ms | Steady State:    0.784 ms
+#       PyTorch  First Run:    0.262 ms | Steady State:    0.048 ms
 #   --> TRANSFORM: JIT
-#       Nabla    First Run:  264.292 ms | Steady State:    0.096 ms
-#       JAX      First Run:   29.734 ms | Steady State:    0.008 ms
-#       PyTorch  First Run:   26.808 ms | Steady State:    0.008 ms
+#       Nabla    First Run:  265.125 ms | Steady State:    0.195 ms
+#       JAX      First Run:   33.601 ms | Steady State:    0.007 ms
+#       PyTorch  First Run:   28.641 ms | Steady State:    0.008 ms
 #   --> TRANSFORM: JIT(Grad)
-#       Nabla    First Run:  215.278 ms | Steady State:    0.090 ms
-#       JAX      First Run:   30.757 ms | Steady State:    0.008 ms
-#       PyTorch  First Run:  110.932 ms | Steady State:    0.020 ms
+#       Nabla    First Run:  193.743 ms | Steady State:    0.123 ms
+#       JAX      First Run:   33.925 ms | Steady State:    0.007 ms
+#       PyTorch  First Run:  208.531 ms | Steady State:    0.012 ms
 
 
 # ================================================================================
@@ -1189,95 +1382,95 @@ if __name__ == "__main__":
 
 # -------------------- PATTERN: Element-wise --------------------
 #   --> TRANSFORM: Eager
-#       Nabla    First Run:    2.089 ms | Steady State:    1.687 ms
-#       JAX      First Run:  127.935 ms | Steady State:    0.986 ms
-#       PyTorch  First Run:    1.806 ms | Steady State:    0.742 ms
+#       Nabla    First Run:    2.278 ms | Steady State:    1.584 ms
+#       JAX      First Run:  114.202 ms | Steady State:    1.035 ms
+#       PyTorch  First Run:    0.985 ms | Steady State:    0.776 ms
 #   --> TRANSFORM: Grad
-#       Nabla    First Run:    6.536 ms | Steady State:    5.853 ms
-#       JAX      First Run:  274.169 ms | Steady State:    3.567 ms
-#       PyTorch  First Run:    3.278 ms | Steady State:    2.588 ms
+#       Nabla    First Run:    6.744 ms | Steady State:    5.797 ms
+#       JAX      First Run:  269.338 ms | Steady State:    3.743 ms
+#       PyTorch  First Run:    4.645 ms | Steady State:    2.992 ms
 #   --> TRANSFORM: JIT
-#       Nabla    First Run: 2620.217 ms | Steady State:    1.845 ms
-#       JAX      First Run:   25.594 ms | Steady State:    0.734 ms
-#       PyTorch  First Run: 1858.696 ms | Steady State:    0.520 ms
+#       Nabla    First Run:  219.130 ms | Steady State:    1.847 ms
+#       JAX      First Run:   27.866 ms | Steady State:    0.727 ms
+#       PyTorch  First Run:   24.793 ms | Steady State:    0.349 ms
 #   --> TRANSFORM: JIT(Grad)
-#       Nabla    First Run: 2771.481 ms | Steady State:    0.715 ms
-#       JAX      First Run:   25.944 ms | Steady State:    0.519 ms
-#       PyTorch  First Run:  853.562 ms | Steady State:    0.743 ms
+#       Nabla    First Run:  216.963 ms | Steady State:    0.659 ms
+#       JAX      First Run:   24.151 ms | Steady State:    0.527 ms
+#       PyTorch  First Run:   77.286 ms | Steady State:    0.664 ms
 
 # -------------------- PATTERN: Matmul --------------------
 #   --> TRANSFORM: Eager
-#       Nabla    First Run:    0.788 ms | Steady State:    0.378 ms
-#       JAX      First Run:   36.711 ms | Steady State:    1.348 ms
-#       PyTorch  First Run:    0.598 ms | Steady State:    0.339 ms
+#       Nabla    First Run:    0.623 ms | Steady State:    0.383 ms
+#       JAX      First Run:   35.628 ms | Steady State:    1.367 ms
+#       PyTorch  First Run:    0.513 ms | Steady State:    0.338 ms
 #   --> TRANSFORM: Grad
-#       Nabla    First Run:    3.282 ms | Steady State:    1.831 ms
-#       JAX      First Run:   78.846 ms | Steady State:    2.975 ms
-#       PyTorch  First Run:    1.232 ms | Steady State:    1.167 ms
+#       Nabla    First Run:    2.289 ms | Steady State:    1.671 ms
+#       JAX      First Run:   75.882 ms | Steady State:    3.261 ms
+#       PyTorch  First Run:    1.223 ms | Steady State:    0.934 ms
 #   --> TRANSFORM: JIT
-#       Nabla    First Run:  172.628 ms | Steady State:    0.517 ms
-#       JAX      First Run:   25.019 ms | Steady State:    1.255 ms
-#       PyTorch  First Run:   22.383 ms | Steady State:    0.348 ms
+#       Nabla    First Run:  212.481 ms | Steady State:    0.531 ms
+#       JAX      First Run:   25.078 ms | Steady State:    1.309 ms
+#       PyTorch  First Run:   22.273 ms | Steady State:    0.350 ms
 #   --> TRANSFORM: JIT(Grad)
-#       Nabla    First Run:  179.332 ms | Steady State:    0.427 ms
-#       JAX      First Run:   27.449 ms | Steady State:    1.401 ms
-#       PyTorch  First Run:   71.601 ms | Steady State:    0.483 ms
+#       Nabla    First Run:  220.731 ms | Steady State:    0.427 ms
+#       JAX      First Run:   28.643 ms | Steady State:    1.508 ms
+#       PyTorch  First Run:   71.214 ms | Steady State:    0.610 ms
 
 # -------------------- PATTERN: Reduction --------------------
 #   --> TRANSFORM: Eager
-#       Nabla    First Run:    1.132 ms | Steady State:    0.980 ms
-#       JAX      First Run:  117.632 ms | Steady State:    0.303 ms
-#       PyTorch  First Run:    0.341 ms | Steady State:    0.112 ms
+#       Nabla    First Run:    1.330 ms | Steady State:    1.002 ms
+#       JAX      First Run:  120.042 ms | Steady State:    0.360 ms
+#       PyTorch  First Run:    1.274 ms | Steady State:    0.101 ms
 #   --> TRANSFORM: Grad
-#       Nabla    First Run:    4.116 ms | Steady State:    3.605 ms
-#       JAX      First Run:  245.264 ms | Steady State:    1.598 ms
-#       PyTorch  First Run:    1.153 ms | Steady State:    0.549 ms
+#       Nabla    First Run:    3.942 ms | Steady State:    3.372 ms
+#       JAX      First Run:  250.948 ms | Steady State:    1.529 ms
+#       PyTorch  First Run:    2.227 ms | Steady State:    0.792 ms
 #   --> TRANSFORM: JIT
-#       Nabla    First Run:  206.968 ms | Steady State:    0.085 ms
-#       JAX      First Run:   31.024 ms | Steady State:    0.126 ms
-#       PyTorch  First Run:   24.705 ms | Steady State:    0.055 ms
+#       Nabla    First Run:  194.185 ms | Steady State:    0.088 ms
+#       JAX      First Run:   31.329 ms | Steady State:    0.141 ms
+#       PyTorch  First Run:   23.263 ms | Steady State:    0.057 ms
 #   --> TRANSFORM: JIT(Grad)
-#       Nabla    First Run:  257.192 ms | Steady State:    0.170 ms
-#       JAX      First Run:   38.958 ms | Steady State:    0.167 ms
-#       PyTorch  First Run:  942.977 ms | Steady State:    0.186 ms
+#       Nabla    First Run:  309.737 ms | Steady State:    0.198 ms
+#       JAX      First Run:   41.120 ms | Steady State:    0.205 ms
+#       PyTorch  First Run:   77.253 ms | Steady State:    0.189 ms
 
 # -------------------- PATTERN: MLP Layer --------------------
 #   --> TRANSFORM: Eager
-#       Nabla    First Run:    2.288 ms | Steady State:    1.106 ms
-#       JAX      First Run:   51.114 ms | Steady State:    2.690 ms
-#       PyTorch  First Run:    1.440 ms | Steady State:    0.932 ms
+#       Nabla    First Run:    1.614 ms | Steady State:    1.216 ms
+#       JAX      First Run:   49.577 ms | Steady State:    2.783 ms
+#       PyTorch  First Run:    1.400 ms | Steady State:    0.898 ms
 #   --> TRANSFORM: Grad
-#       Nabla    First Run:    4.979 ms | Steady State:    3.959 ms
-#       JAX      First Run:  122.972 ms | Steady State:    6.068 ms
-#       PyTorch  First Run:    2.356 ms | Steady State:    1.973 ms
+#       Nabla    First Run:    4.634 ms | Steady State:    3.946 ms
+#       JAX      First Run:  122.821 ms | Steady State:    6.165 ms
+#       PyTorch  First Run:    2.525 ms | Steady State:    1.918 ms
 #   --> TRANSFORM: JIT
-#       Nabla    First Run:  175.585 ms | Steady State:    0.986 ms
-#       JAX      First Run:   27.821 ms | Steady State:    2.523 ms
-#       PyTorch  First Run:   28.536 ms | Steady State:    0.826 ms
+#       Nabla    First Run:  262.869 ms | Steady State:    1.006 ms
+#       JAX      First Run:   30.240 ms | Steady State:    2.619 ms
+#       PyTorch  First Run:   26.755 ms | Steady State:    0.896 ms
 #   --> TRANSFORM: JIT(Grad)
-#       Nabla    First Run:  200.187 ms | Steady State:    1.531 ms
-#       JAX      First Run:   25.089 ms | Steady State:    4.765 ms
-#       PyTorch  First Run:  861.425 ms | Steady State:    2.239 ms
+#       Nabla    First Run:  199.414 ms | Steady State:    1.545 ms
+#       JAX      First Run:   49.118 ms | Steady State:    5.092 ms
+#       PyTorch  First Run:   82.378 ms | Steady State:    1.927 ms
 
 # -------------------- PATTERN: Deep MLP (16 Layers) --------------------
 #   --> TRANSFORM: Eager
-#       Nabla    First Run:   21.863 ms | Steady State:   16.560 ms
-#       JAX      First Run:   42.413 ms | Steady State:   39.436 ms
-#       PyTorch  First Run:   18.195 ms | Steady State:   16.716 ms
+#       Nabla    First Run:   18.463 ms | Steady State:   18.825 ms
+#       JAX      First Run:   39.354 ms | Steady State:   38.672 ms
+#       PyTorch  First Run:   17.004 ms | Steady State:   17.026 ms
 #   --> TRANSFORM: Grad
 # /Users/tillife/Documents/CodingProjects/nabla/nabla/ops/binary.py:148: RuntimeWarning: invalid value encountered in divide
 #   np_result = np.divide(args[0].to_numpy(), args[1].to_numpy())
-#       Nabla    First Run:   90.882 ms | Steady State:   74.109 ms
-#       JAX      First Run:   93.523 ms | Steady State:   86.763 ms
-#       PyTorch  First Run:   42.562 ms | Steady State:   36.075 ms
+#       Nabla    First Run:   67.803 ms | Steady State:   68.498 ms
+#       JAX      First Run:   93.187 ms | Steady State:   87.355 ms
+#       PyTorch  First Run:   42.476 ms | Steady State:   32.076 ms
 #   --> TRANSFORM: JIT
-#       Nabla    First Run: 2639.288 ms | Steady State:   13.437 ms
-#       JAX      First Run:   89.128 ms | Steady State:   36.531 ms
-#       PyTorch  First Run:  906.384 ms | Steady State:   15.076 ms
+#       Nabla    First Run:  272.538 ms | Steady State:   13.602 ms
+#       JAX      First Run:   85.285 ms | Steady State:   36.125 ms
+#       PyTorch  First Run:  118.211 ms | Steady State:   14.683 ms
 #   --> TRANSFORM: JIT(Grad)
-#       Nabla    First Run: 2933.495 ms | Steady State:   29.642 ms
-#       JAX      First Run:  154.670 ms | Steady State:   77.362 ms
-#       PyTorch  First Run: 1618.582 ms | Steady State:   47.823 ms
+#       Nabla    First Run:  293.552 ms | Steady State:   29.946 ms
+#       JAX      First Run:  154.842 ms | Steady State:   75.337 ms
+#       PyTorch  First Run:  306.885 ms | Steady State:   33.279 ms
 
 
 # ================================================================================
@@ -1287,160 +1480,301 @@ if __name__ == "__main__":
 
 # -------------------- PATTERN: Transformer Bwd Pass --------------------
 #   --> TRANSFORM: Eager
-#       Nabla    First Run:  168.265 ms | Steady State:  175.018 ms
-#       JAX      First Run:  912.142 ms | Steady State:  194.931 ms
-#       PyTorch  First Run:   99.962 ms | Steady State:   89.712 ms
+#       Nabla    First Run:  141.688 ms | Steady State:  168.187 ms
+#       JAX      First Run:  899.896 ms | Steady State:  190.118 ms
+#       PyTorch  First Run:   97.043 ms | Steady State:   81.431 ms
 #   --> TRANSFORM: JIT
-#       Nabla    First Run: 8299.188 ms | Steady State:   92.245 ms
-#       JAX      First Run:  255.335 ms | Steady State:  179.384 ms
-#       PyTorch  First Run: 3206.381 ms | Steady State:   93.003 ms
+#       Nabla    First Run:  372.617 ms | Steady State:   90.673 ms
+#       JAX      First Run:  256.625 ms | Steady State:  173.074 ms
+#       PyTorch  First Run:  415.183 ms | Steady State:   89.730 ms
 
 
-# ============================================================================================================================================
-#                                               FORWARD PASS PERFORMANCE ANALYSIS (Steady State)
-# ============================================================================================================================================
+# ================================================================================
+#                                  ADVANCED-BENCH
+#                   {'N': 256, 'D': 512, 'B': 0, 'S': 0, 'E': 0}
+# ================================================================================
 
-# Compares Eager vs. JIT (Time (ms)). 'Best Framework' is for JIT. Ratios are OtherTime/NablaTime.
-#                                                       Nabla      JAX PyTorch Best Framework Nabla vs JAX (Ratio) Nabla vs PyTorch (Ratio)
-# Benchmark   Pattern              Metric
-# MACRO-BENCH Deep MLP (16 Layers) Eager (Time (ms))   16.560   39.436  16.716                                   -                        -
-#                                  JIT (Time (ms))     13.437   36.531  15.076          Nabla                2.72x                    1.12x
-#                                  JIT Speedup (x)      1.23x    1.08x   1.11x                                   -                        -
-#             Element-wise         Eager (Time (ms))    1.687    0.986   0.742                                   -                        -
-#                                  JIT (Time (ms))      1.845    0.734   0.520        PyTorch                0.40x                    0.28x
-#                                  JIT Speedup (x)      0.91x    1.34x   1.43x                                   -                        -
-#             MLP Layer            Eager (Time (ms))    1.106    2.690   0.932                                   -                        -
-#                                  JIT (Time (ms))      0.986    2.523   0.826        PyTorch                2.56x                    0.84x
-#                                  JIT Speedup (x)      1.12x    1.07x   1.13x                                   -                        -
-#             Matmul               Eager (Time (ms))    0.378    1.348   0.339                                   -                        -
-#                                  JIT (Time (ms))      0.517    1.255   0.348        PyTorch                2.43x                    0.67x
-#                                  JIT Speedup (x)      0.73x    1.07x   0.97x                                   -                        -
-#             Reduction            Eager (Time (ms))    0.980    0.303   0.112                                   -                        -
-#                                  JIT (Time (ms))      0.085    0.126   0.055        PyTorch                1.48x                    0.64x
-#                                  JIT Speedup (x)     11.50x    2.40x   2.04x                                   -                        -
-# MICRO-BENCH Element-wise         Eager (Time (ms))    0.050    0.031   0.006                                   -                        -
-#                                  JIT (Time (ms))      0.098    0.005   0.006            JAX                0.05x                    0.06x
-#                                  JIT Speedup (x)      0.51x    6.68x   1.15x                                   -                        -
-#             MLP Layer            Eager (Time (ms))    0.032    0.058   0.003                                   -                        -
-#                                  JIT (Time (ms))      0.096    0.008   0.008            JAX                0.08x                    0.08x
-#                                  JIT Speedup (x)      0.33x    7.67x   0.41x                                   -                        -
-#             Matmul               Eager (Time (ms))    0.047    0.010   0.004                                   -                        -
-#                                  JIT (Time (ms))      0.086    0.005   0.007            JAX                0.06x                    0.08x
-#                                  JIT Speedup (x)      0.55x    2.02x   0.58x                                   -                        -
-#             Reduction            Eager (Time (ms))    0.088    0.037   0.008                                   -                        -
-#                                  JIT (Time (ms))      0.152    0.006   0.007            JAX                0.04x                    0.04x
-#                                  JIT Speedup (x)      0.58x    5.99x   1.21x                                   -                        -
-# TRANSFORMER Transformer Bwd Pass Eager (Time (ms))  175.018  194.931  89.712                                   -                        -
-#                                  JIT (Time (ms))     92.245  179.384  93.003          Nabla                1.94x                    1.01x
-#                                  JIT Speedup (x)      1.90x    1.09x   0.96x                                   -                        -
+# -------------------- PATTERN: Vmap (MLP Layer) --------------------
+#   --> TRANSFORM: Eager
+#       Nabla    First Run:    1.097 ms | Steady State:    0.789 ms
+#       JAX      First Run:   82.809 ms | Steady State:    0.574 ms
+#       PyTorch  First Run:    0.690 ms | Steady State:    0.128 ms
+#   --> TRANSFORM: JIT
+#       Nabla    First Run:  258.376 ms | Steady State:    0.171 ms
+#       JAX      First Run:   28.411 ms | Steady State:    0.406 ms
+#       PyTorch  First Run:   70.556 ms | Steady State:    0.120 ms
 
+# -------------------- PATTERN: JVP (MLP Layer) --------------------
+#   --> TRANSFORM: Eager
+#       Nabla    First Run:    1.083 ms | Steady State:    0.979 ms
+#       JAX      First Run:  198.686 ms | Steady State:    1.843 ms
+#       PyTorch  First Run:   50.194 ms | Steady State:    0.422 ms
+#   --> TRANSFORM: JIT
+#       Nabla    First Run:  228.029 ms | Steady State:    0.403 ms
+#       JAX      First Run:   30.841 ms | Steady State:    1.272 ms
+#       PyTorch  First Run:  116.111 ms | Steady State:    0.379 ms
 
-# ============================================================================================================================================
-#                                                 GRADIENT PERFORMANCE ANALYSIS (Steady State)
-# ============================================================================================================================================
+# -------------------- PATTERN: VJP (MLP Layer) --------------------
+#   --> TRANSFORM: Eager
+#       Nabla    First Run:    0.927 ms | Steady State:    0.764 ms
+#       JAX      First Run:  144.543 ms | Steady State:    1.594 ms
+#       PyTorch  First Run:    0.813 ms | Steady State:    0.426 ms
+#   --> TRANSFORM: JIT
+#       Nabla    First Run:  194.012 ms | Steady State:    0.427 ms
+#       JAX      First Run:   30.676 ms | Steady State:    1.206 ms
+#       PyTorch  First Run:   90.585 ms | Steady State:    0.329 ms
 
-# Compares Eager Grad vs. JIT'd Grad (Time (ms)). 'Best Framework' is for JIT(Grad). Ratios are OtherTime/NablaTime.
-#                                                          Nabla      JAX PyTorch Best Framework Nabla vs JAX (Ratio) Nabla vs PyTorch (Ratio)
-# Benchmark   Pattern              Metric
-# MACRO-BENCH Deep MLP (16 Layers) Grad (Time (ms))       74.109   86.763  36.075                                   -                        -
-#                                  JIT(Grad) (Time (ms))  29.642   77.362  47.823          Nabla                2.61x                    1.61x
-#                                  JIT(Grad) Speedup (x)   2.50x    1.12x   0.75x                                   -                        -
-#             Element-wise         Grad (Time (ms))        5.853    3.567   2.588                                   -                        -
-#                                  JIT(Grad) (Time (ms))   0.715    0.519   0.743            JAX                0.73x                    1.04x
-#                                  JIT(Grad) Speedup (x)   8.19x    6.87x   3.48x                                   -                        -
-#             MLP Layer            Grad (Time (ms))        3.959    6.068   1.973                                   -                        -
-#                                  JIT(Grad) (Time (ms))   1.531    4.765   2.239          Nabla                3.11x                    1.46x
-#                                  JIT(Grad) Speedup (x)   2.59x    1.27x   0.88x                                   -                        -
-#             Matmul               Grad (Time (ms))        1.831    2.975   1.167                                   -                        -
-#                                  JIT(Grad) (Time (ms))   0.427    1.401   0.483          Nabla                3.28x                    1.13x
-#                                  JIT(Grad) Speedup (x)   4.29x    2.12x   2.42x                                   -                        -
-#             Reduction            Grad (Time (ms))        3.605    1.598   0.549                                   -                        -
-#                                  JIT(Grad) (Time (ms))   0.170    0.167   0.186            JAX                0.98x                    1.10x
-#                                  JIT(Grad) Speedup (x)  21.20x    9.54x   2.95x                                   -                        -
-# MICRO-BENCH Element-wise         Grad (Time (ms))        0.257    0.981   0.093                                   -                        -
-#                                  JIT(Grad) (Time (ms))   0.029    0.004   0.041            JAX                0.13x                    1.39x
-#                                  JIT(Grad) Speedup (x)   8.77x  249.98x   2.28x                                   -                        -
-#             MLP Layer            Grad (Time (ms))        0.160    0.845   0.056                                   -                        -
-#                                  JIT(Grad) (Time (ms))   0.090    0.008   0.020            JAX                0.09x                    0.22x
-#                                  JIT(Grad) Speedup (x)   1.77x  101.35x   2.79x                                   -                        -
-#             Matmul               Grad (Time (ms))        0.083    0.447   0.042                                   -                        -
-#                                  JIT(Grad) (Time (ms))   0.065    0.006   0.010            JAX                0.09x                    0.16x
-#                                  JIT(Grad) Speedup (x)   1.26x   73.40x   4.02x                                   -                        -
-#             Reduction            Grad (Time (ms))        0.329    0.884   0.114                                   -                        -
-#                                  JIT(Grad) (Time (ms))   0.072    0.005   0.017            JAX                0.07x                    0.23x
-#                                  JIT(Grad) Speedup (x)   4.55x  166.88x   6.91x                                   -                        -
+# -------------------- PATTERN: Hessian-Vector Product --------------------
+#   --> TRANSFORM: Eager
+#       Nabla    First Run:    3.728 ms | Steady State:    2.893 ms
+#       JAX      First Run:  134.636 ms | Steady State:    1.762 ms
+#       PyTorch  First Run:    2.044 ms | Steady State:    1.169 ms
+#   --> TRANSFORM: JIT
+#       Nabla    First Run:  205.996 ms | Steady State:    0.610 ms
+#       JAX      First Run:   27.508 ms | Steady State:    0.011 ms
+#       PyTorch  First Run:  159.558 ms | Steady State:    0.363 ms
 
+# -------------------- PATTERN: JVP(VJP(MLP)) --------------------
+#   --> TRANSFORM: Eager
+#       Nabla    First Run:    3.222 ms | Steady State:    2.744 ms
+#       JAX      First Run:  160.200 ms | Steady State:    3.665 ms
+#       PyTorch  First Run:    2.777 ms | Steady State:    1.806 ms
+#   --> TRANSFORM: JIT
+#       Nabla    First Run:  224.690 ms | Steady State:    0.625 ms
+#       JAX      First Run:   30.635 ms | Steady State:    0.907 ms
+#       PyTorch  First Run:  335.794 ms | Steady State:    0.586 ms
 
-# ============================================================================================================================================
-#                                       FORWARD PASS PERFORMANCE ANALYSIS (First Run (incl. JIT Comp.))
-# ============================================================================================================================================
+# -------------------- PATTERN: VJP(JVP(MLP)) --------------------
+#   --> TRANSFORM: Eager
+#       Nabla    First Run:    3.571 ms | Steady State:    2.786 ms
+#       JAX      First Run:  162.041 ms | Steady State:    3.074 ms
+#       PyTorch  First Run:    2.068 ms | Steady State:    1.519 ms
+#   --> TRANSFORM: JIT
+#       Nabla    First Run:  680.090 ms | Steady State:    1.091 ms
+#       JAX      First Run:   32.121 ms | Steady State:    1.167 ms
+#       PyTorch  First Run:  421.127 ms | Steady State:    0.552 ms
 
-# Compares Eager vs. JIT (First Run Time (ms)). 'Best Framework' is for JIT. Ratios are OtherTime/NablaTime.
-#                                                                  Nabla      JAX   PyTorch Best Framework Nabla vs JAX (Ratio) Nabla vs PyTorch (Ratio)
-# Benchmark   Pattern              Metric
-# MACRO-BENCH Deep MLP (16 Layers) Eager (First Run Time (ms))    21.863   42.413    18.195                                   -                        -
-#                                  JIT (First Run Time (ms))    2639.288   89.128   906.384            JAX                0.03x                    0.34x
-#                                  JIT Speedup (x)                 0.01x    0.48x     0.02x                                   -                        -
-#             Element-wise         Eager (First Run Time (ms))     2.089  127.935     1.806                                   -                        -
-#                                  JIT (First Run Time (ms))    2620.217   25.594  1858.696            JAX                0.01x                    0.71x
-#                                  JIT Speedup (x)                 0.00x    5.00x     0.00x                                   -                        -
-#             MLP Layer            Eager (First Run Time (ms))     2.288   51.114     1.440                                   -                        -
-#                                  JIT (First Run Time (ms))     175.585   27.821    28.536            JAX                0.16x                    0.16x
-#                                  JIT Speedup (x)                 0.01x    1.84x     0.05x                                   -                        -
-#             Matmul               Eager (First Run Time (ms))     0.788   36.711     0.598                                   -                        -
-#                                  JIT (First Run Time (ms))     172.628   25.019    22.383        PyTorch                0.14x                    0.13x
-#                                  JIT Speedup (x)                 0.00x    1.47x     0.03x                                   -                        -
-#             Reduction            Eager (First Run Time (ms))     1.132  117.632     0.341                                   -                        -
-#                                  JIT (First Run Time (ms))     206.968   31.024    24.705        PyTorch                0.15x                    0.12x
-#                                  JIT Speedup (x)                 0.01x    3.79x     0.01x                                   -                        -
-# MICRO-BENCH Element-wise         Eager (First Run Time (ms))     0.640  107.452     0.139                                   -                        -
-#                                  JIT (First Run Time (ms))     382.954   34.626  2625.361            JAX                0.09x                    6.86x
-#                                  JIT Speedup (x)                 0.00x    3.10x     0.00x                                   -                        -
-#             MLP Layer            Eager (First Run Time (ms))     0.148   41.489     1.419                                   -                        -
-#                                  JIT (First Run Time (ms))     264.292   29.734    26.808        PyTorch                0.11x                    0.10x
-#                                  JIT Speedup (x)                 0.00x    1.40x     0.05x                                   -                        -
-#             Matmul               Eager (First Run Time (ms))     0.380   41.016     1.290                                   -                        -
-#                                  JIT (First Run Time (ms))     188.645   19.281    22.218            JAX                0.10x                    0.12x
-#                                  JIT Speedup (x)                 0.00x    2.13x     0.06x                                   -                        -
-#             Reduction            Eager (First Run Time (ms))     0.261   91.526     2.761                                   -                        -
-#                                  JIT (First Run Time (ms))     215.449   34.028    26.542        PyTorch                0.16x                    0.12x
-#                                  JIT Speedup (x)                 0.00x    2.69x     0.10x                                   -                        -
-# TRANSFORMER Transformer Bwd Pass Eager (First Run Time (ms))   168.265  912.142    99.962                                   -                        -
-#                                  JIT (First Run Time (ms))    8299.188  255.335  3206.381            JAX                0.03x                    0.39x
-#                                  JIT Speedup (x)                 0.02x    3.57x     0.03x                                   -                        -
+# -------------------- PATTERN: JVP(JVP(MLP)) --------------------
+#   --> TRANSFORM: Eager
+#       Nabla    First Run:    3.491 ms | Steady State:    3.195 ms
+#       JAX      First Run:  100.704 ms | Steady State:    3.471 ms
+#       PyTorch  First Run:    1.997 ms | Steady State:    1.355 ms
+#   --> TRANSFORM: JIT
+#       Nabla    First Run:  595.018 ms | Steady State:    1.168 ms
+#       JAX      First Run:   31.096 ms | Steady State:    1.376 ms
+#       PyTorch  First Run:  214.329 ms | Steady State:    0.809 ms
+
+# -------------------- PATTERN: VJP(VJP(MLP)) --------------------
+#   --> TRANSFORM: Eager
+#       Nabla    First Run:    3.421 ms | Steady State:    2.147 ms
+#       JAX      First Run:  161.043 ms | Steady State:    3.129 ms
+#       PyTorch  First Run:    2.310 ms | Steady State:    0.980 ms
+#   --> TRANSFORM: JIT
+#       Nabla    First Run:  207.324 ms | Steady State:    0.691 ms
+#       JAX      First Run:   31.329 ms | Steady State:    0.896 ms
+#       PyTorch  First Run:  266.673 ms | Steady State:    0.451 ms
+
+# Raw results saved to benchmark_results.csv
+
+# --- STEADY STATE PERFORMANCE ---
 
 
-# ============================================================================================================================================
-#                                         GRADIENT PERFORMANCE ANALYSIS (First Run (incl. JIT Comp.))
-# ============================================================================================================================================
+# ==============================================================================================================
+#                                   INTRA-FRAMEWORK JIT SPEEDUP (Eager vs JIT)
+# ==============================================================================================================
+#                                       Nabla Speedup (x) JAX Speedup (x) PyTorch Speedup (x)
+# Benchmark      Pattern
+# TRANSFORMER    Transformer Bwd Pass               1.85x           1.10x               0.91x
+# ADVANCED-BENCH Hessian-Vector Product             4.74x         165.30x               3.22x
+#                JVP (MLP Layer)                    2.43x           1.45x               1.11x
+#                JVP(JVP(MLP))                      2.74x           2.52x               1.67x
+#                JVP(VJP(MLP))                      4.39x           4.04x               3.08x
+#                VJP (MLP Layer)                    1.79x           1.32x               1.30x
+#                VJP(JVP(MLP))                      2.55x           2.63x               2.75x
+#                VJP(VJP(MLP))                      3.11x           3.49x               2.17x
+#                Vmap (MLP Layer)                   4.60x           1.41x               1.07x
+# MACRO-BENCH    Deep MLP (16 Layers)               1.38x           1.07x               1.16x
+#                Element-wise                       0.86x           1.42x               2.22x
+#                MLP Layer                          1.21x           1.06x               1.00x
+#                Matmul                             0.72x           1.04x               0.96x
+#                Reduction                         11.41x           2.56x               1.78x
+# MICRO-BENCH    Element-wise                       0.47x           6.56x               1.25x
+#                MLP Layer                          0.18x           8.06x               0.38x
+#                Matmul                             0.22x           1.82x               0.27x
+#                Reduction                          0.55x           4.98x               1.21x
 
-# Compares Eager Grad vs. JIT'd Grad (First Run Time (ms)). 'Best Framework' is for JIT(Grad). Ratios are OtherTime/NablaTime.
-#                                                                      Nabla      JAX   PyTorch Best Framework Nabla vs JAX (Ratio) Nabla vs PyTorch (Ratio)
-# Benchmark   Pattern              Metric
-# MACRO-BENCH Deep MLP (16 Layers) Grad (First Run Time (ms))         90.882   93.523    42.562                                   -                        -
-#                                  JIT(Grad) (First Run Time (ms))  2933.495  154.670  1618.582            JAX                0.05x                    0.55x
-#                                  JIT(Grad) Speedup (x)               0.03x    0.60x     0.03x                                   -                        -
-#             Element-wise         Grad (First Run Time (ms))          6.536  274.169     3.278                                   -                        -
-#                                  JIT(Grad) (First Run Time (ms))  2771.481   25.944   853.562            JAX                0.01x                    0.31x
-#                                  JIT(Grad) Speedup (x)               0.00x   10.57x     0.00x                                   -                        -
-#             MLP Layer            Grad (First Run Time (ms))          4.979  122.972     2.356                                   -                        -
-#                                  JIT(Grad) (First Run Time (ms))   200.187   25.089   861.425            JAX                0.13x                    4.30x
-#                                  JIT(Grad) Speedup (x)               0.02x    4.90x     0.00x                                   -                        -
-#             Matmul               Grad (First Run Time (ms))          3.282   78.846     1.232                                   -                        -
-#                                  JIT(Grad) (First Run Time (ms))   179.332   27.449    71.601            JAX                0.15x                    0.40x
-#                                  JIT(Grad) Speedup (x)               0.02x    2.87x     0.02x                                   -                        -
-#             Reduction            Grad (First Run Time (ms))          4.116  245.264     1.153                                   -                        -
-#                                  JIT(Grad) (First Run Time (ms))   257.192   38.958   942.977            JAX                0.15x                    3.67x
-#                                  JIT(Grad) Speedup (x)               0.02x    6.30x     0.00x                                   -                        -
-# MICRO-BENCH Element-wise         Grad (First Run Time (ms))          0.758  244.627     8.742                                   -                        -
-#                                  JIT(Grad) (First Run Time (ms))   201.158   34.391   327.048            JAX                0.17x                    1.63x
-#                                  JIT(Grad) Speedup (x)               0.00x    7.11x     0.03x                                   -                        -
-#             MLP Layer            Grad (First Run Time (ms))          0.336  118.913     1.954                                   -                        -
-#                                  JIT(Grad) (First Run Time (ms))   215.278   30.757   110.932            JAX                0.14x                    0.52x
-#                                  JIT(Grad) Speedup (x)               0.00x    3.87x     0.02x                                   -                        -
-#             Matmul               Grad (First Run Time (ms))          0.247   67.241     1.077                                   -                        -
-#                                  JIT(Grad) (First Run Time (ms))   190.360   23.168    73.546            JAX                0.12x                    0.39x
-#                                  JIT(Grad) Speedup (x)               0.00x    2.90x     0.01x                                   -                        -
-#             Reduction            Grad (First Run Time (ms))          0.776  196.079     3.922                                   -                        -
-#                                  JIT(Grad) (First Run Time (ms))   304.747   26.856   101.651            JAX                0.09x                    0.33x
-#                                  JIT(Grad) Speedup (x)               0.00x    7.30x     0.04x                                   -                        -
+
+# ==============================================================================================================
+#                                CROSS-FRAMEWORK JIT COMPARISON (LOWER IS BETTER)
+# ==============================================================================================================
+#                                       Best Framework Nabla Time (ms) Nabla Rel. to Best JAX Time (ms) JAX Rel. to Best PyTorch Time (ms) PyTorch Rel. to Best
+# Benchmark      Pattern
+# TRANSFORMER    Transformer Bwd Pass          PyTorch          90.673              1.01x       173.074            1.93x           89.730*                1.00x
+# ADVANCED-BENCH Hessian-Vector Product            JAX           0.610             57.23x        0.011*            1.00x             0.363               34.09x
+#                JVP (MLP Layer)               PyTorch           0.403              1.06x         1.272            3.35x            0.379*                1.00x
+#                JVP(JVP(MLP))                 PyTorch           1.168              1.44x         1.376            1.70x            0.809*                1.00x
+#                JVP(VJP(MLP))                 PyTorch           0.625              1.07x         0.907            1.55x            0.586*                1.00x
+#                VJP (MLP Layer)               PyTorch           0.427              1.30x         1.206            3.67x            0.329*                1.00x
+#                VJP(JVP(MLP))                 PyTorch           1.091              1.98x         1.167            2.11x            0.552*                1.00x
+#                VJP(VJP(MLP))                 PyTorch           0.691              1.53x         0.896            1.99x            0.451*                1.00x
+#                Vmap (MLP Layer)              PyTorch           0.171              1.43x         0.406            3.40x            0.120*                1.00x
+# MACRO-BENCH    Deep MLP (16 Layers)            Nabla         13.602*              1.00x        36.125            2.66x            14.683                1.08x
+#                Element-wise                  PyTorch           1.847              5.29x         0.727            2.08x            0.349*                1.00x
+#                MLP Layer                     PyTorch           1.006              1.12x         2.619            2.92x            0.896*                1.00x
+#                Matmul                        PyTorch           0.531              1.52x         1.309            3.74x            0.350*                1.00x
+#                Reduction                     PyTorch           0.088              1.54x         0.141            2.47x            0.057*                1.00x
+# MICRO-BENCH    Element-wise                      JAX           0.100             25.65x        0.004*            1.00x             0.005                1.31x
+#                MLP Layer                         JAX           0.195             29.36x        0.007*            1.00x             0.008                1.24x
+#                Matmul                            JAX           0.075             14.48x        0.005*            1.00x             0.006                1.21x
+#                Reduction                     PyTorch           0.157             23.47x         0.007            1.05x            0.007*                1.00x
+
+
+# ==============================================================================================================
+#                                INTRA-FRAMEWORK JIT SPEEDUP (Grad vs JIT(Grad))
+# ==============================================================================================================
+#                                  Nabla Speedup (x) JAX Speedup (x) PyTorch Speedup (x)
+# Benchmark   Pattern
+# MACRO-BENCH Deep MLP (16 Layers)             2.29x           1.16x               0.96x
+#             Element-wise                     8.80x           7.10x               4.51x
+#             MLP Layer                        2.55x           1.21x               1.00x
+#             Matmul                           3.92x           2.16x               1.53x
+#             Reduction                       16.99x           7.47x               4.19x
+# MICRO-BENCH Element-wise                     4.11x         198.60x              10.87x
+#             MLP Layer                        1.23x         106.69x               4.14x
+#             Matmul                           0.94x          49.95x               3.87x
+#             Reduction                        2.23x         128.85x               9.66x
+
+
+# ==============================================================================================================
+#                          CROSS-FRAMEWORK JIT COMPARISON (GRADIENT - LOWER IS BETTER)
+# ==============================================================================================================
+#                                  Best Framework Nabla Time (ms) Nabla Rel. to Best JAX Time (ms) JAX Rel. to Best PyTorch Time (ms) PyTorch Rel. to Best
+# Benchmark   Pattern
+# MACRO-BENCH Deep MLP (16 Layers)          Nabla         29.946*              1.00x        75.337            2.52x            33.279                1.11x
+#             Element-wise                    JAX           0.659              1.25x        0.527*            1.00x             0.664                1.26x
+#             MLP Layer                     Nabla          1.545*              1.00x         5.092            3.30x             1.927                1.25x
+#             Matmul                        Nabla          0.427*              1.00x         1.508            3.53x             0.610                1.43x
+#             Reduction                   PyTorch           0.198              1.05x         0.205            1.08x            0.189*                1.00x
+# MICRO-BENCH Element-wise                    JAX           0.056             11.95x        0.005*            1.00x             0.008                1.73x
+#             MLP Layer                       JAX           0.123             16.71x        0.007*            1.00x             0.012                1.58x
+#             Matmul                          JAX           0.080             11.87x        0.007*            1.00x             0.010                1.52x
+#             Reduction                       JAX           0.140             21.46x        0.007*            1.00x             0.010                1.46x
+
+
+# ============================================================
+#              OVERALL JIT SCORE: ADVANCED-BENCH
+# (Geometric Mean of Performance Relative to Best - Lower is Better)
+# ============================================================
+# Framework
+# PyTorch   1.55x
+# JAX       2.15x
+# Nabla     2.19x
+
+
+# ============================================================
+#                OVERALL JIT SCORE: MACRO-BENCH
+# (Geometric Mean of Performance Relative to Best - Lower is Better)
+# ============================================================
+# Framework
+# PyTorch   1.02x
+# Nabla     1.69x
+# JAX       2.72x
+
+
+# ============================================================
+#             OVERALL JIT(GRAD) SCORE: MACRO-BENCH
+# (Geometric Mean of Performance Relative to Best - Lower is Better)
+# ============================================================
+# Framework
+# Nabla     1.06x
+# PyTorch   1.20x
+# JAX       2.00x
+
+
+# ============================================================
+#                OVERALL JIT SCORE: MICRO-BENCH
+# (Geometric Mean of Performance Relative to Best - Lower is Better)
+# ============================================================
+# Framework
+# JAX        1.01x
+# PyTorch    1.18x
+# Nabla     22.49x
+
+
+# ============================================================
+#             OVERALL JIT(GRAD) SCORE: MICRO-BENCH
+# (Geometric Mean of Performance Relative to Best - Lower is Better)
+# ============================================================
+# Framework
+# JAX        1.00x
+# PyTorch    1.57x
+# Nabla     15.02x
+
+
+# ============================================================
+#                OVERALL JIT SCORE: TRANSFORMER
+# (Geometric Mean of Performance Relative to Best - Lower is Better)
+# ============================================================
+# Framework
+# PyTorch   1.00x
+# Nabla     1.01x
+# JAX       1.93x
+
+# --- FIRST RUN (COMPILATION OVERHEAD) PERFORMANCE ---
+
+
+# ==============================================================================================================
+#                        CROSS-FRAMEWORK JIT COMPILATION TIME (FORWARD - LOWER IS BETTER)
+# ==============================================================================================================
+#                                       Best Framework Nabla Time (ms) Nabla Rel. to Best JAX Time (ms) JAX Rel. to Best PyTorch Time (ms) PyTorch Rel. to Best
+# Benchmark      Pattern
+# TRANSFORMER    Transformer Bwd Pass              JAX         372.617              1.45x      256.625*            1.00x           415.183                1.62x
+# ADVANCED-BENCH Hessian-Vector Product            JAX         205.996              7.49x       27.508*            1.00x           159.558                5.80x
+#                JVP (MLP Layer)                   JAX         228.029              7.39x       30.841*            1.00x           116.111                3.76x
+#                JVP(JVP(MLP))                     JAX         595.018             19.13x       31.096*            1.00x           214.329                6.89x
+#                JVP(VJP(MLP))                     JAX         224.690              7.33x       30.635*            1.00x           335.794               10.96x
+#                VJP (MLP Layer)                   JAX         194.012              6.32x       30.676*            1.00x            90.585                2.95x
+#                VJP(JVP(MLP))                     JAX         680.090             21.17x       32.121*            1.00x           421.127               13.11x
+#                VJP(VJP(MLP))                     JAX         207.324              6.62x       31.329*            1.00x           266.673                8.51x
+#                Vmap (MLP Layer)                  JAX         258.376              9.09x       28.411*            1.00x            70.556                2.48x
+# MACRO-BENCH    Deep MLP (16 Layers)              JAX         272.538              3.20x       85.285*            1.00x           118.211                1.39x
+#                Element-wise                  PyTorch         219.130              8.84x        27.866            1.12x           24.793*                1.00x
+#                MLP Layer                     PyTorch         262.869              9.83x        30.240            1.13x           26.755*                1.00x
+#                Matmul                        PyTorch         212.481              9.54x        25.078            1.13x           22.273*                1.00x
+#                Reduction                     PyTorch         194.185              8.35x        31.329            1.35x           23.263*                1.00x
+# MICRO-BENCH    Element-wise                      JAX         203.292              5.77x       35.239*            1.00x          1975.524               56.06x
+#                MLP Layer                     PyTorch         265.125              9.26x        33.601            1.17x           28.641*                1.00x
+#                Matmul                            JAX         200.542             10.54x       19.026*            1.00x            21.525                1.13x
+#                Reduction                     PyTorch         264.055             10.04x        34.440            1.31x           26.298*                1.00x
+
+
+# ==============================================================================================================
+#                       CROSS-FRAMEWORK JIT COMPILATION TIME (GRADIENT - LOWER IS BETTER)
+# ==============================================================================================================
+#                                  Best Framework Nabla Time (ms) Nabla Rel. to Best JAX Time (ms) JAX Rel. to Best PyTorch Time (ms) PyTorch Rel. to Best
+# Benchmark   Pattern
+# MACRO-BENCH Deep MLP (16 Layers)            JAX         293.552              1.90x      154.842*            1.00x           306.885                1.98x
+#             Element-wise                    JAX         216.963              8.98x       24.151*            1.00x            77.286                3.20x
+#             MLP Layer                       JAX         199.414              4.06x       49.118*            1.00x            82.378                1.68x
+#             Matmul                          JAX         220.731              7.71x       28.643*            1.00x            71.214                2.49x
+#             Reduction                       JAX         309.737              7.53x       41.120*            1.00x            77.253                1.88x
+# MICRO-BENCH Element-wise                    JAX         203.329              4.38x       46.474*            1.00x            96.668                2.08x
+#             MLP Layer                       JAX         193.743              5.71x       33.925*            1.00x           208.531                6.15x
+#             Matmul                          JAX         198.872              7.66x       25.963*            1.00x            73.945                2.85x
+#             Reduction                       JAX         205.870              5.59x       36.828*            1.00x            79.173                2.15x
+
+# --- GENERATING PLOTS ---
+
+# Generated plot: benchmark_micro-bench_jit.png
+
+# Generated plot: benchmark_micro-bench_jit_grad.png
+
+# Generated plot: benchmark_macro-bench_jit.png
+
+# Generated plot: benchmark_macro-bench_jit_grad.png
+
+# Generated plot: benchmark_transformer_jit.png
+
+# Generated plot: benchmark_advanced-bench_jit.png
+
+# Could not generate plot: Data for Transform='JIT(Grad)' and Benchmark='ADVANCED-BENCH' not found.
