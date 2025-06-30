@@ -725,40 +725,6 @@ def sqrt(arg: Array) -> Array:
     return binary_pow(arg, half)
 
 
-# class ZerosLikeOp(UnaryOperation):
-#     """Create an array of zeros with the same shape and dtype as the input."""
-
-#     def __init__(self):
-#         super().__init__("zeros_like")
-
-#     def compute_output_shape(self, *input_shapes: tuple) -> tuple:
-#         """Output shape is the same as input shape."""
-#         if len(input_shapes) != 1:
-#             raise ValueError(f"ZerosLikeOp requires 1 input shape, got {len(input_shapes)}")
-#         return input_shapes[0]
-
-#     def compute_output_dtype(self, arg: Array) -> DType:
-#         """Output dtype is the same as input dtype."""
-#         return arg.dtype
-
-#     def maxpr(self, args: list[TensorValue], output: Array) -> None:
-#         output.tensor_value = ops.shape_to_tensor(args[0].shape)
-
-#     def eagerxpr(self, args: list[Array], output: Array) -> None:
-#         np_result = np.zeros(args[0].shape, dtype=args[0].dtype.to_numpy())
-#         output.impl_(np_result)
-
-#     def vjp_rule(
-#         self, primals: list[Array], cotangent: Array, output: Array
-#     ) -> list[Array]:
-#         return [zeros_like(cotangent)]
-
-#     def jvp_rule(
-#         self, primals: list[Array], tangents: list[Array], output: Array
-#     ) -> Array:
-#         return zeros_like(tangents[0])
-
-
 class TransferToOp(UnaryOperation):
     """Transfer operation to a different device."""
 
@@ -803,8 +769,8 @@ class TransferToOp(UnaryOperation):
         )
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        output.impl_(args[0]._impl)
-
+        output.impl_(args[0].impl.to(self.target_device))
+        
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
@@ -820,8 +786,8 @@ def transfer_to(arg: Array, device: Device) -> Array:
     """Transfer an array to a different device."""
     if not isinstance(device, Device):
         raise TypeError(f"Device must be an instance of Device, got {type(device)}")
-    # if arg.device.id == device.id:
-    #     return arg
+    if arg.device == device:
+        return arg
     return TransferToOp(arg.device, device).forward(arg)
 
 

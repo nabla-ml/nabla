@@ -154,7 +154,7 @@ def learning_rate_schedule(
     return initial_lr * (decay_factor ** (epoch // decay_every))
 
 
-@nb.jit(show_graph=True)
+@nb.jit(show_graph=False)
 def train_step(
     x: nb.Array,
     targets: nb.Array,

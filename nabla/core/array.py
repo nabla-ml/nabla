@@ -85,9 +85,6 @@ class Array:
         self.kernel_impl_path: Optional[Path] = None
         self.custom_kernel_path: Optional[Path] = None
 
-        # Debug print for newly created arrays
-        # print(f"[DEBUG] Created array: name='{name}', shape={shape}, dtype={dtype}")
-
         if materialize:
             self._impl = Tensor(dtype, batch_dims + shape, device=device)
         else:
@@ -100,7 +97,10 @@ class Array:
             return self._impl
         elif isinstance(self._impl, np.ndarray):
             # Convert numpy array to Tensor
-            return Tensor.from_numpy(self._impl)
+            val = Tensor.from_numpy(self._impl)
+            if val.device != self.device:
+                val = val.to(self.device)
+            return val
         else:
             return None
 
@@ -204,7 +204,7 @@ class Array:
         # else:
         array._impl = np_array  # Tensor.from_numpy(np_array)
 
-        array.device = _DEFAULT_CPU
+        # array.device = _DEFAULT_CPU
         return array
 
     def get_arguments(self) -> list[Array]:
@@ -232,20 +232,9 @@ class Array:
 
     def to(self, device: Device) -> Array:
         """Move Array to specified device."""
-        # if self._impl is not of type Tensor, we raise an error
-        if not isinstance(device, Device):
-            raise TypeError(f"Expected Device, got {type(device)}")
-        if self._impl is not None and not isinstance(self._impl, Tensor):
-            raise TypeError(
-                f"Cannot transfer Array with impl type {type(self._impl)} to device {device}"
-            )
-        if self._impl:
-            new_impl = self._impl.to(device)
-            return Array.from_impl(new_impl, name=self.name)
-        else:
-            from ..ops.unary import transfer_to
+        from ..ops.unary import transfer_to
+        return transfer_to(self, device)
 
-            return transfer_to(self, device)
 
     # Operator overloading methods
     def __add__(self, other) -> Array:
