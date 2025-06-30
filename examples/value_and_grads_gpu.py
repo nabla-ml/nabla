@@ -21,14 +21,12 @@ print(f"Using {device} device")
 
 
 def foo(x, y):
-    return nb.sin(x @ y)
+    return nb.sum(nb.relu(x @ y))
 
 
 @nb.jit(show_graph=False)
 def value_and_grads(x, y):
-    value, vjp_fn = nb.vjp(foo, x, y)
-    print("Value device:", value.device)
-    return value, vjp_fn(nb.ones_like(value))
+    return nb.value_and_grad(foo, argnums=(0,1))(x, y)
 
 
 if __name__ == "__main__":

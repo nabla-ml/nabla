@@ -328,7 +328,7 @@ def realize_(
         model_outputs = model.execute(*valid_tensors)
 
         for i, output in enumerate(output_list):
-            output.impl = model_outputs[i]  # type: ignore
+            output.impl_(model_outputs[i])  # type: ignore
 
     except Exception as e:
         raise ValueError(f"Error executing computation: {e}") from e

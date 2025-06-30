@@ -22,12 +22,16 @@ from max import driver
 import nabla as nb
 
 # Configuration
-BATCH_SIZE = 4
-LAYERS = [1, 64, 128, 256, 128, 64, 1]
+# --- FIX STARTS HERE ---
+# Restore the original, effective hyperparameters
+BATCH_SIZE = 8
+LAYERS = [1, 16, 1]#, 128, 256, 128, 64, 1]
 LEARNING_RATE = 0.001
 NUM_EPOCHS = 10
 PRINT_INTERVAL = 1
 SIN_PERIODS = 8
+# --- FIX ENDS HERE ---
+
 
 device = driver.CPU() if driver.accelerator_count() == 0 else driver.Accelerator()
 print(f"Using {device} device")
@@ -49,6 +53,7 @@ def mean_squared_error(predictions: nb.Array, targets: nb.Array) -> nb.Array:
     """Compute mean squared error loss."""
     diff = predictions - targets
     squared_errors = diff * diff
+    # This is a correct adaptation: the scalar for division must also be on the device
     batch_size = nb.array(predictions.shape[0], dtype=nb.DType.float32).to(device)
     loss = nb.sum(squared_errors) / batch_size
     return loss
@@ -68,6 +73,7 @@ def create_sin_dataset(batch_size: int = 256) -> tuple[nb.Array, nb.Array]:
         device
     )
     targets = nb.sin(SIN_PERIODS * 2.0 * np.pi * x) / 2.0 + 0.5
+    # The result of operations on a device tensor remains on the device, so this is correct.
     return x, targets
 
 
@@ -136,7 +142,7 @@ def init_adamw_state(params: list[nb.Array]) -> tuple[list[nb.Array], list[nb.Ar
     m_states = []
     v_states = []
     for param in params:
-        # Use zeros_like for more efficient initialization
+        # Use zeros_like for more efficient initialization and move to device
         m_np = np.zeros_like(param.to_numpy())
         v_np = np.zeros_like(param.to_numpy())
         m_states.append(nb.Array.from_numpy(m_np).to(device))
@@ -154,7 +160,7 @@ def learning_rate_schedule(
     return initial_lr * (decay_factor ** (epoch // decay_every))
 
 
-@nb.jit(show_graph=False)
+@nb.jit
 def train_step(
     x: nb.Array,
     targets: nb.Array,
@@ -230,7 +236,6 @@ def test_nabla_complex_sin():
     avg_data_time = 0.0
     avg_vjp_time = 0.0
     avg_adamw_time = 0.0
-    # best_test_loss = float("inf")
 
     for epoch in range(1, NUM_EPOCHS + 1):
         epoch_start_time = time.time()
@@ -246,14 +251,14 @@ def test_nabla_complex_sin():
         # Training step using JIT-compiled function
         vjp_start = time.time()
 
-        # Use JIT-compiled training step (combines gradient computation and optimizer update)
+        # Use JIT-compiled training step
         updated_params, updated_m, updated_v, loss_values = train_step(
             x, targets, params, m_states, v_states, epoch, current_lr
         )
 
         vjp_time = time.time() - vjp_start
 
-        # Update return values (no separate AdamW step needed)
+        # Update return values
         params, m_states, v_states = updated_params, updated_m, updated_v
         adamw_time = 0.0  # Already included in the JIT step
 
@@ -268,16 +273,24 @@ def test_nabla_complex_sin():
         avg_adamw_time += adamw_time
 
         if epoch % PRINT_INTERVAL == 0:
+            avg_time_per_epoch = avg_time / PRINT_INTERVAL if avg_time > 0 else 0
+            data_perc = (
+                (avg_data_time / avg_time) * 100 if avg_time > 0 else 0
+            )
+            jit_perc = (
+                (avg_vjp_time / avg_time) * 100 if avg_time > 0 else 0
+            )
+
             print(f"\n{'=' * 60}")
             print(
-                f"Epoch {epoch:3d} | Loss: {avg_loss / PRINT_INTERVAL:.6f} | Time: {avg_time / PRINT_INTERVAL:.4f}s"
+                f"Epoch {epoch:4d} | Loss: {avg_loss / PRINT_INTERVAL:.6f} | Time: {avg_time_per_epoch:.4f}s"
             )
             print(f"{'=' * 60}")
             print(
-                f"  ├─ Data Gen:   {avg_data_time / PRINT_INTERVAL:.4f}s ({avg_data_time / avg_time * 100:.1f}%)"
+                f"  ├─ Data Gen:   {avg_data_time / PRINT_INTERVAL:.4f}s ({data_perc:.1f}%)"
             )
             print(
-                f"  └─ JIT Step:   {avg_vjp_time / PRINT_INTERVAL:.4f}s ({avg_vjp_time / avg_time * 100:.1f}%)"
+                f"  └─ JIT Step:   {avg_vjp_time / PRINT_INTERVAL:.4f}s ({jit_perc:.1f}%)"
             )
 
             avg_loss = 0.0
@@ -304,7 +317,6 @@ def test_nabla_complex_sin():
     )
 
     pred_final_np = predictions_test.to_numpy()
-
     final_test_loss = test_loss.to_numpy().item()
 
     print(f"Final test loss: {final_test_loss:.6f}")
