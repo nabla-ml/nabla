@@ -16,8 +16,6 @@ For tutorials and API reference, visit: [nablaml.com](https://www.nablaml.com/in
 pip install nabla-ml
 ```
 
-**Note:** Nabla also includes an [experimental pure Mojo API](https://github.com/nabla-ml/nabla/tree/main/experimental) for native Mojo development.
-
 ## Quick Start
 
 ```python
@@ -32,22 +30,49 @@ foo_grads = nb.jit(nb.vmap(nb.grad(foo)))
 gradients = foo_grads(nb.randn((10, 5)))
 ```
 
-## Development Setup
+## Development Setup and Reproducibility
 
-For contributors and advanced users:
+This guide is for contributors or for reproducing the validation and benchmark results presented in the thesis.
+
+### 1. Initial Setup
+
+First, clone the repository and set up a virtual environment with all necessary dependencies.
 
 ```bash
-# Clone and install in development mode
-git clone https://github.com/nabla-ml/nb.git
+# Clone the repository
+git clone https://github.com/nabla-ml/nabla.git
 cd nabla
-pip install -e ".[dev]"
 
-# Run tests
-pytest
+# Create and activate a virtual environment (recommended)
+python3 -m venv venv
+source venv/bin/activate
 
-# Format and lint code
-ruff format nabla/
-ruff check nabla/ --fix
+# Install all core and development dependencies
+pip install -r requirements-dev.txt
+```
+
+### 2. Run the Correctness Validation Suite
+
+This runs the full test suite described in the thesis to verify Nabla's correctness against JAX.
+
+```bash
+# Navigate to the unit test directory from the project root
+cd nabla/tests/unit
+
+# Execute the unified test script
+python unified.py all -all-configs
+```
+
+### 3. Run the Performance Benchmarks
+
+This script reproduces the performance benchmarks for Nabla, JAX, and PyTorch.
+
+```bash
+# Navigate to the benchmark directory
+cd nabla/tests/benchmarks
+
+# Run the benchmark script
+python benchmark.py
 ```
 
 ## Repository Structure
