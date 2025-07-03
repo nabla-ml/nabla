@@ -1,12 +1,23 @@
-# Include core dependencies
+# Core dependencies for Nabla (also needed for development)
 -r requirements.txt
 
-# Development dependencies
+# --- Development & Validation Dependencies ---
+
+# Testing, Linting & Formatting
 pytest>=7.0
 ruff
 black
 mypy
+pre-commit
+
+# Packaging Tools
 build
 twine
-pre-commit
+
+# --- Comparison Frameworks for Validation & Benchmarking ---
+
+# For correctness validation and performance comparison
 jax
+
+# For performance comparison in benchmarks
+torch
