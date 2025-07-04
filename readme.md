@@ -53,7 +53,7 @@ pip install -r requirements-dev.txt
 
 ### 2. Run the Correctness Validation Suite
 
-This runs the full test suite described in the thesis to verify Nabla's correctness against JAX.
+This runs the full test suite to verify Nabla's correctness against JAX.
 
 ```bash
 # Navigate to the unit test directory from the project root
