@@ -34,8 +34,6 @@ gradients = foo_grads(nb.randn((10, 5)))
 
 This guide is for contributors or for reproducing the validation and benchmark results presented in the thesis.
 
-![alt text](assets/image.png)
-
 ### 1. Initial Setup
 
 First, clone the repository and set up a virtual environment with all necessary dependencies.
@@ -78,6 +76,8 @@ python benchmark.py
 ```
 
 ## Repository Structure
+
+![alt text](assets/image.png)
 
 ```text
 nabla/
