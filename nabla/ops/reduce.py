@@ -65,7 +65,7 @@ class SumOp(ReductionOperation):
         normalized_axes = _normalize_axes(self.axes, len(args[0].shape))
 
         for axis in normalized_axes:
-            if axis != -1 or axis != len(args[0].shape)-1:
+            if axis != -1 or axis != len(args[0].shape) - 1:
                 output_symbol = ops.transpose(output_symbol, axis, -1)
                 output_symbol = ops.sum(output_symbol, axis=-1)
                 output_symbol = ops.transpose(output_symbol, -1, axis)
@@ -225,7 +225,7 @@ class SumBatchDimsOp(ReductionOperation):
         output_symbol = args[0]
         for axis in axes:
             # output_symbol = ops.sum(output_symbol, axis=axis)
-            if axis != -1 or axis != len(args[0].shape)-1:
+            if axis != -1 or axis != len(args[0].shape) - 1:
                 output_symbol = ops.transpose(output_symbol, axis, -1)
                 output_symbol = ops.sum(output_symbol, axis=-1)
                 output_symbol = ops.transpose(output_symbol, -1, axis)
@@ -328,13 +328,13 @@ class MaxOp(ReductionOperation):
 
         for axis in normalized_axes:
             # output_symbol = ops.max(output_symbol, axis=axis)
-            if axis != -1 or axis != len(args[0].shape)-1:
+            if axis != -1 or axis != len(args[0].shape) - 1:
                 output_symbol = ops.transpose(output_symbol, axis, -1)
                 output_symbol = ops.max(output_symbol, axis=-1)
                 output_symbol = ops.transpose(output_symbol, -1, axis)
             else:
                 output_symbol = ops.max(output_symbol, axis=axis)
-        
+
         output.tensor_value = output_symbol
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
@@ -472,7 +472,7 @@ class ArgMaxOp(ReductionOperation):
                 output.tensor_value = ops.transpose(result, -1, self.logical_axis)
             else:
                 output.tensor_value = ops.argmax(input_symbol, axis=self.logical_axis)
-                
+
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         primal = args[0].to_numpy()
 

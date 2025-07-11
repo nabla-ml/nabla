@@ -26,7 +26,7 @@ def foo(x, y):
 
 @nb.jit(show_graph=False)
 def value_and_grads(x, y):
-    return nb.value_and_grad(foo, argnums=(0,1))(x, y)
+    return nb.value_and_grad(foo, argnums=(0, 1))(x, y)
 
 
 if __name__ == "__main__":

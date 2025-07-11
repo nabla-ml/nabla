@@ -770,7 +770,7 @@ class TransferToOp(UnaryOperation):
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         output.impl_(args[0].impl.to(self.target_device))
-        
+
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:

@@ -233,8 +233,8 @@ class Array:
     def to(self, device: Device) -> Array:
         """Move Array to specified device."""
         from ..ops.unary import transfer_to
-        return transfer_to(self, device)
 
+        return transfer_to(self, device)
 
     # Operator overloading methods
     def __add__(self, other) -> Array:

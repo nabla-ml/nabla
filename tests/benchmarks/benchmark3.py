@@ -1,27 +1,3 @@
-"""
-=======================================================================================
-DEFINITIVE BENCHMARKING SUITE FOR NABLA, JAX, AND PYTORCH (CPU) - V18.1 (FIXED)
-=======================================================================================
-This version assumes all frameworks are fully available, simplifying the code and resolving
-all static analysis warnings and runtime errors. It refactors shared logic and
-maintains best practices for clarity and maintainability.
-
-Key Features (V18.1):
-1.  RUNTIME ERROR FIX: Corrected the ValueError ("The truth value of a Series is
-    ambiguous") in the results table gener                formatters[col] = lambda x: f"{x:8.3f}" if isinstance(x, int | float) else (str(x) if pd.notna(x) else "-")tion by implementing a robust comparison logic.
-2.  STATIC ANALYSIS CLEANUP: Addressed Pylance warnings by using more explicit pandas
-    arguments (axis="columns"), removing confusing legacy code, and adding assertions to
-    clarify types for the analyzer.
-3.  UNCONDITIONAL FRAMEWORK DEPENDENCY: Assumes Nabla, JAX, and PyTorch are installed,
-    removing all conditional logic and `try-except` import blocks.
-4.  REFACTORED SCALABILITY LOGIC: The pattern creation for the scalability benchmark
-    is now handled by a dedicated, parameterized function to avoid code duplication.
-5.  MAINTAINED BEST PRACTICES: Continues to use comprehensive tables, robust summary scores
-    (geometric mean), detailed methodology documentation, and clear visual plots for analysis.
-6.  PYTHON 3.10+ TYPE HINTING: Uses `from __future__ import annotations` for cleaner
-    and more modern type hint declarations.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -222,7 +198,9 @@ def get_patterns_and_transforms(dims: dict[str, int]):
     def _torch_transformer_loss(transformer_params, x_input, y_target):
         w_q, w_k, w_v, w_o, w_ff1, w_ff2 = transformer_params
         q, k, v = x_input @ w_q, x_input @ w_k, x_input @ w_v
-        attn_out = torch_functional.softmax(q @ k.transpose(-2, -1) / (E**0.5), dim=-1) @ v
+        attn_out = (
+            torch_functional.softmax(q @ k.transpose(-2, -1) / (E**0.5), dim=-1) @ v
+        )
         x_intermediate = x_input + attn_out @ w_o
         x_final = x_intermediate + torch_functional.relu(x_intermediate @ w_ff1) @ w_ff2
         return -torch.sum(y_target * torch_functional.log_softmax(x_final, dim=-1)) / B
@@ -239,7 +217,14 @@ def get_patterns_and_transforms(dims: dict[str, int]):
         jax_func=jax.grad(_jax_transformer_fwd, argnums=range(2, 8)),
         torch_func=_torch_transformer_grad_wrapper,
         arg_shapes=[
-            (B, S, E), (B, S, E), (E, E), (E, E), (E, E), (E, E), (E, 4 * E), (4 * E, E)
+            (B, S, E),
+            (B, S, E),
+            (E, E),
+            (E, E),
+            (E, E),
+            (E, E),
+            (E, 4 * E),
+            (4 * E, E),
         ],
     )
 
@@ -277,7 +262,9 @@ def get_patterns_and_transforms(dims: dict[str, int]):
     standard_transforms = [
         Transformation("Eager", lambda f: f, lambda f: f, lambda f: f),
         Transformation("Grad", nb.grad, jax.grad, torch.func.grad),  # type: ignore[attr-defined]
-        Transformation("JIT", nb.jit, jax.jit, lambda f: torch.compile(f, mode="max-autotune")),
+        Transformation(
+            "JIT", nb.jit, jax.jit, lambda f: torch.compile(f, mode="max-autotune")
+        ),
         Transformation(
             "JIT(Grad)",
             lambda f: nb.jit(nb.grad(f)),
@@ -287,14 +274,23 @@ def get_patterns_and_transforms(dims: dict[str, int]):
     ]
     transformer_transforms = [
         Transformation("Eager", lambda f: f, lambda f: f, lambda f: f),
-        Transformation("JIT", nb.jit, jax.jit, lambda f: torch.compile(f, mode="max-autotune")),
+        Transformation(
+            "JIT", nb.jit, jax.jit, lambda f: torch.compile(f, mode="max-autotune")
+        ),
     ]
 
     # --- Advanced Patterns (VMap, JVP, VJP, etc.) ---
-    def _nabla_mlp_simple(x, w, b): return nb.sum(nb.relu(x @ w + b))
-    def _jax_mlp_simple(x, w, b): return jnp.sum(jax.nn.relu(x @ w + b))
-    def _torch_mlp_simple(x, w, b): return torch.sum(torch_functional.relu(x @ w + b))
-    def _nabla_mlp_layer_nosum(x, w, b): return nb.relu(x @ w + b)
+    def _nabla_mlp_simple(x, w, b):
+        return nb.sum(nb.relu(x @ w + b))
+
+    def _jax_mlp_simple(x, w, b):
+        return jnp.sum(jax.nn.relu(x @ w + b))
+
+    def _torch_mlp_simple(x, w, b):
+        return torch.sum(torch_functional.relu(x @ w + b))
+
+    def _nabla_mlp_layer_nosum(x, w, b):
+        return nb.relu(x @ w + b)
 
     vmap_pattern = Pattern(
         "Vmap (MLP Layer)",
@@ -305,55 +301,103 @@ def get_patterns_and_transforms(dims: dict[str, int]):
     )
     jvp_pattern = Pattern(
         "JVP (MLP Layer)",
-        lambda x, w, b, t_x: nb.jvp(_nabla_mlp_simple, (x, w, b), (t_x, nb.ones_like(w), nb.ones_like(b)))[1],
-        lambda x, w, b, t_x: jax.jvp(_jax_mlp_simple, (x, w, b), (t_x, jnp.ones_like(w), jnp.ones_like(b)))[1],
-        lambda x, w, b, t_x: torch.func.jvp(_torch_mlp_simple, (x, w, b), (t_x, torch.ones_like(w), torch.ones_like(b)))[1],  # type: ignore[attr-defined]
+        lambda x, w, b, t_x: nb.jvp(
+            _nabla_mlp_simple, (x, w, b), (t_x, nb.ones_like(w), nb.ones_like(b))
+        )[1],
+        lambda x, w, b, t_x: jax.jvp(
+            _jax_mlp_simple, (x, w, b), (t_x, jnp.ones_like(w), jnp.ones_like(b))
+        )[1],
+        lambda x, w, b, t_x: torch.func.jvp(
+            _torch_mlp_simple, (x, w, b), (t_x, torch.ones_like(w), torch.ones_like(b))
+        )[1],  # type: ignore[attr-defined]
         arg_shapes=[(N, D), (D, D), (D,), (N, D)],
     )
     vjp_pattern = Pattern(
         "VJP (MLP Layer)",
         lambda x, w, b, ct: nb.vjp(_nabla_mlp_layer_nosum, x, w, b)[1](ct),
-        lambda x, w, b, ct: jax.vjp(lambda *a: jax.nn.relu(a[0] @ a[1] + a[2]), x, w, b)[1](ct),
-        lambda x, w, b, ct: torch.func.vjp(lambda *a: torch_functional.relu(a[0] @ a[1] + a[2]), x, w, b)[1](ct),  # type: ignore[attr-defined]
+        lambda x, w, b, ct: jax.vjp(
+            lambda *a: jax.nn.relu(a[0] @ a[1] + a[2]), x, w, b
+        )[1](ct),
+        lambda x, w, b, ct: torch.func.vjp(
+            lambda *a: torch_functional.relu(a[0] @ a[1] + a[2]), x, w, b
+        )[1](ct),  # type: ignore[attr-defined]
         arg_shapes=[(N, D), (D, D), (D,), (N, D)],
     )
     hvp_pattern = Pattern(
         "Hessian-Vector Product",
         lambda x, w, b, t_x: nb.jvp(
-            lambda x_in: nb.grad(_nabla_mlp_simple, argnums=0)(x_in, w, b),
-            (x,),
-            (t_x,)
+            lambda x_in: nb.grad(_nabla_mlp_simple, argnums=0)(x_in, w, b), (x,), (t_x,)
         )[1],
         lambda x, w, b, t_x: jax.jvp(
-            lambda x_in: jax.grad(_jax_mlp_simple, argnums=0)(x_in, w, b),
-            (x,),
-            (t_x,)
+            lambda x_in: jax.grad(_jax_mlp_simple, argnums=0)(x_in, w, b), (x,), (t_x,)
         )[1],
         lambda x, w, b, t_x: torch.func.jvp(  # type: ignore[attr-defined]
             lambda x_in: torch.func.grad(_torch_mlp_simple, argnums=0)(x_in, w, b),  # type: ignore[attr-defined]
             (x,),
-            (t_x,)
+            (t_x,),
         )[1],
         arg_shapes=[(N, D), (D, D), (D,), (N, D)],
     )
     jvp_vjp_pattern = Pattern(
         "JVP(VJP(MLP))",
-        lambda x, w, b, ct, t_x: nb.jvp(lambda *a: nb.vjp(_nabla_mlp_simple, *a)[1](ct)[0], (x, w, b), (t_x, nb.ones_like(w), nb.ones_like(b)))[1],
-        lambda x, w, b, ct, t_x: jax.jvp(lambda *a: jax.vjp(_jax_mlp_simple, *a)[1](ct)[0], (x, w, b), (t_x, jnp.ones_like(w), jnp.ones_like(b)))[1],
-        lambda x, w, b, ct, t_x: torch.func.jvp(lambda *a: torch.func.vjp(_torch_mlp_simple, *a)[1](ct)[0], (x, w, b), (t_x, torch.ones_like(w), torch.ones_like(b)))[1],  # type: ignore[attr-defined]
+        lambda x, w, b, ct, t_x: nb.jvp(
+            lambda *a: nb.vjp(_nabla_mlp_simple, *a)[1](ct)[0],
+            (x, w, b),
+            (t_x, nb.ones_like(w), nb.ones_like(b)),
+        )[1],
+        lambda x, w, b, ct, t_x: jax.jvp(
+            lambda *a: jax.vjp(_jax_mlp_simple, *a)[1](ct)[0],
+            (x, w, b),
+            (t_x, jnp.ones_like(w), jnp.ones_like(b)),
+        )[1],
+        lambda x, w, b, ct, t_x: torch.func.jvp(
+            lambda *a: torch.func.vjp(_torch_mlp_simple, *a)[1](ct)[0],
+            (x, w, b),
+            (t_x, torch.ones_like(w), torch.ones_like(b)),
+        )[1],  # type: ignore[attr-defined]
         arg_shapes=[(N, D), (D, D), (D,), (), (N, D)],
     )
     vjp_jvp_pattern = Pattern(
         "VJP(JVP(MLP))",
-        lambda x, w, b, t_x, ct: nb.vjp(lambda *a: nb.jvp(_nabla_mlp_simple, a, (t_x, nb.ones_like(w), nb.ones_like(b)))[1], x, w, b)[1](ct),
-        lambda x, w, b, t_x, ct: jax.vjp(lambda *a: jax.jvp(_jax_mlp_simple, a, (t_x, jnp.ones_like(w), jnp.ones_like(b)))[1], x, w, b)[1](ct),
-        lambda x, w, b, t_x, ct: torch.func.vjp(lambda *a: torch.func.jvp(_torch_mlp_simple, a, (t_x, torch.ones_like(w), torch.ones_like(b)))[1], x, w, b)[1](ct),  # type: ignore[attr-defined]
+        lambda x, w, b, t_x, ct: nb.vjp(
+            lambda *a: nb.jvp(
+                _nabla_mlp_simple, a, (t_x, nb.ones_like(w), nb.ones_like(b))
+            )[1],
+            x,
+            w,
+            b,
+        )[1](ct),
+        lambda x, w, b, t_x, ct: jax.vjp(
+            lambda *a: jax.jvp(
+                _jax_mlp_simple, a, (t_x, jnp.ones_like(w), jnp.ones_like(b))
+            )[1],
+            x,
+            w,
+            b,
+        )[1](ct),
+        lambda x, w, b, t_x, ct: torch.func.vjp(
+            lambda *a: torch.func.jvp(
+                _torch_mlp_simple, a, (t_x, torch.ones_like(w), torch.ones_like(b))
+            )[1],
+            x,
+            w,
+            b,
+        )[1](ct),  # type: ignore[attr-defined]
         arg_shapes=[(N, D), (D, D), (D,), (N, D), ()],
     )
-    advanced_patterns = [vmap_pattern, jvp_pattern, vjp_pattern, hvp_pattern, jvp_vjp_pattern, vjp_jvp_pattern]
+    advanced_patterns = [
+        vmap_pattern,
+        jvp_pattern,
+        vjp_pattern,
+        hvp_pattern,
+        jvp_vjp_pattern,
+        vjp_jvp_pattern,
+    ]
     advanced_transforms = [
         Transformation("Eager", lambda f: f, lambda f: f, lambda f: f),
-        Transformation("JIT", nb.jit, jax.jit, lambda f: torch.compile(f, mode="max-autotune")),
+        Transformation(
+            "JIT", nb.jit, jax.jit, lambda f: torch.compile(f, mode="max-autotune")
+        ),
     ]
 
     return (
@@ -405,11 +449,15 @@ class BenchmarkRunner:
             f"{'=' * 80}{BColors.ENDC}"
         )
 
-    def run(self, patterns: list[Pattern], transforms: list[Transformation]) -> pd.DataFrame:
+    def run(
+        self, patterns: list[Pattern], transforms: list[Transformation]
+    ) -> pd.DataFrame:
         """Runs a set of patterns through a set of transformations."""
         torch._dynamo.reset()
         for pattern in patterns:
-            print(f"\n{BColors.OKBLUE}{'-' * 20} PATTERN: {pattern.name} {'-' * 20}{BColors.ENDC}")
+            print(
+                f"\n{BColors.OKBLUE}{'-' * 20} PATTERN: {pattern.name} {'-' * 20}{BColors.ENDC}"
+            )
             for trans in transforms:
                 print(f"  {BColors.OKCYAN}--> MODE: {trans.name}{BColors.ENDC}")
                 self._run_single_test(pattern, trans)
@@ -420,23 +468,51 @@ class BenchmarkRunner:
         # The __post_init__ call ensures arg_dtypes is not None, but we assert for static analysis.
         assert pattern.arg_dtypes is not None, "Pattern dtypes must be initialized"
         try:
-            args_nabla = tuple(
-                self.dm.get_tensor(s, "nabla", dt)
-                for s, dt in zip(pattern.arg_shapes, pattern.arg_dtypes, strict=True)
-            ) if "Nabla" in self.frameworks_to_run else None
+            args_nabla = (
+                tuple(
+                    self.dm.get_tensor(s, "nabla", dt)
+                    for s, dt in zip(
+                        pattern.arg_shapes, pattern.arg_dtypes, strict=True
+                    )
+                )
+                if "Nabla" in self.frameworks_to_run
+                else None
+            )
 
-            args_jax = tuple(
-                self.dm.get_tensor(s, "jax", dt)
-                for s, dt in zip(pattern.arg_shapes, pattern.arg_dtypes, strict=True)
-            ) if "JAX" in self.frameworks_to_run else None
+            args_jax = (
+                tuple(
+                    self.dm.get_tensor(s, "jax", dt)
+                    for s, dt in zip(
+                        pattern.arg_shapes, pattern.arg_dtypes, strict=True
+                    )
+                )
+                if "JAX" in self.frameworks_to_run
+                else None
+            )
 
-            args_torch = tuple(
-                self.dm.get_tensor(s, "torch", dt)
-                for s, dt in zip(pattern.arg_shapes, pattern.arg_dtypes, strict=True)
-            ) if "PyTorch" in self.frameworks_to_run else None
+            args_torch = (
+                tuple(
+                    self.dm.get_tensor(s, "torch", dt)
+                    for s, dt in zip(
+                        pattern.arg_shapes, pattern.arg_dtypes, strict=True
+                    )
+                )
+                if "PyTorch" in self.frameworks_to_run
+                else None
+            )
         except Exception as e:
-            print(f"      {BColors.FAIL}Argument Preparation FAILED for {pattern.name}: {e}{BColors.ENDC}")
-            self.results.append({"Benchmark": self.config_name, "Pattern": pattern.name, "Transform": trans.name, "Framework": "All", "Error": "Argument Prep Failed"})
+            print(
+                f"      {BColors.FAIL}Argument Preparation FAILED for {pattern.name}: {e}{BColors.ENDC}"
+            )
+            self.results.append(
+                {
+                    "Benchmark": self.config_name,
+                    "Pattern": pattern.name,
+                    "Transform": trans.name,
+                    "Framework": "All",
+                    "Error": "Argument Prep Failed",
+                }
+            )
             return
 
         framework_funcs = {
@@ -453,9 +529,26 @@ class BenchmarkRunner:
                 assert args is not None, "Args should not be None here"
                 self._measure_and_store(fw_name, func, args, pattern.name, trans.name)
             else:
-                self.results.append({"Benchmark": self.config_name, "Pattern": pattern.name, "Transform": trans.name, "Framework": fw_name, "Time (ms)": np.nan, "First Run Time (ms)": np.nan, "Error": "Skipped (N/A)"})
+                self.results.append(
+                    {
+                        "Benchmark": self.config_name,
+                        "Pattern": pattern.name,
+                        "Transform": trans.name,
+                        "Framework": fw_name,
+                        "Time (ms)": np.nan,
+                        "First Run Time (ms)": np.nan,
+                        "Error": "Skipped (N/A)",
+                    }
+                )
 
-    def _measure_and_store(self, fw_name: str, func: Callable, args: tuple[Any, ...], pattern_name: str, trans_name: str):
+    def _measure_and_store(
+        self,
+        fw_name: str,
+        func: Callable,
+        args: tuple[Any, ...],
+        pattern_name: str,
+        trans_name: str,
+    ):
         """
         Measures and records the performance of a given function. This method follows a rigorous
         procedure to ensure fair and accurate timing:
@@ -477,6 +570,7 @@ class BenchmarkRunner:
         try:
             # Create a wrapper that includes the appropriate synchronization call
             if fw_name == "JAX":
+
                 def timed_func():
                     res = func(*args)
                     jax.block_until_ready(res)
@@ -486,6 +580,7 @@ class BenchmarkRunner:
                     func(*args)
                     torch.cpu.synchronize()
             else:  # Nabla is synchronous
+
                 def timed_func():
                     func(*args)
 
@@ -499,11 +594,34 @@ class BenchmarkRunner:
             times = timer.repeat(repeat=self.timeit_repeats, number=self.timeit_runs)
             steady_state_ms = (min(times) / self.timeit_runs) * 1000
 
-            print(f"      {fw_name:<8} First Run: {first_run_ms:8.3f} ms | Steady State: {steady_state_ms:8.3f} ms")
-            self.results.append({"Benchmark": self.config_name, "Pattern": pattern_name, "Transform": trans_name, "Framework": fw_name, "Time (ms)": steady_state_ms, "First Run Time (ms)": first_run_ms})
+            print(
+                f"      {fw_name:<8} First Run: {first_run_ms:8.3f} ms | Steady State: {steady_state_ms:8.3f} ms"
+            )
+            self.results.append(
+                {
+                    "Benchmark": self.config_name,
+                    "Pattern": pattern_name,
+                    "Transform": trans_name,
+                    "Framework": fw_name,
+                    "Time (ms)": steady_state_ms,
+                    "First Run Time (ms)": first_run_ms,
+                }
+            )
         except Exception as e:
-            print(f"      {BColors.FAIL}{fw_name:<8} FAILED ({type(e).__name__}): {str(e)[:150]}{BColors.ENDC}")
-            self.results.append({"Benchmark": self.config_name, "Pattern": pattern_name, "Transform": trans_name, "Framework": fw_name, "Time (ms)": np.nan, "First Run Time (ms)": np.nan, "Error": str(e)[:100]})
+            print(
+                f"      {BColors.FAIL}{fw_name:<8} FAILED ({type(e).__name__}): {str(e)[:150]}{BColors.ENDC}"
+            )
+            self.results.append(
+                {
+                    "Benchmark": self.config_name,
+                    "Pattern": pattern_name,
+                    "Transform": trans_name,
+                    "Framework": fw_name,
+                    "Time (ms)": np.nan,
+                    "First Run Time (ms)": np.nan,
+                    "Error": str(e)[:100],
+                }
+            )
 
 
 # ============================================================================
@@ -527,21 +645,39 @@ class ResultAnalyzer:
         )
         if not pivot_df.empty:
             # Ensure framework order is consistent
-            frameworks_in_pivot = pivot_df.columns.get_level_values("Framework").unique()
-            frameworks_to_reindex = [fw for fw in self.frameworks if fw in frameworks_in_pivot]
+            frameworks_in_pivot = pivot_df.columns.get_level_values(
+                "Framework"
+            ).unique()
+            frameworks_to_reindex = [
+                fw for fw in self.frameworks if fw in frameworks_in_pivot
+            ]
             if frameworks_to_reindex:
-                pivot_df = pivot_df.reindex(frameworks_to_reindex, axis=1, level="Framework")
+                pivot_df = pivot_df.reindex(
+                    frameworks_to_reindex, axis=1, level="Framework"
+                )
         return pivot_df
 
     def _build_comprehensive_table(
-        self, pivot_df: pd.DataFrame, base_transform: str, jit_transform: str, time_col_suffix: str
+        self,
+        pivot_df: pd.DataFrame,
+        base_transform: str,
+        jit_transform: str,
+        time_col_suffix: str,
     ) -> pd.DataFrame:
         """Builds a single table comparing Eager, JIT, and Speedup for all frameworks."""
         if pivot_df.empty:
             return pd.DataFrame()
 
-        base_cols = [(fw, base_transform) for fw in self.frameworks if (fw, base_transform) in pivot_df.columns]
-        jit_cols = [(fw, jit_transform) for fw in self.frameworks if (fw, jit_transform) in pivot_df.columns]
+        base_cols = [
+            (fw, base_transform)
+            for fw in self.frameworks
+            if (fw, base_transform) in pivot_df.columns
+        ]
+        jit_cols = [
+            (fw, jit_transform)
+            for fw in self.frameworks
+            if (fw, jit_transform) in pivot_df.columns
+        ]
 
         relevant_cols = base_cols + jit_cols
         if not relevant_cols:
@@ -552,13 +688,17 @@ class ResultAnalyzer:
             return pd.DataFrame()
 
         if jit_cols:
-            filtered_pivot["Best JIT Time"] = filtered_pivot[jit_cols].min(axis="columns")
+            filtered_pivot["Best JIT Time"] = filtered_pivot[jit_cols].min(
+                axis="columns"
+            )
         else:
             filtered_pivot["Best JIT Time"] = np.nan
 
         summary_data = []
         for idx, row_series in filtered_pivot.iterrows():
-            assert isinstance(idx, tuple) and len(idx) >= 2, "Index should be a tuple with at least 2 elements"
+            assert isinstance(idx, tuple) and len(idx) >= 2, (
+                "Index should be a tuple with at least 2 elements"
+            )
             row_dict = {"Benchmark": idx[0], "Pattern": idx[1]}
 
             best_time_for_row = row_series["Best JIT Time"]
@@ -585,7 +725,9 @@ class ResultAnalyzer:
 
                 if is_best:
                     try:
-                        row_dict[f"{fw} {jit_transform} {time_col_suffix}"] = f"{float(jit_time):8.3f}*"
+                        row_dict[f"{fw} {jit_transform} {time_col_suffix}"] = (
+                            f"{float(jit_time):8.3f}*"
+                        )
                     except (ValueError, TypeError):
                         row_dict[f"{fw} {jit_transform} {time_col_suffix}"] = jit_time
                 else:
@@ -612,7 +754,13 @@ class ResultAnalyzer:
         final_df = pd.DataFrame(summary_data).set_index(["Benchmark", "Pattern"])
         col_order = []
         for fw in self.frameworks:
-            col_order.extend([f"{fw} {base_transform} {time_col_suffix}", f"{fw} {jit_transform} {time_col_suffix}", f"{fw} Speedup (x)"])
+            col_order.extend(
+                [
+                    f"{fw} {base_transform} {time_col_suffix}",
+                    f"{fw} {jit_transform} {time_col_suffix}",
+                    f"{fw} Speedup (x)",
+                ]
+            )
 
         # Only include columns that were actually created.
         return final_df[[c for c in col_order if c in final_df.columns]]
@@ -620,31 +768,50 @@ class ResultAnalyzer:
     def display_table(self, df: pd.DataFrame, title: str):
         if df.empty:
             return
-        print(f"\n\n{BColors.HEADER}{'=' * 110}\n{title.center(110)}\n{'=' * 110}{BColors.ENDC}")
+        print(
+            f"\n\n{BColors.HEADER}{'=' * 110}\n{title.center(110)}\n{'=' * 110}{BColors.ENDC}"
+        )
 
         # Sort benchmarks for consistent order
         all_benchmarks = df.index.get_level_values("Benchmark").unique()
         key_order = ["MICRO-BENCH", "MACRO-BENCH", "TRANSFORMER", "ADVANCED-BENCH"]
         sorted_benchmarks = [b for b in key_order if b in all_benchmarks]
-        other_benchmarks = sorted([b for b in all_benchmarks if b not in sorted_benchmarks])
+        other_benchmarks = sorted(
+            [b for b in all_benchmarks if b not in sorted_benchmarks]
+        )
         df = df.reindex(sorted_benchmarks + other_benchmarks, level="Benchmark")
 
         # Formatters for clean printing
         formatters = {}
         for col in df.columns:
             if "Time (ms)" in col or "Compile Time (ms)" in col:
-                formatters[col] = lambda x: f"{x:8.3f}" if isinstance(x, int | float) else (str(x) if pd.notna(x) else "-")
+                formatters[col] = (
+                    lambda x: f"{x:8.3f}"
+                    if isinstance(x, int | float)
+                    else (str(x) if pd.notna(x) else "-")
+                )
             elif "Speedup" in col:
                 formatters[col] = lambda x: f"{x:.2f}x" if pd.notna(x) else "-"
 
-        with pd.option_context("display.max_rows", None, "display.width", 200, "display.colheader_justify", "right"):
+        with pd.option_context(
+            "display.max_rows",
+            None,
+            "display.width",
+            200,
+            "display.colheader_justify",
+            "right",
+        ):
             print(df.to_string(formatters=formatters, na_rep="-"))
 
-    def display_summary_score(self, pivot_df: pd.DataFrame, transform_name: str, title: str):
+    def display_summary_score(
+        self, pivot_df: pd.DataFrame, transform_name: str, title: str
+    ):
         try:
-            transform_df = pivot_df.xs(transform_name, level="Transform", axis=1).dropna(how="all")
+            transform_df = pivot_df.xs(
+                transform_name, level="Transform", axis=1
+            ).dropna(how="all")
         except KeyError:
-            return # This transform doesn't exist for this benchmark
+            return  # This transform doesn't exist for this benchmark
 
         if transform_df.empty:
             return
@@ -654,12 +821,16 @@ class ResultAnalyzer:
         # Geometric mean ignores NaNs automatically
         geo_mean = np.exp(np.log(relative_perf).mean()).sort_values()
 
-        print(f"\n\n{BColors.HEADER}{'=' * 70}\n{title.center(70)}\n"
-              f"{'(Geometric Mean of Perf. Relative to Best - Lower is Better)'.center(70)}\n"
-              f"{'=' * 70}{BColors.ENDC}")
+        print(
+            f"\n\n{BColors.HEADER}{'=' * 70}\n{title.center(70)}\n"
+            f"{'(Geometric Mean of Perf. Relative to Best - Lower is Better)'.center(70)}\n"
+            f"{'=' * 70}{BColors.ENDC}"
+        )
         print(geo_mean.to_string(float_format="%.2fx"))
 
-    def plot_comparison(self, time_column: str, transform: str, benchmark: str, title_suffix: str):
+    def plot_comparison(
+        self, time_column: str, transform: str, benchmark: str, title_suffix: str
+    ):
         pivot_df = self._create_summary_df(time_column)
         if pivot_df.empty:
             return
@@ -667,35 +838,53 @@ class ResultAnalyzer:
         try:
             # Check if the transform exists
             if transform not in pivot_df.columns.get_level_values("Transform"):
-                print(f"{BColors.WARNING}\nTransform '{transform}' not found in pivot table. Available transforms: {list(pivot_df.columns.get_level_values('Transform').unique())}{BColors.ENDC}")
+                print(
+                    f"{BColors.WARNING}\nTransform '{transform}' not found in pivot table. Available transforms: {list(pivot_df.columns.get_level_values('Transform').unique())}{BColors.ENDC}"
+                )
                 return
-                
-            df_to_plot = pivot_df.xs(transform, level="Transform", axis=1).dropna(how="all")
+
+            df_to_plot = pivot_df.xs(transform, level="Transform", axis=1).dropna(
+                how="all"
+            )
             if benchmark.startswith("SCALABILITY"):
                 # For scalability, we need to handle multiple benchmark entries
-                scalability_data = df_to_plot[df_to_plot.index.get_level_values("Benchmark").str.startswith("SCALABILITY")]
+                scalability_data = df_to_plot[
+                    df_to_plot.index.get_level_values("Benchmark").str.startswith(
+                        "SCALABILITY"
+                    )
+                ]
                 if scalability_data.empty:
                     # Debug: print available benchmarks
-                    available_benchmarks = df_to_plot.index.get_level_values("Benchmark").unique().tolist()
-                    print(f"{BColors.WARNING}\nCould not generate plot: No scalability data found for transform '{transform}'.{BColors.ENDC}")
-                    print(f"{BColors.WARNING}Available benchmarks: {available_benchmarks}{BColors.ENDC}")
+                    available_benchmarks = (
+                        df_to_plot.index.get_level_values("Benchmark").unique().tolist()
+                    )
+                    print(
+                        f"{BColors.WARNING}\nCould not generate plot: No scalability data found for transform '{transform}'.{BColors.ENDC}"
+                    )
+                    print(
+                        f"{BColors.WARNING}Available benchmarks: {available_benchmarks}{BColors.ENDC}"
+                    )
                     return
-                
+
                 # Extract size from the benchmark name (e.g., "SCALABILITY-BENCH (Size=64)")
                 benchmark_names = scalability_data.index.get_level_values("Benchmark")
-                sizes = benchmark_names.str.extract(r"Size=(\d+)")[0]  # Extract size from benchmark name
-                
+                sizes = benchmark_names.str.extract(r"Size=(\d+)")[
+                    0
+                ]  # Extract size from benchmark name
+
                 # Reset index to make manipulation easier
                 scalability_reset = scalability_data.reset_index()
-                scalability_reset["Size"] = pd.to_numeric(sizes, errors='coerce').fillna(0).astype(int)
-                
+                scalability_reset["Size"] = (
+                    pd.to_numeric(sizes, errors="coerce").fillna(0).astype(int)
+                )
+
                 # Melt the dataframe to get it in the right format for plotting
                 df_to_plot = scalability_reset.melt(
-                    id_vars=["Benchmark", "Pattern", "Size"], 
-                    var_name="Framework", 
-                    value_name="Time (ms)"
+                    id_vars=["Benchmark", "Pattern", "Size"],
+                    var_name="Framework",
+                    value_name="Time (ms)",
                 )
-                
+
                 # Remove any rows with invalid sizes or missing data
                 df_to_plot = df_to_plot.dropna(subset=["Size", "Time (ms)"])
                 df_to_plot = df_to_plot[df_to_plot["Size"] > 0]  # Remove invalid sizes
@@ -703,10 +892,14 @@ class ResultAnalyzer:
                 df_to_plot = df_to_plot.loc[benchmark].stack().reset_index()
                 df_to_plot.columns = ["Pattern", "Framework", "Time (ms)"]
         except (KeyError, IndexError):
-            print(f"{BColors.WARNING}\nCould not generate plot: Data for Transform='{transform}', Benchmark='{benchmark}' not found.{BColors.ENDC}")
+            print(
+                f"{BColors.WARNING}\nCould not generate plot: Data for Transform='{transform}', Benchmark='{benchmark}' not found.{BColors.ENDC}"
+            )
             return
         if df_to_plot.empty:
-            print(f"{BColors.WARNING}\nCould not generate plot: No data for '{benchmark}' after filtering.{BColors.ENDC}")
+            print(
+                f"{BColors.WARNING}\nCould not generate plot: No data for '{benchmark}' after filtering.{BColors.ENDC}"
+            )
             return
 
         plt.style.use("seaborn-v0_8-whitegrid")
@@ -714,13 +907,30 @@ class ResultAnalyzer:
         palette = "viridis"
 
         if benchmark.startswith("SCALABILITY"):
-            sns.lineplot(data=df_to_plot, x="Size", y="Time (ms)", hue="Framework", marker="o", ax=ax, palette=palette)
+            sns.lineplot(
+                data=df_to_plot,
+                x="Size",
+                y="Time (ms)",
+                hue="Framework",
+                marker="o",
+                ax=ax,
+                palette=palette,
+            )
             ax.set_xscale("log", base=2)
             ax.set_yscale("log")
             ax.set_xlabel("Matrix Size (N in N,N)", fontsize=12)
-            ax.set_title(f"Framework Scaling: {title_suffix}", fontsize=16, weight="bold")
+            ax.set_title(
+                f"Framework Scaling: {title_suffix}", fontsize=16, weight="bold"
+            )
         else:
-            sns.barplot(data=df_to_plot, x="Pattern", y="Time (ms)", hue="Framework", ax=ax, palette=palette)
+            sns.barplot(
+                data=df_to_plot,
+                x="Pattern",
+                y="Time (ms)",
+                hue="Framework",
+                ax=ax,
+                palette=palette,
+            )
             ax.set_xlabel("Benchmark Pattern", fontsize=12)
             ax.tick_params(axis="x", rotation=15)
             if df_to_plot["Time (ms)"].max() / df_to_plot["Time (ms)"].min() > 10:
@@ -740,61 +950,104 @@ class ResultAnalyzer:
             print(f"{BColors.WARNING}No results to analyze.{BColors.ENDC}")
             return
 
-        print(f"\n{BColors.OKBLUE}{BColors.BOLD}--- STEADY STATE PERFORMANCE ---{BColors.ENDC}")
+        print(
+            f"\n{BColors.OKBLUE}{BColors.BOLD}--- STEADY STATE PERFORMANCE ---{BColors.ENDC}"
+        )
         pivot_steady = self._create_summary_df("Time (ms)")
         if not pivot_steady.empty:
-            self.display_table(self._build_comprehensive_table(pivot_steady, "Eager", "JIT", "Time (ms)"), "FORWARD PASS PERFORMANCE (LOWER TIME | HIGHER SPEEDUP IS BETTER)")
-            self.display_table(self._build_comprehensive_table(pivot_steady, "Grad", "JIT(Grad)", "Time (ms)"), "GRADIENT PASS PERFORMANCE (LOWER TIME | HIGHER SPEEDUP IS BETTER)")
+            self.display_table(
+                self._build_comprehensive_table(
+                    pivot_steady, "Eager", "JIT", "Time (ms)"
+                ),
+                "FORWARD PASS PERFORMANCE (LOWER TIME | HIGHER SPEEDUP IS BETTER)",
+            )
+            self.display_table(
+                self._build_comprehensive_table(
+                    pivot_steady, "Grad", "JIT(Grad)", "Time (ms)"
+                ),
+                "GRADIENT PASS PERFORMANCE (LOWER TIME | HIGHER SPEEDUP IS BETTER)",
+            )
             for bench_name in pivot_steady.index.get_level_values("Benchmark").unique():
                 if not bench_name.startswith("SCALABILITY"):
                     bench_pivot = pivot_steady.loc[[bench_name]]
-                    self.display_summary_score(bench_pivot, "JIT", f"OVERALL JIT SCORE: {bench_name}")
-                    self.display_summary_score(bench_pivot, "JIT(Grad)", f"OVERALL JIT(GRAD) SCORE: {bench_name}")
+                    self.display_summary_score(
+                        bench_pivot, "JIT", f"OVERALL JIT SCORE: {bench_name}"
+                    )
+                    self.display_summary_score(
+                        bench_pivot,
+                        "JIT(Grad)",
+                        f"OVERALL JIT(GRAD) SCORE: {bench_name}",
+                    )
 
-        print(f"\n{BColors.OKBLUE}{BColors.BOLD}--- FIRST RUN (COMPILATION OVERHEAD) PERFORMANCE ---{BColors.ENDC}")
+        print(
+            f"\n{BColors.OKBLUE}{BColors.BOLD}--- FIRST RUN (COMPILATION OVERHEAD) PERFORMANCE ---{BColors.ENDC}"
+        )
         pivot_first_run = self._create_summary_df("First Run Time (ms)")
         if not pivot_first_run.empty:
-            self.display_table(self._build_comprehensive_table(pivot_first_run, "Eager", "JIT", "Compile Time (ms)"), "FORWARD PASS COMPILATION OVERHEAD")
-            self.display_table(self._build_comprehensive_table(pivot_first_run, "Grad", "JIT(Grad)", "Compile Time (ms)"), "GRADIENT PASS COMPILATION OVERHEAD")
+            self.display_table(
+                self._build_comprehensive_table(
+                    pivot_first_run, "Eager", "JIT", "Compile Time (ms)"
+                ),
+                "FORWARD PASS COMPILATION OVERHEAD",
+            )
+            self.display_table(
+                self._build_comprehensive_table(
+                    pivot_first_run, "Grad", "JIT(Grad)", "Compile Time (ms)"
+                ),
+                "GRADIENT PASS COMPILATION OVERHEAD",
+            )
 
         print(f"\n{BColors.OKBLUE}{BColors.BOLD}--- GENERATING PLOTS ---{BColors.ENDC}")
         benchmarks_to_plot = self.df["Benchmark"].unique()
         pivot_steady = self._create_summary_df("Time (ms)")
-        
+
         if pivot_steady.empty:
             print(f"{BColors.WARNING}No data available for plotting.{BColors.ENDC}")
             return
-            
-        available_transforms = pivot_steady.columns.get_level_values("Transform").unique()
-        
+
+        available_transforms = pivot_steady.columns.get_level_values(
+            "Transform"
+        ).unique()
+
         # Plot regular benchmarks
         for bench in benchmarks_to_plot:
             if bench.startswith("SCALABILITY"):
                 continue
-            
+
             # Only plot if the transform exists for this benchmark
             if "JIT" in available_transforms:
                 try:
                     bench_data = pivot_steady.loc[[bench]]
                     if "JIT" in bench_data.columns.get_level_values("Transform"):
-                        self.plot_comparison("Time (ms)", "JIT", bench, "JIT Steady State")
+                        self.plot_comparison(
+                            "Time (ms)", "JIT", bench, "JIT Steady State"
+                        )
                 except (KeyError, IndexError):
                     pass
-                    
+
             if "JIT(Grad)" in available_transforms:
                 try:
                     bench_data = pivot_steady.loc[[bench]]
                     if "JIT(Grad)" in bench_data.columns.get_level_values("Transform"):
-                        self.plot_comparison("Time (ms)", "JIT(Grad)", bench, "JIT(Grad) Steady State")
+                        self.plot_comparison(
+                            "Time (ms)", "JIT(Grad)", bench, "JIT(Grad) Steady State"
+                        )
                 except (KeyError, IndexError):
                     pass
-        
+
         # Plot scalability benchmark if present
         if any(b.startswith("SCALABILITY") for b in benchmarks_to_plot):
             try:
-                self.plot_comparison("Time (ms)", "JIT(Grad)", "SCALABILITY", "MLP Layer Gradient Scaling")
+                self.plot_comparison(
+                    "Time (ms)",
+                    "JIT(Grad)",
+                    "SCALABILITY",
+                    "MLP Layer Gradient Scaling",
+                )
             except Exception as e:
-                print(f"{BColors.WARNING}Could not generate scalability plot: {e}{BColors.ENDC}")
+                print(
+                    f"{BColors.WARNING}Could not generate scalability plot: {e}{BColors.ENDC}"
+                )
 
 
 # ============================================================================
@@ -803,22 +1056,57 @@ class ResultAnalyzer:
 def print_environment_info():
     print(f"{BColors.BOLD}Environment Information:{BColors.ENDC}")
     print(f"  - Python Version: {sys.version.split(' ')[0]}")
-    print(f"  - Platform: {platform.system()} {platform.release()} ({platform.machine()})")
+    print(
+        f"  - Platform: {platform.system()} {platform.release()} ({platform.machine()})"
+    )
     try:
         import cpuinfo
+
         print(f"  - CPU: {cpuinfo.get_cpu_info()['brand_raw']}")
     except ImportError:
         print("  - CPU: (Install 'py-cpuinfo' for details)")
-    print(f"  - Library Versions:\n    - Nabla:   {NABLA_VERSION}\n    - JAX:     {JAX_VERSION}\n    - PyTorch: {TORCH_VERSION}\n    - NumPy:   {np.__version__}")
+    print(
+        f"  - Library Versions:\n    - Nabla:   {NABLA_VERSION}\n    - JAX:     {JAX_VERSION}\n    - PyTorch: {TORCH_VERSION}\n    - NumPy:   {np.__version__}"
+    )
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Nabla/JAX/PyTorch Benchmarking Suite", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--benchmarks", nargs="+", default=["micro", "macro", "transformer", "advanced", "scalability"], choices=["micro", "macro", "transformer", "advanced", "scalability", "all"], help="Which benchmarks to run.")
-    parser.add_argument("--frameworks", nargs="+", default=["Nabla", "JAX", "PyTorch"], choices=["Nabla", "JAX", "PyTorch"], help="Which frameworks to test.")
-    parser.add_argument("--runs", type=int, default=TIMEIT_RUNS_DEFAULT, help="Number of runs per timing loop.")
-    parser.add_argument("--repeats", type=int, default=TIMEIT_REPEATS_DEFAULT, help="Number of repeat timing loops.")
-    parser.add_argument("--output-csv", type=str, default="benchmark_results.csv", help="Path to save the raw timing results CSV file.")
+    parser = argparse.ArgumentParser(
+        description="Nabla/JAX/PyTorch Benchmarking Suite",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "--benchmarks",
+        nargs="+",
+        default=["micro", "macro", "transformer", "advanced", "scalability"],
+        choices=["micro", "macro", "transformer", "advanced", "scalability", "all"],
+        help="Which benchmarks to run.",
+    )
+    parser.add_argument(
+        "--frameworks",
+        nargs="+",
+        default=["Nabla", "JAX", "PyTorch"],
+        choices=["Nabla", "JAX", "PyTorch"],
+        help="Which frameworks to test.",
+    )
+    parser.add_argument(
+        "--runs",
+        type=int,
+        default=TIMEIT_RUNS_DEFAULT,
+        help="Number of runs per timing loop.",
+    )
+    parser.add_argument(
+        "--repeats",
+        type=int,
+        default=TIMEIT_REPEATS_DEFAULT,
+        help="Number of repeat timing loops.",
+    )
+    parser.add_argument(
+        "--output-csv",
+        type=str,
+        default="benchmark_results.csv",
+        help="Path to save the raw timing results CSV file.",
+    )
     args = parser.parse_args()
 
     if "all" in args.benchmarks:
@@ -828,32 +1116,46 @@ def main():
     dm = DataManager(SEED)
     all_results = []
 
-    print(f"\n{BColors.BOLD}Running benchmarks: {', '.join(args.benchmarks)}{BColors.ENDC}")
-    print(f"{BColors.BOLD}Testing frameworks: {', '.join(args.frameworks)}{BColors.ENDC}")
-    print(f"{BColors.BOLD}Timing config: {args.repeats} repeats, {args.runs} runs each.{BColors.ENDC}")
+    print(
+        f"\n{BColors.BOLD}Running benchmarks: {', '.join(args.benchmarks)}{BColors.ENDC}"
+    )
+    print(
+        f"{BColors.BOLD}Testing frameworks: {', '.join(args.frameworks)}{BColors.ENDC}"
+    )
+    print(
+        f"{BColors.BOLD}Timing config: {args.repeats} repeats, {args.runs} runs each.{BColors.ENDC}"
+    )
 
     if "micro" in args.benchmarks:
         dims = {"N": 4, "D": 8, "B": 0, "S": 0, "E": 0}
         p, t, _, _, _, _, _ = get_patterns_and_transforms(dims)
-        runner = BenchmarkRunner("MICRO-BENCH", dm, args.runs, args.repeats, args.frameworks, **dims)
+        runner = BenchmarkRunner(
+            "MICRO-BENCH", dm, args.runs, args.repeats, args.frameworks, **dims
+        )
         all_results.append(runner.run(p, t))
 
     if "macro" in args.benchmarks:
         dims = {"N": 512, "D": 1024, "B": 0, "S": 0, "E": 0, "N_LAYERS_MLP": 16}
         b_p, s_t, _, _, mlp_p, _, _ = get_patterns_and_transforms(dims)
-        runner = BenchmarkRunner("MACRO-BENCH", dm, args.runs, args.repeats, args.frameworks, **dims)
+        runner = BenchmarkRunner(
+            "MACRO-BENCH", dm, args.runs, args.repeats, args.frameworks, **dims
+        )
         all_results.append(runner.run(b_p + [mlp_p], s_t))
 
     if "transformer" in args.benchmarks:
         dims = {"N": 0, "D": 0, "B": 16, "S": 256, "E": 512}
         _, _, trans_p, trans_t, _, _, _ = get_patterns_and_transforms(dims)
-        runner = BenchmarkRunner("TRANSFORMER", dm, args.runs, args.repeats, args.frameworks, **dims)
+        runner = BenchmarkRunner(
+            "TRANSFORMER", dm, args.runs, args.repeats, args.frameworks, **dims
+        )
         all_results.append(runner.run([trans_p], trans_t))
 
     if "advanced" in args.benchmarks:
         dims = {"N": 256, "D": 512, "B": 0, "S": 0, "E": 0}
         _, _, _, _, _, adv_p, adv_t = get_patterns_and_transforms(dims)
-        runner = BenchmarkRunner("ADVANCED-BENCH", dm, args.runs, args.repeats, args.frameworks, **dims)
+        runner = BenchmarkRunner(
+            "ADVANCED-BENCH", dm, args.runs, args.repeats, args.frameworks, **dims
+        )
         all_results.append(runner.run(adv_p, adv_t))
 
     if "scalability" in args.benchmarks:
@@ -866,7 +1168,14 @@ def main():
         for size in [64, 128, 256, 512, 1024, 2048]:
             dims = {"N": size, "D": size, "B": 0, "S": 0, "E": 0}
             mlp_pattern = create_mlp_pattern(N=size, D=size)
-            runner = BenchmarkRunner(f"SCALABILITY-BENCH (Size={size})", dm, args.runs, args.repeats, args.frameworks, **dims)
+            runner = BenchmarkRunner(
+                f"SCALABILITY-BENCH (Size={size})",
+                dm,
+                args.runs,
+                args.repeats,
+                args.frameworks,
+                **dims,
+            )
             all_results.append(runner.run([mlp_pattern], [jit_grad_transform]))
 
     if not all_results:
@@ -877,7 +1186,9 @@ def main():
 
     if args.output_csv:
         all_results_df.to_csv(args.output_csv, index=False)
-        print(f"\n{BColors.OKGREEN}Raw results saved to {args.output_csv}{BColors.ENDC}")
+        print(
+            f"\n{BColors.OKGREEN}Raw results saved to {args.output_csv}{BColors.ENDC}"
+        )
 
     analyzer = ResultAnalyzer(all_results_df, args.frameworks)
     analyzer.process_and_display()

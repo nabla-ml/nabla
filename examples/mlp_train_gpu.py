@@ -25,7 +25,7 @@ import nabla as nb
 # --- FIX STARTS HERE ---
 # Restore the original, effective hyperparameters
 BATCH_SIZE = 8
-LAYERS = [1, 16, 1]#, 128, 256, 128, 64, 1]
+LAYERS = [1, 16, 1]  # , 128, 256, 128, 64, 1]
 LEARNING_RATE = 0.001
 NUM_EPOCHS = 10
 PRINT_INTERVAL = 1
@@ -274,12 +274,8 @@ def test_nabla_complex_sin():
 
         if epoch % PRINT_INTERVAL == 0:
             avg_time_per_epoch = avg_time / PRINT_INTERVAL if avg_time > 0 else 0
-            data_perc = (
-                (avg_data_time / avg_time) * 100 if avg_time > 0 else 0
-            )
-            jit_perc = (
-                (avg_vjp_time / avg_time) * 100 if avg_time > 0 else 0
-            )
+            data_perc = (avg_data_time / avg_time) * 100 if avg_time > 0 else 0
+            jit_perc = (avg_vjp_time / avg_time) * 100 if avg_time > 0 else 0
 
             print(f"\n{'=' * 60}")
             print(
