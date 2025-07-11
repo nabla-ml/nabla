@@ -34,9 +34,7 @@ gradients = foo_grads(nb.randn((10, 5)))
 
 This guide is for contributors or for reproducing the validation and benchmark results presented in the thesis.
 
-<p align="center">
-    <img src="assets/image.png" alt="alt text" style="max-width: 400px; display: block; margin: 0 auto;" />
-</p>
+![alt text](assets/image.png)
 
 ### 1. Initial Setup
 
