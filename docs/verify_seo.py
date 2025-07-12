@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 SEO Verification Script for Nabla Documentation
 Checks all implemented SEO features to ensure they're working correctly.

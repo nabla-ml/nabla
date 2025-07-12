@@ -1,6 +1,0 @@
-sphinx>=5.0
-myst-parser>=1.0.0
-sphinx_book_theme
-sphinx-design
-sphinx-copybutton
-sphinx-autodoc-typehints
