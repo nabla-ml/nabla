@@ -85,6 +85,9 @@ class Array:
         self.kernel_impl_path: Optional[Path] = None
         self.custom_kernel_path: Optional[Path] = None
 
+        from ..ops.operation import Operation
+        self.creator_op: Optional[Operation] = None
+
         if materialize:
             self._impl = Tensor(dtype, batch_dims + shape, device=device)
         else:

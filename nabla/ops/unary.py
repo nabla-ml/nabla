@@ -760,7 +760,8 @@ class TransferToOp(UnaryOperation):
 
         if not res.stage_realization:
             self.eagerxpr([arg], res)
-
+        
+        res.creator_op = self
         return res
 
     def maxpr(self, args: list[TensorValue], output: Array) -> None:

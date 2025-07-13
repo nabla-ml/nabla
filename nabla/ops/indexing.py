@@ -219,7 +219,8 @@ class GatherOp(Operation):
 
         if not res.stage_realization:
             self.eagerxpr([input_array, indices], res)
-
+        
+        res.creator_op = self 
         return res
 
 

@@ -104,6 +104,7 @@ class UnaryOperation(Operation):
         if not res.stage_realization:
             self.eagerxpr([arg], res)
 
+        res.creator_op = self
         return res
 
     def compute_output_shape(self, *input_shapes: tuple) -> tuple:
@@ -244,7 +245,8 @@ class BinaryOperation(Operation):
 
         if not res.stage_realization:
             self.eagerxpr([arg1, arg2], res)
-
+        
+        res.creator_op = self
         return res
 
     def compute_output_shape(self, *input_shapes: tuple) -> tuple:

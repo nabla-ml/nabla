@@ -174,6 +174,7 @@ class RandomOp(Operation):
         if not res.stage_realization:
             self.eagerxpr([], res)
 
+        res.creator_op = self 
         return res
 
     def compute_output_shape(self, *input_shapes) -> tuple:
@@ -352,7 +353,8 @@ class ArangeOp(Operation):
 
         if not res.stage_realization:
             self.eagerxpr([], res)
-
+        
+        res.creator_op = self
         return res
 
     def compute_output_shape(self, *input_shapes) -> tuple:

@@ -94,7 +94,8 @@ class MatMulOp(BinaryOperation):
             res = reshape(res, output_shape[:-2] + (res.shape[1],))
         elif arg2_has_rank_1:
             res = reshape(res, output_shape[:-2] + (res.shape[0],))
-
+        
+        res.creator_op = self
         return res
 
     def compute_output_shape(self, *input_shapes: tuple) -> tuple:
