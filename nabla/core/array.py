@@ -86,6 +86,7 @@ class Array:
         self.custom_kernel_path: Optional[Path] = None
 
         from ..ops.operation import Operation
+
         self.creator_op: Optional[Operation] = None
 
         if materialize:

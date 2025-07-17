@@ -3961,7 +3961,7 @@ class ConcatenateOp(Operation):
         # Execute eager computation if needed
         if not res.stage_realization:
             self.eagerxpr(list(args), res)
-        
+
         res.creator_op = self
         return res
 
@@ -4444,7 +4444,7 @@ class PadOp(Operation):
         # Execute eager computation if needed
         if not res.stage_realization:
             self.eagerxpr([input_array], res)
-        
+
         res.creator_op = self
         return res
 

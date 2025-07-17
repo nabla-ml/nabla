@@ -245,7 +245,7 @@ class BinaryOperation(Operation):
 
         if not res.stage_realization:
             self.eagerxpr([arg1, arg2], res)
-        
+
         res.creator_op = self
         return res
 
