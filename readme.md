@@ -32,7 +32,7 @@ gradients = foo_grads(nb.randn((10, 5)))
 
 ## Development Setup and Reproducibility
 
-This guide is for contributors or for reproducing the validation and benchmark results presented in the thesis.
+This guide is for contributors or for reproducing the validation and benchmark results.
 
 ### 1. Initial Setup
 
@@ -49,6 +49,7 @@ source venv/bin/activate
 
 # Install all core and development dependencies
 pip install -r requirements-dev.txt
+pip install -e ".[dev]"
 ```
 
 ### 2. Run the Correctness Validation Suite
