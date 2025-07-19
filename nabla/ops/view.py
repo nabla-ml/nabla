@@ -1790,7 +1790,6 @@ class PadOp(Operation):
         total_elements = int(np.prod(output.shape))
 
         # Step 2: Create flat index tensor using ops.range with int32 dtype
-
         flat_indices = ops.range(0, total_elements, 1, dtype=DType.int32)
 
         # Step 3: Reshape to output shape
@@ -1840,7 +1839,6 @@ class PadOp(Operation):
         input_flattened = ops.reshape(input_tensor, [-1])
 
         # Step 9: Use scatter to place input values at target indices
-        # scatter(input, updates, indices, axis) - scatter along axis=0 (first axis) of flat tensor
         scattered_flat = ops.scatter(
             flat_zeros, input_flattened, flattened_indices, axis=0
         )
