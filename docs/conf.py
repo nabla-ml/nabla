@@ -172,6 +172,14 @@ html_theme_options = {
         "image_light": "_static/nabla-logo.png",
         "image_dark": "_static/nabla-logo.png",
     },
+    # Force dark mode only
+    "use_theme_switcher": False,
+    "theme_switcher_json_url": "",  # Disable theme switcher completely
+}
+
+html_context = {
+    "default_mode": "dark",
+    "theme_mode": "dark",  # Force dark theme
 }
 
 # Remove the html_logo since we use it in theme options

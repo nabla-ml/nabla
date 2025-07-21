@@ -1,4 +1,4 @@
-# NABLA
+# Get Started
 
 Nabla is a Python library that provides three key features:
 
@@ -20,8 +20,6 @@ api/index
 ```bash
 pip install nabla-ml
 ```
-
-**Note:** Nabla also includes an [experimental pure Mojo API](https://github.com/nabla-ml/nabla/tree/main/experimental) for native Mojo development.
 
 ## Quick Start
 

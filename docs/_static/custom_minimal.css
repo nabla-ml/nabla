@@ -1,5 +1,29 @@
 /* Minimal Custom CSS for Nabla Documentation */
 /* Using default Sphinx Book Theme styling for everything */
+/* DARK MODE ONLY - Force dark theme */
+
+/* Force dark mode on the root element */
+:root {
+    --color-mode: dark;
+}
+
+html[data-theme="dark"], 
+html[data-theme="light"], 
+html {
+    --color-mode: dark;
+}
+
+/* Hide ALL theme switcher elements */
+.theme-switch-button,
+.bd-theme-switch,
+.theme-switcher,
+button[title*="theme"],
+button[title*="Theme"],
+.btn-theme,
+.theme-toggle {
+    display: none !important;
+    visibility: hidden !important;
+}
 
 /* Only essential notebook styling for Google Colab and download buttons */
 .notebook-buttons {
@@ -50,3 +74,5 @@
 .notebook-download:before {
     content: "↓ ";
 }
+
+
