@@ -73,7 +73,7 @@ This script reproduces the performance benchmarks for Nabla, JAX, and PyTorch.
 cd nabla/tests/benchmarks
 
 # Run the benchmark script
-python benchmark.py
+python benchmark1.py
 ```
 
 ## Repository Structure
