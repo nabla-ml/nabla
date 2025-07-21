@@ -1,4 +1,4 @@
-![alt text](assets/nabla-logo.png)
+![alt text](assets/nablalogo.png)
 
 Nabla is a Python library that provides three key features:
 
