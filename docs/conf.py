@@ -145,7 +145,8 @@ html_theme = "sphinx_book_theme"
 html_title = "Nabla"
 html_static_path = ["_static"]
 html_extra_path = ["_static/robots.txt", "_static/sitemap.xml"]
-html_css_files = ["custom_minimal.css"]
+html_css_files = ["custom_minimal.css", "seo-advanced.css"]
+html_js_files = ["seo.js", "performance.js"]
 html_favicon = "_static/nabla-logo.svg"
 
 html_theme_options = {

@@ -2,7 +2,7 @@ User-agent: *
 Allow: /
 
 # Sitemap location
-Sitemap: https://nablaml.com/sitemap.xml
+Sitemap: https://www.nablaml.com/sitemap.xml
 
 # High priority content for search engines
 Allow: /api/
