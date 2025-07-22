@@ -10,7 +10,7 @@ import shutil
 
 def generate_sitemap():
     """Generate sitemap from both markdown sources and built HTML files"""
-    base_url = "https://www.nablaml.com"
+    base_url = "https://nablaml.com"
     today = datetime.now().strftime("%Y-%m-%d")
     
     # Priority mapping for different content types

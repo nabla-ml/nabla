@@ -9,21 +9,24 @@
 <meta name="author" content="Nabla Team">
 <meta name="robots" content="index, follow">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="language" content="en">
+<meta http-equiv="Content-Language" content="en">
 
 <!-- Open Graph (Facebook/LinkedIn) -->
 <meta property="og:title" content="{% if title %}{{ title }} | {% endif %}Nabla - GPU-Accelerated Array Computing">
 <meta property="og:description" content="Python library for GPU-accelerated array computation with NumPy-like API and JAX-style transformations">
-<meta property="og:url" content="https://www.nablaml.com/{{ pagename }}.html">
-<meta property="og:image" content="https://www.nablaml.com/_static/nabla-logo.png">
+<meta property="og:url" content="https://nablaml.com/{% if pagename != 'index' %}{{ pagename }}.html{% endif %}">
+<meta property="og:image" content="https://nablaml.com/_static/nabla-logo.png">
 <meta property="og:type" content="website">
 
 <!-- Twitter Card -->
-<meta name="twitter:card" content="summary">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{% if title %}{{ title }} | {% endif %}Nabla">
 <meta name="twitter:description" content="Python library for GPU-accelerated array computation">
+<meta name="twitter:image" content="https://nablaml.com/_static/nabla-logo.png">
 
 <!-- Canonical URL -->
-<link rel="canonical" href="https://www.nablaml.com/{{ pagename }}.html">
+<link rel="canonical" href="https://nablaml.com/{% if pagename != 'index' %}{{ pagename }}.html{% endif %}">
 
 <!-- Structured Data (JSON-LD) -->
 <script type="application/ld+json">
@@ -32,16 +35,24 @@
   "@type": "SoftwareApplication",
   "name": "Nabla",
   "description": "Python library for GPU-accelerated array computation with NumPy-like API, JAX-style transformations, and Mojo integration",
-  "url": "https://www.nablaml.com",
+  "url": "https://nablaml.com",
   "author": {
     "@type": "Organization",
     "name": "Nabla Team",
-    "url": "https://www.nablaml.com"
+    "url": "https://nablaml.com"
   },
   "programmingLanguage": ["Python", "Mojo"],
   "applicationCategory": "DeveloperApplication",
   "license": "https://www.apache.org/licenses/LICENSE-2.0",
-  "codeRepository": "https://github.com/nabla-ml/nabla"
+  "codeRepository": "https://github.com/nabla-ml/nabla",
+  "operatingSystem": ["Windows", "macOS", "Linux"],
+  "softwareRequirements": "Python 3.8+",
+  "releaseNotes": "https://github.com/nabla-ml/nabla/releases",
+  "downloadUrl": "https://github.com/nabla-ml/nabla",
+  "sameAs": [
+    "https://github.com/nabla-ml/nabla",
+    "https://pypi.org/project/nabla-ml/"
+  ]
 }
 </script>
 {%- endblock %}
