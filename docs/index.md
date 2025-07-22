@@ -9,8 +9,8 @@ Nabla is a Python library that provides three key features:
 ```{toctree}
 :maxdepth: 1
 
-tutorials/index
 api/index
+tutorials/index
 ```
 
 ## Installation
