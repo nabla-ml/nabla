@@ -1,6 +1,11 @@
 name: Documentation Preview and SEO Check
 
 on:
+  push:
+    branches: [ main ]
+    paths: 
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
   pull_request:
     branches: [ main ]
     paths: 
