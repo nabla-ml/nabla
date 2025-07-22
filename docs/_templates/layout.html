@@ -1,7 +1,7 @@
 {% extends "!layout.html" %}
 
 {%- block htmltitle %}
-<title>{% if title %}{{ title }} \ {% endif %}{{ docstitle }}</title>
+<title>{% if title %}{{ title }} / {% endif %}{{ docstitle }}</title>
 <!-- SEO Meta Tags -->
 <meta name="description" content="Python library for GPU-accelerated array computation with NumPy-like API, JAX-style transformations (vmap, grad, jit), and Mojo integration.">
 <meta name="keywords" content="python, arrays, gpu, numpy, jax, mojo, machine learning, automatic differentiation, vectorization, jit">
@@ -11,13 +11,13 @@
 <!-- Open Graph / Facebook -->
 <meta property="og:type" content="website">
 <meta property="og:url" content="{{ pageurl }}">
-<meta property="og:title" content="{% if title %}{{ title }} \ {% endif %}Dynamic Neural Networks and Function Transformations in Python + Mojo">
+<meta property="og:title" content="{% if title %}{{ title }} / {% endif %}Dynamic Neural Networks and Function Transformations in Python + Mojo">
 <meta property="og:description" content="Python library for GPU-accelerated array computation with NumPy-like API and JAX-style transformations">
 <meta property="og:site_name" content="Nabla Documentation">
 
 <!-- Twitter -->
 <meta property="twitter:card" content="summary">
 <meta property="twitter:url" content="{{ pageurl }}">
-<meta property="twitter:title" content="{% if title %}{{ title }} \ {% endif %}Dynamic Neural Networks and Function Transformations in Python + Mojo">
+<meta property="twitter:title" content="{% if title %}{{ title }} / {% endif %}Dynamic Neural Networks and Function Transformations in Python + Mojo">
 <meta property="twitter:description" content="Python library for GPU-accelerated array computation with NumPy-like API and JAX-style transformations">
 {%- endblock %}
