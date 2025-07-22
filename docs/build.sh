@@ -54,6 +54,10 @@ fi
 echo "🗺️  Generating sitemap..."
 python scripts/generate_sitemap.py
 
+# Fix duplicate viewport tags (common issue with Sphinx themes)
+echo "🔧 Fixing duplicate viewport tags..."
+python scripts/fix_duplicate_viewport.py docs/_build/html
+
 # Ensure .nojekyll for GitHub Pages
 touch _build/html/.nojekyll
 

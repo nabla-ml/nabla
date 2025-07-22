@@ -1,67 +1,93 @@
-{% extends "!layout.html" %}
+{% extends "sphinx_book_theme/layout.html" %}
+
+{%- set page_description -%}
+{%- if pagename == 'index' -%}
+Nabla is a high-performance machine learning computing framework with automatic differentiation, JIT compilation, and GPU acceleration. Modern alternative to JAX with Mojo integration.
+{%- elif 'api/' in pagename -%}
+API reference documentation for {{ title }} in the Nabla ML framework. Comprehensive function and class documentation with examples.
+{%- elif 'tutorials/' in pagename -%}
+Learn {{ title }} with this comprehensive tutorial. Step-by-step guide to using the Nabla ML framework for machine learning.
+{%- else -%}
+{{ title }} - High-performance machine learning computing framework focused on automatic differentiation, JIT compilation, and GPU acceleration.
+{%- endif -%}
+{%- endset -%}
+
+{%- set page_title -%}
+{%- if pagename == 'index' -%}
+Nabla - High-Performance ML Computing Framework
+{%- elif 'api/' in pagename -%}
+{{ title }} API - Nabla
+{%- elif 'tutorials/' in pagename -%}
+{{ title }} Tutorial - Nabla  
+{%- else -%}
+{{ title }} - Nabla
+{%- endif -%}
+{%- endset -%}
+
+{%- set base_url = "https://nablaml.com/" -%}
 
 {%- block extrahead %}
-{{ super() }}
+<!-- SEO Meta Tags -->
+<meta name="description" content="{{ page_description|trim }}" />
+<meta name="keywords" content="machine learning, automatic differentiation, JIT compilation, GPU computing, deep learning framework, high performance computing, Mojo, JAX alternative, {{ title|lower }}" />
+<meta name="author" content="Nabla Team" />
+<meta name="robots" content="index, follow" />
 
-<!-- Essential SEO Meta Tags -->
-<meta name="description" content="{% if meta and meta.description %}{{ meta.description }}{% else %}Python library for GPU-accelerated array computation with NumPy-like API, JAX-style transformations (vmap, grad, jit), and Mojo integration.{% endif %}">
-<meta name="keywords" content="python, gpu, arrays, numpy, jax, mojo, machine learning, automatic differentiation, jit{% if pagename %}, {{ pagename|replace('/', ' ') }}{% endif %}">
-<meta name="author" content="Nabla Team">
-<meta name="robots" content="index, follow">
-<meta name="language" content="en">
-<meta http-equiv="Content-Language" content="en">
+<!-- Open Graph Meta Tags -->
+<meta property="og:title" content="{{ page_title|trim }}" />
+<meta property="og:type" content="website" />
+{% if pagename == 'index' %}
+<meta property="og:url" content="{{ base_url }}" />
+{% else %}
+<meta property="og:url" content="{{ base_url }}{{ pagename }}.html" />
+{% endif %}
+<meta property="og:image" content="{{ base_url }}_static/nabla-logo.png" />
+<meta property="og:description" content="{{ page_description|trim }}" />
+<meta property="og:site_name" content="Nabla" />
 
-<!-- Open Graph (Facebook/LinkedIn) -->
-<meta property="og:title" content="{% if title %}{{ title }} | {% endif %}Nabla - GPU-Accelerated Array Computing">
-<meta property="og:description" content="{% if meta and meta.description %}{{ meta.description }}{% else %}Python library for GPU-accelerated array computation with NumPy-like API and JAX-style transformations{% endif %}">
-<meta property="og:url" content="https://nablaml.com/{% if pagename != 'index' %}{{ pagename }}.html{% endif %}">
-<meta property="og:image" content="https://nablaml.com/_static/nabla-logo.png">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta property="og:type" content="website">
-<meta property="og:site_name" content="Nabla Documentation">
-<meta property="og:locale" content="en_US">
-
-<!-- Twitter Card -->
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:site" content="@nabla_ml">
-<meta name="twitter:creator" content="@nabla_ml">
-<meta name="twitter:title" content="{% if title %}{{ title }} | {% endif %}Nabla">
-<meta name="twitter:description" content="{% if meta and meta.description %}{{ meta.description }}{% else %}Python library for GPU-accelerated array computation{% endif %}">
-<meta name="twitter:image" content="https://nablaml.com/_static/nabla-logo.png">
-<meta name="twitter:image:alt" content="Nabla - GPU-accelerated array computation library">
-
-<!-- Canonical URL -->
-<link rel="canonical" href="https://nablaml.com/{% if pagename != 'index' %}{{ pagename }}.html{% endif %}">
+<!-- Twitter Card Meta Tags -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="{{ page_title|trim }}" />
+<meta name="twitter:description" content="{{ page_description|trim }}" />
+<meta name="twitter:image" content="{{ base_url }}_static/nabla-logo.png" />
+<meta name="twitter:site" content="@nablaml" />
 
 <!-- Structured Data (JSON-LD) -->
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  "name": "Nabla",
-  "description": "Python library for GPU-accelerated array computation with NumPy-like API, JAX-style transformations, and Mojo integration",
-  "url": "https://nablaml.com",
+  "name": "{{ page_title|trim }}",
+  "applicationCategory": "DeveloperApplication", 
+  "operatingSystem": "Cross-platform",
+  {% if pagename == 'index' -%}
+  "url": "{{ base_url }}",
+  {%- else -%}
+  "url": "{{ base_url }}{{ pagename }}.html",
+  {%- endif %}
+  "description": "{{ page_description|trim }}",
   "author": {
     "@type": "Organization",
     "name": "Nabla Team",
-    "url": "https://nablaml.com"
+    "url": "https://github.com/nabla-ml"
   },
-  "programmingLanguage": ["Python", "Mojo"],
-  "applicationCategory": "DeveloperApplication",
-  "license": "https://www.apache.org/licenses/LICENSE-2.0",
+  "softwareVersion": "{{ release }}",
+  "dateModified": "{{ last_updated or '2025-07-22' }}",
+  "license": "https://github.com/nabla-ml/nabla/blob/main/LICENSE",
   "codeRepository": "https://github.com/nabla-ml/nabla",
-  "operatingSystem": ["Windows", "macOS", "Linux"],
-  "softwareRequirements": "Python 3.8+",
-  "releaseNotes": "https://github.com/nabla-ml/nabla/releases",
-  "downloadUrl": "https://github.com/nabla-ml/nabla",
-  "datePublished": "2024-01-01",
-  "dateModified": "2025-07-22",
-  "keywords": ["python", "gpu", "arrays", "numpy", "jax", "mojo", "machine learning", "automatic differentiation", "jit"],
-  "sameAs": [
-    "https://github.com/nabla-ml/nabla",
-    "https://pypi.org/project/nabla-ml/"
-  ]
+  "programmingLanguage": ["Python", "Mojo"],
+  "keywords": "machine learning, automatic differentiation, JIT compilation, GPU computing"
 }
 </script>
+
+<!-- Canonical URL -->
+{% if pagename == 'index' %}
+<link rel="canonical" href="{{ base_url }}" />
+{% else %}
+<link rel="canonical" href="{{ base_url }}{{ pagename }}.html" />
+{% endif %}
+{%- endblock %}
+
+{%- block htmltitle %}
+<title>{{ page_title|trim }}</title>
 {%- endblock %}

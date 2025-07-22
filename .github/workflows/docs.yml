@@ -26,6 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     # Only set environment for actual deployments
     environment: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'github-pages' || '' }}
+    env:
+      DOCS_BASE_URL: "https://nablaml.com"  # Configurable domain
     outputs:
       page_url: ${{ steps.deployment.outputs.page_url }}
     steps:
@@ -55,29 +57,89 @@ jobs:
           cd docs
           # Build static documentation (API docs are pre-generated and committed)
           sphinx-build -b html . _build/html
-          # Generate sitemap from actual built HTML files for accuracy
+          
+      - name: SEO Optimization and Validation
+        run: |
+          cd docs
+          echo "🌐 Configuring SEO for environment..."
+          python scripts/configure_seo.py _build/html
+          
+          echo "🗺️  Generating comprehensive sitemap..."
           python scripts/generate_sitemap.py
+          
+          echo "🔧 Running SEO fixes..."
+          python scripts/fix_seo_issues.py _build/html
+          
+          echo "� Generating final SEO report..."
+          python scripts/final_seo_report.py _build/html
+          
+          echo "✅ SEO optimization complete!"
           
       - name: Add .nojekyll for GitHub Pages
         run: |
           touch docs/_build/html/.nojekyll
           
-      - name: Verify sitemap generation
+      - name: Verify SEO and Build Quality
         run: |
-          echo "Checking sitemap.xml:"
-          ls -la docs/_build/html/sitemap.xml
-          echo "Sitemap contains $(grep -c '<url>' docs/_build/html/sitemap.xml) URLs"
-          echo "First few URLs from sitemap:"
-          grep -o '<loc>[^<]*</loc>' docs/_build/html/sitemap.xml | head -10
-          echo "Robots.txt exists:"
-          ls -la docs/_build/html/robots.txt
+          echo "🔍 Verifying SEO implementation:"
           
-      - name: List build output (debug)
+          # Check sitemap
+          if [[ -f "docs/_build/html/sitemap.xml" ]]; then
+            URL_COUNT=$(grep -c '<url>' docs/_build/html/sitemap.xml)
+            echo "✅ Sitemap contains $URL_COUNT URLs"
+            
+            # Verify domain consistency
+            if grep -q "nablaml.com" docs/_build/html/sitemap.xml; then
+              echo "✅ Sitemap uses correct domain"
+            else
+              echo "❌ Sitemap domain mismatch!"
+              exit 1
+            fi
+          else
+            echo "❌ Sitemap not found!"
+            exit 1
+          fi
+          
+          # Check robots.txt
+          if [[ -f "docs/_build/html/robots.txt" ]]; then
+            echo "✅ Robots.txt exists"
+          else
+            echo "❌ Robots.txt missing!"
+            exit 1
+          fi
+          
+          # Check homepage has proper meta tags
+          if grep -q "og:title" docs/_build/html/index.html && 
+             grep -q "application/ld+json" docs/_build/html/index.html &&
+             grep -q 'rel="canonical"' docs/_build/html/index.html; then
+            echo "✅ Homepage has proper SEO meta tags"
+          else
+            echo "❌ Homepage missing SEO meta tags!"
+            exit 1
+          fi
+          
+          # Check that API pages have contextual descriptions
+          if ls docs/_build/html/api/*.html >/dev/null 2>&1; then
+            API_FILE=$(ls docs/_build/html/api/*.html | head -1)
+            if grep -q "API reference documentation" "$API_FILE"; then
+              echo "✅ API pages have contextual descriptions"
+            else
+              echo "❌ API pages missing contextual descriptions!"
+              exit 1
+            fi
+          fi
+          
+          echo "🎉 All SEO checks passed!"
+          
+      - name: Display Build Summary
         run: |
-          echo "Contents of docs/_build/html:"
-          ls -la docs/_build/html/
-          echo "First few lines of index.html:"
-          head -10 docs/_build/html/index.html
+          echo "📊 Documentation Build Summary:"
+          echo "=========================="
+          echo "📁 Total HTML files: $(find docs/_build/html -name "*.html" | wc -l)"
+          echo "🗺️  Sitemap URLs: $(grep -c '<url>' docs/_build/html/sitemap.xml)"
+          echo "📄 Build size: $(du -sh docs/_build/html | cut -f1)"
+          echo "🌐 Deploy URL: https://nablaml.com"
+          echo "=========================="
           
       - name: Setup Pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
