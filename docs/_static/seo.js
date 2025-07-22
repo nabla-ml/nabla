@@ -1,32 +1,6 @@
-// SEO enhancements for Nabla documentation
-// Adds structured data and performance optimizations
-
+// Essential SEO enhancements only
 document.addEventListener('DOMContentLoaded', function() {
-    // Add structured data for search engines
-    const structuredData = {
-        "@context": "https://schema.org",
-        "@type": "SoftwareApplication",
-        "name": "Nabla",
-        "description": "Python library for GPU-accelerated array computation with NumPy-like API, JAX-style transformations (vmap, grad, jit), and Mojo integration",
-        "applicationCategory": "DeveloperApplication",
-        "operatingSystem": "Cross-platform",
-        "programmingLanguage": ["Python", "Mojo"],
-        "url": "https://nablaml.com",
-        "downloadUrl": "https://pypi.org/project/nabla-ml/",
-        "author": {
-            "@type": "Organization",
-            "name": "Nabla Team"
-        },
-        "license": "MIT",
-        "keywords": ["python", "arrays", "gpu", "numpy", "jax", "mojo", "machine learning", "automatic differentiation"]
-    };
-
-    const script = document.createElement('script');
-    script.type = 'application/ld+json';
-    script.textContent = JSON.stringify(structuredData);
-    document.head.appendChild(script);
-
-    // Add canonical URL if not present
+    // Add canonical URL if missing (critical for SEO)
     if (!document.querySelector('link[rel="canonical"]')) {
         const canonical = document.createElement('link');
         canonical.rel = 'canonical';
@@ -34,8 +8,18 @@ document.addEventListener('DOMContentLoaded', function() {
         document.head.appendChild(canonical);
     }
 
-    // Optimize images for SEO (add alt text if missing)
+    // Add missing alt text to images (accessibility + SEO)
     document.querySelectorAll('img:not([alt])').forEach(img => {
-        img.alt = 'Nabla documentation image';
+        img.alt = 'Nabla documentation';
+    });
+
+    // Add heading IDs for anchor linking (improves internal linking)
+    document.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(heading => {
+        if (!heading.id && heading.textContent) {
+            heading.id = heading.textContent.toLowerCase()
+                .replace(/[^\w\s-]/g, '')
+                .replace(/\s+/g, '-')
+                .trim();
+        }
     });
 });

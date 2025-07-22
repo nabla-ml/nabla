@@ -141,9 +141,10 @@ exclude_patterns = [
 ]
 
 # -- Options for HTML output -------------------------------------------------
-html_theme = "sphinx_book_theme"  # Beautiful, modern theme
+html_theme = "sphinx_book_theme"
 html_title = "Nabla"
 html_static_path = ["_static"]
+html_extra_path = ["_static/robots.txt", "_static/sitemap.xml"]
 html_css_files = ["custom_minimal.css"]
 html_favicon = "_static/nabla-logo.svg"
 

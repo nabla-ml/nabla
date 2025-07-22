@@ -40,7 +40,7 @@ else
     # Local build: try to generate API docs if nabla is available
     if python -c "import nabla" 2>/dev/null; then
         echo "✨ Generating API documentation..."
-        python ../scripts/generate_api_docs.py
+        python scripts/generate_api_docs.py
         sphinx-build -b html -W --keep-going . _build/html
     else
         echo "⚠️  Nabla not installed, building without API generation"
@@ -49,6 +49,10 @@ else
             . _build/html
     fi
 fi
+
+# Generate comprehensive sitemap
+echo "🗺️  Generating sitemap..."
+python scripts/generate_sitemap.py
 
 # Ensure .nojekyll for GitHub Pages
 touch _build/html/.nojekyll

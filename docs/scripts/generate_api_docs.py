@@ -932,7 +932,7 @@ Nabla provides a comprehensive set of APIs for array operations, function transf
 
 def main():
     """Main entry point."""
-    project_root = Path(__file__).parent.parent
+    project_root = Path(__file__).parent.parent.parent  # docs/scripts/ -> docs/ -> project/
     generator = APIDocGenerator(project_root)
     generator.generate_api_reference_docs()
 
