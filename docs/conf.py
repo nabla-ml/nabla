@@ -176,6 +176,25 @@ html_theme_options = {
     "theme_switcher_json_url": "",  # Disable theme switcher completely
 }
 
+# Add post-build hook to fix viewport tags automatically
+def setup(app):
+    app.connect('build-finished', fix_viewport_tags)
+
+def fix_viewport_tags(app, exception):
+    if exception is None and app.builder.name == 'html':
+        import subprocess
+        import os
+        build_dir = os.path.join(app.outdir)
+        try:
+            subprocess.run([
+                'python', 
+                os.path.join(app.srcdir, 'scripts/fix_duplicate_viewport.py'),
+                build_dir
+            ], check=True, cwd=app.srcdir)
+            print("✅ Automatically fixed duplicate viewport tags")
+        except Exception as e:
+            print(f"⚠️  Could not auto-fix viewport tags: {e}")
+
 html_context = {
     "default_mode": "dark",
     "theme_mode": "dark",  # Force dark theme
