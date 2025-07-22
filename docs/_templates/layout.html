@@ -10,14 +10,59 @@
 
 <!-- Open Graph / Facebook -->
 <meta property="og:type" content="website">
-<meta property="og:url" content="{{ pageurl }}">
+<meta property="og:url" content="https://www.nablaml.com/{{ pagename }}.html">
 <meta property="og:title" content="{% if title %}{{ title }} / {% endif %}Dynamic Neural Networks and Function Transformations in Python + Mojo">
 <meta property="og:description" content="Python library for GPU-accelerated array computation with NumPy-like API and JAX-style transformations">
 <meta property="og:site_name" content="Nabla Documentation">
 
 <!-- Twitter -->
 <meta property="twitter:card" content="summary">
-<meta property="twitter:url" content="{{ pageurl }}">
+<meta property="twitter:url" content="https://www.nablaml.com/{{ pagename }}.html">
 <meta property="twitter:title" content="{% if title %}{{ title }} / {% endif %}Dynamic Neural Networks and Function Transformations in Python + Mojo">
 <meta property="twitter:description" content="Python library for GPU-accelerated array computation with NumPy-like API and JAX-style transformations">
+<meta name="twitter:site" content="@nablaml">
+<meta name="twitter:creator" content="@nablaml">
+
+<!-- LinkedIn -->
+<meta property="og:url" content="https://www.nablaml.com/{{ pagename }}.html">
+<meta property="article:publisher" content="https://www.linkedin.com/company/nablaml">
+
+<!-- Canonical URL -->
+<link rel="canonical" href="https://www.nablaml.com/{{ pagename }}.html">
+
+<!-- Structured Data (JSON-LD) -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Nabla",
+  "description": "Python library for GPU-accelerated array computation with NumPy-like API, JAX-style transformations (vmap, grad, jit), and Mojo integration",
+  "url": "https://www.nablaml.com",
+  "downloadUrl": "https://pypi.org/project/nabla-ml/",
+  "author": {
+    "@type": "Organization",
+    "name": "Nabla Team",
+    "url": "https://www.nablaml.com",
+    "sameAs": [
+      "https://x.com/nablaml",
+      "https://www.linkedin.com/company/nablaml",
+      "https://github.com/nabla-ml/nabla"
+    ]
+  },
+  "programmingLanguage": ["Python", "Mojo"],
+  "operatingSystem": ["Linux", "macOS", "Windows"],
+  "applicationCategory": "DeveloperApplication",
+  "keywords": ["python", "arrays", "gpu", "numpy", "jax", "mojo", "machine learning", "automatic differentiation", "vectorization", "jit"],
+  "license": "https://www.apache.org/licenses/LICENSE-2.0",
+  "codeRepository": "https://github.com/nabla-ml/nabla",
+  "softwareVersion": "{{ release }}",
+  "datePublished": "2025",
+  "dateModified": "2025-07-22",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  }
+}
+</script>
 {%- endblock %}

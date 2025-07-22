@@ -127,12 +127,6 @@ nbsphinx_epilog = """
         <a href="https://colab.research.google.com/github/nabla-ml/nabla/blob/main/tutorials/{{ env.docname.split('/')[-1] }}.ipynb" class="colab-button" target="_blank">Open in Google Colab</a>
         <a href="{{ env.docname }}.ipynb" class="notebook-download" download>Download Notebook</a>
     </div>
-
-.. note::
-   **💡 Want to run this yourself?**
-   
-   - 🚀 **Google Colab**: No setup required, runs in your browser
-   - 📥 **Local Jupyter**: Download and run with your own Python environment
 """
 
 templates_path = ["_templates"]
@@ -140,7 +134,6 @@ exclude_patterns = [
     "_build",
     "Thumbs.db",
     ".DS_Store",
-    "404.md",
     "**/gen_modules/**",
     "gallery_examples/**",
     "auto_examples/**",

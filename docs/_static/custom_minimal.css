@@ -33,20 +33,23 @@ button[title*="Theme"],
 
 .colab-button {
     display: inline-block;
-    background-color: #f9ab00;
-    color: #1a1a1a;
+    background-color: #404040;
+    color: #e0e0e0;
+    border: 1px solid #606060;
     padding: 8px 16px;
     border-radius: 4px;
     text-decoration: none;
-    font-weight: 500;
+    font-weight: 400;
     margin: 0.5rem 0.5rem 0.5rem 0;
-    transition: background-color 0.2s;
+    transition: all 0.2s;
+    font-size: 0.9rem;
 }
 
 .colab-button:hover {
-    background-color: #e89400;
+    background-color: #505050;
+    border-color: #707070;
     text-decoration: none;
-    color: #1a1a1a;
+    color: #f0f0f0;
 }
 
 .colab-button:before {
@@ -55,20 +58,23 @@ button[title*="Theme"],
 
 .notebook-download {
     display: inline-block;
-    background-color: #6c757d;
-    color: #ffffff;
+    background-color: #404040;
+    color: #e0e0e0;
+    border: 1px solid #606060;
     padding: 8px 16px;
     border-radius: 4px;
     text-decoration: none;
-    font-weight: 500;
+    font-weight: 400;
     margin: 0.5rem 0.5rem 0.5rem 0;
-    transition: background-color 0.2s;
+    transition: all 0.2s;
+    font-size: 0.9rem;
 }
 
 .notebook-download:hover {
-    background-color: #5a6268;
+    background-color: #505050;
+    border-color: #707070;
     text-decoration: none;
-    color: #ffffff;
+    color: #f0f0f0;
 }
 
 .notebook-download:before {
