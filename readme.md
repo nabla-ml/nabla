@@ -6,7 +6,7 @@ Nabla is a Python library that provides three key features:
 - Composable Function Transformations: `vmap`, `grad`, `jit`, and other Automatic Differentiation tools
 - Deep integration with MAX and (custom) Mojo kernels
 
-For tutorials and API reference, visit: [nablaml.com](https://www.nablaml.com/index.html)
+For tutorials and API reference, visit: [nablaml.com](https://nablaml.com/index.html)
 
 ## Installation
 

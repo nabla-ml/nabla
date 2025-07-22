@@ -151,7 +151,7 @@ html_js_files = ["seo.js", "performance.js"]
 html_favicon = "_static/nabla-logo.svg"
 
 # SEO Configuration using standard Sphinx options
-html_baseurl = "https://nabla.ml/"
+html_baseurl = "https://nablaml.com/"
 
 html_theme_options = {
     # Repository integration
