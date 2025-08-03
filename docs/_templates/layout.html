@@ -80,12 +80,7 @@ Nabla - High-Performance ML Computing Framework
 }
 </script>
 
-<!-- Canonical URL -->
-{% if pagename == 'index' %}
-<link rel="canonical" href="{{ base_url }}" />
-{% else %}
-<link rel="canonical" href="{{ base_url }}{{ pagename }}.html" />
-{% endif %}
+<!-- Canonical URL is automatically handled by Sphinx html_baseurl -->
 {%- endblock %}
 
 {%- block htmltitle %}

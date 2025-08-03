@@ -1,5 +1,6 @@
 # Configuration file for the Sphinx documentation builder.
 
+import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -151,7 +152,8 @@ html_js_files = ["seo.js", "performance.js"]
 html_favicon = "_static/nabla-logo.svg"
 
 # SEO Configuration using standard Sphinx options
-html_baseurl = "https://nablaml.com/"
+# Use environment variable if available (for CI/CD), otherwise use default
+html_baseurl = os.environ.get("DOCS_BASE_URL", "https://nablaml.com/")
 
 html_theme_options = {
     # Repository integration
