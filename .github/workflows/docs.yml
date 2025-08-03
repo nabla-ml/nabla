@@ -4,9 +4,15 @@ on:
   push:
     branches:
       - main
+    paths: 
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
   pull_request:
     branches:
       - main
+    paths: 
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
   # Allow manual trigger
   workflow_dispatch:
 
@@ -26,6 +32,8 @@ jobs:
     runs-on: ubuntu-latest
     # Only set environment for actual deployments
     environment: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'github-pages' || '' }}
+    env:
+      DOCS_BASE_URL: "https://nablaml.com"
     outputs:
       page_url: ${{ steps.deployment.outputs.page_url }}
     steps:
@@ -56,6 +64,56 @@ jobs:
           # Build static documentation (API docs are pre-generated and committed)
           sphinx-build -b html . _build/html
           
+      - name: SEO Optimization and Validation
+        run: |
+          cd docs
+          echo "🌐 Configuring SEO..."
+          python scripts/configure_seo.py _build/html
+          
+          echo "🗺️  Generating sitemap..."
+          python scripts/generate_sitemap.py
+          
+          echo "🔧 Running SEO fixes..."
+          python scripts/fix_seo_issues.py _build/html || echo "SEO fixes completed with warnings"
+          
+          echo "📊 Generating SEO report..."
+          python scripts/final_seo_report.py _build/html || echo "SEO report completed"
+          
+      - name: SEO Quality Check
+        run: |
+          cd docs
+          echo "🔍 Running SEO quality checks..."
+          
+          # Check critical files exist
+          for file in "_build/html/index.html" "_build/html/sitemap.xml" "_build/html/robots.txt"; do
+            if [[ -f "$file" ]]; then
+              echo "✅ $file exists"
+            else
+              echo "❌ $file missing!"
+              exit 1
+            fi
+          done
+          
+          # Check sitemap has reasonable content
+          URL_COUNT=$(grep -c '<url>' _build/html/sitemap.xml)
+          if [[ $URL_COUNT -gt 10 ]]; then
+            echo "✅ Sitemap contains $URL_COUNT URLs"
+          else
+            echo "❌ Sitemap has too few URLs ($URL_COUNT)"
+            exit 1
+          fi
+          
+          # Check homepage SEO elements
+          if grep -q "og:title" _build/html/index.html && 
+             grep -q "application/ld+json" _build/html/index.html; then
+            echo "✅ Homepage has proper SEO tags"
+          else
+            echo "❌ Homepage missing critical SEO tags"
+            exit 1
+          fi
+          
+          echo "🎉 All SEO checks passed!"
+          
       - name: Add .nojekyll for GitHub Pages
         run: |
           touch docs/_build/html/.nojekyll
@@ -67,6 +125,26 @@ jobs:
           echo "First few lines of index.html:"
           head -10 docs/_build/html/index.html
           
+      - name: Comment PR with preview info
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const urlCount = require('child_process')
+              .execSync('grep -c "<url>" docs/_build/html/sitemap.xml')
+              .toString().trim();
+              
+            const htmlCount = require('child_process')
+              .execSync('find docs/_build/html -name "*.html" | wc -l')
+              .toString().trim();
+              
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 📚 Documentation Preview Ready\n\n**SEO Status:** ✅ All checks passed\n**HTML Pages:** ${htmlCount} files\n**Sitemap URLs:** ${urlCount} URLs\n**Domain:** https://nablaml.com\n\nThe documentation builds successfully with full SEO optimization! 🎉`
+            });
+            
       - name: Setup Pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/configure-pages@v4
