@@ -9,9 +9,9 @@ Nabla handles: Neural network operations, automatic differentiation, JIT compila
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.animation as animation
-from matplotlib.colors import LinearSegmentedColormap
+import matplotlib.pyplot as plt  # type: ignore
+import matplotlib.animation as animation  # type: ignore
+from matplotlib.colors import LinearSegmentedColormap  # type: ignore
 import sys
 
 import nabla as nb
@@ -207,7 +207,7 @@ plt.style.use('default')
 fig, ax = plt.subplots(figsize=(10, 10))  # Square format
 
 background_color = "#FFFFFF"
-fig.patch.set_facecolor(background_color)
+fig.patch.set_facecolor(background_color)  # type: ignore
 ax.set_facecolor(background_color)
 
 # Color scheme
