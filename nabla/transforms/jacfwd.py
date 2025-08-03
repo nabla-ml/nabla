@@ -60,7 +60,9 @@ def jacfwd(
             selected_argnums = tuple(range(len(args)))
         else:
             # Normalize argnums to a tuple of integers (same as jacrev)
-            selected_argnums = (argnums,) if isinstance(argnums, int) else tuple(argnums)
+            selected_argnums = (
+                (argnums,) if isinstance(argnums, int) else tuple(argnums)
+            )
 
         # Validate argnums (same as jacrev)
         for argnum in selected_argnums:
@@ -164,14 +166,16 @@ def jacfwd(
             for output_component in output_tangents:
                 split_tangents_component = split(output_component, sizes=sizes, axis=0)
                 all_split_tangents.append(split_tangents_component)
-            
-            # Reorganize: instead of [split_for_output0, split_for_output1], 
+
+            # Reorganize: instead of [split_for_output0, split_for_output1],
             # we want [split_for_input0, split_for_input1] where each contains all outputs
             split_tangents = []
             for input_idx in range(len(sizes)):
                 tangents_for_this_input = []
                 for output_idx in range(len(all_split_tangents)):
-                    tangents_for_this_input.append(all_split_tangents[output_idx][input_idx])
+                    tangents_for_this_input.append(
+                        all_split_tangents[output_idx][input_idx]
+                    )
                 split_tangents.append(tangents_for_this_input)
         else:
             # Function returns single output, handle normally
@@ -192,7 +196,7 @@ def jacfwd(
                 output_jacobians = []
                 for output_idx, tangent_for_output in enumerate(tangents_for_arg):
                     output_shape = flat_output[output_idx].shape
-                    
+
                     # Reshape to proper Jacobian format: output_shape + input_shape
                     target_shape = arg_shape + output_shape
                     jacobian_component = reshape(tangent_for_output, target_shape)
@@ -205,14 +209,15 @@ def jacfwd(
                         perm_axes.append(k)
 
                     from ..ops.view import permute
+
                     jacobian_component = permute(jacobian_component, tuple(perm_axes))
                     output_jacobians.append(jacobian_component)
-                
+
                 jacobian_components.append(output_jacobians)
             else:
                 # Single output case
                 output_shape = flat_output[0].shape
-                
+
                 # Reshape to proper Jacobian format: output_shape + input_shape
                 target_shape = arg_shape + output_shape
                 jacobian_component = reshape(tangents_for_arg, target_shape)
@@ -225,6 +230,7 @@ def jacfwd(
                     perm_axes.append(k)
 
                 from ..ops.view import permute
+
                 jacobian_component = permute(jacobian_component, tuple(perm_axes))
                 jacobian_components.append(jacobian_component)
 

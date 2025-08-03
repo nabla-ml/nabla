@@ -4,78 +4,111 @@ SEO Implementation Improvements for Nabla Documentation
 This script helps implement advanced SEO features and page-specific optimizations.
 """
 
-import os
 import json
 from pathlib import Path
-import re
+
 
 def create_page_specific_meta():
     """Create configuration for page-specific meta descriptions"""
-    
+
     meta_config = {
         # Main sections
         "index": {
             "description": "Nabla: GPU-accelerated Python library for array computation with NumPy-like API and JAX-style transformations. Fast, composable, and Mojo-integrated.",
-            "keywords": ["nabla", "gpu", "python", "arrays", "numpy", "jax", "mojo", "machine learning"]
+            "keywords": [
+                "nabla",
+                "gpu",
+                "python",
+                "arrays",
+                "numpy",
+                "jax",
+                "mojo",
+                "machine learning",
+            ],
         },
         "api/index": {
             "description": "Complete API reference for Nabla - Python library for GPU-accelerated array operations, transformations, and neural networks.",
-            "keywords": ["api", "reference", "documentation", "functions", "classes", "nabla"]
+            "keywords": [
+                "api",
+                "reference",
+                "documentation",
+                "functions",
+                "classes",
+                "nabla",
+            ],
         },
         "tutorials/index": {
             "description": "Learn Nabla with hands-on tutorials covering GPU computing, automatic differentiation, and machine learning examples.",
-            "keywords": ["tutorials", "examples", "machine learning", "gpu", "automatic differentiation"]
+            "keywords": [
+                "tutorials",
+                "examples",
+                "machine learning",
+                "gpu",
+                "automatic differentiation",
+            ],
         },
-        
         # Specific API pages
         "api/array": {
             "description": "Array class documentation - the fundamental array type in Nabla for GPU-accelerated computation.",
-            "keywords": ["array", "class", "gpu", "computation", "tensor"]
+            "keywords": ["array", "class", "gpu", "computation", "tensor"],
         },
         "api/transforms": {
             "description": "Function transformations in Nabla: vmap, grad, jit, and other automatic differentiation tools.",
-            "keywords": ["transforms", "vmap", "grad", "jit", "automatic differentiation"]
+            "keywords": [
+                "transforms",
+                "vmap",
+                "grad",
+                "jit",
+                "automatic differentiation",
+            ],
         },
-        
         # Tutorial pages
         "tutorials/understanding_nabla_part1": {
             "description": "Introduction to Nabla fundamentals: arrays, operations, and GPU acceleration basics.",
-            "keywords": ["introduction", "basics", "getting started", "arrays", "gpu"]
+            "keywords": ["introduction", "basics", "getting started", "arrays", "gpu"],
         },
         "tutorials/jax_vs_nabla_mlp_cpu": {
             "description": "Performance comparison between JAX and Nabla for MLP training on CPU with code examples.",
-            "keywords": ["jax", "comparison", "mlp", "performance", "cpu", "training"]
+            "keywords": ["jax", "comparison", "mlp", "performance", "cpu", "training"],
         },
         "tutorials/jax_vs_nabla_transformer_cpu": {
             "description": "JAX vs Nabla transformer training comparison - performance benchmarks and implementation details.",
-            "keywords": ["transformer", "jax", "comparison", "performance", "nlp", "training"]
-        }
+            "keywords": [
+                "transformer",
+                "jax",
+                "comparison",
+                "performance",
+                "nlp",
+                "training",
+            ],
+        },
     }
-    
+
     # Save to JSON file for use in build process
     config_path = Path(__file__).parent.parent / "docs" / "_static" / "meta_config.json"
-    with open(config_path, 'w') as f:
+    with open(config_path, "w") as f:
         json.dump(meta_config, f, indent=2)
-    
+
     print(f"✅ Created meta configuration at {config_path}")
     return meta_config
 
+
 def update_sphinx_config():
     """Update Sphinx configuration for better SEO"""
-    
+
     conf_py_path = Path(__file__).parent.parent / "docs" / "conf.py"
-    
+
     # Read current conf.py
-    with open(conf_py_path, 'r') as f:
+    with open(conf_py_path) as f:
         content = f.read()
-    
+
     # Check if SEO improvements are already added
     if "# SEO Improvements" in content:
         print("✅ SEO improvements already in conf.py")
         return
-    
+
     # Add SEO configuration
-    seo_config = '''
+    seo_config = """
 
 # SEO Improvements
 html_theme_options.update({
@@ -108,18 +141,19 @@ html_split_index = True
 html_theme_options["show_nav_level"] = 2
 html_theme_options["collapse_navigation"] = False
 html_theme_options["navigation_depth"] = 3
-'''
-    
+"""
+
     # Append to conf.py
-    with open(conf_py_path, 'a') as f:
+    with open(conf_py_path, "a") as f:
         f.write(seo_config)
-    
+
     print("✅ Updated Sphinx configuration with SEO improvements")
+
 
 def create_advanced_seo_template():
     """Create an advanced SEO template with conditional meta tags"""
-    
-    template_content = '''{% extends "!layout.html" %}
+
+    template_content = """{% extends "!layout.html" %}
 
 {%- block htmltitle %}
 <title>{% if title %}{{ title }} | {% endif %}{{ docstitle }}</title>
@@ -222,19 +256,20 @@ def create_advanced_seo_template():
 {%- endif %}
 
 {%- endblock %}
-'''
-    
+"""
+
     print("📝 Advanced template created (example shown)")
     print("   Note: The template above shows the improved structure")
     print("   Current template has been updated with the key fixes")
 
+
 def generate_seo_report():
     """Generate final SEO implementation report"""
-    
-    print("\n" + "="*80)
+
+    print("\n" + "=" * 80)
     print("📊 FINAL SEO IMPLEMENTATION REPORT")
-    print("="*80)
-    
+    print("=" * 80)
+
     print("\n✅ COMPLETED FIXES:")
     print("• Fixed duplicate viewport meta tags by using extrahead block")
     print("• Enhanced Twitter Cards with proper image and alt text")
@@ -242,7 +277,7 @@ def generate_seo_report():
     print("• Improved structured data with keywords and dates")
     print("• Added proper canonical URLs")
     print("• Enhanced meta descriptions with conditional content")
-    
+
     print("\n🎯 RECOMMENDED NEXT STEPS:")
     print("1. Rebuild documentation: `cd docs && make clean && make html`")
     print("2. Test a few pages to verify viewport fix worked")
@@ -250,14 +285,14 @@ def generate_seo_report():
     print("4. Add verification meta tags for Google/Bing")
     print("5. Monitor Core Web Vitals with PageSpeed Insights")
     print("6. Consider adding FAQ structured data for common questions")
-    
+
     print("\n📈 EXPECTED SEO IMPROVEMENTS:")
     print("• Better indexing of all 102+ documented pages")
-    print("• Improved social media sharing appearance") 
+    print("• Improved social media sharing appearance")
     print("• Enhanced search result snippets")
     print("• Better mobile responsiveness (fixed viewport)")
     print("• Stronger domain authority signals")
-    
+
     print("\n🔧 MONITORING RECOMMENDATIONS:")
     print("• Set up Google Search Console monitoring")
     print("• Monitor indexing status weekly")
@@ -265,10 +300,11 @@ def generate_seo_report():
     print("• Review search rankings for target keywords")
     print("• Monitor structured data with Rich Results Test")
 
+
 if __name__ == "__main__":
     print("🚀 IMPLEMENTING SEO IMPROVEMENTS FOR NABLA DOCUMENTATION")
     print("=" * 60)
-    
+
     create_page_specific_meta()
     create_advanced_seo_template()
     generate_seo_report()

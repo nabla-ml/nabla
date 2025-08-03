@@ -67,7 +67,9 @@ def jacrev(
             selected_argnums = tuple(range(len(args)))
         else:
             # Normalize argnums to a tuple of integers
-            selected_argnums = (argnums,) if isinstance(argnums, int) else tuple(argnums)
+            selected_argnums = (
+                (argnums,) if isinstance(argnums, int) else tuple(argnums)
+            )
 
         # Validate argnums
         for argnum in selected_argnums:

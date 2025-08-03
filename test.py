@@ -1,12 +1,12 @@
 import nabla as nb
 
+
 def my_program(x: list[nb.Array]) -> nb.Array:
     a = x[0] * x[1]
     b = nb.cos(a)
     c = nb.log(x[1])
     y = b * c
     return y
-
 
 
 # init input arrays
@@ -27,8 +27,6 @@ print("value:\n", value)
 print("value_tangent:\n", value_tangent)
 
 
-
-
 # compute value and pullback function
 value, pullback = nb.vjp(my_program, [x1, x2])
 print("value:\n", value)
@@ -41,8 +39,6 @@ print("value_cotangent:\n", value_cotangent)
 x1_cotangent, x2_cotangent = pullback(value_cotangent)
 print("x1_cotangent:\n", x1_cotangent)
 print("x2_cotangent:\n", x2_cotangent)
-
-
 
 
 jacrev_fn = nb.jacfwd(my_program)
@@ -60,6 +56,7 @@ def my_program(x: tuple[nb.Array, nb.Array]) -> nb.Array:
     c = nb.log(x[1])
     y = b * c
     return y
+
 
 print("\n\n--- JACREV ---\n")
 jacrev_fn = nb.jacrev(my_program)
