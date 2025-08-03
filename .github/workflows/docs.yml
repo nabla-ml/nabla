@@ -62,11 +62,6 @@ jobs:
           cd docs
           sphinx-build -b html . _build/html
           
-      - name: Add CNAME for custom domain
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          echo "nablaml.com" > docs/_build/html/CNAME
-          
       - name: SEO Optimization and Validation
         run: |
           cd docs
