@@ -1,4 +1,4 @@
-name: Documentation Preview and SEO Check
+name: Build and Deploy Documentation
 
 on:
   push:
@@ -13,10 +13,16 @@ on:
       - '.github/workflows/docs.yml'
 
 jobs:
-  preview-docs:
+  build-and-deploy-docs:
     runs-on: ubuntu-latest
     env:
-      DOCS_BASE_URL: "https://nablaml.com"  # Preview uses same domain for consistency
+      DOCS_BASE_URL: "https://nablaml.com"
+      
+    # Add permissions for GitHub Pages deployment
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
       
     steps:
       - uses: actions/checkout@v4
@@ -93,7 +99,7 @@ jobs:
             exit 1
           fi
           
-          echo "🎉 All SEO checks passed for PR preview!"
+          echo "🎉 All SEO checks passed! Ready for deployment!"
           
       - name: Comment PR with preview info
         if: github.event_name == 'pull_request'
@@ -114,3 +120,11 @@ jobs:
               repo: context.repo.repo,
               body: `## 📚 Documentation Preview Ready\n\n**SEO Status:** ✅ All checks passed\n**HTML Pages:** ${htmlCount} files\n**Sitemap URLs:** ${urlCount} URLs\n**Domain:** https://nablaml.com\n\nThe documentation builds successfully with full SEO optimization! 🎉`
             });
+
+      - name: Deploy to GitHub Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs/_build/html
+          cname: nablaml.com
