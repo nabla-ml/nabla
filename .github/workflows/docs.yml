@@ -1,5 +1,10 @@
 name: Build and Deploy Documentation
 
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 on:
   push:
     branches: [ main ]
@@ -11,6 +16,12 @@ on:
     paths: 
       - 'docs/**'
       - '.github/workflows/docs.yml'
+
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy-docs:
@@ -50,6 +61,11 @@ jobs:
         run: |
           cd docs
           sphinx-build -b html . _build/html
+          
+      - name: Add CNAME for custom domain
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          echo "nablaml.com" > docs/_build/html/CNAME
           
       - name: SEO Optimization and Validation
         run: |
@@ -121,10 +137,17 @@ jobs:
               body: `## 📚 Documentation Preview Ready\n\n**SEO Status:** ✅ All checks passed\n**HTML Pages:** ${htmlCount} files\n**Sitemap URLs:** ${urlCount} URLs\n**Domain:** https://nablaml.com\n\nThe documentation builds successfully with full SEO optimization! 🎉`
             });
 
+      - name: Setup Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/configure-pages@v4
+        
+      - name: Upload artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./docs/_build/html
+          
       - name: Deploy to GitHub Pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs/_build/html
-          cname: nablaml.com
+        id: deployment
+        uses: actions/deploy-pages@v4
