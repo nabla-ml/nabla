@@ -29,7 +29,7 @@ from .vmap import vmap
 
 def jacrev(
     func: Callable[..., Any],
-    argnums: int | tuple[int, ...] | list[int] = 0,
+    argnums: int | tuple[int, ...] | list[int] | None = None,
     has_aux: bool = False,
     holomorphic: bool = False,
     allow_int: bool = False,
@@ -62,8 +62,12 @@ def jacrev(
 
     def jacrev_fn(*args: Any) -> Any:
         # print("\nSTART JACREV FN")
-        # Normalize argnums to a tuple of integers
-        selected_argnums = (argnums,) if isinstance(argnums, int) else tuple(argnums)
+        # Handle default case: if argnums is None, differentiate w.r.t. all arguments
+        if argnums is None:
+            selected_argnums = tuple(range(len(args)))
+        else:
+            # Normalize argnums to a tuple of integers
+            selected_argnums = (argnums,) if isinstance(argnums, int) else tuple(argnums)
 
         # Validate argnums
         for argnum in selected_argnums:

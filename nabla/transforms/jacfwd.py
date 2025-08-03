@@ -27,7 +27,7 @@ from .vmap import vmap
 
 def jacfwd(
     func: Callable[..., Any],
-    argnums: int | tuple[int, ...] | list[int] = 0,
+    argnums: int | tuple[int, ...] | list[int] | None = None,
     has_aux: bool = False,
     holomorphic: bool = False,
     allow_int: bool = False,
@@ -55,8 +55,12 @@ def jacfwd(
         # print(f"\n=== JACFWD PROTOTYPE ===")
         # print(f"Input args shapes: {[arg.shape if hasattr(arg, 'shape') else type(arg).__name__ for arg in args]}")
 
-        # Normalize argnums to a tuple of integers (same as jacrev)
-        selected_argnums = (argnums,) if isinstance(argnums, int) else tuple(argnums)
+        # Handle default case: if argnums is None, differentiate w.r.t. all arguments
+        if argnums is None:
+            selected_argnums = tuple(range(len(args)))
+        else:
+            # Normalize argnums to a tuple of integers (same as jacrev)
+            selected_argnums = (argnums,) if isinstance(argnums, int) else tuple(argnums)
 
         # Validate argnums (same as jacrev)
         for argnum in selected_argnums:
@@ -110,16 +114,23 @@ def jacfwd(
             tangent_vectors = args[num_primals:]  # Last N arguments are tangents
 
             if len(primals) == 1:
-                # Single input case
-                tangents_tuple = tangent_vectors[0]
+                # Single input case - reconstruct tangent structure to match primal structure
                 primals_tuple = primals[0]
+                if isinstance(primals_tuple, (list, tuple)):
+                    # If primal is a container, wrap it in tuple for jvp and reconstruct tangent
+                    jvp_primals = (primals_tuple,)
+                    jvp_tangents = (type(primals_tuple)(tangent_vectors),)
+                else:
+                    # If primal is not a container, pass directly
+                    jvp_primals = primals_tuple
+                    jvp_tangents = tangent_vectors[0]
             else:
-                # Multi-input case
-                tangents_tuple = tuple(tangent_vectors)
-                primals_tuple = tuple(primals)
+                # Multi-input case - pass as tuple for multiple arguments
+                jvp_primals = tuple(primals)
+                jvp_tangents = tuple(tangent_vectors)
 
-            # Compute JVP: jvp(partial_func, primals, tangents)
-            jvp_result = jvp(partial_func, primals_tuple, tangents_tuple)
+            # Compute JVP with proper calling convention
+            jvp_result = jvp(partial_func, jvp_primals, jvp_tangents)
             primal_out, tangent_out = jvp_result  # type: ignore
 
             return tangent_out  # Return tangent output directly
@@ -145,8 +156,26 @@ def jacfwd(
         if not isinstance(flat_output, list):
             flat_output = [flat_output]
 
-        # Split the output tangents by the sizes from _std_basis
-        split_tangents = split(output_tangents, sizes=sizes, axis=0)
+        # Handle output_tangents structure - it may be a container if function returns multiple outputs
+        if isinstance(output_tangents, (list, tuple)):
+            # Function returns multiple outputs, so output_tangents is also a container
+            # We need to split each output component separately
+            all_split_tangents = []
+            for output_component in output_tangents:
+                split_tangents_component = split(output_component, sizes=sizes, axis=0)
+                all_split_tangents.append(split_tangents_component)
+            
+            # Reorganize: instead of [split_for_output0, split_for_output1], 
+            # we want [split_for_input0, split_for_input1] where each contains all outputs
+            split_tangents = []
+            for input_idx in range(len(sizes)):
+                tangents_for_this_input = []
+                for output_idx in range(len(all_split_tangents)):
+                    tangents_for_this_input.append(all_split_tangents[output_idx][input_idx])
+                split_tangents.append(tangents_for_this_input)
+        else:
+            # Function returns single output, handle normally
+            split_tangents = split(output_tangents, sizes=sizes, axis=0)
 
         # print("\n\nSPLIT TANGENTS")
         # print(split_tangents)
@@ -156,24 +185,48 @@ def jacfwd(
         for _j, (arg, tangents_for_arg) in enumerate(
             zip(flat_diff_args, split_tangents, strict=False)
         ):
-            output_shape = flat_output[0].shape
             arg_shape = arg.shape
 
-            # Reshape to proper Jacobian format: output_shape + input_shape
-            target_shape = arg_shape + output_shape
-            jacobian_component = reshape(tangents_for_arg, target_shape)
+            if isinstance(tangents_for_arg, list):
+                # Multiple outputs case - create jacobian for each output
+                output_jacobians = []
+                for output_idx, tangent_for_output in enumerate(tangents_for_arg):
+                    output_shape = flat_output[output_idx].shape
+                    
+                    # Reshape to proper Jacobian format: output_shape + input_shape
+                    target_shape = arg_shape + output_shape
+                    jacobian_component = reshape(tangent_for_output, target_shape)
 
-            # reshaped_grad = grad.reshape(shape)
-            perm_axes = []
-            for k in range(len(output_shape)):
-                perm_axes.append(k + len(arg_shape))
-            for k in range(len(arg_shape)):
-                perm_axes.append(k)
+                    # Permute axes to get output_shape + input_shape format
+                    perm_axes = []
+                    for k in range(len(output_shape)):
+                        perm_axes.append(k + len(arg_shape))
+                    for k in range(len(arg_shape)):
+                        perm_axes.append(k)
 
-            from ..ops.view import permute
+                    from ..ops.view import permute
+                    jacobian_component = permute(jacobian_component, tuple(perm_axes))
+                    output_jacobians.append(jacobian_component)
+                
+                jacobian_components.append(output_jacobians)
+            else:
+                # Single output case
+                output_shape = flat_output[0].shape
+                
+                # Reshape to proper Jacobian format: output_shape + input_shape
+                target_shape = arg_shape + output_shape
+                jacobian_component = reshape(tangents_for_arg, target_shape)
 
-            jacobian_component = permute(jacobian_component, tuple(perm_axes))
-            jacobian_components.append(jacobian_component)
+                # Permute axes to get output_shape + input_shape format
+                perm_axes = []
+                for k in range(len(output_shape)):
+                    perm_axes.append(k + len(arg_shape))
+                for k in range(len(arg_shape)):
+                    perm_axes.append(k)
+
+                from ..ops.view import permute
+                jacobian_component = permute(jacobian_component, tuple(perm_axes))
+                jacobian_components.append(jacobian_component)
 
         # Return as tuple for multiple inputs
         if len(jacobian_components) == 1:

@@ -61,7 +61,9 @@ def jvp(
         - For functions requiring keyword arguments, use functools.partial or lambda
     """
     # Handle inputs correctly based on structure
-    is_multi_arg = isinstance(primals, tuple)
+    # Follow JAX convention: if primals is a tuple with length > 1, treat as multiple arguments
+    # If primals is a tuple with length 1, treat as single argument
+    is_multi_arg = isinstance(primals, tuple) and len(primals) > 1
 
     any_primal_traced = any(
         getattr(arg, "traced", False) for arg in _extract_arrays_from_pytree(primals)
@@ -77,6 +79,12 @@ def jvp(
                 f"primals and tangents must have the same structure and length, "
                 f"got {len(primals)} primals and {len(tangents) if isinstance(tangents, tuple) else 1} tangents"
             )
+    elif isinstance(primals, tuple) and len(primals) == 1:
+        # Single argument case wrapped in tuple: primals = (arg,), tangents = (tangent,)
+        if not isinstance(tangents, tuple) or len(tangents) != 1:
+            raise ValueError(
+                "For single argument wrapped in tuple, tangents must also be wrapped in tuple of length 1"
+            )
     elif isinstance(tangents, tuple):
         raise ValueError(
             "If primal is a single argument, tangent should also be a single argument"
@@ -86,7 +94,15 @@ def jvp(
     traced_inputs_pytree = make_traced_pytree(primals)
 
     # Extract traced args based on structure
-    traced_args = traced_inputs_pytree if is_multi_arg else (traced_inputs_pytree,)
+    if is_multi_arg:
+        # Multiple arguments: func(arg1, arg2, ...)
+        traced_args = traced_inputs_pytree
+    elif isinstance(primals, tuple) and len(primals) == 1:
+        # Single argument wrapped in tuple: func(arg)
+        traced_args = (traced_inputs_pytree[0],)
+    else:
+        # Single argument not wrapped: func(arg)
+        traced_args = (traced_inputs_pytree,)
 
     # Execute the function with traced inputs
     outputs = func(*traced_args)
