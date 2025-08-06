@@ -1402,9 +1402,9 @@ class ConcatenateOp(Operation):
                 raise ValueError(
                     f"All inputs must have the same dtype. Got {arg.dtype} vs {first_arg.dtype}"
                 )
-            if arg.device != first_arg.device:
+            if arg.logical_device != first_arg.logical_device:
                 raise ValueError(
-                    f"All inputs must be on the same device. Got {arg.device} vs {first_arg.device}"
+                    f"All inputs must be on the same device. Got {arg.logical_device} vs {first_arg.logical_device}"
                 )
 
         # Compute output properties
@@ -1424,7 +1424,7 @@ class ConcatenateOp(Operation):
         res = Array(
             shape=output_shape,
             dtype=first_arg.dtype,
-            device=first_arg.device,
+            device=first_arg.logical_device,
             materialize=False,
             name=self.name,
             batch_dims=output_batch_dims,
@@ -1831,7 +1831,7 @@ class PadOp(Operation):
         from max.graph import DeviceRef
 
         zero_scalar = ops.constant(
-            0.0, dtype=output.dtype, device=DeviceRef.from_device(output.device)
+            0.0, dtype=output.dtype, device=DeviceRef.from_device(output.logical_device)
         )
         flat_zeros = ops.broadcast_to(zero_scalar, [total_output_elements])
 
@@ -1905,7 +1905,7 @@ class PadOp(Operation):
         res = Array(
             shape=output_shape,
             dtype=input_array.dtype,
-            device=input_array.device,
+            device=input_array.logical_device,
             materialize=False,
             name=self.name,
             batch_dims=input_array.batch_dims,

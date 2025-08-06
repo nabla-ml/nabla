@@ -126,11 +126,11 @@ class ModelFactory:
                 TensorType(
                     dtype=input_node.dtype,
                     shape=input_node.batch_dims + input_node.shape,
-                    device=DeviceRef.from_device(input_node.device),
+                    device=DeviceRef.from_device(input_node.logical_device),
                 )
             )
-            if input_node.device not in devices:
-                devices.append(input_node.device)
+            if input_node.logical_device not in devices:
+                devices.append(input_node.logical_device)
 
         custom_ops_paths = []
         for node in trace:
@@ -156,7 +156,7 @@ class ModelFactory:
                         input_node.tensor_value = constant(
                             input_node.to_numpy(),
                             input_node.dtype,
-                            DeviceRef.from_device(input_node.device),
+                            DeviceRef.from_device(input_node.logical_device),
                         )  # add tensor_value as constant weight to the graph
                         j += 1
                     else:

@@ -221,7 +221,7 @@ class GatherOp(Operation):
         res = Array(
             shape=output_shape,
             dtype=output_dtype,
-            device=input_array.device,
+            device=input_array.logical_device,
             materialize=False,
             name=self.name,
             batch_dims=output_batch_dims,
@@ -335,7 +335,7 @@ class ScatterOp(Operation):
 
         # Create zero tensor with target shape
         zero_scalar = ops.constant(
-            0.0, dtype=output.dtype, device=DeviceRef.from_device(output.device)
+            0.0, dtype=output.dtype, device=DeviceRef.from_device(output.logical_device)
         )
         target_shape = list(output.batch_dims) + list(output.shape)
         zero_tensor = ops.broadcast_to(zero_scalar, target_shape)
@@ -528,7 +528,7 @@ class ScatterOp(Operation):
         res = Array(
             shape=output_shape,
             dtype=output_dtype,
-            device=values.device,  # Use values device since that's the data
+            device=values.logical_device,  # Use values device since that's the data
             materialize=False,
             name=self.name,
             batch_dims=output_batch_dims,

@@ -72,7 +72,7 @@ class MatMulOp(BinaryOperation):
         res = Array(
             shape=output_shape,
             dtype=output_dtype,
-            device=arg1.device,
+            device=arg1.logical_device,
             materialize=False,
             name=self.name,
             batch_dims=output_batch_dims,
@@ -124,9 +124,9 @@ class MatMulOp(BinaryOperation):
             raise TypeError("Both arguments must be Array instances")
         if arg1.dtype != arg2.dtype:
             raise ValueError(f"Dtypes {arg1.dtype} and {arg2.dtype} are incompatible")
-        if arg1.device != arg2.device:
+        if arg1.logical_device != arg2.logical_device:
             raise ValueError(
-                f"Devices {arg1.device} and {arg2.device} are incompatible"
+                f"Devices {arg1.logical_device} and {arg2.logical_device} are incompatible"
             )
         if arg1.shape[-1] != arg2.shape[-2]:
             raise ValueError(
@@ -347,7 +347,7 @@ def matmul(arg0, arg1) -> Array:
 #         output_shape = self.compute_output_shape(input_arr.shape, filter_arr.shape)
 #         res = Array(
 #             shape=output_shape, dtype=self.compute_output_dtype(input_arr, filter_arr),
-#             device=input_arr.device, materialize=False, name=self.name,
+#             device=input_arr.logical_device, materialize=False, name=self.name,
 #             batch_dims=input_arr.batch_dims,
 #         )
 #         res.set_maxpr(self.maxpr)
@@ -361,8 +361,8 @@ def matmul(arg0, arg1) -> Array:
 #     def _validate_inputs(self, input_arr: Array, filter_arr: Array) -> None:
 #         if len(input_arr.shape) != 4 or len(filter_arr.shape) != 4:
 #             raise ValueError("Conv2D requires 4D input and filter tensors.")
-#         if input_arr.device != filter_arr.device:
-#             raise ValueError(f"Devices {input_arr.device} and {filter_arr.device} are incompatible")
+#         if input_arr.logical_device != filter_arr.logical_device:
+#             raise ValueError(f"Devices {input_arr.logical_device} and {filter_arr.logical_device} are incompatible")
 
 #     def maxpr(self, args: list[TensorValue], output: Array) -> None:
 #         input_val, filter_val = args
@@ -466,7 +466,7 @@ def matmul(arg0, arg1) -> Array:
 #         output_shape = self.compute_output_shape(input_arr.shape, filter_arr.shape)
 #         res = Array(
 #             shape=output_shape, dtype=self.compute_output_dtype(input_arr, filter_arr),
-#             device=input_arr.device, materialize=False, name=self.name,
+#             device=input_arr.logical_device, materialize=False, name=self.name,
 #             batch_dims=input_arr.batch_dims,
 #         )
 #         res.set_maxpr(self.maxpr)
@@ -480,8 +480,8 @@ def matmul(arg0, arg1) -> Array:
 #     def _validate_inputs(self, input_arr: Array, filter_arr: Array) -> None:
 #         if len(input_arr.shape) != 4 or len(filter_arr.shape) != 4:
 #             raise ValueError("Conv2DTranspose requires 4D input and filter tensors.")
-#         if input_arr.device != filter_arr.device:
-#             raise ValueError(f"Devices {input_arr.device} and {filter_arr.device} are incompatible")
+#         if input_arr.logical_device != filter_arr.logical_device:
+#             raise ValueError(f"Devices {input_arr.logical_device} and {filter_arr.logical_device} are incompatible")
 
 #     def maxpr(self, args: list[TensorValue], output: Array) -> None:
 #         input_val, filter_val = args

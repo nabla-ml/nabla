@@ -89,7 +89,7 @@ class UnaryOperation(Operation):
         res = Array(
             shape=output_shape,
             dtype=output_dtype,
-            device=arg.device,
+            device=arg.logical_device,
             materialize=False,
             name=self.name,
             batch_dims=output_batch_dims,
@@ -138,7 +138,7 @@ def move_to_best_device(*args: Array) -> tuple[Array, ...]:
     accelerator_devices = set()
 
     for arg in args:
-        device = arg.device
+        device = arg.logical_device
         data_size = np.prod(arg.shape)
         device_data[device] = device_data.get(device, 0) + data_size
 
@@ -182,7 +182,7 @@ def move_to_best_device(*args: Array) -> tuple[Array, ...]:
     # Move all arrays to the best device
     result_args = []
     for arg in args:
-        if arg.device != best_device:
+        if arg.logical_device != best_device:
             result_args.append(arg.to(best_device))
         else:
             result_args.append(arg)
@@ -231,7 +231,7 @@ class BinaryOperation(Operation):
         res = Array(
             shape=output_shape,
             dtype=output_dtype,
-            device=arg1.device,
+            device=arg1.logical_device,
             materialize=False,
             name=self.name,
             batch_dims=output_batch_dims,
@@ -271,9 +271,9 @@ class BinaryOperation(Operation):
             raise TypeError("Both arguments must be Array instances")
         if arg1.dtype != arg2.dtype:
             raise ValueError(f"Dtypes {arg1.dtype} and {arg2.dtype} are incompatible")
-        if arg1.device != arg2.device:
+        if arg1.logical_device != arg2.logical_device:
             raise ValueError(
-                f"Devices {arg1.device} and {arg2.device} are incompatible"
+                f"Devices {arg1.logical_device} and {arg2.logical_device} are incompatible"
             )
 
     def compute_output_batch_dims(self, *input_batch_dims: tuple) -> tuple:

@@ -70,7 +70,7 @@ class Array:
         self.shape = shape
         self.batch_dims = batch_dims
         self.dtype = dtype
-        self.device = device
+        self.logical_device = device
         self.name = name
         self.args: list[Array] = []
         self.visited: bool = False
@@ -94,6 +94,18 @@ class Array:
         else:
             self._impl = None
 
+    @property 
+    def device(self) -> Device:
+        """Get the logical device of this Array. This can differ from the logical device and will show the actual device the buffer lives on."""
+        if self._impl is None:
+            return self.logical_device
+        if isinstance(self._impl, Tensor):
+            return self._impl.device
+        elif isinstance(self._impl, np.ndarray):
+            return _DEFAULT_CPU
+        else:
+            raise TypeError(f"Unsupported implementation type: {type(self._impl)}")
+
     @property
     def impl(self) -> Optional[Tensor]:
         """Get the max.Tensor representation of this Array. If the underlying _impl field is a Numpy array, convert it to a Tensor."""
@@ -102,8 +114,8 @@ class Array:
         elif isinstance(self._impl, np.ndarray):
             # Convert numpy array to Tensor
             val = Tensor.from_numpy(self._impl)
-            if val.device != self.device:
-                val = val.to(self.device)
+            if val.device != self.logical_device:
+                val = val.to(self.logical_device)
             return val
         else:
             return None
@@ -208,7 +220,7 @@ class Array:
         # else:
         array._impl = np_array  # Tensor.from_numpy(np_array)
 
-        # array.device = _DEFAULT_CPU
+        # array.logical_device = _DEFAULT_CPU
         return array
 
     def get_arguments(self) -> list[Array]:

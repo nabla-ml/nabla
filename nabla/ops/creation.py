@@ -143,7 +143,7 @@ class RandomOp(Operation):
         super().__init__(f"rng_{op_name}[shape={shape}]")
         self.shape = shape
         self.dtype = dtype
-        self.device = device
+        self.logical_device = device
         self.seed = seed
 
         # Validate common parameters
@@ -161,7 +161,7 @@ class RandomOp(Operation):
         res = Array(
             shape=self.shape,
             dtype=self.dtype,
-            device=self.device,
+            device=self.logical_device,
             materialize=False,
             name=self.name,
         )
@@ -216,7 +216,7 @@ class RandNOp(RandomOp):
         ops.random.set_seed(self.seed)
         output.tensor_value = ops.random.normal(
             TensorType(
-                output.dtype, output.shape, DeviceRef.from_device(output.device)
+                output.dtype, output.shape, DeviceRef.from_device(output.logical_device)
             ),
             mean=self.mean,
             std=self.std,
@@ -227,7 +227,7 @@ class RandNOp(RandomOp):
         np_result = np.random.normal(
             loc=self.mean, scale=self.std, size=output.shape
         ).astype(DType.to_numpy(output.dtype))
-        output.impl_(Tensor.from_numpy(np_result).to(output.device))
+        output.impl_(Tensor.from_numpy(np_result).to(output.logical_device))
 
 
 class RandUniformOp(RandomOp):
@@ -257,7 +257,7 @@ class RandUniformOp(RandomOp):
         ops.random.set_seed(self.seed)
         output.tensor_value = ops.random.uniform(
             TensorType(
-                output.dtype, output.shape, DeviceRef.from_device(output.device)
+                output.dtype, output.shape, DeviceRef.from_device(output.logical_device)
             ),
             range=(self.lower, self.upper),
         )
@@ -267,7 +267,7 @@ class RandUniformOp(RandomOp):
         np_result = np.random.uniform(
             low=self.lower, high=self.upper, size=output.shape
         ).astype(DType.to_numpy(output.dtype))
-        output.impl_(Tensor.from_numpy(np_result).to(output.device))
+        output.impl_(Tensor.from_numpy(np_result).to(output.logical_device))
 
 
 def array(
@@ -323,7 +323,7 @@ class ArangeOp(Operation):
         self.stop = stop
         self.step = step
         self.dtype = dtype
-        self.device = device
+        self.logical_device = device
 
         # Pre-compute the output shape using numpy's robust implementation
         # This handles all edge cases like float steps, negative steps, etc.
@@ -342,7 +342,7 @@ class ArangeOp(Operation):
         res = Array(
             shape=self.shape,
             dtype=self.dtype,
-            device=self.device,
+            device=self.logical_device,
             materialize=False,
             name=self.name,
         )
@@ -369,13 +369,13 @@ class ArangeOp(Operation):
             stop=self.stop,
             step=self.step,
             dtype=output.dtype,
-            device=DeviceRef.from_device(output.device),
+            device=DeviceRef.from_device(output.logical_device),
         )
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         """Eager-mode execution using numpy."""
         # We can reuse the numpy array we created for the shape calculation
-        output.impl_(Tensor.from_numpy(self._np_arange_for_shape).to(output.device))
+        output.impl_(Tensor.from_numpy(self._np_arange_for_shape).to(output.logical_device))
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
@@ -459,7 +459,7 @@ def ndarange_like(template: Array) -> Array:
     return ndarange(
         template.shape,
         template.dtype,
-        template.device,
+        template.logical_device,
         template.batch_dims,
         template.traced,
     )
@@ -490,7 +490,7 @@ def randn_like(
         template.dtype,
         mean,
         std,
-        template.device,
+        template.logical_device,
         seed,
         template.batch_dims,
         traced=template.traced,
@@ -523,7 +523,7 @@ def rand_like(
         template.dtype,
         lower,
         upper,
-        template.device,
+        template.logical_device,
         seed,
         template.batch_dims,
         traced=template.traced,
@@ -558,7 +558,7 @@ def zeros_like(template: Array) -> Array:
     return zeros(
         template.shape,
         template.dtype,
-        template.device,
+        template.logical_device,
         template.batch_dims,
         traced=template.traced,
     )
@@ -569,7 +569,7 @@ def ones_like(template: Array) -> Array:
     return ones(
         template.shape,
         template.dtype,
-        template.device,
+        template.logical_device,
         template.batch_dims,
         traced=template.traced,
     )
@@ -581,7 +581,7 @@ def full_like(template: Array, fill_value: float) -> Array:
         template.shape,
         fill_value,
         template.dtype,
-        template.device,
+        template.logical_device,
         template.batch_dims,
         template.traced,
     )
@@ -764,4 +764,4 @@ def triu(x, k=0):
     from .special import where
 
     mask = ndarange((x.shape[-1],)) < ndarange((x.shape[-1],))[:, None] + k
-    return where(mask, x, array(0, dtype=x.dtype, device=x.device))
+    return where(mask, x, array(0, dtype=x.dtype, device=x.logical_device))

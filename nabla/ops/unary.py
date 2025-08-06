@@ -787,9 +787,9 @@ def transfer_to(arg: Array, device: Device) -> Array:
     """Transfer an array to a different device."""
     if not isinstance(device, Device):
         raise TypeError(f"Device must be an instance of Device, got {type(device)}")
-    if arg.device == device:
+    if arg.logical_device == device:
         return arg
-    return TransferToOp(arg.device, device).forward(arg)
+    return TransferToOp(arg.logical_device, device).forward(arg)
 
 
 # Add global instances
