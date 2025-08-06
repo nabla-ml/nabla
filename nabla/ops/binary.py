@@ -183,7 +183,7 @@ class PowerOp(BinaryOperation):
         output.tensor_value = ops.pow(args[0], args[1])
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
-        np_result = np.pow(args[0].to_numpy(), args[1].to_numpy())
+        np_result = args[0].to_numpy() ** args[1].to_numpy()
         # Ensure result is an array, not a scalar
         if np.isscalar(np_result):
             np_result = np.array(np_result)
