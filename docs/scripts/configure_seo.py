@@ -22,18 +22,9 @@ def configure_seo_for_environment():
     # Update sitemap generator with environment-specific URL
     sitemap_script = Path(__file__).parent / "generate_sitemap.py"
     if sitemap_script.exists():
-        with open(sitemap_script) as f:
-            content = f.read()
-
-        # Replace base_url in the script
-        updated_content = content.replace(
-            'base_url = "https://www.nablaml.com"', f'base_url = "{base_url}"'
-        )
-
-        with open(sitemap_script, "w") as f:
-            f.write(updated_content)
-
-        print("✅ Updated sitemap generator with environment URL")
+        print("✅ Sitemap generator will use environment URL")
+    else:
+        print("⚠️  Sitemap generator not found")
 
     return base_url
 
