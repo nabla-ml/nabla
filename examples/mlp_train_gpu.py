@@ -22,18 +22,16 @@ from max import driver
 import nabla as nb
 
 # Configuration
-# --- FIX STARTS HERE ---
-# Restore the original, effective hyperparameters
-BATCH_SIZE = 8
-LAYERS = [1, 16, 1]  # , 128, 256, 128, 64, 1]
+# Test different sizes to see GPU vs CPU performance difference
+BATCH_SIZE = 2048  # Much larger batch size to benefit GPU
+LAYERS = [1, 4096, 8192, 8192, 4096, 1]  # Much larger model for GPU advantage
 LEARNING_RATE = 0.001
-NUM_EPOCHS = 10
-PRINT_INTERVAL = 1
+NUM_EPOCHS = 50  # Fewer epochs since larger model
+PRINT_INTERVAL = 10
 SIN_PERIODS = 8
-# --- FIX ENDS HERE ---
 
 
-device = driver.CPU() if driver.accelerator_count() == 0 else driver.Accelerator()
+device = nb.cpu() if nb.accelerator_count() == 0 else nb.accelerator()
 print(f"Using {device} device")
 
 
@@ -256,6 +254,13 @@ def test_nabla_complex_sin():
             x, targets, params, m_states, v_states, epoch, current_lr
         )
 
+        # check if the device of all update _params and loss_value are acutally equal to the device
+        if not all(p.device == device for p in updated_params):
+            raise ValueError(
+                "Updated parameters are not on the expected device. "
+                f"Expected: {device}, Got: {[p.device for p in updated_params]}"
+            )
+
         vjp_time = time.time() - vjp_start
 
         # Update return values
@@ -278,6 +283,7 @@ def test_nabla_complex_sin():
             jit_perc = (avg_vjp_time / avg_time) * 100 if avg_time > 0 else 0
 
             print(f"\n{'=' * 60}")
+            print(f"loss device: {loss_values.device}")
             print(
                 f"Epoch {epoch:4d} | Loss: {avg_loss / PRINT_INTERVAL:.6f} | Time: {avg_time_per_epoch:.4f}s"
             )
@@ -297,48 +303,49 @@ def test_nabla_complex_sin():
 
     print("\nNabla JIT training completed!")
 
-    # Final evaluation
-    print("\n=== Final Evaluation ===")
-    x_test_np = np.linspace(0, 1, 1000).reshape(-1, 1).astype(np.float32)
-    targets_test_np = (
-        np.sin(SIN_PERIODS * 2.0 * np.pi * x_test_np) / 2.0 + 0.5
-    ).astype(np.float32)
+    # # Final evaluation
+    # print("\n=== Final Evaluation ===")
+    # x_test_np = np.linspace(0, 1, 1000).reshape(-1, 1).astype(np.float32)
+    # targets_test_np = (
+    #     np.sin(SIN_PERIODS * 2.0 * np.pi * x_test_np) / 2.0 + 0.5
+    # ).astype(np.float32)
 
-    x_test = nb.Array.from_numpy(x_test_np).to(device)
-    targets_test = nb.Array.from_numpy(targets_test_np).to(device)
+    # x_test = nb.Array.from_numpy(x_test_np).to(device)
+    # targets_test = nb.Array.from_numpy(targets_test_np).to(device)
 
-    # Use JIT-compiled function for evaluation
-    predictions_test, test_loss = compute_predictions_and_loss(
-        x_test, targets_test, params
-    )
+    # # Use JIT-compiled function for evaluation
+    # predictions_test, test_loss = compute_predictions_and_loss(
+    #     x_test, targets_test, params
+    # )
 
-    pred_final_np = predictions_test.to_numpy()
-    final_test_loss = test_loss.to_numpy().item()
+    # pred_final_np = predictions_test.to_numpy()
+    # final_test_loss = test_loss.to_numpy().item()
 
-    print(f"Final test loss: {final_test_loss:.6f}")
-    print(
-        f"Final predictions range: [{pred_final_np.min():.3f}, {pred_final_np.max():.3f}]"
-    )
-    print(f"Target range: [{targets_test_np.min():.3f}, {targets_test_np.max():.3f}]")
+    # print(f"Final test loss: {final_test_loss:.6f}")
+    # print(
+    #     f"Final predictions range: [{pred_final_np.min():.3f}, {pred_final_np.max():.3f}]"
+    # )
+    # print(f"Target range: [{targets_test_np.min():.3f}, {targets_test_np.max():.3f}]")
 
-    # Calculate correlation
-    correlation = np.corrcoef(pred_final_np.flatten(), targets_test_np.flatten())[0, 1]
-    print(f"Prediction-target correlation: {correlation:.4f}")
+    # # Calculate correlation
+    # correlation = np.corrcoef(pred_final_np.flatten(), targets_test_np.flatten())[0, 1]
+    # print(f"Prediction-target correlation: {correlation:.4f}")
 
-    return final_test_loss, correlation
+    # return final_test_loss, correlation
 
 
 if __name__ == "__main__":
-    final_loss, correlation = test_nabla_complex_sin()
-    print("\n=== Nabla JIT Summary ===")
-    print(f"Final test loss: {final_loss:.6f}")
-    print(f"Correlation with true function: {correlation:.4f}")
+    test_nabla_complex_sin()
+    # final_loss, correlation = test_nabla_complex_sin()
+    # print("\n=== Nabla JIT Summary ===")
+    # print(f"Final test loss: {final_loss:.6f}")
+    # print(f"Correlation with true function: {correlation:.4f}")
 
-    if correlation > 0.95:
-        print("SUCCESS: Nabla JIT learned the complex function very well! 🎉")
-    elif correlation > 0.8:
-        print("GOOD: Nabla JIT learned the general shape well! 👍")
-    elif correlation > 0.5:
-        print("PARTIAL: Some learning but needs improvement 🤔")
-    else:
-        print("POOR: Nabla JIT failed to learn the complex function 😞")
+    # if correlation > 0.95:
+    #     print("SUCCESS: Nabla JIT learned the complex function very well! 🎉")
+    # elif correlation > 0.8:
+    #     print("GOOD: Nabla JIT learned the general shape well! 👍")
+    # elif correlation > 0.5:
+    #     print("PARTIAL: Some learning but needs improvement 🤔")
+    # else:
+    #     print("POOR: Nabla JIT failed to learn the complex function 😞")
