@@ -14,7 +14,7 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-"""Nabla implementation with JIT acceleration to learn the complex 8-period sin curve."""
+"""Nabla implementation with JIT acceleration to learn the 8-Period sin curve."""
 
 import time
 
@@ -61,7 +61,7 @@ def mlp_forward_and_loss(inputs: list[nb.Array]) -> nb.Array:
 
 
 def create_sin_dataset(batch_size: int = 256) -> tuple[nb.Array, nb.Array]:
-    """Create the COMPLEX 8-period sin dataset."""
+    """Create the 8-Period sin dataset."""
     x = nb.rand((batch_size, 1), lower=0.0, upper=1.0, dtype=nb.DType.float32)
     targets = nb.sin(SIN_PERIODS * 2.0 * np.pi * x) / 2.0 + 0.5
     return x, targets
@@ -211,7 +211,7 @@ def compute_predictions_and_loss(
 
 def test_nabla_complex_sin():
     """Test Nabla implementation with JIT for complex sin learning."""
-    print("=== Learning COMPLEX 8-Period Sin Function with Nabla JIT ===")
+    print("=== Learning 8-Period Sin Function with Nabla JIT ===")
     print(f"Architecture: {LAYERS}")
     print(f"Initial learning rate: {LEARNING_RATE}")
     print(f"Sin periods: {SIN_PERIODS}")

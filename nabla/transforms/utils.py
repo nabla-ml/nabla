@@ -414,7 +414,7 @@ class Trace:
         if not self._computed:
             self._compute_trace()
 
-        from ..utils.formatting import format_shape_and_dtype
+        from ..utils.formatting import format_shape_dtype_device
 
         # Initialize name generator with a simple global counter
         var_names = {}
@@ -443,7 +443,7 @@ class Trace:
         for inp in self.inputs:
             var_name = _get_next_name()
             var_names[id(inp)] = var_name
-            type_annotation = format_shape_and_dtype(inp)
+            type_annotation = format_shape_dtype_device(inp)
             input_vars.append(f"{var_name}:{type_annotation}")
 
         # Single pass through trace: assign names and build equations
@@ -477,7 +477,7 @@ class Trace:
                 else:
                     # Fallback to the type or some default name
                     op_name = "external_const"
-            type_annotation = format_shape_and_dtype(node)
+            type_annotation = format_shape_dtype_device(node)
 
             if node.args:
                 # Get argument variable names

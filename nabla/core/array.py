@@ -234,16 +234,15 @@ class Array:
     def __repr__(self) -> str:
         """String representation of the Array."""
         # self.realize()
-        from ..utils.formatting import format_shape_and_dtype
+        from ..utils.formatting import format_shape_dtype_device
 
         if self.impl is not None:
             return (
-                str(self.impl.to(CPU()).to_numpy()) + ":" + format_shape_and_dtype(self)
+                str(self.impl.to(CPU()).to_numpy()) + ":" + format_shape_dtype_device(self)
             )
         else:
             return (
-                f"Array(shape={self.shape}, dtype={self.dtype}, unrealized):"
-                + format_shape_and_dtype(self)
+                f"Array(shape={self.shape}, dtype={self.dtype}, logical_device={self.logical_device}, unrealized):"
             )
 
     def to(self, device: Device) -> Array:

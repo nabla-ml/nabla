@@ -44,7 +44,7 @@ def format_dtype(dtype: Any) -> str:
         return dtype_str
 
 
-def format_shape_and_dtype(array: Array) -> str:
+def format_shape_dtype_device(array: Array) -> str:
     """Format shape and dtype in JAX style with batch_dims numbers in blue and everything else in purple."""
     dtype_str = format_dtype(array.dtype)
 
@@ -64,9 +64,13 @@ def format_shape_and_dtype(array: Array) -> str:
         shape_str = f"{purple},{purple}".join(map(str, array.shape))
         dims_parts.append(shape_str)
 
+    # Add device information
+    device_info = ":" + str(array.impl.device.label) + "(" + str(array.impl.device.id) + ")"
+
     # Combine dimensions with comma separator and wrap everything in purple
     if dims_parts:
         all_dims = f"{purple},{purple}".join(dims_parts)
-        return f"{purple}{dtype_str}[{all_dims}]{reset}"
+        return f"{purple}{dtype_str}[{all_dims}]{device_info}{reset}"
     else:
-        return f"{purple}{dtype_str}[]{reset}"
+        return f"{purple}{dtype_str}[]{device_info}{reset}"
+

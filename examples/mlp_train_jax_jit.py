@@ -14,7 +14,7 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-"""JAX implementation to learn the complex 8-period sin curve for comparison with Nabla."""
+"""JAX implementation to learn the 8-Period sin curve for comparison with Nabla."""
 
 import time
 
@@ -64,7 +64,7 @@ def mlp_forward_and_loss(inputs: list[jnp.ndarray]) -> jnp.ndarray:
 def create_sin_dataset(
     batch_size: int = 256, key: jax.Array | None = None
 ) -> tuple[jax.Array, jax.Array]:
-    """Create the COMPLEX 8-period sin dataset."""
+    """Create the 8-Period sin dataset."""
     if key is None:
         # Use numpy for compatibility with original
         np_x = np.random.uniform(0.0, 1.0, (batch_size, 1)).astype(np.float32)
@@ -302,7 +302,7 @@ def analyze_jax_learning_progress(params: list[jnp.ndarray], epoch: int):
 
 def test_jax_complex_sin():
     """Test JAX implementation for complex sin learning."""
-    print("=== Learning COMPLEX 8-Period Sin Function with JAX ===")
+    print("=== Learning 8-Period Sin Function with JAX ===")
     print(f"Architecture: {LAYERS}")
     print(f"Initial learning rate: {LEARNING_RATE}")
     print(f"Sin periods: {SIN_PERIODS}")

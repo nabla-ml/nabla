@@ -46,7 +46,7 @@ def create_dataset(
 def create_sin_dataset(
     batch_size: int = 256, sin_periods: int = 8
 ) -> tuple[nb.Array, nb.Array]:
-    """Create the complex 8-period sin dataset from mlp_train_jit.py.
+    """Create the 8-Period sin dataset from mlp_train_jit.py.
 
     Args:
         batch_size: Number of samples to generate

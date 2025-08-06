@@ -7,11 +7,10 @@ Interactive Jupyter notebooks to learn Nabla's features and capabilities through
 :caption: Interactive Notebooks
 
 autodiff_with_nabla
-visualizing_program_trafos
-value_and_grads_cpu
-value_and_grads_gpu
-mlp_training_cpu
-mlp_training_gpu
-jax_vs_nabla_mlp_cpu
-jax_vs_nabla_transformer_cpu
+autodiff_with_nabla_2
+xpr_and_maxgraphs
+jit_vs_nonjit
+mlp_training
+mlp_jax_vs_nabla
+transformer_jax_vs_nabla
 ```

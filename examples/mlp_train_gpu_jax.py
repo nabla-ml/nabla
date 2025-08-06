@@ -74,7 +74,7 @@ def test_device(device_name):
         return loss
 
     def create_sin_dataset(batch_size=256, key=None):
-        """Create the COMPLEX 8-period sin dataset."""
+        """Create the 8-Period sin dataset."""
         if key is None:
             key = jax.random.PRNGKey(42)
         x = jax.random.uniform(key, (batch_size, 1), dtype=jnp.float32)
@@ -177,7 +177,7 @@ def test_device(device_name):
     def test_jax_complex_sin():
         """Test JAX implementation with JIT for complex sin learning."""
         print(
-            f"=== Learning COMPLEX 8-Period Sin Function with JAX JIT ({device_name.upper()}) ==="
+            f"=== Learning 8-Period Sin Function with JAX JIT ({device_name.upper()}) ==="
         )
         print(f"Architecture: {LAYERS}")
         print(f"Initial learning rate: {LEARNING_RATE}")

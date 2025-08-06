@@ -38,6 +38,7 @@ class GraphTracer:
             str(node.batch_dims + node.shape),
             "-",
             node.name or "input",
+            str(node.logical_device)
         ]
         node_str = "-".join(components)
         return hash(node_str)

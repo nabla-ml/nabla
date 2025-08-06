@@ -1,3 +1,18 @@
 # Core dependencies for Nabla
 numpy>=1.22,<2.0.0
 modular>=25.0.0
+
+
+import subprocess
+import sys
+
+try:
+    import nabla as nb
+except ImportError:
+    print("Installing nabla...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "nabla-ml"])
+    import nabla as nb
+
+print(
+    f"🎉 Nabla is ready! Running on Python {sys.version_info.major}.{sys.version_info.minor}"
+)
