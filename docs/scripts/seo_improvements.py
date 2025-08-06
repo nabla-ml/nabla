@@ -173,8 +173,8 @@ def create_advanced_seo_template():
 <!-- Open Graph (Facebook/LinkedIn) -->
 <meta property="og:title" content="{% if title %}{{ title }} | {% endif %}Nabla - GPU-Accelerated Array Computing">
 <meta property="og:description" content="{{ page_meta.description if page_meta else 'Python library for GPU-accelerated array computation with NumPy-like API and JAX-style transformations' }}">
-<meta property="og:url" content="https://nablaml.com/{% if pagename != 'index' %}{{ pagename }}.html{% endif %}">
-<meta property="og:image" content="https://nablaml.com/_static/nabla-logo.png">
+<meta property="og:url" content="https://www.nablaml.com/{% if pagename != 'index' %}{{ pagename }}.html{% endif %}">
+<meta property="og:image" content="https://www.nablaml.com/_static/nabla-logo.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:type" content="website">
@@ -187,11 +187,11 @@ def create_advanced_seo_template():
 <meta name="twitter:creator" content="@nabla_ml">
 <meta name="twitter:title" content="{% if title %}{{ title }} | {% endif %}Nabla">
 <meta name="twitter:description" content="{{ page_meta.description if page_meta else 'Python library for GPU-accelerated array computation' }}">
-<meta name="twitter:image" content="https://nablaml.com/_static/nabla-logo.png">
+<meta name="twitter:image" content="https://www.nablaml.com/_static/nabla-logo.png">
 <meta name="twitter:image:alt" content="Nabla - GPU-accelerated array computation library">
 
 <!-- Canonical URL -->
-<link rel="canonical" href="https://nablaml.com/{% if pagename != 'index' %}{{ pagename }}.html{% endif %}">
+<link rel="canonical" href="https://www.nablaml.com/{% if pagename != 'index' %}{{ pagename }}.html{% endif %}">
 
 <!-- Structured Data (JSON-LD) -->
 <script type="application/ld+json">
@@ -200,11 +200,11 @@ def create_advanced_seo_template():
   "@type": "SoftwareApplication",
   "name": "Nabla",
   "description": "Python library for GPU-accelerated array computation with NumPy-like API, JAX-style transformations, and Mojo integration",
-  "url": "https://nablaml.com",
+  "url": "https://www.nablaml.com",
   "author": {
     "@type": "Organization",
     "name": "Nabla Team",
-    "url": "https://nablaml.com"
+    "url": "https://www.nablaml.com"
   },
   "programmingLanguage": ["Python", "Mojo"],
   "applicationCategory": "DeveloperApplication",
@@ -246,7 +246,7 @@ def create_advanced_seo_template():
     "name": "Nabla Team",
     "logo": {
       "@type": "ImageObject",
-      "url": "https://nablaml.com/_static/nabla-logo.png"
+      "url": "https://www.nablaml.com/_static/nabla-logo.png"
     }
   },
   "datePublished": "2024-01-01",

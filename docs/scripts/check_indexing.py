@@ -14,9 +14,9 @@ def check_google_indexing():
 
     # Check site: operator results
     queries = [
-        "site:nablaml.com",
-        "site:nablaml.com/api/",
-        "site:nablaml.com/tutorials/",
+        "site:www.nablaml.com",
+        "site:www.nablaml.com/api/",
+        "site:www.nablaml.com/tutorials/",
         "nabla python library gpu",
         '"nabla-ml" python',
     ]
@@ -51,9 +51,9 @@ def check_structured_data():
     print("\n🏗️  Checking structured data...")
 
     test_urls = [
-        "https://nablaml.com/",
-        "https://nablaml.com/api/array.html",
-        "https://nablaml.com/tutorials/index.html",
+        "https://www.nablaml.com/",
+        "https://www.nablaml.com/api/array.html",
+        "https://www.nablaml.com/tutorials/index.html",
     ]
 
     for url in test_urls:
@@ -94,9 +94,9 @@ def check_meta_tags():
     print("\n🏷️  Checking meta tags...")
 
     test_urls = [
-        "https://nablaml.com/",
-        "https://nablaml.com/api/array.html",
-        "https://nablaml.com/tutorials/index.html",
+        "https://www.nablaml.com/",
+        "https://www.nablaml.com/api/array.html",
+        "https://www.nablaml.com/tutorials/index.html",
     ]
 
     for url in test_urls:

@@ -13,7 +13,7 @@ def configure_seo_for_environment():
     """Configure SEO settings based on environment variables"""
 
     # Get base URL from environment or default
-    base_url = os.environ.get("DOCS_BASE_URL", "https://nablaml.com")
+    base_url = os.environ.get("DOCS_BASE_URL", "https://www.nablaml.com")
     is_ci = os.environ.get("CI", "false").lower() == "true"
 
     print(f"🌐 Configuring SEO for: {base_url}")
@@ -27,7 +27,7 @@ def configure_seo_for_environment():
 
         # Replace base_url in the script
         updated_content = content.replace(
-            'base_url = "https://nablaml.com"', f'base_url = "{base_url}"'
+            'base_url = "https://www.nablaml.com"', f'base_url = "{base_url}"'
         )
 
         with open(sitemap_script, "w") as f:

@@ -12,7 +12,7 @@ import requests
 
 
 class SEOAuditor:
-    def __init__(self, base_url="https://nablaml.com"):
+    def __init__(self, base_url="https://www.nablaml.com"):
         self.base_url = base_url.rstrip("/")
         self.issues = []
         self.warnings = []
