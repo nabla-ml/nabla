@@ -22,7 +22,7 @@ import numpy as np
 from max.dtype import DType
 from max.graph import TensorValue, ops
 
-from ..core.array import Array, Shape
+from ..core.array import Array, Shape, _DEFAULT_CPU
 from .operation import ReductionOperation
 from .view import squeeze, squeeze_batch_dims
 
@@ -65,7 +65,7 @@ class SumOp(ReductionOperation):
         normalized_axes = _normalize_axes(self.axes, len(args[0].shape))
 
         for axis in normalized_axes:
-            if axis != -1 or axis != len(args[0].shape) - 1:
+            if output.device != _DEFAULT_CPU and (axis != -1 or axis != len(args[0].shape) - 1):
                 output_symbol = ops.transpose(output_symbol, axis, -1)
                 output_symbol = ops.sum(output_symbol, axis=-1)
                 output_symbol = ops.transpose(output_symbol, -1, axis)
@@ -224,8 +224,7 @@ class SumBatchDimsOp(ReductionOperation):
         axes = [ax - len(output.shape) for ax in normalized_axes]
         output_symbol = args[0]
         for axis in axes:
-            # output_symbol = ops.sum(output_symbol, axis=axis)
-            if axis != -1 or axis != len(args[0].shape) - 1:
+            if output.device != _DEFAULT_CPU and (axis != -1 or axis != len(args[0].shape) - 1):
                 output_symbol = ops.transpose(output_symbol, axis, -1)
                 output_symbol = ops.sum(output_symbol, axis=-1)
                 output_symbol = ops.transpose(output_symbol, -1, axis)
@@ -327,8 +326,7 @@ class MaxOp(ReductionOperation):
         normalized_axes = _normalize_axes(self.axes, len(args[0].shape))
 
         for axis in normalized_axes:
-            # output_symbol = ops.max(output_symbol, axis=axis)
-            if axis != -1 or axis != len(args[0].shape) - 1:
+            if output.device != _DEFAULT_CPU and (axis != -1 or axis != len(args[0].shape) - 1):
                 output_symbol = ops.transpose(output_symbol, axis, -1)
                 output_symbol = ops.max(output_symbol, axis=-1)
                 output_symbol = ops.transpose(output_symbol, -1, axis)
@@ -466,7 +464,7 @@ class ArgMaxOp(ReductionOperation):
         else:
             # Assume that logical axes is always negative
             # output.tensor_value = ops.argmax(input_symbol, axis=self.logical_axis)
-            if self.logical_axis != -1 or self.logical_axis != len(args[0].shape) - 1:
+            if output.device != _DEFAULT_CPU and (self.logical_axis != -1 or self.logical_axis != len(args[0].shape) - 1):
                 input_symbol = ops.transpose(input_symbol, self.logical_axis, -1)
                 result = ops.argmax(input_symbol, axis=-1)
                 output.tensor_value = ops.transpose(result, -1, self.logical_axis)
