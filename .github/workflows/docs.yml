@@ -33,7 +33,7 @@ jobs:
     # Only set environment for actual deployments
     environment: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'github-pages' || '' }}
     env:
-      DOCS_BASE_URL: "https://nablaml.com"
+      DOCS_BASE_URL: "https://www.nablaml.com"
     outputs:
       page_url: ${{ steps.deployment.outputs.page_url }}
     steps:
