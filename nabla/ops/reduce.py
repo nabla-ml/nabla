@@ -65,12 +65,12 @@ class SumOp(ReductionOperation):
         normalized_axes = _normalize_axes(self.axes, len(args[0].shape))
 
         for axis in normalized_axes:
-            if axis != -1 or axis != len(args[0].shape) - 1:
-                output_symbol = ops.transpose(output_symbol, axis, -1)
-                output_symbol = ops.sum(output_symbol, axis=-1)
-                output_symbol = ops.transpose(output_symbol, -1, axis)
-            else:
-                output_symbol = ops.sum(output_symbol, axis=axis)
+            # if axis != -1 or axis != len(args[0].shape) - 1:
+            #     output_symbol = ops.transpose(output_symbol, axis, -1)
+            #     output_symbol = ops.sum(output_symbol, axis=-1)
+            #     output_symbol = ops.transpose(output_symbol, -1, axis)
+            # else:
+            output_symbol = ops.sum(output_symbol, axis=axis)
 
         output.tensor_value = output_symbol
 
