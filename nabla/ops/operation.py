@@ -20,7 +20,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional
 
 from max.dtype import DType
 from max.graph import TensorValue
@@ -68,7 +67,7 @@ class Operation(ABC):
         """Jacobian-vector product rule for forward-mode autodiff."""
         pass
 
-    def custom_kernel_path(self) -> Optional[Path]:
+    def custom_kernel_path(self) -> Path | None:
         """Optional: path to custom kernel implementation."""
         return None
 

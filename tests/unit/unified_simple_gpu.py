@@ -35,18 +35,19 @@ All operations are wrapped in nb.jit() for GPU compilation where appropriate.
 Each operation is validated against NumPy for correctness.
 """
 
-import nabla as nb
 import numpy as np
+
+import nabla as nb
 
 
 def compare_with_numpy(nabla_result, numpy_result, operation_name, tolerance=1e-5):
     """Compare Nabla result with NumPy result and print validation status."""
     nabla_np = nabla_result.to_numpy()
-    
+
     # Handle different dtypes
     if nabla_result.dtype == nb.DType.bool:
         numpy_result = numpy_result.astype(bool)
-    
+
     try:
         if np.allclose(nabla_np, numpy_result, atol=tolerance, rtol=tolerance):
             print(f"✅ {operation_name}: PASSED")
@@ -61,8 +62,9 @@ def compare_with_numpy(nabla_result, numpy_result, operation_name, tolerance=1e-
         print(f"   NumPy result: {numpy_result}")
 
     print(f"   Nabla device: {nabla_result.device}")
-    
-    return nabla_result 
+
+    return nabla_result
+
 
 device = nb.cpu() if nb.accelerator_count() == 0 else nb.accelerator()
 print(f"Using {device} device")
@@ -71,13 +73,13 @@ print(f"Using {device} device")
 def test_binary_operations():
     """Test all binary operations with NumPy validation."""
     print("\n=== BINARY OPERATIONS ===")
-    
+
     # Create test arrays
     a = nb.ndarange((2, 3)).to(device)
     b = nb.ndarange((2, 3)).to(device)
     a_np = np.arange(6).reshape(2, 3).astype(np.float32)
     b_np = np.arange(6).reshape(2, 3).astype(np.float32)
-    
+
     print("Add")
     res = nb.jit(nb.add)(a, b)
     compare_with_numpy(res, a_np + b_np, "Add")
@@ -130,14 +132,16 @@ def test_binary_operations():
 def test_unary_operations():
     """Test all unary operations with NumPy validation."""
     print("\n=== UNARY OPERATIONS ===")
-    
+
     # Create test arrays
     a = nb.ndarange((2, 3)).to(device) + 1  # Add 1 to avoid issues with log/sqrt of 0
-    bool_array = nb.array([True, False, True, False, True, False]).reshape((2, 3)).to(device)
-    
+    bool_array = (
+        nb.array([True, False, True, False, True, False]).reshape((2, 3)).to(device)
+    )
+
     a_np = (np.arange(6).reshape(2, 3) + 1).astype(np.float32)
     bool_np = np.array([True, False, True, False, True, False]).reshape(2, 3)
-    
+
     print("Negate")
     res = nb.jit(nb.negate)(a)
     compare_with_numpy(res, -a_np, "Negate")
@@ -192,11 +196,11 @@ def test_unary_operations():
 def test_reduction_operations():
     """Test all reduction operations with NumPy validation."""
     print("\n=== REDUCTION OPERATIONS ===")
-    
+
     # Create test array
     a = nb.ndarange((3, 4)).to(device) + 1
     a_np = (np.arange(12).reshape(3, 4) + 1).astype(np.float32)
-    
+
     print("Sum (all)")
     res = nb.jit(nb.sum)(a)
     compare_with_numpy(res, np.sum(a_np), "Sum (all)")
@@ -237,14 +241,14 @@ def test_reduction_operations():
 def test_view_operations():
     """Test all view operations with NumPy validation."""
     print("\n=== VIEW OPERATIONS ===")
-    
+
     # Create test arrays
     a = nb.ndarange((2, 3, 4)).to(device)
     b = nb.ndarange((2, 3)).to(device)
-    
+
     a_np = np.arange(24).reshape(2, 3, 4).astype(np.float32)
     b_np = np.arange(6).reshape(2, 3).astype(np.float32)
-    
+
     print("Transpose")
     res = nb.jit(nb.transpose)(b)
     compare_with_numpy(res, np.transpose(b_np), "Transpose")
@@ -295,14 +299,14 @@ def test_view_operations():
 def test_linalg_operations():
     """Test linear algebra operations with NumPy validation."""
     print("\n=== LINEAR ALGEBRA OPERATIONS ===")
-    
+
     # Create test matrices
     a = nb.ndarange((3, 4)).to(device)
     b = nb.ndarange((4, 5)).to(device)
-    
+
     a_np = np.arange(12).reshape(3, 4).astype(np.float32)
     b_np = np.arange(20).reshape(4, 5).astype(np.float32)
-    
+
     print("Matrix Multiplication")
     res = nb.jit(nb.matmul)(a, b)
     compare_with_numpy(res, np.matmul(a_np, b_np), "Matrix Multiplication")
@@ -311,14 +315,16 @@ def test_linalg_operations():
 def test_special_operations():
     """Test special operations with NumPy validation."""
     print("\n=== SPECIAL OPERATIONS ===")
-    
+
     # Create test arrays
     a = nb.ndarange((2, 3)).to(device)
-    condition = nb.array([True, False, True, False, True, False]).reshape((2, 3)).to(device)
-    
+    condition = (
+        nb.array([True, False, True, False, True, False]).reshape((2, 3)).to(device)
+    )
+
     a_np = np.arange(6).reshape(2, 3).astype(np.float32)
     condition_np = np.array([True, False, True, False, True, False]).reshape(2, 3)
-    
+
     print("Softmax")
     res = nb.jit(lambda x: nb.softmax(x, axis=-1))(a)
     # Manual softmax calculation for comparison
@@ -330,27 +336,31 @@ def test_special_operations():
     res = nb.jit(lambda x: nb.logsumexp(x, axis=-1))(a)
     # Manual logsumexp calculation
     max_a = np.max(a_np, axis=-1, keepdims=True)
-    logsumexp_np = np.log(np.sum(np.exp(a_np - max_a), axis=-1)) + np.squeeze(max_a, axis=-1)
+    logsumexp_np = np.log(np.sum(np.exp(a_np - max_a), axis=-1)) + np.squeeze(
+        max_a, axis=-1
+    )
     compare_with_numpy(res, logsumexp_np, "Log-sum-exp")
 
     print("Where")
     b = nb.ones((2, 3)).to(device)
     c = nb.zeros((2, 3)).to(device)
     res = nb.jit(nb.where)(condition, b, c)
-    compare_with_numpy(res, np.where(condition_np, np.ones((2, 3)), np.zeros((2, 3))), "Where")
+    compare_with_numpy(
+        res, np.where(condition_np, np.ones((2, 3)), np.zeros((2, 3))), "Where"
+    )
 
 
 def test_indexing_operations():
     """Test indexing operations with NumPy validation."""
     print("\n=== INDEXING OPERATIONS ===")
-    
+
     # Create test arrays
     a = nb.ndarange((3, 4)).to(device)
     indices = nb.array([0, 2, 1]).to(device)
-    
+
     a_np = np.arange(12).reshape(3, 4).astype(np.float32)
     indices_np = np.array([0, 2, 1])
-    
+
     print("Gather")
     res = nb.jit(lambda x, idx: nb.gather(x, idx, axis=0))(a, indices)
     compare_with_numpy(res, a_np[indices_np], "Gather")
@@ -359,9 +369,11 @@ def test_indexing_operations():
     target_shape = (4,)
     scatter_indices = nb.array([0, 2]).to(device)
     scatter_updates = nb.array([10, 20]).to(device)
-    
+
     print("Scatter")
-    res = nb.jit(lambda idx, upd: nb.scatter(target_shape, idx, upd, axis=0))(scatter_indices, scatter_updates)
+    res = nb.jit(lambda idx, upd: nb.scatter(target_shape, idx, upd, axis=0))(
+        scatter_indices, scatter_updates
+    )
     # Manual scatter validation
     scatter_expected = np.zeros(4, dtype=np.float32)
     scatter_expected[0] = 10
@@ -372,7 +384,7 @@ def test_indexing_operations():
 def test_creation_operations():
     """Test array creation operations with NumPy validation."""
     print("\n=== CREATION OPERATIONS ===")
-    
+
     print("Array from list")
     res = nb.array([1, 2, 3, 4]).to(device)
     compare_with_numpy(res, np.array([1, 2, 3, 4], dtype=np.float32), "Array from list")
@@ -417,8 +429,7 @@ if __name__ == "__main__":
     test_special_operations()
     test_indexing_operations()
     test_creation_operations()
-    
+
     print("\n=== ALL TESTS COMPLETED ===")
     print("All operations tested against NumPy for correctness validation!")
     print("✅ = Passed, ❌ = Failed, ⚠️ = Comparison Error")
-

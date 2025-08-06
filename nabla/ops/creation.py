@@ -375,7 +375,9 @@ class ArangeOp(Operation):
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         """Eager-mode execution using numpy."""
         # We can reuse the numpy array we created for the shape calculation
-        output.impl_(Tensor.from_numpy(self._np_arange_for_shape).to(output.logical_device))
+        output.impl_(
+            Tensor.from_numpy(self._np_arange_for_shape).to(output.logical_device)
+        )
 
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array

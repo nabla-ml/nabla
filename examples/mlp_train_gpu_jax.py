@@ -33,10 +33,11 @@ NUM_EPOCHS = 50  # Fewer epochs since larger model
 PRINT_INTERVAL = 10
 SIN_PERIODS = 8
 
+
 # Test both CPU and GPU
 def test_device(device_name):
     """Test JAX training on specified device."""
-    
+
     if device_name == "gpu":
         # Try to use GPU if available
         try:
@@ -98,15 +99,24 @@ def test_device(device_name):
 
         return params
 
-    def adamw_step(params, gradients, m_states, v_states, step, 
-                   learning_rate=0.001, beta1=0.9, beta2=0.999, 
-                   eps=1e-8, weight_decay=0.01):
+    def adamw_step(
+        params,
+        gradients,
+        m_states,
+        v_states,
+        step,
+        learning_rate=0.001,
+        beta1=0.9,
+        beta2=0.999,
+        eps=1e-8,
+        weight_decay=0.01,
+    ):
         """AdamW optimizer step with weight decay."""
         updated_params = []
         updated_m = []
         updated_v = []
 
-        for param, grad, m, v in zip(params, gradients, m_states, v_states):
+        for param, grad, m, v in zip(params, gradients, m_states, v_states, strict=False):
             # Update moments
             new_m = beta1 * m + (1.0 - beta1) * grad
             new_v = beta2 * v + (1.0 - beta2) * (grad * grad)
@@ -140,14 +150,16 @@ def test_device(device_name):
             v_states.append(jnp.zeros_like(param))
         return m_states, v_states
 
-    def learning_rate_schedule(epoch, initial_lr=0.001, decay_factor=0.95, decay_every=1000):
+    def learning_rate_schedule(
+        epoch, initial_lr=0.001, decay_factor=0.95, decay_every=1000
+    ):
         """Learning rate schedule for complex function learning."""
         return initial_lr * (decay_factor ** (epoch // decay_every))
 
     @jit
     def train_step(x, targets, params, m_states, v_states, step, learning_rate):
         """JIT-compiled training step combining gradient computation and optimizer update."""
-        
+
         def loss_fn(inner_params):
             predictions = mlp_forward(x, inner_params)
             loss = mean_squared_error(predictions, targets)
@@ -164,7 +176,9 @@ def test_device(device_name):
 
     def test_jax_complex_sin():
         """Test JAX implementation with JIT for complex sin learning."""
-        print(f"=== Learning COMPLEX 8-Period Sin Function with JAX JIT ({device_name.upper()}) ===")
+        print(
+            f"=== Learning COMPLEX 8-Period Sin Function with JAX JIT ({device_name.upper()}) ==="
+        )
         print(f"Architecture: {LAYERS}")
         print(f"Initial learning rate: {LEARNING_RATE}")
         print(f"Sin periods: {SIN_PERIODS}")
@@ -184,8 +198,12 @@ def test_device(device_name):
         target_init_np = np.array(targets_init)
 
         print(f"Initial loss: {float(initial_loss):.6f}")
-        print(f"Initial predictions range: [{pred_init_np.min():.3f}, {pred_init_np.max():.3f}]")
-        print(f"Targets range: [{target_init_np.min():.3f}, {target_init_np.max():.3f}]")
+        print(
+            f"Initial predictions range: [{pred_init_np.min():.3f}, {pred_init_np.max():.3f}]"
+        )
+        print(
+            f"Targets range: [{target_init_np.min():.3f}, {target_init_np.max():.3f}]"
+        )
 
         print("\nStarting training...")
 
@@ -236,10 +254,16 @@ def test_device(device_name):
 
                 print(f"\n{'=' * 60}")
                 print(f"JAX Device: {device}")
-                print(f"Epoch {epoch:4d} | Loss: {avg_loss / PRINT_INTERVAL:.6f} | Time: {avg_time_per_epoch:.4f}s")
+                print(
+                    f"Epoch {epoch:4d} | Loss: {avg_loss / PRINT_INTERVAL:.6f} | Time: {avg_time_per_epoch:.4f}s"
+                )
                 print(f"{'=' * 60}")
-                print(f"  ├─ Data Gen:   {avg_data_time / PRINT_INTERVAL:.4f}s ({data_perc:.1f}%)")
-                print(f"  └─ JIT Step:   {avg_jit_time / PRINT_INTERVAL:.4f}s ({jit_perc:.1f}%)")
+                print(
+                    f"  ├─ Data Gen:   {avg_data_time / PRINT_INTERVAL:.4f}s ({data_perc:.1f}%)"
+                )
+                print(
+                    f"  └─ JIT Step:   {avg_jit_time / PRINT_INTERVAL:.4f}s ({jit_perc:.1f}%)"
+                )
 
                 avg_loss = 0.0
                 avg_time = 0.0
@@ -255,14 +279,14 @@ def test_device(device_name):
 if __name__ == "__main__":
     print("Testing JAX performance on CPU and GPU for MLP training")
     print("=" * 80)
-    
+
     # Test CPU
     cpu_time = test_device("cpu")
     print("\n" + "=" * 80)
-    
+
     # Test GPU
     gpu_time = test_device("gpu")
-    
+
     print("\n" + "=" * 80)
     print("JAX PERFORMANCE COMPARISON:")
     print(f"CPU time per epoch: {cpu_time:.4f}s")

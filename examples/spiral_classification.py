@@ -123,7 +123,9 @@ def init_network_params_nabla(layer_sizes, seed=42):
     """Initialize network weights using Xavier initialization."""
     np.random.seed(seed)
     params = []
-    for i, (in_size, out_size) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:], strict=False)):
+    for i, (in_size, out_size) in enumerate(
+        zip(layer_sizes[:-1], layer_sizes[1:], strict=False)
+    ):
         W_np = np.random.normal(
             0, np.sqrt(2.0 / (in_size + out_size)), (in_size, out_size)
         ).astype(np.float32)
@@ -200,7 +202,9 @@ def train_step_adam_nabla(
     updated_m = []
     updated_v = []
 
-    for (W, b), (dW, db), (mW, mb), (vW, vb) in zip(params, grads, m_state, v_state, strict=False):
+    for (W, b), (dW, db), (mW, mb), (vW, vb) in zip(
+        params, grads, m_state, v_state, strict=False
+    ):
         # Update biased first moment estimate
         new_mW = beta1 * mW + (1 - beta1) * dW
         new_mb = beta1 * mb + (1 - beta1) * db

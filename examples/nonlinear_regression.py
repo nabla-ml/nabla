@@ -98,7 +98,9 @@ def init_network_params_nabla(layer_sizes, seed=42):
     """Initialize network weights using He initialization optimized for Leaky ReLU."""
     np.random.seed(seed)
     params = []
-    for i, (in_size, out_size) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:], strict=False)):
+    for i, (in_size, out_size) in enumerate(
+        zip(layer_sizes[:-1], layer_sizes[1:], strict=False)
+    ):
         if i == len(layer_sizes) - 2:  # Output layer
             # Use smaller initialization for output layer to prevent large initial outputs
             W_np = np.random.normal(
@@ -187,7 +189,9 @@ def train_step_adam_nabla(
     updated_m = []
     updated_v = []
 
-    for (W, b), (dW, db), (mW, mb), (vW, vb) in zip(params, grads, m_state, v_state, strict=False):
+    for (W, b), (dW, db), (mW, mb), (vW, vb) in zip(
+        params, grads, m_state, v_state, strict=False
+    ):
         new_mW = beta1 * mW + (1 - beta1) * dW
         new_mb = beta1 * mb + (1 - beta1) * db
 

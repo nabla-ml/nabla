@@ -18,7 +18,6 @@
 
 import threading
 from collections.abc import Callable
-from typing import Optional
 
 from max.engine.api import Model
 
@@ -30,7 +29,7 @@ class ThreadSafeExecutionContext:
         self._cache: dict[int, Model] = {}
         self._lock = threading.RLock()  # Using RLock to allow recursive locking
 
-    def get(self, key: int) -> Optional[Model]:
+    def get(self, key: int) -> Model | None:
         """Get a model from the cache. Returns None if not found."""
         with self._lock:
             return self._cache.get(key)

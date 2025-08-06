@@ -6,7 +6,6 @@ making it easier to understand test failures and debug issues.
 """
 
 from enum import Enum
-from typing import Optional
 
 
 class ErrorType(Enum):
@@ -23,7 +22,7 @@ class ErrorType(Enum):
 
 
 def format_error_message(
-    test_name: str, error_type: ErrorType, details: Optional[str] = None
+    test_name: str, error_type: ErrorType, details: str | None = None
 ) -> str:
     """
     Generate consistent, informative error messages for test results.
@@ -72,7 +71,7 @@ def enhanced_error_message(
     rank_combo: tuple,
     transformation: str,
     error_type: ErrorType,
-    details: Optional[str] = None,
+    details: str | None = None,
 ) -> str:
     """
     Generate enhanced error messages with operation context.
@@ -139,7 +138,7 @@ class ErrorSummary:
         rank_combo: tuple,
         transformation: str,
         success: bool,
-        error_details: Optional[str] = None,
+        error_details: str | None = None,
     ):
         """Add a test result to the summary"""
         if success:

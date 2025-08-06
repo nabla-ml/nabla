@@ -22,8 +22,9 @@ vs when CPU and GPU performance are similar.
 """
 
 import time
+
 import numpy as np
-from max import driver
+
 import nabla as nb
 
 # Configuration for GPU vs CPU comparison
@@ -34,7 +35,7 @@ SMALL_CONFIG = {
     "LEARNING_RATE": 0.001,
     "NUM_EPOCHS": 20,
     "PRINT_INTERVAL": 10,
-    "SIN_PERIODS": 8
+    "SIN_PERIODS": 8,
 }
 
 # Large config (GPU should be much faster)
@@ -44,8 +45,9 @@ LARGE_CONFIG = {
     "LEARNING_RATE": 0.001,
     "NUM_EPOCHS": 20,
     "PRINT_INTERVAL": 5,
-    "SIN_PERIODS": 8
+    "SIN_PERIODS": 8,
 }
+
 
 def calculate_model_size(layers):
     """Calculate total number of parameters in the model."""
@@ -55,6 +57,7 @@ def calculate_model_size(layers):
         # Biases: layers[i+1]
         total_params += layers[i] * layers[i + 1] + layers[i + 1]
     return total_params
+
 
 def mlp_forward(x: nb.Array, params: list[nb.Array]) -> nb.Array:
     """MLP forward pass through all layers."""
@@ -67,6 +70,7 @@ def mlp_forward(x: nb.Array, params: list[nb.Array]) -> nb.Array:
             output = nb.relu(output)
     return output
 
+
 def mean_squared_error(predictions: nb.Array, targets: nb.Array, device) -> nb.Array:
     """Compute mean squared error loss."""
     diff = predictions - targets
@@ -75,11 +79,17 @@ def mean_squared_error(predictions: nb.Array, targets: nb.Array, device) -> nb.A
     loss = nb.sum(squared_errors) / batch_size
     return loss
 
-def create_sin_dataset(batch_size: int, sin_periods: int, device) -> tuple[nb.Array, nb.Array]:
+
+def create_sin_dataset(
+    batch_size: int, sin_periods: int, device
+) -> tuple[nb.Array, nb.Array]:
     """Create the sin dataset."""
-    x = nb.rand((batch_size, 1), lower=0.0, upper=1.0, dtype=nb.DType.float32).to(device)
+    x = nb.rand((batch_size, 1), lower=0.0, upper=1.0, dtype=nb.DType.float32).to(
+        device
+    )
     targets = nb.sin(sin_periods * 2.0 * np.pi * x) / 2.0 + 0.5
     return x, targets
+
 
 def initialize_params(layers: list[int], device, seed: int = 42) -> list[nb.Array]:
     """Initialize model parameters."""
@@ -93,9 +103,13 @@ def initialize_params(layers: list[int], device, seed: int = 42) -> list[nb.Arra
         params.append(b)
     return params
 
+
 @nb.jit
-def train_step_simple(x: nb.Array, targets: nb.Array, params: list[nb.Array], learning_rate: float) -> tuple[list[nb.Array], nb.Array]:
+def train_step_simple(
+    x: nb.Array, targets: nb.Array, params: list[nb.Array], learning_rate: float
+) -> tuple[list[nb.Array], nb.Array]:
     """Simple training step using SGD."""
+
     def loss_fn(*inner_params):
         param_list = list(inner_params)
         predictions = mlp_forward(x, param_list)
@@ -111,150 +125,177 @@ def train_step_simple(x: nb.Array, targets: nb.Array, params: list[nb.Array], le
 
     # Simple SGD update
     updated_params = []
-    for param, grad in zip(params, param_gradients):
+    for param, grad in zip(params, param_gradients, strict=False):
         updated_params.append(param - learning_rate * grad)
 
     return updated_params, loss_value
 
+
 def run_benchmark(config_name: str, config: dict, device) -> tuple[float, float]:
     """Run training benchmark and return timing results."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"RUNNING {config_name} on {device}")
-    print(f"{'='*60}")
-    
+    print(f"{'=' * 60}")
+
     # Extract config
     BATCH_SIZE = config["BATCH_SIZE"]
-    LAYERS = config["LAYERS"] 
+    LAYERS = config["LAYERS"]
     LEARNING_RATE = config["LEARNING_RATE"]
     NUM_EPOCHS = config["NUM_EPOCHS"]
     PRINT_INTERVAL = config["PRINT_INTERVAL"]
     SIN_PERIODS = config["SIN_PERIODS"]
-    
+
     model_size = calculate_model_size(LAYERS)
     print(f"Model size: {model_size:,} parameters")
     print(f"Batch size: {BATCH_SIZE}")
     print(f"Architecture: {LAYERS}")
-    
+
     # Initialize
     params = initialize_params(LAYERS, device)
-    
+
     # Warm-up run (important for GPU timing)
     print("Warming up...")
     for _ in range(3):
         x, targets = create_sin_dataset(BATCH_SIZE, SIN_PERIODS, device)
         params, _ = train_step_simple(x, targets, params, LEARNING_RATE, device)
-    
+
     print("Starting benchmark...")
     total_time = 0.0
     losses = []
-    
+
     for epoch in range(1, NUM_EPOCHS + 1):
         epoch_start = time.time()
-        
+
         # Create batch
         x, targets = create_sin_dataset(BATCH_SIZE, SIN_PERIODS, device)
-        
+
         # Training step
-        params, loss_value = train_step_simple(x, targets, params, LEARNING_RATE, device)
-        
+        params, loss_value = train_step_simple(
+            x, targets, params, LEARNING_RATE, device
+        )
+
         epoch_time = time.time() - epoch_start
         total_time += epoch_time
         losses.append(loss_value.to_numpy().item())
-        
+
         if epoch % PRINT_INTERVAL == 0:
             avg_loss = np.mean(losses[-PRINT_INTERVAL:])
             avg_time = total_time / epoch
-            print(f"Epoch {epoch:3d} | Loss: {avg_loss:.6f} | Avg time/epoch: {avg_time:.4f}s")
-    
+            print(
+                f"Epoch {epoch:3d} | Loss: {avg_loss:.6f} | Avg time/epoch: {avg_time:.4f}s"
+            )
+
     avg_time_per_epoch = total_time / NUM_EPOCHS
     final_loss = losses[-1]
-    
+
     print(f"\nCompleted {config_name}:")
     print(f"  Average time per epoch: {avg_time_per_epoch:.4f}s")
     print(f"  Total time: {total_time:.2f}s")
     print(f"  Final loss: {final_loss:.6f}")
-    
+
     return avg_time_per_epoch, final_loss
+
 
 def main():
     """Main comparison function."""
     print("GPU vs CPU Performance Comparison for Nabla MLP Training")
     print("=" * 60)
-    
+
     # Check available devices
     has_gpu = nb.accelerator_count() > 0
     print(f"GPU available: {has_gpu}")
-    
+
     if not has_gpu:
-        print("No GPU available. Running CPU-only comparison with different model sizes.")
-        
+        print(
+            "No GPU available. Running CPU-only comparison with different model sizes."
+        )
+
         # CPU comparison with different sizes
         cpu_device = nb.cpu()
-        
+
         print("\nTesting SMALL model on CPU...")
         small_time, small_loss = run_benchmark("SMALL CONFIG", SMALL_CONFIG, cpu_device)
-        
+
         print("\nTesting LARGE model on CPU...")
         large_time, large_loss = run_benchmark("LARGE CONFIG", LARGE_CONFIG, cpu_device)
-        
-        print(f"\n{'='*60}")
+
+        print(f"\n{'=' * 60}")
         print("CPU COMPARISON RESULTS:")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print(f"Small model: {small_time:.4f}s per epoch")
         print(f"Large model: {large_time:.4f}s per epoch")
-        print(f"Large/Small ratio: {large_time/small_time:.2f}x")
-        
+        print(f"Large/Small ratio: {large_time / small_time:.2f}x")
+
     else:
         cpu_device = nb.cpu()
         gpu_device = nb.accelerator()
-        
+
         results = {}
-        
+
         # Test small model on both devices
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("SMALL MODEL COMPARISON")
-        print("="*60)
-        
-        cpu_small_time, cpu_small_loss = run_benchmark("SMALL - CPU", SMALL_CONFIG, cpu_device)
-        gpu_small_time, gpu_small_loss = run_benchmark("SMALL - GPU", SMALL_CONFIG, gpu_device)
-        
-        # Test large model on both devices  
-        print("\n" + "="*60)
+        print("=" * 60)
+
+        cpu_small_time, cpu_small_loss = run_benchmark(
+            "SMALL - CPU", SMALL_CONFIG, cpu_device
+        )
+        gpu_small_time, gpu_small_loss = run_benchmark(
+            "SMALL - GPU", SMALL_CONFIG, gpu_device
+        )
+
+        # Test large model on both devices
+        print("\n" + "=" * 60)
         print("LARGE MODEL COMPARISON")
-        print("="*60)
-        
-        cpu_large_time, cpu_large_loss = run_benchmark("LARGE - CPU", LARGE_CONFIG, cpu_device)
-        gpu_large_time, gpu_large_loss = run_benchmark("LARGE - GPU", LARGE_CONFIG, gpu_device)
-        
+        print("=" * 60)
+
+        cpu_large_time, cpu_large_loss = run_benchmark(
+            "LARGE - CPU", LARGE_CONFIG, cpu_device
+        )
+        gpu_large_time, gpu_large_loss = run_benchmark(
+            "LARGE - GPU", LARGE_CONFIG, gpu_device
+        )
+
         # Results summary
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("PERFORMANCE COMPARISON RESULTS:")
-        print(f"{'='*60}")
-        print(f"SMALL MODEL:")
+        print(f"{'=' * 60}")
+        print("SMALL MODEL:")
         print(f"  CPU: {cpu_small_time:.4f}s per epoch")
         print(f"  GPU: {gpu_small_time:.4f}s per epoch")
-        print(f"  Speedup: {cpu_small_time/gpu_small_time:.2f}x")
-        print(f"")
-        print(f"LARGE MODEL:")
-        print(f"  CPU: {cpu_large_time:.4f}s per epoch") 
+        print(f"  Speedup: {cpu_small_time / gpu_small_time:.2f}x")
+        print("")
+        print("LARGE MODEL:")
+        print(f"  CPU: {cpu_large_time:.4f}s per epoch")
         print(f"  GPU: {gpu_large_time:.4f}s per epoch")
-        print(f"  Speedup: {cpu_large_time/gpu_large_time:.2f}x")
-        print(f"")
-        print(f"ANALYSIS:")
-        small_speedup = cpu_small_time/gpu_small_time
-        large_speedup = cpu_large_time/gpu_large_time
-        
+        print(f"  Speedup: {cpu_large_time / gpu_large_time:.2f}x")
+        print("")
+        print("ANALYSIS:")
+        small_speedup = cpu_small_time / gpu_small_time
+        large_speedup = cpu_large_time / gpu_large_time
+
         if small_speedup < 1.5:
-            print(f"  ✓ Small model shows minimal GPU advantage ({small_speedup:.1f}x) - as expected!")
+            print(
+                f"  ✓ Small model shows minimal GPU advantage ({small_speedup:.1f}x) - as expected!"
+            )
         else:
-            print(f"  ⚠ Small model shows unexpected GPU advantage ({small_speedup:.1f}x)")
-            
+            print(
+                f"  ⚠ Small model shows unexpected GPU advantage ({small_speedup:.1f}x)"
+            )
+
         if large_speedup > 3.0:
-            print(f"  ✓ Large model shows significant GPU advantage ({large_speedup:.1f}x) - excellent!")
+            print(
+                f"  ✓ Large model shows significant GPU advantage ({large_speedup:.1f}x) - excellent!"
+            )
         elif large_speedup > 1.5:
-            print(f"  ✓ Large model shows moderate GPU advantage ({large_speedup:.1f}x) - good!")
+            print(
+                f"  ✓ Large model shows moderate GPU advantage ({large_speedup:.1f}x) - good!"
+            )
         else:
-            print(f"  ⚠ Large model shows minimal GPU advantage ({large_speedup:.1f}x) - unexpected")
+            print(
+                f"  ⚠ Large model shows minimal GPU advantage ({large_speedup:.1f}x) - unexpected"
+            )
+
 
 if __name__ == "__main__":
     main()

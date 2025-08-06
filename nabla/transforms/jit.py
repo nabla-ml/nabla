@@ -15,7 +15,7 @@
 # ===----------------------------------------------------------------------=== #
 
 from collections.abc import Callable
-from typing import Any, Optional
+from typing import Any
 
 from ..core.array import Array
 from .utils import (
@@ -146,7 +146,7 @@ def _fast_extract_tensors_fallback(actual_args, is_list_style):
 
 
 def jit(
-    func: Optional[Callable[..., Any]] = None,
+    func: Callable[..., Any] | None = None,
     static: bool = True,
     show_graph: bool = False,
 ) -> Callable[..., Any]:
@@ -354,7 +354,7 @@ def jit(
 
 
 def djit(
-    func: Optional[Callable[..., Any]] = None, show_graph: bool = False
+    func: Callable[..., Any] | None = None, show_graph: bool = False
 ) -> Callable[..., Any]:
     """Dynamic JIT compile a function for performance optimization.
     This can be used as a function call like `djit(func)` or as a decorator `@djit`.

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import Optional, Union
+from typing import Union
 
 import numpy as np
 from max.driver import CPU, Device, Tensor
@@ -46,17 +46,17 @@ class Array:
     name: str
     args: list[Array]
     visited: bool
-    tensor_value: Optional[Union[Value, TensorValue, TensorValueLike]]
-    maxpr: Optional[MaxprCallable]
-    vjp_rule: Optional[VJPRule]
-    jvp_rule: Optional[JVPRule]
+    tensor_value: Union[Value, TensorValue, TensorValueLike] | None
+    maxpr: MaxprCallable | None
+    vjp_rule: VJPRule | None
+    jvp_rule: JVPRule | None
     traced: bool
-    tangent: Optional[Array]
-    cotangent: Optional[Array]
+    tangent: Array | None
+    cotangent: Array | None
     stage_realization: bool
-    kernel_impl_path: Optional[Path]
-    custom_kernel_path: Optional[Path]
-    _impl: Optional[Union[np.ndarray, Tensor]]
+    kernel_impl_path: Path | None
+    custom_kernel_path: Path | None
+    _impl: Union[np.ndarray, Tensor] | None
 
     def __init__(
         self,
@@ -74,27 +74,27 @@ class Array:
         self.name = name
         self.args: list[Array] = []
         self.visited: bool = False
-        self.tensor_value: Optional[Union[Value, TensorValue, TensorValueLike]] = None
-        self.maxpr: Optional[MaxprCallable] = None
-        self.vjp_rule: Optional[VJPRule] = None
-        self.jvp_rule: Optional[JVPRule] = None
+        self.tensor_value: Union[Value, TensorValue, TensorValueLike] | None = None
+        self.maxpr: MaxprCallable | None = None
+        self.vjp_rule: VJPRule | None = None
+        self.jvp_rule: JVPRule | None = None
         self.traced: bool = False
-        self.tangent: Optional[Array] = None
-        self.cotangent: Optional[Array] = None
+        self.tangent: Array | None = None
+        self.cotangent: Array | None = None
         self.stage_realization: bool = False
-        self.kernel_impl_path: Optional[Path] = None
-        self.custom_kernel_path: Optional[Path] = None
+        self.kernel_impl_path: Path | None = None
+        self.custom_kernel_path: Path | None = None
 
         from ..ops.operation import Operation
 
-        self.creator_op: Optional[Operation] = None
+        self.creator_op: Operation | None = None
 
         if materialize:
             self._impl = Tensor(dtype, batch_dims + shape, device=device)
         else:
             self._impl = None
 
-    @property 
+    @property
     def device(self) -> Device:
         """Get the logical device of this Array. This can differ from the logical device and will show the actual device the buffer lives on."""
         if self._impl is None:
@@ -107,7 +107,7 @@ class Array:
             raise TypeError(f"Unsupported implementation type: {type(self._impl)}")
 
     @property
-    def impl(self) -> Optional[Tensor]:
+    def impl(self) -> Tensor | None:
         """Get the max.Tensor representation of this Array. If the underlying _impl field is a Numpy array, convert it to a Tensor."""
         if isinstance(self._impl, Tensor):
             return self._impl
@@ -120,7 +120,7 @@ class Array:
         else:
             return None
 
-    def impl_(self, value: Optional[Union[np.ndarray, Tensor]]) -> None:
+    def impl_(self, value: Union[np.ndarray, Tensor] | None) -> None:
         """Set the implementation of this Array to a Numpy array or Tensor."""
         self._impl = value
 

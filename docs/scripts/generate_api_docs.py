@@ -10,7 +10,7 @@ Supports @nodoc decorator to exclude items from documentation.
 import ast
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 
 class APIDocGenerator:
@@ -61,7 +61,7 @@ class APIDocGenerator:
             # Fallback to basic filtering if utils.docs is not available
             return not name.startswith("_")
 
-    def extract_docstring(self, node: ast.AST) -> Optional[str]:
+    def extract_docstring(self, node: ast.AST) -> str | None:
         """Extract docstring from an AST node."""
         if (
             isinstance(node, ast.FunctionDef | ast.ClassDef | ast.AsyncFunctionDef)
@@ -213,7 +213,7 @@ class APIDocGenerator:
             pass
         return []
 
-    def format_docstring(self, docstring: Optional[str]) -> str:
+    def format_docstring(self, docstring: str | None) -> str:
         """Format a docstring for Markdown."""
         if not docstring:
             return "*No description available.*"

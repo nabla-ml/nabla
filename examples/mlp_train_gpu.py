@@ -17,7 +17,6 @@
 import time
 
 import numpy as np
-from max import driver
 
 import nabla as nb
 
