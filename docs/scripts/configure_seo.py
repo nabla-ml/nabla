@@ -22,9 +22,18 @@ def configure_seo_for_environment():
     # Update sitemap generator with environment-specific URL
     sitemap_script = Path(__file__).parent / "generate_sitemap.py"
     if sitemap_script.exists():
-        print("✅ Sitemap generator will use environment URL")
-    else:
-        print("⚠️  Sitemap generator not found")
+        with open(sitemap_script) as f:
+            content = f.read()
+
+        # Replace base_url in the script
+        updated_content = content.replace(
+            'base_url = "https://www.nablaml.com"', f'base_url = "{base_url}"'
+        )
+
+        with open(sitemap_script, "w") as f:
+            f.write(updated_content)
+
+        print("✅ Updated sitemap generator with environment URL")
 
     return base_url
 
@@ -46,20 +55,14 @@ def validate_seo_consistency(html_dir_path: str, expected_domain: str):
         if expected_base not in sitemap_content:
             issues.append(f"Sitemap doesn't contain expected domain: {expected_base}")
     else:
-        # Sitemap might be in _static during build process or not generated yet
+        # Sitemap might be in _static during build process
         static_sitemap = html_dir / "_static" / "sitemap.xml"
         if static_sitemap.exists():
             print(
                 "📝 Note: Found sitemap in _static directory, this is expected during build"
             )
-            # Check the static sitemap for domain consistency
-            sitemap_content = static_sitemap.read_text()
-            expected_base = expected_domain.rstrip("/")
-            if expected_base not in sitemap_content:
-                issues.append(f"Sitemap doesn't contain expected domain: {expected_base}")
         else:
-            print("📝 Note: Sitemap not found yet, will be generated later")
-            # Don't treat this as an error since sitemap generation happens after validation
+            issues.append("Sitemap not found")
 
     # Check robots.txt
     robots_file = html_dir / "robots.txt"

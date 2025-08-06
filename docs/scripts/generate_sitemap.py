@@ -11,9 +11,7 @@ from pathlib import Path
 
 def generate_sitemap():
     """Generate sitemap from both markdown sources and built HTML files"""
-    # Get base URL from environment variable, fallback to default
-    import os
-    base_url = os.environ.get("DOCS_BASE_URL", "https://www.nablaml.com")
+    base_url = "https://www.nablaml.com"
     today = datetime.now().strftime("%Y-%m-%d")
 
     # Priority mapping for different content types
