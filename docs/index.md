@@ -1,7 +1,5 @@
 # Get Started
 
-<!-- Force rebuild -->
-
 Nabla is a Python library that provides three key features:
 
 - Multidimensional Array computation (like NumPy) with strong GPU acceleration
