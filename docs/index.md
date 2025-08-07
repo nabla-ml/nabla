@@ -35,8 +35,6 @@ gradients = foo_grads(nb.randn((10, 5)).to(nb.accelerator()))
 
 ## For Developers
 
-Clone the repository and set up a virtual environment with all necessary dependencies:
-
 1. Clone the repository
 2. Create a virtual environment (recommended)
 3. Install dependencies
