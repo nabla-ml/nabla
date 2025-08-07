@@ -6,7 +6,12 @@ Nabla is a scientific computing library in Python, featuring:
 - JAX-like composable function transformations: `grad`, `vmap`, `jit`, and other automatic differentiation tools
 - Deep integration with the MAX compiler and custom Mojo 🔥 kernels
 
-For tutorials and API reference, visit: [nablaml.com](https://nablaml.com/index.html)
+```{toctree}
+:maxdepth: 1
+
+api/index
+tutorials/index
+```
 
 ## Installation
 
