@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=45", "wheel"]
+requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -84,9 +84,13 @@ warn_unused_configs = true
 ignore_missing_imports = true
 # files = "src/nabla, tests"
 
+[tool.setuptools]
+py-modules = []
+
 [tool.setuptools.packages.find]
 where = ["."]
-exclude = ["tests*"]
+include = ["nabla*"]
+exclude = ["tests*", "experimental*"]
 
 [tool.setuptools.package-data]
 "nabla" = ["**/*.mojo", "**/*.py"]
