@@ -1,21 +1,14 @@
-# Get Started
+# Nabla
 
-Nabla is a Python library that provides three key features:
+Nabla is a scientific computing library in Python, featuring:
 
-- Multidimensional Array computation (like NumPy) with strong GPU acceleration
-- Composable Function Transformations: `vmap`, `grad`, `jit`, and other Automatic Differentiation tools
-- Deep integration with MAX and (custom) Mojo kernels
+- Multidimensional array computation with strong GPU acceleration
+- JAX-like composable function transformations: `grad`, `vmap`, `jit`, and other automatic differentiation tools
+- Deep integration with the MAX compiler and custom Mojo 🔥 kernels
 
-```{toctree}
-:maxdepth: 1
-
-api/index
-tutorials/index
-```
+For tutorials and API reference, visit: [nablaml.com](https://nablaml.com/index.html)
 
 ## Installation
-
-**📦 Now available on PyPI!**
 
 ```bash
 pip install nabla-ml
@@ -28,32 +21,35 @@ import nabla as nb
 
 # Example function using Nabla's array operations
 def foo(input):
-    return nb.sum(input * input, axes=0)
+    return nb.sum(input * input, axes=-1)
 
-# Vectorize, differentiate, accelerate
+# Differentiate, vectorize, accelerate
 foo_grads = nb.jit(nb.vmap(nb.grad(foo)))
-gradients = foo_grads(nb.randn((10, 5)))
+gradients = foo_grads(nb.randn((10, 5)).to(nb.accelerator()))
 ```
 
-## Development Setup
+## For Developers
 
-For contributors and advanced users:
+Clone the repository and set up a virtual environment with all necessary dependencies:
+
+1. Clone the repository
+2. Create a virtual environment (recommended)
+3. Install dependencies
 
 ```bash
-# Clone and install in development mode
-git clone https://github.com/nabla-ml/nb.git
+git clone https://github.com/nabla-ml/nabla.git
 cd nabla
+
+python3 -m venv venv
+source venv/bin/activate
+
+pip install -r requirements-dev.txt
 pip install -e ".[dev]"
-
-# Run tests
-pytest
-
-# Format and lint code
-ruff format nabla/
-ruff check nabla/ --fix
 ```
 
 ## Repository Structure
+
+<!-- ![alt text](assets/image.png) -->
 
 ```text
 nabla/
@@ -65,8 +61,7 @@ nabla/
 │   └── utils/                 # Utilities (formatting, types, MAX-interop, etc.)
 ├── tests/                     # Comprehensive test suite
 ├── tutorials/                 # Notebooks on Nabla usage for ML tasks
-├── examples/                  # Example scripts for common use cases
-└── experimental/              # Core (pure) Mojo library (WIP!)
+└── examples/                  # Example scripts for common use cases
 ```
 
 ## Contributing

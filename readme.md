@@ -1,16 +1,14 @@
 ![alt text](assets/nablalogo.png)
 
-Nabla is a Python library that provides three key features:
+Nabla is a scientific computing library in Python, featuring:
 
-- Multidimensional Array computation (like NumPy) with strong GPU acceleration
-- Composable Function Transformations: `vmap`, `grad`, `jit`, and other Automatic Differentiation tools
-- Deep integration with MAX and (custom) Mojo kernels
+- Multidimensional array computation with strong GPU acceleration
+- JAX-like composable function transformations: `grad`, `vmap`, `jit`, and other automatic differentiation tools
+- Deep integration with the MAX compiler and custom Mojo 🔥 kernels
 
 For tutorials and API reference, visit: [nablaml.com](https://nablaml.com/index.html)
 
 ## Installation
-
-**Now available on PyPI!**
 
 ```bash
 pip install nabla-ml
@@ -23,62 +21,35 @@ import nabla as nb
 
 # Example function using Nabla's array operations
 def foo(input):
-    return nb.sum(input * input, axes=0)
+    return nb.sum(input * input, axes=-1)
 
-# Vectorize, differentiate, accelerate
+# Differentiate, vectorize, accelerate
 foo_grads = nb.jit(nb.vmap(nb.grad(foo)))
-gradients = foo_grads(nb.randn((10, 5)))
+gradients = foo_grads(nb.randn((10, 5)).to(nb.accelerator()))
 ```
 
-## Development Setup and Reproducibility
+## For Developers
 
-This guide is for contributors or for reproducing the validation and benchmark results.
+Clone the repository and set up a virtual environment with all necessary dependencies:
 
-### 1. Initial Setup
-
-First, clone the repository and set up a virtual environment with all necessary dependencies.
+1. Clone the repository
+2. Create a virtual environment (recommended)
+3. Install dependencies
 
 ```bash
-# Clone the repository
 git clone https://github.com/nabla-ml/nabla.git
 cd nabla
 
-# Create and activate a virtual environment (recommended)
 python3 -m venv venv
 source venv/bin/activate
 
-# Install all core and development dependencies
 pip install -r requirements-dev.txt
 pip install -e ".[dev]"
 ```
 
-### 2. Run the Correctness Validation Suite
-
-This runs the full test suite to verify Nabla's correctness against JAX.
-
-```bash
-# Navigate to the unit test directory from the project root
-cd nabla/tests/unit
-
-# Execute the unified test script
-python unified.py all -all-configs
-```
-
-### 3. Run the Performance Benchmarks
-
-This script reproduces the performance benchmarks for Nabla, JAX, and PyTorch.
-
-```bash
-# Navigate to the benchmark directory
-cd nabla/tests/benchmarks
-
-# Run the benchmark script
-python benchmark1.py
-```
-
 ## Repository Structure
 
-![alt text](assets/image.png)
+<!-- ![alt text](assets/image.png) -->
 
 ```text
 nabla/
@@ -90,8 +61,7 @@ nabla/
 │   └── utils/                 # Utilities (formatting, types, MAX-interop, etc.)
 ├── tests/                     # Comprehensive test suite
 ├── tutorials/                 # Notebooks on Nabla usage for ML tasks
-├── examples/                  # Example scripts for common use cases
-└── experimental/              # Core (pure) Mojo library (WIP!)
+└── examples/                  # Example scripts for common use cases
 ```
 
 ## Contributing
