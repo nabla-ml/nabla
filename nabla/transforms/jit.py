@@ -18,6 +18,7 @@ from collections.abc import Callable
 from typing import Any
 
 from ..core.array import Array
+from ..utils.max_interop import accelerator, accelerator_count, cpu
 from .utils import (
     _clean_traced_outputs,
     _extract_arrays_from_pytree,
@@ -27,6 +28,10 @@ from .utils import (
     tree_flatten,
     tree_unflatten,
 )
+
+_DEFAULT_DEVICE = cpu() if accelerator_count() == 0 else accelerator(0)
+# Cache CPU device for comparison
+_CPU_DEVICE = cpu()
 
 
 def _build_fast_input_extractors(actual_args, is_list_style):
@@ -45,6 +50,38 @@ def _build_fast_input_extractors(actual_args, is_list_style):
 
     structure = analyze_structure(actual_args)
     return {"is_list_style": is_list_style, "structure": structure}
+
+
+# UPDATED helper: early automatic device placement with controls
+_DEF_ACC_AVAILABLE = accelerator_count() > 0
+
+def _move_args_to_default_device(obj, *, convert_scalars: bool, only_from_cpu: bool):
+    if not _DEF_ACC_AVAILABLE:
+        return obj
+
+    def move(item):
+        if isinstance(item, Array):
+            # Only move if on CPU (default host) when only_from_cpu=True
+            if only_from_cpu:
+                if item.logical_device == _CPU_DEVICE and _DEFAULT_DEVICE != _CPU_DEVICE:
+                    return item.to(_DEFAULT_DEVICE)
+            else:  # legacy behavior (not used presently)
+                if item.logical_device != _DEFAULT_DEVICE:
+                    return item.to(_DEFAULT_DEVICE)
+            return item
+        if convert_scalars and isinstance(item, (int, float, bool)):
+            import nabla as nb
+            arr = nb.array(item)
+            if _DEFAULT_DEVICE != _CPU_DEVICE:
+                arr = arr.to(_DEFAULT_DEVICE)
+            return arr
+        if isinstance(item, (list, tuple)):
+            return type(item)(move(sub) for sub in item)
+        if isinstance(item, dict):
+            return {k: move(v) for k, v in item.items()}
+        return item
+
+    return move(obj)
 
 
 def _fast_extract_tensors(actual_args, is_list_style, extractors):
@@ -149,12 +186,20 @@ def jit(
     func: Callable[..., Any] | None = None,
     static: bool = True,
     show_graph: bool = False,
+    auto_device: bool = True,
 ) -> Callable[..., Any]:
     """Just-in-time compile a function for performance optimization.
     This can be used as a function call like `jit(func)` or as a decorator `@jit`.
 
     Args:
         func: Function to optimize with JIT compilation (should take positional arguments)
+        static: If True, compile once and reuse a cached model (fast path). If False, behaves like dynamic JIT (see `djit`).
+        show_graph: If True, prints the compiled graph representation when first realized.
+        auto_device: If True (default) and an accelerator is available, automatically moves CPU-resident input Arrays
+            to the default accelerator device before tracing/execution. In static mode, Python scalars are also
+            eagerly converted to device Arrays (since they would be converted during tracing anyway). In dynamic
+            mode (`static=False` / `djit`), scalars are left as Python scalars (original behavior) but CPU Arrays
+            are still moved. Set to False to disable all automatic device movement/conversion.
 
     Returns:
         JIT-compiled function with optimized execution
@@ -165,6 +210,7 @@ def jit(
         * Only accepts positional arguments
         * For functions requiring keyword arguments, use functools.partial or lambda
         * Supports both list-style (legacy) and unpacked arguments style (JAX-like)
+        * Device auto-movement is a Nabla extension controlled by `auto_device`.
 
     Example:
         As a function call::
@@ -179,14 +225,13 @@ def jit(
     """
     # Handle being called as a decorator without arguments
     if func is None:
-        return lambda f: jit(f, static=static, show_graph=show_graph)
+        return lambda f: jit(f, static=static, show_graph=show_graph, auto_device=auto_device)
 
     # Store the compiled model as a closure variable
     if static:
         cached_model = None
         output_structure = None
         param_to_model_index = None
-        # Pre-allocate fast path variables
         _fast_conversion_cache = None
         _fast_input_extractors = None
 
@@ -198,11 +243,20 @@ def jit(
             _fast_conversion_cache, \
             _fast_input_extractors
 
-        # Common argument processing - needed for both static and non-static paths
         any_arg_traced = any(
             getattr(arg, "traced", False) for arg in _extract_arrays_from_pytree(args)
         )
         actual_args, is_list_style = _handle_args_consistently(args)
+
+        # Early automatic device placement (if enabled)
+        if auto_device and _DEF_ACC_AVAILABLE:
+            # Static jit: we will convert scalars anyway (with_conversion=True) so we may eagerly convert + move
+            # Dynamic jit: preserve previous behavior -> NO early scalar conversion
+            actual_args = _move_args_to_default_device(
+                actual_args,
+                convert_scalars=static,  # only static path
+                only_from_cpu=True,
+            )
 
         if static:
             # Fast path optimization: skip most overhead for compiled models
@@ -327,7 +381,6 @@ def jit(
                 outputs = tree_unflatten(output_structure, output_arrays)
 
             return outputs
-
         else:
             # Regular JIT - use existing logic
             # Prepare traced inputs with staging enabled
@@ -354,13 +407,18 @@ def jit(
 
 
 def djit(
-    func: Callable[..., Any] | None = None, show_graph: bool = False
+    func: Callable[..., Any] | None = None, show_graph: bool = False, auto_device: bool = True
 ) -> Callable[..., Any]:
     """Dynamic JIT compile a function for performance optimization.
     This can be used as a function call like `djit(func)` or as a decorator `@djit`.
 
     Args:
         func: Function to optimize with JIT compilation (should take positional arguments)
+        show_graph: If True, prints the compiled graph representation when realized.
+        auto_device: If True (default) and an accelerator is available, automatically moves CPU-resident input Arrays
+            to the default accelerator device before tracing/execution. Unlike static `jit`, dynamic mode does not
+            eagerly convert Python scalars to Arrays during the early device pass (to preserve prior semantics).
+            Disable by setting to False.
 
     Returns:
         JIT-compiled function with optimized execution
@@ -371,5 +429,6 @@ def djit(
         * Only accepts positional arguments
         * For functions requiring keyword arguments, use functools.partial or lambda
         * Supports both list-style (legacy) and unpacked arguments style (JAX-like)
+        * Device auto-movement is a Nabla extension controlled by `auto_device`.
     """
-    return jit(func, static=False, show_graph=show_graph)
+    return jit(func, static=False, show_graph=show_graph, auto_device=auto_device)
