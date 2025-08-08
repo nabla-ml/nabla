@@ -8,7 +8,6 @@ Interactive Jupyter notebooks to learn Nabla's features and capabilities through
 
 autodiff_with_nabla
 mlp_training
-mlp_jax_vs_nabla
-transformer_jax_vs_nabla
-xpr_and_maxgraphs
+transformer_training
+transforms_uncovered
 ```
