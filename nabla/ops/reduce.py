@@ -22,7 +22,7 @@ import numpy as np
 from max.dtype import DType
 from max.graph import TensorValue, ops
 
-from ..core.array import Array, Shape, _DEFAULT_CPU
+from ..core.array import Array, Shape
 from .operation import ReductionOperation
 from .view import squeeze, squeeze_batch_dims
 
@@ -65,12 +65,10 @@ class SumOp(ReductionOperation):
         normalized_axes = _normalize_axes(self.axes, len(args[0].shape))
 
         for axis in normalized_axes:
-            if output.device != _DEFAULT_CPU and (axis != -1 or axis != len(args[0].shape) - 1):
-                output_symbol = ops.transpose(output_symbol, axis, -1)
-                output_symbol = ops.sum(output_symbol, axis=-1)
-                output_symbol = ops.transpose(output_symbol, -1, axis)
-            else:
-                output_symbol = ops.sum(output_symbol, axis=axis)
+            try:
+                output_symbol = ops.sum(output_symbol, axis=axis) 
+            except ValueError as e:
+                raise ValueError(f"Failed to compute sum over axis {axis}: {e}. \nTry to update the Modular Package to the latest nightly via `pip uninstall -y modular && rm -rf ~/.cache/pip ~/.cache/realtec && pip install --pre modular --index-url https://dl.modular.com/public/nightly/python/simple/`. \nThis should fix this issue.")
 
         output.tensor_value = output_symbol
 
@@ -224,12 +222,10 @@ class SumBatchDimsOp(ReductionOperation):
         axes = [ax - len(output.shape) for ax in normalized_axes]
         output_symbol = args[0]
         for axis in axes:
-            if output.device != _DEFAULT_CPU and (axis != -1 or axis != len(args[0].shape) - 1):
-                output_symbol = ops.transpose(output_symbol, axis, -1)
-                output_symbol = ops.sum(output_symbol, axis=-1)
-                output_symbol = ops.transpose(output_symbol, -1, axis)
-            else:
+            try:
                 output_symbol = ops.sum(output_symbol, axis=axis)
+            except ValueError as e:
+                raise ValueError(f"Failed to compute sum over batchdim axis {axis}: {e}. \nTry to update the Modular Package to the latest nightly via `pip uninstall -y modular && rm -rf ~/.cache/pip ~/.cache/realtec && pip install --pre modular --index-url https://dl.modular.com/public/nightly/python/simple/`. \nThis should fix this issue.")
 
         output.tensor_value = output_symbol
 
@@ -326,12 +322,10 @@ class MaxOp(ReductionOperation):
         normalized_axes = _normalize_axes(self.axes, len(args[0].shape))
 
         for axis in normalized_axes:
-            if output.device != _DEFAULT_CPU and (axis != -1 or axis != len(args[0].shape) - 1):
-                output_symbol = ops.transpose(output_symbol, axis, -1)
-                output_symbol = ops.max(output_symbol, axis=-1)
-                output_symbol = ops.transpose(output_symbol, -1, axis)
-            else:
+            try:
                 output_symbol = ops.max(output_symbol, axis=axis)
+            except ValueError as e:
+                raise ValueError(f"Failed to compute max over axis {axis}: {e}. \nTry to update the Modular Package to the latest nightly via `pip uninstall -y modular && rm -rf ~/.cache/pip ~/.cache/realtec && pip install --pre modular --index-url https://dl.modular.com/public/nightly/python/simple/`. \nThis should fix this issue.")
 
         output.tensor_value = output_symbol
 
@@ -464,12 +458,15 @@ class ArgMaxOp(ReductionOperation):
         else:
             # Assume that logical axes is always negative
             # output.tensor_value = ops.argmax(input_symbol, axis=self.logical_axis)
-            if output.device != _DEFAULT_CPU and (self.logical_axis != -1 or self.logical_axis != len(args[0].shape) - 1):
-                input_symbol = ops.transpose(input_symbol, self.logical_axis, -1)
-                result = ops.argmax(input_symbol, axis=-1)
-                output.tensor_value = ops.transpose(result, -1, self.logical_axis)
-            else:
+            # if output.device != _DEFAULT_CPU and (self.logical_axis != -1 or self.logical_axis != len(args[0].shape) - 1):
+            #     input_symbol = ops.transpose(input_symbol, self.logical_axis, -1)
+            #     result = ops.argmax(input_symbol, axis=-1)
+            #     output.tensor_value = ops.transpose(result, -1, self.logical_axis)
+            # else:
+            try:
                 output.tensor_value = ops.argmax(input_symbol, axis=self.logical_axis)
+            except ValueError as e:
+                raise ValueError(f"Failed to compute argmax over axis {self.logical_axis}: {e}. \nTry to update the Modular Package to the latest nightly via `pip uninstall -y modular && rm -rf ~/.cache/pip ~/.cache/realtec && pip install --pre modular --index-url https://dl.modular.com/public/nightly/python/simple/`. \nThis should fix this issue.")
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
         primal = args[0].to_numpy()
