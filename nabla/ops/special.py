@@ -24,15 +24,39 @@ __all__ = ["softmax", "logsumexp", "where", "cond"]
 
 
 def logsumexp(arg: Array, axis: int | None = None, keep_dims: bool = False) -> Array:
-    """Compute log(sum(exp(x))) in a numerically stable way.
+    """Computes the log of the sum of exponentials of input elements.
 
-    Args:
-        arg: Input array
-        axis: Axis along which to compute logsumexp. If None, compute over all elements.
-        keep_dims: Whether to keep reduced dimensions
+    This function computes `log(sum(exp(x)))` in a numerically stable way by using
+    the identity: `logsumexp(x) = max(x) + log(sum(exp(x - max(x))))`. This
+    avoids overflow errors that can occur when `exp(x)` is very large.
 
-    Returns:
-        Array containing logsumexp values
+    Parameters
+    ----------
+    arg : Array
+        The input array.
+    axis : int | None, optional
+        The axis or axes along which to compute the `logsumexp`. If None (the
+        default), the operation is performed over all elements of the array.
+    keep_dims : bool, optional
+        If True, the axes which are reduced are left in the result as
+        dimensions with size one. With this option, the result will broadcast
+        correctly against the input array. Defaults to False.
+
+    Returns
+    -------
+    Array
+        An array containing the result of the `logsumexp` operation.
+
+    Examples
+    --------
+    >>> import nabla as nb
+    >>> x = nb.array([1.0, 2.0, 3.0])
+    >>> nb.logsumexp(x)
+    Array([3.407606], dtype=float32)
+
+    >>> data = nb.array([[1, 2, 3], [4, 5, 6]])
+    >>> nb.logsumexp(data, axis=1)
+    Array([3.407606, 6.407606], dtype=float32)
     """
     from .binary import add, sub
     from .reduce import max as array_max
@@ -69,14 +93,38 @@ def logsumexp(arg: Array, axis: int | None = None, keep_dims: bool = False) -> A
 
 
 def softmax(arg: Array, axis: int = -1) -> Array:
-    """Compute softmax function in a numerically stable way.
+    """Computes the softmax function for an array.
 
-    Args:
-        arg: Input array
-        axis: Axis along which to compute softmax
+    The softmax function transforms a vector of real numbers into a probability
+    distribution. Each element in the output is in the range (0, 1), and the
+    elements along the specified axis sum to 1. It is calculated in a
+    numerically stable way as `exp(x - logsumexp(x))`.
 
-    Returns:
-        Array containing softmax probabilities
+    Parameters
+    ----------
+    arg : Array
+        The input array.
+    axis : int, optional
+        The axis along which the softmax computation is performed. The default
+        is -1, which is the last axis.
+
+    Returns
+    -------
+    Array
+        An array of the same shape as the input, containing the softmax
+        probabilities.
+
+    Examples
+    --------
+    >>> import nabla as nb
+    >>> x = nb.array([1.0, 2.0, 3.0])
+    >>> nb.softmax(x)
+    Array([0.09003057, 0.24472848, 0.66524094], dtype=float32)
+
+    >>> logits = nb.array([[1, 2, 3], [1, 1, 1]])
+    >>> nb.softmax(logits, axis=1)
+    Array([[0.09003057, 0.24472848, 0.66524094],
+           [0.33333334, 0.33333334, 0.33333334]], dtype=float32)
     """
     from .binary import sub
     from .unary import exp
@@ -90,15 +138,38 @@ def softmax(arg: Array, axis: int = -1) -> Array:
 
 
 def where(condition: Array, x: Array, y: Array) -> Array:
-    """Element-wise selection from x or y based on condition.
+    """Selects elements from two arrays based on a condition.
 
-    Args:
-        condition: Boolean array for selection
-        x: Array to select from where condition is True
-        y: Array to select from where condition is False
+    This function returns an array with elements chosen from `x` where the
+    corresponding element in `condition` is True, and from `y` otherwise.
+    The function supports broadcasting among the three input arrays.
 
-    Returns:
-        Array with elements selected from x or y
+    Parameters
+    ----------
+    condition : Array
+        A boolean array. Where True, yield `x`, otherwise yield `y`.
+    x : Array
+        The array from which to take values when `condition` is True.
+    y : Array
+        The array from which to take values when `condition` is False.
+
+    Returns
+    -------
+    Array
+        An array with elements from `x` and `y`, depending on `condition`.
+
+    Examples
+    --------
+    >>> import nabla as nb
+    >>> condition = nb.array([True, False, True])
+    >>> x = nb.array([1, 2, 3])
+    >>> y = nb.array([10, 20, 30])
+    >>> nb.where(condition, x, y)
+    Array([1, 20, 3], dtype=int32)
+
+    Broadcasting example:
+    >>> nb.where(nb.array([True, False]), nb.array(5), nb.array([10, 20]))
+    Array([5, 20], dtype=int32)
     """
     from .binary import add, mul
     from .unary import cast, logical_not
@@ -117,16 +188,44 @@ def where(condition: Array, x: Array, y: Array) -> Array:
 def cond(
     condition: Array, true_fn: Callable, false_fn: Callable, *args, **kwargs
 ) -> Array:
-    """Conditional execution based on a boolean condition.
+    """Conditionally executes one of two functions.
 
-    Args:
-        condition: Boolean array determining which function to execute
-        true_fn: Function to execute if condition is True
-        false_fn: Function to execute if condition is False
-        *args, **kwargs: Arguments passed to the selected function
+    If `condition` is True, `true_fn` is called; otherwise, `false_fn` is
+    called. This is a control-flow primitive that allows for conditional
+    execution within a computational graph. Unlike `nabla.where`, which
+    evaluates both branches, `cond` only executes the selected function.
 
-    Returns:
-        Result of the executed function
+    Parameters
+    ----------
+    condition : Array
+        A scalar boolean array that determines which function to execute.
+    true_fn : Callable
+        The function to be called if `condition` is True.
+    false_fn : Callable
+        The function to be called if `condition` is False.
+    *args
+        Positional arguments to be passed to the selected function.
+    **kwargs
+        Keyword arguments to be passed to the selected function.
+
+    Returns
+    -------
+    Array
+        The result of calling either `true_fn` or `false_fn`.
+
+    Examples
+    --------
+    >>> import nabla as nb
+    >>> def f(x):
+    ...     return x * 2
+    ...
+    >>> def g(x):
+    ...     return x + 10
+    ...
+    >>> x = nb.array(5)
+    >>> # Executes g(x) because the condition is False
+    >>> nb.cond(nb.array(False), f, g, x)
+    Array([15], dtype=int32)
     """
     from max.dtype import DType
 

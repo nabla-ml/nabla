@@ -137,7 +137,8 @@ class TransposeBatchDimsOp(ViewOperation):
     def __init__(self, axis_1: int = -2, axis_2: int = -1):
         """Initialize transpose batch dims operation.
 
-        Args:
+        Parameters
+    ----------
             axis_1: First batch dimension axis to swap (negative indices preferred)
             axis_2: Second batch dimension axis to swap (negative indices preferred)
         """
@@ -244,15 +245,18 @@ def transpose_batch_dims(arg: Array, axis_1: int = -2, axis_2: int = -1) -> Arra
     This operation swaps two axes in the batch_dims of an Array, similar to how
     regular transpose works on shape dimensions. The shape dimensions remain unchanged.
 
-    Args:
+    Parameters
+    ----------
         arg: Input array with batch dimensions to transpose
         axis_1: First batch dimension axis to swap (default: -2)
         axis_2: Second batch dimension axis to swap (default: -1)
 
-    Returns:
+    Returns
+    -------
         Array with specified batch dimensions transposed
 
-    Example:
+    Examples
+    --------
         >>> import nabla as nb
         >>> # Array with batch_dims=(2, 3, 4) and shape=(5, 6)
         >>> x = nb.ones((5, 6))
@@ -275,11 +279,13 @@ def compute_iterative_transpose_swaps(axes: tuple[int, ...]) -> list[tuple[int, 
     sequence of axis swaps (transposes) are needed to achieve a given permutation.
     Returns a list of (axis1, axis2) tuples that should be swapped in order.
 
-    Args:
+    Parameters
+    ----------
         axes: Tuple of axis indices specifying the desired permutation.
               All indices should be negative (e.g., -1, -2, -3, ...)
 
-    Returns:
+    Returns
+    -------
         List of (axis1, axis2) tuples representing the swaps to perform in order.
         Each tuple contains two negative axis indices to be swapped.
 
@@ -339,7 +345,8 @@ class PermuteOp(ViewOperation):
     def __init__(self, axes: tuple[int, ...]):
         """Initialize permute operation.
 
-        Args:
+        Parameters
+    ----------
             axes: Tuple of axis indices specifying the new order.
                   Must be a permutation of range(ndim).
         """
@@ -429,14 +436,17 @@ class PermuteOp(ViewOperation):
 def permute(input_array: Array, axes: tuple[int, ...]) -> Array:
     """Permute (reorder) the dimensions of a tensor.
 
-    Args:
+    Parameters
+    ----------
         input_array: Input tensor
         axes: Tuple specifying the new order of dimensions
 
-    Returns:
+    Returns
+    -------
         Tensor with reordered dimensions
 
-    Example:
+    Examples
+    --------
         >>> x = nb.ones((2, 3, 4))  # shape (2, 3, 4)
         >>> y = permute(x, (2, 0, 1))  # shape (4, 2, 3)
         >>> # Dimension 2 -> position 0, dimension 0 -> position 1, dimension 1 -> position 2
@@ -460,7 +470,8 @@ class PermuteBatchDimsOp(ViewOperation):
     def __init__(self, axes: tuple[int, ...]):
         """Initialize permute batch dims operation.
 
-        Args:
+        Parameters
+    ----------
             axes: Tuple of axis indices specifying the new order for batch_dims.
                   Must be a permutation of range(-len(batch_dims), 0).
                   All indices should be negative.
@@ -585,15 +596,18 @@ def permute_batch_dims(input_array: Array, axes: tuple[int, ...]) -> Array:
     similar to how regular permute works on shape dimensions. The shape dimensions
     remain unchanged.
 
-    Args:
+    Parameters
+    ----------
         input_array: Input array with batch dimensions to permute
         axes: Tuple specifying the new order of batch dimensions.
               All indices should be negative and form a permutation.
 
-    Returns:
+    Returns
+    -------
         Array with batch dimensions reordered according to axes
 
-    Example:
+    Examples
+    --------
         >>> import nabla as nb
         >>> # Array with batch_dims=(2, 3, 4) and shape=(5, 6)
         >>> x = nb.ones((5, 6))
@@ -621,14 +635,17 @@ def permute_batch_dims(input_array: Array, axes: tuple[int, ...]) -> Array:
 def move_axis_to_front(input_array: Array, axis: int) -> Array:
     """Move specified axis to the front (position 0), shifting others right.
 
-    Args:
+    Parameters
+    ----------
         input_array: Input tensor
         axis: Axis to move to front
 
-    Returns:
+    Returns
+    -------
         Tensor with specified axis moved to front
 
-    Example:
+    Examples
+    --------
         >>> x = nb.ones((2, 3, 4))  # shape (2, 3, 4)
         >>> y = move_axis_to_front(x, 2)  # shape (4, 2, 3)
         >>> # axis 2 moved to front, others shifted: [2, 0, 1]
@@ -651,14 +668,17 @@ def move_axis_to_front(input_array: Array, axis: int) -> Array:
 def move_axis_to_back(input_array: Array, axis: int) -> Array:
     """Move specified axis to the back (last position), shifting others left.
 
-    Args:
+    Parameters
+    ----------
         input_array: Input tensor
         axis: Axis to move to back
 
-    Returns:
+    Returns
+    -------
         Tensor with specified axis moved to back
 
-    Example:
+    Examples
+    --------
         >>> x = nb.ones((2, 3, 4))  # shape (2, 3, 4)
         >>> y = move_axis_to_back(x, 0)  # shape (3, 4, 2)
         >>> # axis 0 moved to back, others shifted: [1, 2, 0]
@@ -681,14 +701,17 @@ def move_axis_to_back(input_array: Array, axis: int) -> Array:
 def move_axis_from_front(input_array: Array, target_axis: int) -> Array:
     """Move front axis (position 0) to specified target position.
 
-    Args:
+    Parameters
+    ----------
         input_array: Input tensor (assumes front axis is the one to move)
         target_axis: Target position for the front axis
 
-    Returns:
+    Returns
+    -------
         Tensor with front axis moved to target position
 
-    Example:
+    Examples
+    --------
         >>> x = nb.ones((4, 2, 3))  # front axis has size 4
         >>> y = move_axis_from_front(x, 2)  # shape (2, 3, 4)
         >>> # front axis moved to position 2: [1, 2, 0]
@@ -717,14 +740,17 @@ def move_axis_from_front(input_array: Array, target_axis: int) -> Array:
 def move_axis_from_back(input_array: Array, target_axis: int) -> Array:
     """Move back axis (last position) to specified target position.
 
-    Args:
+    Parameters
+    ----------
         input_array: Input tensor (assumes back axis is the one to move)
         target_axis: Target position for the back axis
 
-    Returns:
+    Returns
+    -------
         Tensor with back axis moved to target position
 
-    Example:
+    Examples
+    --------
         >>> x = nb.ones((4, 2, 3))  # back axis has size 3
         >>> y = move_axis_from_back(x, 1)  # shape (2, 4, 3)
         >>> # back axis moved to position 1: [0, 2, 1]
@@ -752,14 +778,17 @@ def move_axis_from_back(input_array: Array, target_axis: int) -> Array:
 def move_axis_to_front_of_batch_dims(input_array: Array, axis: int) -> Array:
     """Move specified batch dimension to the front (position 0), shifting others right.
 
-    Args:
+    Parameters
+    ----------
         input_array: Input tensor with batch dimensions
         axis: Batch dimension to move to front (negative index)
 
-    Returns:
+    Returns
+    -------
         Tensor with specified batch dimension moved to front
 
-    Example:
+    Examples
+    --------
         >>> x = nb.ones((2, 3, 4))  # shape (2, 3, 4)
         >>> x.batch_dims = (1, 0)  # Simulated for example
         >>> y = move_axis_to_fron_of_batch_dims(x, -1)  # Move last batch dim to front
@@ -785,14 +814,17 @@ def move_axis_to_front_of_batch_dims(input_array: Array, axis: int) -> Array:
 def move_axis_from_front_of_batch_dims(input_array: Array, target_axis: int) -> Array:
     """Move front batch dimension (position 0) to specified target position.
 
-    Args:
+    Parameters
+    ----------
         input_array: Input tensor with batch dimensions (assumes front batch dim is the one to move)
         target_axis: Target position for the front batch dimension (negative index)
 
-    Returns:
+    Returns
+    -------
         Tensor with front batch dimension moved to target position
 
-    Example:
+    Examples
+    --------
         >>> x = nb.ones((4, 2, 3))  # shape (4, 2, 3)
         >>> x.batch_dims = (0, 1)  # Simulated for example
         >>> y = move_axis_from_front_of_batch_dims(x, -1)  # Move front batch dim to last position
@@ -1447,11 +1479,13 @@ class ConcatenateOp(Operation):
 def concatenate(args: list[Array], axis: int = 0) -> Array:
     """Concatenate arrays along an existing axis.
 
-    Args:
+    Parameters
+    ----------
         args: List of arrays to concatenate
         axis: Axis along which to concatenate arrays (default: 0)
 
-    Returns:
+    Returns
+    -------
         Concatenated array
     """
     if not args:
@@ -1649,12 +1683,14 @@ def array_slice(
 ) -> Array:
     """Slice an array along specified dimensions.
 
-    Args:
+    Parameters
+    ----------
         arg: Input array to slice
         slices: List of slice objects defining the slicing for each dimension
         squeeze_axes: List of axes that should be squeezed (for JAX compatibility)
 
-    Returns:
+    Returns
+    -------
         Sliced array
     """
     op = ArraySliceOp(slices, squeeze_axes)
@@ -1664,11 +1700,13 @@ def array_slice(
 def split(arg: Array, sizes: list[int], axis: int = 0) -> list[Array]:
     """Split an array into multiple sub-arrays along a specified axis.
 
-    Args:
+    Parameters
+    ----------
         arg: Input array to split
         sizes: List of sizes for each split along the specified axis
         axis: Axis along which to split the array (default: 0)
-    Returns:
+    Returns
+    -------
         List of sub-arrays resulting from the split
     """
     if not sizes:
@@ -1932,12 +1970,14 @@ def pad(arg: Array, slices: list[slice], target_shape: Shape) -> Array:
     it creates a larger array where the small array is placed at the sliced location
     and everything else is zero.
 
-    Args:
+    Parameters
+    ----------
         arg: Input array (the smaller array to be placed)
         slices: List of slice objects defining where to place the array
         target_shape: The shape of the output array
 
-    Returns:
+    Returns
+    -------
         Larger array with input placed at sliced location, zeros elsewhere
     """
     op = PadOp(slices, target_shape)
@@ -2021,11 +2061,13 @@ class SqueezeBatchDimsOp(ViewOperation):
 def squeeze_batch_dims(arg: Array, axes: list[int] | None = None) -> Array:
     """Squeeze array by removing batch dimensions of size 1.
 
-    Args:
+    Parameters
+    ----------
         arg: Input array
         axes: List of batch dimension axes to squeeze. If None, returns array unchanged.
 
-    Returns:
+    Returns
+    -------
         Array with specified batch dimensions of size 1 removed
     """
     if axes is None:
@@ -2118,12 +2160,14 @@ class UnsqueezeBatchDimsOp(ViewOperation):
 def unsqueeze_batch_dims(arg: Array, axes: list[int] | None = None) -> Array:
     """Unsqueeze array by adding batch dimensions of size 1.
 
-    Args:
+    Parameters
+    ----------
         arg: Input array
         axes: List of positions where to insert batch dimensions of size 1.
               If None, returns array unchanged.
 
-    Returns:
+    Returns
+    -------
         Array with batch dimensions of size 1 added at specified positions
     """
     if axes is None:
@@ -2140,11 +2184,13 @@ def unsqueeze_batch_dims(arg: Array, axes: list[int] | None = None) -> Array:
 def stack(arrays: list[Array], axis: int = 0) -> Array:
     """Stack arrays along a new axis.
 
-    Args:
+    Parameters
+    ----------
         arrays: List of arrays to stack
         axis: Axis along which to stack the arrays (default: 0)
 
-    Returns:
+    Returns
+    -------
         Stacked array
     """
     if not arrays:

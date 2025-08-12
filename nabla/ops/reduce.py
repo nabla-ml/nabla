@@ -113,7 +113,48 @@ def sum(
     axes: int | list[int] | tuple[int, ...] | None = None,
     keep_dims: bool = False,
 ) -> Array:
-    """sum array elements over given axes."""
+    """Calculates the sum of array elements over given axes.
+
+    This function reduces an array by summing its elements along the
+    specified axes. If no axes are provided, the sum of all elements in the
+    array is calculated.
+
+    Parameters
+    ----------
+    arg : Array
+        The input array to be summed.
+    axes : int | list[int] | tuple[int, ...] | None, optional
+        The axis or axes along which to perform the sum. If None (the
+        default), the sum is performed over all axes, resulting in a scalar
+        array.
+    keep_dims : bool, optional
+        If True, the axes which are reduced are left in the result as
+        dimensions with size one. This allows the result to broadcast
+        correctly against the original array. Defaults to False.
+
+    Returns
+    -------
+    Array
+        An array containing the summed values.
+
+    Examples
+    --------
+    >>> import nabla as nb
+    >>> x = nb.array([[1, 2, 3], [4, 5, 6]])
+
+    Sum all elements:
+    >>> nb.sum(x)
+    Array([21], dtype=int32)
+
+    Sum along an axis:
+    >>> nb.sum(x, axes=0)
+    Array([5, 7, 9], dtype=int32)
+
+    Sum along an axis and keep dimensions:
+    >>> nb.sum(x, axes=1, keep_dims=True)
+    Array([[ 6],
+           [15]], dtype=int32)
+    """
     if axes is not None:
         if isinstance(axes, int):
             axes = [axes]
@@ -151,7 +192,47 @@ def mean(
     axes: int | list[int] | tuple[int, ...] | None = None,
     keep_dims: bool = False,
 ) -> Array:
-    """Compute mean of array elements over given axes."""
+    """Computes the arithmetic mean of array elements over given axes.
+
+    This function calculates the average of an array's elements along the
+    specified axes. If no axes are provided, the mean of all elements in the
+    array is calculated.
+
+    Parameters
+    ----------
+    arg : Array
+        The input array for which to compute the mean.
+    axes : int | list[int] | tuple[int, ...] | None, optional
+        The axis or axes along which to compute the mean. If None (the default),
+        the mean is computed over all axes, resulting in a scalar array.
+    keep_dims : bool, optional
+        If True, the axes which are reduced are left in the result as
+        dimensions with size one. This allows the result to broadcast
+        correctly against the original array. Defaults to False.
+
+    Returns
+    -------
+    Array
+        An array containing the mean values, typically of a floating-point dtype.
+
+    Examples
+    --------
+    >>> import nabla as nb
+    >>> x = nb.array([[1, 2, 3], [4, 5, 6]])
+
+    Compute the mean of all elements:
+    >>> nb.mean(x)
+    Array([3.5], dtype=float32)
+
+    Compute the mean along an axis:
+    >>> nb.mean(x, axes=0)
+    Array([2.5, 3.5, 4.5], dtype=float32)
+
+    Compute the mean along an axis and keep dimensions:
+    >>> nb.mean(x, axes=1, keep_dims=True)
+    Array([[2.],
+           [5.]], dtype=float32)
+    """
     from .binary import div
     from .creation import array
 
@@ -268,7 +349,28 @@ def sum_batch_dims(
     axes: int | list[int] | tuple[int, ...] | None = None,
     keep_dims: bool = False,
 ) -> Array:
-    """sum array elements over given batch dimension axes."""
+    """Calculates the sum of array elements over given batch dimension axes.
+
+    This function is specialized for reducing batch dimensions, which are
+    used in function transformations like `vmap`. It operates on the
+    `batch_dims` of an array, leaving the standard `shape` unaffected.
+
+    Parameters
+    ----------
+    arg : Array
+        The input array with batch dimensions.
+    axes : int | list[int] | tuple[int, ...] | None, optional
+        The batch dimension axis or axes to sum over. If None, sums over all
+        batch dimensions.
+    keep_dims : bool, optional
+        If True, the reduced batch axes are kept with size one. Defaults
+        to False.
+
+    Returns
+    -------
+    Array
+        An array with specified batch dimensions reduced by the sum operation.
+    """
 
     if axes is not None:
         if isinstance(axes, int):
@@ -389,7 +491,47 @@ def max(
     axes: int | list[int] | tuple[int, ...] | None = None,
     keep_dims: bool = False,
 ) -> Array:
-    """Find maximum array elements over given axes."""
+    """Finds the maximum value of array elements over given axes.
+
+    This function reduces an array by finding the maximum element along the
+    specified axes. If no axes are provided, the maximum of all elements in the
+    array is returned.
+
+    Parameters
+    ----------
+    arg : Array
+        The input array.
+    axes : int | list[int] | tuple[int, ...] | None, optional
+        The axis or axes along which to find the maximum. If None (the
+        default), the maximum is found over all axes, resulting in a scalar
+        array.
+    keep_dims : bool, optional
+        If True, the axes which are reduced are left in the result as
+        dimensions with size one. This allows the result to broadcast
+        correctly against the original array. Defaults to False.
+
+    Returns
+    -------
+    Array
+        An array containing the maximum values.
+
+    Examples
+    --------
+    >>> import nabla as nb
+    >>> x = nb.array([[1, 5, 2], [4, 3, 6]])
+
+    Find the maximum of all elements:
+    >>> nb.max(x)
+    Array([6], dtype=int32)
+
+    Find the maximum along an axis:
+    >>> nb.max(x, axes=1)
+    Array([5, 6], dtype=int32)
+
+    Find the maximum along an axis and keep dimensions:
+    >>> nb.max(x, axes=0, keep_dims=True)
+    Array([[4, 5, 6]], dtype=int32)
+    """
     if axes is not None:
         if isinstance(axes, int):
             axes = [axes]
@@ -507,8 +649,44 @@ def argmax(
     axes: int | None = None,
     keep_dims: bool = False,
 ) -> Array:
-    """
-    Find indices of maximum array elements over a given axis, matching JAX's API.
+    """Finds the indices of maximum array elements over a given axis.
+
+    This function returns the indices of the maximum values along an axis. If
+    multiple occurrences of the maximum value exist, the index of the first
+    occurrence is returned.
+
+    Parameters
+    ----------
+    arg : Array
+        The input array.
+    axes : int | None, optional
+        The axis along which to find the indices of the maximum values. If
+        None (the default), the array is flattened before finding the index
+        of the overall maximum value.
+    keep_dims : bool, optional
+        If True, the axis which is reduced is left in the result as a
+        dimension with size one. This is not supported when `axes` is None.
+        Defaults to False.
+
+    Returns
+    -------
+    Array
+        An array of `int64` integers containing the indices of the maximum
+        elements.
+
+    Examples
+    --------
+    >>> import nabla as nb
+    >>> x = nb.array([1, 5, 2, 5])
+    >>> nb.argmax(x)
+    Array(1, dtype=int64)
+
+    >>> y = nb.array([[1, 5, 2], [4, 3, 6]])
+    >>> nb.argmax(y, axes=1)
+    Array([1, 2], dtype=int64)
+
+    >>> nb.argmax(y, axes=0, keep_dims=True)
+    Array([[1, 0, 1]], dtype=int64)
     """
 
     logical_axis: int | None

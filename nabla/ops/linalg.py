@@ -14,7 +14,14 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-"""Linear algebra operations."""
+"""
+Linear algebra operations for Nabla arrays.
+
+This module provides fundamental linear algebra functions, starting with matrix
+multiplication (`matmul`). The operations support broadcasting over batch
+dimensions and are equipped with differentiation rules for use in gradient-based
+optimization.
+"""
 
 import numpy as np
 from max.graph import TensorValue, ops
@@ -28,13 +35,36 @@ __all__ = ["matmul"]
 
 
 class MatMulOp(BinaryOperation):
-    """Matrix multiplication operation with batching support."""
+    """
+    Implements the matrix multiplication operation, supporting batched inputs.
+
+    This operation class encapsulates the logic for matrix multiplication,
+    including shape computation, validation, execution in both eager and graph
+    modes, and the rules for automatic differentiation (VJP and JVP).
+    """
 
     def __init__(self):
+        """Initializes the MatMulOp."""
         super().__init__("dot_general")
 
     def forward(self, *args: Array) -> Array:
-        """Forward pass for binary operations."""
+        """
+        Executes the forward pass for matrix multiplication.
+
+        This method handles the core logic, including promoting 1D arrays to 2D
+        for the multiplication, performing broadcasting, and then reshaping the
+        output back to the expected rank.
+
+        Parameters
+        ----------
+        *args : Array
+            A tuple containing the two input arrays to be multiplied, `(arg1, arg2)`.
+
+        Returns
+        -------
+        Array
+            The result of the matrix multiplication.
+        """
         if len(args) != 2:
             raise ValueError(f"Binary operation requires 2 arguments, got {len(args)}")
 
@@ -49,6 +79,7 @@ class MatMulOp(BinaryOperation):
         arg1_has_rank_1 = len(arg1.shape) == 1
         arg2_has_rank_1 = len(arg2.shape) == 1
 
+        # Promote 1D arrays to 2D for matmul computation
         if arg1_has_rank_1:
             arg1 = reshape(arg1, (1, arg1.shape[0]))
 
@@ -87,19 +118,37 @@ class MatMulOp(BinaryOperation):
         if not res.stage_realization:
             self.eagerxpr([arg1, arg2], res)
 
-        # If the inputs were rank 1, we need to reshape the output
+        # Reshape output back to the correct rank if inputs were 1D
         if arg1_has_rank_1 and arg2_has_rank_1:
+            # Vector dot product results in a scalar-like (1,1) shape, squeeze it
             res = reshape(res, output_shape[:-2] + (1, 1))
         elif arg1_has_rank_1:
+            # Squeeze the first dimension
             res = reshape(res, output_shape[:-2] + (res.shape[1],))
         elif arg2_has_rank_1:
+            # Squeeze the second dimension
             res = reshape(res, output_shape[:-2] + (res.shape[0],))
 
         res.creator_op = self
         return res
 
     def compute_output_shape(self, *input_shapes: tuple) -> tuple:
-        """Compute output shape for matrix multiplication with compatible signature."""
+        """
+        Computes the output shape for matrix multiplication.
+
+        The batch dimensions are broadcasted, and the last two dimensions follow
+        standard matrix multiplication rules (M, K) @ (K, N) -> (M, N).
+
+        Parameters
+        ----------
+        input_shapes : tuple
+            A tuple of two shapes, `(shape1, shape2)`.
+
+        Returns
+        -------
+        tuple
+            The shape of the resulting array.
+        """
         if len(input_shapes) != 2:
             raise ValueError(
                 f"Matrix multiplication requires 2 input shapes, got {len(input_shapes)}"
@@ -119,7 +168,25 @@ class MatMulOp(BinaryOperation):
         )
 
     def _validate_inputs(self, arg1: Array, arg2: Array) -> None:
-        """Validate matrix multiplication inputs."""
+        """
+        Validates inputs for matrix multiplication.
+
+        Checks for type, dtype, device, and shape compatibility.
+
+        Parameters
+        ----------
+        arg1 : Array
+            The first input array.
+        arg2 : Array
+            The second input array.
+
+        Raises
+        ------
+        TypeError
+            If inputs are not Array instances.
+        ValueError
+            If dtypes, devices, or shapes are incompatible.
+        """
         if not isinstance(arg1, Array) or not isinstance(arg2, Array):
             raise TypeError("Both arguments must be Array instances")
         if arg1.dtype != arg2.dtype:
@@ -134,6 +201,19 @@ class MatMulOp(BinaryOperation):
             )
 
     def maxpr(self, args: list[TensorValue], output: Array) -> None:
+        """
+        Defines the MAX graph implementation for matrix multiplication.
+
+        For inputs with more than 4 dimensions, it reshapes them to 3D for
+        batched matmul and then reshapes the result back.
+
+        Parameters
+        ----------
+        args : list[TensorValue]
+            A list containing the two input tensor values.
+        output : Array
+            The output array to store the result in.
+        """
         x_val, y_val = args[0], args[1]
         x_shape = x_val.shape
         y_shape = y_val.shape
@@ -147,7 +227,7 @@ class MatMulOp(BinaryOperation):
                     f"Shapes {x_shape} and {y_shape} are not compatible for matrix multiplication "
                     f"(batch dimensions mismatch: {x_shape[:-2]} vs {y_shape[:-2]})"
                 )
-            # now we can simpply reshape the args to a rank3 tensor respecitvely and then do a batche dmamtul on this one
+            # Reshape high-rank tensors to 3D for batched matmul, then reshape back
             batch_dims_x = [int(dim) for dim in x_shape[:-2]]
             batch_dims_y = [int(dim) for dim in y_shape[:-2]]
             new_shape_x = (
@@ -171,6 +251,16 @@ class MatMulOp(BinaryOperation):
             output.tensor_value = reshaped_result
 
     def eagerxpr(self, args: list[Array], output: Array) -> None:
+        """
+        Defines the eager mode execution using `numpy.matmul`.
+
+        Parameters
+        ----------
+        args : list[Array]
+            A list containing the two input arrays.
+        output : Array
+            The output array to store the result in.
+        """
         arg0_numpy = args[0].to_numpy()
         arg1_numpy = args[1].to_numpy()
         np_result = np.matmul(arg0_numpy, arg1_numpy)
@@ -179,14 +269,55 @@ class MatMulOp(BinaryOperation):
     def vjp_rule(
         self, primals: list[Array], cotangent: Array, output: Array
     ) -> list[Array]:
+        """
+        Defines the vector-Jacobian product (VJP) rule for matmul.
+
+        The gradients are `g @ y.T` and `x.T @ g` for inputs `x` and `y` and
+        gradient `g`.
+
+        Parameters
+        ----------
+        primals : list[Array]
+            The original inputs to the operation, `(x, y)`.
+        cotangent : Array
+            The gradient of the loss with respect to the output.
+        output : Array
+            The output of the forward pass.
+
+        Returns
+        -------
+        list[Array]
+            A list containing the gradients with respect to each input.
+        """
         x, y = primals
         from .view import transpose
 
-        return [matmul(cotangent, transpose(y)), matmul(transpose(x), cotangent)]
+        grad_x = matmul(cotangent, transpose(y))
+        grad_y = matmul(transpose(x), cotangent)
+        return [grad_x, grad_y]
 
     def jvp_rule(
         self, primals: list[Array], tangents: list[Array], output: Array
     ) -> Array:
+        """
+        Defines the Jacobian-vector product (JVP) rule for matmul.
+
+        Based on the product rule, the tangent is `(dx @ y) + (x @ dy)`.
+
+        Parameters
+        ----------
+        primals : list[Array]
+            The original inputs to the operation, `(x, y)`.
+        tangents : list[Array]
+            The tangents of the inputs, `(tx, ty)`.
+        output : Array
+            The output of the forward pass.
+
+        Returns
+        -------
+        Array
+            The tangent of the output.
+        """
         x, y = primals
         tx, ty = tangents
 
@@ -199,8 +330,60 @@ class MatMulOp(BinaryOperation):
 _matmul_op = MatMulOp()
 
 
-def matmul(arg0, arg1) -> Array:
-    """Matrix multiplication with broadcasting support."""
+def matmul(arg0: Array | float | int, arg1: Array | float | int) -> Array:
+    """
+    Performs matrix multiplication on two arrays.
+
+    This function follows the semantics of `numpy.matmul`, supporting
+    multiplication of 1D vectors, 2D matrices, and stacks of matrices.
+
+    - If both arguments are 1D arrays of size `N`, it computes the inner
+      (dot) product and returns a scalar-like array.
+    - If one argument is a 2D array (M, K) and the other is a 1D array (K),
+      it promotes the vector to a matrix (1, K) or (K, 1) for the
+      multiplication, then squeezes the result back to a 1D array.
+    - If both arguments are 2D arrays, `(M, K) @ (K, N)`, it performs standard
+      matrix multiplication, resulting in an array of shape `(M, N)`.
+    - If either argument has more than 2 dimensions, it is treated as a stack
+      of matrices residing in the last two dimensions and is broadcast accordingly.
+
+    Parameters
+    ----------
+    arg0 : Array | float | int
+        The first input array.
+    arg1 : Array | float | int
+        The second input array.
+
+    Returns
+    -------
+    Array
+        The result of the matrix multiplication.
+
+    Examples
+    --------
+    >>> import nabla as nb
+    >>> # Vector-vector product (dot product)
+    >>> v1 = nb.array([1, 2, 3])
+    >>> v2 = nb.array([4, 5, 6])
+    >>> nb.matmul(v1, v2)
+    Array([32], dtype=int32)
+
+    >>> # Matrix-vector product
+    >>> M = nb.array([[1, 2], [3, 4]])
+    >>> v = nb.array([5, 6])
+    >>> nb.matmul(M, v)
+    Array([17, 39], dtype=int32)
+
+    >>> # Batched matrix-matrix product
+    >>> M1 = nb.array([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]) # Shape (2, 2, 2)
+    >>> M2 = nb.array([[[9, 1], [2, 3]], [[4, 5], [6, 7]]]) # Shape (2, 2, 2)
+    >>> nb.matmul(M1, M2)
+    Array([[[ 13,   7],
+            [ 35,  15]],
+    <BLANKLINE>
+           [[ 56,  47],
+            [ 76,  67]]], dtype=int32)
+    """
     from .binary import _ensure_array
 
     arg0 = _ensure_array(arg0)

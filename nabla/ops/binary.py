@@ -555,95 +555,452 @@ _not_equal_op = NotEqualOp()
 _mod_op = ModOp()
 
 
-def add(arg0, arg1) -> Array:
-    """Element-wise addition of two arrays or array and scalar."""
-    arg0 = _ensure_array(arg0)
-    arg1 = _ensure_array(arg1)
-    return _add_op.forward(arg0, arg1)
+def add(x: Array | float | int, y: Array | float | int) -> Array:
+    """Adds two arrays element-wise.
+
+    This function performs element-wise addition on two arrays. It supports
+    broadcasting, allowing arrays of different shapes to be combined as long
+    as their shapes are compatible. This function also provides the
+    implementation of the `+` operator for Nabla arrays.
+
+    Parameters
+    ----------
+    x : Array | float | int
+        The first input array or scalar.
+    y : Array | float | int
+        The second input array or scalar. Must be broadcastable to the same
+        shape as `x`.
+
+    Returns
+    -------
+    Array
+        An array containing the result of the element-wise addition.
+
+    Examples
+    --------
+    Calling `add` explicitly:
+
+    >>> import nabla as nb
+    >>> x = nb.array([1, 2, 3])
+    >>> y = nb.array([4, 5, 6])
+    >>> nb.add(x, y)
+    Array([5, 7, 9], dtype=int32)
+
+    Calling `add` via the `+` operator:
+
+    >>> x + y
+    Array([5, 7, 9], dtype=int32)
+
+    Broadcasting a scalar:
+
+    >>> x + 10
+    Array([11, 12, 13], dtype=int32)
+    """
+    x = _ensure_array(x)
+    y = _ensure_array(y)
+    return _add_op.forward(x, y)
 
 
-def mul(arg0, arg1) -> Array:
-    """Element-wise multiplication of two arrays or array and scalar."""
-    arg0 = _ensure_array(arg0)
-    arg1 = _ensure_array(arg1)
-    return _mul_op.forward(arg0, arg1)
+def mul(x: Array | float | int, y: Array | float | int) -> Array:
+    """Multiplies two arrays element-wise.
+
+    This function performs element-wise multiplication on two arrays. It
+    supports broadcasting, allowing arrays of different shapes to be combined
+    as long as their shapes are compatible. This function also provides the
+    implementation of the `*` operator for Nabla arrays.
+
+    Parameters
+    ----------
+    x : Array | float | int
+        The first input array or scalar.
+    y : Array | float | int
+        The second input array or scalar. Must be broadcastable to the same
+        shape as `x`.
+
+    Returns
+    -------
+    Array
+        An array containing the result of the element-wise multiplication.
+
+    Examples
+    --------
+    >>> import nabla as nb
+    >>> x = nb.array([1, 2, 3])
+    >>> y = nb.array([4, 5, 6])
+    >>> nb.mul(x, y)
+    Array([4, 10, 18], dtype=int32)
+
+    >>> x * y
+    Array([4, 10, 18], dtype=int32)
+    """
+    x = _ensure_array(x)
+    y = _ensure_array(y)
+    return _mul_op.forward(x, y)
 
 
-def sub(arg0, arg1) -> Array:
-    """Element-wise subtraction of two arrays or array and scalar."""
-    arg0 = _ensure_array(arg0)
-    arg1 = _ensure_array(arg1)
-    return _sub_op.forward(arg0, arg1)
+def sub(x: Array | float | int, y: Array | float | int) -> Array:
+    """Subtracts two arrays element-wise.
+
+    This function performs element-wise subtraction on two arrays. It supports
+    broadcasting, allowing arrays of different shapes to be combined as long
+    as their shapes are compatible. This function also provides the
+    implementation of the `-` operator for Nabla arrays.
+
+    Parameters
+    ----------
+    x : Array | float | int
+        The first input array or scalar (the minuend).
+    y : Array | float | int
+        The second input array or scalar (the subtrahend). Must be
+        broadcastable to the same shape as `x`.
+
+    Returns
+    -------
+    Array
+        An array containing the result of the element-wise subtraction.
+
+    Examples
+    --------
+    >>> import nabla as nb
+    >>> x = nb.array([10, 20, 30])
+    >>> y = nb.array([1, 2, 3])
+    >>> nb.sub(x, y)
+    Array([ 9, 18, 27], dtype=int32)
+
+    >>> x - y
+    Array([ 9, 18, 27], dtype=int32)
+    """
+    x = _ensure_array(x)
+    y = _ensure_array(y)
+    return _sub_op.forward(x, y)
 
 
-def div(arg0, arg1) -> Array:
-    """Element-wise division of two arrays or array and scalar."""
-    arg0 = _ensure_array(arg0)
-    arg1 = _ensure_array(arg1)
-    return _div_op.forward(arg0, arg1)
+def div(x: Array | float | int, y: Array | float | int) -> Array:
+    """Divides two arrays element-wise.
+
+    This function performs element-wise (true) division on two arrays. It
+    supports broadcasting, allowing arrays of different shapes to be combined
+    as long as their shapes are compatible. This function also provides the
+    implementation of the `/` operator for Nabla arrays.
+
+    Parameters
+    ----------
+    x : Array | float | int
+        The first input array or scalar (the dividend).
+    y : Array | float | int
+        The second input array or scalar (the divisor). Must be broadcastable
+        to the same shape as `x`.
+
+    Returns
+    -------
+    Array
+        An array containing the result of the element-wise division. The
+        result is typically a floating-point array.
+
+    Examples
+    --------
+    >>> import nabla as nb
+    >>> x = nb.array([10, 20, 30])
+    >>> y = nb.array([2, 5, 10])
+    >>> nb.div(x, y)
+    Array([5., 4., 3.], dtype=float32)
+
+    >>> x / y
+    Array([5., 4., 3.], dtype=float32)
+    """
+    x = _ensure_array(x)
+    y = _ensure_array(y)
+    return _div_op.forward(x, y)
 
 
-def floordiv(arg0, arg1) -> Array:
-    """Element-wise floor division of two arrays or array and scalar.
+def floordiv(x: Array | float | int, y: Array | float | int) -> Array:
+    """Performs element-wise floor division on two arrays.
 
-    Floor division is implemented as floor(a / b) which rounds towards
-    negative infinity, matching Python's // operator behavior.
+    Floor division is equivalent to `floor(x / y)`, rounding the result
+    towards negative infinity. This matches the behavior of Python's `//`
+    operator, which this function implements for Nabla arrays.
+
+    Parameters
+    ----------
+    x : Array | float | int
+        The first input array or scalar (the dividend).
+    y : Array | float | int
+        The second input array or scalar (the divisor). Must be broadcastable
+        to the same shape as `x`.
+
+    Returns
+    -------
+    Array
+        An array containing the result of the element-wise floor division.
+
+    Examples
+    --------
+    >>> import nabla as nb
+    >>> x = nb.array([10, -10, 9])
+    >>> y = nb.array([3, 3, 3])
+    >>> nb.floordiv(x, y)
+    Array([ 3, -4,  3], dtype=int32)
+
+    >>> x // y
+    Array([ 3, -4,  3], dtype=int32)
     """
     from ..ops.unary import floor
 
-    arg0 = _ensure_array(arg0)
-    arg1 = _ensure_array(arg1)
+    x = _ensure_array(x)
+    y = _ensure_array(y)
 
     # Perform regular division then floor
-    result = div(arg0, arg1)
+    result = div(x, y)
     return floor(result)
 
 
 # noqa: A001 - Intentionally shadowing built-in 'pow' for API consistency
-def pow(arg0, arg1) -> Array:
-    """Element-wise power operation (arg0^arg1)."""
-    arg0 = _ensure_array(arg0)
-    arg1 = _ensure_array(arg1)
-    return _power_op.forward(arg0, arg1)
+def pow(x: Array | float | int, y: Array | float | int) -> Array:
+    """Computes `x` raised to the power of `y` element-wise.
+
+    This function calculates `x ** y` for each element in the input arrays.
+    It supports broadcasting and provides the implementation of the `**`
+    operator for Nabla arrays.
+
+    Parameters
+    ----------
+    x : Array | float | int
+        The base array or scalar.
+    y : Array | float | int
+        The exponent array or scalar. Must be broadcastable to the same shape
+        as `x`.
+
+    Returns
+    -------
+    Array
+        An array containing the result of the element-wise power operation.
+
+    Examples
+    --------
+    >>> import nabla as nb
+    >>> x = nb.array([1, 2, 3])
+    >>> y = nb.array([2, 3, 2])
+    >>> nb.pow(x, y)
+    Array([1, 8, 9], dtype=int32)
+
+    >>> x ** y
+    Array([1, 8, 9], dtype=int32)
+    """
+    x = _ensure_array(x)
+    y = _ensure_array(y)
+    return _power_op.forward(x, y)
 
 
-def greater_equal(arg0: Array, arg1: Array) -> Array:
-    """Element-wise greater than or equal to operation."""
-    arg0 = _ensure_array(arg0)
-    arg1 = _ensure_array(arg1)
-    return _greater_equal_op.forward(arg0, arg1)
+def greater_equal(x: Array | float | int, y: Array | float | int) -> Array:
+    """Performs element-wise comparison `x >= y`.
+
+    This function compares two arrays element-wise, returning a boolean array
+    indicating where elements of `x` are greater than or equal to elements
+    of `y`. It supports broadcasting and provides the implementation of the
+    `>=` operator for Nabla arrays.
+
+    Parameters
+    ----------
+    x : Array | float | int
+        The first input array or scalar.
+    y : Array | float | int
+        The second input array or scalar. Must be broadcastable to the same
+        shape as `x`.
+
+    Returns
+    -------
+    Array
+        A boolean array containing the result of the element-wise comparison.
+
+    Examples
+    --------
+    >>> import nabla as nb
+    >>> x = nb.array([1, 5, 3])
+    >>> y = nb.array([2, 5, 1])
+    >>> nb.greater_equal(x, y)
+    Array([False,  True,  True], dtype=bool)
+
+    >>> x >= y
+    Array([False,  True,  True], dtype=bool)
+    """
+    x = _ensure_array(x)
+    y = _ensure_array(y)
+    return _greater_equal_op.forward(x, y)
 
 
-def maximum(arg0, arg1) -> Array:
-    """Element-wise maximum of two arrays or array and scalar."""
-    arg0 = _ensure_array(arg0)
-    arg1 = _ensure_array(arg1)
-    return _maximum_op.forward(arg0, arg1)
+def maximum(x: Array | float | int, y: Array | float | int) -> Array:
+    """Computes the element-wise maximum of two arrays.
+
+    This function compares two arrays element-wise and returns a new array
+    containing the larger of the two elements at each position. It supports
+    broadcasting.
+
+    Parameters
+    ----------
+    x : Array | float | int
+        The first input array or scalar.
+    y : Array | float | int
+        The second input array or scalar. Must be broadcastable to the same
+        shape as `x`.
+
+    Returns
+    -------
+    Array
+        An array containing the element-wise maximum of `x` and `y`.
+
+    Examples
+    --------
+    >>> import nabla as nb
+    >>> x = nb.array([1, 5, 2])
+    >>> y = nb.array([2, 3, 6])
+    >>> nb.maximum(x, y)
+    Array([2, 5, 6], dtype=int32)
+    """
+    x = _ensure_array(x)
+    y = _ensure_array(y)
+    return _maximum_op.forward(x, y)
 
 
-def minimum(arg0, arg1) -> Array:
-    """Element-wise minimum of two arrays or array and scalar."""
-    arg0 = _ensure_array(arg0)
-    arg1 = _ensure_array(arg1)
-    return _minimum_op.forward(arg0, arg1)
+def minimum(x: Array | float | int, y: Array | float | int) -> Array:
+    """Computes the element-wise minimum of two arrays.
+
+    This function compares two arrays element-wise and returns a new array
+    containing the smaller of the two elements at each position. It supports
+    broadcasting.
+
+    Parameters
+    ----------
+    x : Array | float | int
+        The first input array or scalar.
+    y : Array | float | int
+        The second input array or scalar. Must be broadcastable to the same
+        shape as `x`.
+
+    Returns
+    -------
+    Array
+        An array containing the element-wise minimum of `x` and `y`.
+
+    Examples
+    --------
+    >>> import nabla as nb
+    >>> x = nb.array([1, 5, 2])
+    >>> y = nb.array([2, 3, 6])
+    >>> nb.minimum(x, y)
+    Array([1, 3, 2], dtype=int32)
+    """
+    x = _ensure_array(x)
+    y = _ensure_array(y)
+    return _minimum_op.forward(x, y)
 
 
-def equal(arg0, arg1) -> Array:
-    """Element-wise equality comparison."""
-    arg0 = _ensure_array(arg0)
-    arg1 = _ensure_array(arg1)
-    return _equal_op.forward(arg0, arg1)
+def equal(x: Array | float | int, y: Array | float | int) -> Array:
+    """Performs element-wise comparison `x == y`.
+
+    This function compares two arrays element-wise, returning a boolean array
+    indicating where elements of `x` are equal to elements of `y`. It
+    supports broadcasting and provides the implementation of the `==` operator
+    for Nabla arrays.
+
+    Parameters
+    ----------
+    x : Array | float | int
+        The first input array or scalar.
+    y : Array | float | int
+        The second input array or scalar. Must be broadcastable to the same
+        shape as `x`.
+
+    Returns
+    -------
+    Array
+        A boolean array containing the result of the element-wise equality
+        comparison.
+
+    Examples
+    --------
+    >>> import nabla as nb
+    >>> x = nb.array([1, 2, 3])
+    >>> y = nb.array([1, 5, 3])
+    >>> nb.equal(x, y)
+    Array([ True, False,  True], dtype=bool)
+
+    >>> x == y
+    Array([ True, False,  True], dtype=bool)
+    """
+    x = _ensure_array(x)
+    y = _ensure_array(y)
+    return _equal_op.forward(x, y)
 
 
-def not_equal(arg0, arg1) -> Array:
-    """Element-wise not-equal comparison."""
-    arg0 = _ensure_array(arg0)
-    arg1 = _ensure_array(arg1)
-    return _not_equal_op.forward(arg0, arg1)
+def not_equal(x: Array | float | int, y: Array | float | int) -> Array:
+    """Performs element-wise comparison `x != y`.
+
+    This function compares two arrays element-wise, returning a boolean array
+    indicating where elements of `x` are not equal to elements of `y`. It
+    supports broadcasting and provides the implementation of the `!=` operator
+    for Nabla arrays.
+
+    Parameters
+    ----------
+    x : Array | float | int
+        The first input array or scalar.
+    y : Array | float | int
+        The second input array or scalar. Must be broadcastable to the same
+        shape as `x`.
+
+    Returns
+    -------
+    Array
+        A boolean array containing the result of the element-wise inequality
+        comparison.
+
+    Examples
+    --------
+    >>> import nabla as nb
+    >>> x = nb.array([1, 2, 3])
+    >>> y = nb.array([1, 5, 3])
+    >>> nb.not_equal(x, y)
+    Array([False,  True, False], dtype=bool)
+
+    >>> x != y
+    Array([False,  True, False], dtype=bool)
+    """
+    x = _ensure_array(x)
+    y = _ensure_array(y)
+    return _not_equal_op.forward(x, y)
 
 
-def mod(arg0, arg1) -> Array:
-    """Element-wise modulo operation (arg0 % arg1)."""
-    arg0 = _ensure_array(arg0)
-    arg1 = _ensure_array(arg1)
-    return _mod_op.forward(arg0, arg1)
+def mod(x: Array | float | int, y: Array | float | int) -> Array:
+    """Computes the element-wise remainder of division.
+
+    This function calculates the remainder of `x / y` element-wise. The
+    sign of the result follows the sign of the divisor `y`. It provides the
+    implementation of the `%` operator for Nabla arrays.
+
+    Parameters
+    ----------
+    x : Array | float | int
+        The dividend array or scalar.
+    y : Array | float | int
+        The divisor array or scalar. Must be broadcastable to the same shape
+        as `x`.
+
+    Returns
+    -------
+    Array
+        An array containing the element-wise remainder.
+
+    Examples
+    --------
+    >>> import nabla as nb
+    >>> x = nb.array([10, -10, 9])
+    >>> y = nb.array([3, 3, -3])
+    >>> nb.mod(x, y)
+    Array([ 1,  2, -0], dtype=int32)
+
+    >>> x % y
+    Array([ 1,  2, -0], dtype=int32)
+    """
+    x = _ensure_array(x)
+    y = _ensure_array(y)
+    return _mod_op.forward(x, y)
