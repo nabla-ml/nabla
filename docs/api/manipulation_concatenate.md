@@ -10,13 +10,14 @@ nabla.concatenate(args: list[nabla.core.array.Array], axis: int = 0) -> nabla.co
 
 Concatenate arrays along an existing axis.
 
+Parameters
+----------
 
 ## Parameters
 
 axis: Axis along which to concatenate arrays (default: 0)
 
-
-## Returns
-
+Returns
+-------
 Concatenated array
 

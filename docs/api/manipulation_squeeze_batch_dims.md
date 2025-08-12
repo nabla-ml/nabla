@@ -10,14 +10,12 @@ nabla.squeeze_batch_dims(arg: nabla.core.array.Array, axes: list[int] | None = N
 
 Squeeze array by removing batch dimensions of size 1.
 
-
-## Parameters
-
+Parameters
+----------
 arg: Input array
 axes: List of batch dimension axes to squeeze. If None, returns array unchanged.
 
-
-## Returns
-
+Returns
+-------
 Array with specified batch dimensions of size 1 removed
 

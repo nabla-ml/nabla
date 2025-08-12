@@ -14,15 +14,13 @@ This is the inverse operation of array slicing - given slices, a small array, an
 it creates a larger array where the small array is placed at the sliced location
 and everything else is zero.
 
-
-## Parameters
-
+Parameters
+----------
 arg: Input array (the smaller array to be placed)
 slices: List of slice objects defining where to place the array
 target_shape: The shape of the output array
 
-
-## Returns
-
+Returns
+-------
 Larger array with input placed at sliced location, zeros elsewhere
 

@@ -14,7 +14,7 @@ linalg_matmul
 ### {doc}`matmul <linalg_matmul>`
 
 ```python
-nabla.matmul(arg0, arg1) -> nabla.core.array.Array
+nabla.matmul(arg0: nabla.core.array.Array | float | int, arg1: nabla.core.array.Array | float | int) -> nabla.core.array.Array
 ```
 
 Matrix multiplication.

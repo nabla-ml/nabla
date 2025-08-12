@@ -22,7 +22,7 @@ trafos_xpr
 ### {doc}`djit <trafos_djit>`
 
 ```python
-nabla.djit(func: Optional[collections.abc.Callable[..., Any]] = None, show_graph: bool = False) -> collections.abc.Callable[..., typing.Any]
+nabla.djit(func: collections.abc.Callable[..., typing.Any] | None = None, show_graph: bool = False, auto_device: bool = True) -> collections.abc.Callable[..., typing.Any]
 ```
 
 Nabla operation: `djit`
@@ -38,7 +38,7 @@ Automatic differentiation to compute gradients.
 ### {doc}`jacfwd <trafos_jacfwd>`
 
 ```python
-nabla.jacfwd(func: collections.abc.Callable[..., typing.Any], argnums: int | tuple[int, ...] | list[int] = 0, has_aux: bool = False, holomorphic: bool = False, allow_int: bool = False) -> collections.abc.Callable[..., typing.Any]
+nabla.jacfwd(func: collections.abc.Callable[..., typing.Any], argnums: int | tuple[int, ...] | list[int] | None = None, has_aux: bool = False, holomorphic: bool = False, allow_int: bool = False) -> collections.abc.Callable[..., typing.Any]
 ```
 
 Nabla operation: `jacfwd`
@@ -46,7 +46,7 @@ Nabla operation: `jacfwd`
 ### {doc}`jacrev <trafos_jacrev>`
 
 ```python
-nabla.jacrev(func: collections.abc.Callable[..., typing.Any], argnums: int | tuple[int, ...] | list[int] = 0, has_aux: bool = False, holomorphic: bool = False, allow_int: bool = False) -> collections.abc.Callable[..., typing.Any]
+nabla.jacrev(func: collections.abc.Callable[..., typing.Any], argnums: int | tuple[int, ...] | list[int] | None = None, has_aux: bool = False, holomorphic: bool = False, allow_int: bool = False) -> collections.abc.Callable[..., typing.Any]
 ```
 
 Nabla operation: `jacrev`
@@ -54,7 +54,7 @@ Nabla operation: `jacrev`
 ### {doc}`jit <trafos_jit>`
 
 ```python
-nabla.jit(func: Optional[collections.abc.Callable[..., Any]] = None, static: bool = True, show_graph: bool = False) -> collections.abc.Callable[..., typing.Any]
+nabla.jit(func: collections.abc.Callable[..., typing.Any] | None = None, static: bool = True, show_graph: bool = False, auto_device: bool = True) -> collections.abc.Callable[..., typing.Any]
 ```
 
 Just-in-time compilation for performance optimization.

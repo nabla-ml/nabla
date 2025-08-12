@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.jit(func: Optional[collections.abc.Callable[..., Any]] = None, static: bool = True, show_graph: bool = False) -> collections.abc.Callable[..., typing.Any]
+nabla.jit(func: collections.abc.Callable[..., typing.Any] | None = None, static: bool = True, show_graph: bool = False, auto_device: bool = True) -> collections.abc.Callable[..., typing.Any]
 ```
 
 ## Description
@@ -15,6 +15,13 @@ This can be used as a function call like `jit(func)` or as a decorator `@jit`.
 ## Parameters
 
 func: Function to optimize with JIT compilation (should take positional arguments)
+static: If True, compile once and reuse a cached model (fast path). If False, behaves like dynamic JIT (see `djit`).
+show_graph: If True, prints the compiled graph representation when first realized.
+auto_device: If True (default) and an accelerator is available, automatically moves CPU-resident input Arrays
+to the default accelerator device before tracing/execution. In static mode, Python scalars are also
+eagerly converted to device Arrays (since they would be converted during tracing anyway). In dynamic
+mode (`static=False` / `djit`), scalars are left as Python scalars (original behavior) but CPU Arrays
+are still moved. Set to False to disable all automatic device movement/conversion.
 
 
 ## Returns
@@ -41,6 +48,7 @@ This follows JAX's jit API:
 * Only accepts positional arguments
 * For functions requiring keyword arguments, use functools.partial or lambda
 * Supports both list-style (legacy) and unpacked arguments style (JAX-like)
+* Device auto-movement is a Nabla extension controlled by `auto_device`.
 
 
 ## See Also

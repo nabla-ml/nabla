@@ -14,21 +14,18 @@ This operation reorders the batch_dims of an Array according to the given axes,
 similar to how regular permute works on shape dimensions. The shape dimensions
 remain unchanged.
 
-
-## Parameters
-
+Parameters
+----------
 input_array: Input array with batch dimensions to permute
 axes: Tuple specifying the new order of batch dimensions.
 All indices should be negative and form a permutation.
 
-
-## Returns
-
+Returns
+-------
 Array with batch dimensions reordered according to axes
 
-
-## Examples
-
+Examples
+--------
 >>> import nabla as nb
 >>> # Array with batch_dims=(2, 3, 4) and shape=(5, 6)
 >>> x = nb.ones((5, 6))
