@@ -24,9 +24,9 @@ dimensions as the template array.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([[1, 2], [3, 4]], dtype=nb.DType.int32)
-nb.zeros_like(x)
+>>> import nabla as nb
+>>> x = nb.array([[1, 2], [3, 4]], dtype=nb.DType.int32)
+>>> nb.zeros_like(x)
 Array([[0, 0],
        [0, 0]], dtype=int32)
 ```

@@ -37,16 +37,16 @@ This function follows the JAX/NumPy `arange` API.
 ## Examples
 
 ```python
-import nabla as nb
-# nb.arange(stop)
-nb.arange(5)
+>>> import nabla as nb
+>>> # nb.arange(stop)
+>>> nb.arange(5)
 Array([0., 1., 2., 3., 4.], dtype=float32)
 <BLANKLINE>
-# nb.arange(start, stop)
-nb.arange(5, 10)
+>>> # nb.arange(start, stop)
+>>> nb.arange(5, 10)
 Array([5., 6., 7., 8., 9.], dtype=float32)
 <BLANKLINE>
-# nb.arange(start, stop, step)
-nb.arange(10, 20, 2, dtype=nb.DType.int32)
+>>> # nb.arange(start, stop, step)
+>>> nb.arange(10, 20, 2, dtype=nb.DType.int32)
 Array([10, 12, 14, 16, 18], dtype=int32)
 ```

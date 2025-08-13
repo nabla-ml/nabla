@@ -28,12 +28,12 @@ for Nabla arrays.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([1, 2, 3])
-y = nb.array([1, 5, 3])
-nb.not_equal(x, y)
+>>> import nabla as nb
+>>> x = nb.array([1, 2, 3])
+>>> y = nb.array([1, 5, 3])
+>>> nb.not_equal(x, y)
 Array([False,  True, False], dtype=bool)
 
-x != y
+>>> x != y
 Array([False,  True, False], dtype=bool)
 ```

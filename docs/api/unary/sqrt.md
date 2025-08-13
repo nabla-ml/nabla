@@ -24,8 +24,8 @@ compatible with the automatic differentiation system.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([0.0, 4.0, 9.0])
-nb.sqrt(x)
+>>> import nabla as nb
+>>> x = nb.array([0.0, 4.0, 9.0])
+>>> nb.sqrt(x)
 Array([0., 2., 3.], dtype=float32)
 ```

@@ -25,8 +25,8 @@ added to ensure the input to the logarithm is positive.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([1.0, 2.71828, 10.0])
-nb.log(x)
+>>> import nabla as nb
+>>> x = nb.array([1.0, 2.71828, 10.0])
+>>> nb.log(x)
 Array([0.       , 0.9999993, 2.3025851], dtype=float32)
 ```

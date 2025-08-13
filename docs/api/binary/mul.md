@@ -28,12 +28,12 @@ implementation of the `*` operator for Nabla arrays.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([1, 2, 3])
-y = nb.array([4, 5, 6])
-nb.mul(x, y)
+>>> import nabla as nb
+>>> x = nb.array([1, 2, 3])
+>>> y = nb.array([4, 5, 6])
+>>> nb.mul(x, y)
 Array([4, 10, 18], dtype=int32)
 
-x * y
+>>> x * y
 Array([4, 10, 18], dtype=int32)
 ```

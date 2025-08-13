@@ -28,16 +28,16 @@ from `input_array` at the positions specified by `indices`.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([[10, 20, 30], [40, 50, 60]])
-indices = nb.array([[0, 2], [1, 0]])
-# Gather along axis 1
-nb.gather(x, indices, axis=1)
+>>> import nabla as nb
+>>> x = nb.array([[10, 20, 30], [40, 50, 60]])
+>>> indices = nb.array([[0, 2], [1, 0]])
+>>> # Gather along axis 1
+>>> nb.gather(x, indices, axis=1)
 Array([[10, 30],
        [50, 40]], dtype=int32)
 
-# Gather along axis 0
-indices = nb.array([[0, 1, 0]])
-nb.gather(x, indices, axis=0)
+>>> # Gather along axis 0
+>>> indices = nb.array([[0, 1, 0]])
+>>> nb.gather(x, indices, axis=0)
 Array([[10, 50, 30]], dtype=int32)
 ```

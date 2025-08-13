@@ -24,8 +24,8 @@ This function is not differentiable and its gradient is zero everywhere.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([-1.7, -0.2, 0.2, 1.7])
-nb.floor(x)
+>>> import nabla as nb
+>>> x = nb.array([-1.7, -0.2, 0.2, 1.7])
+>>> nb.floor(x)
 Array([-2., -1.,  0.,  1.], dtype=float32)
 ```

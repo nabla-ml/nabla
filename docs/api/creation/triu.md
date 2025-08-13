@@ -26,21 +26,21 @@ expected to be at least 2-dimensional.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.ndarange((3, 3), dtype=nb.DType.int32)
-x
+>>> import nabla as nb
+>>> x = nb.ndarange((3, 3), dtype=nb.DType.int32)
+>>> x
 Array([[0, 1, 2],
        [3, 4, 5],
        [6, 7, 8]], dtype=int32)
 <BLANKLINE>
-# Upper triangle with the main diagonal
-nb.triu(x, k=0)
+>>> # Upper triangle with the main diagonal
+>>> nb.triu(x, k=0)
 Array([[0, 1, 2],
        [0, 4, 5],
        [0, 0, 8]], dtype=int32)
 <BLANKLINE>
-# Upper triangle above the main diagonal
-nb.triu(x, k=1)
+>>> # Upper triangle above the main diagonal
+>>> nb.triu(x, k=1)
 Array([[0, 1, 2],
        [0, 0, 5],
        [0, 0, 0]], dtype=int32)

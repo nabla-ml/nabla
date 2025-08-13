@@ -32,8 +32,8 @@ number of elements (the product of the shape dimensions).
 ## Examples
 
 ```python
-import nabla as nb
-nb.ndarange((2, 3), dtype=nb.DType.int32)
+>>> import nabla as nb
+>>> nb.ndarange((2, 3), dtype=nb.DType.int32)
 Array([[0, 1, 2],
        [3, 4, 5]], dtype=int32)
 ```

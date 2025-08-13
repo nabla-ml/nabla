@@ -23,8 +23,8 @@ Computes the element-wise sine of an array.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([0, 1.5707963, 3.1415926])
-nb.sin(x)
+>>> import nabla as nb
+>>> x = nb.array([0, 1.5707963, 3.1415926])
+>>> nb.sin(x)
 Array([0.0000000e+00, 1.0000000e+00, -8.7422780e-08], dtype=float32)
 ```

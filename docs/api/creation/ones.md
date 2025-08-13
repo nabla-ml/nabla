@@ -29,8 +29,8 @@ Creates an array of a given shape filled with ones.
 ## Examples
 
 ```python
-import nabla as nb
-# Create a vector of ones
-nb.ones((4,), dtype=nb.DType.float32)
+>>> import nabla as nb
+>>> # Create a vector of ones
+>>> nb.ones((4,), dtype=nb.DType.float32)
 Array([1., 1., 1., 1.], dtype=float32)
 ```

@@ -29,14 +29,14 @@ The function supports broadcasting among the three input arrays.
 ## Examples
 
 ```python
-import nabla as nb
-condition = nb.array([True, False, True])
-x = nb.array([1, 2, 3])
-y = nb.array([10, 20, 30])
-nb.where(condition, x, y)
+>>> import nabla as nb
+>>> condition = nb.array([True, False, True])
+>>> x = nb.array([1, 2, 3])
+>>> y = nb.array([10, 20, 30])
+>>> nb.where(condition, x, y)
 Array([1, 20, 3], dtype=int32)
 
 Broadcasting example:
-nb.where(nb.array([True, False]), nb.array(5), nb.array([10, 20]))
+>>> nb.where(nb.array([True, False]), nb.array(5), nb.array([10, 20]))
 Array([5, 20], dtype=int32)
 ```

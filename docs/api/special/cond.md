@@ -34,15 +34,15 @@ evaluates both branches, `cond` only executes the selected function.
 ## Examples
 
 ```python
-import nabla as nb
-def f(x):
+>>> import nabla as nb
+>>> def f(x):
     return x * 2
 ...
-def g(x):
+>>> def g(x):
     return x + 10
 ...
-x = nb.array(5)
-# Executes g(x) because the condition is False
-nb.cond(nb.array(False), f, g, x)
+>>> x = nb.array(5)
+>>> # Executes g(x) because the condition is False
+>>> nb.cond(nb.array(False), f, g, x)
 Array([15], dtype=int32)
 ```

@@ -28,12 +28,12 @@ implementation of the `-` operator for Nabla arrays.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([10, 20, 30])
-y = nb.array([1, 2, 3])
-nb.sub(x, y)
+>>> import nabla as nb
+>>> x = nb.array([10, 20, 30])
+>>> y = nb.array([1, 2, 3])
+>>> nb.sub(x, y)
 Array([ 9, 18, 27], dtype=int32)
 
-x - y
+>>> x - y
 Array([ 9, 18, 27], dtype=int32)
 ```

@@ -29,15 +29,15 @@ occurrence is returned.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([1, 5, 2, 5])
-nb.argmax(x)
+>>> import nabla as nb
+>>> x = nb.array([1, 5, 2, 5])
+>>> nb.argmax(x)
 Array(1, dtype=int64)
 
-y = nb.array([[1, 5, 2], [4, 3, 6]])
-nb.argmax(y, axes=1)
+>>> y = nb.array([[1, 5, 2], [4, 3, 6]])
+>>> nb.argmax(y, axes=1)
 Array([1, 2], dtype=int64)
 
-nb.argmax(y, axes=0, keep_dims=True)
+>>> nb.argmax(y, axes=0, keep_dims=True)
 Array([[1, 0, 1]], dtype=int64)
 ```

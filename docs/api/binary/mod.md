@@ -27,12 +27,12 @@ implementation of the `%` operator for Nabla arrays.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([10, -10, 9])
-y = nb.array([3, 3, -3])
-nb.mod(x, y)
+>>> import nabla as nb
+>>> x = nb.array([10, -10, 9])
+>>> y = nb.array([3, 3, -3])
+>>> nb.mod(x, y)
 Array([ 1,  2, -0], dtype=int32)
 
-x % y
+>>> x % y
 Array([ 1,  2, -0], dtype=int32)
 ```

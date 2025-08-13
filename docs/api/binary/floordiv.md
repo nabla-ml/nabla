@@ -27,12 +27,12 @@ operator, which this function implements for Nabla arrays.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([10, -10, 9])
-y = nb.array([3, 3, 3])
-nb.floordiv(x, y)
+>>> import nabla as nb
+>>> x = nb.array([10, -10, 9])
+>>> y = nb.array([3, 3, 3])
+>>> nb.floordiv(x, y)
 Array([ 3, -4,  3], dtype=int32)
 
-x // y
+>>> x // y
 Array([ 3, -4,  3], dtype=int32)
 ```

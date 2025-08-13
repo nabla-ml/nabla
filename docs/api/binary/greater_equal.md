@@ -28,12 +28,12 @@ of `y`. It supports broadcasting and provides the implementation of the
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([1, 5, 3])
-y = nb.array([2, 5, 1])
-nb.greater_equal(x, y)
+>>> import nabla as nb
+>>> x = nb.array([1, 5, 3])
+>>> y = nb.array([2, 5, 1])
+>>> nb.greater_equal(x, y)
 Array([False,  True,  True], dtype=bool)
 
-x >= y
+>>> x >= y
 Array([False,  True,  True], dtype=bool)
 ```

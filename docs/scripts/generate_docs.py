@@ -24,7 +24,7 @@ def parse_numpydoc(docstring):
         section_content = sections[i+1].strip()
         
         if section_name == 'examples':
-            parsed['examples'] = re.sub(r'^>>> ', '', section_content, flags=re.MULTILINE)
+            parsed['examples'] = section_content#re.sub(r'^>>> ', '', section_content, flags=re.MULTILINE)
             parsed['examples'] = re.sub(r'^\.\.\. ', '', parsed['examples'], flags=re.MULTILINE)
             continue
             

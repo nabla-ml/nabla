@@ -27,9 +27,9 @@ broadcasting.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([1, 5, 2])
-y = nb.array([2, 3, 6])
-nb.maximum(x, y)
+>>> import nabla as nb
+>>> x = nb.array([1, 5, 2])
+>>> y = nb.array([2, 3, 6])
+>>> nb.maximum(x, y)
 Array([2, 5, 6], dtype=int32)
 ```

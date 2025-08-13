@@ -25,7 +25,7 @@ remain unchanged.
 ## Examples
 
 ```python
-import nabla as nb
+>>> import nabla as nb
     >>> # Array with batch_dims=(2, 3, 4) and shape=(5, 6)
     >>> x = nb.ones((5, 6))
     >>> x.batch_dims = (2, 3, 4)  # Simulated for example

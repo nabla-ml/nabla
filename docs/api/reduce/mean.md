@@ -29,19 +29,19 @@ array is calculated.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([[1, 2, 3], [4, 5, 6]])
+>>> import nabla as nb
+>>> x = nb.array([[1, 2, 3], [4, 5, 6]])
 
 Compute the mean of all elements:
-nb.mean(x)
+>>> nb.mean(x)
 Array([3.5], dtype=float32)
 
 Compute the mean along an axis:
-nb.mean(x, axes=0)
+>>> nb.mean(x, axes=0)
 Array([2.5, 3.5, 4.5], dtype=float32)
 
 Compute the mean along an axis and keep dimensions:
-nb.mean(x, axes=1, keep_dims=True)
+>>> nb.mean(x, axes=1, keep_dims=True)
 Array([[2.],
        [5.]], dtype=float32)
 ```

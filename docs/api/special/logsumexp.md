@@ -29,12 +29,12 @@ avoids overflow errors that can occur when `exp(x)` is very large.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([1.0, 2.0, 3.0])
-nb.logsumexp(x)
+>>> import nabla as nb
+>>> x = nb.array([1.0, 2.0, 3.0])
+>>> nb.logsumexp(x)
 Array([3.407606], dtype=float32)
 
-data = nb.array([[1, 2, 3], [4, 5, 6]])
-nb.logsumexp(data, axis=1)
+>>> data = nb.array([[1, 2, 3], [4, 5, 6]])
+>>> nb.logsumexp(data, axis=1)
 Array([3.407606, 6.407606], dtype=float32)
 ```

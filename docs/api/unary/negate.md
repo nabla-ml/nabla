@@ -25,12 +25,12 @@ implementation for the unary `-` operator on Nabla arrays.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([1, -2, 3.5])
-nb.negate(x)
+>>> import nabla as nb
+>>> x = nb.array([1, -2, 3.5])
+>>> nb.negate(x)
 Array([-1.,  2., -3.5], dtype=float32)
 
 Using the `-` operator:
--x
+>>> -x
 Array([-1.,  2., -3.5], dtype=float32)
 ```

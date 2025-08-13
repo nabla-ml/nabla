@@ -27,9 +27,9 @@ broadcasting.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([1, 5, 2])
-y = nb.array([2, 3, 6])
-nb.minimum(x, y)
+>>> import nabla as nb
+>>> x = nb.array([1, 5, 2])
+>>> y = nb.array([2, 3, 6])
+>>> nb.minimum(x, y)
 Array([1, 3, 2], dtype=int32)
 ```

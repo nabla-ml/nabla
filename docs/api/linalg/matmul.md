@@ -36,23 +36,23 @@ multiplication of 1D vectors, 2D matrices, and stacks of matrices.
 ## Examples
 
 ```python
-import nabla as nb
-# Vector-vector product (dot product)
-v1 = nb.array([1, 2, 3])
-v2 = nb.array([4, 5, 6])
-nb.matmul(v1, v2)
+>>> import nabla as nb
+>>> # Vector-vector product (dot product)
+>>> v1 = nb.array([1, 2, 3])
+>>> v2 = nb.array([4, 5, 6])
+>>> nb.matmul(v1, v2)
 Array([32], dtype=int32)
 
-# Matrix-vector product
-M = nb.array([[1, 2], [3, 4]])
-v = nb.array([5, 6])
-nb.matmul(M, v)
+>>> # Matrix-vector product
+>>> M = nb.array([[1, 2], [3, 4]])
+>>> v = nb.array([5, 6])
+>>> nb.matmul(M, v)
 Array([17, 39], dtype=int32)
 
-# Batched matrix-matrix product
-M1 = nb.array([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]) # Shape (2, 2, 2)
-M2 = nb.array([[[9, 1], [2, 3]], [[4, 5], [6, 7]]]) # Shape (2, 2, 2)
-nb.matmul(M1, M2)
+>>> # Batched matrix-matrix product
+>>> M1 = nb.array([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]) # Shape (2, 2, 2)
+>>> M2 = nb.array([[[9, 1], [2, 3]], [[4, 5], [6, 7]]]) # Shape (2, 2, 2)
+>>> nb.matmul(M1, M2)
 Array([[[ 13,   7],
         [ 35,  15]],
 <BLANKLINE>

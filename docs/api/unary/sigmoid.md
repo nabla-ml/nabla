@@ -24,8 +24,8 @@ activation function that squashes values to the range `(0, 1)`.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([-1.0, 0.0, 1.0, 20.0])
-nb.sigmoid(x)
+>>> import nabla as nb
+>>> x = nb.array([-1.0, 0.0, 1.0, 20.0])
+>>> nb.sigmoid(x)
 Array([0.26894143, 0.5       , 0.7310586 , 1.        ], dtype=float32)
 ```

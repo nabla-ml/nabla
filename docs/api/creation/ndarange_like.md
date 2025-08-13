@@ -25,9 +25,9 @@ N-1, where N is the total number of elements.
 ## Examples
 
 ```python
-import nabla as nb
-template = nb.zeros((2, 2), dtype=nb.DType.int32)
-nb.ndarange_like(template)
+>>> import nabla as nb
+>>> template = nb.zeros((2, 2), dtype=nb.DType.int32)
+>>> nb.ndarange_like(template)
 Array([[0, 1],
        [2, 3]], dtype=int32)
 ```

@@ -26,11 +26,11 @@ with the specified data type (`dtype`).
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([1, 2, 3])
-x.dtype
+>>> import nabla as nb
+>>> x = nb.array([1, 2, 3])
+>>> x.dtype
 int32
-y = nb.cast(x, nb.float32)
-y
+>>> y = nb.cast(x, nb.float32)
+>>> y
 Array([1., 2., 3.], dtype=float32)
 ```

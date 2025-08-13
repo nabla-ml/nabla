@@ -24,8 +24,8 @@ Input arrays of non-boolean types will be cast to boolean first.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([True, False, True])
-nb.logical_not(x)
+>>> import nabla as nb
+>>> x = nb.array([True, False, True])
+>>> nb.logical_not(x)
 Array([False,  True, False], dtype=bool)
 ```

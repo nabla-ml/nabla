@@ -31,17 +31,17 @@ the given `axis`. This operation is the inverse of `gather`.
 ## Examples
 
 ```python
-import nabla as nb
-target_shape = (3, 4)
-indices = nb.array([0, 2, 1])
-values = nb.array([10, 20, 30])
-# Scatter values into a 1D target
-nb.scatter((4,), nb.array([0, 3, 1]), nb.array([1, 2, 3]))
+>>> import nabla as nb
+>>> target_shape = (3, 4)
+>>> indices = nb.array([0, 2, 1])
+>>> values = nb.array([10, 20, 30])
+>>> # Scatter values into a 1D target
+>>> nb.scatter((4,), nb.array([0, 3, 1]), nb.array([1, 2, 3]))
 Array([1, 3, 0, 2], dtype=int32)
 
-# Scatter rows into a 2D target along axis 0
-values_2d = nb.array([[1, 1, 1, 1], [2, 2, 2, 2], [3, 3, 3, 3]])
-nb.scatter(target_shape, indices, values_2d, axis=0)
+>>> # Scatter rows into a 2D target along axis 0
+>>> values_2d = nb.array([[1, 1, 1, 1], [2, 2, 2, 2], [3, 3, 3, 3]])
+>>> nb.scatter(target_shape, indices, values_2d, axis=0)
 Array([[1, 1, 1, 1],
        [3, 3, 3, 3],
        [2, 2, 2, 2]], dtype=int32)

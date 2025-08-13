@@ -21,8 +21,8 @@ Computes the element-wise absolute value of an array.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([-1.5, 0.0, 2.5])
-nb.abs(x)
+>>> import nabla as nb
+>>> x = nb.array([-1.5, 0.0, 2.5])
+>>> nb.abs(x)
 Array([1.5, 0. , 2.5], dtype=float32)
 ```

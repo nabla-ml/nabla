@@ -28,12 +28,12 @@ implementation of the `/` operator for Nabla arrays.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([10, 20, 30])
-y = nb.array([2, 5, 10])
-nb.div(x, y)
+>>> import nabla as nb
+>>> x = nb.array([10, 20, 30])
+>>> y = nb.array([2, 5, 10])
+>>> nb.div(x, y)
 Array([5., 4., 3.], dtype=float32)
 
-x / y
+>>> x / y
 Array([5., 4., 3.], dtype=float32)
 ```

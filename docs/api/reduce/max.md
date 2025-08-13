@@ -29,18 +29,18 @@ array is returned.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([[1, 5, 2], [4, 3, 6]])
+>>> import nabla as nb
+>>> x = nb.array([[1, 5, 2], [4, 3, 6]])
 
 Find the maximum of all elements:
-nb.max(x)
+>>> nb.max(x)
 Array([6], dtype=int32)
 
 Find the maximum along an axis:
-nb.max(x, axes=1)
+>>> nb.max(x, axes=1)
 Array([5, 6], dtype=int32)
 
 Find the maximum along an axis and keep dimensions:
-nb.max(x, axes=0, keep_dims=True)
+>>> nb.max(x, axes=0, keep_dims=True)
 Array([[4, 5, 6]], dtype=int32)
 ```

@@ -24,8 +24,8 @@ input array.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([0.0, 1.0, 2.0])
-nb.exp(x)
+>>> import nabla as nb
+>>> x = nb.array([0.0, 1.0, 2.0])
+>>> nb.exp(x)
 Array([1.       , 2.7182817, 7.389056 ], dtype=float32)
 ```

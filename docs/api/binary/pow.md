@@ -27,12 +27,12 @@ operator for Nabla arrays.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([1, 2, 3])
-y = nb.array([2, 3, 2])
-nb.pow(x, y)
+>>> import nabla as nb
+>>> x = nb.array([1, 2, 3])
+>>> y = nb.array([2, 3, 2])
+>>> nb.pow(x, y)
 Array([1, 8, 9], dtype=int32)
 
-x ** y
+>>> x ** y
 Array([1, 8, 9], dtype=int32)
 ```

@@ -29,19 +29,19 @@ array is calculated.
 ## Examples
 
 ```python
-import nabla as nb
-x = nb.array([[1, 2, 3], [4, 5, 6]])
+>>> import nabla as nb
+>>> x = nb.array([[1, 2, 3], [4, 5, 6]])
 
 Sum all elements:
-nb.sum(x)
+>>> nb.sum(x)
 Array([21], dtype=int32)
 
 Sum along an axis:
-nb.sum(x, axes=0)
+>>> nb.sum(x, axes=0)
 Array([5, 7, 9], dtype=int32)
 
 Sum along an axis and keep dimensions:
-nb.sum(x, axes=1, keep_dims=True)
+>>> nb.sum(x, axes=1, keep_dims=True)
 Array([[ 6],
        [15]], dtype=int32)
 ```

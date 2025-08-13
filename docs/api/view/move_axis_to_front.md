@@ -21,7 +21,7 @@ Move specified axis to the front (position 0), shifting others right.
 ## Examples
 
 ```python
-x = nb.ones((2, 3, 4))  # shape (2, 3, 4)
+>>> x = nb.ones((2, 3, 4))  # shape (2, 3, 4)
     >>> y = move_axis_to_front(x, 2)  # shape (4, 2, 3)
     >>> # axis 2 moved to front, others shifted: [2, 0, 1]
 ```
