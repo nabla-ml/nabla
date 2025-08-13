@@ -4,158 +4,64 @@ on:
   push:
     branches:
       - main
-    paths: 
+    paths:
       - 'docs/**'
       - '.github/workflows/docs.yml'
   pull_request:
     branches:
       - main
-    paths: 
+    paths:
       - 'docs/**'
       - '.github/workflows/docs.yml'
-  # Allow manual trigger
   workflow_dispatch:
 
-# Sets permissions for GitHub Pages deployment
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Allow only one concurrent deployment
 concurrency:
   group: "pages"
   cancel-in-progress: true
 
 jobs:
-  build-docs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    # Only set environment for actual deployments
-    environment: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'github-pages' || '' }}
     env:
       DOCS_BASE_URL: "https://www.nablaml.com"
-    outputs:
-      page_url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Fetch all history for proper versioning
-      
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: 'pip'
           cache-dependency-path: 'docs/requirements.txt'
-          
-      - name: Install system dependencies
+
+      - name: Install Dependencies
+        run: pip install -r docs/requirements.txt
+
+      - name: Build Documentation
+        run: sphinx-build -b html docs/ docs/_build/html
+
+      - name: Run Post-Build Quality Checks
         run: |
-          sudo apt-get update
-          sudo apt-get install -y pandoc
-          
-      - name: Install documentation dependencies only
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r docs/requirements.txt
-          
-      - name: Build documentation (minimal, no library installation)
-        run: |
-          cd docs
-          # Build static documentation (API docs are pre-generated and committed)
-          sphinx-build -b html . _build/html
-          
-      - name: SEO Optimization and Validation
-        run: |
-          cd docs
-          echo "🌐 Configuring SEO..."
-          python scripts/configure_seo.py _build/html
-          
-          echo "🗺️  Generating sitemap..."
-          python scripts/generate_sitemap.py
-          
-          echo "🔧 Running SEO fixes..."
-          python scripts/fix_seo_issues.py _build/html || echo "SEO fixes completed with warnings"
-          
-          echo "📊 Generating SEO report..."
-          python scripts/final_seo_report.py _build/html || echo "SEO report completed"
-          
-      - name: SEO Quality Check
-        run: |
-          cd docs
-          echo "🔍 Running SEO quality checks..."
-          
-          # Check critical files exist
-          for file in "_build/html/index.html" "_build/html/sitemap.xml" "_build/html/robots.txt"; do
-            if [[ -f "$file" ]]; then
-              echo "✅ $file exists"
-            else
-              echo "❌ $file missing!"
-              exit 1
-            fi
-          done
-          
-          # Check sitemap has reasonable content
-          URL_COUNT=$(grep -c '<url>' _build/html/sitemap.xml)
-          if [[ $URL_COUNT -gt 10 ]]; then
-            echo "✅ Sitemap contains $URL_COUNT URLs"
-          else
-            echo "❌ Sitemap has too few URLs ($URL_COUNT)"
-            exit 1
-          fi
-          
-          # Check homepage SEO elements
-          if grep -q "og:title" _build/html/index.html && 
-             grep -q "application/ld+json" _build/html/index.html; then
-            echo "✅ Homepage has proper SEO tags"
-          else
-            echo "❌ Homepage missing critical SEO tags"
-            exit 1
-          fi
-          
-          echo "🎉 All SEO checks passed!"
-          
-      - name: Add .nojekyll for GitHub Pages
-        run: |
-          touch docs/_build/html/.nojekyll
-          
-      - name: List build output (debug)
-        run: |
-          echo "Contents of docs/_build/html:"
-          ls -la docs/_build/html/
-          echo "First few lines of index.html:"
-          head -10 docs/_build/html/index.html
-          
-      - name: Comment PR with preview info
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const urlCount = require('child_process')
-              .execSync('grep -c "<url>" docs/_build/html/sitemap.xml')
-              .toString().trim();
-              
-            const htmlCount = require('child_process')
-              .execSync('find docs/_build/html -name "*.html" | wc -l')
-              .toString().trim();
-              
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `## 📚 Documentation Preview Ready\n\n**SEO Status:** ✅ All checks passed\n**HTML Pages:** ${htmlCount} files\n**Sitemap URLs:** ${urlCount} URLs\n**Domain:** https://nablaml.com\n\nThe documentation builds successfully with full SEO optimization! 🎉`
-            });
-            
+          python docs/scripts/check_indexing.py
+          python docs/scripts/seo_audit.py
+
       - name: Setup Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/configure-pages@v4
-        
+
       - name: Upload artifact
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./docs/_build/html
-          
+
       - name: Deploy to GitHub Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         id: deployment
         uses: actions/deploy-pages@v4
