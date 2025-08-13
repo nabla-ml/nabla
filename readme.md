@@ -1,12 +1,12 @@
-![alt text](assets/nablalogo.png)
+![alt text](docs/_static/nabla-logo.png)
 
-Nabla is a scientific computing library in Python, featuring:
+Nabla is an open-source Scientific Computing library in Python, featuring:
 
 - Multidimensional array computation with strong GPU acceleration
 - JAX-like composable function transformations: `grad`, `vmap`, `jit`, and other automatic differentiation tools
-- Deep integration with the MAX compiler and custom Mojo 🔥 kernels
+- Deep integration with the MAX compiler and custom Mojo kernels
 
-For tutorials and API reference, visit: [nablaml.com](https://nablaml.com/index.html)
+For tutorials and API reference, visit: [nablaml.com](https://nablaml.com/index.html) 🤗
 
 ## Installation
 
