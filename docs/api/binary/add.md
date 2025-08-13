@@ -6,6 +6,7 @@
 nabla.add(x: 'Array | float | int', y: 'Array | float | int') -> 'Array'
 ```
 
+<!--  -->
 ## Description
 
 Adds two arrays element-wise.

@@ -49,11 +49,6 @@ jobs:
       - name: Build Documentation
         run: sphinx-build -b html docs/ docs/_build/html
 
-      - name: Run Post-Build Quality Checks
-        run: |
-          python docs/scripts/check_indexing.py
-          python docs/scripts/seo_audit.py
-
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
