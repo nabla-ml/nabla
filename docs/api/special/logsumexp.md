@@ -28,7 +28,7 @@ avoids overflow errors that can occur when `exp(x)` is very large.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> x = nb.array([1.0, 2.0, 3.0])
 >>> nb.logsumexp(x)

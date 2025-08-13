@@ -23,7 +23,7 @@ activation function that squashes values to the range `(0, 1)`.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> x = nb.array([-1.0, 0.0, 1.0, 20.0])
 >>> nb.sigmoid(x)

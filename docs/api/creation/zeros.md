@@ -28,7 +28,7 @@ Creates an array of a given shape filled with zeros.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> # Create a 2x3 matrix of zeros
 >>> nb.zeros((2, 3), dtype=nb.DType.int32)

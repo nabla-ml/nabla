@@ -23,7 +23,7 @@ compatible with the automatic differentiation system.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> x = nb.array([0.0, 4.0, 9.0])
 >>> nb.sqrt(x)

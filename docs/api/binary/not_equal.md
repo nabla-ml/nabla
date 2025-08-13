@@ -27,7 +27,7 @@ for Nabla arrays.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> x = nb.array([1, 2, 3])
 >>> y = nb.array([1, 5, 3])

@@ -24,7 +24,8 @@ def parse_numpydoc(docstring):
         section_content = sections[i+1].strip()
         
         if section_name == 'examples':
-            parsed['examples'] = section_content#re.sub(r'^>>> ', '', section_content, flags=re.MULTILINE)
+            parsed['examples'] = section_content
+            parsed['examples'] = re.sub(r'<BLANKLINE>\n', '\n', parsed['examples'])
             parsed['examples'] = re.sub(r'^\.\.\. ', '', parsed['examples'], flags=re.MULTILINE)
             continue
             
@@ -100,7 +101,7 @@ def generate_markdown(function_name, signature, parsed_docstring):
 
     if parsed_docstring.get('examples'):
         md.append("## Examples\n")
-        md.append(f"```python\n{parsed_docstring['examples']}\n```\n")
+        md.append(f"```pycon\n{parsed_docstring['examples']}\n```\n")
 
     return '\n'.join(md)
 
@@ -126,9 +127,7 @@ def discover_public_api(ops_dir):
                         if isinstance(target, ast.Name) and target.id == '__all__':
                             if isinstance(node.value, (ast.List, ast.Tuple)):
                                 for elt in node.value.elts:
-                                    if isinstance(elt, ast.Str):
-                                        public_api_map[elt.s] = module_name
-                                    elif isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                                    if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
                                         public_api_map[elt.value] = module_name
                             break
         except SyntaxError:

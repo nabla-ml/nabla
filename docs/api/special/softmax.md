@@ -27,7 +27,7 @@ numerically stable way as `exp(x - logsumexp(x))`.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> x = nb.array([1.0, 2.0, 3.0])
 >>> nb.softmax(x)

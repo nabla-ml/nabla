@@ -25,7 +25,7 @@ with the specified data type (`dtype`).
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> x = nb.array([1, 2, 3])
 >>> x.dtype

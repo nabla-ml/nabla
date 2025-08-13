@@ -23,7 +23,7 @@ squashing values to the range `[-1, 1]`.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> x = nb.array([-1.0, 0.0, 1.0, 20.0])
 >>> nb.tanh(x)

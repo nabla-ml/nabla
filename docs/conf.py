@@ -72,7 +72,7 @@ html_static_path = ["_static"]
 
 # Patterns to exclude from the build process.
 exclude_patterns = [
-    "_build", "Thumbs.db", ".DS_Store", "**/gen_modules/**"
+    "_build", "Thumbs.db", ".DS_Store", "**/gen_modules/**", "README.md", "scripts/README.md"
 ]
 
 # =============================================================================
@@ -91,7 +91,7 @@ html_extra_path = ["_static/robots.txt", "_static/sitemap.xml"]
 
 # Custom CSS and JavaScript files.
 html_css_files = ["custom_minimal.css", "seo-advanced.css"]
-html_js_files = ["performance.js"]
+html_js_files = ["performance.js", "custom.js"]
 
 # Theme-specific options for the Sphinx Book Theme.
 html_theme_options = {
@@ -108,7 +108,7 @@ html_theme_options = {
         "image_light": "_static/nabla-logo.png",
         "image_dark": "_static/nabla-logo.png",
     },
-    "use_theme_switcher": False, # Force dark mode
+    
 }
 
 # Global context variables available to all templates.

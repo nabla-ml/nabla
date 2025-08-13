@@ -26,7 +26,7 @@ broadcasting.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> x = nb.array([1, 5, 2])
 >>> y = nb.array([2, 3, 6])

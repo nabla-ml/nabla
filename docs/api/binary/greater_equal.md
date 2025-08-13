@@ -27,7 +27,7 @@ of `y`. It supports broadcasting and provides the implementation of the
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> x = nb.array([1, 5, 3])
 >>> y = nb.array([2, 5, 1])

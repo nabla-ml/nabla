@@ -27,7 +27,7 @@ implementation of the `/` operator for Nabla arrays.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> x = nb.array([10, 20, 30])
 >>> y = nb.array([2, 5, 10])

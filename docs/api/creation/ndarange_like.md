@@ -24,7 +24,7 @@ N-1, where N is the total number of elements.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> template = nb.zeros((2, 2), dtype=nb.DType.int32)
 >>> nb.ndarange_like(template)

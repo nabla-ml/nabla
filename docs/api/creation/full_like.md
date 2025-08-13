@@ -25,7 +25,7 @@ dimensions as the template array, filled with `fill_value`.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> x = nb.zeros((2, 2))
 >>> nb.full_like(x, 7.0)

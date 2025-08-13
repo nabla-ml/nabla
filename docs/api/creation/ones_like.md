@@ -23,7 +23,7 @@ dimensions as the template array.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> x = nb.array([[1., 2.], [3., 4.]])
 >>> nb.ones_like(x)

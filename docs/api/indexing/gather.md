@@ -27,7 +27,7 @@ from `input_array` at the positions specified by `indices`.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> x = nb.array([[10, 20, 30], [40, 50, 60]])
 >>> indices = nb.array([[0, 2], [1, 0]])

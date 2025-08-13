@@ -31,7 +31,7 @@ number of elements (the product of the shape dimensions).
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> nb.ndarange((2, 3), dtype=nb.DType.int32)
 Array([[0, 1, 2],

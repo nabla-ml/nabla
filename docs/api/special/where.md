@@ -28,7 +28,7 @@ The function supports broadcasting among the three input arrays.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> condition = nb.array([True, False, True])
 >>> x = nb.array([1, 2, 3])

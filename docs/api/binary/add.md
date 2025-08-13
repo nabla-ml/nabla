@@ -27,7 +27,7 @@ implementation of the `+` operator for Nabla arrays.
 
 ## Examples
 
-```python
+```pycon
 Calling `add` explicitly:
 
 >>> import nabla as nb

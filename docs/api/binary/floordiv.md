@@ -26,7 +26,7 @@ operator, which this function implements for Nabla arrays.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> x = nb.array([10, -10, 9])
 >>> y = nb.array([3, 3, 3])

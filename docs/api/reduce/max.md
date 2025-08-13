@@ -28,7 +28,7 @@ array is returned.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> x = nb.array([[1, 5, 2], [4, 3, 6]])
 

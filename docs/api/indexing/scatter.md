@@ -30,7 +30,7 @@ the given `axis`. This operation is the inverse of `gather`.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> target_shape = (3, 4)
 >>> indices = nb.array([0, 2, 1])

@@ -1,6 +1,13 @@
 import os
 import datetime
+import sys
 from pathlib import Path
+
+# Add docs directory to sys.path to import conf
+docs_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(docs_dir))
+
+from conf import html_baseurl
 
 def get_priority(url, base_url):
     """Determine the priority of a URL."""
@@ -19,10 +26,10 @@ def generate_sitemap():
     print("🗺️  Generating sitemap...")
 
     # Configuration
-    docs_dir = Path(__file__).parent.parent
     build_dir = docs_dir / "_build" / "html"
-    base_url = "https://www.nablaml.com"
+    base_url = html_baseurl.rstrip('/')  # Use base URL from conf.py
     sitemap_path = build_dir / "sitemap.xml"
+
 
     if not build_dir.exists():
         print(f"❌ Build directory not found at: {build_dir}")
@@ -41,6 +48,10 @@ def generate_sitemap():
     # Add each HTML file to the sitemap
     for html_file in html_files:
         if html_file.name in exclude_files:
+            continue
+        
+        # Exclude files in _static directory
+        if "_static" in html_file.relative_to(build_dir).parts:
             continue
 
         # Get relative path and construct URL

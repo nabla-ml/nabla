@@ -24,7 +24,7 @@ implementation for the unary `-` operator on Nabla arrays.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> x = nb.array([1, -2, 3.5])
 >>> nb.negate(x)

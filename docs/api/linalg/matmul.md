@@ -35,7 +35,7 @@ multiplication of 1D vectors, 2D matrices, and stacks of matrices.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> # Vector-vector product (dot product)
 >>> v1 = nb.array([1, 2, 3])
@@ -55,7 +55,7 @@ Array([17, 39], dtype=int32)
 >>> nb.matmul(M1, M2)
 Array([[[ 13,   7],
         [ 35,  15]],
-<BLANKLINE>
+
        [[ 56,  47],
         [ 76,  67]]], dtype=int32)
 ```

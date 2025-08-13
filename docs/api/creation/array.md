@@ -32,19 +32,19 @@ device and with the given data type.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> import numpy as np
 >>> # Create from a Python list
 >>> nb.array([1, 2, 3])
 Array([1, 2, 3], dtype=int32)
-<BLANKLINE>
+
 >>> # Create from a NumPy array
 >>> np_arr = np.array([[4.0, 5.0], [6.0, 7.0]])
 >>> nb.array(np_arr)
 Array([[4., 5.],
        [6., 7.]], dtype=float32)
-<BLANKLINE>
+
 >>> # Create a scalar array
 >>> nb.array(100, dtype=nb.DType.int64)
 Array(100, dtype=int64)

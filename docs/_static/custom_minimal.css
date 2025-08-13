@@ -14,13 +14,13 @@ html {
 }
 
 /* Hide ALL theme switcher elements */
-.theme-switch-button,
-.bd-theme-switch,
-.theme-switcher,
-button[title*="theme"],
-button[title*="Theme"],
-.btn-theme,
-.theme-toggle {
+html .theme-switch-button,
+html .bd-theme-switch,
+html .theme-switcher,
+html button[title*="theme"],
+html button[title*="Theme"],
+html .btn-theme,
+html .theme-toggle {
     display: none !important;
     visibility: hidden !important;
 }

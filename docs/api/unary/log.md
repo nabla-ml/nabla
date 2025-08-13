@@ -24,7 +24,7 @@ added to ensure the input to the logarithm is positive.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> x = nb.array([1.0, 2.71828, 10.0])
 >>> nb.log(x)

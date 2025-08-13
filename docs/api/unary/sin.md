@@ -22,7 +22,7 @@ Computes the element-wise sine of an array.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> x = nb.array([0, 1.5707963, 3.1415926])
 >>> nb.sin(x)

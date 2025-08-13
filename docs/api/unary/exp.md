@@ -23,7 +23,7 @@ input array.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> x = nb.array([0.0, 1.0, 2.0])
 >>> nb.exp(x)

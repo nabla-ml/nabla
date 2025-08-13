@@ -23,7 +23,7 @@ activation function in neural networks.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> x = nb.array([-2.0, -0.5, 0.0, 1.0, 2.0])
 >>> nb.relu(x)

@@ -23,7 +23,7 @@ This function is not differentiable and its gradient is zero everywhere.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> x = nb.array([-1.7, -0.2, 0.2, 1.7])
 >>> nb.floor(x)

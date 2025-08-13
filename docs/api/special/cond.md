@@ -33,7 +33,7 @@ evaluates both branches, `cond` only executes the selected function.
 
 ## Examples
 
-```python
+```pycon
 >>> import nabla as nb
 >>> def f(x):
     return x * 2
