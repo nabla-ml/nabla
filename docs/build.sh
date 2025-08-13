@@ -33,7 +33,6 @@ echo "📚 Building documentation..."
 if [[ "$BUILD_MODE" == "ci" ]]; then
     # CI build: minimal, no autosummary, mock imports
     sphinx-build -b html -W --keep-going \
-        -D autosummary_generate=False \
         -D autodoc_mock_imports="max,max.dtype,max.graph,max.tensor,mojo,numpy,jax,torch" \
         . _build/html
 else

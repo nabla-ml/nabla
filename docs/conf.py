@@ -137,6 +137,9 @@ autodoc_mock_imports = MOCK_MODULES
 autodoc_typehints = "description"
 autodoc_typehints_description_target = "documented"
 
+# -- Autosummary --
+autosummary_generate = not os.environ.get('CI')
+
 # -- Intersphinx (Cross-project Linking) --
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
