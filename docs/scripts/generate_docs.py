@@ -203,7 +203,7 @@ def main():
         category_index_rst.append("   :maxdepth: 1")
         category_index_rst.append("   :caption: Functions\n")
         for name in sorted(functions):
-            category_index_rst.append(f"   {name}")
+            category_index_rst.append(f"   {name}.md")
         
         category_index_file = category_dir / "index.rst"
         category_index_file.write_text('\n'.join(category_index_rst), encoding='utf-8')

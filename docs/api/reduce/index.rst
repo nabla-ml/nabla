@@ -5,8 +5,8 @@ Reduce
    :maxdepth: 1
    :caption: Functions
 
-   argmax
-   max
-   mean
-   sum
-   sum_batch_dims
+   argmax.md
+   max.md
+   mean.md
+   sum.md
+   sum_batch_dims.md

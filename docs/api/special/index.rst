@@ -5,7 +5,7 @@ Special
    :maxdepth: 1
    :caption: Functions
 
-   cond
-   logsumexp
-   softmax
-   where
+   cond.md
+   logsumexp.md
+   softmax.md
+   where.md

@@ -5,4 +5,4 @@ Linalg
    :maxdepth: 1
    :caption: Functions
 
-   matmul
+   matmul.md

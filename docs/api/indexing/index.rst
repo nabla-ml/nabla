@@ -5,5 +5,5 @@ Indexing
    :maxdepth: 1
    :caption: Functions
 
-   gather
-   scatter
+   gather.md
+   scatter.md
