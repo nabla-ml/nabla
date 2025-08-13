@@ -4,7 +4,7 @@ Nabla is a scientific computing library in Python, featuring:
 
 - Multidimensional array computation with strong GPU acceleration
 - JAX-like composable function transformations: `grad`, `vmap`, `jit`, and other automatic differentiation tools
-- Deep integration with the MAX compiler and custom Mojo 🔥 kernels
+- Deep integration with the MAX compiler and custom Mojo kernels
 
 ```{toctree}
 :maxdepth: 1
@@ -12,6 +12,8 @@ Nabla is a scientific computing library in Python, featuring:
 api/index
 tutorials/index
 ```
+
+❤️ If you find Nabla useful, please consider [sponsoring the project on GitHub](https://github.com/sponsors/nabla-ml). Your support helps us continue development!
 
 ## Installation
 
