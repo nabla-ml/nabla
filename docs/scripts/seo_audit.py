@@ -7,7 +7,7 @@ Checks various SEO aspects and provides recommendations.
 import time
 import xml.etree.ElementTree as ET
 from urllib.parse import urlparse
-
+from pathlib import Path
 import requests
 
 
@@ -58,120 +58,119 @@ class SEOAuditor:
     def check_sitemap(self):
         """Check sitemap.xml and extract URLs"""
         print("\n🗺️  Checking sitemap.xml...")
+        sitemap_path = Path(__file__).parent.parent / "_build" / "html" / "sitemap.xml"
+        if not sitemap_path.exists():
+            self.log_issue(f"Sitemap not found at {sitemap_path}")
+            return []
         try:
-            response = requests.get(f"{self.base_url}/sitemap.xml", timeout=10)
-            if response.status_code == 200:
-                root = ET.fromstring(response.content)
-                urls = []
+            with open(sitemap_path, "r", encoding="utf-8") as f:
+                sitemap_content = f.read()
+            root = ET.fromstring(sitemap_content)
+            urls = []
 
-                # Parse sitemap URLs
-                for url_elem in root.findall(
-                    ".//{http://www.sitemaps.org/schemas/sitemap/0.9}url"
-                ):
-                    loc = url_elem.find(
-                        "{http://www.sitemaps.org/schemas/sitemap/0.9}loc"
-                    )
-                    priority = url_elem.find(
-                        "{http://www.sitemaps.org/schemas/sitemap/0.9}priority"
-                    )
-                    lastmod = url_elem.find(
-                        "{http://www.sitemaps.org/schemas/sitemap/0.9}lastmod"
-                    )
-
-                    url_info = {
-                        "url": loc.text if loc is not None else "",
-                        "priority": priority.text if priority is not None else "0.5",
-                        "lastmod": lastmod.text if lastmod is not None else "Unknown",
-                    }
-                    urls.append(url_info)
-
-                self.log_success(f"Sitemap found with {len(urls)} URLs")
-
-                # Check for important sections
-                api_urls = [u for u in urls if "/api/" in u["url"]]
-                tutorial_urls = [u for u in urls if "/tutorials/" in u["url"]]
-
-                self.log_success(f"Found {len(api_urls)} API documentation URLs")
-                self.log_success(f"Found {len(tutorial_urls)} tutorial URLs")
-
-                # Check homepage priority
-                homepage = next(
-                    (u for u in urls if u["url"] == f"{self.base_url}/"), None
+            # Parse sitemap URLs
+            for url_elem in root.findall(
+                ".//{http://www.sitemaps.org/schemas/sitemap/0.9}url"
+            ):
+                loc = url_elem.find(
+                    "{http://www.sitemaps.org/schemas/sitemap/0.9}loc"
                 )
-                if homepage and float(homepage["priority"]) == 1.0:
-                    self.log_success("Homepage has maximum priority (1.0)")
-                else:
-                    self.log_warning("Homepage should have priority 1.0")
+                priority = url_elem.find(
+                    "{http://www.sitemaps.org/schemas/sitemap/0.9}priority"
+                )
+                lastmod = url_elem.find(
+                    "{http://www.sitemaps.org/schemas/sitemap/0.9}lastmod"
+                )
 
-                return urls
+                url_info = {
+                    "url": loc.text if loc is not None else "",
+                    "priority": priority.text if priority is not None else "0.5",
+                    "lastmod": lastmod.text if lastmod is not None else "Unknown",
+                }
+                urls.append(url_info)
+
+            self.log_success(f"Sitemap found with {len(urls)} URLs")
+
+            # Check for important sections
+            api_urls = [u for u in urls if "/api/" in u["url"]]
+            tutorial_urls = [u for u in urls if "/tutorials/" in u["url"]]
+
+            self.log_success(f"Found {len(api_urls)} API documentation URLs")
+            self.log_success(f"Found {len(tutorial_urls)} tutorial URLs")
+
+            # Check homepage priority
+            homepage = next(
+                (u for u in urls if u["url"] == f"{self.base_url}/index.html" or u["url"] == f"{self.base_url}/n"), None
+            )
+            if homepage and float(homepage["priority"]) == 1.0:
+                self.log_success("Homepage has maximum priority (1.0)")
             else:
-                self.log_issue(
-                    f"Sitemap not accessible (Status: {response.status_code})"
-                )
-                return []
+                self.log_warning("Homepage should have priority 1.0")
+
+            return urls
         except Exception as e:
             self.log_issue(f"Failed to parse sitemap: {e}")
             return []
 
     def check_page_seo(self, url, max_retries=3):
         """Check SEO elements for a specific page"""
-        for attempt in range(max_retries):
-            try:
-                response = requests.get(
-                    url, timeout=15, headers={"User-Agent": "SEO Auditor Bot 1.0"}
+        path_part = urlparse(url).path
+        if path_part.startswith('/'):
+            path_part = path_part[1:]
+        
+        # Handle the homepage case where the path is empty
+        if not path_part:
+            path_part = "index.html"
+
+        file_path = Path(__file__).parent.parent / "_build" / "html" / path_part
+        if not file_path.exists():
+            self.log_warning(f"File not found for URL {url} at {file_path}")
+            return None
+        
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                html = f.read().lower()
+            
+            issues_found = []
+
+            # Check critical SEO elements
+            if "<title>" not in html:
+                issues_found.append("Missing title tag")
+            elif "nabla" not in html[html.find("<title>") : html.find("</title>")]:
+                issues_found.append("Title doesn't contain brand name")
+
+            if 'name="description"' not in html:
+                issues_found.append("Missing meta description")
+
+            if 'rel="canonical"' not in html:
+                issues_found.append("Missing canonical URL")
+
+            if 'property="og:' not in html:
+                issues_found.append("Missing Open Graph tags")
+
+            if 'name="twitter:' not in html:
+                issues_found.append("Missing Twitter Card tags")
+
+            if "application/ld+json" not in html:
+                issues_found.append("Missing structured data")
+
+            # Check for duplicate meta viewport (known issue)
+            viewport_count = html.count('name="viewport"')
+            if viewport_count > 1:
+                issues_found.append(
+                    f"Duplicate viewport meta tags ({viewport_count} found)"
                 )
 
-                if response.status_code != 200:
-                    if attempt == max_retries - 1:
-                        self.log_warning(
-                            f"Page {url} returned status {response.status_code}"
-                        )
-                    continue
+            return {
+                "url": url,
+                "status": 200,
+                "issues": issues_found,
+                "title": self.extract_title(html),
+                "description": self.extract_meta_description(html),
+            }
 
-                html = response.text.lower()
-                issues_found = []
-
-                # Check critical SEO elements
-                if "<title>" not in html:
-                    issues_found.append("Missing title tag")
-                elif "nabla" not in html[html.find("<title>") : html.find("</title>")]:
-                    issues_found.append("Title doesn't contain brand name")
-
-                if 'name="description"' not in html:
-                    issues_found.append("Missing meta description")
-
-                if 'rel="canonical"' not in html:
-                    issues_found.append("Missing canonical URL")
-
-                if 'property="og:' not in html:
-                    issues_found.append("Missing Open Graph tags")
-
-                if 'name="twitter:' not in html:
-                    issues_found.append("Missing Twitter Card tags")
-
-                if "application/ld+json" not in html:
-                    issues_found.append("Missing structured data")
-
-                # Check for duplicate meta viewport (known issue)
-                viewport_count = html.count('name="viewport"')
-                if viewport_count > 1:
-                    issues_found.append(
-                        f"Duplicate viewport meta tags ({viewport_count} found)"
-                    )
-
-                return {
-                    "url": url,
-                    "status": response.status_code,
-                    "issues": issues_found,
-                    "title": self.extract_title(response.text),
-                    "description": self.extract_meta_description(response.text),
-                }
-
-            except Exception as e:
-                if attempt == max_retries - 1:
-                    self.log_warning(f"Failed to check {url}: {e}")
-                else:
-                    time.sleep(1)  # Brief delay before retry
+        except Exception as e:
+            self.log_warning(f"Failed to check {url}: {e}")
 
         return None
 

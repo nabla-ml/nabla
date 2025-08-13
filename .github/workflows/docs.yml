@@ -50,10 +50,7 @@ jobs:
         run: pip install -r docs/requirements.txt
 
       - name: Build Documentation
-        run: sphinx-build -b html docs/ docs/_build/html
-
-      - name: Generate Sitemap
-        run: python docs/scripts/generate_sitemap.py
+        run: bash docs/build.sh
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

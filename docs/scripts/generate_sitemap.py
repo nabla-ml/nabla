@@ -2,6 +2,16 @@ import os
 import datetime
 from pathlib import Path
 
+def get_priority(url, base_url):
+    """Determine the priority of a URL."""
+    if url == f"{base_url}/index.html" or url == f"{base_url}/":
+        return "1.0"
+    if "api/" in url:
+        return "0.7"
+    if "tutorials/" in url:
+        return "0.8"
+    return "0.5"
+
 def generate_sitemap():
     """
     Generates a sitemap.xml for the Nabla documentation website.
@@ -44,8 +54,9 @@ def generate_sitemap():
         sitemap_content += "  <url>\n"
         sitemap_content += f"    <loc>{url}</loc>\n"
         sitemap_content += f"    <lastmod>{last_mod}</lastmod>\n"
+        priority = get_priority(url, base_url)
         sitemap_content += "    <changefreq>monthly</changefreq>\n"
-        sitemap_content += "    <priority>0.8</priority>\n"
+        sitemap_content += f"    <priority>{priority}</priority>\n"
         sitemap_content += "  </url>\n"
 
     sitemap_content += "</urlset>\n"
