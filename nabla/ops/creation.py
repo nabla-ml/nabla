@@ -25,7 +25,7 @@ from .operation import Operation
 from .view import broadcast_batch_dims, broadcast_to
 
 # Public API
-all = [
+__all__ = [
     "array",
     "arange",
     "ndarange",

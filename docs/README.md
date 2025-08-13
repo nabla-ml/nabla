@@ -6,7 +6,7 @@ This guide explains how to generate and maintain the Nabla documentation.
 
 ```bash
 # Generate structured API documentation
-python docs/scripts/generate_api_docs.py
+python docs/scripts/generate_docs.py
 
 # Build the documentation
 cd docs && bash build.sh
@@ -19,7 +19,7 @@ open docs/_build/html/index.html
 
 Documentation maintenance scripts are located in `docs/scripts/`:
 
-- `generate_api_docs.py` - Generate API documentation from code
+- `generate_docs.py` - Generate API documentation from code
 - `generate_sitemap.py` - Create sitemap.xml for SEO
 - `check_indexing.py` - Verify Google indexing status
 - `seo_audit.py` - Run SEO analysis on documentation

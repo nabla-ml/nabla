@@ -40,6 +40,11 @@ author = "Nabla Team"
 release = "0.1.0"
 
 # -- General configuration ---------------------------------------------------
+source_suffix = {
+    '.rst': 'restructuredtext',
+    '.md': 'markdown',
+}
+
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
