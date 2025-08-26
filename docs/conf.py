@@ -37,8 +37,8 @@ for mod_name in MOCK_MODULES:
 # SECTION 2: PROJECT INFORMATION
 # =============================================================================
 project = "Nabla"
-project_copyright = "2025, Nabla Team"
-author = "Nabla Team"
+project_copyright = "2025, Nabla ML"
+author = "Nabla ML"
 release = "0.1.0"
 
 # =============================================================================

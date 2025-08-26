@@ -54,16 +54,16 @@ class AddOneCustomOp(nb.UnaryOperation):
         raise NotImplementedError("JVP not implemented for AddOneCustomOp")
 
 
-def add_one_custom(args: list[nb.Array]) -> list[nb.Array]:
+def add_one_custom(arg: nb.Array) -> list[nb.Array]:
     """Custom unary operation that adds one to the input."""
-    return [AddOneCustomOp().forward(args[0])]
+    return [AddOneCustomOp().forward(arg)]
 
 
 if __name__ == "__main__":
     a = nb.ndarange((2, 3))
-    print([a])
+    print(a)
 
     jitted_add_one_custom = nb.jit(add_one_custom)
 
-    res = jitted_add_one_custom([a])
+    res = jitted_add_one_custom(a)
     print(res)

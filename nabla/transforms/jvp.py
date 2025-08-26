@@ -17,7 +17,10 @@
 from collections.abc import Callable
 from typing import Any, Literal, overload
 
+from ..core.array import Array
 from .utils import (
+    _convert_scalars_to_arrays,
+    _convert_to_scalar_if_needed,
     _extract_arrays_from_pytree,
     make_traced_pytree,
     make_untraced_pytree,
@@ -60,9 +63,11 @@ def jvp(
         - Only accepts positional arguments
         - For functions requiring keyword arguments, use functools.partial or lambda
     """
+    # Convert scalars to arrays for traceability
+    primals = _convert_scalars_to_arrays(primals)
+    tangents = _convert_scalars_to_arrays(tangents)
+
     # Handle inputs correctly based on structure
-    # Follow JAX convention: if primals is a tuple with length > 1, treat as multiple arguments
-    # If primals is a tuple with length 1, treat as single argument
     is_multi_arg = isinstance(primals, tuple) and len(primals) > 1
 
     any_primal_traced = any(
@@ -80,7 +85,6 @@ def jvp(
                 f"got {len(primals)} primals and {len(tangents) if isinstance(tangents, tuple) else 1} tangents"
             )
     elif isinstance(primals, tuple) and len(primals) == 1:
-        # Single argument case wrapped in tuple: primals = (arg,), tangents = (tangent,)
         if not isinstance(tangents, tuple) or len(tangents) != 1:
             raise ValueError(
                 "For single argument wrapped in tuple, tangents must also be wrapped in tuple of length 1"
@@ -95,24 +99,38 @@ def jvp(
 
     # Extract traced args based on structure
     if is_multi_arg:
-        # Multiple arguments: func(arg1, arg2, ...)
         traced_args = traced_inputs_pytree
     elif isinstance(primals, tuple) and len(primals) == 1:
-        # Single argument wrapped in tuple: func(arg)
         traced_args = (traced_inputs_pytree[0],)
     else:
-        # Single argument not wrapped: func(arg)
         traced_args = (traced_inputs_pytree,)
 
     # Execute the function with traced inputs
-    outputs = func(*traced_args)
+    full_outputs = func(*traced_args)
+
+    # Handle has_aux
+    if has_aux:
+        if not isinstance(full_outputs, tuple) or len(full_outputs) != 2:
+            raise ValueError(
+                "Function with has_aux=True must return a tuple (output, aux)"
+            )
+        outputs, aux = full_outputs
+    else:
+        outputs = full_outputs
+        aux = None
 
     # Compute output tangents
     output_tangents = pushfwd(traced_inputs_pytree, outputs, tangents)
 
+    # Convert output tangents to scalars if the corresponding output is a scalar
+    final_tangents = _convert_to_scalar_if_needed(outputs, output_tangents)
+
     # Make everything untraced before returning
     if not any_primal_traced and not any_tangent_traced:
         make_untraced_pytree(outputs)
-        make_untraced_pytree(output_tangents)
+        make_untraced_pytree(final_tangents)
 
-    return outputs, output_tangents
+    if has_aux:
+        return outputs, final_tangents, aux
+    else:
+        return outputs, final_tangents

@@ -20,11 +20,9 @@ from typing import Any
 from ..core.array import Array
 from ..utils.max_interop import accelerator, accelerator_count, cpu
 from .utils import (
-    _clean_traced_outputs,
     _extract_arrays_from_pytree,
-    _handle_args_consistently,
-    _prepare_traced_inputs,
-    make_untraced_pytree,
+    process_transform_inputs,
+    process_transform_outputs,
     tree_flatten,
     tree_unflatten,
 )
@@ -243,165 +241,90 @@ def jit(
             _fast_conversion_cache, \
             _fast_input_extractors
 
-        any_arg_traced = any(
-            getattr(arg, "traced", False) for arg in _extract_arrays_from_pytree(args)
+        # Phase 1: Input Processing (Common for all paths)
+        # Note: _handle_args_consistently is now inside process_transform_inputs
+        traced_args, actual_args, is_list_style = process_transform_inputs(
+            args, 
+            convert_scalars=static,  # Scalars are converted only in static mode
+            apply_staging=True
         )
-        actual_args, is_list_style = _handle_args_consistently(args)
 
         # Early automatic device placement (if enabled)
         if auto_device and _DEF_ACC_AVAILABLE:
-            # Static jit: we will convert scalars anyway (with_conversion=True) so we may eagerly convert + move
-            # Dynamic jit: preserve previous behavior -> NO early scalar conversion
             actual_args = _move_args_to_default_device(
                 actual_args,
-                convert_scalars=static,  # only static path
+                convert_scalars=static,
                 only_from_cpu=True,
             )
 
         if static:
-            # Fast path optimization: skip most overhead for compiled models
+            # Fast path optimization for subsequent runs
             if cached_model is not None:
-                # OPTIMIZED FAST PATH - minimal Python overhead
                 if _fast_conversion_cache is None:
-                    # First fast execution - build conversion cache
                     _fast_input_extractors = _build_fast_input_extractors(
                         actual_args, is_list_style
                     )
                     _fast_conversion_cache = True
 
-                    # Extract tensors for this run
-                    function_param_tensors = _fast_extract_tensors(
-                        actual_args, is_list_style, _fast_input_extractors
-                    )
-                else:
-                    # Ultra-fast path: direct extraction without full tracing
-                    function_param_tensors = _fast_extract_tensors(
-                        actual_args, is_list_style, _fast_input_extractors
-                    )
-
-                # Pre-computed reordering (this was the biggest bottleneck!)
-                if param_to_model_index is None:
-                    raise ValueError(
-                        "param_to_model_index should not be None in fast path"
-                    )
+                function_param_tensors = _fast_extract_tensors(
+                    actual_args, is_list_style, _fast_input_extractors
+                )
+                
                 ordered_tensor_inputs = [
                     function_param_tensors[func_idx]
-                    for func_idx, _ in param_to_model_index  # type: ignore
+                    for func_idx, _ in param_to_model_index
                 ]
 
-                if cached_model is None:
-                    raise ValueError("cached_model should not be None in fast path")
                 model_outputs = cached_model.execute(*ordered_tensor_inputs)
-
-                # Fast output conversion - avoid full tree operations
-                output_arrays = [Array.from_impl(out) for out in model_outputs]  # type: ignore
-                if output_structure is None:
-                    # Single output case - return the first (and only) output array
-                    outputs = (
-                        output_arrays[0] if len(output_arrays) == 1 else output_arrays
-                    )
-                else:
-                    outputs = tree_unflatten(output_structure, output_arrays)
-
-                return outputs
+                output_arrays = [Array.from_impl(out) for out in model_outputs]
+                
+                outputs = tree_unflatten(output_structure, output_arrays)
+                return process_transform_outputs(outputs, actual_args, is_list_style, untrace=False, unstage=False)
 
             # COMPILATION PATH (first run)
-            # For static JIT, use conversion to turn scalars into Arrays
-            traced_args, _ = _prepare_traced_inputs(
-                actual_args, is_list_style, apply_staging=True, with_conversion=True
-            )
             flat_input_arrays = tree_flatten(traced_args)[0]
 
-            # Check if we need to compile the model
-            if cached_model is None:
-                # Execute the function with traced inputs and appropriate style
-                outputs = func(traced_args) if is_list_style else func(*traced_args)
-
-                # Realize only the Arrays in the outputs
-                flat_output_arrays, output_structure_local = tree_flatten(outputs)
-                output_structure = output_structure_local  # Assign to nonlocal variable
-                from ..core.graph_execution import realize_
-
-                result = realize_(
-                    flat_output_arrays, flat_input_arrays, show_graph=show_graph
-                )
-                if isinstance(result, tuple):
-                    cached_model, trace_inputs = result
-                else:
-                    raise ValueError(
-                        "Expected tuple result from realize_ with dynamic_inputs"
-                    )
-
-                # Create mapping: function parameter index -> model input index
-                param_to_model_index = []
-                model_input_idx = 0
-                for trace_input in trace_inputs:
-                    if trace_input in flat_input_arrays:
-                        func_param_idx = flat_input_arrays.index(trace_input)
-                        param_to_model_index.append((func_param_idx, model_input_idx))
-                        model_input_idx += 1
-
-                # Don't return here - fall through to execute the model on first run too
-
-            # Use the cached model for execution (both first run and subsequent runs)
-            # Convert current args using the same conversion approach
-            current_traced_args, _ = _prepare_traced_inputs(
-                actual_args, is_list_style, apply_staging=False, with_conversion=True
-            )
-            current_flat_arrays = tree_flatten(current_traced_args)[0]
-
-            # Reorder inputs to match the model's expected order
-            function_param_tensors = [
-                input_array.impl for input_array in current_flat_arrays
-            ]
-
-            # Reorder according to the mapping we stored during compilation
-            if param_to_model_index is None:
-                raise ValueError(
-                    "param_to_model_index should not be None at execution time"
-                )
-
-            ordered_tensor_inputs = [None] * len(param_to_model_index)
-            for func_idx, model_idx in param_to_model_index:
-                ordered_tensor_inputs[model_idx] = function_param_tensors[func_idx]
-
-            # Filter out None values and ensure we have valid tensors
-            valid_inputs = [inp for inp in ordered_tensor_inputs if inp is not None]
-            if cached_model is None:
-                raise ValueError("cached_model should not be None at execution time")
-            model_outputs = cached_model.execute(*valid_inputs)
-
-            output_arrays = [Array.from_impl(out) for out in model_outputs]  # type: ignore
-
-            # Convert model outputs back to the original structure
-            if output_structure is None:
-                # Single output case - return the first (and only) output array
-                outputs = output_arrays[0] if len(output_arrays) == 1 else output_arrays
-            else:
-                outputs = tree_unflatten(output_structure, output_arrays)
-
-            return outputs
-        else:
-            # Regular JIT - use existing logic
-            # Prepare traced inputs with staging enabled
-            traced_args, _ = _prepare_traced_inputs(
-                actual_args, is_list_style, apply_staging=True
-            )
-
-            # Execute the function with traced inputs and appropriate style
             outputs = func(traced_args) if is_list_style else func(*traced_args)
 
-            # Realize only the Arrays in the outputs
+            flat_output_arrays, output_structure_local = tree_flatten(outputs)
+            output_structure = output_structure_local
+            
+            from ..core.graph_execution import realize_
+            cached_model, trace_inputs = realize_(
+                flat_output_arrays, flat_input_arrays, show_graph=show_graph
+            )
+
+            # Create mapping from function parameter index to model input index
+            param_to_model_index = []
+            for model_input_idx, trace_input in enumerate(trace_inputs):
+                if trace_input in flat_input_arrays:
+                    func_param_idx = flat_input_arrays.index(trace_input)
+                    param_to_model_index.append((func_param_idx, model_input_idx))
+
+            # Execute with the newly compiled model
+            current_flat_arrays = tree_flatten(actual_args)[0]
+            function_param_tensors = [arr.impl for arr in current_flat_arrays]
+            
+            ordered_tensor_inputs = [
+                function_param_tensors[func_idx]
+                for func_idx, _ in param_to_model_index
+            ]
+            
+            model_outputs = cached_model.execute(*ordered_tensor_inputs)
+            output_arrays = [Array.from_impl(out) for out in model_outputs]
+            
+            outputs = tree_unflatten(output_structure, output_arrays)
+            
+            return process_transform_outputs(outputs, actual_args, is_list_style)
+
+        else:  # Dynamic JIT path
+            outputs = func(traced_args) if is_list_style else func(*traced_args)
+            
             output_arrays = _extract_arrays_from_pytree(outputs)
             from ..core.graph_execution import realize_
-
             realize_(output_arrays, show_graph=show_graph)
-
-            # make output_arrays untraced, but only if all the inputs were originally untraced
-            if not any_arg_traced:
-                make_untraced_pytree(outputs)
-
-            return _clean_traced_outputs(outputs, is_list_style, remove_staging=True)
+            
+            return process_transform_outputs(outputs, actual_args, is_list_style)
 
     return jit_func
 

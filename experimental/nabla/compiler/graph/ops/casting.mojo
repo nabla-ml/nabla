@@ -17,8 +17,9 @@
 """Ops that modify the shape or data type of a symbolic tensor."""
 from collections import Dict, Optional
 
-from _mlir.builtin_attributes import StringAttr
-from _mlir.ir import Identifier, NamedAttribute
+# import
+from max.mlir.builtin_attributes import StringAttr
+# from max._mlir.ir import Identifier, NamedAttribute
 from builtin._location import __call_location, _SourceLocation
 from nabla.compiler.tensor import Tensor, TensorShape
 from memory import UnsafePointer

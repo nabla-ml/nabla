@@ -18,6 +18,7 @@ from collections.abc import Callable
 from typing import Any
 
 from .utils import (
+    _create_jacobian_helpers,
     _extract_arrays_from_pytree,
     _std_basis,
     make_traced_pytree,
@@ -61,46 +62,16 @@ def jacrev(
     """
 
     def jacrev_fn(*args: Any) -> Any:
-        # print("\nSTART JACREV FN")
-        # Handle default case: if argnums is None, differentiate w.r.t. all arguments
-        if argnums is None:
-            selected_argnums = tuple(range(len(args)))
-        else:
-            # Normalize argnums to a tuple of integers
-            selected_argnums = (
-                (argnums,) if isinstance(argnums, int) else tuple(argnums)
-            )
-
-        # Validate argnums
-        for argnum in selected_argnums:
-            if argnum >= len(args) or argnum < -len(args):
-                raise ValueError(
-                    f"argnum {argnum} is out of bounds for function with {len(args)} arguments"
-                )
-
-        # Normalize negative indices
-        normalized_argnums = tuple(
-            argnum if argnum >= 0 else len(args) + argnum for argnum in selected_argnums
-        )
-
-        # Extract the arguments to differentiate with respect to
-        diff_args = tuple(args[i] for i in normalized_argnums)
-
-        # Create a function that takes only the differentiated arguments
-        def partial_func(*diff_args_inner):
-            # Reconstruct the full argument list
-            full_args = list(args)
-            for i, arg in zip(normalized_argnums, diff_args_inner, strict=False):
-                full_args[i] = arg
-            return func(*full_args)
+        # Use the helper to handle arg parsing and partial function creation
+        diff_args, partial_func = _create_jacobian_helpers(func, argnums, args)
 
         # Compute VJP - delegate has_aux handling to vjp
         vjp_result = vjp(partial_func, *diff_args, has_aux=has_aux)
 
         if has_aux:
-            y, pullback, aux = vjp_result  # type: ignore
+            y, pullback, aux = vjp_result
         else:
-            y, pullback = vjp_result  # type: ignore
+            y, pullback = vjp_result
 
         # Flatten output arrays for std_basis generation
         flat_y = _extract_arrays_from_pytree(y)
@@ -108,108 +79,64 @@ def jacrev(
             flat_y = [flat_y]
 
         # Generate standard basis vectors and get sizes for split operations
-        sizes, std_basis_vectors = _std_basis(flat_y)  # type: ignore
+        sizes, std_basis_vectors = _std_basis(flat_y)
 
         std_basis_flat = _extract_arrays_from_pytree(std_basis_vectors)
         if not isinstance(std_basis_flat, list):
             std_basis_flat = [std_basis_flat]
 
-        # Handle mixed scalar/tensor outputs by creating appropriate in_axes specification
+        # Handle mixed scalar/tensor outputs by creating appropriate in_axes for vmap
         if all(arr.shape == () for arr in std_basis_flat):
-            # All outputs are scalar - use in_axes=None to broadcast
-            grads = vmap(pullback, in_axes=None)(std_basis_vectors)
+            in_axes_spec = None
         elif any(arr.shape == () for arr in std_basis_flat):
-            # Mixed scalar/tensor outputs - create in_axes specification for each element
-            # Note: std_basis_vectors is a list/tuple, so in_axes should match that structure
-            if isinstance(std_basis_vectors, list | tuple):
-                in_axes_spec = [
-                    None if arr.shape == () else 0 for arr in std_basis_flat
-                ]
-                grads = vmap(pullback, in_axes=in_axes_spec)(std_basis_vectors)
+            if isinstance(std_basis_vectors, (list, tuple)):
+                in_axes_spec = [None if arr.shape == () else 0 for arr in std_basis_flat]
             else:
-                # Single element case - shouldn't happen with mixed outputs, but handle for completeness
                 in_axes_spec = None if std_basis_flat[0].shape == () else 0
-                grads = vmap(pullback, in_axes=in_axes_spec)(std_basis_vectors)
         else:
-            # All outputs are tensors - use in_axes=0 to vectorize along the first axis
-            grads = vmap(pullback)(std_basis_vectors)
+            in_axes_spec = 0
+        
+        grads = vmap(pullback, in_axes=in_axes_spec)(std_basis_vectors)
 
-        # CRITICAL: Check if std_basis_vectors were traced (indicating composition with other transformations)
-        std_basis_arrays = _extract_arrays_from_pytree(std_basis_vectors)
+        # Make gradients traceable for further composition
         any_std_basis_traced = any(
-            getattr(arr, "traced", False) for arr in std_basis_arrays
+            getattr(arr, "traced", False) for arr in _extract_arrays_from_pytree(std_basis_vectors)
         )
-
-        # Make grads traced to capture subsequent operations in the computation graph
         if not any_std_basis_traced:
-            # Only make traced if original std_basis wasn't traced (avoid double tracing)
             grads = make_traced_pytree(grads)
 
-        # Import split function for proper jacobian structuring
         from ..ops.view import reshape, split
 
-        # Extract flat input arguments for reshaping
         flat_diff_args = _extract_arrays_from_pytree(diff_args)
 
+        # Split batched gradients based on output components
         splits = []
-        for i in range(len(flat_diff_args)):  # For each input argument
-            if isinstance(grads, list) and len(grads) > 0:
-                if isinstance(grads[0], tuple):
-                    # Multiple inputs: extract i-th input's gradients from each batch
-                    input_grads = grads[0][i]  # All batched gradients for input i
-                else:
-                    # Single input case
-                    input_grads = grads[0] if len(flat_diff_args) == 1 else grads[i]
-            else:
-                # Direct case
-                input_grads = grads[i] if isinstance(grads, tuple) else grads
+        for i in range(len(flat_diff_args)):
+            input_grads = grads[i] if isinstance(grads, tuple) else grads
+            splits.append(split(input_grads, sizes=sizes, axis=0))
 
-            # Split this input's gradients by output components (now traced!)
-            splits.append(split(input_grads, sizes=sizes, axis=0))  # type: ignore
-
-        # Reshape jacobian components to proper out_shape + arg_shape format (now traced!)
-        cotangents = []
-        for j in range(len(flat_y)):  # For each output component
+        # Reshape gradients into Jacobian components
+        jacobian_parts = []
+        for j, out_array in enumerate(flat_y):
             arg_jacs = []
-            for i in range(len(flat_diff_args)):  # For each input argument
-                grad = splits[i][j]  # j-th output component for i-th input
-                batch_dims = flat_y[j].batch_dims
-                out_shape = flat_y[j].shape
-                arg_shape = flat_diff_args[i].shape
-
-                # print("out_shape:", out_shape, "in_shape:", arg_shape)
-
-                # Only remove (1,) from output shape when we have batch dimensions (from vmap)
-                # This handles the case where scalar functions return (1,) instead of ()
-                if len(batch_dims) > 0 and len(out_shape) == 1 and out_shape[0] == 1:
+            for i, in_array in enumerate(flat_diff_args):
+                grad_slice = splits[i][j]
+                
+                out_shape = out_array.shape
+                # Handle scalar outputs that get an extra dimension from vmap
+                if len(out_array.batch_dims) > 0 and out_shape == (1,):
                     out_shape = ()
-                # Never remove (1,) from arg_shape - it represents valid jacobian structure
-
-                # Jacobian shape should be output_shape + input_shape
-                target_shape = out_shape + arg_shape
-                reshaped_grad = reshape(grad, target_shape)  # Now traced!
+                
+                target_shape = out_shape + in_array.shape
+                reshaped_grad = reshape(grad_slice, target_shape)
                 arg_jacs.append(reshaped_grad)
+            
+            jacobian_parts.append(arg_jacs[0] if len(arg_jacs) == 1 else tuple(arg_jacs))
 
-            if len(arg_jacs) == 1:
-                arg_jacs = arg_jacs[0]  # Single input case, return single jacobian
+        final_jac = jacobian_parts[0] if len(jacobian_parts) == 1 else tuple(jacobian_parts)
 
-            cotangents.append(arg_jacs)
-
-        final_jac = cotangents
-        # print(len(cotangents))
-
-        if len(cotangents) == 1:
-            final_jac = cotangents[0]
-
-        # Make final jacobian untraced unless we're in a composition context
         if not any_std_basis_traced:
             make_untraced_pytree(final_jac)
 
-        # print("\nEND JACREV FN\n")
-
-        if not has_aux:
-            return final_jac
-        else:
-            return final_jac, aux
-
+        return (final_jac, aux) if has_aux else final_jac
     return jacrev_fn

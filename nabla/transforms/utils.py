@@ -114,6 +114,81 @@ def tree_map(func: Callable[[Array], Array], tree: Any) -> Any:
     return tree_unflatten(structure, transformed_leaves)
 
 
+def _map_pytree_with_axes(process_func: Callable, tree: Any, axes: Any, *other_args) -> Any:
+    """
+    Recursively apply a processing function to corresponding elements of a data pytree
+    and an axes pytree. This is the core engine for vmap's batching and unbatching.
+    """
+    def _recurse(tree_part, axes_part):
+        if isinstance(tree_part, Array):
+            # Apply the processing function to the array leaf
+            return process_func(tree_part, axes_part, *other_args)
+        elif isinstance(tree_part, dict):
+            # If axes is a dict, recurse with matching keys. Otherwise, broadcast the axis.
+            axes_map = axes_part if isinstance(axes_part, dict) else {k: axes_part for k in tree_part}
+            return {k: _recurse(v, axes_map.get(k)) for k, v in tree_part.items()}
+        elif isinstance(tree_part, (list, tuple)):
+            # If axes is a sequence, recurse with matching elements. Otherwise, broadcast the axis.
+            axes_list = axes_part if isinstance(axes_part, (list, tuple)) else [axes_part] * len(tree_part)
+            return type(tree_part)([_recurse(t, a) for t, a in zip(tree_part, axes_list)])
+        else:
+            # Non-Array leaves are returned as is
+            return tree_part
+
+    return _recurse(tree, axes)
+
+
+
+
+def _map_pytree_structure(func, *trees):
+    """
+    Recursively apply a function to corresponding elements of pytrees.
+    This is a more general version of tree_map that can handle multiple trees
+    and does not rely on tree_flatten, allowing it to work with structures
+    containing non-Array leaves like scalars.
+    """
+    if not trees:
+        return None
+    first_tree = trees[0]
+    if isinstance(first_tree, Array):
+        return func(*trees)
+    if isinstance(first_tree, (list, tuple)):
+        return type(first_tree)(_map_pytree_structure(func, *[t[i] for t in trees]) for i in range(len(first_tree)))
+    elif isinstance(first_tree, dict):
+        return {k: _map_pytree_structure(func, *[t[k] for t in trees]) for k in first_tree}
+    else:
+        return func(*trees)
+
+
+def _convert_to_scalar_if_needed(structure_provider_pytree, result_pytree):
+    """
+    Maps over two pytrees, converting items in result_pytree to scalars
+    if the corresponding item in structure_provider_pytree is a scalar.
+    """
+    def _convert(structure_provider, result):
+        if isinstance(structure_provider, (int, float)) and isinstance(result, Array):
+            if result.shape == ():
+                return result.to_numpy().item()
+        return result
+    return _map_pytree_structure(_convert, structure_provider_pytree, result_pytree)
+
+
+def _convert_scalars_to_arrays(tree: Any) -> Any:
+    """Recursively convert scalar numbers in a pytree to Nabla Arrays."""
+    import nabla as nb
+    if isinstance(tree, (int, float)):
+        return nb.array(tree)
+    if isinstance(tree, Array):
+        return tree
+    elif isinstance(tree, dict):
+        return {k: _convert_scalars_to_arrays(v) for k, v in tree.items()}
+    elif isinstance(tree, (list, tuple)):
+        return type(tree)(_convert_scalars_to_arrays(x) for x in tree)
+    else:
+        # Return other types (like functions, strings, etc.) unchanged
+        return tree
+
+
 def _extract_arrays_from_pytree(tree: Any) -> list[Array]:
     """Extract all Arrays from a pytree structure.
 
@@ -131,6 +206,33 @@ def _validate_length_match(list1, list2, name1, name2):
     """Check if two lists have the same length."""
     if len(list1) != len(list2):
         raise ValueError(f"{name1} length {len(list1)} != {name2} length {len(list2)}")
+
+
+def _create_jacobian_helpers(func, argnums, args):
+    """Create helper functions for jacobian calculations."""
+    # Normalize and validate argnums
+    if argnums is None:
+        selected_argnums = tuple(range(len(args)))
+    else:
+        selected_argnums = (argnums,) if isinstance(argnums, int) else tuple(argnums)
+
+    for argnum in selected_argnums:
+        if not (-len(args) <= argnum < len(args)):
+            raise ValueError(f"argnum {argnum} is out of bounds for function with {len(args)} arguments")
+
+    normalized_argnums = tuple(argnum if argnum >= 0 else len(args) + argnum for argnum in selected_argnums)
+    
+    # Extract arguments to be differentiated
+    diff_args = tuple(args[i] for i in normalized_argnums)
+
+    # Create a partial function that only takes the differentiated arguments
+    def partial_func(*diff_args_inner):
+        full_args = list(args)
+        for i, arg in zip(normalized_argnums, diff_args_inner, strict=False):
+            full_args[i] = arg
+        return func(*full_args)
+
+    return diff_args, partial_func
 
 
 def _std_basis(args: list[Array]) -> tuple[list[int], list[Array]]:
@@ -259,83 +361,57 @@ def _handle_args_consistently(args):
     return args, False
 
 
-def _prepare_traced_inputs(
-    actual_args, is_list_style, apply_staging=False, with_conversion=False
-):
-    """Prepare traced inputs for list-style or pytree-style arguments."""
+def process_transform_inputs(args, convert_scalars=False, apply_staging=False):
+    """
+    Standardize input processing for all transformations.
+    - Handles both list-style and unpacked arguments.
+    - Converts scalars to Arrays if needed.
+    - Creates traced copies for graph capture.
+    - Applies staging for performance optimization if requested.
+    """
+    actual_args, is_list_style = _handle_args_consistently(args)
+    
+    if convert_scalars:
+        actual_args = _convert_scalars_to_arrays(actual_args)
 
-    # Convert scalars to Arrays if requested
-    if with_conversion:
-
-        def convert_scalars_to_arrays(item):
-            if isinstance(item, Array):
-                return item
-            elif isinstance(item, list | tuple):
-                return type(item)(
-                    convert_scalars_to_arrays(sub_item) for sub_item in item
-                )
-            elif isinstance(item, dict):
-                return {k: convert_scalars_to_arrays(v) for k, v in item.items()}
-            elif isinstance(item, (int, float, bool)):
-                # Only convert basic scalar types to Nabla Arrays
-                import nabla as nb
-
-                return nb.array(item)
-            else:
-                # Keep everything else (functions, numpy arrays, etc.) unchanged
-                return item
-
-        actual_args = convert_scalars_to_arrays(actual_args)
-
-    if is_list_style:
-        traced_args = make_traced_pytree(actual_args)
-        if apply_staging:
-            make_staged_pytree(traced_args)
-        return traced_args, None
-
-    # Handle the case where actual_args might not have __len__
-    if hasattr(actual_args, "__len__"):
-        args_len = len(actual_args)  # type: ignore
-    else:
-        args_len = 1
-
-    if args_len == 1:
-        inputs_pytree = actual_args[0]
-        traced_inputs_pytree = make_traced_pytree(inputs_pytree)
-        traced_args = (traced_inputs_pytree,)
-    else:
-        inputs_pytree = actual_args
-        traced_inputs_pytree = make_traced_pytree(inputs_pytree)
-        traced_args = traced_inputs_pytree
-
+    traced_args = make_traced_pytree(actual_args)
+    
     if apply_staging:
-        # Apply staging to the TRACED arrays, not the original args
         arrays = _extract_arrays_from_pytree(traced_args)
         make_staged_pytree(arrays)
 
-    return traced_args, traced_inputs_pytree
+    # Return everything needed to execute the function and process outputs
+    return traced_args, actual_args, is_list_style
 
 
-def _clean_traced_outputs(outputs, is_list_style, remove_staging=False):
-    """Clean up traced outputs and handle staging flags."""
-    if is_list_style:
-        # For list-style, we expect a list of Arrays, but handle tuple case
-        if isinstance(outputs, list):
+def process_transform_outputs(outputs, original_inputs, is_list_style, untrace=True, unstage=True):
+    """
+    Standardize output processing for all transformations.
+    - Untraces outputs to prevent graph leakage.
+    - Unstages outputs to finalize computation.
+    - Converts outputs back to scalars if original inputs were scalars.
+    """
+    if untrace:
+        any_input_traced = any(
+            getattr(arg, "traced", False) for arg in _extract_arrays_from_pytree(original_inputs)
+        )
+        if not any_input_traced:
             make_untraced_pytree(outputs)
-            if remove_staging:
-                make_unstaged_pytree(outputs)
-        else:
-            # If it's not a list (e.g., tuple from VJP), treat as pytree
-            make_untraced_pytree(outputs)
-            if remove_staging:
-                output_arrays = _extract_arrays_from_pytree(outputs)
-                make_unstaged_pytree(output_arrays)
-    else:
-        make_untraced_pytree(outputs)
-        if remove_staging:
-            output_arrays = _extract_arrays_from_pytree(outputs)
-            make_unstaged_pytree(output_arrays)
-    return outputs
+
+    if unstage:
+        output_arrays = _extract_arrays_from_pytree(outputs)
+        make_unstaged_pytree(output_arrays)
+
+    # Convert outputs to scalars if the corresponding original input was a scalar
+    def _convert_output_to_scalar(original_input, output):
+        if isinstance(original_input, (int, float)) and isinstance(output, Array):
+            if output.shape == ():
+                return output.to_numpy().item()
+        return output
+
+    final_outputs = _map_pytree_structure(_convert_output_to_scalar, original_inputs, outputs)
+
+    return final_outputs
 
 
 class Trace:

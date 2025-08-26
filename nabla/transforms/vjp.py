@@ -17,7 +17,10 @@
 from collections.abc import Callable
 from typing import Any, Literal, overload
 
+from ..core.array import Array
 from .utils import (
+    _convert_scalars_to_arrays,
+    _convert_to_scalar_if_needed,
     _extract_arrays_from_pytree,
     make_traced_pytree,
     make_untraced_pytree,
@@ -65,6 +68,12 @@ def vjp(
         - Always returns gradients as tuple
         - For functions requiring keyword arguments, use functools.partial or lambda
     """
+    # Keep a reference to the original primals before conversion
+    original_primals = primals
+
+    # Convert all scalar numbers to Nabla arrays to ensure they are traceable
+    primals = _convert_scalars_to_arrays(primals)
+
     # Handle the input structure based on number of arguments
     if len(primals) == 1:
         inputs_pytree = primals[0]
@@ -99,14 +108,8 @@ def vjp(
         aux = None
 
     def vjp_fn(cotangents: Any) -> Any:
-        """VJP function that computes gradients.
-
-        Returns gradients in the same structure as the original inputs:
-        - Single argument: returns gradient directly (not wrapped in tuple)
-        - Multiple arguments: returns tuple of gradients
-        - Pytree inputs: returns gradients in same pytree structure
-        """
-        # Always ensure cotangents are traced for composability with other transformations
+        """VJP function that computes gradients."""
+        # Always ensure cotangents are traced for composability
         traced_cotangents = make_traced_pytree(cotangents)
 
         # Use the unified pullback function with pytree support
@@ -122,9 +125,11 @@ def vjp(
         if not any_cotangent_traced and not any_arg_traced:
             make_untraced_pytree(gradients)
 
-        # Return gradients in their natural structure - preserves input structure
-        # This is more intuitive than forced tuple wrapping
-        return gradients
+        # Convert gradients back to scalars if the original primal was a scalar
+        original_inputs_pytree = original_primals[0] if is_single_arg else original_primals
+        final_gradients = _convert_to_scalar_if_needed(original_inputs_pytree, gradients)
+
+        return final_gradients
 
     # Make outputs untraced before returning
     if not any_arg_traced:

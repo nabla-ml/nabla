@@ -135,8 +135,8 @@ class ModelFactory:
 
         custom_ops_paths = []
         for node in trace:
-            if node.kernel_impl_path and node.kernel_impl_path.exists():
-                custom_ops_paths.append(node.kernel_impl_path)
+            if node.custom_kernel_path and node.custom_kernel_path.exists():
+                custom_ops_paths.append(node.custom_kernel_path)
 
         try:
             with Graph(

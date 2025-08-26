@@ -66,7 +66,7 @@ class Operation(ABC):
     ) -> Array:
         """Jacobian-vector product rule for forward-mode autodiff."""
         pass
-
+    
     def custom_kernel_path(self) -> Path | None:
         """Optional: path to custom kernel implementation."""
         return None

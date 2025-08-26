@@ -318,7 +318,7 @@ def test_batched_matmul_parametrized():
     assert np.allclose(result[0].to_numpy(), expected_value, rtol=1e-6), (
         f"Expected all values to be {expected_value}, but got varying values"
     )
-
+    
 
 if __name__ == "__main__":
     test_simple_vmap_basic()
