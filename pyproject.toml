@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nabla_ml"
-version = "25.08081506"
+version = "25.08311355"
 authors = [
     { name = "TilliFe", email = "tillmann.fehrenbach@gmail.com" },
 ]
