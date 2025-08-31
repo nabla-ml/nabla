@@ -384,12 +384,12 @@ def process_transform_inputs(args, convert_scalars=False, apply_staging=False):
     return traced_args, actual_args, is_list_style
 
 
+# In the first file (autodiff_core.py)
 def process_transform_outputs(outputs, original_inputs, is_list_style, untrace=True, unstage=True):
     """
     Standardize output processing for all transformations.
     - Untraces outputs to prevent graph leakage.
     - Unstages outputs to finalize computation.
-    - Converts outputs back to scalars if original inputs were scalars.
     """
     if untrace:
         any_input_traced = any(
@@ -402,16 +402,9 @@ def process_transform_outputs(outputs, original_inputs, is_list_style, untrace=T
         output_arrays = _extract_arrays_from_pytree(outputs)
         make_unstaged_pytree(output_arrays)
 
-    # Convert outputs to scalars if the corresponding original input was a scalar
-    def _convert_output_to_scalar(original_input, output):
-        if isinstance(original_input, (int, float)) and isinstance(output, Array):
-            if output.shape == ():
-                return output.to_numpy().item()
-        return output
-
-    final_outputs = _map_pytree_structure(_convert_output_to_scalar, original_inputs, outputs)
-
-    return final_outputs
+    # The complex and buggy scalar conversion has been removed.
+    # The function now simply returns the processed outputs.
+    return outputs
 
 
 class Trace:
