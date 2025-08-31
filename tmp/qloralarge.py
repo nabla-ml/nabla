@@ -24,7 +24,6 @@ QUERY_PRE_ATTN_SCALAR: float = 256.0         # query_pre_attn_scalar
 ROPE_THETA: float = 1000000.0                # rope_theta
 ROPE_LOCAL_BASE_FREQ: float = 10000.0        # rope_local_base_freq
 
-
 # Sliding Window Attention Configuration from Model Card
 SLIDING_WINDOW_SIZE: int = 512
 LAYER_TYPES: List[str] = [
@@ -54,8 +53,6 @@ NUM_TOKENS_TO_GENERATE: int = 8
 
 
 # --- 2. QLoRA & STATIC CONFIGURATIONS ---
-# This module implements the core logic for QLoRA and defines static
-# configuration structures for JIT compilation. No architectural changes here.
 
 # Type definitions
 JaxArray = jax.Array
@@ -93,7 +90,6 @@ NF4_QUANTIZATION_VALUES: JaxArray = jnp.array([
     0.0796,  0.1609,  0.2461,  0.3379,  0.4407,  0.5626,  0.7230,  1.0000
 ], dtype=jnp.bfloat16)
 
-# (Quantization and Dequantization functions remain unchanged)
 def pack_4bit(x: JaxArray) -> JaxArray:
     x_flat = x.flatten()
     if x_flat.size % 2 != 0: x_flat = jnp.pad(x_flat, (0, 1))
@@ -143,9 +139,7 @@ def dequantize_nf4(q_weights: Dict[str, JaxArray], q_config: QuantConfig) -> Jax
     w = w_flat[:q_config.original_numel]
     return w.reshape(q_config.original_shape)
 
-# --- 3. MODEL ARCHITECTURE (CORRECTED) ---
-# This module is updated with the corrected activation, RoPE base frequency,
-# and query scaling to match the model card.
+# --- 3. MODEL ARCHITECTURE ---
 
 def rms_norm(x: JaxArray, w: JaxArray, eps: float = 1e-6) -> JaxArray:
     norm_factor = jax.lax.rsqrt(jnp.mean(x**2, axis=-1, keepdims=True) + eps)
@@ -157,11 +151,6 @@ def precompute_rope_freqs(
     theta_global: float = ROPE_THETA,
     theta_local: float = ROPE_LOCAL_BASE_FREQ
 ) -> Dict[str, Tuple[JaxArray, JaxArray]]:
-    """
-    CORRECTED: Pre-computes two sets of RoPE frequencies.
-    - 'global': For full attention layers, using the primary `rope_theta`.
-    - 'local': For sliding attention layers, using `rope_local_base_freq`.
-    """
     def _compute_freqs(theta: float) -> Tuple[JaxArray, JaxArray]:
         inv_freq = 1.0 / (theta ** (jnp.arange(0, dim, 2, dtype=jnp.float32) / dim))
         t = jnp.arange(max_len, dtype=jnp.float32)
@@ -198,26 +187,22 @@ def apply_rotary_embeddings(x: JaxArray, start_pos: Union[int, JaxArray], rope_s
     y = y.at[..., 1::2].set(x_rotated_imag)
     return y
 
-def qlora_linear(x: JaxArray, frozen_q_w: Dict, q_config: QuantConfig, lora_a: JaxArray, lora_b: JaxArray) -> JaxArray:
-    dequantized_w = dequantize_nf4(frozen_q_w, q_config)
+def qlora_linear(x: JaxArray, frozen_w: JaxArray, lora_a: JaxArray, lora_b: JaxArray) -> JaxArray:
     x_compute = x.astype(COMPUTE_DTYPE)
-    dequantized_w_compute = dequantized_w.astype(COMPUTE_DTYPE)
+    frozen_w_compute = frozen_w.astype(COMPUTE_DTYPE)
     lora_a_compute = lora_a.astype(COMPUTE_DTYPE)
     lora_b_compute = lora_b.astype(COMPUTE_DTYPE)
     lora_scaling = LORA_ALPHA / LORA_RANK
-    frozen_out = x_compute @ dequantized_w_compute
+    frozen_out = x_compute @ frozen_w_compute
     lora_out = (x_compute @ lora_a_compute) @ lora_b_compute
     return (frozen_out + lora_out * lora_scaling).astype(jnp.float32)
 
 def attention(x: JaxArray, rope_sin: JaxArray, rope_cos: JaxArray, start_pos: Union[int, JaxArray],
-              frozen_p: FrozenParams, config_p: AttentionConfig, lora_p: LoRAParams) -> JaxArray:
-    """
-    Uses `query_pre_attn_scalar` for score normalization.
-    """
+              frozen_p: FrozenParams, config_p: AttentionConfig, lora_p: LoRAParams, return_caches: bool = False) -> Union[JaxArray, Tuple[JaxArray, JaxArray, JaxArray]]:
     bsz, seq_len, _ = x.shape
-    q = qlora_linear(x, frozen_p['q_proj'], config_p.q_proj, lora_p['q_proj_A'], lora_p['q_proj_B'])
-    k = qlora_linear(x, frozen_p['k_proj'], config_p.k_proj, lora_p['k_proj_A'], lora_p['k_proj_B'])
-    v = qlora_linear(x, frozen_p['v_proj'], config_p.v_proj, lora_p['v_proj_A'], lora_p['v_proj_B'])
+    q = qlora_linear(x, frozen_p['q_proj'], lora_p['q_proj_A'], lora_p['q_proj_B'])
+    k = qlora_linear(x, frozen_p['k_proj'], lora_p['k_proj_A'], lora_p['k_proj_B'])
+    v = qlora_linear(x, frozen_p['v_proj'], lora_p['v_proj_A'], lora_p['v_proj_B'])
 
     q = q.reshape(bsz, seq_len, NUM_HEADS, HEAD_DIM).transpose(0, 2, 1, 3)
     k = k.reshape(bsz, seq_len, NUM_KV_HEADS, HEAD_DIM).transpose(0, 2, 1, 3)
@@ -232,7 +217,7 @@ def attention(x: JaxArray, rope_sin: JaxArray, rope_cos: JaxArray, start_pos: Un
 
     if config_p.attention_type == 'full_attention':
         mask = jnp.tril(jnp.ones((1, 1, seq_len, seq_len), dtype=bool))
-    else: # 'sliding_attention'
+    else:  # 'sliding_attention'
         q_pos = jnp.arange(seq_len)[None, :]
         k_pos = jnp.arange(seq_len)[:, None]
         causal_mask = k_pos <= q_pos
@@ -245,61 +230,67 @@ def attention(x: JaxArray, rope_sin: JaxArray, rope_cos: JaxArray, start_pos: Un
     scores = jax.nn.softmax(scores, axis=-1)
 
     attn_out = (scores @ v_repeated).transpose(0, 2, 1, 3).reshape(bsz, seq_len, -1)
-    return qlora_linear(attn_out, frozen_p['o_proj'], config_p.o_proj, lora_p['o_proj_A'], lora_p['o_proj_B'])
+    o = qlora_linear(attn_out, frozen_p['o_proj'], lora_p['o_proj_A'], lora_p['o_proj_B'])
+    if return_caches:
+        return o, k, v
+    return o
 
 def feed_forward(x: JaxArray, frozen_p: FrozenParams, config_p: FeedForwardConfig, lora_p: LoRAParams) -> JaxArray:
-    """
-    Uses the specified `gelu_pytorch_tanh` activation function.
-    """
-    gate = qlora_linear(x, frozen_p['gate_proj'], config_p.gate_proj, lora_p['gate_proj_A'], lora_p['gate_proj_B'])
-    up = qlora_linear(x, frozen_p['up_proj'], config_p.up_proj, lora_p['up_proj_A'], lora_p['up_proj_B'])
+    gate = qlora_linear(x, frozen_p['gate_proj'], lora_p['gate_proj_A'], lora_p['gate_proj_B'])
+    up = qlora_linear(x, frozen_p['up_proj'], lora_p['up_proj_A'], lora_p['up_proj_B'])
     ffn_out = jax.nn.gelu(gate, approximate=True) * up
-    return qlora_linear(ffn_out, frozen_p['down_proj'], config_p.down_proj, lora_p['down_proj_A'], lora_p['down_proj_B'])
+    return qlora_linear(ffn_out, frozen_p['down_proj'], lora_p['down_proj_A'], lora_p['down_proj_B'])
 
 def transformer_layer(x: JaxArray, rope_sin: JaxArray, rope_cos: JaxArray, start_pos: Union[int, JaxArray],
-                      frozen_p: FrozenParams, config_p: LayerConfig, lora_p: LoRAParams) -> JaxArray:
-    h = x + attention(rms_norm(x, frozen_p['attn_norm_scale']), rope_sin, rope_cos, start_pos,
-                      frozen_p['attention'], config_p.attention, lora_p['attention'])
+                      frozen_p: FrozenParams, config_p: LayerConfig, lora_p: LoRAParams, return_caches: bool = False) -> Union[JaxArray, Tuple[JaxArray, JaxArray, JaxArray]]:
+    attn_out_or_tuple = attention(rms_norm(x, frozen_p['attn_norm_scale']), rope_sin, rope_cos, start_pos,
+                                 frozen_p['attention'], config_p.attention, lora_p['attention'], return_caches)
+    if return_caches:
+        attn_out, k, v = attn_out_or_tuple
+    else:
+        attn_out = attn_out_or_tuple
+    h = x + attn_out
     out = h + feed_forward(rms_norm(h, frozen_p['ffn_norm_scale']),
                            frozen_p['feed_forward'], config_p.feed_forward, lora_p['feed_forward'])
+    if return_caches:
+        return out, k, v
     return out
 
-def model_forward(tokens: JaxArray, start_pos: JaxArray, frozen_params: FrozenParams,
-                  model_config: StaticModelConfig, lora_params: LoRAParams) -> JaxArray:
+def model_forward(tokens: JaxArray, start_pos: Union[int, JaxArray], frozen_params: FrozenParams,
+                  model_config: StaticModelConfig, lora_params: LoRAParams, return_caches: bool = False) -> Union[JaxArray, Tuple[JaxArray, List[Tuple[JaxArray, JaxArray]]]]:
     x = frozen_params['tok_embeddings'][tokens]
     rope_freqs_map = frozen_params['rope_freqs']
-
+    caches = [] if return_caches else None
     for i in range(NUM_LAYERS):
-        # Select the correct RoPE frequencies (local or global) for the current layer
-        # based on its specified attention type.
         if LAYER_TYPES[i] == 'full_attention':
             rope_sin, rope_cos = rope_freqs_map['global']
-        else: # sliding_attention
+        else:
             rope_sin, rope_cos = rope_freqs_map['local']
-
-        x = transformer_layer(x, rope_sin, rope_cos, start_pos, frozen_params[f'layer_{i}'],
-                              model_config.layers[i], lora_params[f'layer_{i}'])
-
+        layer_out_or_tuple = transformer_layer(x, rope_sin, rope_cos, start_pos, frozen_params[f'layer_{i}'],
+                                               model_config.layers[i], lora_params[f'layer_{i}'], return_caches)
+        if return_caches:
+            x, k, v = layer_out_or_tuple
+            caches.append((k, v))
+        else:
+            x = layer_out_or_tuple
     x = rms_norm(x, frozen_params['output_norm_scale'])
-    return x @ frozen_params['tok_embeddings'].T
+    logits = x @ frozen_params['tok_embeddings'].T
+    if return_caches:
+        return logits, caches
+    return logits
 
 
-# --- 4. DATA & INITIALIZATION (CORRECTED) ---
-# Initialization now respects the `initializer_range` from the model card.
+# --- 4. DATA & INITIALIZATION ---
 
-def data_generator(data_size: int, batch_size: int, seq_len: int, vocab_size: int) -> Generator[Tuple[JaxArray, JaxArray, JaxArray], None, None]:
+def data_generator(data_size: int, batch_size: int, seq_len: int, vocab_size: int) -> Generator[Tuple[JaxArray, JaxArray], None, None]:
     data = np.random.randint(0, vocab_size, size=data_size, dtype=np.int32)
     while True:
         idxs = np.random.randint(0, len(data) - seq_len - 1, size=batch_size)
         x = np.stack([data[i:i+seq_len] for i in idxs])
         y = np.stack([data[i+1:i+seq_len+1] for i in idxs])
-        yield jnp.array(x), jnp.array(y), jnp.array(idxs)
+        yield jnp.array(x), jnp.array(y)
 
 def init_gemma3_270m_params(key: JaxArray, vocab_size: int) -> Tuple[FrozenParams, StaticModelConfig, LoRAParams]:
-    """
-    CORRECTED: Initializes weights using the specified `initializer_range` and
-    pre-computes both sets of RoPE frequencies.
-    """
     def normal(key: JaxArray, shape: Tuple[int, ...]) -> JaxArray:
         return jax.random.normal(key, shape, dtype=jnp.float32) * INITIALIZER_RANGE
         
@@ -331,11 +322,13 @@ def init_gemma3_270m_params(key: JaxArray, vocab_size: int) -> Tuple[FrozenParam
         attn_configs, ffn_configs = {}, {}
         for name, weight in weights_to_quantize['attention'].items():
             q_w, q_c = quantize_nf4(weight)
-            frozen_params[f'layer_{i}']['attention'][name] = q_w
+            dequant_w = dequantize_nf4(q_w, q_c)
+            frozen_params[f'layer_{i}']['attention'][name] = dequant_w
             attn_configs[name] = q_c
         for name, weight in weights_to_quantize['feed_forward'].items():
             q_w, q_c = quantize_nf4(weight)
-            frozen_params[f'layer_{i}']['feed_forward'][name] = q_w
+            dequant_w = dequantize_nf4(q_w, q_c)
+            frozen_params[f'layer_{i}']['feed_forward'][name] = dequant_w
             ffn_configs[name] = q_c
         
         final_attn_config = AttentionConfig(**attn_configs, attention_type=LAYER_TYPES[i])
@@ -359,10 +352,9 @@ def init_gemma3_270m_params(key: JaxArray, vocab_size: int) -> Tuple[FrozenParam
 
 
 # --- 5. LOSS, OPTIMIZER, AND TRAINING ---
-# No architectural changes in this section.
 
-def loss_fn(lora_params: LoRAParams, frozen_params: FrozenParams, model_config: StaticModelConfig, x: JaxArray, y: JaxArray, start_pos: JaxArray) -> JaxArray:
-    logits = model_forward(x, start_pos, frozen_params, model_config, lora_params)
+def loss_fn(lora_params: LoRAParams, frozen_params: FrozenParams, model_config: StaticModelConfig, x: JaxArray, y: JaxArray) -> JaxArray:
+    logits = model_forward(x, 0, frozen_params, model_config, lora_params)
     log_probs = jax.nn.log_softmax(logits, axis=-1)
     return -jnp.mean(jnp.take_along_axis(log_probs, y[..., None], axis=-1))
 
@@ -395,8 +387,8 @@ def optimizer_update(grads: LoRAParams, state: OptimizerState, params: LoRAParam
     return new_params, new_state
 
 @partial(jax.jit, static_argnums=(2,))
-def train_step(lora_params: LoRAParams, frozen_params: FrozenParams, model_config: StaticModelConfig, optimizer_state: OptimizerState, x: JaxArray, y: JaxArray, start_pos: JaxArray) -> Tuple[JaxArray, LoRAParams, OptimizerState, JaxArray]:
-    loss, grads = jax.value_and_grad(loss_fn, argnums=0)(lora_params, frozen_params, model_config, x, y, start_pos)
+def train_step(lora_params: LoRAParams, frozen_params: FrozenParams, model_config: StaticModelConfig, optimizer_state: OptimizerState, x: JaxArray, y: JaxArray) -> Tuple[JaxArray, LoRAParams, OptimizerState, JaxArray]:
+    loss, grads = jax.value_and_grad(loss_fn, argnums=0)(lora_params, frozen_params, model_config, x, y)
     clipped_grads = clip_grads_by_global_norm(grads, GRAD_CLIP_NORM)
     current_lr = get_learning_rate(optimizer_state['step'], WARMUP_STEPS, TOTAL_TRAIN_STEPS, MAX_LEARNING_RATE, MIN_LEARNING_RATE)
     new_lora_params, new_optimizer_state = optimizer_update(clipped_grads, optimizer_state, lora_params, current_lr)
@@ -404,7 +396,6 @@ def train_step(lora_params: LoRAParams, frozen_params: FrozenParams, model_confi
 
 
 # --- 6. INFERENCE WITH KV CACHING ---
-# Inference logic now uses corrected architectural components implicitly.
 
 def transformer_layer_inference(
     x: JaxArray, start_pos: int, rope_sin: JaxArray, rope_cos: JaxArray, kv_cache: Tuple[JaxArray, JaxArray],
@@ -414,9 +405,9 @@ def transformer_layer_inference(
     ffn_p, ffn_c, ffn_l = layer_params['feed_forward'], layer_config.feed_forward, lora_layer_params['feed_forward']
 
     x_norm = rms_norm(x, layer_params['attn_norm_scale'])
-    q = qlora_linear(x_norm, attn_p['q_proj'], attn_c.q_proj, attn_l['q_proj_A'], attn_l['q_proj_B'])
-    k = qlora_linear(x_norm, attn_p['k_proj'], attn_c.k_proj, attn_l['k_proj_A'], attn_l['k_proj_B'])
-    v = qlora_linear(x_norm, attn_p['v_proj'], attn_c.v_proj, attn_l['v_proj_A'], attn_l['v_proj_B'])
+    q = qlora_linear(x_norm, attn_p['q_proj'], attn_l['q_proj_A'], attn_l['q_proj_B'])
+    k = qlora_linear(x_norm, attn_p['k_proj'], attn_l['k_proj_A'], attn_l['k_proj_B'])
+    v = qlora_linear(x_norm, attn_p['v_proj'], attn_l['v_proj_A'], attn_l['v_proj_B'])
 
     bsz, seq_len, _ = x.shape
     q = q.reshape(bsz, seq_len, NUM_HEADS, HEAD_DIM).transpose(0, 2, 1, 3)
@@ -442,7 +433,7 @@ def transformer_layer_inference(
         window_start = start_pos - SLIDING_WINDOW_SIZE + 1
         sliding_mask = key_positions >= window_start
         mask = causal_mask & sliding_mask
-    else: # 'full_attention'
+    else:  # 'full_attention'
         mask = causal_mask
     
     mask = mask[None, None, None, :]
@@ -451,29 +442,24 @@ def transformer_layer_inference(
     
     attn_out = (scores @ v_repeated).transpose(0, 2, 1, 3).reshape(bsz, seq_len, -1)
     
-    h = x + qlora_linear(attn_out, attn_p['o_proj'], attn_c.o_proj, attn_l['o_proj_A'], attn_l['o_proj_B'])
+    h = x + qlora_linear(attn_out, attn_p['o_proj'], attn_l['o_proj_A'], attn_l['o_proj_B'])
     ffn_out = feed_forward(rms_norm(h, layer_params['ffn_norm_scale']), ffn_p, ffn_c, ffn_l)
     return h + ffn_out, (k_cache, v_cache)
 
 @partial(jax.jit, static_argnums=(1, 3))
 def generate_impl(frozen_params: FrozenParams, model_config: StaticModelConfig, lora_params: LoRAParams,
-                  num_tokens_to_generate: int, prompt_tokens: JaxArray) -> JaxArray:
+                  num_tokens_to_generate: int, prompt_tokens: List[int]) -> JaxArray:
     kv_cache_shape = (1, NUM_KV_HEADS, MAX_CONTEXT_LEN, HEAD_DIM)
     kv_caches = [(jnp.zeros(kv_cache_shape, dtype=COMPUTE_DTYPE), jnp.zeros(kv_cache_shape, dtype=COMPUTE_DTYPE)) for _ in range(NUM_LAYERS)]
     prompt = jnp.array([prompt_tokens])
     prompt_len = prompt.shape[1]
     rope_freqs_map = frozen_params['rope_freqs']
-    x = frozen_params['tok_embeddings'][prompt]
-    
-    # Process prompt
-    for i in range(NUM_LAYERS):
-        if LAYER_TYPES[i] == 'full_attention':
-            rope_sin, rope_cos = rope_freqs_map['global']
-        else:
-            rope_sin, rope_cos = rope_freqs_map['local']
-        x, kv_caches[i] = transformer_layer_inference(x, 0, rope_sin, rope_cos, kv_caches[i], frozen_params[f'layer_{i}'], model_config.layers[i], lora_params[f'layer_{i}'])
-    
-    logits = rms_norm(x, frozen_params['output_norm_scale']) @ frozen_params['tok_embeddings'].T
+    logits, prompt_caches = model_forward(prompt, 0, frozen_params, model_config, lora_params, return_caches=True)
+    for i, (k, v) in enumerate(prompt_caches):
+        kv_caches[i] = (
+            jax.lax.dynamic_update_slice(kv_caches[i][0], k.astype(COMPUTE_DTYPE), (0, 0, 0, 0)),
+            jax.lax.dynamic_update_slice(kv_caches[i][1], v.astype(COMPUTE_DTYPE), (0, 0, 0, 0))
+        )
     next_token = jnp.argmax(logits[:, -1, :], axis=-1)
 
     def body_fun(i: int, state: Tuple) -> Tuple:
@@ -482,7 +468,6 @@ def generate_impl(frozen_params: FrozenParams, model_config: StaticModelConfig, 
         token_input = current_token.reshape(1, 1)
         x = frozen_params['tok_embeddings'][token_input]
         
-        # Generate next token
         for j in range(NUM_LAYERS):
             if LAYER_TYPES[j] == 'full_attention':
                 rope_sin, rope_cos = rope_freqs_map['global']
@@ -503,7 +488,7 @@ def generate_impl(frozen_params: FrozenParams, model_config: StaticModelConfig, 
 def generate(prompt_tokens: List[int], frozen_params: FrozenParams, model_config: StaticModelConfig, lora_params: LoRAParams, num_new_tokens: int) -> List[int]:
     print(f"\n--- Generating Sequence (Corrected Hybrid Sliding/Full Attention with Dual RoPE) ---")
     start_time = time.time()
-    generated_ids = generate_impl(frozen_params, model_config, lora_params, num_new_tokens, jnp.array(prompt_tokens))
+    generated_ids = generate_impl(frozen_params, model_config, lora_params, num_new_tokens, prompt_tokens)
     generated_ids.block_until_ready()
     end_time = time.time()
     duration = end_time - start_time
@@ -513,7 +498,6 @@ def generate(prompt_tokens: List[int], frozen_params: FrozenParams, model_config
 
 
 # --- 7. MAIN SCRIPT & ARCHITECTURE VALIDATION ---
-# Unchanged
 
 def calculate_parameter_count(config: Dict[str, int]) -> Tuple[int, int, int]:
     embedding_params = config['VOCAB_SIZE'] * config['EMBED_DIM']
@@ -530,7 +514,7 @@ def calculate_parameter_count(config: Dict[str, int]) -> Tuple[int, int, int]:
 
 def main() -> None:
     key = jax.random.PRNGKey(42)
-    print("--- Validating Simulated Gemma 3 270M Architecture (Rigorously Corrected) ---")
+    print("--- Validating Simulated Gemma 3 270M Architecture ---")
     model_config_dict = {
         'VOCAB_SIZE': VOCAB_SIZE, 'EMBED_DIM': EMBED_DIM, 'NUM_LAYERS': NUM_LAYERS, 'FFN_DIM': FFN_DIM,
         'NUM_HEADS': NUM_HEADS, 'NUM_KV_HEADS': NUM_KV_HEADS, 'HEAD_DIM': HEAD_DIM
@@ -550,8 +534,8 @@ def main() -> None:
     
     print(f"\n--- Simulating Finetuning (SeqLen: {SEQ_LEN}, Batch: {BATCH_SIZE}) ---")
     for epoch in range(NUM_EPOCHS):
-        x_batch, y_batch, start_pos_batch = next(dataloader)
-        loss, lora_params, optimizer_state, current_lr = train_step(lora_params, frozen_params, model_config, optimizer_state, x_batch, y_batch, start_pos_batch)
+        x_batch, y_batch = next(dataloader)
+        loss, lora_params, optimizer_state, current_lr = train_step(lora_params, frozen_params, model_config, optimizer_state, x_batch, y_batch)
         print(f"Epoch {epoch:4d} | Loss: {loss:.4f} | LR: {current_lr:.6f}")
     
     print("\n--- Simulated Finetuning complete ---")
