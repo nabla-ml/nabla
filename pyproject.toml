@@ -26,7 +26,7 @@ classifiers = [
 keywords = ["deep learning", "machine learning", "jax", "autodiff", "nabla", "mojo", "max", "gpu", "vmap", "grad"]
 
 dependencies = [
-    "numpy>=1.22.0",
+    "numpy>=2.0.0",
     "modular>=25.0.0",
 ]
 
