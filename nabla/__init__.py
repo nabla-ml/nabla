@@ -34,6 +34,7 @@ from .ops.operation import (
     ViewOperation,
 )
 from .transforms import (
+    backward,
     djit,
     grad,
     jacfwd,
@@ -131,6 +132,7 @@ __all__ = [
     "jacrev",
     "jacfwd",
     "grad",
+    "backward",
     "value_and_grad",
     # Utilities
     "device",

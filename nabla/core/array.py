@@ -53,6 +53,7 @@ class Array:
     traced: bool
     tangent: Array | None
     cotangent: Array | None
+    grad: Array | None
     stage_realization: bool
     kernel_impl_path: Path | None
     custom_kernel_path: Path | None
@@ -81,6 +82,7 @@ class Array:
         self.traced: bool = False
         self.tangent: Array | None = None
         self.cotangent: Array | None = None
+        self.grad: Array | None = None
         self.stage_realization: bool = False
         self.kernel_impl_path: Path | None = None
         self.custom_kernel_path: Path | None = None
@@ -250,6 +252,29 @@ class Array:
         from ..ops.unary import transfer_to
 
         return transfer_to(self, device)
+
+    def backward(self, grad: Array | None = None) -> None:
+        """Compute gradients flowing into traced leaf inputs that influence this Array."""
+
+        if grad is None:
+            if self.shape != () or self.batch_dims:
+                raise ValueError(
+                    "grad argument required for non-scalar outputs in backward()"
+                )
+            from ..ops.creation import ones_like
+
+            grad = ones_like(self)
+        elif not isinstance(grad, Array):
+            raise TypeError("grad must be a Nabla Array")
+
+        from ..transforms.utils import backward as backward_transform
+
+        backward_transform(self, grad)
+
+    def requires_grad(self, val: bool = True) -> None:
+        """Opt into or out of gradient tracking for imperative workflows."""
+
+        self.traced = bool(val)
 
     # Operator overloading methods
     def __add__(self, other) -> Array:

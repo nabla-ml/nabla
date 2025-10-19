@@ -410,15 +410,26 @@ def process_transform_outputs(outputs, original_inputs, is_list_style, untrace=T
 class Trace:
     """A simple trace container that holds the computation graph."""
 
-    def __init__(self, inputs: list[Array], outputs: list[Array] | None = None) -> None:
+    def __init__(
+        self, inputs: list[Array] | None, outputs: list[Array] | None = None
+    ) -> None:
+        if outputs is None:
+            outputs = []
+
+        if inputs is None:
+            if not outputs:
+                raise ValueError("Cannot infer trace inputs without outputs")
+            inputs = self._discover_traced_inputs(outputs)
+
         self.inputs = inputs
-        self.outputs = outputs if outputs is not None else []
+        self.outputs = outputs
         self.trace: list[Array] = []
         self._computed = False
 
         # Mark all inputs as traced for autodiff so the computation graph gets captured
         for inp in inputs:
-            inp.traced = True
+            if not getattr(inp, "traced", False):
+                inp.traced = True
 
     @classmethod
     def trace_function(
@@ -597,6 +608,43 @@ class Trace:
 
         return result
 
+    @classmethod
+    def from_outputs(cls, outputs: Any) -> Trace:
+        """Create a trace by discovering traced leaf inputs from outputs."""
+        output_arrays = _extract_arrays_from_pytree(outputs)
+        inputs = cls._discover_traced_inputs(output_arrays)
+        return cls(inputs, output_arrays)
+
+    @staticmethod
+    def _discover_traced_inputs(output_arrays: list[Array]) -> list[Array]:
+        """Find traced leaf nodes that serve as inputs for a computation graph."""
+        discovered: list[Array] = []
+        discovered_ids: set[int] = set()
+        visited: set[int] = set()
+
+        def _dfs(node: Array) -> None:
+            node_id = id(node)
+            if node_id in visited:
+                return
+            visited.add(node_id)
+
+            for arg in getattr(node, "args", ()) or ():
+                if isinstance(arg, Array):
+                    _dfs(arg)
+
+            is_traced = getattr(node, "traced", False)
+            node_args = getattr(node, "args", ()) or ()
+
+            if is_traced and not node_args:
+                if node_id not in discovered_ids:
+                    discovered.append(node)
+                    discovered_ids.add(node_id)
+
+        for output in output_arrays:
+            _dfs(output)
+
+        return discovered
+
 
 def _cleanup_cotangents(traced_nodes: list[Array]) -> None:
     """Clean up cotangent values from traced nodes.
@@ -700,6 +748,32 @@ def _reconstruct_gradient_structure(
 
     # Reconstruct the pytree structure with gradients
     return tree_unflatten(structure, gradient_arrays)
+
+
+def backward(outputs: Any, cotangents: Any) -> None:
+    """Accumulate gradients on traced leaf inputs for the given traced outputs."""
+
+    trace = Trace.from_outputs(outputs)
+    input_arrays = trace.inputs
+    output_arrays = trace.outputs
+
+    cotangent_arrays = _extract_arrays_from_pytree(cotangents)
+    if not cotangent_arrays and output_arrays:
+        raise ValueError("cotangents must contain arrays")
+
+    _validate_length_match(
+        cotangent_arrays, output_arrays, "cotangents", "outputs"
+    )
+
+    gradients = _compute_pullback(input_arrays, output_arrays, cotangent_arrays)
+
+    for inp, grad in zip(input_arrays, gradients, strict=False):
+        if inp.grad is None:
+            inp.grad = grad
+        else:
+            from ..ops.binary import add
+
+            inp.grad = add(inp.grad, grad)
 
 
 def pullback(
