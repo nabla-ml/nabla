@@ -5,7 +5,6 @@ View
    :maxdepth: 1
    :caption: Functions
 
-   tensor_slice.md
    broadcast_batch_dims.md
    broadcast_to.md
    concatenate.md
@@ -21,6 +20,7 @@ View
    squeeze.md
    squeeze_batch_dims.md
    stack.md
+   tensor_slice.md
    transpose.md
    unsqueeze.md
    unsqueeze_batch_dims.md

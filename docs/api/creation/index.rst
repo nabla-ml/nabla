@@ -6,7 +6,6 @@ Creation
    :caption: Functions
 
    arange.md
-   tensor.md
    full_like.md
    glorot_uniform.md
    he_normal.md
@@ -21,6 +20,7 @@ Creation
    rand_like.md
    randn.md
    randn_like.md
+   tensor.md
    triu.md
    xavier_normal.md
    xavier_uniform.md
