@@ -253,8 +253,13 @@ class Array:
 
         return transfer_to(self, device)
 
-    def backward(self, grad: Array | None = None) -> None:
-        """Compute gradients flowing into traced leaf inputs that influence this Array."""
+    def backward(self, grad: Array | None = None, retain_graph: bool = False) -> None:
+        """Compute gradients flowing into traced leaf inputs that influence this Array.
+        
+        Args:
+            grad: Optional cotangent tensor; defaults to ones for scalar outputs
+            retain_graph: If False (default), frees the computation graph after backward pass
+        """
 
         if grad is None:
             if self.shape != () or self.batch_dims:
@@ -269,7 +274,7 @@ class Array:
 
         from ..transforms.utils import backward as backward_transform
 
-        backward_transform(self, grad)
+        backward_transform(self, grad, retain_graph=retain_graph)
 
     def requires_grad(self, val: bool = True) -> None:
         """Opt into or out of gradient tracking for imperative workflows."""

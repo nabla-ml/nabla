@@ -750,8 +750,14 @@ def _reconstruct_gradient_structure(
     return tree_unflatten(structure, gradient_arrays)
 
 
-def backward(outputs: Any, cotangents: Any) -> None:
-    """Accumulate gradients on traced leaf inputs for the given traced outputs."""
+def backward(outputs: Any, cotangents: Any, retain_graph: bool = False) -> None:
+    """Accumulate gradients on traced leaf inputs for the given traced outputs.
+    
+    Args:
+        outputs: Output arrays to backpropagate from
+        cotangents: Cotangent vectors for outputs
+        retain_graph: If False (default), frees the computation graph after backward pass
+    """
 
     trace = Trace.from_outputs(outputs)
     input_arrays = trace.inputs
@@ -774,6 +780,12 @@ def backward(outputs: Any, cotangents: Any) -> None:
             from ..ops.binary import add
 
             inp.grad = add(inp.grad, grad)
+
+    if not retain_graph:
+        traced_nodes = trace.get_traced_nodes()
+        for node in traced_nodes:
+            node.args = []
+            node.traced = False
 
 
 def pullback(
