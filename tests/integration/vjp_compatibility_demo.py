@@ -44,8 +44,8 @@ def demonstrate_compatibility():
     def nb_fn(x):
         return nb.sin(x)
 
-    _, vjp_nb = nb.vjp(nb_fn, nb.Array.from_numpy(x))
-    grads_nb = vjp_nb(nb.Array.from_numpy(cotangent))
+    _, vjp_nb = nb.vjp(nb_fn, nb.Tensor.from_numpy(x))
+    grads_nb = vjp_nb(nb.Tensor.from_numpy(cotangent))
 
     # JAX
     def jax_fn(x):
@@ -68,8 +68,8 @@ def demonstrate_compatibility():
     def nb_fn(x, y):
         return nb.mul(x, y)
 
-    _, vjp_nb = nb.vjp(nb_fn, nb.Array.from_numpy(x), nb.Array.from_numpy(y))
-    grads_nb = vjp_nb(nb.Array.from_numpy(cotangent))
+    _, vjp_nb = nb.vjp(nb_fn, nb.Tensor.from_numpy(x), nb.Tensor.from_numpy(y))
+    grads_nb = vjp_nb(nb.Tensor.from_numpy(cotangent))
 
     # JAX
     def jax_fn(x, y):
@@ -92,9 +92,9 @@ def demonstrate_compatibility():
     def nb_fn(inputs):
         return nb.add(inputs["a"], inputs["b"])
 
-    inputs_nb = {k: nb.Array.from_numpy(v) for k, v in inputs.items()}
+    inputs_nb = {k: nb.Tensor.from_numpy(v) for k, v in inputs.items()}
     _, vjp_nb = nb.vjp(nb_fn, inputs_nb)
-    grads_nb = vjp_nb(nb.Array.from_numpy(cotangent))
+    grads_nb = vjp_nb(nb.Tensor.from_numpy(cotangent))
 
     # JAX
     def jax_fn(inputs):
@@ -120,8 +120,8 @@ def demonstrate_compatibility():
     def nb_fn(A, B):
         return nb.matmul(A, B)
 
-    _, vjp_nb = nb.vjp(nb_fn, nb.Array.from_numpy(A), nb.Array.from_numpy(B))
-    grads_nb = vjp_nb(nb.Array.from_numpy(cotangent))
+    _, vjp_nb = nb.vjp(nb_fn, nb.Tensor.from_numpy(A), nb.Tensor.from_numpy(B))
+    grads_nb = vjp_nb(nb.Tensor.from_numpy(cotangent))
 
     # JAX
     def jax_fn(A, B):
@@ -144,8 +144,8 @@ def demonstrate_compatibility():
     def nb_fn(x):
         return nb.sum(nb.mul(nb.exp(nb.sin(x)), nb.cos(x)))
 
-    _, vjp_nb = nb.vjp(nb_fn, nb.Array.from_numpy(x))
-    grads_nb = vjp_nb(nb.Array.from_numpy(np.array(cotangent)))
+    _, vjp_nb = nb.vjp(nb_fn, nb.Tensor.from_numpy(x))
+    grads_nb = vjp_nb(nb.Tensor.from_numpy(np.array(cotangent)))
 
     # JAX
     def jax_fn(x):

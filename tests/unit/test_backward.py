@@ -7,8 +7,8 @@ import nabla as nb
 from nabla.transforms import backward as nabla_backward
 
 
-def _reset_grads(*arrays) -> None:
-    for arr in arrays:
+def _reset_grads(*tensors) -> None:
+    for arr in tensors:
         arr.grad = None
 
 
@@ -19,8 +19,8 @@ def _assert_close(nabla_grad, torch_grad, *, rtol=1e-6, atol=1e-6) -> None:
 
 
 def test_backward_scalar_matches_pytorch():
-    nabla_a = nb.array([0.1, -0.2, 0.3])
-    nabla_b = nb.array([1.5, -0.7, 2.2])
+    nabla_a = nb.tensor([0.1, -0.2, 0.3])
+    nabla_b = nb.tensor([1.5, -0.7, 2.2])
     nabla_a.requires_grad()
     nabla_b.requires_grad()
 
@@ -43,8 +43,8 @@ def test_backward_scalar_matches_pytorch():
 
 
 def test_backward_vector_with_cotangent_matches_pytorch():
-    nabla_x = nb.array([[1.0, 2.0], [-1.0, 0.5]])
-    nabla_y = nb.array([[0.3, -0.6], [1.2, 0.4]])
+    nabla_x = nb.tensor([[1.0, 2.0], [-1.0, 0.5]])
+    nabla_y = nb.tensor([[0.3, -0.6], [1.2, 0.4]])
     nabla_x.requires_grad()
     nabla_y.requires_grad()
 
@@ -69,8 +69,8 @@ def test_backward_vector_with_cotangent_matches_pytorch():
 
 def test_backward_accumulates_like_pytorch():
     """Test that gradients accumulate across multiple backward passes with retain_graph."""
-    nabla_a = nb.array([0.4, -0.8])
-    nabla_b = nb.array([-1.2, 0.9])
+    nabla_a = nb.tensor([0.4, -0.8])
+    nabla_b = nb.tensor([-1.2, 0.9])
     nabla_a.requires_grad()
     nabla_b.requires_grad()
 

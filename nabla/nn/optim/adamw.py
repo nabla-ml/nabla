@@ -23,17 +23,17 @@ import nabla as nb
 
 @nb.jit
 def adamw_step(
-    params: list[nb.Array],
-    gradients: list[nb.Array],
-    m_states: list[nb.Array],
-    v_states: list[nb.Array],
+    params: list[nb.Tensor],
+    gradients: list[nb.Tensor],
+    m_states: list[nb.Tensor],
+    v_states: list[nb.Tensor],
     step: int,
     learning_rate: float = 0.001,
     beta1: float = 0.9,
     beta2: float = 0.999,
     eps: float = 1e-8,
     weight_decay: float = 0.01,
-) -> tuple[list[nb.Array], list[nb.Array], list[nb.Array]]:
+) -> tuple[list[nb.Tensor], list[nb.Tensor], list[nb.Tensor]]:
     """JIT-compiled AdamW optimizer step with weight decay.
 
     AdamW decouples weight decay from the gradient-based update, applying
@@ -41,8 +41,8 @@ def adamw_step(
     to the loss function.
 
     Args:
-        params: List of parameter arrays
-        gradients: List of gradient arrays (same structure as params)
+        params: List of parameter tensors
+        gradients: List of gradient tensors (same structure as params)
         m_states: List of first moment estimates
         v_states: List of second moment estimates
         step: Current step number (for bias correction)
@@ -80,11 +80,11 @@ def adamw_step(
     return updated_params, updated_m, updated_v
 
 
-def init_adamw_state(params: list[nb.Array]) -> tuple[list[nb.Array], list[nb.Array]]:
+def init_adamw_state(params: list[nb.Tensor]) -> tuple[list[nb.Tensor], list[nb.Tensor]]:
     """Initialize AdamW optimizer state.
 
     Args:
-        params: List of parameter arrays
+        params: List of parameter tensors
 
     Returns:
         Tuple of (m_states, v_states) - first and second moment estimates
@@ -95,6 +95,6 @@ def init_adamw_state(params: list[nb.Array]) -> tuple[list[nb.Array], list[nb.Ar
         # Initialize first and second moments to zero
         m_np = np.zeros_like(param.to_numpy())
         v_np = np.zeros_like(param.to_numpy())
-        m_states.append(nb.Array.from_numpy(m_np))
-        v_states.append(nb.Array.from_numpy(v_np))
+        m_states.append(nb.Tensor.from_numpy(m_np))
+        v_states.append(nb.Tensor.from_numpy(v_np))
     return m_states, v_states

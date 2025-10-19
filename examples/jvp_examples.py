@@ -31,8 +31,8 @@ def test_jvp_cubic_function():
         return [x * x * x]  # f(x) = x³
 
     # Test case: x = 2.0, tangent = 1.0
-    x = nb.array([2.0]).to(device)
-    tangent = nb.array([1.0]).to(device)
+    x = nb.tensor([2.0]).to(device)
+    tangent = nb.tensor([1.0]).to(device)
 
     values, tangent_out = nb.jvp(cubic_fn, [x], [tangent])
 
@@ -58,8 +58,8 @@ def test_jvp_higher_order_derivatives():
         x = inputs[0]
         return [x * x * x]  # f(x) = x³
 
-    x = nb.array([2.0]).to(device)
-    tangent = nb.array([1.0]).to(device)
+    x = nb.tensor([2.0]).to(device)
+    tangent = nb.tensor([1.0]).to(device)
 
     # First-order JVP
     values, first_order = nb.jvp(cubic_fn, [x], [tangent])
@@ -82,17 +82,17 @@ def test_jvp_higher_order_derivatives():
 
 
 def test_jvp_multiple_inputs():
-    """Test JVP with multiple input arrays."""
+    """Test JVP with multiple input tensors."""
     device = nb.device("cpu")
 
     def multi_input_fn(inputs):
         x, y = inputs[0], inputs[1]
         return [x * y + x * x]  # f(x,y) = xy + x²
 
-    x = nb.array([3.0]).to(device)
-    y = nb.array([4.0]).to(device)
-    tangent_x = nb.array([1.0]).to(device)
-    tangent_y = nb.array([1.0]).to(device)
+    x = nb.tensor([3.0]).to(device)
+    y = nb.tensor([4.0]).to(device)
+    tangent_x = nb.tensor([1.0]).to(device)
+    tangent_y = nb.tensor([1.0]).to(device)
 
     values, tangent_out = nb.jvp(multi_input_fn, [x, y], [tangent_x, tangent_y])
 
@@ -122,8 +122,8 @@ def test_jvp_parametrized_inputs(x_val, tangent_val):
         x = inputs[0]
         return [x * x]  # f(x) = x²
 
-    x = nb.array([x_val]).to(device)
-    tangent = nb.array([tangent_val]).to(device)
+    x = nb.tensor([x_val]).to(device)
+    tangent = nb.tensor([tangent_val]).to(device)
 
     values, tangent_out = nb.jvp(square_fn, [x], [tangent])
 
@@ -149,8 +149,8 @@ def test_jvp_with_squeeze_unsqueeze():
         x = nb.squeeze(nb.squeeze(x, [0]), [0])
         return [x * x * x]  # f(x) = x³
 
-    x = nb.array([2.0]).to(device)
-    tangent = nb.array([1.0]).to(device)
+    x = nb.tensor([2.0]).to(device)
+    tangent = nb.tensor([1.0]).to(device)
 
     values, tangent_out = nb.jvp(squeeze_unsqueeze_fn, [x], [tangent])
 

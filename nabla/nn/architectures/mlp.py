@@ -37,7 +37,7 @@ def create_mlp_forward_and_loss(activation: str = "relu") -> Callable:
         Function that takes inputs and returns loss
     """
 
-    def mlp_forward_and_loss(inputs: list[nb.Array]) -> list[nb.Array]:
+    def mlp_forward_and_loss(inputs: list[nb.Tensor]) -> list[nb.Tensor]:
         """Combined forward pass and loss computation for VJP."""
         x, targets, *params = inputs
         predictions = mlp_forward_with_activations(x, params, activation)
@@ -86,7 +86,7 @@ def create_mlp_config(
         raise ValueError(f"Unsupported init_method: {init_method}")
 
     # Create forward function
-    def forward_fn(x: nb.Array, params: list[nb.Array]) -> nb.Array:
+    def forward_fn(x: nb.Tensor, params: list[nb.Tensor]) -> nb.Tensor:
         return mlp_forward_with_activations(x, params, activation, final_activation)
 
     # Create forward and loss function for training

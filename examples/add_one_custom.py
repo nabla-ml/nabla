@@ -27,7 +27,7 @@ class AddOneCustomOp(nb.UnaryOperation):
     def __init__(self):
         super().__init__("add_one_custom")
 
-    def maxpr(self, args: list[max.graph.Value], output: nb.Array) -> None:
+    def maxpr(self, args: list[max.graph.Value], output: nb.Tensor) -> None:
         custom_result = max.graph.ops.custom(
             name="add_one_custom",
             values=args,
@@ -39,22 +39,22 @@ class AddOneCustomOp(nb.UnaryOperation):
     def custom_kernel_path(self):
         return Path(__file__).parent / "custom_kernels"
 
-    def eagerxpr(self, args: list[nb.Array], output: nb.Array) -> None:
+    def eagerxpr(self, args: list[nb.Tensor], output: nb.Tensor) -> None:
         np_result = args[0].to_numpy() + 1
         output.impl = max.driver.Tensor.from_numpy(np_result)
 
     def vjp_rule(
-        self, primals: list[nb.Array], cotangent: nb.Array, output: nb.Array
-    ) -> list[nb.Array]:
+        self, primals: list[nb.Tensor], cotangent: nb.Tensor, output: nb.Tensor
+    ) -> list[nb.Tensor]:
         raise NotImplementedError("VJP not implemented for AddOneCustomOp")
 
     def jvp_rule(
-        self, primals: list[nb.Array], tangents: list[nb.Array], output: nb.Array
-    ) -> nb.Array:
+        self, primals: list[nb.Tensor], tangents: list[nb.Tensor], output: nb.Tensor
+    ) -> nb.Tensor:
         raise NotImplementedError("JVP not implemented for AddOneCustomOp")
 
 
-def add_one_custom(arg: nb.Array) -> list[nb.Array]:
+def add_one_custom(arg: nb.Tensor) -> list[nb.Tensor]:
     """Custom unary operation that adds one to the input."""
     return [AddOneCustomOp().forward(arg)]
 

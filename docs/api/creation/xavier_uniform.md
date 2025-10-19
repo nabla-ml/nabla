@@ -3,12 +3,12 @@
 ## Signature
 
 ```python
-nabla.xavier_uniform(shape: 'Shape', dtype: 'DType', gain: 'float', device: 'Device', seed: 'int', batch_dims: 'Shape', traced: 'bool') -> 'Array'
+nabla.xavier_uniform(shape: 'Shape', dtype: 'DType', gain: 'float', device: 'Device', seed: 'int', batch_dims: 'Shape', traced: 'bool') -> 'Tensor'
 ```
 
 ## Description
 
-Fills an array with values according to the Xavier uniform initializer.
+Fills an tensor with values according to the Xavier uniform initializer.
 
 Also known as Glorot uniform initialization, this method is designed to
 keep the variance of activations the same across every layer in a network.
@@ -17,13 +17,13 @@ a = gain * sqrt(6 / (fan_in + fan_out)).
 
 ## Parameters
 
-- **`shape`** (`Shape`): The shape of the output array. Must be at least 2D.
+- **`shape`** (`Shape`): The shape of the output tensor. Must be at least 2D.
 
-- **`dtype`** (`DType, optional`): The desired data type for the array. Defaults to DType.float32.
+- **`dtype`** (`DType, optional`): The desired data type for the tensor. Defaults to DType.float32.
 
 - **`gain`** (`float, optional`): An optional scaling factor. Defaults to 1.0.
 
-- **`device`** (`Device, optional`): The device to place the array on. Defaults to the CPU.
+- **`device`** (`Device, optional`): The device to place the tensor on. Defaults to the CPU.
 
 - **`seed`** (`int, optional`): The seed for the random number generator. Defaults to 0.
 
@@ -33,4 +33,4 @@ a = gain * sqrt(6 / (fan_in + fan_out)).
 
 ## Returns
 
-- `Array`: An array initialized with the Xavier uniform distribution.
+- `Tensor`: An tensor initialized with the Xavier uniform distribution.

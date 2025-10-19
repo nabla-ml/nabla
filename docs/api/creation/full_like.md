@@ -3,25 +3,25 @@
 ## Signature
 
 ```python
-nabla.full_like(template: 'Array', fill_value: 'float') -> 'Array'
+nabla.full_like(template: 'Tensor', fill_value: 'float') -> 'Tensor'
 ```
 
 ## Description
 
-Creates a filled array with the same properties as a template array.
+Creates a filled tensor with the same properties as a template tensor.
 
-The new array will have the same shape, dtype, device, and batch
-dimensions as the template array, filled with `fill_value`.
+The new tensor will have the same shape, dtype, device, and batch
+dimensions as the template tensor, filled with `fill_value`.
 
 ## Parameters
 
-- **`template`** (`Array`): The template array to match properties from.
+- **`template`** (`Tensor`): The template tensor to match properties from.
 
-- **`fill_value`** (`float`): The value to fill the new array with.
+- **`fill_value`** (`float`): The value to fill the new tensor with.
 
 ## Returns
 
-- `Array`: A new array filled with `fill_value` and with the same properties as the template.
+- `Tensor`: A new tensor filled with `fill_value` and with the same properties as the template.
 
 ## Examples
 
@@ -29,6 +29,6 @@ dimensions as the template array, filled with `fill_value`.
 >>> import nabla as nb
 >>> x = nb.zeros((2, 2))
 >>> nb.full_like(x, 7.0)
-Array([[7., 7.],
+Tensor([[7., 7.],
        [7., 7.]], dtype=float32)
 ```

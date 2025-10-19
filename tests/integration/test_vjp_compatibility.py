@@ -17,11 +17,11 @@ def test_single_input_single_output():
 
     # Setup
     x_np = np.array([1.0, 2.0, 3.0])
-    x_nb = nb.Array.from_numpy(x_np)
+    x_nb = nb.Tensor.from_numpy(x_np)
     x_jax = jnp.array(x_np)
 
     cotangent_np = np.array([1.0, 1.0, 1.0])
-    cotangent_nb = nb.Array.from_numpy(cotangent_np)
+    cotangent_nb = nb.Tensor.from_numpy(cotangent_np)
     cotangent_jax = jnp.array(cotangent_np)
 
     # Nabla VJP
@@ -47,8 +47,8 @@ def test_single_input_single_output():
     )
 
     # Nabla returns gradient directly, JAX returns tuple
-    assert isinstance(grads_nb, nb.Array), (
-        f"Nabla should return Array directly, got {type(grads_nb)}"
+    assert isinstance(grads_nb, nb.Tensor), (
+        f"Nabla should return Tensor directly, got {type(grads_nb)}"
     )
     assert isinstance(grads_jax, tuple), (
         f"JAX should return tuple, got {type(grads_jax)}"
@@ -71,13 +71,13 @@ def test_multiple_inputs_single_output():
     # Setup
     x_np = np.array([1.0, 2.0])
     y_np = np.array([3.0, 4.0])
-    x_nb = nb.Array.from_numpy(x_np)
-    y_nb = nb.Array.from_numpy(y_np)
+    x_nb = nb.Tensor.from_numpy(x_np)
+    y_nb = nb.Tensor.from_numpy(y_np)
     x_jax = jnp.array(x_np)
     y_jax = jnp.array(y_np)
 
     cotangent_np = np.array([1.0, 1.0])
-    cotangent_nb = nb.Array.from_numpy(cotangent_np)
+    cotangent_nb = nb.Tensor.from_numpy(cotangent_np)
     cotangent_jax = jnp.array(cotangent_np)
 
     # Nabla VJP
@@ -133,8 +133,8 @@ def test_nested_structure():
     # inputs_dict = {"x": x_np, "y": y_np}
 
     # Convert to Nabla and JAX
-    x_nb = nb.Array.from_numpy(x_np)
-    y_nb = nb.Array.from_numpy(y_np)
+    x_nb = nb.Tensor.from_numpy(x_np)
+    y_nb = nb.Tensor.from_numpy(y_np)
     inputs_nb = {"x": x_nb, "y": y_nb}
 
     x_jax = jnp.array(x_np)
@@ -142,7 +142,7 @@ def test_nested_structure():
     inputs_jax = {"x": x_jax, "y": y_jax}
 
     cotangent_np = np.array([1.0, 1.0])
-    cotangent_nb = nb.Array.from_numpy(cotangent_np)
+    cotangent_nb = nb.Tensor.from_numpy(cotangent_np)
     cotangent_jax = jnp.array(cotangent_np)
 
     # Nabla VJP

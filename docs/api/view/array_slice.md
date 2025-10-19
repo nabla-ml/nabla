@@ -1,19 +1,19 @@
-# array_slice
+# tensor_slice
 
 ## Signature
 
 ```python
-nabla.array_slice(arg: 'Array', slices: 'list[slice]', squeeze_axes: 'list[int] | None') -> 'Array'
+nabla.tensor_slice(arg: 'Tensor', slices: 'list[slice]', squeeze_axes: 'list[int] | None') -> 'Tensor'
 ```
 
 ## Description
 
-Slice an array along specified dimensions.
+Slice an tensor along specified dimensions.
 
 ## Parameters
 
-- **`arg`** (`Input array to slice`): slices: List of slice objects defining the slicing for each dimension squeeze_axes: List of axes that should be squeezed (for JAX compatibility)
+- **`arg`** (`Input tensor to slice`): slices: List of slice objects defining the slicing for each dimension squeeze_axes: List of axes that should be squeezed (for JAX compatibility)
 
 ## Returns
 
-- `Sliced array`: 
+- `Sliced tensor`: 

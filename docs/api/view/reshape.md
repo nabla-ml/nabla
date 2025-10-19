@@ -3,9 +3,9 @@
 ## Signature
 
 ```python
-nabla.reshape(arg: 'Array', shape: 'Shape') -> 'Array'
+nabla.reshape(arg: 'Tensor', shape: 'Shape') -> 'Tensor'
 ```
 
 ## Description
 
-Reshape array to given shape.
+Reshape tensor to given shape.

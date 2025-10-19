@@ -5,7 +5,7 @@ View
    :maxdepth: 1
    :caption: Functions
 
-   array_slice.md
+   tensor_slice.md
    broadcast_batch_dims.md
    broadcast_to.md
    concatenate.md

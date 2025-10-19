@@ -3,29 +3,29 @@
 ## Signature
 
 ```python
-nabla.logical_not(arg: 'Array') -> 'Array'
+nabla.logical_not(arg: 'Tensor') -> 'Tensor'
 ```
 
 ## Description
 
-Computes the element-wise logical NOT of a boolean array.
+Computes the element-wise logical NOT of a boolean tensor.
 
-This function inverts the boolean value of each element in the input array.
-Input arrays of non-boolean types will be cast to boolean first.
+This function inverts the boolean value of each element in the input tensor.
+Input tensors of non-boolean types will be cast to boolean first.
 
 ## Parameters
 
-- **`arg`** (`Array`): The input boolean array.
+- **`arg`** (`Tensor`): The input boolean tensor.
 
 ## Returns
 
-- `Array`: A boolean array containing the inverted values.
+- `Tensor`: A boolean tensor containing the inverted values.
 
 ## Examples
 
 ```pycon
 >>> import nabla as nb
->>> x = nb.array([True, False, True])
+>>> x = nb.tensor([True, False, True])
 >>> nb.logical_not(x)
-Array([False,  True, False], dtype=bool)
+Tensor([False,  True, False], dtype=bool)
 ```

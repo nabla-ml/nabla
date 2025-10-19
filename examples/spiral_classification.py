@@ -131,8 +131,8 @@ def init_network_params_nabla(layer_sizes, seed=42):
         ).astype(np.float32)
         b_np = np.zeros(out_size, dtype=np.float32)
 
-        W = nb.Array.from_numpy(W_np)
-        b = nb.Array.from_numpy(b_np)
+        W = nb.Tensor.from_numpy(W_np)
+        b = nb.Tensor.from_numpy(b_np)
         params.append((W, b))
     return params
 
@@ -140,7 +140,7 @@ def init_network_params_nabla(layer_sizes, seed=42):
 def leaky_relu_nabla(x, alpha=0.01):
     """Leaky ReLU activation function."""
     zeros = nb.zeros_like(x)
-    alpha_val = nb.array(alpha, dtype=x.dtype)
+    alpha_val = nb.tensor(alpha, dtype=x.dtype)
     return nb.where(x > zeros, x, alpha_val * x)
 
 
@@ -169,7 +169,7 @@ def cross_entropy_loss_nabla(params, x, y):
     log_probs = log_softmax(logits, axis=-1)
 
     cross_entropy = -nb.sum(one_hot_y * log_probs)
-    batch_size = nb.array(logits.shape[0], dtype=nb.DType.float32)
+    batch_size = nb.tensor(logits.shape[0], dtype=nb.DType.float32)
     return cross_entropy / batch_size
 
 
@@ -272,7 +272,7 @@ def plot_decision_boundary(params, X, y, epoch=0, loss=0.0):
 
     # Get predictions
     grid_np = np.c_[xx.ravel(), yy.ravel()].astype(np.float32)
-    grid_nabla = nb.Array.from_numpy(grid_np)
+    grid_nabla = nb.Tensor.from_numpy(grid_np)
     probs_nabla = predict_probabilities_nabla(params, grid_nabla)[:, 1]
 
     Z = probs_nabla.to_numpy().reshape(xx.shape)
@@ -336,8 +336,8 @@ def main():
     print("🚀 Generating spiral dataset...")
     X_np, y_np = generate_spiral_data_numpy(num_samples=800, noise=0.08, seed=42)
 
-    X_nabla = nb.Array.from_numpy(X_np.astype(np.float32))
-    y_nabla = nb.Array.from_numpy(y_np.astype(np.int32))
+    X_nabla = nb.Tensor.from_numpy(X_np.astype(np.float32))
+    y_nabla = nb.Tensor.from_numpy(y_np.astype(np.int32))
 
     # Initialize network
     print("🧠 Initializing neural network...")

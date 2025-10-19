@@ -16,7 +16,7 @@ REDUCTION OPERATIONS (4):
 
 VIEW OPERATIONS (11):
 - transpose, permute, move_axis_to_front, reshape, broadcast_to
-- squeeze, unsqueeze, array_slice, pad, concatenate, stack
+- squeeze, unsqueeze, tensor_slice, pad, concatenate, stack
 
 LINEAR ALGEBRA OPERATIONS (1):
 - matmul
@@ -28,7 +28,7 @@ INDEXING OPERATIONS (2):
 - gather, scatter
 
 CREATION OPERATIONS (9):
-- array, arange, ndarange, zeros, ones, randn, rand
+- tensor, arange, ndarange, zeros, ones, randn, rand
 - zeros_like, ones_like
 
 All operations are wrapped in nb.jit() for GPU compilation where appropriate.
@@ -74,7 +74,7 @@ def test_binary_operations():
     """Test all binary operations with NumPy validation."""
     print("\n=== BINARY OPERATIONS ===")
 
-    # Create test arrays
+    # Create test tensors
     a = nb.ndarange((2, 3)).to(device)
     b = nb.ndarange((2, 3)).to(device)
     a_np = np.arange(6).reshape(2, 3).astype(np.float32)
@@ -133,10 +133,10 @@ def test_unary_operations():
     """Test all unary operations with NumPy validation."""
     print("\n=== UNARY OPERATIONS ===")
 
-    # Create test arrays
+    # Create test tensors
     a = nb.ndarange((2, 3)).to(device) + 1  # Add 1 to avoid issues with log/sqrt of 0
-    bool_array = (
-        nb.array([True, False, True, False, True, False]).reshape((2, 3)).to(device)
+    bool_tensor = (
+        nb.tensor([True, False, True, False, True, False]).reshape((2, 3)).to(device)
     )
 
     a_np = (np.arange(6).reshape(2, 3) + 1).astype(np.float32)
@@ -189,7 +189,7 @@ def test_unary_operations():
     compare_with_numpy(res, np.sqrt(a_np), "Square Root")
 
     print("Logical Not")
-    res = nb.jit(nb.logical_not)(bool_array)
+    res = nb.jit(nb.logical_not)(bool_tensor)
     compare_with_numpy(res, np.logical_not(bool_np), "Logical Not")
 
 
@@ -197,7 +197,7 @@ def test_reduction_operations():
     """Test all reduction operations with NumPy validation."""
     print("\n=== REDUCTION OPERATIONS ===")
 
-    # Create test array
+    # Create test tensor
     a = nb.ndarange((3, 4)).to(device) + 1
     a_np = (np.arange(12).reshape(3, 4) + 1).astype(np.float32)
 
@@ -242,7 +242,7 @@ def test_view_operations():
     """Test all view operations with NumPy validation."""
     print("\n=== VIEW OPERATIONS ===")
 
-    # Create test arrays
+    # Create test tensors
     a = nb.ndarange((2, 3, 4)).to(device)
     b = nb.ndarange((2, 3)).to(device)
 
@@ -279,19 +279,19 @@ def test_view_operations():
     res = nb.jit(lambda x: nb.unsqueeze(x, axes=[1]))(b)
     compare_with_numpy(res, np.expand_dims(b_np, axis=1), "Unsqueeze")
 
-    print("Array slice")
-    res = nb.jit(lambda x: nb.array_slice(x, slices=[slice(None), slice(0, 2)]))(a)
-    compare_with_numpy(res, a_np[:, 0:2], "Array slice")
+    print("Tensor slice")
+    res = nb.jit(lambda x: nb.tensor_slice(x, slices=[slice(None), slice(0, 2)]))(a)
+    compare_with_numpy(res, a_np[:, 0:2], "Tensor slice")
 
     print("Concatenate")
-    arrays = [b, b + 10]
-    arrays_np = [b_np, b_np + 10]
-    res = nb.jit(lambda x: nb.concatenate(x, axis=0))(arrays)
-    compare_with_numpy(res, np.concatenate(arrays_np, axis=0), "Concatenate")
+    tensors = [b, b + 10]
+    tensors_np = [b_np, b_np + 10]
+    res = nb.jit(lambda x: nb.concatenate(x, axis=0))(tensors)
+    compare_with_numpy(res, np.concatenate(tensors_np, axis=0), "Concatenate")
 
     print("Stack")
-    res = nb.jit(lambda x: nb.stack(x, axis=0))(arrays)
-    compare_with_numpy(res, np.stack(arrays_np, axis=0), "Stack")
+    res = nb.jit(lambda x: nb.stack(x, axis=0))(tensors)
+    compare_with_numpy(res, np.stack(tensors_np, axis=0), "Stack")
 
     # Skip pad validation for now as it's more complex
 
@@ -316,10 +316,10 @@ def test_special_operations():
     """Test special operations with NumPy validation."""
     print("\n=== SPECIAL OPERATIONS ===")
 
-    # Create test arrays
+    # Create test tensors
     a = nb.ndarange((2, 3)).to(device)
     condition = (
-        nb.array([True, False, True, False, True, False]).reshape((2, 3)).to(device)
+        nb.tensor([True, False, True, False, True, False]).reshape((2, 3)).to(device)
     )
 
     a_np = np.arange(6).reshape(2, 3).astype(np.float32)
@@ -354,9 +354,9 @@ def test_indexing_operations():
     """Test indexing operations with NumPy validation."""
     print("\n=== INDEXING OPERATIONS ===")
 
-    # Create test arrays
+    # Create test tensors
     a = nb.ndarange((3, 4)).to(device)
-    indices = nb.array([0, 2, 1]).to(device)
+    indices = nb.tensor([0, 2, 1]).to(device)
 
     a_np = np.arange(12).reshape(3, 4).astype(np.float32)
     indices_np = np.array([0, 2, 1])
@@ -367,8 +367,8 @@ def test_indexing_operations():
 
     # For scatter, create a simple validation
     target_shape = (4,)
-    scatter_indices = nb.array([0, 2]).to(device)
-    scatter_updates = nb.array([10, 20]).to(device)
+    scatter_indices = nb.tensor([0, 2]).to(device)
+    scatter_updates = nb.tensor([10, 20]).to(device)
 
     print("Scatter")
     res = nb.jit(lambda idx, upd: nb.scatter(target_shape, idx, upd, axis=0))(
@@ -382,12 +382,12 @@ def test_indexing_operations():
 
 
 def test_creation_operations():
-    """Test array creation operations with NumPy validation."""
+    """Test tensor creation operations with NumPy validation."""
     print("\n=== CREATION OPERATIONS ===")
 
-    print("Array from list")
-    res = nb.array([1, 2, 3, 4]).to(device)
-    compare_with_numpy(res, np.array([1, 2, 3, 4], dtype=np.float32), "Array from list")
+    print("Tensor from list")
+    res = nb.tensor([1, 2, 3, 4]).to(device)
+    compare_with_numpy(res, np.array([1, 2, 3, 4], dtype=np.float32), "Tensor from list")
 
     print("Arange")
     res = nb.arange(10).to(device)

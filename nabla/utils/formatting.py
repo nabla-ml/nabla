@@ -14,13 +14,13 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-"""Utility functions for formatting and displaying array shapes and dtypes."""
+"""Utility functions for formatting and displaying tensor shapes and dtypes."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from ..core.array import Array
+from ..core.tensor import Tensor
 
 # ANSI color codes
 light_purple = "\033[94m"
@@ -44,28 +44,28 @@ def format_dtype(dtype: Any) -> str:
         return dtype_str
 
 
-def format_shape_dtype_device(array: Array) -> str:
+def format_shape_dtype_device(tensor: Tensor) -> str:
     """Format shape and dtype in JAX style with batch_dims numbers in blue and everything else in purple."""
-    dtype_str = format_dtype(array.dtype)
+    dtype_str = format_dtype(tensor.dtype)
 
     # Build the dimension string
     dims_parts = []
 
     # Add batch dimensions with blue numbers
-    if array.batch_dims:
+    if tensor.batch_dims:
         batch_dims_colored = []
-        for dim in array.batch_dims:
+        for dim in tensor.batch_dims:
             batch_dims_colored.append(f"{light_purple}{dim}{purple}")
         batch_dims_str = f"{purple},{purple}".join(batch_dims_colored)
         dims_parts.append(batch_dims_str)
 
     # Add shape dimensions in purple
-    if array.shape:
-        shape_str = f"{purple},{purple}".join(map(str, array.shape))
+    if tensor.shape:
+        shape_str = f"{purple},{purple}".join(map(str, tensor.shape))
         dims_parts.append(shape_str)
 
     # Add device information
-    device_info = ":" + str(array.impl.device.label) + "(" + str(array.impl.device.id) + ")"
+    device_info = ":" + str(tensor.impl.device.label) + "(" + str(tensor.impl.device.id) + ")"
 
     # Combine dimensions with comma separator and wrap everything in purple
     if dims_parts:

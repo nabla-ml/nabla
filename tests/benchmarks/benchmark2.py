@@ -71,16 +71,16 @@ def scaling_benchmark_attention(
         return jnp.sum(scores @ v)
 
     func = attention_nb if framework == "nabla" else attention_jax
-    array_lib = nb if framework == "nabla" else jnp
+    tensor_lib = nb if framework == "nabla" else jnp
 
     for seq_len in seq_lengths:
         print(f"Testing {framework} attention scaling: seq_len={seq_len}")
 
         # Generate inputs
-        x = array_lib.array(np.random.rand(4, seq_len, embed_dim).astype(np.float32))
-        w_q = array_lib.array(np.random.rand(embed_dim, embed_dim).astype(np.float32))
-        w_k = array_lib.array(np.random.rand(embed_dim, embed_dim).astype(np.float32))
-        w_v = array_lib.array(np.random.rand(embed_dim, embed_dim).astype(np.float32))
+        x = tensor_lib.tensor(np.random.rand(4, seq_len, embed_dim).astype(np.float32))
+        w_q = tensor_lib.tensor(np.random.rand(embed_dim, embed_dim).astype(np.float32))
+        w_k = tensor_lib.tensor(np.random.rand(embed_dim, embed_dim).astype(np.float32))
+        w_v = tensor_lib.tensor(np.random.rand(embed_dim, embed_dim).astype(np.float32))
 
         # Memory profiling
         profiler = MemoryProfiler()
@@ -118,15 +118,15 @@ def depth_scaling_benchmark(framework: str, depths: list[int], layer_dim: int = 
         return jnp.sum(x)
 
     func = deep_network_nb if framework == "nabla" else deep_network_jax
-    array_lib = nb if framework == "nabla" else jnp
+    tensor_lib = nb if framework == "nabla" else jnp
 
     for depth in depths:
         print(f"Testing {framework} depth scaling: depth={depth}")
 
         # Generate inputs
-        x = array_lib.array(np.random.rand(32, layer_dim).astype(np.float32))
+        x = tensor_lib.tensor(np.random.rand(32, layer_dim).astype(np.float32))
         weights = [
-            array_lib.array(np.random.rand(layer_dim, layer_dim).astype(np.float32))
+            tensor_lib.tensor(np.random.rand(layer_dim, layer_dim).astype(np.float32))
             for _ in range(depth)
         ]
 
@@ -177,8 +177,8 @@ def memory_efficiency_comparison():
         profiler = MemoryProfiler()
         profiler.start_tracking()
 
-        a_nb = nb.array(np.random.rand(size, size).astype(np.float32))
-        b_nb = nb.array(np.random.rand(size, size).astype(np.float32))
+        a_nb = nb.tensor(np.random.rand(size, size).astype(np.float32))
+        b_nb = nb.tensor(np.random.rand(size, size).astype(np.float32))
 
         @nb.jit
         def matmul_grad_nb(a, b):
@@ -262,8 +262,8 @@ def compilation_time_analysis():
     for complexity, (nb_func, jax_func, args) in test_cases.items():
         print(f"Testing compilation time for {complexity} function...")
 
-        # Convert args to appropriate framework arrays
-        nb_args = [nb.array(arg) for arg in args]
+        # Convert args to appropriate framework tensors
+        nb_args = [nb.tensor(arg) for arg in args]
         jax_args = [jnp.array(arg) for arg in args]
 
         # Nabla compilation time

@@ -3,9 +3,9 @@
 ## Signature
 
 ```python
-nabla.shallow_copy(arg: 'Array') -> 'Array'
+nabla.shallow_copy(arg: 'Tensor') -> 'Tensor'
 ```
 
 ## Description
 
-Create a shallow copy of the array.
+Create a shallow copy of the tensor.

@@ -3,23 +3,23 @@
 ## Signature
 
 ```python
-nabla.transfer_to(arg: 'Array', device: 'Device') -> 'Array'
+nabla.transfer_to(arg: 'Tensor', device: 'Device') -> 'Tensor'
 ```
 
 ## Description
 
-Transfers an array to a different compute device.
+Transfers an tensor to a different compute device.
 
-This function moves the data of a Nabla array to the specified device
-(e.g., from CPU to GPU). If the array is already on the target device,
+This function moves the data of a Nabla tensor to the specified device
+(e.g., from CPU to GPU). If the tensor is already on the target device,
 it is returned unchanged.
 
 ## Parameters
 
-- **`arg`** (`Array`): The input array to transfer.
+- **`arg`** (`Tensor`): The input tensor to transfer.
 
 - **`device`** (`Device`): The target device instance (e.g., `nb.Device.cpu()`, `nb.Device.gpu()`).
 
 ## Returns
 
-- `Array`: A new array residing on the target device.
+- `Tensor`: A new tensor residing on the target device.

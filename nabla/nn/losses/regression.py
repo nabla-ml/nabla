@@ -21,7 +21,7 @@ import numpy as np
 import nabla as nb
 
 
-def mean_squared_error(predictions: nb.Array, targets: nb.Array) -> nb.Array:
+def mean_squared_error(predictions: nb.Tensor, targets: nb.Tensor) -> nb.Tensor:
     """Compute mean squared error loss.
 
     Args:
@@ -33,12 +33,12 @@ def mean_squared_error(predictions: nb.Array, targets: nb.Array) -> nb.Array:
     """
     diff = predictions - targets
     squared_errors = diff * diff
-    batch_size = nb.array([np.float32(predictions.shape[0])])
+    batch_size = nb.tensor([np.float32(predictions.shape[0])])
     loss = nb.sum(squared_errors) / batch_size
     return loss
 
 
-def mean_absolute_error(predictions: nb.Array, targets: nb.Array) -> nb.Array:
+def mean_absolute_error(predictions: nb.Tensor, targets: nb.Tensor) -> nb.Tensor:
     """Compute mean absolute error loss.
 
     Args:
@@ -50,14 +50,14 @@ def mean_absolute_error(predictions: nb.Array, targets: nb.Array) -> nb.Array:
     """
     diff = predictions - targets
     absolute_errors = nb.abs(diff)
-    batch_size = nb.array([np.float32(predictions.shape[0])])
+    batch_size = nb.tensor([np.float32(predictions.shape[0])])
     loss = nb.sum(absolute_errors) / batch_size
     return loss
 
 
 def huber_loss(
-    predictions: nb.Array, targets: nb.Array, delta: float = 1.0
-) -> nb.Array:
+    predictions: nb.Tensor, targets: nb.Tensor, delta: float = 1.0
+) -> nb.Tensor:
     """Compute Huber loss (smooth L1 loss).
 
     Args:
@@ -85,6 +85,6 @@ def huber_loss(
     inv_mask_float = ones_like_mask - mask_float
     loss_values = mask_float * quadratic + inv_mask_float * linear
 
-    batch_size = nb.array([np.float32(predictions.shape[0])])
+    batch_size = nb.tensor([np.float32(predictions.shape[0])])
     loss = nb.sum(loss_values) / batch_size
     return loss

@@ -15,7 +15,7 @@
 # ===----------------------------------------------------------------------=== #
 
 """
-Linear algebra operations for Nabla arrays.
+Linear algebra operations for Nabla tensors.
 
 This module provides fundamental linear algebra functions, starting with matrix
 multiplication (`matmul`). The operations support broadcasting over batch
@@ -26,7 +26,7 @@ optimization.
 import numpy as np
 from max.graph import TensorValue, ops
 
-from ..core.array import Array
+from ..core.tensor import Tensor
 from ..utils.shape_utils import get_broadcasted_shape
 from .operation import BinaryOperation
 
@@ -47,28 +47,28 @@ class MatMulOp(BinaryOperation):
         """Initializes the MatMulOp."""
         super().__init__("dot_general")
 
-    def forward(self, *args: Array) -> Array:
+    def forward(self, *args: Tensor) -> Tensor:
         """
         Executes the forward pass for matrix multiplication.
 
-        This method handles the core logic, including promoting 1D arrays to 2D
+        This method handles the core logic, including promoting 1D tensors to 2D
         for the multiplication, performing broadcasting, and then reshaping the
         output back to the expected rank.
 
         Parameters
         ----------
-        *args : Array
-            A tuple containing the two input arrays to be multiplied, `(arg1, arg2)`.
+        *args : Tensor
+            A tuple containing the two input tensors to be multiplied, `(arg1, arg2)`.
 
         Returns
         -------
-        Array
+        Tensor
             The result of the matrix multiplication.
         """
         if len(args) != 2:
             raise ValueError(f"Binary operation requires 2 arguments, got {len(args)}")
 
-        # Move arrays to best device
+        # Move tensors to best device
         from .operation import move_to_best_device
 
         args = move_to_best_device(*args)
@@ -79,7 +79,7 @@ class MatMulOp(BinaryOperation):
         arg1_has_rank_1 = len(arg1.shape) == 1
         arg2_has_rank_1 = len(arg2.shape) == 1
 
-        # Promote 1D arrays to 2D for matmul computation
+        # Promote 1D tensors to 2D for matmul computation
         if arg1_has_rank_1:
             arg1 = reshape(arg1, (1, arg1.shape[0]))
 
@@ -100,7 +100,7 @@ class MatMulOp(BinaryOperation):
             arg2 = broadcast_to(arg2, output_shape[:-2] + arg2.shape[-2:])
             arg2 = broadcast_batch_dims(arg2, output_batch_dims)
 
-        res = Array(
+        res = Tensor(
             shape=output_shape,
             dtype=output_dtype,
             device=arg1.logical_device,
@@ -147,7 +147,7 @@ class MatMulOp(BinaryOperation):
         Returns
         -------
         tuple
-            The shape of the resulting array.
+            The shape of the resulting tensor.
         """
         if len(input_shapes) != 2:
             raise ValueError(
@@ -167,7 +167,7 @@ class MatMulOp(BinaryOperation):
             replace_ignored_dims=[shape1[-2], shape2[-1]],
         )
 
-    def _validate_inputs(self, arg1: Array, arg2: Array) -> None:
+    def _validate_inputs(self, arg1: Tensor, arg2: Tensor) -> None:
         """
         Validates inputs for matrix multiplication.
 
@@ -175,20 +175,20 @@ class MatMulOp(BinaryOperation):
 
         Parameters
         ----------
-        arg1 : Array
-            The first input array.
-        arg2 : Array
-            The second input array.
+        arg1 : Tensor
+            The first input tensor.
+        arg2 : Tensor
+            The second input tensor.
 
         Raises
         ------
         TypeError
-            If inputs are not Array instances.
+            If inputs are not Tensor instances.
         ValueError
             If dtypes, devices, or shapes are incompatible.
         """
-        if not isinstance(arg1, Array) or not isinstance(arg2, Array):
-            raise TypeError("Both arguments must be Array instances")
+        if not isinstance(arg1, Tensor) or not isinstance(arg2, Tensor):
+            raise TypeError("Both arguments must be Tensor instances")
         if arg1.dtype != arg2.dtype:
             raise ValueError(f"Dtypes {arg1.dtype} and {arg2.dtype} are incompatible")
         if arg1.logical_device != arg2.logical_device:
@@ -200,7 +200,7 @@ class MatMulOp(BinaryOperation):
                 f"Shapes {arg1.shape} and {arg2.shape} are not compatible for matrix multiplication"
             )
 
-    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
         """
         Defines the MAX graph implementation for matrix multiplication.
 
@@ -211,8 +211,8 @@ class MatMulOp(BinaryOperation):
         ----------
         args : list[TensorValue]
             A list containing the two input tensor values.
-        output : Array
-            The output array to store the result in.
+        output : Tensor
+            The output tensor to store the result in.
         """
         x_val, y_val = args[0], args[1]
         x_shape = x_val.shape
@@ -250,16 +250,16 @@ class MatMulOp(BinaryOperation):
             )
             output.tensor_value = reshaped_result
 
-    def eagerxpr(self, args: list[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
         """
         Defines the eager mode execution using `numpy.matmul`.
 
         Parameters
         ----------
-        args : list[Array]
-            A list containing the two input arrays.
-        output : Array
-            The output array to store the result in.
+        args : list[Tensor]
+            A list containing the two input tensors.
+        output : Tensor
+            The output tensor to store the result in.
         """
         arg0_numpy = args[0].to_numpy()
         arg1_numpy = args[1].to_numpy()
@@ -267,8 +267,8 @@ class MatMulOp(BinaryOperation):
         output.impl_(np_result)
 
     def vjp_rule(
-        self, primals: list[Array], cotangent: Array, output: Array
-    ) -> list[Array]:
+        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
+    ) -> list[Tensor]:
         """
         Defines the vector-Jacobian product (VJP) rule for matmul.
 
@@ -277,16 +277,16 @@ class MatMulOp(BinaryOperation):
 
         Parameters
         ----------
-        primals : list[Array]
+        primals : list[Tensor]
             The original inputs to the operation, `(x, y)`.
-        cotangent : Array
+        cotangent : Tensor
             The gradient of the loss with respect to the output.
-        output : Array
+        output : Tensor
             The output of the forward pass.
 
         Returns
         -------
-        list[Array]
+        list[Tensor]
             A list containing the gradients with respect to each input.
         """
         x, y = primals
@@ -297,8 +297,8 @@ class MatMulOp(BinaryOperation):
         return [grad_x, grad_y]
 
     def jvp_rule(
-        self, primals: list[Array], tangents: list[Array], output: Array
-    ) -> Array:
+        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
+    ) -> Tensor:
         """
         Defines the Jacobian-vector product (JVP) rule for matmul.
 
@@ -306,16 +306,16 @@ class MatMulOp(BinaryOperation):
 
         Parameters
         ----------
-        primals : list[Array]
+        primals : list[Tensor]
             The original inputs to the operation, `(x, y)`.
-        tangents : list[Array]
+        tangents : list[Tensor]
             The tangents of the inputs, `(tx, ty)`.
-        output : Array
+        output : Tensor
             The output of the forward pass.
 
         Returns
         -------
-        Array
+        Tensor
             The tangent of the output.
         """
         x, y = primals
@@ -330,64 +330,64 @@ class MatMulOp(BinaryOperation):
 _matmul_op = MatMulOp()
 
 
-def matmul(arg0: Array | float | int, arg1: Array | float | int) -> Array:
+def matmul(arg0: Tensor | float | int, arg1: Tensor | float | int) -> Tensor:
     """
-    Performs matrix multiplication on two arrays.
+    Performs matrix multiplication on two tensors.
 
     This function follows the semantics of `numpy.matmul`, supporting
     multiplication of 1D vectors, 2D matrices, and stacks of matrices.
 
-    - If both arguments are 1D arrays of size `N`, it computes the inner
-      (dot) product and returns a scalar-like array.
-    - If one argument is a 2D array (M, K) and the other is a 1D array (K),
+    - If both arguments are 1D tensors of size `N`, it computes the inner
+      (dot) product and returns a scalar-like tensor.
+    - If one argument is a 2D tensor (M, K) and the other is a 1D tensor (K),
       it promotes the vector to a matrix (1, K) or (K, 1) for the
-      multiplication, then squeezes the result back to a 1D array.
-    - If both arguments are 2D arrays, `(M, K) @ (K, N)`, it performs standard
-      matrix multiplication, resulting in an array of shape `(M, N)`.
+      multiplication, then squeezes the result back to a 1D tensor.
+    - If both arguments are 2D tensors, `(M, K) @ (K, N)`, it performs standard
+      matrix multiplication, resulting in an tensor of shape `(M, N)`.
     - If either argument has more than 2 dimensions, it is treated as a stack
       of matrices residing in the last two dimensions and is broadcast accordingly.
 
     Parameters
     ----------
-    arg0 : Array | float | int
-        The first input array.
-    arg1 : Array | float | int
-        The second input array.
+    arg0 : Tensor | float | int
+        The first input tensor.
+    arg1 : Tensor | float | int
+        The second input tensor.
 
     Returns
     -------
-    Array
+    Tensor
         The result of the matrix multiplication.
 
     Examples
     --------
     >>> import nabla as nb
     >>> # Vector-vector product (dot product)
-    >>> v1 = nb.array([1, 2, 3])
-    >>> v2 = nb.array([4, 5, 6])
+    >>> v1 = nb.tensor([1, 2, 3])
+    >>> v2 = nb.tensor([4, 5, 6])
     >>> nb.matmul(v1, v2)
-    Array([32], dtype=int32)
+    Tensor([32], dtype=int32)
 
     >>> # Matrix-vector product
-    >>> M = nb.array([[1, 2], [3, 4]])
-    >>> v = nb.array([5, 6])
+    >>> M = nb.tensor([[1, 2], [3, 4]])
+    >>> v = nb.tensor([5, 6])
     >>> nb.matmul(M, v)
-    Array([17, 39], dtype=int32)
+    Tensor([17, 39], dtype=int32)
 
     >>> # Batched matrix-matrix product
-    >>> M1 = nb.array([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]) # Shape (2, 2, 2)
-    >>> M2 = nb.array([[[9, 1], [2, 3]], [[4, 5], [6, 7]]]) # Shape (2, 2, 2)
+    >>> M1 = nb.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]) # Shape (2, 2, 2)
+    >>> M2 = nb.tensor([[[9, 1], [2, 3]], [[4, 5], [6, 7]]]) # Shape (2, 2, 2)
     >>> nb.matmul(M1, M2)
-    Array([[[ 13,   7],
+    Tensor([[[ 13,   7],
             [ 35,  15]],
     <BLANKLINE>
            [[ 56,  47],
             [ 76,  67]]], dtype=int32)
     """
-    from .binary import _ensure_array
+    from .binary import _ensure_tensor
 
-    arg0 = _ensure_array(arg0)
-    arg1 = _ensure_array(arg1)
+    arg0 = _ensure_tensor(arg0)
+    arg1 = _ensure_tensor(arg1)
     return _matmul_op.forward(arg0, arg1)
 
 
@@ -434,9 +434,9 @@ def matmul(arg0: Array | float | int, arg1: Array | float | int) -> Array:
 #     )
 
 
-# def flip(x: Array, axis: int | tuple[int, ...]) -> Array:
+# def flip(x: Tensor, axis: int | tuple[int, ...]) -> Tensor:
 #     """
-#     Reverses the order of elements in an array along the given axes.
+#     Reverses the order of elements in an tensor along the given axes.
 #     This is an implementation of np.flip using fundamental slicing.
 #     """
 #     if isinstance(axis, int):
@@ -451,13 +451,13 @@ def matmul(arg0: Array | float | int, arg1: Array | float | int) -> Array:
 #     for ax in axes_to_flip:
 #         slicer[ax] = slice(None, None, -1)
 
-#     # Use tuple slicing on the array. The Nabla Array class's __getitem__
+#     # Use tuple slicing on the tensor. The Nabla Tensor class's __getitem__
 #     # must support this to be Python-idiomatic.
 #     return x[tuple(slicer)]
 
 # def _conv2d_filter_gradient(
-#     x: Array, dy: Array, stride: tuple, dilation: tuple, padding: tuple, groups: int
-# ) -> Array:
+#     x: Tensor, dy: Tensor, stride: tuple, dilation: tuple, padding: tuple, groups: int
+# ) -> Tensor:
 #     """
 #     Computes `grad_W = conv(permute(x), permute(dy))` for a standard conv2d.
 #     Returns a filter gradient in HWIO layout.
@@ -521,14 +521,14 @@ def matmul(arg0: Array | float | int, arg1: Array | float | int) -> Array:
 
 #         return (n, h_out, w_out, c_out)
 
-#     def forward(self, *args: Array) -> Array:
+#     def forward(self, *args: Tensor) -> Tensor:
 #         # Standard forward pass logic
 #         from .operation import move_to_best_device
 #         input_arr, filter_arr = move_to_best_device(*args)
 #         self._validate_inputs(input_arr, filter_arr)
 
 #         output_shape = self.compute_output_shape(input_arr.shape, filter_arr.shape)
-#         res = Array(
+#         res = Tensor(
 #             shape=output_shape, dtype=self.compute_output_dtype(input_arr, filter_arr),
 #             device=input_arr.logical_device, materialize=False, name=self.name,
 #             batch_dims=input_arr.batch_dims,
@@ -541,13 +541,13 @@ def matmul(arg0: Array | float | int, arg1: Array | float | int) -> Array:
 #             self.eagerxpr([input_arr, filter_arr], res)
 #         return res
 
-#     def _validate_inputs(self, input_arr: Array, filter_arr: Array) -> None:
+#     def _validate_inputs(self, input_arr: Tensor, filter_arr: Tensor) -> None:
 #         if len(input_arr.shape) != 4 or len(filter_arr.shape) != 4:
 #             raise ValueError("Conv2D requires 4D input and filter tensors.")
 #         if input_arr.logical_device != filter_arr.logical_device:
 #             raise ValueError(f"Devices {input_arr.logical_device} and {filter_arr.logical_device} are incompatible")
 
-#     def maxpr(self, args: list[TensorValue], output: Array) -> None:
+#     def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
 #         input_val, filter_val = args
 #         (pt, pb), (pl, pr) = self.padding
 #         output.tensor_value = ops.conv2d(
@@ -555,7 +555,7 @@ def matmul(arg0: Array | float | int, arg1: Array | float | int) -> Array:
 #             dilation=self.dilation, padding=(pt, pb, pl, pr), groups=self.groups
 #         )
 
-#     def eagerxpr(self, args: list[Array], output: Array) -> None:
+#     def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
 #         input_arr, filter_arr = args
 #         input_torch = torch.from_numpy(np.transpose(input_arr.to_numpy(), (0, 3, 1, 2)))
 #         filter_torch = torch.from_numpy(np.transpose(filter_arr.to_numpy(), (3, 2, 0, 1)))
@@ -567,7 +567,7 @@ def matmul(arg0: Array | float | int, arg1: Array | float | int) -> Array:
 #         result_nhwc = np.transpose(result_torch.numpy(), (0, 2, 3, 1))
 #         output.impl_(result_nhwc)
 
-#     def vjp_rule(self, primals: list[Array], cotangent: Array, output: Array) -> list[Array]:
+#     def vjp_rule(self, primals: list[Tensor], cotangent: Tensor, output: Tensor) -> list[Tensor]:
 #         """VJP of Y = conv(X, W)"""
 #         input_arr, filter_arr = primals # filter_arr is HWIO
 
@@ -599,7 +599,7 @@ def matmul(arg0: Array | float | int, arg1: Array | float | int) -> Array:
 #         return [grad_input, grad_filter]
 
 
-#     def jvp_rule(self, primals: list[Array], tangents: list[Array], output: Array) -> Array:
+#     def jvp_rule(self, primals: list[Tensor], tangents: list[Tensor], output: Tensor) -> Tensor:
 #         input_arr, filter_arr = primals
 #         input_tangent, filter_tangent = tangents
 #         from .binary import add
@@ -642,12 +642,12 @@ def matmul(arg0: Array | float | int, arg1: Array | float | int) -> Array:
 #             raise ValueError(f"Computed non-positive output dimensions for Conv2DTranspose: {(n, h_out, w_out, c_out)}")
 #         return (n, h_out, w_out, c_out)
 
-#     def forward(self, *args: Array) -> Array:
+#     def forward(self, *args: Tensor) -> Tensor:
 #         from .operation import move_to_best_device
 #         input_arr, filter_arr = move_to_best_device(*args)
 #         self._validate_inputs(input_arr, filter_arr)
 #         output_shape = self.compute_output_shape(input_arr.shape, filter_arr.shape)
-#         res = Array(
+#         res = Tensor(
 #             shape=output_shape, dtype=self.compute_output_dtype(input_arr, filter_arr),
 #             device=input_arr.logical_device, materialize=False, name=self.name,
 #             batch_dims=input_arr.batch_dims,
@@ -660,13 +660,13 @@ def matmul(arg0: Array | float | int, arg1: Array | float | int) -> Array:
 #             self.eagerxpr([input_arr, filter_arr], res)
 #         return res
 
-#     def _validate_inputs(self, input_arr: Array, filter_arr: Array) -> None:
+#     def _validate_inputs(self, input_arr: Tensor, filter_arr: Tensor) -> None:
 #         if len(input_arr.shape) != 4 or len(filter_arr.shape) != 4:
 #             raise ValueError("Conv2DTranspose requires 4D input and filter tensors.")
 #         if input_arr.logical_device != filter_arr.logical_device:
 #             raise ValueError(f"Devices {input_arr.logical_device} and {filter_arr.logical_device} are incompatible")
 
-#     def maxpr(self, args: list[TensorValue], output: Array) -> None:
+#     def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
 #         input_val, filter_val = args
 #         (pt, pb), (pl, pr) = self.padding
 #         if self.groups > 1:
@@ -688,7 +688,7 @@ def matmul(arg0: Array | float | int, arg1: Array | float | int) -> Array:
 #                 padding=(pt, pb, pl, pr), output_paddings=self.output_padding
 #             )
 
-#     def eagerxpr(self, args: list[Array], output: Array) -> None:
+#     def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
 #         input_arr, filter_arr = args
 #         input_torch = torch.from_numpy(np.transpose(input_arr.to_numpy(), (0, 3, 1, 2)))
 #         filter_torch = torch.from_numpy(np.transpose(filter_arr.to_numpy(), (3, 2, 0, 1)))
@@ -701,7 +701,7 @@ def matmul(arg0: Array | float | int, arg1: Array | float | int) -> Array:
 #         result_nhwc = np.transpose(result_torch.numpy(), (0, 2, 3, 1))
 #         output.impl_(result_nhwc)
 
-#     def vjp_rule(self, primals: list[Array], cotangent: Array, output: Array) -> list[Array]:
+#     def vjp_rule(self, primals: list[Tensor], cotangent: Tensor, output: Tensor) -> list[Tensor]:
 #         """VJP of Y = conv_transpose(X, W)"""
 #         input_arr, filter_arr = primals # filter_arr is HWOI
 
@@ -726,7 +726,7 @@ def matmul(arg0: Array | float | int, arg1: Array | float | int) -> Array:
 
 #         return [grad_input, grad_filter]
 
-#     def jvp_rule(self, primals: list[Array], tangents: list[Array], output: Array) -> Array:
+#     def jvp_rule(self, primals: list[Tensor], tangents: list[Tensor], output: Tensor) -> Tensor:
 #         input_arr, filter_arr = primals
 #         input_tangent, filter_tangent = tangents
 #         from .binary import add
@@ -739,9 +739,9 @@ def matmul(arg0: Array | float | int, arg1: Array | float | int) -> Array:
 #         return add(res1, res2)
 
 # def conv2d(
-#     input_arr: Array, filter_arr: Array, stride=(1, 1),
+#     input_arr: Tensor, filter_arr: Tensor, stride=(1, 1),
 #     dilation=(1, 1), padding=0, groups=1
-# ) -> Array:
+# ) -> Tensor:
 #     """Applies a 2D convolution."""
 #     norm_stride = _normalize_tuple(stride, 2, "stride")
 #     norm_dilation = _normalize_tuple(dilation, 2, "dilation")
@@ -755,9 +755,9 @@ def matmul(arg0: Array | float | int, arg1: Array | float | int) -> Array:
 
 
 # def conv2d_transpose(
-#     input_arr: Array, filter_arr: Array, stride=(1, 1),
+#     input_arr: Tensor, filter_arr: Tensor, stride=(1, 1),
 #     dilation=(1, 1), padding=0, output_padding=0, groups=1
-# ) -> Array:
+# ) -> Tensor:
 #     """Applies a 2D transposed convolution."""
 #     norm_stride = _normalize_tuple(stride, 2, "stride")
 #     norm_dilation = _normalize_tuple(dilation, 2, "dilation")
@@ -809,7 +809,7 @@ def matmul(arg0: Array | float | int, arg1: Array | float | int) -> Array:
 
 #     Parameters:
 #     -----------
-#     input_data : ndarray
+#     input_data : ndtensor
 #         Input data with shape (N, C, H, W)
 #     filter_h : int
 #         Filter height
@@ -824,7 +824,7 @@ def matmul(arg0: Array | float | int, arg1: Array | float | int) -> Array:
 
 #     Returns:
 #     --------
-#     col : ndarray
+#     col : ndtensor
 #         Column matrix with shape (N, C, filter_h, filter_w, out_h, out_w)
 #     """
 #     n, c, h, w = input_data.shape
@@ -881,7 +881,7 @@ def matmul(arg0: Array | float | int, arg1: Array | float | int) -> Array:
 
 #     Parameters:
 #     -----------
-#     col : ndarray
+#     col : ndtensor
 #         Column matrix with shape (N, C, filter_h, filter_w, out_h, out_w)
 #     input_shape : tuple
 #         Original input shape (N, C, H, W)
@@ -898,7 +898,7 @@ def matmul(arg0: Array | float | int, arg1: Array | float | int) -> Array:
 
 #     Returns:
 #     --------
-#     img : ndarray
+#     img : ndtensor
 #         Reconstructed input data with shape (N, C, H, W)
 #     """
 #     n, c, h, w = input_shape
@@ -947,9 +947,9 @@ def matmul(arg0: Array | float | int, arg1: Array | float | int) -> Array:
 
 #     Parameters:
 #     -----------
-#     input_data : ndarray
+#     input_data : ndtensor
 #         Input data with shape (N, C_in, H, W)
-#     filters : ndarray
+#     filters : ndtensor
 #         Filters with shape (C_out, C_in, filter_h, filter_w)
 #     dilation : tuple
 #         Dilation factors (dilation_h, dilation_w)
@@ -960,7 +960,7 @@ def matmul(arg0: Array | float | int, arg1: Array | float | int) -> Array:
 
 #     Returns:
 #     --------
-#     output : ndarray
+#     output : ndtensor
 #         Convolution output with shape (N, C_out, out_h, out_w)
 #     """
 #     n, c_in, h, w = input_data.shape
@@ -1010,9 +1010,9 @@ def matmul(arg0: Array | float | int, arg1: Array | float | int) -> Array:
 
 #     Parameters:
 #     -----------
-#     input_data : ndarray
+#     input_data : ndtensor
 #         Input data with shape (N, C_in, H, W)
-#     filters : ndarray
+#     filters : ndtensor
 #         Filters with shape (C_out, C_in, filter_h, filter_w)
 #     dilation : tuple
 #         Dilation factors (dilation_h, dilation_w)
@@ -1025,7 +1025,7 @@ def matmul(arg0: Array | float | int, arg1: Array | float | int) -> Array:
 
 #     Returns:
 #     --------
-#     output : ndarray
+#     output : ndtensor
 #         Transposed convolution output
 #     """
 #     n, c_in, h, w = input_data.shape
@@ -1043,7 +1043,7 @@ def matmul(arg0: Array | float | int, arg1: Array | float | int) -> Array:
 #         upsampled_h = h + (h - 1) * (stride_h - 1)
 #         upsampled_w = w + (w - 1) * (stride_w - 1)
 
-#         # Create upsampled array filled with zeros
+#         # Create upsampled tensor filled with zeros
 #         upsampled = np.zeros(
 #             (n, c_in, upsampled_h, upsampled_w), dtype=input_data.dtype
 #         )

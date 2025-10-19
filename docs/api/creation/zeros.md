@@ -3,20 +3,20 @@
 ## Signature
 
 ```python
-nabla.zeros(shape: 'Shape', dtype: 'DType', device: 'Device', batch_dims: 'Shape', traced: 'bool') -> 'Array'
+nabla.zeros(shape: 'Shape', dtype: 'DType', device: 'Device', batch_dims: 'Shape', traced: 'bool') -> 'Tensor'
 ```
 
 ## Description
 
-Creates an array of a given shape filled with zeros.
+Creates an tensor of a given shape filled with zeros.
 
 ## Parameters
 
-- **`shape`** (`Shape`): The shape of the new array, e.g., `(2, 3)` or `(5,)`.
+- **`shape`** (`Shape`): The shape of the new tensor, e.g., `(2, 3)` or `(5,)`.
 
-- **`dtype`** (`DType, optional`): The desired data type for the array. Defaults to DType.float32.
+- **`dtype`** (`DType, optional`): The desired data type for the tensor. Defaults to DType.float32.
 
-- **`device`** (`Device, optional`): The device to place the array on. Defaults to the CPU.
+- **`device`** (`Device, optional`): The device to place the tensor on. Defaults to the CPU.
 
 - **`batch_dims`** (`Shape, optional`): Specifies leading dimensions to be treated as batch dimensions. Defaults to an empty tuple.
 
@@ -24,7 +24,7 @@ Creates an array of a given shape filled with zeros.
 
 ## Returns
 
-- `Array`: An array of the specified shape and dtype, filled with zeros.
+- `Tensor`: An tensor of the specified shape and dtype, filled with zeros.
 
 ## Examples
 
@@ -32,6 +32,6 @@ Creates an array of a given shape filled with zeros.
 >>> import nabla as nb
 >>> # Create a 2x3 matrix of zeros
 >>> nb.zeros((2, 3), dtype=nb.DType.int32)
-Array([[0, 0, 0],
+Tensor([[0, 0, 0],
        [0, 0, 0]], dtype=int32)
 ```

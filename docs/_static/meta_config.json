@@ -1,11 +1,11 @@
 {
   "index": {
-    "description": "Nabla: GPU-accelerated Python library for array computation with NumPy-like API and JAX-style transformations. Fast, composable, and Mojo-integrated.",
+    "description": "Nabla: GPU-accelerated Python library for tensor computation with NumPy-like API and JAX-style transformations. Fast, composable, and Mojo-integrated.",
     "keywords": [
       "nabla",
       "gpu",
       "python",
-      "arrays",
+      "tensors",
       "numpy",
       "jax",
       "mojo",
@@ -13,7 +13,7 @@
     ]
   },
   "api/index": {
-    "description": "Complete API reference for Nabla - Python library for GPU-accelerated array operations, transformations, and neural networks.",
+    "description": "Complete API reference for Nabla - Python library for GPU-accelerated tensor operations, transformations, and neural networks.",
     "keywords": [
       "api",
       "reference",
@@ -33,10 +33,10 @@
       "automatic differentiation"
     ]
   },
-  "api/array": {
-    "description": "Array class documentation - the fundamental array type in Nabla for GPU-accelerated computation.",
+  "api/tensor": {
+    "description": "Tensor class documentation - the fundamental tensor type in Nabla for GPU-accelerated computation.",
     "keywords": [
-      "array",
+      "tensor",
       "class",
       "gpu",
       "computation",
@@ -54,12 +54,12 @@
     ]
   },
   "tutorials/understanding_nabla_part1": {
-    "description": "Introduction to Nabla fundamentals: arrays, operations, and GPU acceleration basics.",
+    "description": "Introduction to Nabla fundamentals: tensors, operations, and GPU acceleration basics.",
     "keywords": [
       "introduction",
       "basics",
       "getting started",
-      "arrays",
+      "tensors",
       "gpu"
     ]
   },

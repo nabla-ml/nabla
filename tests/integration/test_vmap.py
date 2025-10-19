@@ -102,25 +102,25 @@ def test_nested_vmap_batched_matmul():
     """Test nested vmap for batched matrix multiplication from scratch."""
     print("\nTesting nested vmap batched matrix multiplication...")
 
-    def dot(args: list[nb.Array]) -> list[nb.Array]:
+    def dot(args: list[nb.Tensor]) -> list[nb.Tensor]:
         """Compute dot product along axis 0."""
         return [nb.sum(args[0] * args[1], axes=[0])]
 
-    def mv_prod(args: list[nb.Array]) -> list[nb.Array]:
+    def mv_prod(args: list[nb.Tensor]) -> list[nb.Tensor]:
         """Matrix-vector product using vmap over rows."""
         return nb.vmap(dot, [0, None])(args)
 
-    def mm_prod(args: list[nb.Array]) -> list[nb.Array]:
+    def mm_prod(args: list[nb.Tensor]) -> list[nb.Tensor]:
         """Matrix-matrix product using vmap over columns."""
         return nb.vmap(mv_prod, [None, 1], [1])(args)
 
     # Instead of the complex nested approach, let's use a simpler batched matrix multiplication
     def simple_batched_matmul(
-        batch_matrices: nb.Array, single_matrix: nb.Array
-    ) -> nb.Array:
+        batch_matrices: nb.Tensor, single_matrix: nb.Tensor
+    ) -> nb.Tensor:
         """Simple batched matrix multiplication using direct vmap."""
 
-        def single_matmul(matrix: nb.Array) -> nb.Array:
+        def single_matmul(matrix: nb.Tensor) -> nb.Tensor:
             return nb.matmul(matrix, single_matrix)
 
         return nb.vmap(single_matmul, in_axes=0, out_axes=0)(batch_matrices)
@@ -179,11 +179,11 @@ def test_nested_vmap_batched_matmul():
         # Now test a more complex nested vmap approach (if the simple one works)
         print("Testing enhanced nested vmap approach...")
 
-        def enhanced_batched_matmul(args: list[nb.Array]) -> list[nb.Array]:
+        def enhanced_batched_matmul(args: list[nb.Tensor]) -> list[nb.Tensor]:
             """Enhanced batched matrix multiplication using nested vmap with better error handling."""
             batch_matrices, single_matrix = args[0], args[1]
 
-            def matrix_multiply_single(matrix: nb.Array) -> nb.Array:
+            def matrix_multiply_single(matrix: nb.Tensor) -> nb.Tensor:
                 """Multiply a single matrix with the shared matrix."""
                 return nb.matmul(matrix, single_matrix)
 
@@ -217,15 +217,15 @@ def test_individual_components():
     """Test the individual components of the nested vmap."""
     print("\nTesting individual vmap components...")
 
-    def dot(args: list[nb.Array]) -> list[nb.Array]:
+    def dot(args: list[nb.Tensor]) -> list[nb.Tensor]:
         """Compute dot product along axis 0."""
         return [nb.sum(args[0] * args[1], axes=[0])]
 
     try:
         # Test basic dot product
         print("Testing basic dot product...")
-        a = nb.array([1.0, 2.0, 3.0], nb.DType.float32)
-        b = nb.array([4.0, 5.0, 6.0], nb.DType.float32)
+        a = nb.tensor([1.0, 2.0, 3.0], nb.DType.float32)
+        b = nb.tensor([4.0, 5.0, 6.0], nb.DType.float32)
         result = dot([a, b])
         expected = 32.0  # 1*4 + 2*5 + 3*6 = 32
         assert abs(result[0].to_numpy().item() - expected) < 1e-6
@@ -234,11 +234,11 @@ def test_individual_components():
         # Test matrix-vector product
         print("Testing matrix-vector product...")
 
-        def mv_prod(args: list[nb.Array]) -> list[nb.Array]:
+        def mv_prod(args: list[nb.Tensor]) -> list[nb.Tensor]:
             return nb.vmap(dot, [0, None])(args)
 
-        matrix = nb.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], nb.DType.float32)
-        vector = nb.array([1.0, 1.0, 1.0], nb.DType.float32)
+        matrix = nb.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], nb.DType.float32)
+        vector = nb.tensor([1.0, 1.0, 1.0], nb.DType.float32)
         mv_result = mv_prod([matrix, vector])
         # Expected: [1+2+3, 4+5+6] = [6, 15]
         expected_mv = np.array([6.0, 15.0], dtype=np.float32)
@@ -248,11 +248,11 @@ def test_individual_components():
         # Test matrix-matrix product
         print("Testing matrix-matrix product...")
 
-        def mm_prod(args: list[nb.Array]) -> list[nb.Array]:
+        def mm_prod(args: list[nb.Tensor]) -> list[nb.Tensor]:
             return nb.vmap(mv_prod, [None, 1], [1])(args)
 
-        mat_a = nb.array([[1.0, 2.0], [3.0, 4.0]], nb.DType.float32)  # 2x2
-        mat_b = nb.array([[1.0, 0.0], [0.0, 1.0]], nb.DType.float32)  # 2x2 identity
+        mat_a = nb.tensor([[1.0, 2.0], [3.0, 4.0]], nb.DType.float32)  # 2x2
+        mat_b = nb.tensor([[1.0, 0.0], [0.0, 1.0]], nb.DType.float32)  # 2x2 identity
         mm_result = mm_prod([mat_a, mat_b])
         # Should be identity multiplication, result = mat_a
         assert np.allclose(mm_result[0].to_numpy(), mat_a.to_numpy(), rtol=1e-6)
@@ -342,7 +342,7 @@ def test_advanced_nested_vmap_patterns():
             """
             result = nb.sum(
                 x * weights, axes=[0]
-            )  # Sum over feature dimension for 1D arrays
+            )  # Sum over feature dimension for 1D tensors
             return result
 
         # Test data

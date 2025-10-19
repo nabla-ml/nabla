@@ -5,7 +5,7 @@ Each example is a complete, runnable script that illustrates specific functional
 
 ## Contents
 
-- Basic Operations: Array creation and manipulation
+- Basic Operations: Tensor creation and manipulation
 - Automatic Differentiation: Using `vjp` and `jvp`
 - Vectorization: Using `vmap` for automatic batching
 - JIT Compilation: Accelerating code with just-in-time compilation

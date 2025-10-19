@@ -4,10 +4,10 @@
 import nabla as nb
 
 
-def test_pytree_vjp_simple_array():
-    """Test VJP with simple array."""
-    print("=== Test 1: Simple Array ===")
-    x = nb.array([1.0, 2.0, 3.0])
+def test_pytree_vjp_simple_tensor():
+    """Test VJP with simple tensor."""
+    print("=== Test 1: Simple Tensor ===")
+    x = nb.tensor([1.0, 2.0, 3.0])
 
     def simple_func(x):
         return nb.sum(x**2)
@@ -23,11 +23,11 @@ def test_pytree_vjp_simple_array():
     assert nb.allclose(grad, expected_grad), f"Expected {expected_grad}, got {grad}"
 
 
-def test_pytree_vjp_multiple_arrays():
-    """Test VJP with multiple arrays."""
-    print("\n=== Test 2: Multiple Arrays ===")
-    x = nb.array([1.0, 2.0])
-    y = nb.array([3.0, 4.0])
+def test_pytree_vjp_multiple_tensors():
+    """Test VJP with multiple tensors."""
+    print("\n=== Test 2: Multiple Tensors ===")
+    x = nb.tensor([1.0, 2.0])
+    y = nb.tensor([3.0, 4.0])
 
     def multi_func(x, y):
         return nb.sum(x * y)
@@ -46,7 +46,7 @@ def test_pytree_vjp_multiple_arrays():
 def test_pytree_vjp_dict_input():
     """Test VJP with dictionary input."""
     print("\n=== Test 3: Dictionary Input ===")
-    params = {"weights": nb.array([1.0, 2.0]), "bias": nb.array([0.5])}
+    params = {"weights": nb.tensor([1.0, 2.0]), "bias": nb.tensor([0.5])}
 
     def dict_func(params):
         return nb.sum(params["weights"] * 2.0) + nb.sum(params["bias"])
@@ -58,8 +58,8 @@ def test_pytree_vjp_dict_input():
     print(f"Gradient dict: {grad_dict}")
 
     # Verify gradients
-    expected_grad_weights = nb.array([2.0, 2.0])
-    expected_grad_bias = nb.array([1.0])
+    expected_grad_weights = nb.tensor([2.0, 2.0])
+    expected_grad_bias = nb.tensor([1.0])
     assert nb.allclose(grad_dict["weights"], expected_grad_weights), (
         f"Expected weights grad={expected_grad_weights}, got {grad_dict['weights']}"
     )
@@ -72,8 +72,8 @@ def test_pytree_vjp_nested_structure():
     """Test VJP with nested structure."""
     print("\n=== Test 4: Nested Structure ===")
     nested_params = {
-        "layer1": [nb.array([1.0]), nb.array([2.0])],
-        "layer2": {"w": nb.array([3.0]), "b": nb.array([4.0])},
+        "layer1": [nb.tensor([1.0]), nb.tensor([2.0])],
+        "layer2": {"w": nb.tensor([3.0]), "b": nb.tensor([4.0])},
     }
 
     def nested_func(params):
@@ -94,16 +94,16 @@ def test_pytree_vjp_nested_structure():
     )
 
     # Verify all gradients are 1.0 (since we're just summing everything)
-    assert nb.allclose(grad_nested["layer1"][0], nb.array([1.0])), (
+    assert nb.allclose(grad_nested["layer1"][0], nb.tensor([1.0])), (
         f"Expected layer1[0] grad=1.0, got {grad_nested['layer1'][0]}"
     )
-    assert nb.allclose(grad_nested["layer1"][1], nb.array([1.0])), (
+    assert nb.allclose(grad_nested["layer1"][1], nb.tensor([1.0])), (
         f"Expected layer1[1] grad=1.0, got {grad_nested['layer1'][1]}"
     )
-    assert nb.allclose(grad_nested["layer2"]["w"], nb.array([1.0])), (
+    assert nb.allclose(grad_nested["layer2"]["w"], nb.tensor([1.0])), (
         f"Expected layer2.w grad=1.0, got {grad_nested['layer2']['w']}"
     )
-    assert nb.allclose(grad_nested["layer2"]["b"], nb.array([1.0])), (
+    assert nb.allclose(grad_nested["layer2"]["b"], nb.tensor([1.0])), (
         f"Expected layer2.b grad=1.0, got {grad_nested['layer2']['b']}"
     )
 
@@ -111,8 +111,8 @@ def test_pytree_vjp_nested_structure():
 if __name__ == "__main__":
     """Run all pytree VJP tests when executed as script."""
     print("=== Pytree VJP Tests ===")
-    test_pytree_vjp_simple_array()
-    test_pytree_vjp_multiple_arrays()
+    test_pytree_vjp_simple_tensor()
+    test_pytree_vjp_multiple_tensors()
     test_pytree_vjp_dict_input()
     test_pytree_vjp_nested_structure()
     print("\n🎉 All pytree VJP tests passed!")

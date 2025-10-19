@@ -61,7 +61,7 @@ ignore = ["E501", "UP007"]  # UP007: Use Union instead of | for Python 3.9 compa
 "nabla/ops/__init__.py" = ["A004"]  # Allow sum shadowing in public API
 "nabla/ops/binary.py" = ["A001"]  # Allow intentional shadowing of built-in 'pow' for API consistency
 "nabla/ops/reduce.py" = ["A001"]  # Allow intentional shadowing of built-in 'sum' for API consistency
-"nabla/ops/unary.py" = ["A001"]  # Allow intentional shadowing of built-ins (abs, max, min, etc.) for array API consistency
+"nabla/ops/unary.py" = ["A001"]  # Allow intentional shadowing of built-ins (abs, max, min, etc.) for tensor API consistency
 "nabla/ops/*.py" = ["A001"]  # Allow intentional shadowing of built-ins in ops modules for NumPy/JAX-like API
 "tests/integration/test_nested_dict_vjp.py" = ["E721"]  # Allow type comparison with == for tests
 "tests/integration/test_new_vjp.py" = ["E731"]  # Allow lambda assignments in tests

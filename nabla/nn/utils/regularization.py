@@ -21,20 +21,20 @@ import numpy as np
 import nabla as nb
 
 
-def l1_regularization(params: list[nb.Array], weight: float = 0.01) -> nb.Array:
+def l1_regularization(params: list[nb.Tensor], weight: float = 0.01) -> nb.Tensor:
     """Compute L1 (Lasso) regularization loss.
 
     L1 regularization adds a penalty equal to the sum of absolute values of parameters.
     This encourages sparsity in the model parameters.
 
     Args:
-        params: List of parameter arrays (typically weights)
+        params: List of parameter tensors (typically weights)
         weight: Regularization strength
 
     Returns:
         Scalar L1 regularization loss
     """
-    l1_loss = nb.array([0.0])
+    l1_loss = nb.tensor([0.0])
 
     for param in params:
         l1_loss = l1_loss + nb.sum(nb.abs(param))
@@ -42,20 +42,20 @@ def l1_regularization(params: list[nb.Array], weight: float = 0.01) -> nb.Array:
     return weight * l1_loss
 
 
-def l2_regularization(params: list[nb.Array], weight: float = 0.01) -> nb.Array:
+def l2_regularization(params: list[nb.Tensor], weight: float = 0.01) -> nb.Tensor:
     """Compute L2 (Ridge) regularization loss.
 
     L2 regularization adds a penalty equal to the sum of squares of parameters.
     This encourages small parameter values and helps prevent overfitting.
 
     Args:
-        params: List of parameter arrays (typically weights)
+        params: List of parameter tensors (typically weights)
         weight: Regularization strength
 
     Returns:
         Scalar L2 regularization loss
     """
-    l2_loss = nb.array([0.0])
+    l2_loss = nb.tensor([0.0])
 
     for param in params:
         l2_loss = l2_loss + nb.sum(param * param)
@@ -64,18 +64,18 @@ def l2_regularization(params: list[nb.Array], weight: float = 0.01) -> nb.Array:
 
 
 def elastic_net_regularization(
-    params: list[nb.Array],
+    params: list[nb.Tensor],
     l1_weight: float = 0.01,
     l2_weight: float = 0.01,
     l1_ratio: float = 0.5,
-) -> nb.Array:
+) -> nb.Tensor:
     """Compute Elastic Net regularization loss.
 
     Elastic Net combines L1 and L2 regularization:
     ElasticNet = l1_ratio * L1 + (1 - l1_ratio) * L2
 
     Args:
-        params: List of parameter arrays (typically weights)
+        params: List of parameter tensors (typically weights)
         l1_weight: L1 regularization strength
         l2_weight: L2 regularization strength
         l1_ratio: Ratio of L1 to L2 regularization (0 = pure L2, 1 = pure L1)
@@ -94,21 +94,21 @@ def elastic_net_regularization(
 
 
 def dropout(
-    x: nb.Array, p: float = 0.5, training: bool = True, seed: int | None = None
-) -> nb.Array:
+    x: nb.Tensor, p: float = 0.5, training: bool = True, seed: int | None = None
+) -> nb.Tensor:
     """Apply dropout regularization.
 
     During training, randomly sets elements to zero with probability p.
     During inference, scales all elements by (1-p) to maintain expected values.
 
     Args:
-        x: Input array
+        x: Input tensor
         p: Dropout probability (fraction of elements to set to zero)
         training: Whether in training mode (apply dropout) or inference mode
         seed: Random seed for reproducibility
 
     Returns:
-        Array with dropout applied
+        Tensor with dropout applied
     """
     if not training or p == 0.0:
         return x
@@ -122,15 +122,15 @@ def dropout(
 
     keep_prob = 1.0 - p
     mask_np = (np.random.random(x.shape) < keep_prob).astype(np.float32)
-    mask = nb.Array.from_numpy(mask_np)
+    mask = nb.Tensor.from_numpy(mask_np)
 
     # Apply mask and scale
     return (x * mask) / keep_prob
 
 
 def spectral_normalization(
-    weight: nb.Array, u: nb.Array | None = None, n_iterations: int = 1
-) -> tuple[nb.Array, nb.Array]:
+    weight: nb.Tensor, u: nb.Tensor | None = None, n_iterations: int = 1
+) -> tuple[nb.Tensor, nb.Tensor]:
     """Apply spectral normalization to weight matrix.
 
     Spectral normalization constrains the spectral norm (largest singular value)
@@ -157,7 +157,7 @@ def spectral_normalization(
     # Initialize u if not provided
     if u is None:
         u_np = np.random.normal(0, 1, (out_features,)).astype(np.float32)
-        u_init = nb.Array.from_numpy(u_np)
+        u_init = nb.Tensor.from_numpy(u_np)
     else:
         u_init = u
 
@@ -201,12 +201,12 @@ def spectral_normalization(
 
 
 def gradient_clipping(
-    gradients: list[nb.Array], max_norm: float = 1.0, norm_type: str = "l2"
-) -> tuple[list[nb.Array], nb.Array]:
+    gradients: list[nb.Tensor], max_norm: float = 1.0, norm_type: str = "l2"
+) -> tuple[list[nb.Tensor], nb.Tensor]:
     """Apply gradient clipping to prevent exploding gradients.
 
     Args:
-        gradients: List of gradient arrays
+        gradients: List of gradient tensors
         max_norm: Maximum allowed gradient norm
         norm_type: Type of norm to use ("l2" or "l1")
 
@@ -215,20 +215,20 @@ def gradient_clipping(
     """
     # Compute total gradient norm
     if norm_type == "l2":
-        total_norm_sq = nb.array([0.0])
+        total_norm_sq = nb.tensor([0.0])
         for grad in gradients:
             total_norm_sq = total_norm_sq + nb.sum(grad * grad)
         total_norm = nb.sqrt(total_norm_sq)
     elif norm_type == "l1":
-        total_norm = nb.array([0.0])
+        total_norm = nb.tensor([0.0])
         for grad in gradients:
             total_norm = total_norm + nb.sum(nb.abs(grad))
     else:
         raise ValueError(f"Unsupported norm_type: {norm_type}")
 
     # Clip gradients if norm exceeds threshold
-    max_norm_tensor = nb.array([max_norm])
-    clip_coeff = nb.minimum(max_norm_tensor / (total_norm + 1e-8), nb.array([1.0]))
+    max_norm_tensor = nb.tensor([max_norm])
+    clip_coeff = nb.minimum(max_norm_tensor / (total_norm + 1e-8), nb.tensor([1.0]))
 
     clipped_gradients = []
     for grad in gradients:

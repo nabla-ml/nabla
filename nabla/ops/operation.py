@@ -24,7 +24,7 @@ from pathlib import Path
 from max.dtype import DType
 from max.graph import TensorValue
 
-from ..core.array import Array
+from ..core.tensor import Tensor
 
 
 class Operation(ABC):
@@ -34,8 +34,8 @@ class Operation(ABC):
         self.name = name
 
     @abstractmethod
-    def forward(self, *args: Array) -> Array:
-        """Forward pass - creates the result Array."""
+    def forward(self, *args: Tensor) -> Tensor:
+        """Forward pass - creates the result Tensor."""
         pass
 
     @abstractmethod
@@ -44,26 +44,26 @@ class Operation(ABC):
         pass
 
     @abstractmethod
-    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
         """MAX graph computation."""
         pass
 
     @abstractmethod
-    def eagerxpr(self, args: list[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
         """Eager computation using NumPy."""
         pass
 
     @abstractmethod
     def vjp_rule(
-        self, primals: list[Array], cotangent: Array, output: Array
-    ) -> list[Array]:
+        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
+    ) -> list[Tensor]:
         """Vector-Jacobian product rule for reverse-mode autodiff."""
         pass
 
     @abstractmethod
     def jvp_rule(
-        self, primals: list[Array], tangents: list[Array], output: Array
-    ) -> Array:
+        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
+    ) -> Tensor:
         """Jacobian-vector product rule for forward-mode autodiff."""
         pass
     
@@ -75,7 +75,7 @@ class Operation(ABC):
 class UnaryOperation(Operation):
     """Base class for unary operations."""
 
-    def forward(self, *args: Array) -> Array:
+    def forward(self, *args: Tensor) -> Tensor:
         """Forward pass for unary operations."""
         if len(args) != 1:
             raise ValueError(f"Unary operation requires 1 argument, got {len(args)}")
@@ -85,7 +85,7 @@ class UnaryOperation(Operation):
         output_batch_dims = self.compute_output_batch_dims(arg.batch_dims)
         output_dtype = self.compute_output_dtype(arg)
 
-        res = Array(
+        res = Tensor(
             shape=output_shape,
             dtype=output_dtype,
             device=arg.logical_device,
@@ -114,7 +114,7 @@ class UnaryOperation(Operation):
             )
         return input_shapes[0]
 
-    def compute_output_dtype(self, arg: Array) -> DType:
+    def compute_output_dtype(self, arg: Tensor) -> DType:
         """Default: output dtype same as input dtype."""
         return arg.dtype
 
@@ -125,8 +125,8 @@ class UnaryOperation(Operation):
         return input_batch_dims
 
 
-def move_to_best_device(*args: Array) -> tuple[Array, ...]:
-    """Move all arrays to the best available device."""
+def move_to_best_device(*args: Tensor) -> tuple[Tensor, ...]:
+    """Move all tensors to the best available device."""
     if len(args) <= 1:
         return args
 
@@ -178,7 +178,7 @@ def move_to_best_device(*args: Array) -> tuple[Array, ...]:
         # Find device with most data (will be CPU in this case)
         best_device = max(device_data, key=lambda d: device_data[d])
 
-    # Move all arrays to the best device
+    # Move all tensors to the best device
     result_args = []
     for arg in args:
         if arg.logical_device != best_device:
@@ -192,12 +192,12 @@ def move_to_best_device(*args: Array) -> tuple[Array, ...]:
 class BinaryOperation(Operation):
     """Base class for binary operations."""
 
-    def forward(self, *args: Array) -> Array:
+    def forward(self, *args: Tensor) -> Tensor:
         """Forward pass for binary operations."""
         if len(args) != 2:
             raise ValueError(f"Binary operation requires 2 arguments, got {len(args)}")
 
-        # Move arrays to best device
+        # Move tensors to best device
         args = move_to_best_device(*args)
         arg1, arg2 = args[0], args[1]
 
@@ -227,7 +227,7 @@ class BinaryOperation(Operation):
             arg2 = broadcast_to(arg2, output_shape)
             arg2 = broadcast_batch_dims(arg2, output_batch_dims)
 
-        res = Array(
+        res = Tensor(
             shape=output_shape,
             dtype=output_dtype,
             device=arg1.logical_device,
@@ -260,14 +260,14 @@ class BinaryOperation(Operation):
 
         return get_broadcasted_shape(shape1, shape2)
 
-    def compute_output_dtype(self, arg1: Array, arg2: Array) -> DType:
+    def compute_output_dtype(self, arg1: Tensor, arg2: Tensor) -> DType:
         """Default: output dtype same as first input dtype."""
         return arg1.dtype
 
-    def _validate_inputs(self, arg1: Array, arg2: Array) -> None:
+    def _validate_inputs(self, arg1: Tensor, arg2: Tensor) -> None:
         """Validate binary operation inputs."""
-        if not isinstance(arg1, Array) or not isinstance(arg2, Array):
-            raise TypeError("Both arguments must be Array instances")
+        if not isinstance(arg1, Tensor) or not isinstance(arg2, Tensor):
+            raise TypeError("Both arguments must be Tensor instances")
         if arg1.dtype != arg2.dtype:
             raise ValueError(f"Dtypes {arg1.dtype} and {arg2.dtype} are incompatible")
         if arg1.logical_device != arg2.logical_device:

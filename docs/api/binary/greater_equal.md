@@ -3,37 +3,37 @@
 ## Signature
 
 ```python
-nabla.greater_equal(x: 'Array | float | int', y: 'Array | float | int') -> 'Array'
+nabla.greater_equal(x: 'Tensor | float | int', y: 'Tensor | float | int') -> 'Tensor'
 ```
 
 ## Description
 
 Performs element-wise comparison `x >= y`.
 
-This function compares two arrays element-wise, returning a boolean array
+This function compares two tensors element-wise, returning a boolean tensor
 indicating where elements of `x` are greater than or equal to elements
 of `y`. It supports broadcasting and provides the implementation of the
-`>=` operator for Nabla arrays.
+`>=` operator for Nabla tensors.
 
 ## Parameters
 
-- **`x`** (`Array | float | int`): The first input array or scalar.
+- **`x`** (`Tensor | float | int`): The first input tensor or scalar.
 
-- **`y`** (`Array | float | int`): The second input array or scalar. Must be broadcastable to the same shape as `x`.
+- **`y`** (`Tensor | float | int`): The second input tensor or scalar. Must be broadcastable to the same shape as `x`.
 
 ## Returns
 
-- `Array`: A boolean array containing the result of the element-wise comparison.
+- `Tensor`: A boolean tensor containing the result of the element-wise comparison.
 
 ## Examples
 
 ```pycon
 >>> import nabla as nb
->>> x = nb.array([1, 5, 3])
->>> y = nb.array([2, 5, 1])
+>>> x = nb.tensor([1, 5, 3])
+>>> y = nb.tensor([2, 5, 1])
 >>> nb.greater_equal(x, y)
-Array([False,  True,  True], dtype=bool)
+Tensor([False,  True,  True], dtype=bool)
 
 >>> x >= y
-Array([False,  True,  True], dtype=bool)
+Tensor([False,  True,  True], dtype=bool)
 ```

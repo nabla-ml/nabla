@@ -25,17 +25,17 @@ except ImportError:
     print("✗ JAX not available - will only test Nabla behavior")
 
 
-def test_single_array_arg():
-    """Test 1: Single array argument - f(x) -> scalar"""
-    print("\n=== Test 1: Single Array Argument ===")
+def test_single_tensor_arg():
+    """Test 1: Single tensor argument - f(x) -> scalar"""
+    print("\n=== Test 1: Single Tensor Argument ===")
 
     def func_nabla(x):
         return nb.sum(x**2)
 
     # Nabla test
-    x_nabla = nb.array([2.0, 3.0, 4.0])
+    x_nabla = nb.tensor([2.0, 3.0, 4.0])
     outputs_nabla, vjp_fn_nabla = nb.vjp(func_nabla, x_nabla)
-    gradients_nabla = vjp_fn_nabla(nb.array([1.0]))
+    gradients_nabla = vjp_fn_nabla(nb.tensor([1.0]))
 
     print("Nabla:")
     print(f"  Input: {x_nabla}")
@@ -71,18 +71,18 @@ def test_single_array_arg():
         print("  ✓ Gradient values and structures match perfectly!")
 
 
-def test_multiple_array_args():
-    """Test 2: Multiple array arguments - f(x, y) -> scalar"""
-    print("\n=== Test 2: Multiple Array Arguments ===")
+def test_multiple_tensor_args():
+    """Test 2: Multiple tensor arguments - f(x, y) -> scalar"""
+    print("\n=== Test 2: Multiple Tensor Arguments ===")
 
     def func_nabla(x, y):
         return nb.sum(x * y)
 
     # Nabla test
-    x_nabla = nb.array([2.0, 3.0])
-    y_nabla = nb.array([4.0, 5.0])
+    x_nabla = nb.tensor([2.0, 3.0])
+    y_nabla = nb.tensor([4.0, 5.0])
     outputs_nabla, vjp_fn_nabla = nb.vjp(func_nabla, x_nabla, y_nabla)
-    gradients_nabla = vjp_fn_nabla(nb.array([1.0]))
+    gradients_nabla = vjp_fn_nabla(nb.tensor([1.0]))
 
     print("Nabla:")
     print(f"  Inputs: x={x_nabla}, y={y_nabla}")
@@ -141,9 +141,9 @@ def test_dict_input():
         return nb.sum(params["x"] ** 2) + nb.sum(params["y"])
 
     # Nabla test
-    params_nabla = {"x": nb.array([2.0, 3.0]), "y": nb.array([4.0, 5.0])}
+    params_nabla = {"x": nb.tensor([2.0, 3.0]), "y": nb.tensor([4.0, 5.0])}
     outputs_nabla, vjp_fn_nabla = nb.vjp(func_nabla, params_nabla)
-    gradients_nabla = vjp_fn_nabla(nb.array([1.0]))
+    gradients_nabla = vjp_fn_nabla(nb.tensor([1.0]))
 
     print("Nabla:")
     print(f"  Input: {params_nabla}")
@@ -211,12 +211,12 @@ def test_nested_dict_input():
     # Nabla test
     params_nabla = {
         "layer1": {
-            "weights": nb.array([[1.0, 2.0], [3.0, 4.0]]),
-            "bias": nb.array([0.5, 1.0]),
+            "weights": nb.tensor([[1.0, 2.0], [3.0, 4.0]]),
+            "bias": nb.tensor([0.5, 1.0]),
         }
     }
     outputs_nabla, vjp_fn_nabla = nb.vjp(func_nabla, params_nabla)
-    gradients_nabla = vjp_fn_nabla(nb.array([1.0]))
+    gradients_nabla = vjp_fn_nabla(nb.tensor([1.0]))
 
     print("Nabla:")
     print(f"  Input structure preserved: {isinstance(gradients_nabla, tuple)}")
@@ -291,9 +291,9 @@ def test_list_input():
         return nb.sum(x * y)
 
     # Nabla test
-    data_nabla = [nb.array([2.0, 3.0]), nb.array([4.0, 5.0])]
+    data_nabla = [nb.tensor([2.0, 3.0]), nb.tensor([4.0, 5.0])]
     outputs_nabla, vjp_fn_nabla = nb.vjp(func_nabla, data_nabla)
-    gradients_nabla = vjp_fn_nabla(nb.array([1.0]))
+    gradients_nabla = vjp_fn_nabla(nb.tensor([1.0]))
 
     print("Nabla:")
     print(f"  Input: {data_nabla}")
@@ -359,11 +359,11 @@ def test_mixed_nested_structure():
 
     # Nabla test
     data_nabla = {
-        "x": nb.array([2.0, 3.0]),
-        "y": [nb.array([4.0, 5.0]), nb.array([6.0, 7.0])],
+        "x": nb.tensor([2.0, 3.0]),
+        "y": [nb.tensor([4.0, 5.0]), nb.tensor([6.0, 7.0])],
     }
     outputs_nabla, vjp_fn_nabla = nb.vjp(func_nabla, data_nabla)
-    gradients_nabla = vjp_fn_nabla(nb.array([1.0]))
+    gradients_nabla = vjp_fn_nabla(nb.tensor([1.0]))
 
     print("Nabla:")
     print(f"  Input: {data_nabla}")
@@ -481,8 +481,8 @@ if __name__ == "__main__":
     print("🧪 COMPREHENSIVE VJP COMPATIBILITY TEST")
     print("Testing Nabla's vjp function against JAX's behavior...")
 
-    test_single_array_arg()
-    test_multiple_array_args()
+    test_single_tensor_arg()
+    test_multiple_tensor_args()
     test_dict_input()
     test_nested_dict_input()
     test_list_input()

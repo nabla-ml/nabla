@@ -3,17 +3,17 @@
 ## Signature
 
 ```python
-nabla.concatenate(args: 'list[Array]', axis: 'int') -> 'Array'
+nabla.concatenate(args: 'list[Tensor]', axis: 'int') -> 'Tensor'
 ```
 
 ## Description
 
-Concatenate arrays along an existing axis.
+Concatenate tensors along an existing axis.
 
 ## Parameters
 
-- **`args`** (`List of arrays to concatenate`): axis: Axis along which to concatenate arrays (default: 0)
+- **`args`** (`List of tensors to concatenate`): axis: Axis along which to concatenate tensors (default: 0)
 
 ## Returns
 
-- `Concatenated array`: 
+- `Concatenated tensor`: 

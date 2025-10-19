@@ -3,23 +3,23 @@
 ## Signature
 
 ```python
-nabla.he_uniform(shape: 'Shape', dtype: 'DType', device: 'Device', seed: 'int', batch_dims: 'Shape', traced: 'bool') -> 'Array'
+nabla.he_uniform(shape: 'Shape', dtype: 'DType', device: 'Device', seed: 'int', batch_dims: 'Shape', traced: 'bool') -> 'Tensor'
 ```
 
 ## Description
 
-Fills an array with values according to the He uniform initializer.
+Fills an tensor with values according to the He uniform initializer.
 
 This method is designed for layers with ReLU activations. It samples from
 a uniform distribution U(-a, a) where a = sqrt(6 / fan_in).
 
 ## Parameters
 
-- **`shape`** (`Shape`): The shape of the output array. Must be at least 2D.
+- **`shape`** (`Shape`): The shape of the output tensor. Must be at least 2D.
 
-- **`dtype`** (`DType, optional`): The desired data type for the array. Defaults to DType.float32.
+- **`dtype`** (`DType, optional`): The desired data type for the tensor. Defaults to DType.float32.
 
-- **`device`** (`Device, optional`): The device to place the array on. Defaults to the CPU.
+- **`device`** (`Device, optional`): The device to place the tensor on. Defaults to the CPU.
 
 - **`seed`** (`int, optional`): The seed for the random number generator. Defaults to 0.
 
@@ -29,4 +29,4 @@ a uniform distribution U(-a, a) where a = sqrt(6 / fan_in).
 
 ## Returns
 
-- `Array`: An array initialized with the He uniform distribution.
+- `Tensor`: An tensor initialized with the He uniform distribution.

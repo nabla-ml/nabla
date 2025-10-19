@@ -52,7 +52,7 @@ def check_structured_data():
 
     test_urls = [
         "https://www.nablaml.com/",
-        "https://www.nablaml.com/api/array.html",
+        "https://www.nablaml.com/api/tensor.html",
         "https://www.nablaml.com/tutorials/index.html",
     ]
 
@@ -95,7 +95,7 @@ def check_meta_tags():
 
     test_urls = [
         "https://www.nablaml.com/",
-        "https://www.nablaml.com/api/array.html",
+        "https://www.nablaml.com/api/tensor.html",
         "https://www.nablaml.com/tutorials/index.html",
     ]
 

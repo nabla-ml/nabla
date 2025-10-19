@@ -3,27 +3,27 @@
 ## Signature
 
 ```python
-nabla.add(x: 'Array | float | int', y: 'Array | float | int') -> 'Array'
+nabla.add(x: 'Tensor | float | int', y: 'Tensor | float | int') -> 'Tensor'
 ```
 
 ## Description
 
-Adds two arrays element-wise.
+Adds two tensors element-wise.
 
-This function performs element-wise addition on two arrays. It supports
-broadcasting, allowing arrays of different shapes to be combined as long
+This function performs element-wise addition on two tensors. It supports
+broadcasting, allowing tensors of different shapes to be combined as long
 as their shapes are compatible. This function also provides the
-implementation of the `+` operator for Nabla arrays.
+implementation of the `+` operator for Nabla tensors.
 
 ## Parameters
 
-- **`x`** (`Array | float | int`): The first input array or scalar.
+- **`x`** (`Tensor | float | int`): The first input tensor or scalar.
 
-- **`y`** (`Array | float | int`): The second input array or scalar. Must be broadcastable to the same shape as `x`.
+- **`y`** (`Tensor | float | int`): The second input tensor or scalar. Must be broadcastable to the same shape as `x`.
 
 ## Returns
 
-- `Array`: An array containing the result of the element-wise addition.
+- `Tensor`: An tensor containing the result of the element-wise addition.
 
 ## Examples
 
@@ -31,18 +31,18 @@ implementation of the `+` operator for Nabla arrays.
 Calling `add` explicitly:
 
 >>> import nabla as nb
->>> x = nb.array([1, 2, 3])
->>> y = nb.array([4, 5, 6])
+>>> x = nb.tensor([1, 2, 3])
+>>> y = nb.tensor([4, 5, 6])
 >>> nb.add(x, y)
-Array([5, 7, 9], dtype=int32)
+Tensor([5, 7, 9], dtype=int32)
 
 Calling `add` via the `+` operator:
 
 >>> x + y
-Array([5, 7, 9], dtype=int32)
+Tensor([5, 7, 9], dtype=int32)
 
 Broadcasting a scalar:
 
 >>> x + 10
-Array([11, 12, 13], dtype=int32)
+Tensor([11, 12, 13], dtype=int32)
 ```

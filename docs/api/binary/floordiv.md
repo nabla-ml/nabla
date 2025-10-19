@@ -3,36 +3,36 @@
 ## Signature
 
 ```python
-nabla.floordiv(x: 'Array | float | int', y: 'Array | float | int') -> 'Array'
+nabla.floordiv(x: 'Tensor | float | int', y: 'Tensor | float | int') -> 'Tensor'
 ```
 
 ## Description
 
-Performs element-wise floor division on two arrays.
+Performs element-wise floor division on two tensors.
 
 Floor division is equivalent to `floor(x / y)`, rounding the result
 towards negative infinity. This matches the behavior of Python's `//`
-operator, which this function implements for Nabla arrays.
+operator, which this function implements for Nabla tensors.
 
 ## Parameters
 
-- **`x`** (`Array | float | int`): The first input array or scalar (the dividend).
+- **`x`** (`Tensor | float | int`): The first input tensor or scalar (the dividend).
 
-- **`y`** (`Array | float | int`): The second input array or scalar (the divisor). Must be broadcastable to the same shape as `x`.
+- **`y`** (`Tensor | float | int`): The second input tensor or scalar (the divisor). Must be broadcastable to the same shape as `x`.
 
 ## Returns
 
-- `Array`: An array containing the result of the element-wise floor division.
+- `Tensor`: An tensor containing the result of the element-wise floor division.
 
 ## Examples
 
 ```pycon
 >>> import nabla as nb
->>> x = nb.array([10, -10, 9])
->>> y = nb.array([3, 3, 3])
+>>> x = nb.tensor([10, -10, 9])
+>>> y = nb.tensor([3, 3, 3])
 >>> nb.floordiv(x, y)
-Array([ 3, -4,  3], dtype=int32)
+Tensor([ 3, -4,  3], dtype=int32)
 
 >>> x // y
-Array([ 3, -4,  3], dtype=int32)
+Tensor([ 3, -4,  3], dtype=int32)
 ```

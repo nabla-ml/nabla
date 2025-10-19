@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.arange(start: 'int | float', stop: 'int | float | None', step: 'int | float | None', dtype: 'DType', device: 'Device', traced: 'bool', batch_dims: 'Shape') -> 'Array'
+nabla.arange(start: 'int | float', stop: 'int | float | None', step: 'int | float | None', dtype: 'DType', device: 'Device', traced: 'bool', batch_dims: 'Shape') -> 'Tensor'
 ```
 
 ## Description
@@ -22,9 +22,9 @@ This function follows the JAX/NumPy `arange` API.
 
 - **`step`** (`int | float, optional`): Spacing between values. The default step size is 1.
 
-- **`dtype`** (`DType, optional`): The data type of the output array. Defaults to DType.float32.
+- **`dtype`** (`DType, optional`): The data type of the output tensor. Defaults to DType.float32.
 
-- **`device`** (`Device, optional`): The device to place the array on. Defaults to the CPU.
+- **`device`** (`Device, optional`): The device to place the tensor on. Defaults to the CPU.
 
 - **`traced`** (`bool, optional`): Whether the operation should be traced in the graph. Defaults to False.
 
@@ -32,7 +32,7 @@ This function follows the JAX/NumPy `arange` API.
 
 ## Returns
 
-- `Array`: A 1D array of evenly spaced values.
+- `Tensor`: A 1D tensor of evenly spaced values.
 
 ## Examples
 
@@ -40,13 +40,13 @@ This function follows the JAX/NumPy `arange` API.
 >>> import nabla as nb
 >>> # nb.arange(stop)
 >>> nb.arange(5)
-Array([0., 1., 2., 3., 4.], dtype=float32)
+Tensor([0., 1., 2., 3., 4.], dtype=float32)
 
 >>> # nb.arange(start, stop)
 >>> nb.arange(5, 10)
-Array([5., 6., 7., 8., 9.], dtype=float32)
+Tensor([5., 6., 7., 8., 9.], dtype=float32)
 
 >>> # nb.arange(start, stop, step)
 >>> nb.arange(10, 20, 2, dtype=nb.DType.int32)
-Array([10, 12, 14, 16, 18], dtype=int32)
+Tensor([10, 12, 14, 16, 18], dtype=int32)
 ```

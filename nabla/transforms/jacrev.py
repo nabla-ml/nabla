@@ -19,7 +19,7 @@ from typing import Any
 
 from .utils import (
     _create_jacobian_helpers,
-    _extract_arrays_from_pytree,
+    _extract_tensors_from_pytree,
     _std_basis,
     make_traced_pytree,
     make_untraced_pytree,
@@ -73,15 +73,15 @@ def jacrev(
         else:
             y, pullback = vjp_result
 
-        # Flatten output arrays for std_basis generation
-        flat_y = _extract_arrays_from_pytree(y)
+        # Flatten output tensors for std_basis generation
+        flat_y = _extract_tensors_from_pytree(y)
         if not isinstance(flat_y, list):
             flat_y = [flat_y]
 
         # Generate standard basis vectors and get sizes for split operations
         sizes, std_basis_vectors = _std_basis(flat_y)
 
-        std_basis_flat = _extract_arrays_from_pytree(std_basis_vectors)
+        std_basis_flat = _extract_tensors_from_pytree(std_basis_vectors)
         if not isinstance(std_basis_flat, list):
             std_basis_flat = [std_basis_flat]
 
@@ -100,14 +100,14 @@ def jacrev(
 
         # Make gradients traceable for further composition
         any_std_basis_traced = any(
-            getattr(arr, "traced", False) for arr in _extract_arrays_from_pytree(std_basis_vectors)
+            getattr(arr, "traced", False) for arr in _extract_tensors_from_pytree(std_basis_vectors)
         )
         if not any_std_basis_traced:
             grads = make_traced_pytree(grads)
 
         from ..ops.view import reshape, split
 
-        flat_diff_args = _extract_arrays_from_pytree(diff_args)
+        flat_diff_args = _extract_tensors_from_pytree(diff_args)
 
         # Split batched gradients based on output components
         splits = []
@@ -117,17 +117,17 @@ def jacrev(
 
         # Reshape gradients into Jacobian components
         jacobian_parts = []
-        for j, out_array in enumerate(flat_y):
+        for j, out_tensor in enumerate(flat_y):
             arg_jacs = []
-            for i, in_array in enumerate(flat_diff_args):
+            for i, in_tensor in enumerate(flat_diff_args):
                 grad_slice = splits[i][j]
                 
-                out_shape = out_array.shape
+                out_shape = out_tensor.shape
                 # Handle scalar outputs that get an extra dimension from vmap
-                if len(out_array.batch_dims) > 0 and out_shape == (1,):
+                if len(out_tensor.batch_dims) > 0 and out_shape == (1,):
                     out_shape = ()
                 
-                target_shape = out_shape + in_array.shape
+                target_shape = out_shape + in_tensor.shape
                 reshaped_grad = reshape(grad_slice, target_shape)
                 arg_jacs.append(reshaped_grad)
             

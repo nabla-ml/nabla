@@ -17,11 +17,11 @@
 from collections.abc import Callable
 from typing import Any, Literal, overload
 
-from ..core.array import Array
+from ..core.tensor import Tensor
 from .utils import (
-    _convert_scalars_to_arrays,
+    _convert_scalars_to_tensors,
     _convert_to_scalar_if_needed,
-    _extract_arrays_from_pytree,
+    _extract_tensors_from_pytree,
     make_traced_pytree,
     make_untraced_pytree,
     pushfwd,
@@ -63,18 +63,18 @@ def jvp(
         - Only accepts positional arguments
         - For functions requiring keyword arguments, use functools.partial or lambda
     """
-    # Convert scalars to arrays for traceability
-    primals = _convert_scalars_to_arrays(primals)
-    tangents = _convert_scalars_to_arrays(tangents)
+    # Convert scalars to tensors for traceability
+    primals = _convert_scalars_to_tensors(primals)
+    tangents = _convert_scalars_to_tensors(tangents)
 
     # Handle inputs correctly based on structure
     is_multi_arg = isinstance(primals, tuple) and len(primals) > 1
 
     any_primal_traced = any(
-        getattr(arg, "traced", False) for arg in _extract_arrays_from_pytree(primals)
+        getattr(arg, "traced", False) for arg in _extract_tensors_from_pytree(primals)
     )
     any_tangent_traced = any(
-        getattr(arg, "traced", False) for arg in _extract_arrays_from_pytree(tangents)
+        getattr(arg, "traced", False) for arg in _extract_tensors_from_pytree(tangents)
     )
 
     # Validate primals and tangents match

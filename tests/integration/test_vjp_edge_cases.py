@@ -17,14 +17,14 @@ def test_matrix_operations():
     # Setup matrices
     A_np = np.random.randn(3, 4)
     B_np = np.random.randn(4, 2)
-    A_nb = nb.Array.from_numpy(A_np)
-    B_nb = nb.Array.from_numpy(B_np)
+    A_nb = nb.Tensor.from_numpy(A_np)
+    B_nb = nb.Tensor.from_numpy(B_np)
     A_jax = jnp.array(A_np)
     B_jax = jnp.array(B_np)
 
     # Cotangent for result (3, 2)
     cotangent_np = np.random.randn(3, 2)
-    cotangent_nb = nb.Array.from_numpy(cotangent_np)
+    cotangent_nb = nb.Tensor.from_numpy(cotangent_np)
     cotangent_jax = jnp.array(cotangent_np)
 
     # Nabla VJP
@@ -54,11 +54,11 @@ def test_complex_function():
 
     # Setup
     x_np = np.array([0.5, 1.0, 1.5])
-    x_nb = nb.Array.from_numpy(x_np)
+    x_nb = nb.Tensor.from_numpy(x_np)
     x_jax = jnp.array(x_np)
 
     cotangent_np = 1.0  # Scalar output
-    cotangent_nb = nb.Array.from_numpy(np.array(cotangent_np))
+    cotangent_nb = nb.Tensor.from_numpy(np.array(cotangent_np))
     cotangent_jax = jnp.array(cotangent_np)
 
     # Nabla VJP - complex function: sum(sin(x) * exp(x))
@@ -75,9 +75,9 @@ def test_complex_function():
     out_jax, vjp_jax = jax.vjp(jax_fn, x_jax)
     grads_jax = vjp_jax(cotangent_jax)
 
-    # Check structure and values - Nabla returns Array directly, JAX returns tuple
-    assert isinstance(grads_nb, nb.Array), (
-        f"Nabla should return Array, got {type(grads_nb)}"
+    # Check structure and values - Nabla returns Tensor directly, JAX returns tuple
+    assert isinstance(grads_nb, nb.Tensor), (
+        f"Nabla should return Tensor, got {type(grads_nb)}"
     )
     assert isinstance(grads_jax, tuple), (
         f"JAX should return tuple, got {type(grads_jax)}"
@@ -99,14 +99,14 @@ def test_list_inputs():
     z_np = np.array([5.0, 6.0])
 
     inputs_nb = [
-        nb.Array.from_numpy(x_np),
-        nb.Array.from_numpy(y_np),
-        nb.Array.from_numpy(z_np),
+        nb.Tensor.from_numpy(x_np),
+        nb.Tensor.from_numpy(y_np),
+        nb.Tensor.from_numpy(z_np),
     ]
     inputs_jax = [jnp.array(x_np), jnp.array(y_np), jnp.array(z_np)]
 
     cotangent_np = np.array([1.0, 1.0])
-    cotangent_nb = nb.Array.from_numpy(cotangent_np)
+    cotangent_nb = nb.Tensor.from_numpy(cotangent_np)
     cotangent_jax = jnp.array(cotangent_np)
 
     # Nabla VJP

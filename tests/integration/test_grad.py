@@ -158,7 +158,7 @@ def test_grad_decorator_style():
     def loss_func_jax(x):
         return (x**2).sum()
 
-    x_nb = nb.array([1.0, 2.0, 3.0])
+    x_nb = nb.tensor([1.0, 2.0, 3.0])
     x_jax = jnp.array([1.0, 2.0, 3.0])
 
     grad_nb = loss_func_nb(x_nb)
@@ -207,7 +207,7 @@ def test_grad_multi_argument():
     def sum_squares_jax(x, y):
         return (x**2 + y**2).sum()
 
-    x_nb, y_nb = nb.array([1.0, 2.0]), nb.array([3.0, 4.0])
+    x_nb, y_nb = nb.tensor([1.0, 2.0]), nb.tensor([3.0, 4.0])
     x_jax, y_jax = jnp.array([1.0, 2.0]), jnp.array([3.0, 4.0])
 
     # Test gradient w.r.t. first argument
@@ -267,7 +267,7 @@ def test_grad_with_aux():
         aux_data = {"debug": "auxiliary data", "norm": jnp.sqrt((x**2).sum())}
         return main_output, aux_data
 
-    x_nb = nb.array([3.0, 4.0])
+    x_nb = nb.tensor([3.0, 4.0])
     x_jax = jnp.array([3.0, 4.0])
 
     # Test gradient with auxiliary data
@@ -304,7 +304,7 @@ def test_grad_scalar_validation():
     def vector_func(x):
         return x * 2  # Returns a vector, not a scalar
 
-    x_nb = nb.array([1.0, 2.0, 3.0])
+    x_nb = nb.tensor([1.0, 2.0, 3.0])
 
     print("Testing vector function (should raise ValueError)...")
 

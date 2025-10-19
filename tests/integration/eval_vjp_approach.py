@@ -7,7 +7,7 @@ sys.path.append("/Users/tillife/Documents/CodingProjects/nabla")
 
 from nabla.core.trafos import tree_flatten, tree_unflatten, vjp
 from nabla.ops.binary import add, mul
-from nabla.ops.creation import array
+from nabla.ops.creation import tensor
 
 
 def test_edge_cases():
@@ -20,26 +20,26 @@ def test_edge_cases():
     try:
 
         def empty_func():
-            return array([1.0])
+            return tensor([1.0])
 
         output, vjp_fn = vjp(empty_func)
-        grads = vjp_fn(array([1.0]))
+        grads = vjp_fn(tensor([1.0]))
         print(f"   ✅ Empty args: {grads}")
     except Exception as e:
         print(f"   ❌ Empty args failed: {e}")
 
-    # Test 2: Only non-Array inputs
-    print("\n2. Only non-Array inputs:")
+    # Test 2: Only non-Tensor inputs
+    print("\n2. Only non-Tensor inputs:")
     try:
 
-        def non_array_func(x, y):
-            return array([float(x + y)])
+        def non_tensor_func(x, y):
+            return tensor([float(x + y)])
 
-        output, vjp_fn = vjp(non_array_func, 1, 2.5)
-        grads = vjp_fn(array([1.0]))
-        print(f"   ✅ Non-arrays only: {grads}")
+        output, vjp_fn = vjp(non_tensor_func, 1, 2.5)
+        grads = vjp_fn(tensor([1.0]))
+        print(f"   ✅ Non-tensors only: {grads}")
     except Exception as e:
-        print(f"   ❌ Non-arrays only failed: {e}")
+        print(f"   ❌ Non-tensors only failed: {e}")
 
     # Test 3: Deeply nested structures
     print("\n3. Deeply nested structures:")
@@ -48,10 +48,10 @@ def test_edge_cases():
             "level1": {
                 "level2": {
                     "level3": {
-                        "weights": array([1.0, 2.0]),
+                        "weights": tensor([1.0, 2.0]),
                         "metadata": {"version": 1, "name": "deep"},
                     },
-                    "other": [array([3.0]), "string", {"nested": True}],
+                    "other": [tensor([3.0]), "string", {"nested": True}],
                 }
             },
             "scalar": 42,
@@ -63,7 +63,7 @@ def test_edge_cases():
             return sum(add(w, other_arr))
 
         output, vjp_fn = vjp(deep_func, **deep_input)
-        grads = vjp_fn(array([1.0]))
+        grads = vjp_fn(tensor([1.0]))
         _, grad_kwargs = grads
 
         print("   ✅ Deep nesting preserved")
@@ -87,15 +87,15 @@ def test_edge_cases():
                 result = add(result, weight_dict["w"])
             return sum(mul(result, scale))
 
-        pos_arr = array([1.0, 2.0])
+        pos_arr = tensor([1.0, 2.0])
         pos_int = 3
-        weight_dict = {"w": array([0.1, 0.2]), "name": "test"}
+        weight_dict = {"w": tensor([0.1, 0.2]), "name": "test"}
         scale = 2.0
 
         output, vjp_fn = vjp(
             mixed_func, pos_arr, pos_int, weight_dict=weight_dict, scale=scale
         )
-        grads = vjp_fn(array([1.0]))
+        grads = vjp_fn(tensor([1.0]))
         grad_args, grad_kwargs = grads
 
         print("   ✅ Mixed args/kwargs:")
@@ -117,17 +117,17 @@ def test_edge_cases():
     try:
         large_dict = {}
         for i in range(100):
-            large_dict[f"param_{i}"] = array([float(i)])
+            large_dict[f"param_{i}"] = tensor([float(i)])
 
         def large_func(**kwargs):
-            result = array([0.0])
+            result = tensor([0.0])
             for key in sorted(kwargs.keys()):
                 if key.startswith("param_"):
                     result = add(result, kwargs[key])
             return sum(result)
 
         output, vjp_fn = vjp(large_func, **large_dict)
-        grads = vjp_fn(array([1.0]))
+        grads = vjp_fn(tensor([1.0]))
         _, grad_kwargs = grads
 
         print(f"   ✅ Large structure ({len(grad_kwargs)} parameters)")
@@ -149,8 +149,8 @@ def test_consistency_with_jax_like_behavior():
         [1, 2, 3],  # list
         (1, 2, 3),  # tuple
         {"a": 1, "b": 2},  # dict
-        {"a": array([1.0]), "b": [2, array([3.0])]},  # mixed
-        [array([1.0]), {"nested": array([2.0])}],  # complex
+        {"a": tensor([1.0]), "b": [2, tensor([3.0])]},  # mixed
+        [tensor([1.0]), {"nested": tensor([2.0])}],  # complex
     ]
 
     print("Tree flatten/unflatten consistency:")
@@ -160,10 +160,10 @@ def test_consistency_with_jax_like_behavior():
             # We validate that reconstruction works, but don't use the result
             _ = tree_unflatten(tree_def, leaves)
 
-            # For non-Array leaves, they should be preserved in tree_def
-            arrays_only = [leaf for leaf in leaves if hasattr(leaf, "shape")]
+            # For non-Tensor leaves, they should be preserved in tree_def
+            tensors_only = [leaf for leaf in leaves if hasattr(leaf, "shape")]
 
-            print(f"   ✅ Structure {i}: {len(arrays_only)} arrays extracted")
+            print(f"   ✅ Structure {i}: {len(tensors_only)} tensors extracted")
         except Exception as e:
             print(f"   ❌ Structure {i} failed: {e}")
 
@@ -183,13 +183,13 @@ def evaluate_performance_characteristics():
         structure = {}
         for i in range(size):
             structure[f"layer_{i}"] = {
-                "weights": array([1.0, 2.0]),
-                "bias": array([0.5]),
+                "weights": tensor([1.0, 2.0]),
+                "bias": tensor([0.5]),
                 "config": {"lr": 0.01, "name": f"layer_{i}"},
             }
 
         def benchmark_func(**kwargs):
-            result = array([0.0])
+            result = tensor([0.0])
             for key in sorted(kwargs.keys()):
                 if key.startswith("layer_"):
                     w = kwargs[key]["weights"]
@@ -200,7 +200,7 @@ def evaluate_performance_characteristics():
         start_time = time.time()
         output, vjp_fn = vjp(benchmark_func, **structure)
         # Execute VJP but don't store result since we're just testing performance
-        _ = vjp_fn(array([1.0]))
+        _ = vjp_fn(tensor([1.0]))
         end_time = time.time()
 
         print(f"   Size {size}: {(end_time - start_time) * 1000:.2f}ms")

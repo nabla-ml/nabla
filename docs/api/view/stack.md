@@ -3,17 +3,17 @@
 ## Signature
 
 ```python
-nabla.stack(arrays: 'list[Array]', axis: 'int') -> 'Array'
+nabla.stack(tensors: 'list[Tensor]', axis: 'int') -> 'Tensor'
 ```
 
 ## Description
 
-Stack arrays along a new axis.
+Stack tensors along a new axis.
 
 ## Parameters
 
-- **`arrays`** (`List of arrays to stack`): axis: Axis along which to stack the arrays (default: 0)
+- **`tensors`** (`List of tensors to stack`): axis: Axis along which to stack the tensors (default: 0)
 
 ## Returns
 
-- `Stacked array`: 
+- `Stacked tensor`: 

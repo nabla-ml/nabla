@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.permute(input_array: 'Array', axes: 'tuple[int, ...]') -> 'Array'
+nabla.permute(input_tensor: 'Tensor', axes: 'tuple[int, ...]') -> 'Tensor'
 ```
 
 ## Description
@@ -12,7 +12,7 @@ Permute (reorder) the dimensions of a tensor.
 
 ## Parameters
 
-- **`input_array`** (`Input tensor`): axes: Tuple specifying the new order of dimensions
+- **`input_tensor`** (`Input tensor`): axes: Tuple specifying the new order of dimensions
 
 ## Returns
 

@@ -2,7 +2,7 @@
 
 Nabla is a scientific computing library in Python, featuring:
 
-- Multidimensional array computation with strong GPU acceleration
+- Multidimensional tensor computation with strong GPU acceleration
 - JAX-like composable function transformations: `grad`, `vmap`, `jit`, and other automatic differentiation tools
 - Deep integration with the MAX compiler and custom Mojo kernels
 
@@ -76,7 +76,7 @@ pip install -e ".[dev]"
 ```text
 nabla/
 ├── nabla/                     # Core Python library
-│   ├── core/                  # Array class and MAX compiler integration
+│   ├── core/                  # Tensor class and MAX compiler integration
 │   ├── nn/                    # Neural network modules and models
 │   ├── ops/                   # Mathematical operations (binary, unary, linalg, etc.)
 │   ├── transforms/            # Function transformations (vmap, grad, jit, etc.)

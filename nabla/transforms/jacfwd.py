@@ -20,7 +20,7 @@ from typing import Any
 from .jvp import jvp
 from .utils import (
     _create_jacobian_helpers,
-    _extract_arrays_from_pytree,
+    _extract_tensors_from_pytree,
     _std_basis,
 )
 from .vmap import vmap
@@ -56,7 +56,7 @@ def jacfwd(
         diff_args, partial_func = _create_jacobian_helpers(func, argnums, args)
 
         # Generate standard basis vectors for the INPUT arguments
-        flat_diff_args = _extract_arrays_from_pytree(diff_args)
+        flat_diff_args = _extract_tensors_from_pytree(diff_args)
         if not isinstance(flat_diff_args, list):
             flat_diff_args = [flat_diff_args]
 
@@ -86,7 +86,7 @@ def jacfwd(
 
         # Get output structure by running the function once
         test_output = partial_func(*diff_args)
-        flat_output = _extract_arrays_from_pytree(test_output)
+        flat_output = _extract_tensors_from_pytree(test_output)
         if not isinstance(flat_output, list):
             flat_output = [flat_output]
 

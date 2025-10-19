@@ -221,7 +221,7 @@ class SEOAuditor:
 
         # Check important sections
         important_urls = []
-        for pattern in ["/api/index.html", "/tutorials/index.html", "/api/array.html"]:
+        for pattern in ["/api/index.html", "/tutorials/index.html", "/api/tensor.html"]:
             matching_urls = [u for u in urls if pattern in u["url"]]
             important_urls.extend(matching_urls[:2])  # Max 2 per pattern
 

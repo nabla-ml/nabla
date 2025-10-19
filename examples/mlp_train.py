@@ -31,7 +31,7 @@ PRINT_INTERVAL = 100
 SIN_PERIODS = 8
 
 
-def mlp_forward(x: nb.Array, params: list[nb.Array]) -> nb.Array:
+def mlp_forward(x: nb.Tensor, params: list[nb.Tensor]) -> nb.Tensor:
     """MLP forward pass through all layers."""
     output = x
     for i in range(0, len(params) - 1, 2):
@@ -43,16 +43,16 @@ def mlp_forward(x: nb.Array, params: list[nb.Array]) -> nb.Array:
     return output
 
 
-def mean_squared_error(predictions: nb.Array, targets: nb.Array) -> nb.Array:
+def mean_squared_error(predictions: nb.Tensor, targets: nb.Tensor) -> nb.Tensor:
     """Compute mean squared error loss."""
     diff = predictions - targets
     squared_errors = diff * diff
-    batch_size = nb.array(predictions.shape[0], dtype=nb.DType.float32)
+    batch_size = nb.tensor(predictions.shape[0], dtype=nb.DType.float32)
     loss = nb.sum(squared_errors) / batch_size
     return loss
 
 
-def mlp_forward_and_loss(inputs: list[nb.Array]) -> nb.Array:
+def mlp_forward_and_loss(inputs: list[nb.Tensor]) -> nb.Tensor:
     """Combined forward pass and loss computation for VJP with leaky ReLU."""
     x, targets, *params = inputs
     predictions = mlp_forward(x, params)
@@ -60,7 +60,7 @@ def mlp_forward_and_loss(inputs: list[nb.Array]) -> nb.Array:
     return loss
 
 
-def create_sin_dataset(batch_size: int = 256) -> tuple[nb.Array, nb.Array]:
+def create_sin_dataset(batch_size: int = 256) -> tuple[nb.Tensor, nb.Tensor]:
     """Create the 8-Period sin dataset."""
     x = nb.rand((batch_size, 1), lower=0.0, upper=1.0, dtype=nb.DType.float32)
     targets = nb.sin(SIN_PERIODS * 2.0 * np.pi * x) / 2.0 + 0.5
@@ -69,7 +69,7 @@ def create_sin_dataset(batch_size: int = 256) -> tuple[nb.Array, nb.Array]:
 
 def initialize_for_complex_function(
     layers: list[int], seed: int = 42
-) -> list[nb.Array]:
+) -> list[nb.Tensor]:
     """Initialize specifically for learning complex high-frequency functions."""
     np.random.seed(seed)
     params = []
@@ -97,25 +97,25 @@ def initialize_for_complex_function(
             # Initialize output bias to middle of target range
             b_np = np.ones((1, fan_out), dtype=np.float32) * 0.5
 
-        w = nb.Array.from_numpy(w_np)
-        b = nb.Array.from_numpy(b_np)
+        w = nb.Tensor.from_numpy(w_np)
+        b = nb.Tensor.from_numpy(b_np)
         params.extend([w, b])
 
     return params
 
 
 def adamw_step(
-    params: list[nb.Array],
-    gradients: list[nb.Array],
-    m_states: list[nb.Array],
-    v_states: list[nb.Array],
+    params: list[nb.Tensor],
+    gradients: list[nb.Tensor],
+    m_states: list[nb.Tensor],
+    v_states: list[nb.Tensor],
     step: int,
     learning_rate: float = 0.001,
     beta1: float = 0.9,
     beta2: float = 0.999,
     eps: float = 1e-8,
     weight_decay: float = 0.01,
-) -> tuple[list[nb.Array], list[nb.Array], list[nb.Array]]:
+) -> tuple[list[nb.Tensor], list[nb.Tensor], list[nb.Tensor]]:
     """AdamW optimizer step with weight decay - OPTIMIZED to match JAX efficiency."""
     updated_params = []
     updated_m = []
@@ -147,7 +147,7 @@ def adamw_step(
     return updated_params, updated_m, updated_v
 
 
-def init_adamw_state(params: list[nb.Array]) -> tuple[list[nb.Array], list[nb.Array]]:
+def init_adamw_state(params: list[nb.Tensor]) -> tuple[list[nb.Tensor], list[nb.Tensor]]:
     """Initialize AdamW state - optimized version."""
     m_states = []
     v_states = []
@@ -155,8 +155,8 @@ def init_adamw_state(params: list[nb.Array]) -> tuple[list[nb.Array], list[nb.Ar
         # Use zeros_like for more efficient initialization
         m_np = np.zeros_like(param.to_numpy())
         v_np = np.zeros_like(param.to_numpy())
-        m_states.append(nb.Array.from_numpy(m_np))
-        v_states.append(nb.Array.from_numpy(v_np))
+        m_states.append(nb.Tensor.from_numpy(m_np))
+        v_states.append(nb.Tensor.from_numpy(v_np))
     return m_states, v_states
 
 
@@ -171,14 +171,14 @@ def learning_rate_schedule(
 
 
 def train_step_jitted(
-    x: nb.Array,
-    targets: nb.Array,
-    params: list[nb.Array],
-    m_states: list[nb.Array],
-    v_states: list[nb.Array],
+    x: nb.Tensor,
+    targets: nb.Tensor,
+    params: list[nb.Tensor],
+    m_states: list[nb.Tensor],
+    v_states: list[nb.Tensor],
     step: int,
     learning_rate: float,
-) -> tuple[list[nb.Array], list[nb.Array], list[nb.Array], nb.Array]:
+) -> tuple[list[nb.Tensor], list[nb.Tensor], list[nb.Tensor], nb.Tensor]:
     """JIT-compiled training step combining gradient computation and optimizer update."""
 
     # Direct gradient computation without passing functions (JAX style)
@@ -199,8 +199,8 @@ def train_step_jitted(
 
 
 def compute_predictions_and_loss(
-    x_test: nb.Array, targets_test: nb.Array, params: list[nb.Array]
-) -> tuple[nb.Array, nb.Array]:
+    x_test: nb.Tensor, targets_test: nb.Tensor, params: list[nb.Tensor]
+) -> tuple[nb.Tensor, nb.Tensor]:
     """JIT-compiled function to compute predictions and loss."""
     predictions_test = mlp_forward(x_test, params)
     test_loss = mean_squared_error(predictions_test, targets_test)
@@ -306,8 +306,8 @@ def test_nabla_complex_sin():
         np.sin(SIN_PERIODS * 2.0 * np.pi * x_test_np) / 2.0 + 0.5
     ).astype(np.float32)
 
-    x_test = nb.Array.from_numpy(x_test_np)
-    targets_test = nb.Array.from_numpy(targets_test_np)
+    x_test = nb.Tensor.from_numpy(x_test_np)
+    targets_test = nb.Tensor.from_numpy(targets_test_np)
 
     # Use JIT-compiled function for evaluation
     predictions_test, test_loss = compute_predictions_and_loss(

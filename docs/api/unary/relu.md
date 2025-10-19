@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.relu(arg: 'Array') -> 'Array'
+nabla.relu(arg: 'Tensor') -> 'Tensor'
 ```
 
 ## Description
@@ -15,17 +15,17 @@ activation function in neural networks.
 
 ## Parameters
 
-- **`arg`** (`Array`): The input array.
+- **`arg`** (`Tensor`): The input tensor.
 
 ## Returns
 
-- `Array`: An array containing the result of the ReLU operation.
+- `Tensor`: An tensor containing the result of the ReLU operation.
 
 ## Examples
 
 ```pycon
 >>> import nabla as nb
->>> x = nb.array([-2.0, -0.5, 0.0, 1.0, 2.0])
+>>> x = nb.tensor([-2.0, -0.5, 0.0, 1.0, 2.0])
 >>> nb.relu(x)
-Array([0., 0., 0., 1., 2.], dtype=float32)
+Tensor([0., 0., 0., 1., 2.], dtype=float32)
 ```

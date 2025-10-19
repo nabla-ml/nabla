@@ -3,9 +3,9 @@
 ## Signature
 
 ```python
-nabla.squeeze(arg: 'Array', axes: 'list[int] | None') -> 'Array'
+nabla.squeeze(arg: 'Tensor', axes: 'list[int] | None') -> 'Tensor'
 ```
 
 ## Description
 
-Squeeze array by removing dimensions of size 1.
+Squeeze tensor by removing dimensions of size 1.

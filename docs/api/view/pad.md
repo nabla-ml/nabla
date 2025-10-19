@@ -3,21 +3,21 @@
 ## Signature
 
 ```python
-nabla.pad(arg: 'Array', slices: 'list[slice]', target_shape: 'Shape') -> 'Array'
+nabla.pad(arg: 'Tensor', slices: 'list[slice]', target_shape: 'Shape') -> 'Tensor'
 ```
 
 ## Description
 
-Place a smaller array into a larger zero-filled array at the location specified by slices.
+Place a smaller tensor into a larger zero-filled tensor at the location specified by slices.
 
-This is the inverse operation of array slicing - given slices, a small array, and target shape,
-it creates a larger array where the small array is placed at the sliced location
+This is the inverse operation of tensor slicing - given slices, a small tensor, and target shape,
+it creates a larger tensor where the small tensor is placed at the sliced location
 and everything else is zero.
 
 ## Parameters
 
-- **`arg`** (`Input array (the smaller array to be placed)`): slices: List of slice objects defining where to place the array target_shape: The shape of the output array
+- **`arg`** (`Input tensor (the smaller tensor to be placed)`): slices: List of slice objects defining where to place the tensor target_shape: The shape of the output tensor
 
 ## Returns
 
-- `Larger array with input placed at sliced location, zeros elsewhere`: 
+- `Larger tensor with input placed at sliced location, zeros elsewhere`: 

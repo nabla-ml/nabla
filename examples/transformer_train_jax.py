@@ -185,8 +185,8 @@ def manual_embedding_lookup(token_ids, embedding_matrix):
     # For each token in vocabulary, use where to select appropriate embeddings
     for token_idx in range(vocab_size):
         # Create condition: token_ids == token_idx
-        token_idx_array = jnp.array([token_idx], dtype=jnp.int32)
-        token_idx_broadcast = jnp.broadcast_to(token_idx_array, token_ids.shape)
+        token_idx_tensor = jnp.array([token_idx], dtype=jnp.int32)
+        token_idx_broadcast = jnp.broadcast_to(token_idx_tensor, token_ids.shape)
         condition = jnp.equal(token_ids, token_idx_broadcast)
 
         # Expand condition to match embedding dimensions (batch, seq_len, d_model)
@@ -682,7 +682,7 @@ def _init_decoder_layer_params(glorot_uniform) -> dict[str, Any]:
 
 def create_reverse_dataset(batch_size):
     """
-    Create a dataset for the sequence reversal task using numpy then converting to JAX arrays.
+    Create a dataset for the sequence reversal task using numpy then converting to JAX tensors.
     Matches Nabla version approach.
 
     Task: Given a sequence [a, b, c, d], learn to output [d, c, b, a, <END>]
@@ -715,7 +715,7 @@ def create_reverse_dataset(batch_size):
     end_tokens_np = np.full((batch_size, 1), 2, dtype=np.int32)  # <END> token (2)
     target_np = np.concatenate([reversed_sequences_np, end_tokens_np], axis=1)
 
-    # Convert numpy arrays to JAX arrays
+    # Convert numpy tensors to JAX tensors
     encoder_input = jnp.array(encoder_input_np)
     decoder_input = jnp.array(decoder_input_np)
     target = jnp.array(target_np)

@@ -34,7 +34,7 @@ import numpy as np
 from max.dtype import DType
 from max.graph import TensorValue, ops
 
-from ..core.array import Array
+from ..core.tensor import Tensor
 from .operation import Operation
 
 
@@ -116,7 +116,7 @@ class GatherOp(Operation):
         from ..utils.shape_utils import get_broadcasted_shape
         return get_broadcasted_shape(input_batch_dims_val, indices_batch_dims_val)
 
-    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
         """
         Defines the MAX graph implementation using `max.graph.ops.gather`.
 
@@ -125,8 +125,8 @@ class GatherOp(Operation):
         args : list[TensorValue]
             A list containing the input tensor and the indices tensor, as
             `[input_tensor, indices_tensor]`.
-        output : Array
-            The output array where the result will be stored.
+        output : Tensor
+            The output tensor where the result will be stored.
         """
         input_tensor, indices_tensor = args
 
@@ -137,25 +137,25 @@ class GatherOp(Operation):
         result = ops.gather(input_tensor, indices_tensor, axis=self.axis)
         output.tensor_value = result
 
-    def eagerxpr(self, args: list[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
         """
         Defines the eager mode execution using `numpy.take`.
 
         Parameters
         ----------
-        args : list[Array]
-            A list containing the input array and the indices array, as
-            `[input_array, indices_array]`.
-        output : Array
-            The output array where the result will be stored.
+        args : list[Tensor]
+            A list containing the input tensor and the indices tensor, as
+            `[input_tensor, indices_tensor]`.
+        output : Tensor
+            The output tensor where the result will be stored.
         """
         values_np = args[0].to_numpy()
         indices_np = args[1].to_numpy()
         output.impl_(np.take(values_np, indices_np, axis=self.axis))
 
     def vjp_rule(
-        self, primals: list[Array], cotangent: Array, output: Array
-    ) -> list[Array]:
+        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
+    ) -> list[Tensor]:
         """
         Defines the vector-Jacobian product (VJP) rule for the gather operation.
 
@@ -164,34 +164,34 @@ class GatherOp(Operation):
 
         Parameters
         ----------
-        primals : list[Array]
-            The inputs to the forward pass, as `[input_array, indices_array]`.
-        cotangent : Array
+        primals : list[Tensor]
+            The inputs to the forward pass, as `[input_tensor, indices_tensor]`.
+        cotangent : Tensor
             The gradient of the loss with respect to the output of this operation.
-        output : Array
+        output : Tensor
             The output of the forward pass.
 
         Returns
         -------
-        list[Array]
+        list[Tensor]
             A list containing the gradients with respect to the inputs,
             as `[input_grad, indices_grad]`.
         """
-        input_array, indices_array = primals
-        target_shape = input_array.shape
+        input_tensor, indices_tensor = primals
+        target_shape = input_tensor.shape
 
         # Scatter the incoming gradient to the appropriate locations.
-        input_grad = scatter(target_shape, indices_array, cotangent, axis=self.axis)
+        input_grad = scatter(target_shape, indices_tensor, cotangent, axis=self.axis)
 
         # No gradient flows through the indices.
         from ..ops.creation import zeros
-        indices_grad = zeros(indices_array.shape, dtype=input_array.dtype)
+        indices_grad = zeros(indices_tensor.shape, dtype=input_tensor.dtype)
 
         return [input_grad, indices_grad]
 
     def jvp_rule(
-        self, primals: list[Array], tangents: list[Array], output: Array
-    ) -> Array:
+        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
+    ) -> Tensor:
         """
         Defines the Jacobian-vector product (JVP) rule for the gather operation.
 
@@ -200,16 +200,16 @@ class GatherOp(Operation):
 
         Parameters
         ----------
-        primals : list[Array]
-            The inputs to the forward pass, as `[input_array, indices_array]`.
-        tangents : list[Array]
+        primals : list[Tensor]
+            The inputs to the forward pass, as `[input_tensor, indices_tensor]`.
+        tangents : list[Tensor]
             The tangents of the inputs, as `[input_tangent, indices_tangent]`.
-        output : Array
+        output : Tensor
             The output of the forward pass.
 
         Returns
         -------
-        Array
+        Tensor
             The tangent of the output.
         """
         input_tangent, _ = tangents
@@ -217,107 +217,107 @@ class GatherOp(Operation):
         # Apply the same gather operation to the input tangent.
         return gather(input_tangent, indices=primals[1], axis=self.axis)
 
-    def compute_output_dtype(self, input_array: Array, indices: Array) -> DType:
+    def compute_output_dtype(self, input_tensor: Tensor, indices: Tensor) -> DType:
         """
-        Computes the output dtype, which is the same as the input array's dtype.
+        Computes the output dtype, which is the same as the input tensor's dtype.
         """
-        return input_array.dtype
+        return input_tensor.dtype
 
-    def forward(self, *args: Array) -> Array:
+    def forward(self, *args: Tensor) -> Tensor:
         """
         Executes the forward pass for the gather operation.
 
         Parameters
         ----------
-        *args : Array
-            Variable arguments, expected to be `(input_array, indices_array)`.
+        *args : Tensor
+            Variable arguments, expected to be `(input_tensor, indices_tensor)`.
 
         Returns
         -------
-        Array
-            The resulting array after the gather operation.
+        Tensor
+            The resulting tensor after the gather operation.
         """
         if len(args) != 2:
             raise ValueError(f"Gather operation requires 2 arguments, got {len(args)}")
 
         from .operation import move_to_best_device
         args = move_to_best_device(*args)
-        input_array, indices = args
+        input_tensor, indices = args
 
-        if not isinstance(input_array, Array) or not isinstance(indices, Array):
-            raise TypeError("Both arguments must be Array instances")
+        if not isinstance(input_tensor, Tensor) or not isinstance(indices, Tensor):
+            raise TypeError("Both arguments must be Tensor instances")
 
-        output_shape = self.compute_output_shape(input_array.shape, indices.shape)
+        output_shape = self.compute_output_shape(input_tensor.shape, indices.shape)
         output_batch_dims = self.compute_output_batch_dims(
-            input_array.batch_dims, indices.batch_dims
+            input_tensor.batch_dims, indices.batch_dims
         )
-        output_dtype = self.compute_output_dtype(input_array, indices)
+        output_dtype = self.compute_output_dtype(input_tensor, indices)
 
-        res = Array(
+        res = Tensor(
             shape=output_shape,
             dtype=output_dtype,
-            device=input_array.logical_device,
+            device=input_tensor.logical_device,
             materialize=False,
             name=self.name,
             batch_dims=output_batch_dims,
         )
 
         res.set_maxpr(self.maxpr)
-        res.add_arguments(input_array, indices)
+        res.add_arguments(input_tensor, indices)
         res.vjp_rule = self.vjp_rule
         res.jvp_rule = self.jvp_rule
         res.custom_kernel_path = self.custom_kernel_path()
 
         if not res.stage_realization:
-            self.eagerxpr([input_array, indices], res)
+            self.eagerxpr([input_tensor, indices], res)
 
         res.creator_op = self
         return res
 
 
-def gather(input_array: Array, indices: Array, axis: int = -1) -> Array:
+def gather(input_tensor: Tensor, indices: Tensor, axis: int = -1) -> Tensor:
     """
-    Selects elements from an input array using indices along a specified axis.
+    Selects elements from an input tensor using indices along a specified axis.
 
     This function is analogous to `numpy.take_along_axis`. It selects elements
-    from `input_array` at the positions specified by `indices`.
+    from `input_tensor` at the positions specified by `indices`.
 
     Parameters
     ----------
-    input_array : Array
-        The source array from which to gather values.
-    indices : Array
-        The array of indices to gather. Must be an integer-typed array.
+    input_tensor : Tensor
+        The source tensor from which to gather values.
+    indices : Tensor
+        The tensor of indices to gather. Must be an integer-typed tensor.
     axis : int, optional
         The axis along which to gather. A negative value counts from the last
         dimension. Defaults to -1.
 
     Returns
     -------
-    Array
-        A new array containing the elements of `input_array` at the given
+    Tensor
+        A new tensor containing the elements of `input_tensor` at the given
         `indices`.
 
     Examples
     --------
     >>> import nabla as nb
-    >>> x = nb.array([[10, 20, 30], [40, 50, 60]])
-    >>> indices = nb.array([[0, 2], [1, 0]])
+    >>> x = nb.tensor([[10, 20, 30], [40, 50, 60]])
+    >>> indices = nb.tensor([[0, 2], [1, 0]])
     >>> # Gather along axis 1
     >>> nb.gather(x, indices, axis=1)
-    Array([[10, 30],
+    Tensor([[10, 30],
            [50, 40]], dtype=int32)
 
     >>> # Gather along axis 0
-    >>> indices = nb.array([[0, 1, 0]])
+    >>> indices = nb.tensor([[0, 1, 0]])
     >>> nb.gather(x, indices, axis=0)
-    Array([[10, 50, 30]], dtype=int32)
+    Tensor([[10, 50, 30]], dtype=int32)
     """
     if axis >= 0:
-        axis = axis - len(input_array.shape)
+        axis = axis - len(input_tensor.shape)
 
     op = GatherOp(axis)
-    return op.forward(input_array, indices)
+    return op.forward(input_tensor, indices)
 
 
 class ScatterOp(Operation):
@@ -393,7 +393,7 @@ class ScatterOp(Operation):
         from ..utils.shape_utils import get_broadcasted_shape
         return get_broadcasted_shape(indices_batch_dims, values_batch_dims)
 
-    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
         """
         Defines the MAX graph implementation using `max.graph.ops.scatter_nd`.
 
@@ -402,8 +402,8 @@ class ScatterOp(Operation):
         args : list[TensorValue]
             A list containing the indices tensor and the values tensor, as
             `[indices_tensor, values_tensor]`.
-        output : Array
-            The output array where the result will be stored.
+        output : Tensor
+            The output tensor where the result will be stored.
         """
         indices_tensor, values_tensor = args
         from max.graph import DeviceRef
@@ -441,31 +441,31 @@ class ScatterOp(Operation):
         result = ops.scatter_nd(zero_tensor, values_tensor, indices_nd)
         output.tensor_value = result
 
-    def eagerxpr(self, args: list[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
         """
         Defines the eager mode execution using NumPy indexing.
 
         Parameters
         ----------
-        args : list[Array]
-            A list containing the indices array and the values array, as
-            `[indices_array, values_array]`.
-        output : Array
-            The output array where the result will be stored.
+        args : list[Tensor]
+            A list containing the indices tensor and the values tensor, as
+            `[indices_tensor, values_tensor]`.
+        output : Tensor
+            The output tensor where the result will be stored.
         """
-        indices_array, values_array = args
-        indices_np = indices_array.to_numpy()
-        values_np = values_array.to_numpy()
+        indices_tensor, values_tensor = args
+        indices_np = indices_tensor.to_numpy()
+        values_np = values_tensor.to_numpy()
 
         if indices_np.dtype.kind not in {"i", "u"}:
             raise ValueError(
-                f"Indices array must be of integer type, got {indices_np.dtype}"
+                f"Indices tensor must be of integer type, got {indices_np.dtype}"
             )
 
         full_shape = list(output.batch_dims) + list(output.shape)
         result_np = np.zeros(full_shape, dtype=values_np.dtype)
 
-        if indices_array.batch_dims or values_array.batch_dims:
+        if indices_tensor.batch_dims or values_tensor.batch_dims:
             batch_size = indices_np.shape[0]
             for i in range(batch_size):
                 indices_batch_i = indices_np[i]
@@ -480,18 +480,18 @@ class ScatterOp(Operation):
 
     def _scatter_single(
         self,
-        target_array: np.ndarray,
+        target_tensor: np.ndarray,
         indices: np.ndarray,
         values: np.ndarray,
         axis: int,
     ) -> None:
         """
-        Helper method to scatter values into a target array along an axis.
+        Helper method to scatter values into a target tensor along an axis.
 
         Parameters
         ----------
-        target_array : np.ndarray
-            The array to scatter values into.
+        target_tensor : np.ndarray
+            The tensor to scatter values into.
         indices : np.ndarray
             The indices where values should be placed.
         values : np.ndarray
@@ -500,15 +500,15 @@ class ScatterOp(Operation):
             The axis along which to perform the scatter.
         """
         if axis < 0:
-            axis += target_array.ndim
+            axis += target_tensor.ndim
 
-        idx = [slice(None)] * target_array.ndim
+        idx = [slice(None)] * target_tensor.ndim
         idx[axis] = indices
-        target_array[tuple(idx)] = values
+        target_tensor[tuple(idx)] = values
 
     def vjp_rule(
-        self, primals: list[Array], cotangent: Array, output: Array
-    ) -> list[Array]:
+        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
+    ) -> list[Tensor]:
         """
         Defines the vector-Jacobian product (VJP) rule for the scatter operation.
 
@@ -517,30 +517,30 @@ class ScatterOp(Operation):
 
         Parameters
         ----------
-        primals : list[Array]
-            The inputs to the forward pass, as `[indices_array, values_array]`.
-        cotangent : Array
+        primals : list[Tensor]
+            The inputs to the forward pass, as `[indices_tensor, values_tensor]`.
+        cotangent : Tensor
             The gradient of the loss with respect to the output of this operation.
-        output : Array
+        output : Tensor
             The output of the forward pass.
 
         Returns
         -------
-        list[Array]
+        list[Tensor]
             A list containing the gradients with respect to the inputs,
             as `[indices_grad, values_grad]`.
         """
-        indices_array, values_array = primals
+        indices_tensor, values_tensor = primals
         from ..ops.creation import zeros
 
-        indices_grad = zeros(indices_array.shape, dtype=values_array.dtype)
-        values_grad = gather(cotangent, indices_array, axis=self.axis)
+        indices_grad = zeros(indices_tensor.shape, dtype=values_tensor.dtype)
+        values_grad = gather(cotangent, indices_tensor, axis=self.axis)
 
         return [indices_grad, values_grad]
 
     def jvp_rule(
-        self, primals: list[Array], tangents: list[Array], output: Array
-    ) -> Array:
+        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
+    ) -> Tensor:
         """
         Defines the Jacobian-vector product (JVP) rule for the scatter operation.
 
@@ -549,41 +549,41 @@ class ScatterOp(Operation):
 
         Parameters
         ----------
-        primals : list[Array]
-            The inputs to the forward pass, as `[indices_array, values_array]`.
-        tangents : list[Array]
+        primals : list[Tensor]
+            The inputs to the forward pass, as `[indices_tensor, values_tensor]`.
+        tangents : list[Tensor]
             The tangents of the inputs, as `[indices_tangent, values_tangent]`.
-        output : Array
+        output : Tensor
             The output of the forward pass.
 
         Returns
         -------
-        Array
+        Tensor
             The tangent of the output.
         """
         _, values_tangent = tangents
         # Indices are discrete, so their tangents are ignored.
         return scatter(self.target_shape, primals[0], values_tangent, axis=self.axis)
 
-    def compute_output_dtype(self, indices: Array, values: Array) -> DType:
+    def compute_output_dtype(self, indices: Tensor, values: Tensor) -> DType:
         """
-        Computes the output dtype, which is the same as the values array's dtype.
+        Computes the output dtype, which is the same as the values tensor's dtype.
         """
         return values.dtype
 
-    def forward(self, *args: Array) -> Array:
+    def forward(self, *args: Tensor) -> Tensor:
         """
         Executes the forward pass for the scatter operation.
 
         Parameters
         ----------
-        *args : Array
-            Variable arguments, expected to be `(indices_array, values_array)`.
+        *args : Tensor
+            Variable arguments, expected to be `(indices_tensor, values_tensor)`.
 
         Returns
         -------
-        Array
-            The resulting array after the scatter operation.
+        Tensor
+            The resulting tensor after the scatter operation.
         """
         if len(args) != 2:
             raise ValueError(f"Scatter operation requires 2 arguments, got {len(args)}")
@@ -592,8 +592,8 @@ class ScatterOp(Operation):
         args = move_to_best_device(*args)
         indices, values = args
 
-        if not isinstance(indices, Array) or not isinstance(values, Array):
-            raise TypeError("Both arguments must be Array instances")
+        if not isinstance(indices, Tensor) or not isinstance(values, Tensor):
+            raise TypeError("Both arguments must be Tensor instances")
 
         output_shape = self.compute_output_shape(indices.shape, values.shape)
         output_batch_dims = self.compute_output_batch_dims(
@@ -601,7 +601,7 @@ class ScatterOp(Operation):
         )
         output_dtype = self.compute_output_dtype(indices, values)
 
-        res = Array(
+        res = Tensor(
             shape=output_shape,
             dtype=output_dtype,
             device=values.logical_device,
@@ -623,47 +623,47 @@ class ScatterOp(Operation):
 
 
 def scatter(
-    target_shape: tuple, indices: Array, values: Array, axis: int = -1
-) -> Array:
+    target_shape: tuple, indices: Tensor, values: Tensor, axis: int = -1
+) -> Tensor:
     """
-    Updates an array of zeros with given values at specified indices.
+    Updates an tensor of zeros with given values at specified indices.
 
-    This function creates an array of shape `target_shape` filled with zeros
+    This function creates an tensor of shape `target_shape` filled with zeros
     and then places the `values` at the locations specified by `indices` along
     the given `axis`. This operation is the inverse of `gather`.
 
     Parameters
     ----------
     target_shape : tuple
-        The shape of the output array.
-    indices : Array
-        An integer array specifying the indices to update.
-    values : Array
-        The array of values to scatter into the new array.
+        The shape of the output tensor.
+    indices : Tensor
+        An integer tensor specifying the indices to update.
+    values : Tensor
+        The tensor of values to scatter into the new tensor.
     axis : int, optional
         The axis along which to scatter. A negative value counts from the last
         dimension. Defaults to -1.
 
     Returns
     -------
-    Array
-        A new array of shape `target_shape` with `values` scattered at the
+    Tensor
+        A new tensor of shape `target_shape` with `values` scattered at the
         specified `indices`.
 
     Examples
     --------
     >>> import nabla as nb
     >>> target_shape = (3, 4)
-    >>> indices = nb.array([0, 2, 1])
-    >>> values = nb.array([10, 20, 30])
+    >>> indices = nb.tensor([0, 2, 1])
+    >>> values = nb.tensor([10, 20, 30])
     >>> # Scatter values into a 1D target
-    >>> nb.scatter((4,), nb.array([0, 3, 1]), nb.array([1, 2, 3]))
-    Array([1, 3, 0, 2], dtype=int32)
+    >>> nb.scatter((4,), nb.tensor([0, 3, 1]), nb.tensor([1, 2, 3]))
+    Tensor([1, 3, 0, 2], dtype=int32)
 
     >>> # Scatter rows into a 2D target along axis 0
-    >>> values_2d = nb.array([[1, 1, 1, 1], [2, 2, 2, 2], [3, 3, 3, 3]])
+    >>> values_2d = nb.tensor([[1, 1, 1, 1], [2, 2, 2, 2], [3, 3, 3, 3]])
     >>> nb.scatter(target_shape, indices, values_2d, axis=0)
-    Array([[1, 1, 1, 1],
+    Tensor([[1, 1, 1, 1],
            [3, 3, 3, 3],
            [2, 2, 2, 2]], dtype=int32)
     """

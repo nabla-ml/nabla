@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.move_axis_to_front(input_array: 'Array', axis: 'int') -> 'Array'
+nabla.move_axis_to_front(input_tensor: 'Tensor', axis: 'int') -> 'Tensor'
 ```
 
 ## Description
@@ -12,7 +12,7 @@ Move specified axis to the front (position 0), shifting others right.
 
 ## Parameters
 
-- **`input_array`** (`Input tensor`): axis: Axis to move to front
+- **`input_tensor`** (`Input tensor`): axis: Axis to move to front
 
 ## Returns
 

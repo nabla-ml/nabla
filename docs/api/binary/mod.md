@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.mod(x: 'Array | float | int', y: 'Array | float | int') -> 'Array'
+nabla.mod(x: 'Tensor | float | int', y: 'Tensor | float | int') -> 'Tensor'
 ```
 
 ## Description
@@ -12,27 +12,27 @@ Computes the element-wise remainder of division.
 
 This function calculates the remainder of `x / y` element-wise. The
 sign of the result follows the sign of the divisor `y`. It provides the
-implementation of the `%` operator for Nabla arrays.
+implementation of the `%` operator for Nabla tensors.
 
 ## Parameters
 
-- **`x`** (`Array | float | int`): The dividend array or scalar.
+- **`x`** (`Tensor | float | int`): The dividend tensor or scalar.
 
-- **`y`** (`Array | float | int`): The divisor array or scalar. Must be broadcastable to the same shape as `x`.
+- **`y`** (`Tensor | float | int`): The divisor tensor or scalar. Must be broadcastable to the same shape as `x`.
 
 ## Returns
 
-- `Array`: An array containing the element-wise remainder.
+- `Tensor`: An tensor containing the element-wise remainder.
 
 ## Examples
 
 ```pycon
 >>> import nabla as nb
->>> x = nb.array([10, -10, 9])
->>> y = nb.array([3, 3, -3])
+>>> x = nb.tensor([10, -10, 9])
+>>> y = nb.tensor([3, 3, -3])
 >>> nb.mod(x, y)
-Array([ 1,  2, -0], dtype=int32)
+Tensor([ 1,  2, -0], dtype=int32)
 
 >>> x % y
-Array([ 1,  2, -0], dtype=int32)
+Tensor([ 1,  2, -0], dtype=int32)
 ```

@@ -20,7 +20,7 @@ import numpy as np
 from max.dtype import DType
 from max.graph import TensorValue, ops
 
-from ..core.array import Array, Shape
+from ..core.tensor import Tensor, Shape
 from .operation import Operation, ViewOperation
 
 # Public API
@@ -40,7 +40,7 @@ __all__ = [
     "squeeze_batch_dims",
     "unsqueeze_batch_dims",
     "shallow_copy",
-    "array_slice",
+    "tensor_slice",
     "pad",
     "concatenate",
     "stack",
@@ -83,13 +83,13 @@ class TransposeOp(ViewOperation):
         new_shape[axis_1], new_shape[axis_2] = new_shape[axis_2], new_shape[axis_1]
         return tuple(new_shape)
 
-    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
         if len(args[0].shape) < 2:
             output.tensor_value = args[0]
             return
         output.tensor_value = ops.transpose(args[0], self.axis_1, self.axis_2)
 
-    def eagerxpr(self, args: list[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
         if len(args[0].shape) < 2:
             output._impl = args[0].impl
             return
@@ -102,18 +102,18 @@ class TransposeOp(ViewOperation):
         output.impl_(np_result)
 
     def vjp_rule(
-        self, primals: list[Array], cotangent: Array, output: Array
-    ) -> list[Array]:
+        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
+    ) -> list[Tensor]:
         return [transpose(cotangent, self.axis_1, self.axis_2)]
 
     def jvp_rule(
-        self, primals: list[Array], tangents: list[Array], output: Array
-    ) -> Array:
+        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
+    ) -> Tensor:
         return transpose(tangents[0], self.axis_1, self.axis_2)
 
 
-def transpose(arg: Array, axis_1: int = -2, axis_2: int = -1) -> Array:
-    """Transpose array along two axes."""
+def transpose(arg: Tensor, axis_1: int = -2, axis_2: int = -1) -> Tensor:
+    """Transpose tensor along two axes."""
     if len(arg.shape) <= 1:
         return arg
 
@@ -124,7 +124,7 @@ def transpose(arg: Array, axis_1: int = -2, axis_2: int = -1) -> Array:
     if axis_1 < -len(arg.shape) or axis_2 < -len(arg.shape):
         raise ValueError(
             f"Invalid axes {axis_1}, {axis_2} for shape {arg.shape}. "
-            "Axes must be within the range of the array dimensions."
+            "Axes must be within the range of the tensor dimensions."
         )
 
     op = TransposeOp(axis_1, axis_2)
@@ -164,7 +164,7 @@ class TransposeBatchDimsOp(ViewOperation):
 
         if not input_batch_dims:
             raise ValueError(
-                "Cannot transpose batch dims of an array with no batch dimensions"
+                "Cannot transpose batch dims of an tensor with no batch dimensions"
             )
 
         # Convert negative indices to positive for validation and computation
@@ -190,7 +190,7 @@ class TransposeBatchDimsOp(ViewOperation):
 
         return tuple(new_batch_dims)
 
-    def forward(self, *args: Array) -> Array:
+    def forward(self, *args: Tensor) -> Tensor:
         """Override forward to handle single input."""
         if len(args) != 1:
             raise ValueError(
@@ -198,25 +198,25 @@ class TransposeBatchDimsOp(ViewOperation):
             )
         return super().forward(*args)
 
-    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
         """MAX graph implementation using ops.transpose."""
         axis_1 = self.axis_1 - len(output.shape)
         axis_2 = self.axis_2 - len(output.shape)
 
         output.tensor_value = ops.transpose(args[0], axis_1, axis_2)
 
-    def eagerxpr(self, args: list[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
         """Eager execution using NumPy transpose."""
-        input_array = args[0]
+        input_tensor = args[0]
 
         # Get the full tensor including batch dimensions
-        input_np = input_array.to_numpy()
+        input_np = input_tensor.to_numpy()
 
         axis_1 = self.axis_1 - len(args[0].shape)
         axis_2 = self.axis_2 - len(args[0].shape)
 
         # Create axes list for full transpose
-        total_dims = len(input_array.batch_dims) + len(input_array.shape)
+        total_dims = len(input_tensor.batch_dims) + len(input_tensor.shape)
         axes = list(range(total_dims))
 
         # Swap the two batch dimension axes
@@ -227,38 +227,38 @@ class TransposeBatchDimsOp(ViewOperation):
         output.impl_(np_result)
 
     def vjp_rule(
-        self, primals: list[Array], cotangent: Array, output: Array
-    ) -> list[Array]:
+        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
+    ) -> list[Tensor]:
         """VJP rule: transpose is its own inverse."""
         return [transpose_batch_dims(cotangent, self.axis_1, self.axis_2)]
 
     def jvp_rule(
-        self, primals: list[Array], tangents: list[Array], output: Array
-    ) -> Array:
+        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
+    ) -> Tensor:
         """JVP rule: apply same transpose to tangents."""
         return transpose_batch_dims(tangents[0], self.axis_1, self.axis_2)
 
 
-def transpose_batch_dims(arg: Array, axis_1: int = -2, axis_2: int = -1) -> Array:
+def transpose_batch_dims(arg: Tensor, axis_1: int = -2, axis_2: int = -1) -> Tensor:
     """Transpose batch dimensions along two axes.
 
-    This operation swaps two axes in the batch_dims of an Array, similar to how
+    This operation swaps two axes in the batch_dims of an Tensor, similar to how
     regular transpose works on shape dimensions. The shape dimensions remain unchanged.
 
     Parameters
     ----------
-        arg: Input array with batch dimensions to transpose
+        arg: Input tensor with batch dimensions to transpose
         axis_1: First batch dimension axis to swap (default: -2)
         axis_2: Second batch dimension axis to swap (default: -1)
 
     Returns
     -------
-        Array with specified batch dimensions transposed
+        Tensor with specified batch dimensions transposed
 
     Examples
     --------
         >>> import nabla as nb
-        >>> # Array with batch_dims=(2, 3, 4) and shape=(5, 6)
+        >>> # Tensor with batch_dims=(2, 3, 4) and shape=(5, 6)
         >>> x = nb.ones((5, 6))
         >>> x.batch_dims = (2, 3, 4)  # Simulated for example
         >>> y = transpose_batch_dims(x, -3, -1)  # Swap first and last batch dims
@@ -378,7 +378,7 @@ class PermuteOp(ViewOperation):
         # Reorder dimensions according to axes (convert negative to positive for indexing)
         return tuple(input_shape[axis + len(input_shape)] for axis in self.axes)
 
-    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
         """Max computation: permute the tensor using iterative transpose."""
         # Get the sequence of swaps needed for this permutation
         swaps = compute_iterative_transpose_swaps(self.axes)
@@ -390,18 +390,18 @@ class PermuteOp(ViewOperation):
 
         output.tensor_value = out_symbol
 
-    def eagerxpr(self, args: list[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
         """Eager computation: permute using numpy."""
         # Handle batch dimensions properly like transpose does
         offset = len(args[0].batch_dims)
 
-        # Convert our negative axes (relative to array shape) to work with full numpy array
+        # Convert our negative axes (relative to tensor shape) to work with full numpy tensor
         numpy_axes = []
         for ax in self.axes:
             # ax is negative relative to args[0].shape, convert to positive
-            array_pos_ax = ax + len(args[0].shape)
-            # Now convert to position in full numpy array (including batch dims)
-            numpy_pos_ax = offset + array_pos_ax
+            tensor_pos_ax = ax + len(args[0].shape)
+            # Now convert to position in full numpy tensor (including batch dims)
+            numpy_pos_ax = offset + tensor_pos_ax
             numpy_axes.append(numpy_pos_ax)
 
         # Prepend batch dimension indices (they stay in their original positions)
@@ -411,8 +411,8 @@ class PermuteOp(ViewOperation):
         output.impl_(np_result)
 
     def vjp_rule(
-        self, primals: list[Array], cotangent: Array, output: Array
-    ) -> list[Array]:
+        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
+    ) -> list[Tensor]:
         """VJP rule: reverse the permutation."""
         # Create inverse permutation for negative indices
         inv_axes = [0] * len(self.axes)
@@ -427,18 +427,18 @@ class PermuteOp(ViewOperation):
         return [permute(cotangent, tuple(inv_axes_negative))]
 
     def jvp_rule(
-        self, primals: list[Array], tangents: list[Array], output: Array
-    ) -> Array:
+        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
+    ) -> Tensor:
         """JVP rule: apply same permutation to tangent."""
         return permute(tangents[0], self.axes)
 
 
-def permute(input_array: Array, axes: tuple[int, ...]) -> Array:
+def permute(input_tensor: Tensor, axes: tuple[int, ...]) -> Tensor:
     """Permute (reorder) the dimensions of a tensor.
 
     Parameters
     ----------
-        input_array: Input tensor
+        input_tensor: Input tensor
         axes: Tuple specifying the new order of dimensions
 
     Returns
@@ -452,20 +452,20 @@ def permute(input_array: Array, axes: tuple[int, ...]) -> Array:
         >>> # Dimension 2 -> position 0, dimension 0 -> position 1, dimension 1 -> position 2
     """
     # always store axes to be fully negative
-    axes = tuple(-len(input_array.shape) + ax if ax >= 0 else ax for ax in axes)
+    axes = tuple(-len(input_tensor.shape) + ax if ax >= 0 else ax for ax in axes)
     # but first we add oentailly missing axes which we treat as unpemruted
     axes_new = []
-    for i in range(-len(input_array.shape), -len(axes)):
+    for i in range(-len(input_tensor.shape), -len(axes)):
         axes_new.append(i)
 
     axes = tuple(axes_new + list(axes))  # prepend missing axes to the front
 
     op = PermuteOp(axes)
-    return op.forward(input_array)
+    return op.forward(input_tensor)
 
 
 class PermuteBatchDimsOp(ViewOperation):
-    """Permute (reorder) the batch dimensions of an array according to given axes."""
+    """Permute (reorder) the batch dimensions of an tensor according to given axes."""
 
     def __init__(self, axes: tuple[int, ...]):
         """Initialize permute batch dims operation.
@@ -497,7 +497,7 @@ class PermuteBatchDimsOp(ViewOperation):
 
         if not input_batch_dims:
             raise ValueError(
-                "Cannot permute batch dims of an array with no batch dimensions"
+                "Cannot permute batch dims of an tensor with no batch dimensions"
             )
 
         # Validate axes - should be all negative and same length as input batch_dims
@@ -518,7 +518,7 @@ class PermuteBatchDimsOp(ViewOperation):
             input_batch_dims[axis + len(input_batch_dims)] for axis in self.axes
         )
 
-    def forward(self, *args: Array) -> Array:
+    def forward(self, *args: Tensor) -> Tensor:
         """Override forward to handle single input."""
         if len(args) != 1:
             raise ValueError(
@@ -526,7 +526,7 @@ class PermuteBatchDimsOp(ViewOperation):
             )
         return super().forward(*args)
 
-    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
         """MAX graph implementation using ops.transpose."""
         # Get the sequence of swaps needed for this permutation
         swaps = compute_iterative_transpose_swaps(self.axes)
@@ -542,25 +542,25 @@ class PermuteBatchDimsOp(ViewOperation):
 
         output.tensor_value = out_symbol
 
-    def eagerxpr(self, args: list[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
         """Eager execution using NumPy transpose."""
-        input_array = args[0]
+        input_tensor = args[0]
 
         # Get the full tensor including batch dimensions
-        input_np = input_array.to_numpy()
+        input_np = input_tensor.to_numpy()
 
         # Convert batch dimension axes to full tensor indices
         # Following the pattern from other batch operations
         numpy_axes = []
         for ax in self.axes:
             # ax is negative relative to batch_dims, convert to full tensor position
-            batch_pos_ax = ax - len(input_array.shape)
+            batch_pos_ax = ax - len(input_tensor.shape)
             numpy_axes.append(batch_pos_ax)
 
         # Add shape dimension indices (they stay in their original relative positions)
         # They come after the batch dimensions in the permuted tensor
-        shape_offset = len(input_array.batch_dims)
-        shape_axes = list(range(shape_offset, shape_offset + len(input_array.shape)))
+        shape_offset = len(input_tensor.batch_dims)
+        shape_axes = list(range(shape_offset, shape_offset + len(input_tensor.shape)))
         full_axes = numpy_axes + shape_axes
 
         # Apply transpose
@@ -568,8 +568,8 @@ class PermuteBatchDimsOp(ViewOperation):
         output.impl_(np_result)
 
     def vjp_rule(
-        self, primals: list[Array], cotangent: Array, output: Array
-    ) -> list[Array]:
+        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
+    ) -> list[Tensor]:
         # """VJP rule: reverse the permutation."""
         # Create inverse permutation for negative indices
         inv_axes = [0] * len(self.axes)
@@ -583,61 +583,61 @@ class PermuteBatchDimsOp(ViewOperation):
         return [permute_batch_dims(cotangent, tuple(inv_axes_negative))]
 
     def jvp_rule(
-        self, primals: list[Array], tangents: list[Array], output: Array
-    ) -> Array:
+        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
+    ) -> Tensor:
         """JVP rule: apply same permutation to tangent."""
         return permute_batch_dims(tangents[0], self.axes)
 
 
-def permute_batch_dims(input_array: Array, axes: tuple[int, ...]) -> Array:
-    """Permute (reorder) the batch dimensions of an array.
+def permute_batch_dims(input_tensor: Tensor, axes: tuple[int, ...]) -> Tensor:
+    """Permute (reorder) the batch dimensions of an tensor.
 
-    This operation reorders the batch_dims of an Array according to the given axes,
+    This operation reorders the batch_dims of an Tensor according to the given axes,
     similar to how regular permute works on shape dimensions. The shape dimensions
     remain unchanged.
 
     Parameters
     ----------
-        input_array: Input array with batch dimensions to permute
+        input_tensor: Input tensor with batch dimensions to permute
         axes: Tuple specifying the new order of batch dimensions.
               All indices should be negative and form a permutation.
 
     Returns
     -------
-        Array with batch dimensions reordered according to axes
+        Tensor with batch dimensions reordered according to axes
 
     Examples
     --------
         >>> import nabla as nb
-        >>> # Array with batch_dims=(2, 3, 4) and shape=(5, 6)
+        >>> # Tensor with batch_dims=(2, 3, 4) and shape=(5, 6)
         >>> x = nb.ones((5, 6))
         >>> x.batch_dims = (2, 3, 4)  # Simulated for example
         >>> y = permute_batch_dims(x, (-1, -3, -2))  # Reorder as (4, 2, 3)
         >>> # Result has batch_dims=(4, 2, 3) and shape=(5, 6)
     """
     if len(axes) <= 1:
-        return input_array  # No permutation needed for single axis or empty
+        return input_tensor  # No permutation needed for single axis or empty
 
     # Convert to negative indices for consistency with batch dimension handling
-    axes = tuple(-len(input_array.batch_dims) + ax if ax >= 0 else ax for ax in axes)
+    axes = tuple(-len(input_tensor.batch_dims) + ax if ax >= 0 else ax for ax in axes)
 
     # Handle case where fewer axes are provided - prepend missing axes to front
-    if len(axes) < len(input_array.batch_dims):
+    if len(axes) < len(input_tensor.batch_dims):
         axes_new = []
-        for i in range(-len(input_array.batch_dims), -len(axes)):
+        for i in range(-len(input_tensor.batch_dims), -len(axes)):
             axes_new.append(i)
         axes = tuple(axes_new) + axes
 
     op = PermuteBatchDimsOp(axes)
-    return op.forward(input_array)
+    return op.forward(input_tensor)
 
 
-def move_axis_to_front(input_array: Array, axis: int) -> Array:
+def move_axis_to_front(input_tensor: Tensor, axis: int) -> Tensor:
     """Move specified axis to the front (position 0), shifting others right.
 
     Parameters
     ----------
-        input_array: Input tensor
+        input_tensor: Input tensor
         axis: Axis to move to front
 
     Returns
@@ -650,27 +650,27 @@ def move_axis_to_front(input_array: Array, axis: int) -> Array:
         >>> y = move_axis_to_front(x, 2)  # shape (4, 2, 3)
         >>> # axis 2 moved to front, others shifted: [2, 0, 1]
     """
-    ndim = len(input_array.shape)
+    ndim = len(input_tensor.shape)
 
     # Normalize negative axis
     if axis < 0:
         axis = ndim + axis
 
     if axis < 0 or axis >= ndim:
-        raise ValueError(f"Axis {axis} out of bounds for array of dimension {ndim}")
+        raise ValueError(f"Axis {axis} out of bounds for tensor of dimension {ndim}")
 
     # Generate permutation: [axis, 0, 1, ..., axis-1, axis+1, ..., ndim-1]
     axes = [axis] + [i for i in range(ndim) if i != axis]
 
-    return permute(input_array, tuple(axes))
+    return permute(input_tensor, tuple(axes))
 
 
-def move_axis_to_back(input_array: Array, axis: int) -> Array:
+def move_axis_to_back(input_tensor: Tensor, axis: int) -> Tensor:
     """Move specified axis to the back (last position), shifting others left.
 
     Parameters
     ----------
-        input_array: Input tensor
+        input_tensor: Input tensor
         axis: Axis to move to back
 
     Returns
@@ -683,27 +683,27 @@ def move_axis_to_back(input_array: Array, axis: int) -> Array:
         >>> y = move_axis_to_back(x, 0)  # shape (3, 4, 2)
         >>> # axis 0 moved to back, others shifted: [1, 2, 0]
     """
-    ndim = len(input_array.shape)
+    ndim = len(input_tensor.shape)
 
     # Normalize negative axis
     if axis < 0:
         axis = ndim + axis
 
     if axis < 0 or axis >= ndim:
-        raise ValueError(f"Axis {axis} out of bounds for array of dimension {ndim}")
+        raise ValueError(f"Axis {axis} out of bounds for tensor of dimension {ndim}")
 
     # Generate permutation: [0, 1, ..., axis-1, axis+1, ..., ndim-1, axis]
     axes = [i for i in range(ndim) if i != axis] + [axis]
 
-    return permute(input_array, tuple(axes))
+    return permute(input_tensor, tuple(axes))
 
 
-def move_axis_from_front(input_array: Array, target_axis: int) -> Array:
+def move_axis_from_front(input_tensor: Tensor, target_axis: int) -> Tensor:
     """Move front axis (position 0) to specified target position.
 
     Parameters
     ----------
-        input_array: Input tensor (assumes front axis is the one to move)
+        input_tensor: Input tensor (assumes front axis is the one to move)
         target_axis: Target position for the front axis
 
     Returns
@@ -716,7 +716,7 @@ def move_axis_from_front(input_array: Array, target_axis: int) -> Array:
         >>> y = move_axis_from_front(x, 2)  # shape (2, 3, 4)
         >>> # front axis moved to position 2: [1, 2, 0]
     """
-    ndim = len(input_array.shape)
+    ndim = len(input_tensor.shape)
 
     # Normalize negative axis
     if target_axis < 0:
@@ -724,25 +724,25 @@ def move_axis_from_front(input_array: Array, target_axis: int) -> Array:
 
     if target_axis < 0 or target_axis >= ndim:
         raise ValueError(
-            f"Target axis {target_axis} out of bounds for array of dimension {ndim}"
+            f"Target axis {target_axis} out of bounds for tensor of dimension {ndim}"
         )
 
     if target_axis == 0:
-        return input_array  # Already at front
+        return input_tensor  # Already at front
 
     # Generate permutation to move front to target_axis
     # [1, 2, ..., target_axis, 0, target_axis+1, ..., ndim-1]
     axes = list(range(1, target_axis + 1)) + [0] + list(range(target_axis + 1, ndim))
 
-    return permute(input_array, tuple(axes))
+    return permute(input_tensor, tuple(axes))
 
 
-def move_axis_from_back(input_array: Array, target_axis: int) -> Array:
+def move_axis_from_back(input_tensor: Tensor, target_axis: int) -> Tensor:
     """Move back axis (last position) to specified target position.
 
     Parameters
     ----------
-        input_array: Input tensor (assumes back axis is the one to move)
+        input_tensor: Input tensor (assumes back axis is the one to move)
         target_axis: Target position for the back axis
 
     Returns
@@ -755,7 +755,7 @@ def move_axis_from_back(input_array: Array, target_axis: int) -> Array:
         >>> y = move_axis_from_back(x, 1)  # shape (2, 4, 3)
         >>> # back axis moved to position 1: [0, 2, 1]
     """
-    ndim = len(input_array.shape)
+    ndim = len(input_tensor.shape)
 
     # Normalize negative axis
     if target_axis < 0:
@@ -763,24 +763,24 @@ def move_axis_from_back(input_array: Array, target_axis: int) -> Array:
 
     if target_axis < 0 or target_axis >= ndim:
         raise ValueError(
-            f"Target axis {target_axis} out of bounds for array of dimension {ndim}"
+            f"Target axis {target_axis} out of bounds for tensor of dimension {ndim}"
         )
 
     if target_axis == ndim - 1:
-        return input_array  # Already at back
+        return input_tensor  # Already at back
 
     # Generate permutation to move back to target_axis
     axes = list(range(0, target_axis)) + [ndim - 1] + list(range(target_axis, ndim - 1))
 
-    return permute(input_array, tuple(axes))
+    return permute(input_tensor, tuple(axes))
 
 
-def move_axis_to_front_of_batch_dims(input_array: Array, axis: int) -> Array:
+def move_axis_to_front_of_batch_dims(input_tensor: Tensor, axis: int) -> Tensor:
     """Move specified batch dimension to the front (position 0), shifting others right.
 
     Parameters
     ----------
-        input_array: Input tensor with batch dimensions
+        input_tensor: Input tensor with batch dimensions
         axis: Batch dimension to move to front (negative index)
 
     Returns
@@ -794,29 +794,29 @@ def move_axis_to_front_of_batch_dims(input_array: Array, axis: int) -> Array:
         >>> y = move_axis_to_fron_of_batch_dims(x, -1)  # Move last batch dim to front
         >>> # Result has batch_dims=(0, 1) and shape=(2, 3, 4)
     """
-    ndim = len(input_array.batch_dims)
+    ndim = len(input_tensor.batch_dims)
 
     # Normalize negative axis
     if axis >= 0:
-        axis = -len(input_array.batch_dims) + axis
+        axis = -len(input_tensor.batch_dims) + axis
 
-    if axis < -len(input_array.batch_dims) or axis >= 0:
+    if axis < -len(input_tensor.batch_dims) or axis >= 0:
         raise ValueError(
             f"Axis {axis} out of bounds for batch_dims of dimension {ndim}"
         )
 
     # Generate permutation: [axis, 0, 1, ..., axis-1, axis+1, ..., ndim-1]
-    axes = [axis] + [i for i in range(-len(input_array.batch_dims), 0) if i != axis]
+    axes = [axis] + [i for i in range(-len(input_tensor.batch_dims), 0) if i != axis]
 
-    return permute_batch_dims(input_array, tuple(axes))
+    return permute_batch_dims(input_tensor, tuple(axes))
 
 
-def move_axis_from_front_of_batch_dims(input_array: Array, target_axis: int) -> Array:
+def move_axis_from_front_of_batch_dims(input_tensor: Tensor, target_axis: int) -> Tensor:
     """Move front batch dimension (position 0) to specified target position.
 
     Parameters
     ----------
-        input_array: Input tensor with batch dimensions (assumes front batch dim is the one to move)
+        input_tensor: Input tensor with batch dimensions (assumes front batch dim is the one to move)
         target_axis: Target position for the front batch dimension (negative index)
 
     Returns
@@ -830,28 +830,28 @@ def move_axis_from_front_of_batch_dims(input_array: Array, target_axis: int) -> 
         >>> y = move_axis_from_front_of_batch_dims(x, -1)  # Move front batch dim to last position
         >>> # Result has batch_dims=(1, 0) and shape=(4, 2, 3)
     """
-    ndim = len(input_array.batch_dims)
+    ndim = len(input_tensor.batch_dims)
 
     # Normalize negative axis
     if target_axis >= 0:
-        target_axis = -len(input_array.batch_dims) + target_axis
+        target_axis = -len(input_tensor.batch_dims) + target_axis
 
-    if target_axis < -len(input_array.batch_dims) or target_axis >= 0:
+    if target_axis < -len(input_tensor.batch_dims) or target_axis >= 0:
         raise ValueError(
             f"Target axis {target_axis} out of bounds for batch_dims of dimension {ndim}"
         )
 
     if target_axis == 0:
-        return input_array  # Already at front
+        return input_tensor  # Already at front
 
     # Generate permutation to move front to target_axis
     axes = (
-        list(range(-len(input_array.batch_dims) + 1, target_axis + 1))
+        list(range(-len(input_tensor.batch_dims) + 1, target_axis + 1))
         + [0]
         + list(range(target_axis + 1, 0))
     )
 
-    return permute_batch_dims(input_array, tuple(axes))
+    return permute_batch_dims(input_tensor, tuple(axes))
 
 
 class ReshapeOp(ViewOperation):
@@ -870,7 +870,7 @@ class ReshapeOp(ViewOperation):
             )
         return self.target_shape
 
-    def forward(self, *args: Array) -> Array:
+    def forward(self, *args: Tensor) -> Tensor:
         """Override forward to validate size compatibility with compatible signature."""
         if len(args) != 1:
             raise ValueError(f"Reshape operation requires 1 argument, got {len(args)}")
@@ -880,35 +880,35 @@ class ReshapeOp(ViewOperation):
         new_size = np.prod(self.target_shape) if self.target_shape else 1
         if old_size != new_size:
             raise ValueError(
-                f"Cannot reshape array of size {old_size} to shape {self.target_shape} of size {new_size}"
+                f"Cannot reshape tensor of size {old_size} to shape {self.target_shape} of size {new_size}"
             )
 
         return super().forward(arg)
 
-    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
         output.tensor_value = ops.reshape(
             args[0], output.batch_dims + self.target_shape
         )
 
-    def eagerxpr(self, args: list[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
         np_result = np.reshape(
             args[0].to_numpy(), output.batch_dims + self.target_shape
         )
         output.impl_(np_result)
 
     def vjp_rule(
-        self, primals: list[Array], cotangent: Array, output: Array
-    ) -> list[Array]:
+        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
+    ) -> list[Tensor]:
         return [reshape(cotangent, self.arg_shape)]
 
     def jvp_rule(
-        self, primals: list[Array], tangents: list[Array], output: Array
-    ) -> Array:
+        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
+    ) -> Tensor:
         return reshape(tangents[0], self.target_shape)
 
 
-def reshape(arg: Array, shape: Shape) -> Array:
-    """Reshape array to given shape."""
+def reshape(arg: Tensor, shape: Shape) -> Tensor:
+    """Reshape tensor to given shape."""
     # Handle -1 dimension inference
     if -1 in shape:
         # Compute the inferred dimension
@@ -935,7 +935,7 @@ def reshape(arg: Array, shape: Shape) -> Array:
                 )
             if total_size % known_size != 0:
                 raise ValueError(
-                    f"Cannot reshape array of size {total_size} to shape {shape}"
+                    f"Cannot reshape tensor of size {total_size} to shape {shape}"
                 )
 
             inferred_dim = total_size // known_size
@@ -950,7 +950,7 @@ def reshape(arg: Array, shape: Shape) -> Array:
 
 
 class BroadcastToOp(ViewOperation):
-    """Broadcast array to target shape."""
+    """Broadcast tensor to target shape."""
 
     def __init__(self, target_shape: Shape):
         super().__init__(f"broadcast[shape={target_shape}]")
@@ -964,7 +964,7 @@ class BroadcastToOp(ViewOperation):
             )
         return self.target_shape
 
-    def forward(self, *args: Array) -> Array:
+    def forward(self, *args: Tensor) -> Tensor:
         """Override forward to handle case where no broadcasting needed with compatible signature."""
         if len(args) != 1:
             raise ValueError(
@@ -996,20 +996,20 @@ class BroadcastToOp(ViewOperation):
 
         return broadcasted_axes
 
-    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
         output.tensor_value = ops.broadcast_to(
             args[0], output.batch_dims + self.target_shape
         )
 
-    def eagerxpr(self, args: list[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
         np_result = np.broadcast_to(
             args[0].to_numpy(), shape=output.batch_dims + self.target_shape
         )
         output.impl_(np_result)
 
     def vjp_rule(
-        self, primals: list[Array], cotangent: Array, output: Array
-    ) -> list[Array]:
+        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
+    ) -> list[Tensor]:
         broadcasted_axes = self.get_broadcasted_axes(
             primals[0].shape, self.target_shape
         )
@@ -1018,13 +1018,13 @@ class BroadcastToOp(ViewOperation):
         return [sum_op(cotangent, axes=broadcasted_axes, keep_dims=True)]
 
     def jvp_rule(
-        self, primals: list[Array], tangents: list[Array], output: Array
-    ) -> Array:
+        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
+    ) -> Tensor:
         return broadcast_to(tangents[0], self.target_shape)
 
 
-def broadcast_to(arg: Array, shape: Shape) -> Array:
-    """Broadcast array to target shape."""
+def broadcast_to(arg: Tensor, shape: Shape) -> Tensor:
+    """Broadcast tensor to target shape."""
     if arg.shape == shape:
         return arg
     for _ in range(len(shape) - len(arg.shape)):
@@ -1034,7 +1034,7 @@ def broadcast_to(arg: Array, shape: Shape) -> Array:
 
 
 class BroadcastBatchDimsOp(ViewOperation):
-    """Broadcast array to target batch_dims."""
+    """Broadcast tensor to target batch_dims."""
 
     def __init__(self, target_batch_dims: Shape):
         super().__init__(f"broadcast_batch_dims[shape={target_batch_dims}]")
@@ -1048,7 +1048,7 @@ class BroadcastBatchDimsOp(ViewOperation):
             )
         return self.target_batch_dims
 
-    def forward(self, *args: Array) -> Array:
+    def forward(self, *args: Tensor) -> Tensor:
         """Override forward to handle case where no broadcasting needed with compatible signature."""
         if len(args) != 1:
             raise ValueError(
@@ -1090,20 +1090,20 @@ class BroadcastBatchDimsOp(ViewOperation):
 
         return broadcasted_axes
 
-    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
         output.tensor_value = ops.broadcast_to(
             args[0], self.target_batch_dims + output.shape
         )
 
-    def eagerxpr(self, args: list[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
         np_result = np.broadcast_to(
             args[0].to_numpy(), shape=self.target_batch_dims + output.shape
         )
         output.impl_(np_result)
 
     def vjp_rule(
-        self, primals: list[Array], cotangent: Array, output: Array
-    ) -> list[Array]:
+        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
+    ) -> list[Tensor]:
         from .reduce import sum_batch_dims
 
         broadcasted_axes = self.get_broadcasted_axes(
@@ -1112,13 +1112,13 @@ class BroadcastBatchDimsOp(ViewOperation):
         return [sum_batch_dims(cotangent, axes=broadcasted_axes, keep_dims=True)]
 
     def jvp_rule(
-        self, primals: list[Array], tangents: list[Array], output: Array
-    ) -> Array:
+        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
+    ) -> Tensor:
         return broadcast_batch_dims(tangents[0], self.target_batch_dims)
 
 
-def broadcast_batch_dims(arg: Array, batch_dims: Shape) -> Array:
-    """Broadcast array to target batch_dims."""
+def broadcast_batch_dims(arg: Tensor, batch_dims: Shape) -> Tensor:
+    """Broadcast tensor to target batch_dims."""
     if arg.batch_dims == batch_dims:
         return arg
 
@@ -1158,37 +1158,37 @@ class SqueezeOp(ViewOperation):
         new_shape = [dim for dim in new_shape if dim is not None]
         return tuple(new_shape)
 
-    def forward(self, *args: Array) -> Array:
+    def forward(self, *args: Tensor) -> Tensor:
         """Override forward to handle case where no squeezing needed with compatible signature."""
         if len(args) != 1:
             raise ValueError(f"Squeeze operation requires 1 argument, got {len(args)}")
         return super().forward(*args)
 
-    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
         res = args[0]
         # Use self.axes directly since it's already normalized to a list in __init__
         for ax in self.axes:
             res = ops.squeeze(res, ax)
         output.tensor_value = res
 
-    def eagerxpr(self, args: list[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
         axis = tuple(self.axes) if self.axes else None
         np_result = np.squeeze(args[0].to_numpy(), axis=axis)
         output.impl_(np_result)
 
     def vjp_rule(
-        self, _primals: list[Array], cotangent: Array, _output: Array
-    ) -> list[Array]:
+        self, _primals: list[Tensor], cotangent: Tensor, _output: Tensor
+    ) -> list[Tensor]:
         return [unsqueeze(cotangent, self.axes)]
 
     def jvp_rule(
-        self, _primals: list[Array], tangents: list[Array], _output: Array
-    ) -> Array:
+        self, _primals: list[Tensor], tangents: list[Tensor], _output: Tensor
+    ) -> Tensor:
         return squeeze(tangents[0], self.axes)
 
 
-def squeeze(arg: Array, axes: list[int] | None = None) -> Array:
-    """Squeeze array by removing dimensions of size 1."""
+def squeeze(arg: Tensor, axes: list[int] | None = None) -> Tensor:
+    """Squeeze tensor by removing dimensions of size 1."""
     if axes is None:
         return arg
     axes = [ax if ax < 0 else -len(arg.shape) + ax for ax in axes]
@@ -1225,7 +1225,7 @@ class UnsqueezeOp(ViewOperation):
 
         return tuple(new_shape)
 
-    def forward(self, *args: Array) -> Array:
+    def forward(self, *args: Tensor) -> Tensor:
         """Override forward to handle case where no unsqueezing needed with compatible signature."""
         if len(args) != 1:
             raise ValueError(
@@ -1233,29 +1233,29 @@ class UnsqueezeOp(ViewOperation):
             )
         return super().forward(*args)
 
-    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
         res_value = args[0]
         for ax in self.axes:
             res_value = ops.unsqueeze(res_value, ax)
         output.tensor_value = res_value
 
-    def eagerxpr(self, args: list[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
         np_result = np.expand_dims(args[0].to_numpy(), axis=self.axes)
         output.impl_(np_result)
 
     def vjp_rule(
-        self, primals: list[Array], cotangent: Array, output: Array
-    ) -> list[Array]:
+        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
+    ) -> list[Tensor]:
         return [squeeze(cotangent, self.axes)]
 
     def jvp_rule(
-        self, primals: list[Array], tangents: list[Array], output: Array
-    ) -> Array:
+        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
+    ) -> Tensor:
         return unsqueeze(tangents[0], self.axes)
 
 
-def unsqueeze(arg: Array, axes: list[int] | None = None) -> Array:
-    """Unsqueeze array by adding dimensions of size 1."""
+def unsqueeze(arg: Tensor, axes: list[int] | None = None) -> Tensor:
+    """Unsqueeze tensor by adding dimensions of size 1."""
     if axes is None:
         return arg
 
@@ -1265,11 +1265,11 @@ def unsqueeze(arg: Array, axes: list[int] | None = None) -> Array:
 
 
 class ShallowCopyOp(ViewOperation):
-    """Copy operation to create a new array with the same data."""
+    """Copy operation to create a new tensor with the same data."""
 
-    def __init__(self, arg: Array):
+    def __init__(self, arg: Tensor):
         # if not arg.name and arg._impl and arg.shape == () and arg.batch_dims == ():
-        #     name = arg.to_numpy().__repr__()  # Use numpy repr for empty arrays
+        #     name = arg.to_numpy().__repr__()  # Use numpy repr for empty tensors
         # else:
         name = "shallow_copy"
 
@@ -1283,31 +1283,31 @@ class ShallowCopyOp(ViewOperation):
             )
         return input_shapes[0]
 
-    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
         output.tensor_value = args[0]
 
-    def eagerxpr(self, args: list[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
         output.impl_(args[0]._impl)
 
     def vjp_rule(
-        self, primals: list[Array], cotangent: Array, output: Array
-    ) -> list[Array]:
+        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
+    ) -> list[Tensor]:
         return [cotangent]
 
     def jvp_rule(
-        self, primals: list[Array], tangents: list[Array], output: Array
-    ) -> Array:
+        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
+    ) -> Tensor:
         return tangents[0]
 
 
-def shallow_copy(arg: Array) -> Array:
-    """Create a shallow copy of the array."""
+def shallow_copy(arg: Tensor) -> Tensor:
+    """Create a shallow copy of the tensor."""
     op = ShallowCopyOp(arg)
     return op.forward(arg)
 
 
 class ConcatenateOp(Operation):
-    """Concatenate operation to join arrays along an existing axis."""
+    """Concatenate operation to join tensors along an existing axis."""
 
     def __init__(self, axis: int = 0):
         super().__init__(f"concatenate[axis={axis}]")
@@ -1327,7 +1327,7 @@ class ConcatenateOp(Operation):
         axis = self.axis if self.axis >= 0 else len(first_shape) + self.axis
         if axis < 0 or axis >= len(first_shape):
             raise ValueError(
-                f"Axis {self.axis} is out of bounds for array with {len(first_shape)} dimensions"
+                f"Axis {self.axis} is out of bounds for tensor with {len(first_shape)} dimensions"
             )
 
         # Check that all shapes are compatible
@@ -1353,7 +1353,7 @@ class ConcatenateOp(Operation):
         output_shape[axis] = total_size_along_axis
         return tuple(output_shape)
 
-    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
         """MAX graph implementation using ops.concat."""
         # Normalize axis for MAX operations, considering batch_dims
         # full_output_shape = output.batch_dims + output.shape  # TODO: Use if needed
@@ -1363,22 +1363,22 @@ class ConcatenateOp(Operation):
         axis_in_tensor = axis + len(output.batch_dims)
         output.tensor_value = ops.concat(args, axis=axis_in_tensor)
 
-    def eagerxpr(self, args: list[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
         """Eager execution using NumPy concatenate."""
         import numpy as np
 
-        numpy_arrays = [arg.to_numpy() for arg in args]
+        numpy_tensors = [arg.to_numpy() for arg in args]
         # Normalize axis for NumPy operations, considering batch_dims
         axis = self.axis if self.axis >= 0 else len(output.shape) + self.axis
 
         # Adjust axis to account for batch_dims in the actual tensor
         axis_in_tensor = axis + len(output.batch_dims)
-        result = np.concatenate(numpy_arrays, axis=axis_in_tensor)
+        result = np.concatenate(numpy_tensors, axis=axis_in_tensor)
         output.impl_(result)
 
     def vjp_rule(
-        self, primals: list[Array], cotangent: Array, output: Array
-    ) -> list[Array]:
+        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
+    ) -> list[Tensor]:
         """Vector-Jacobian product rule for concatenate operation.
 
         The VJP of concatenate is slicing the cotangent back into pieces.
@@ -1399,7 +1399,7 @@ class ConcatenateOp(Operation):
             slices[axis] = slice(start_idx, end_idx)
 
             # Slice the cotangent
-            sliced = array_slice(cotangent, slices)
+            sliced = tensor_slice(cotangent, slices)
             result.append(sliced)
 
             start_idx = end_idx
@@ -1407,8 +1407,8 @@ class ConcatenateOp(Operation):
         return result
 
     def jvp_rule(
-        self, primals: list[Array], tangents: list[Array], output: Array
-    ) -> Array:
+        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
+    ) -> Tensor:
         """Jacobian-vector product rule for concatenate operation.
 
         The JVP of concatenate is concatenating the tangents along the same axis.
@@ -1417,12 +1417,12 @@ class ConcatenateOp(Operation):
         op = ConcatenateOp(axis=self.axis)
         return op.forward(*tangents)
 
-    def forward(self, *args: Array) -> Array:
+    def forward(self, *args: Tensor) -> Tensor:
         """Forward pass for concatenate operation with multiple inputs."""
         if len(args) == 0:
             raise ValueError("Concatenate operation requires at least 1 argument")
 
-        # Move arrays to best device
+        # Move tensors to best device
         from .operation import move_to_best_device
 
         args = move_to_best_device(*args)
@@ -1452,8 +1452,8 @@ class ConcatenateOp(Operation):
                     f"Input 0 has batch_dims {output_batch_dims}, input {i} has batch_dims {arg.batch_dims}"
                 )
 
-        # Create result array
-        res = Array(
+        # Create result tensor
+        res = Tensor(
             shape=output_shape,
             dtype=first_arg.dtype,
             device=first_arg.logical_device,
@@ -1476,27 +1476,27 @@ class ConcatenateOp(Operation):
         return res
 
 
-def concatenate(args: list[Array], axis: int = 0) -> Array:
-    """Concatenate arrays along an existing axis.
+def concatenate(args: list[Tensor], axis: int = 0) -> Tensor:
+    """Concatenate tensors along an existing axis.
 
     Parameters
     ----------
-        args: List of arrays to concatenate
-        axis: Axis along which to concatenate arrays (default: 0)
+        args: List of tensors to concatenate
+        axis: Axis along which to concatenate tensors (default: 0)
 
     Returns
     -------
-        Concatenated array
+        Concatenated tensor
     """
     if not args:
-        raise ValueError("Concatenate operation requires at least one array")
+        raise ValueError("Concatenate operation requires at least one tensor")
 
     op = ConcatenateOp(axis)
     return op.forward(*args)
 
 
-class ArraySliceOp(ViewOperation):
-    """Array slicing operation."""
+class TensorSliceOp(ViewOperation):
+    """Tensor slicing operation."""
 
     def __init__(self, slices: list[slice], squeeze_axes: list[int] | None = None):
         # Store original slices for reference
@@ -1517,15 +1517,15 @@ class ArraySliceOp(ViewOperation):
                 slice_strs.append(f"{start}:{stop}")
 
         squeeze_info = f"_squeeze{squeeze_axes}" if squeeze_axes else ""
-        super().__init__(f"array_slice[{','.join(slice_strs)}]{squeeze_info}")
+        super().__init__(f"tensor_slice[{','.join(slice_strs)}]{squeeze_info}")
         self.slices = slices
         self.squeeze_axes = squeeze_axes or []
 
     def compute_output_shape(self, *input_shapes: tuple) -> tuple:
-        """Compute output shape for array slice operation."""
+        """Compute output shape for tensor slice operation."""
         if len(input_shapes) != 1:
             raise ValueError(
-                f"Array slice operation requires 1 input shape, got {len(input_shapes)}"
+                f"Tensor slice operation requires 1 input shape, got {len(input_shapes)}"
             )
 
         input_shape = input_shapes[0]
@@ -1533,7 +1533,7 @@ class ArraySliceOp(ViewOperation):
 
         if len(self.slices) > len(input_shape):
             raise IndexError(
-                f"too many indices for array: array is {len(input_shape)}-dimensional, but {len(self.slices)} were indexed"
+                f"too many indices for tensor: tensor is {len(input_shape)}-dimensional, but {len(self.slices)} were indexed"
             )
 
         # Process each dimension
@@ -1579,7 +1579,7 @@ class ArraySliceOp(ViewOperation):
 
         return tuple(output_shape)
 
-    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
         """MAX graph implementation using ops.slice_tensor."""
         input_tensor = args[0]
         # Check for negative steps - not supported in JIT mode yet
@@ -1622,9 +1622,9 @@ class ArraySliceOp(ViewOperation):
 
         output.tensor_value = result
 
-    def eagerxpr(self, args: list[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
         """Eager execution using NumPy slicing."""
-        input_array = args[0].to_numpy()
+        input_tensor = args[0].to_numpy()
 
         # Build numpy slice tuple
         # Need to account for batch_dims - slicing only applies to shape dimensions
@@ -1641,7 +1641,7 @@ class ArraySliceOp(ViewOperation):
             else:
                 numpy_slices.append(slice(None))  # Full slice for remaining dimensions
 
-        result = input_array[tuple(numpy_slices)]
+        result = input_tensor[tuple(numpy_slices)]
 
         # Apply squeezing for JAX-compatible behavior
         if self.squeeze_axes:
@@ -1654,9 +1654,9 @@ class ArraySliceOp(ViewOperation):
         output.impl_(result)
 
     def vjp_rule(
-        self, primals: list[Array], cotangent: Array, output: Array
-    ) -> list[Array]:
-        """Vector-Jacobian product rule for array slice."""
+        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
+    ) -> list[Tensor]:
+        """Vector-Jacobian product rule for tensor slice."""
         # If we squeezed dimensions, we need to unsqueeze the cotangent first
         if self.squeeze_axes:
             from ..ops.view import unsqueeze
@@ -1670,44 +1670,44 @@ class ArraySliceOp(ViewOperation):
         return [pad(cotangent_unsqueezed, self.slices, primals[0].shape)]
 
     def jvp_rule(
-        self, primals: list[Array], tangents: list[Array], output: Array
-    ) -> Array:
-        """Jacobian-vector product rule for array slice."""
+        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
+    ) -> Tensor:
+        """Jacobian-vector product rule for tensor slice."""
         # Apply the same slicing and squeezing to tangents
-        op = ArraySliceOp(self.slices, self.squeeze_axes)
+        op = TensorSliceOp(self.slices, self.squeeze_axes)
         return op.forward(tangents[0])
 
 
-def array_slice(
-    arg: Array, slices: list[slice], squeeze_axes: list[int] | None = None
-) -> Array:
-    """Slice an array along specified dimensions.
+def tensor_slice(
+    arg: Tensor, slices: list[slice], squeeze_axes: list[int] | None = None
+) -> Tensor:
+    """Slice an tensor along specified dimensions.
 
     Parameters
     ----------
-        arg: Input array to slice
+        arg: Input tensor to slice
         slices: List of slice objects defining the slicing for each dimension
         squeeze_axes: List of axes that should be squeezed (for JAX compatibility)
 
     Returns
     -------
-        Sliced array
+        Sliced tensor
     """
-    op = ArraySliceOp(slices, squeeze_axes)
+    op = TensorSliceOp(slices, squeeze_axes)
     return op.forward(arg)
 
 
-def split(arg: Array, sizes: list[int], axis: int = 0) -> list[Array]:
-    """Split an array into multiple sub-arrays along a specified axis.
+def split(arg: Tensor, sizes: list[int], axis: int = 0) -> list[Tensor]:
+    """Split an tensor into multiple sub-tensors along a specified axis.
 
     Parameters
     ----------
-        arg: Input array to split
+        arg: Input tensor to split
         sizes: List of sizes for each split along the specified axis
-        axis: Axis along which to split the array (default: 0)
+        axis: Axis along which to split the tensor (default: 0)
     Returns
     -------
-        List of sub-arrays resulting from the split
+        List of sub-tensors resulting from the split
     """
     if not sizes:
         raise ValueError("Sizes list must not be empty")
@@ -1717,7 +1717,7 @@ def split(arg: Array, sizes: list[int], axis: int = 0) -> list[Array]:
 
     if axis < 0 or axis >= len(arg.shape):
         raise ValueError(
-            f"Axis {axis} is out of bounds for array with {len(arg.shape)} dimensions"
+            f"Axis {axis} is out of bounds for tensor with {len(arg.shape)} dimensions"
         )
 
     # Compute the total size along the specified axis
@@ -1734,18 +1734,18 @@ def split(arg: Array, sizes: list[int], axis: int = 0) -> list[Array]:
         slices.append(slice(idx, idx + size))
         idx += size
 
-    # Create the result arrays
+    # Create the result tensors
     results = []
     for s in slices:
         slice_obj = [slice(None)] * len(arg.shape)  # Full slice for all dimensions
         slice_obj[axis] = s  # Set the slice for the specified axis
-        results.append(array_slice(arg, slice_obj))
+        results.append(tensor_slice(arg, slice_obj))
 
     return results
 
 
 class PadOp(Operation):
-    """Inverse slice operation - places a smaller array into a larger zero-filled array."""
+    """Inverse slice operation - places a smaller tensor into a larger zero-filled tensor."""
 
     def __init__(self, slices: list[slice], target_shape: Shape):
         # Convert slices to string representation for name
@@ -1818,7 +1818,7 @@ class PadOp(Operation):
 
         return self.target_shape
 
-    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
         """MAX graph implementation using range->reshape->broadcast->slice->scatter approach."""
         import numpy as np
 
@@ -1885,13 +1885,13 @@ class PadOp(Operation):
         final_shape = list(output.batch_dims) + list(output.shape)
         output.tensor_value = ops.reshape(scattered_flat, final_shape)
 
-    def eagerxpr(self, args: list[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
         """Eager execution using NumPy."""
-        small_array = args[0]
+        small_tensor = args[0]
 
-        # Create zero-filled target array
+        # Create zero-filled target tensor
         target_shape = output.batch_dims + output.shape
-        result_np = np.zeros(target_shape, dtype=small_array.to_numpy().dtype)
+        result_np = np.zeros(target_shape, dtype=small_tensor.to_numpy().dtype)
 
         # Build slice indices (accounting for batch_dims)
         slice_indices = []
@@ -1907,78 +1907,78 @@ class PadOp(Operation):
         for _i in range(len(self.slices), len(output.shape)):
             slice_indices.append(slice(None))
 
-        # Place small array into the target location
-        result_np[tuple(slice_indices)] = small_array.to_numpy()
+        # Place small tensor into the target location
+        result_np[tuple(slice_indices)] = small_tensor.to_numpy()
 
         output.impl_(result_np)
 
     def vjp_rule(
-        self, primals: list[Array], cotangent: Array, output: Array
-    ) -> list[Array]:
+        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
+    ) -> list[Tensor]:
         """VJP rule: slice the cotangent back to original size."""
         # The VJP of pad is just a regular slice!
-        from nabla.ops.view import array_slice
+        from nabla.ops.view import tensor_slice
 
-        return [array_slice(cotangent, self.slices)]
+        return [tensor_slice(cotangent, self.slices)]
 
     def jvp_rule(
-        self, primals: list[Array], tangents: list[Array], output: Array
-    ) -> Array:
+        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
+    ) -> Tensor:
         """JVP rule: apply pad to tangents."""
         return pad(tangents[0], self.slices, self.target_shape)
 
-    def forward(self, *args: Array) -> Array:
+    def forward(self, *args: Tensor) -> Tensor:
         """Forward pass for inverse slice operation."""
         if len(args) != 1:
             raise ValueError(
                 f"Inverse slice operation requires 1 argument, got {len(args)}"
             )
 
-        input_array = args[0]
+        input_tensor = args[0]
 
         # Compute output properties
-        output_shape = self.compute_output_shape(input_array.shape)
+        output_shape = self.compute_output_shape(input_tensor.shape)
 
-        # Create result array
-        res = Array(
+        # Create result tensor
+        res = Tensor(
             shape=output_shape,
-            dtype=input_array.dtype,
-            device=input_array.logical_device,
+            dtype=input_tensor.dtype,
+            device=input_tensor.logical_device,
             materialize=False,
             name=self.name,
-            batch_dims=input_array.batch_dims,
+            batch_dims=input_tensor.batch_dims,
         )
 
         # Set up computation
         res.set_maxpr(self.maxpr)
-        res.add_arguments(input_array)
+        res.add_arguments(input_tensor)
         res.vjp_rule = self.vjp_rule
         res.jvp_rule = self.jvp_rule
 
         # Execute eager computation if needed
         if not res.stage_realization:
-            self.eagerxpr([input_array], res)
+            self.eagerxpr([input_tensor], res)
 
         res.creator_op = self
         return res
 
 
-def pad(arg: Array, slices: list[slice], target_shape: Shape) -> Array:
-    """Place a smaller array into a larger zero-filled array at the location specified by slices.
+def pad(arg: Tensor, slices: list[slice], target_shape: Shape) -> Tensor:
+    """Place a smaller tensor into a larger zero-filled tensor at the location specified by slices.
 
-    This is the inverse operation of array slicing - given slices, a small array, and target shape,
-    it creates a larger array where the small array is placed at the sliced location
+    This is the inverse operation of tensor slicing - given slices, a small tensor, and target shape,
+    it creates a larger tensor where the small tensor is placed at the sliced location
     and everything else is zero.
 
     Parameters
     ----------
-        arg: Input array (the smaller array to be placed)
-        slices: List of slice objects defining where to place the array
-        target_shape: The shape of the output array
+        arg: Input tensor (the smaller tensor to be placed)
+        slices: List of slice objects defining where to place the tensor
+        target_shape: The shape of the output tensor
 
     Returns
     -------
-        Larger array with input placed at sliced location, zeros elsewhere
+        Larger tensor with input placed at sliced location, zeros elsewhere
     """
     op = PadOp(slices, target_shape)
     return op.forward(arg)
@@ -2023,7 +2023,7 @@ class SqueezeBatchDimsOp(ViewOperation):
         new_batch_dims = [dim for dim in new_batch_dims if dim is not None]
         return tuple(new_batch_dims)
 
-    def forward(self, *args: Array) -> Array:
+    def forward(self, *args: Tensor) -> Tensor:
         """Override forward to handle case where no squeezing needed."""
         if len(args) != 1:
             raise ValueError(
@@ -2031,7 +2031,7 @@ class SqueezeBatchDimsOp(ViewOperation):
             )
         return super().forward(*args)
 
-    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
         """MAX graph implementation using ops.squeeze."""
         axes = [ax - len(output.shape) for ax in self.axes]
         res = args[0]
@@ -2039,36 +2039,36 @@ class SqueezeBatchDimsOp(ViewOperation):
             res = ops.squeeze(res, ax)
         output.tensor_value = res
 
-    def eagerxpr(self, args: list[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
         """Eager execution using NumPy squeeze."""
         axes = [ax - len(args[0].shape) for ax in self.axes]
         np_result = np.squeeze(args[0].to_numpy(), axis=tuple(axes))
         output.impl_(np_result)
 
     def vjp_rule(
-        self, _primals: list[Array], cotangent: Array, _output: Array
-    ) -> list[Array]:
+        self, _primals: list[Tensor], cotangent: Tensor, _output: Tensor
+    ) -> list[Tensor]:
         """VJP rule: unsqueeze the cotangent back to original batch dimensions."""
         return [unsqueeze_batch_dims(cotangent, self.axes)]
 
     def jvp_rule(
-        self, _primals: list[Array], tangents: list[Array], _output: Array
-    ) -> Array:
+        self, _primals: list[Tensor], tangents: list[Tensor], _output: Tensor
+    ) -> Tensor:
         """JVP rule: apply squeeze to tangents."""
         return squeeze_batch_dims(tangents[0], self.axes)
 
 
-def squeeze_batch_dims(arg: Array, axes: list[int] | None = None) -> Array:
-    """Squeeze array by removing batch dimensions of size 1.
+def squeeze_batch_dims(arg: Tensor, axes: list[int] | None = None) -> Tensor:
+    """Squeeze tensor by removing batch dimensions of size 1.
 
     Parameters
     ----------
-        arg: Input array
-        axes: List of batch dimension axes to squeeze. If None, returns array unchanged.
+        arg: Input tensor
+        axes: List of batch dimension axes to squeeze. If None, returns tensor unchanged.
 
     Returns
     -------
-        Array with specified batch dimensions of size 1 removed
+        Tensor with specified batch dimensions of size 1 removed
     """
     if axes is None:
         return arg
@@ -2114,7 +2114,7 @@ class UnsqueezeBatchDimsOp(ViewOperation):
 
         return tuple(new_batch_dims)
 
-    def forward(self, *args: Array) -> Array:
+    def forward(self, *args: Tensor) -> Tensor:
         """Override forward to handle case where no unsqueezing needed."""
         if len(args) != 1:
             raise ValueError(
@@ -2122,7 +2122,7 @@ class UnsqueezeBatchDimsOp(ViewOperation):
             )
         return super().forward(*args)
 
-    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
         """MAX graph implementation using ops.unsqueeze."""
         res = args[0]
         # Use self.axes directly since it's already normalized to a list in __init__
@@ -2132,7 +2132,7 @@ class UnsqueezeBatchDimsOp(ViewOperation):
             res = ops.unsqueeze(res, ax)
         output.tensor_value = res
 
-    def eagerxpr(self, args: list[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
         """Eager execution using NumPy expand_dims."""
         if self.axes:
             # Apply expand_dims for each axis sequentially
@@ -2145,30 +2145,30 @@ class UnsqueezeBatchDimsOp(ViewOperation):
         output.impl_(np_result)
 
     def vjp_rule(
-        self, primals: list[Array], cotangent: Array, output: Array
-    ) -> list[Array]:
+        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
+    ) -> list[Tensor]:
         """VJP rule: squeeze the cotangent back to original batch dimensions."""
         return [squeeze_batch_dims(cotangent, self.axes)]
 
     def jvp_rule(
-        self, primals: list[Array], tangents: list[Array], output: Array
-    ) -> Array:
+        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
+    ) -> Tensor:
         """JVP rule: apply unsqueeze to tangents."""
         return unsqueeze_batch_dims(tangents[0], self.axes)
 
 
-def unsqueeze_batch_dims(arg: Array, axes: list[int] | None = None) -> Array:
-    """Unsqueeze array by adding batch dimensions of size 1.
+def unsqueeze_batch_dims(arg: Tensor, axes: list[int] | None = None) -> Tensor:
+    """Unsqueeze tensor by adding batch dimensions of size 1.
 
     Parameters
     ----------
-        arg: Input array
+        arg: Input tensor
         axes: List of positions where to insert batch dimensions of size 1.
-              If None, returns array unchanged.
+              If None, returns tensor unchanged.
 
     Returns
     -------
-        Array with batch dimensions of size 1 added at specified positions
+        Tensor with batch dimensions of size 1 added at specified positions
     """
     if axes is None:
         return arg
@@ -2180,24 +2180,24 @@ def unsqueeze_batch_dims(arg: Array, axes: list[int] | None = None) -> Array:
     return op.forward(arg)
 
 
-# let's creata stack function which first creates a lsit of arrays wiht a new axis (via unsqueeze) and then concatenates them along that axis
-def stack(arrays: list[Array], axis: int = 0) -> Array:
-    """Stack arrays along a new axis.
+# let's creata stack function which first creates a lsit of tensors wiht a new axis (via unsqueeze) and then concatenates them along that axis
+def stack(tensors: list[Tensor], axis: int = 0) -> Tensor:
+    """Stack tensors along a new axis.
 
     Parameters
     ----------
-        arrays: List of arrays to stack
-        axis: Axis along which to stack the arrays (default: 0)
+        tensors: List of tensors to stack
+        axis: Axis along which to stack the tensors (default: 0)
 
     Returns
     -------
-        Stacked array
+        Stacked tensor
     """
-    if not arrays:
-        raise ValueError("Stack operation requires at least one array")
+    if not tensors:
+        raise ValueError("Stack operation requires at least one tensor")
 
-    # Unsqueeze each array to add a new dimension at the specified axis
-    unsqueezed_arrays = [unsqueeze(array, [axis]) for array in arrays]
+    # Unsqueeze each tensor to add a new dimension at the specified axis
+    unsqueezed_tensors = [unsqueeze(tensor, [axis]) for tensor in tensors]
 
     # Use concatenate to stack them along the new axis
-    return concatenate(unsqueezed_arrays, axis=axis)
+    return concatenate(unsqueezed_tensors, axis=axis)

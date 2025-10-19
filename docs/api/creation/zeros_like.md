@@ -3,30 +3,30 @@
 ## Signature
 
 ```python
-nabla.zeros_like(template: 'Array') -> 'Array'
+nabla.zeros_like(template: 'Tensor') -> 'Tensor'
 ```
 
 ## Description
 
-Creates an array of zeros with the same properties as a template array.
+Creates an tensor of zeros with the same properties as a template tensor.
 
-The new array will have the same shape, dtype, device, and batch
-dimensions as the template array.
+The new tensor will have the same shape, dtype, device, and batch
+dimensions as the template tensor.
 
 ## Parameters
 
-- **`template`** (`Array`): The template array to match properties from.
+- **`template`** (`Tensor`): The template tensor to match properties from.
 
 ## Returns
 
-- `Array`: A new array of zeros with the same properties as the template.
+- `Tensor`: A new tensor of zeros with the same properties as the template.
 
 ## Examples
 
 ```pycon
 >>> import nabla as nb
->>> x = nb.array([[1, 2], [3, 4]], dtype=nb.DType.int32)
+>>> x = nb.tensor([[1, 2], [3, 4]], dtype=nb.DType.int32)
 >>> nb.zeros_like(x)
-Array([[0, 0],
+Tensor([[0, 0],
        [0, 0]], dtype=int32)
 ```

@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.move_axis_from_front_of_batch_dims(input_array: 'Array', target_axis: 'int') -> 'Array'
+nabla.move_axis_from_front_of_batch_dims(input_tensor: 'Tensor', target_axis: 'int') -> 'Tensor'
 ```
 
 ## Description
@@ -12,7 +12,7 @@ Move front batch dimension (position 0) to specified target position.
 
 ## Parameters
 
-- **`input_array`** (`Input tensor with batch dimensions (assumes front batch dim is the one to move)`): target_axis: Target position for the front batch dimension (negative index)
+- **`input_tensor`** (`Input tensor with batch dimensions (assumes front batch dim is the one to move)`): target_axis: Target position for the front batch dimension (negative index)
 
 ## Returns
 

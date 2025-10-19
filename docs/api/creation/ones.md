@@ -3,20 +3,20 @@
 ## Signature
 
 ```python
-nabla.ones(shape: 'Shape', dtype: 'DType', device: 'Device', batch_dims: 'Shape', traced: 'bool') -> 'Array'
+nabla.ones(shape: 'Shape', dtype: 'DType', device: 'Device', batch_dims: 'Shape', traced: 'bool') -> 'Tensor'
 ```
 
 ## Description
 
-Creates an array of a given shape filled with ones.
+Creates an tensor of a given shape filled with ones.
 
 ## Parameters
 
-- **`shape`** (`Shape`): The shape of the new array, e.g., `(2, 3)` or `(5,)`.
+- **`shape`** (`Shape`): The shape of the new tensor, e.g., `(2, 3)` or `(5,)`.
 
-- **`dtype`** (`DType, optional`): The desired data type for the array. Defaults to DType.float32.
+- **`dtype`** (`DType, optional`): The desired data type for the tensor. Defaults to DType.float32.
 
-- **`device`** (`Device, optional`): The device to place the array on. Defaults to the CPU.
+- **`device`** (`Device, optional`): The device to place the tensor on. Defaults to the CPU.
 
 - **`batch_dims`** (`Shape, optional`): Specifies leading dimensions to be treated as batch dimensions. Defaults to an empty tuple.
 
@@ -24,7 +24,7 @@ Creates an array of a given shape filled with ones.
 
 ## Returns
 
-- `Array`: An array of the specified shape and dtype, filled with ones.
+- `Tensor`: An tensor of the specified shape and dtype, filled with ones.
 
 ## Examples
 
@@ -32,5 +32,5 @@ Creates an array of a given shape filled with ones.
 >>> import nabla as nb
 >>> # Create a vector of ones
 >>> nb.ones((4,), dtype=nb.DType.float32)
-Array([1., 1., 1., 1.], dtype=float32)
+Tensor([1., 1., 1., 1.], dtype=float32)
 ```

@@ -21,27 +21,27 @@ import numpy as np
 import nabla as nb
 
 
-def relu(x: nb.Array) -> nb.Array:
+def relu(x: nb.Tensor) -> nb.Tensor:
     """Rectified Linear Unit activation function.
 
     Args:
-        x: Input array
+        x: Input tensor
 
     Returns:
-        Array with ReLU applied element-wise
+        Tensor with ReLU applied element-wise
     """
     return nb.maximum(x, 0)
 
 
-def leaky_relu(x: nb.Array, negative_slope: float = 0.01) -> nb.Array:
+def leaky_relu(x: nb.Tensor, negative_slope: float = 0.01) -> nb.Tensor:
     """Leaky ReLU activation function.
 
     Args:
-        x: Input array
+        x: Input tensor
         negative_slope: Slope for negative values
 
     Returns:
-        Array with Leaky ReLU applied element-wise
+        Tensor with Leaky ReLU applied element-wise
     """
     zeros = nb.zeros_like(x)
     positive_part = nb.maximum(x, zeros)
@@ -49,14 +49,14 @@ def leaky_relu(x: nb.Array, negative_slope: float = 0.01) -> nb.Array:
     return positive_part + negative_part
 
 
-def sigmoid(x: nb.Array) -> nb.Array:
+def sigmoid(x: nb.Tensor) -> nb.Tensor:
     """Sigmoid activation function.
 
     Args:
-        x: Input array
+        x: Input tensor
 
     Returns:
-        Array with sigmoid applied element-wise
+        Tensor with sigmoid applied element-wise
     """
     # sigmoid(x) = 1 / (1 + exp(-x))
     # For numerical stability, use:
@@ -81,29 +81,29 @@ def sigmoid(x: nb.Array) -> nb.Array:
     return positive_mask_float * positive_part + negative_mask_float * negative_part
 
 
-def tanh(x: nb.Array) -> nb.Array:
+def tanh(x: nb.Tensor) -> nb.Tensor:
     """Hyperbolic tangent activation function.
 
     Args:
-        x: Input array
+        x: Input tensor
 
     Returns:
-        Array with tanh applied element-wise
+        Tensor with tanh applied element-wise
     """
     return nb.tanh(x)
 
 
-def gelu(x: nb.Array) -> nb.Array:
+def gelu(x: nb.Tensor) -> nb.Tensor:
     """Gaussian Error Linear Unit activation function.
 
     GELU(x) = x * Φ(x) where Φ(x) is the CDF of standard normal distribution.
     Approximation: GELU(x) ≈ 0.5 * x * (1 + tanh(√(2/π) * (x + 0.044715 * x^3)))
 
     Args:
-        x: Input array
+        x: Input tensor
 
     Returns:
-        Array with GELU applied element-wise
+        Tensor with GELU applied element-wise
     """
     # Constants for GELU approximation
     sqrt_2_over_pi = np.sqrt(2.0 / np.pi)
@@ -119,62 +119,62 @@ def gelu(x: nb.Array) -> nb.Array:
     return half * x * (one + tanh_result)
 
 
-def swish(x: nb.Array, beta: float = 1.0) -> nb.Array:
+def swish(x: nb.Tensor, beta: float = 1.0) -> nb.Tensor:
     """Swish (SiLU) activation function.
 
     Swish(x) = x * sigmoid(β * x)
     When β = 1, this is SiLU (Sigmoid Linear Unit).
 
     Args:
-        x: Input array
+        x: Input tensor
         beta: Scaling factor for sigmoid
 
     Returns:
-        Array with Swish applied element-wise
+        Tensor with Swish applied element-wise
     """
     scaled_x = x * beta if beta != 1.0 else x
 
     return x * sigmoid(scaled_x)
 
 
-def silu(x: nb.Array) -> nb.Array:
+def silu(x: nb.Tensor) -> nb.Tensor:
     """Sigmoid Linear Unit (SiLU) activation function.
 
     SiLU(x) = x * sigmoid(x) = Swish(x, β=1)
 
     Args:
-        x: Input array
+        x: Input tensor
 
     Returns:
-        Array with SiLU applied element-wise
+        Tensor with SiLU applied element-wise
     """
     return swish(x, beta=1.0)
 
 
-def softmax(x: nb.Array, axis: int = -1) -> nb.Array:
+def softmax(x: nb.Tensor, axis: int = -1) -> nb.Tensor:
     """Softmax activation function.
 
     Args:
-        x: Input array
+        x: Input tensor
         axis: Axis along which to compute softmax
 
     Returns:
-        Array with softmax applied along specified axis
+        Tensor with softmax applied along specified axis
     """
     from ...ops.special import softmax as special_softmax
 
     return special_softmax(x, axis=axis)
 
 
-def log_softmax(x: nb.Array, axis: int = -1) -> nb.Array:
+def log_softmax(x: nb.Tensor, axis: int = -1) -> nb.Tensor:
     """Log-softmax activation function.
 
     Args:
-        x: Input array
+        x: Input tensor
         axis: Axis along which to compute log-softmax
 
     Returns:
-        Array with log-softmax applied along specified axis
+        Tensor with log-softmax applied along specified axis
     """
     from ...ops.special import logsumexp
 

@@ -21,10 +21,10 @@ import nabla as nb
 
 @nb.jit
 def adam_step(
-    params: list[nb.Array],
-    gradients: list[nb.Array],
-    m_states: list[nb.Array],
-    v_states: list[nb.Array],
+    params: list[nb.Tensor],
+    gradients: list[nb.Tensor],
+    m_states: list[nb.Tensor],
+    v_states: list[nb.Tensor],
     step: int,
     learning_rate: float = 0.001,
     beta1: float = 0.9,
@@ -33,12 +33,12 @@ def adam_step(
     weight_decay: float = 0.0,
     amsgrad: bool = False,
     maximize: bool = False,
-) -> tuple[list[nb.Array], list[nb.Array], list[nb.Array]]:
+) -> tuple[list[nb.Tensor], list[nb.Tensor], list[nb.Tensor]]:
     """Perform a single Adam optimization step.
 
     Args:
-        params: List of parameter arrays
-        gradients: List of gradient arrays (same structure as params)
+        params: List of parameter tensors
+        gradients: List of gradient tensors (same structure as params)
         m_states: List of first moment estimates
         v_states: List of second moment estimates
         step: Current step number (for bias correction)
@@ -97,11 +97,11 @@ def adam_step(
     return updated_params, updated_m_states, updated_v_states
 
 
-def init_adam_state(params: list[nb.Array]) -> tuple[list[nb.Array], list[nb.Array]]:
+def init_adam_state(params: list[nb.Tensor]) -> tuple[list[nb.Tensor], list[nb.Tensor]]:
     """Initialize Adam optimizer states.
 
     Args:
-        params: List of parameter arrays
+        params: List of parameter tensors
 
     Returns:
         Tuple of (m_states, v_states) - zero-initialized moment estimates

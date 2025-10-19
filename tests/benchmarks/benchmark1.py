@@ -37,7 +37,7 @@ def time_and_validate(
             jax_op = jax.jacfwd(jax_f, argnums=0)
         elif transformation == "hvp":
             vjp_fn_nb = lambda *p: nb.vjp(nb_f, *p)[1](
-                nb.array(1.0, dtype=nb.DType.float32)
+                nb.tensor(1.0, dtype=nb.DType.float32)
             )
             vjp_fn_jax = lambda *p: jax.vjp(jax_f, *p)[1](jnp.array(1.0))
             nb_op = lambda *p: nb.jvp(vjp_fn_nb, p, p)[1]
@@ -64,7 +64,7 @@ def time_and_validate(
         warmup_args_np = [
             np.random.rand(*shape).astype(np.float32) for shape in arg_shapes
         ]
-        warmup_args_nb = [nb.array(arg) for arg in warmup_args_np]
+        warmup_args_nb = [nb.tensor(arg) for arg in warmup_args_np]
         warmup_args_jax = [jnp.array(arg) for arg in warmup_args_np]
         nb_op_jit(*warmup_args_nb)
         jax_op_jit(*warmup_args_jax)
@@ -81,7 +81,7 @@ def time_and_validate(
     all_runs_ok = True
     for i in range(n_runs):
         np_args = [np.random.rand(*shape).astype(np.float32) for shape in arg_shapes]
-        nb_args = [nb.array(arg) for arg in np_args]
+        nb_args = [nb.tensor(arg) for arg in np_args]
         jax_args = [jnp.array(arg) for arg in np_args]
         try:
             start_nb = time.perf_counter()
@@ -139,7 +139,7 @@ def time_and_validate(
 
 # Helpers for API differences
 def _mean_nb(x, axis, keepdims=False):
-    res = nb.sum(x, axes=[axis]) / nb.array(x.shape[axis], dtype=x.dtype)
+    res = nb.sum(x, axes=[axis]) / nb.tensor(x.shape[axis], dtype=x.dtype)
     if keepdims:
         res = nb.unsqueeze(res, axes=[axis])
     return res
@@ -298,7 +298,7 @@ def _self_attention_tensor_out_nb(x, w_q, w_k, w_v):
     q, k, v = x @ w_q, x @ w_k, x @ w_v
     # Use simpler scaling to avoid potential dtype issues
     d_k = k.shape[-1]
-    scale = nb.array(1.0 / np.sqrt(d_k), dtype=nb.DType.float32)
+    scale = nb.tensor(1.0 / np.sqrt(d_k), dtype=nb.DType.float32)
     scores = (q @ nb.permute(k, (0, 2, 1))) * scale
     return _softmax_nb(scores) @ v
 
@@ -333,7 +333,7 @@ def _multi_head_attention_nb(x, w_q, w_k, w_v, w_o, num_heads=4):
     v = nb.permute(v, (0, 2, 1, 3))
 
     # Scaled dot-product attention per head
-    scale = nb.array(1.0 / np.sqrt(d_k), dtype=nb.DType.float32)
+    scale = nb.tensor(1.0 / np.sqrt(d_k), dtype=nb.DType.float32)
     scores = (q @ nb.permute(k, (0, 1, 3, 2))) * scale
     attn = _softmax_nb(scores) @ v
 

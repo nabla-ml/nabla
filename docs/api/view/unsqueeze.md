@@ -3,9 +3,9 @@
 ## Signature
 
 ```python
-nabla.unsqueeze(arg: 'Array', axes: 'list[int] | None') -> 'Array'
+nabla.unsqueeze(arg: 'Tensor', axes: 'list[int] | None') -> 'Tensor'
 ```
 
 ## Description
 
-Unsqueeze array by adding dimensions of size 1.
+Unsqueeze tensor by adding dimensions of size 1.

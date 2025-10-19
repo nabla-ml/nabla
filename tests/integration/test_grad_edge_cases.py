@@ -14,22 +14,22 @@ def test_simple_cases():
     """Test simple, straightforward cases."""
     print("=== SIMPLE CASES ===")
 
-    # Single array input
+    # Single tensor input
     def func_nb(x):
         return (x**2).sum()
 
     def func_jax(x):
         return (x**2).sum()
 
-    x_nb = nb.array([1.0, 2.0, 3.0])
+    x_nb = nb.tensor([1.0, 2.0, 3.0])
     x_jax = jnp.array([1.0, 2.0, 3.0])
 
     grad_nb = nb.grad(func_nb)(x_nb)
     grad_jax = jax.grad(func_jax)(x_jax)
 
-    print(f"Single array: Nabla={grad_nb}, JAX={grad_jax}")
-    assert np.allclose(grad_nb.to_numpy(), grad_jax), "Single array case failed"
-    print("✅ Single array case passed")
+    print(f"Single tensor: Nabla={grad_nb}, JAX={grad_jax}")
+    assert np.allclose(grad_nb.to_numpy(), grad_jax), "Single tensor case failed"
+    print("✅ Single tensor case passed")
 
 
 def test_multiple_separate_args():
@@ -42,7 +42,7 @@ def test_multiple_separate_args():
     def func_jax(x, y, z):
         return (x**2 + y**3 + z**4).sum()
 
-    x_nb, y_nb, z_nb = nb.array([1.0]), nb.array([2.0]), nb.array([3.0])
+    x_nb, y_nb, z_nb = nb.tensor([1.0]), nb.tensor([2.0]), nb.tensor([3.0])
     x_jax, y_jax, z_jax = jnp.array([1.0]), jnp.array([2.0]), jnp.array([3.0])
 
     # Test gradients w.r.t. different arguments
@@ -87,12 +87,12 @@ def test_single_list_input():
         return loss
 
     # Create test data
-    x_nb = nb.array([[1.0, 2.0]])
-    y_nb = nb.array([[3.0]])
-    w1_nb = nb.array([[0.1, 0.2], [0.3, 0.4]])
-    b1_nb = nb.array([[0.1, 0.2]])
-    w2_nb = nb.array([[0.5], [0.6]])
-    b2_nb = nb.array([[0.1]])
+    x_nb = nb.tensor([[1.0, 2.0]])
+    y_nb = nb.tensor([[3.0]])
+    w1_nb = nb.tensor([[0.1, 0.2], [0.3, 0.4]])
+    b1_nb = nb.tensor([[0.1, 0.2]])
+    w2_nb = nb.tensor([[0.5], [0.6]])
+    b2_nb = nb.tensor([[0.1]])
 
     inputs_nb = [x_nb, y_nb, w1_nb, b1_nb, w2_nb, b2_nb]
     inputs_jax = [jnp.array(arr.to_numpy()) for arr in inputs_nb]
@@ -144,8 +144,8 @@ def test_nested_structures():
         return (w1**2 + w2**3 + b1**4 + b2**5).sum()
 
     # Create nested structure
-    w1_nb, w2_nb = nb.array([1.0]), nb.array([2.0])
-    b1_nb, b2_nb = nb.array([3.0]), nb.array([4.0])
+    w1_nb, w2_nb = nb.tensor([1.0]), nb.tensor([2.0])
+    b1_nb, b2_nb = nb.tensor([3.0]), nb.tensor([4.0])
     params_nb = ([w1_nb, w2_nb], [b1_nb, b2_nb])
 
     w1_jax, w2_jax = jnp.array([1.0]), jnp.array([2.0])
@@ -182,7 +182,7 @@ def test_dict_inputs():
     def func_jax(params):
         return (params["w"] ** 2 + params["b"] ** 3).sum()
 
-    params_nb = {"w": nb.array([1.0, 2.0]), "b": nb.array([3.0])}
+    params_nb = {"w": nb.tensor([1.0, 2.0]), "b": nb.tensor([3.0])}
     params_jax = {"w": jnp.array([1.0, 2.0]), "b": jnp.array([3.0])}
 
     grad_nb = nb.grad(func_nb)(params_nb)
@@ -226,8 +226,8 @@ def test_mixed_pytrees():
 
     # Create mixed structure
     params_nb = {
-        "linear": [nb.array([1.0]), nb.array([2.0])],
-        "conv": {"weight": nb.array([3.0]), "bias": nb.array([4.0])},
+        "linear": [nb.tensor([1.0]), nb.tensor([2.0])],
+        "conv": {"weight": nb.tensor([3.0]), "bias": nb.tensor([4.0])},
     }
 
     params_jax = {
@@ -274,7 +274,7 @@ def test_edge_cases():
     def scalar_func_jax(x):
         return x**2
 
-    x_nb = nb.array(5.0)
+    x_nb = nb.tensor(5.0)
     x_jax = jnp.array(5.0)
 
     grad_nb = nb.grad(scalar_func_nb)(x_nb)

@@ -20,8 +20,8 @@ import nabla as nb
 
 
 def linear_forward(
-    x: nb.Array, weight: nb.Array, bias: nb.Array | None = None
-) -> nb.Array:
+    x: nb.Tensor, weight: nb.Tensor, bias: nb.Tensor | None = None
+) -> nb.Tensor:
     """Forward pass through a linear layer.
 
     Computes: output = x @ weight + bias
@@ -40,7 +40,7 @@ def linear_forward(
     return output
 
 
-def mlp_forward(x: nb.Array, params: list[nb.Array]) -> nb.Array:
+def mlp_forward(x: nb.Tensor, params: list[nb.Tensor]) -> nb.Tensor:
     """MLP forward pass through all layers.
 
     This is the original MLP forward function from mlp_train_jit.py.
@@ -64,11 +64,11 @@ def mlp_forward(x: nb.Array, params: list[nb.Array]) -> nb.Array:
 
 
 def mlp_forward_with_activations(
-    x: nb.Array,
-    params: list[nb.Array],
+    x: nb.Tensor,
+    params: list[nb.Tensor],
     activation: str = "relu",
     final_activation: str | None = None,
-) -> nb.Array:
+) -> nb.Tensor:
     """MLP forward pass with configurable activations.
 
     Args:

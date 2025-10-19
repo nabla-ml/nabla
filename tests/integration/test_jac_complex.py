@@ -25,7 +25,7 @@ def test_vector_to_scalar_jacobian():
     x_nb = nb.ndarange((2, 3))
     y_nb = nb.ndarange((3,))
 
-    # Convert to JAX arrays with same values
+    # Convert to JAX tensors with same values
     x_jax = jnp.array(x_nb.to_numpy())
     y_jax = jnp.array(y_nb.to_numpy())
 

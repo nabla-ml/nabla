@@ -98,7 +98,7 @@ class DataManager:
                 numpy_data = self.rng.random(shape, dtype=np.float32)
 
         if framework == "nabla":
-            return nb.array(numpy_data)
+            return nb.tensor(numpy_data)
         if framework == "jax":
             return jnp.array(numpy_data)
         if framework == "torch":

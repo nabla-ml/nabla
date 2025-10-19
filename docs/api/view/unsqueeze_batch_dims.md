@@ -3,17 +3,17 @@
 ## Signature
 
 ```python
-nabla.unsqueeze_batch_dims(arg: 'Array', axes: 'list[int] | None') -> 'Array'
+nabla.unsqueeze_batch_dims(arg: 'Tensor', axes: 'list[int] | None') -> 'Tensor'
 ```
 
 ## Description
 
-Unsqueeze array by adding batch dimensions of size 1.
+Unsqueeze tensor by adding batch dimensions of size 1.
 
 ## Parameters
 
-- **`arg`** (`Input array`): axes: List of positions where to insert batch dimensions of size 1. If None, returns array unchanged.
+- **`arg`** (`Input tensor`): axes: List of positions where to insert batch dimensions of size 1. If None, returns tensor unchanged.
 
 ## Returns
 
-- `Array with batch dimensions of size 1 added at specified positions`: 
+- `Tensor with batch dimensions of size 1 added at specified positions`: 

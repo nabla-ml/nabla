@@ -31,8 +31,8 @@ def simple_func(inputs):
 jitted_func = nb.jit(simple_func)
 
 # Test data
-x = nb.array([1.0, 2.0, 3.0])
-y = nb.array([4.0, 5.0, 6.0])
+x = nb.tensor([1.0, 2.0, 3.0])
+y = nb.tensor([4.0, 5.0, 6.0])
 inputs = [x, y]
 
 # Warmup run (compilation)

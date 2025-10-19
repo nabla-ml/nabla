@@ -3,9 +3,9 @@
 ## Signature
 
 ```python
-nabla.broadcast_batch_dims(arg: 'Array', batch_dims: 'Shape') -> 'Array'
+nabla.broadcast_batch_dims(arg: 'Tensor', batch_dims: 'Shape') -> 'Tensor'
 ```
 
 ## Description
 
-Broadcast array to target batch_dims.
+Broadcast tensor to target batch_dims.

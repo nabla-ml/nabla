@@ -20,14 +20,14 @@ def test_single_arg_returns_direct_gradient():
     def f(x):
         return nb.sum(x**2)
 
-    x = nb.array([1.0, 2.0, 3.0])
-    v = nb.array(1.0)
+    x = nb.tensor([1.0, 2.0, 3.0])
+    v = nb.tensor(1.0)
 
     out, vjp_fn = nb.vjp(f, x)
     grad = vjp_fn(v)
 
     # Should return gradient directly, not wrapped in tuple
-    assert isinstance(grad, nb.Array)
+    assert isinstance(grad, nb.Tensor)
     expected = 2.0 * x  # derivative of x^2 is 2x
     assert nb.allclose(grad, expected)
 
@@ -38,9 +38,9 @@ def test_multiple_args_return_tuple():
     def f(x, y):
         return nb.sum(x * y)
 
-    x = nb.array([1.0, 2.0])
-    y = nb.array([3.0, 4.0])
-    v = nb.array(1.0)
+    x = nb.tensor([1.0, 2.0])
+    y = nb.tensor([3.0, 4.0])
+    v = nb.tensor(1.0)
 
     out, vjp_fn = nb.vjp(f, x, y)
     grads = vjp_fn(v)
@@ -61,10 +61,10 @@ def test_pytree_structure_preservation():
         x, y_dict = tree
         return nb.sum(x) + nb.sum(y_dict["a"]) + nb.sum(y_dict["b"])
 
-    x = nb.array([1.0, 2.0])
-    y_dict = {"a": nb.array([3.0]), "b": nb.array([4.0, 5.0])}
+    x = nb.tensor([1.0, 2.0])
+    y_dict = {"a": nb.tensor([3.0]), "b": nb.tensor([4.0, 5.0])}
     pytree = (x, y_dict)
-    v = nb.array(1.0)
+    v = nb.tensor(1.0)
 
     out, vjp_fn = nb.vjp(f, pytree)
     grad_tree = vjp_fn(v)
@@ -74,7 +74,7 @@ def test_pytree_structure_preservation():
     assert len(grad_tree) == 2
 
     grad_x, grad_y_dict = grad_tree
-    assert isinstance(grad_x, nb.Array)
+    assert isinstance(grad_x, nb.Tensor)
     assert isinstance(grad_y_dict, dict)
     assert "a" in grad_y_dict and "b" in grad_y_dict
 
@@ -93,10 +93,10 @@ def test_nested_pytree_structure():
         y, z = inner_tuple
         return nb.sum(x**2) + nb.sum(y * z)
 
-    outer_dict = {"data": nb.array([1.0, 2.0, 3.0])}
-    inner_tuple = (nb.array([2.0, 3.0]), nb.array([4.0, 5.0]))
+    outer_dict = {"data": nb.tensor([1.0, 2.0, 3.0])}
+    inner_tuple = (nb.tensor([2.0, 3.0]), nb.tensor([4.0, 5.0]))
     nested = (outer_dict, inner_tuple)
-    v = nb.array(1.0)
+    v = nb.tensor(1.0)
 
     out, vjp_fn = nb.vjp(f, nested)
     grad_nested = vjp_fn(v)
@@ -126,14 +126,14 @@ def test_scalar_output_vector_input():
     def f(x):
         return nb.sum(x * x)  # Use available nabla operations
 
-    x = nb.array([1.0, 2.0, 3.0, 4.0])
-    v = nb.array(1.0)  # scalar cotangent
+    x = nb.tensor([1.0, 2.0, 3.0, 4.0])
+    v = nb.tensor(1.0)  # scalar cotangent
 
     out, vjp_fn = nb.vjp(f, x)
     grad = vjp_fn(v)
 
     # Single input should return gradient directly
-    assert isinstance(grad, nb.Array)
+    assert isinstance(grad, nb.Tensor)
     assert grad.shape == x.shape
     assert nb.allclose(grad, 2.0 * x)
 
@@ -144,14 +144,14 @@ def test_vector_output_vector_input():
     def f(x):
         return x**2  # element-wise squaring
 
-    x = nb.array([1.0, 2.0, 3.0])
-    v = nb.array([1.0, 1.0, 1.0])  # vector cotangent
+    x = nb.tensor([1.0, 2.0, 3.0])
+    v = nb.tensor([1.0, 1.0, 1.0])  # vector cotangent
 
     out, vjp_fn = nb.vjp(f, x)
     grad = vjp_fn(v)
 
     # Single input should return gradient directly
-    assert isinstance(grad, nb.Array)
+    assert isinstance(grad, nb.Tensor)
     assert grad.shape == x.shape
     assert nb.allclose(grad, 2.0 * x)
 
@@ -159,23 +159,23 @@ def test_vector_output_vector_input():
 def test_mixed_structure_consistency():
     """Test that VJP structure behavior is consistent across different scenarios."""
 
-    # Test 1: Single array input
+    # Test 1: Single tensor input
     def f1(x):
         return nb.sum(x)
 
-    x1 = nb.array([1.0, 2.0])
-    v1 = nb.array(1.0)
+    x1 = nb.tensor([1.0, 2.0])
+    v1 = nb.tensor(1.0)
 
     out1, vjp_fn1 = nb.vjp(f1, x1)
     grad1 = vjp_fn1(v1)
-    assert isinstance(grad1, nb.Array)  # Direct return, not tuple
+    assert isinstance(grad1, nb.Tensor)  # Direct return, not tuple
 
-    # Test 2: Two array inputs
+    # Test 2: Two tensor inputs
     def f2(x, y):
         return nb.sum(x + y)
 
-    x2, y2 = nb.array([1.0, 2.0]), nb.array([3.0, 4.0])
-    v2 = nb.array(1.0)
+    x2, y2 = nb.tensor([1.0, 2.0]), nb.tensor([3.0, 4.0])
+    v2 = nb.tensor(1.0)
 
     out2, vjp_fn2 = nb.vjp(f2, x2, y2)
     grads2 = vjp_fn2(v2)
@@ -186,8 +186,8 @@ def test_mixed_structure_consistency():
     def f3(d):
         return nb.sum(d["a"]) + nb.sum(d["b"])
 
-    d3 = {"a": nb.array([1.0]), "b": nb.array([2.0, 3.0])}
-    v3 = nb.array(1.0)
+    d3 = {"a": nb.tensor([1.0]), "b": nb.tensor([2.0, 3.0])}
+    v3 = nb.tensor(1.0)
 
     out3, vjp_fn3 = nb.vjp(f3, d3)
     grad3 = vjp_fn3(v3)
@@ -201,8 +201,8 @@ def test_empty_pytree_handling():
         # Function that doesn't use all inputs
         return nb.sum(x["used"])
 
-    x = {"used": nb.array([1.0, 2.0]), "unused": nb.array([3.0, 4.0])}
-    v = nb.array(1.0)
+    x = {"used": nb.tensor([1.0, 2.0]), "unused": nb.tensor([3.0, 4.0])}
+    v = nb.tensor(1.0)
 
     out, vjp_fn = nb.vjp(f, x)
     grad = vjp_fn(v)
@@ -217,10 +217,10 @@ def test_empty_pytree_handling():
 @pytest.mark.parametrize(
     "input_structure",
     [
-        nb.array([1.0, 2.0]),  # Simple array
-        {"a": nb.array([1.0])},  # Dict
-        [nb.array([1.0]), nb.array([2.0])],  # List
-        (nb.array([1.0]), nb.array([2.0])),  # Tuple
+        nb.tensor([1.0, 2.0]),  # Simple tensor
+        {"a": nb.tensor([1.0])},  # Dict
+        [nb.tensor([1.0]), nb.tensor([2.0])],  # List
+        (nb.tensor([1.0]), nb.tensor([2.0])),  # Tuple
     ],
 )
 def test_parametrized_structure_preservation(input_structure):
@@ -229,7 +229,7 @@ def test_parametrized_structure_preservation(input_structure):
     def f(x):
         return nb.sum(tree_util.tree_leaves(x)[0])  # Use first leaf
 
-    v = nb.array(1.0)
+    v = nb.tensor(1.0)
 
     out, vjp_fn = nb.vjp(f, input_structure)
     grad = vjp_fn(v)

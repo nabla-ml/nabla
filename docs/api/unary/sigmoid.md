@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.sigmoid(arg: 'Array') -> 'Array'
+nabla.sigmoid(arg: 'Tensor') -> 'Tensor'
 ```
 
 ## Description
@@ -15,17 +15,17 @@ activation function that squashes values to the range `(0, 1)`.
 
 ## Parameters
 
-- **`arg`** (`Array`): The input array.
+- **`arg`** (`Tensor`): The input tensor.
 
 ## Returns
 
-- `Array`: An array containing the sigmoid of each element.
+- `Tensor`: An tensor containing the sigmoid of each element.
 
 ## Examples
 
 ```pycon
 >>> import nabla as nb
->>> x = nb.array([-1.0, 0.0, 1.0, 20.0])
+>>> x = nb.tensor([-1.0, 0.0, 1.0, 20.0])
 >>> nb.sigmoid(x)
-Array([0.26894143, 0.5       , 0.7310586 , 1.        ], dtype=float32)
+Tensor([0.26894143, 0.5       , 0.7310586 , 1.        ], dtype=float32)
 ```

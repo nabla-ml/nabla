@@ -175,14 +175,14 @@ def my_function(x, y):
 ### 2. Organize with `@nodoc`
 ```python
 # Public API
-def create_array(shape):
-    """Create a new array with given shape."""
-    return _internal_create_array(shape)
+def create_tensor(shape):
+    """Create a new tensor with given shape."""
+    return _internal_create_tensor(shape)
 
 # Internal implementation
 @nodoc
-def _internal_create_array(shape):
-    """Internal array creation logic."""
+def _internal_create_tensor(shape):
+    """Internal tensor creation logic."""
     # Implementation details
     pass
 ```
@@ -306,9 +306,9 @@ Add SEO-friendly module docstrings:
 ```python
 # At the top of each module
 """
-Core array operations for GPU-accelerated computation.
+Core tensor operations for GPU-accelerated computation.
 
-This module provides NumPy-compatible array operations optimized
+This module provides NumPy-compatible tensor operations optimized
 for machine learning and scientific computing workloads.
 """
 ```

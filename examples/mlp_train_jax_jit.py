@@ -62,13 +62,13 @@ def mlp_forward_and_loss(inputs: list[jnp.ndarray]) -> jnp.ndarray:
 
 
 def create_sin_dataset(
-    batch_size: int = 256, key: jax.Array | None = None
-) -> tuple[jax.Array, jax.Array]:
+    batch_size: int = 256, key: jax.Tensor | None = None
+) -> tuple[jax.Tensor, jax.Tensor]:
     """Create the 8-Period sin dataset."""
     if key is None:
         # Use numpy for compatibility with original
         np_x = np.random.uniform(0.0, 1.0, (batch_size, 1)).astype(np.float32)
-        np_x = jnp.array(np_x)  # Convert to JAX array
+        np_x = jnp.array(np_x)  # Convert to JAX tensor
     else:
         # Use JAX random for reproducibility
         np_x = jax.random.uniform(key, (batch_size, 1), minval=0.0, maxval=1.0)

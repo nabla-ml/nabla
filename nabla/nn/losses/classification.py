@@ -21,7 +21,7 @@ import numpy as np
 import nabla as nb
 
 
-def cross_entropy_loss(logits: nb.Array, targets: nb.Array, axis: int = -1) -> nb.Array:
+def cross_entropy_loss(logits: nb.Tensor, targets: nb.Tensor, axis: int = -1) -> nb.Tensor:
     """Compute cross-entropy loss between logits and targets.
 
     Args:
@@ -33,7 +33,7 @@ def cross_entropy_loss(logits: nb.Array, targets: nb.Array, axis: int = -1) -> n
         Scalar loss value
     """
     from ...ops.binary import mul
-    from ...ops.reduce import sum as array_sum
+    from ...ops.reduce import sum as tensor_sum
     from ...ops.special import logsumexp
 
     # Compute log probabilities using logsumexp for numerical stability
@@ -42,16 +42,16 @@ def cross_entropy_loss(logits: nb.Array, targets: nb.Array, axis: int = -1) -> n
     log_probs = logits - log_sum_exp
 
     # Cross-entropy: -sum(targets * log_probs)
-    cross_entropy = -array_sum(mul(targets, log_probs), axes=axis)
+    cross_entropy = -tensor_sum(mul(targets, log_probs), axes=axis)
 
     # Average over batch
-    batch_size = nb.array([np.float32(logits.shape[0])])
-    return array_sum(cross_entropy) / batch_size
+    batch_size = nb.tensor([np.float32(logits.shape[0])])
+    return tensor_sum(cross_entropy) / batch_size
 
 
 def sparse_cross_entropy_loss(
-    logits: nb.Array, targets: nb.Array, axis: int = -1
-) -> nb.Array:
+    logits: nb.Tensor, targets: nb.Tensor, axis: int = -1
+) -> nb.Tensor:
     """Compute cross-entropy loss with integer targets.
 
     Args:
@@ -71,14 +71,14 @@ def sparse_cross_entropy_loss(
     one_hot_np = np.zeros((batch_size, num_classes), dtype=np.float32)
     one_hot_np[np.arange(batch_size), targets_np] = 1.0
 
-    one_hot_targets = nb.Array.from_numpy(one_hot_np)
+    one_hot_targets = nb.Tensor.from_numpy(one_hot_np)
 
     return cross_entropy_loss(logits, one_hot_targets, axis=axis)
 
 
 def binary_cross_entropy_loss(
-    predictions: nb.Array, targets: nb.Array, eps: float = 1e-7
-) -> nb.Array:
+    predictions: nb.Tensor, targets: nb.Tensor, eps: float = 1e-7
+) -> nb.Tensor:
     """Compute binary cross-entropy loss.
 
     Args:
@@ -116,8 +116,8 @@ def binary_cross_entropy_loss(
 
 
 def softmax_cross_entropy_loss(
-    logits: nb.Array, targets: nb.Array, axis: int = -1
-) -> nb.Array:
+    logits: nb.Tensor, targets: nb.Tensor, axis: int = -1
+) -> nb.Tensor:
     """Compute softmax cross-entropy loss (numerically stable).
 
     This is equivalent to cross_entropy_loss but more numerically stable
@@ -133,7 +133,7 @@ def softmax_cross_entropy_loss(
     """
     from ...ops.binary import mul
     from ...ops.reduce import mean
-    from ...ops.reduce import sum as array_sum
+    from ...ops.reduce import sum as tensor_sum
     from ...ops.special import logsumexp
 
     # Compute log_softmax = logits - logsumexp(logits)
@@ -141,7 +141,7 @@ def softmax_cross_entropy_loss(
     log_softmax = logits - log_sum_exp
 
     # Cross-entropy with log_softmax
-    cross_entropy = -array_sum(mul(targets, log_softmax), axes=axis)
+    cross_entropy = -tensor_sum(mul(targets, log_softmax), axes=axis)
 
     # Average over batch
     return mean(cross_entropy)

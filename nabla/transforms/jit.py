@@ -17,10 +17,10 @@
 from collections.abc import Callable
 from typing import Any
 
-from ..core.array import Array
+from ..core.tensor import Tensor
 from ..utils.max_interop import accelerator, accelerator_count, cpu
 from .utils import (
-    _extract_arrays_from_pytree,
+    _extract_tensors_from_pytree,
     process_transform_inputs,
     process_transform_outputs,
     tree_flatten,
@@ -37,8 +37,8 @@ def _build_fast_input_extractors(actual_args, is_list_style):
     # Cache input structure for ultra-fast conversion
 
     def analyze_structure(item):
-        if isinstance(item, Array):
-            return "array"
+        if isinstance(item, Tensor):
+            return "tensor"
         elif isinstance(item, int | float):
             return "scalar"
         elif isinstance(item, list | tuple):
@@ -58,7 +58,7 @@ def _move_args_to_default_device(obj, *, convert_scalars: bool, only_from_cpu: b
         return obj
 
     def move(item):
-        if isinstance(item, Array):
+        if isinstance(item, Tensor):
             # Only move if on CPU (default host) when only_from_cpu=True
             if only_from_cpu:
                 if item.logical_device == _CPU_DEVICE and _DEFAULT_DEVICE != _CPU_DEVICE:
@@ -69,7 +69,7 @@ def _move_args_to_default_device(obj, *, convert_scalars: bool, only_from_cpu: b
             return item
         if convert_scalars and isinstance(item, (int, float, bool)):
             import nabla as nb
-            arr = nb.array(item)
+            arr = nb.tensor(item)
             if _DEFAULT_DEVICE != _CPU_DEVICE:
                 arr = arr.to(_DEFAULT_DEVICE)
             return arr
@@ -97,10 +97,10 @@ def _ultra_fast_extract_with_cache(args, structure):
     import nabla as nb
 
     def extract_with_structure(item, struct):
-        if struct == "array":
+        if struct == "tensor":
             return [item.impl]
         elif struct == "scalar":
-            return [nb.array(item).impl]
+            return [nb.tensor(item).impl]
         elif isinstance(struct, tuple) and struct[0] == "container":
             _, container_type, substruct_list = struct
             extracted = []
@@ -108,17 +108,17 @@ def _ultra_fast_extract_with_cache(args, structure):
                 extracted.extend(extract_with_structure(sub_item, sub_struct))
             return extracted
         elif isinstance(item, dict):
-            # Handle dictionaries by extracting arrays from all values
+            # Handle dictionaries by extracting tensors from all values
             extracted = []
             for key in sorted(item.keys()):  # Deterministic ordering
-                if isinstance(item[key], Array):
+                if isinstance(item[key], Tensor):
                     extracted.append(item[key].impl)
                 elif isinstance(item[key], dict) or isinstance(
                     item[key], (list, tuple)
                 ):
                     extracted.extend(extract_with_structure(item[key], struct))
                 elif isinstance(item[key], (int, float)):
-                    extracted.append(nb.array(item[key]).impl)
+                    extracted.append(nb.tensor(item[key]).impl)
             return extracted
         elif isinstance(item, (list, tuple)):
             # Handle lists and tuples
@@ -126,20 +126,20 @@ def _ultra_fast_extract_with_cache(args, structure):
             for sub_item in item:
                 extracted.extend(extract_with_structure(sub_item, struct))
             return extracted
-        elif isinstance(item, Array):
+        elif isinstance(item, Tensor):
             return [item.impl]
         elif isinstance(item, (int, float)):
-            return [nb.array(item).impl]
+            return [nb.tensor(item).impl]
         else:
-            # Try to convert to array as fallback, but handle dict error
+            # Try to convert to tensor as fallback, but handle dict error
             try:
-                return [nb.array(item).impl]
+                return [nb.tensor(item).impl]
             except TypeError:
                 # If conversion fails, it might be a complex structure - use tree_flatten
                 from .utils import tree_flatten
 
-                flat_arrays, _ = tree_flatten(item)
-                return [arr.impl for arr in flat_arrays]
+                flat_tensors, _ = tree_flatten(item)
+                return [arr.impl for arr in flat_tensors]
 
     return extract_with_structure(args, structure)
 
@@ -147,37 +147,37 @@ def _ultra_fast_extract_with_cache(args, structure):
 def _fast_extract_tensors_fallback(actual_args, is_list_style):
     """Fallback fast tensor extraction method."""
 
-    # Convert to Arrays first, then extract tensors - matches compilation path
-    def quick_convert_to_array(item):
-        if isinstance(item, Array):
+    # Convert to Tensors first, then extract tensors - matches compilation path
+    def quick_convert_to_tensor(item):
+        if isinstance(item, Tensor):
             return item
         elif isinstance(item, int | float):
-            # Fast scalar to Array conversion
+            # Fast scalar to Tensor conversion
             import nabla as nb
 
-            return nb.array(item)
+            return nb.tensor(item)
         elif isinstance(item, dict):
             # Handle dictionaries by recursively converting values
-            return {k: quick_convert_to_array(v) for k, v in item.items()}
+            return {k: quick_convert_to_tensor(v) for k, v in item.items()}
         elif isinstance(item, list | tuple):
-            return type(item)(quick_convert_to_array(sub_item) for sub_item in item)
+            return type(item)(quick_convert_to_tensor(sub_item) for sub_item in item)
         else:
             import nabla as nb
 
             # Try to convert, but handle cases where conversion might fail
             try:
-                return nb.array(item)
+                return nb.tensor(item)
             except TypeError:
                 # If it's a complex structure that can't be converted, return as is
-                # tree_flatten will handle extracting Arrays from it
+                # tree_flatten will handle extracting Tensors from it
                 return item
 
-    # Convert to Arrays first
-    converted_args = quick_convert_to_array(actual_args)
+    # Convert to Tensors first
+    converted_args = quick_convert_to_tensor(actual_args)
     # Then flatten to match the compilation path
-    flat_arrays = tree_flatten(converted_args)[0]
+    flat_tensors = tree_flatten(converted_args)[0]
     # Finally extract impl tensors
-    return [arr.impl for arr in flat_arrays]
+    return [arr.impl for arr in flat_tensors]
 
 
 def jit(
@@ -193,10 +193,10 @@ def jit(
         func: Function to optimize with JIT compilation (should take positional arguments)
         static: If True, compile once and reuse a cached model (fast path). If False, behaves like dynamic JIT (see `djit`).
         show_graph: If True, prints the compiled graph representation when first realized.
-        auto_device: If True (default) and an accelerator is available, automatically moves CPU-resident input Arrays
+        auto_device: If True (default) and an accelerator is available, automatically moves CPU-resident input Tensors
             to the default accelerator device before tracing/execution. In static mode, Python scalars are also
-            eagerly converted to device Arrays (since they would be converted during tracing anyway). In dynamic
-            mode (`static=False` / `djit`), scalars are left as Python scalars (original behavior) but CPU Arrays
+            eagerly converted to device Tensors (since they would be converted during tracing anyway). In dynamic
+            mode (`static=False` / `djit`), scalars are left as Python scalars (original behavior) but CPU Tensors
             are still moved. Set to False to disable all automatic device movement/conversion.
 
     Returns:
@@ -276,34 +276,34 @@ def jit(
                 ]
 
                 model_outputs = cached_model.execute(*ordered_tensor_inputs)
-                output_arrays = [Array.from_impl(out) for out in model_outputs]
+                output_tensors = [Tensor.from_impl(out) for out in model_outputs]
                 
-                outputs = tree_unflatten(output_structure, output_arrays)
+                outputs = tree_unflatten(output_structure, output_tensors)
                 return process_transform_outputs(outputs, actual_args, is_list_style, untrace=False, unstage=False)
 
             # COMPILATION PATH (first run)
-            flat_input_arrays = tree_flatten(traced_args)[0]
+            flat_input_tensors = tree_flatten(traced_args)[0]
 
             outputs = func(traced_args) if is_list_style else func(*traced_args)
 
-            flat_output_arrays, output_structure_local = tree_flatten(outputs)
+            flat_output_tensors, output_structure_local = tree_flatten(outputs)
             output_structure = output_structure_local
             
             from ..core.graph_execution import realize_
             cached_model, trace_inputs = realize_(
-                flat_output_arrays, flat_input_arrays, show_graph=show_graph
+                flat_output_tensors, flat_input_tensors, show_graph=show_graph
             )
 
             # Create mapping from function parameter index to model input index
             param_to_model_index = []
             for model_input_idx, trace_input in enumerate(trace_inputs):
-                if trace_input in flat_input_arrays:
-                    func_param_idx = flat_input_arrays.index(trace_input)
+                if trace_input in flat_input_tensors:
+                    func_param_idx = flat_input_tensors.index(trace_input)
                     param_to_model_index.append((func_param_idx, model_input_idx))
 
             # Execute with the newly compiled model
-            current_flat_arrays = tree_flatten(actual_args)[0]
-            function_param_tensors = [arr.impl for arr in current_flat_arrays]
+            current_flat_tensors = tree_flatten(actual_args)[0]
+            function_param_tensors = [arr.impl for arr in current_flat_tensors]
             
             ordered_tensor_inputs = [
                 function_param_tensors[func_idx]
@@ -311,18 +311,18 @@ def jit(
             ]
             
             model_outputs = cached_model.execute(*ordered_tensor_inputs)
-            output_arrays = [Array.from_impl(out) for out in model_outputs]
+            output_tensors = [Tensor.from_impl(out) for out in model_outputs]
             
-            outputs = tree_unflatten(output_structure, output_arrays)
+            outputs = tree_unflatten(output_structure, output_tensors)
             
             return process_transform_outputs(outputs, actual_args, is_list_style)
 
         else:  # Dynamic JIT path
             outputs = func(traced_args) if is_list_style else func(*traced_args)
             
-            output_arrays = _extract_arrays_from_pytree(outputs)
+            output_tensors = _extract_tensors_from_pytree(outputs)
             from ..core.graph_execution import realize_
-            realize_(output_arrays, show_graph=show_graph)
+            realize_(output_tensors, show_graph=show_graph)
             
             return process_transform_outputs(outputs, actual_args, is_list_style)
 
@@ -338,9 +338,9 @@ def djit(
     Args:
         func: Function to optimize with JIT compilation (should take positional arguments)
         show_graph: If True, prints the compiled graph representation when realized.
-        auto_device: If True (default) and an accelerator is available, automatically moves CPU-resident input Arrays
+        auto_device: If True (default) and an accelerator is available, automatically moves CPU-resident input Tensors
             to the default accelerator device before tracing/execution. Unlike static `jit`, dynamic mode does not
-            eagerly convert Python scalars to Arrays during the early device pass (to preserve prior semantics).
+            eagerly convert Python scalars to Tensors during the early device pass (to preserve prior semantics).
             Disable by setting to False.
 
     Returns:

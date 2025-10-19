@@ -88,14 +88,14 @@ def validate_scalar_output(obj: Any) -> None:
     Raises:
         ValueError: If the output is not scalar-like
     """
-    from ..core.array import Array
+    from ..core.tensor import Tensor
 
-    if isinstance(obj, Array):
+    if isinstance(obj, Tensor):
         # JAX behavior: allow both () and (1,) shapes as "scalar-like"
         if obj.shape != () and obj.shape != (1,):
             raise ValueError(
                 f"Gradient only defined for scalar-output functions. "
-                f"Found array with shape: {obj.shape}"
+                f"Found tensor with shape: {obj.shape}"
             )
     elif isinstance(obj, list | tuple):
         for item in obj:
@@ -104,36 +104,36 @@ def validate_scalar_output(obj: Any) -> None:
         for value in obj.values():
             validate_scalar_output(value)
     else:
-        # Handle non-Array outputs (like numpy arrays, Python scalars)
+        # Handle non-Tensor outputs (like numpy tensors, Python scalars)
         import numpy as np
 
-        test_array = np.asarray(obj)
-        if test_array.shape != () and test_array.shape != (1,):
+        test_tensor = np.astensor(obj)
+        if test_tensor.shape != () and test_tensor.shape != (1,):
             raise ValueError(
                 f"Gradient only defined for scalar-output functions. "
-                f"Found non-scalar with shape: {test_array.shape}"
+                f"Found non-scalar with shape: {test_tensor.shape}"
             )
 
 
 def create_ones_like_cotangent(obj: Any) -> Any:
     """
-    Create a cotangent with ones_like for each Array leaf in the structure.
+    Create a cotangent with ones_like for each Tensor leaf in the structure.
 
     Parameters:
         obj: The object to create cotangent for
 
     Returns:
-        Cotangent with same structure but ones_like for Array leaves
+        Cotangent with same structure but ones_like for Tensor leaves
     """
-    from ..core.array import Array
+    from ..core.tensor import Tensor
     from ..ops.creation import ones_like
 
-    if isinstance(obj, Array):
+    if isinstance(obj, Tensor):
         return ones_like(obj)
     elif isinstance(obj, list | tuple):
         return type(obj)(create_ones_like_cotangent(item) for item in obj)
     elif isinstance(obj, dict):
         return {k: create_ones_like_cotangent(v) for k, v in obj.items()}
     else:
-        # For non-Array leaves, we don't need cotangents
+        # For non-Tensor leaves, we don't need cotangents
         return obj

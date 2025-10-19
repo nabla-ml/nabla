@@ -26,9 +26,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from nabla.core.array import Array
+from nabla.core.tensor import Tensor
 from nabla.transforms.utils import (
-    _extract_arrays_from_pytree,
+    _extract_tensors_from_pytree,
     _handle_args_consistently,
     make_traced_pytree,
     make_untraced_pytree,
@@ -76,20 +76,20 @@ def _validate_axes_structure(axes: Any, tree: Any, name: str) -> None:
                 )
             for i, (a, t) in enumerate(zip(axes_part, tree_part, strict=False)):
                 _check_structure(a, t, f"{path}[{i}]")
-        elif isinstance(tree_part, Array):
+        elif isinstance(tree_part, Tensor):
             if not isinstance(axes_part, int | type(None)):
                 raise ValueError(
-                    f"{name} at {path} must be int or None for Array, got {type(axes_part)}"
+                    f"{name} at {path} must be int or None for Tensor, got {type(axes_part)}"
                 )
-        # else: non-Array leaf, axes_part can be anything
+        # else: non-Tensor leaf, axes_part can be anything
 
     _check_structure(axes, tree, "")
 
 
 def _apply_vmap_to_tree(
-    tree: Any, axes: Any, batch_fn: Callable[[Array, int | None], Array]
+    tree: Any, axes: Any, batch_fn: Callable[[Tensor, int | None], Tensor]
 ) -> Any:
-    """Apply batching function to arrays in a pytree based on axes structure."""
+    """Apply batching function to tensors in a pytree based on axes structure."""
 
     def _apply_recursive(tree_part: Any, axes_part: Any) -> Any:
         if isinstance(tree_part, dict):
@@ -100,10 +100,10 @@ def _apply_vmap_to_tree(
                 for t, a in zip(tree_part, axes_part, strict=False)
             ]
             return type(tree_part)(result)
-        elif isinstance(tree_part, Array):
+        elif isinstance(tree_part, Tensor):
             return batch_fn(tree_part, axes_part)
         else:
-            # Non-Array leaf, return unchanged
+            # Non-Tensor leaf, return unchanged
             return tree_part
 
     return _apply_recursive(tree, axes)
@@ -114,28 +114,28 @@ def vmap_approach1(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
     if func is None:
         return lambda f: vmap_approach1(f, in_axes=in_axes, out_axes=out_axes)
 
-    def _prepare_input_batch(array: Array, axis: int | None) -> Array:
-        """Prepare a single array for batching."""
+    def _prepare_input_batch(tensor: Tensor, axis: int | None) -> Tensor:
+        """Prepare a single tensor for batching."""
         from nabla.ops.unary import incr_batch_dim_ctr
         from nabla.ops.view import transpose, unsqueeze
 
         if axis is None:
             # Broadcast case: add a size-1 batch dimension
-            batched = unsqueeze(array, [0])
+            batched = unsqueeze(tensor, [0])
         else:
             # Move the specified axis to position 0
-            batched = transpose(array, axis, 0) if axis != 0 else array
+            batched = transpose(tensor, axis, 0) if axis != 0 else tensor
 
         # Increment batch dimension counter for tracking
         return incr_batch_dim_ctr(batched)
 
-    def _prepare_output_unbatch(array: Array, axis: int | None) -> Array:
-        """Prepare a single output array for unbatching."""
+    def _prepare_output_unbatch(tensor: Tensor, axis: int | None) -> Tensor:
+        """Prepare a single output tensor for unbatching."""
         from nabla.ops.unary import decr_batch_dim_ctr
         from nabla.ops.view import squeeze, transpose
 
         # Decrement batch dimension counter
-        unbatched = decr_batch_dim_ctr(array)
+        unbatched = decr_batch_dim_ctr(tensor)
 
         if axis is None:
             # Remove the batch dimension completely
@@ -186,7 +186,7 @@ def vmap_approach1(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
         # Apply batching to inputs using pytree structure
         traced_batched_args = []
         for arg, axis_spec in zip(actual_args, structured_in_axes, strict=False):
-            # Make arrays traced first
+            # Make tensors traced first
             traced_arg = tree_map(lambda a: make_traced_pytree([a])[0], arg)
             # Apply batching according to axis specification
             batched_arg = _apply_vmap_to_tree(
@@ -294,11 +294,11 @@ def _standardize_axes_enhanced(axes: Any, trees: list[Any], name: str) -> list[A
 def _extract_axis_info_from_pytree(
     tree: Any, axis_spec: Any
 ) -> tuple[list[int | None], Any]:
-    """Extract flat list of axis specifications matching flattened arrays."""
-    tree_arrays, tree_structure = tree_flatten(tree)
+    """Extract flat list of axis specifications matching flattened tensors."""
+    tree_tensors, tree_structure = tree_flatten(tree)
 
     def _extract_axes_recursive(spec: Any, struct: Any) -> list[int | None]:
-        if struct is None:  # Array placeholder
+        if struct is None:  # Tensor placeholder
             return [spec]
         elif isinstance(struct, dict):
             axes_list = []
@@ -311,7 +311,7 @@ def _extract_axis_info_from_pytree(
                 axes_list.extend(_extract_axes_recursive(spec[i], item))
             return axes_list
         else:
-            # Non-Array leaf, no axes info needed
+            # Non-Tensor leaf, no axes info needed
             return []
 
     flat_axes = _extract_axes_recursive(axis_spec, tree_structure)
@@ -338,23 +338,23 @@ def vmap_approach2(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
         # Process each input argument
         batched_args = []
         for arg, axis_spec in zip(actual_args, standardized_in_axes, strict=False):
-            # Extract flat arrays and axis info
+            # Extract flat tensors and axis info
             flat_axes, tree_structure = _extract_axis_info_from_pytree(arg, axis_spec)
-            arg_arrays = _extract_arrays_from_pytree(arg)
+            arg_tensors = _extract_tensors_from_pytree(arg)
 
             # Validate axis specifications
-            if len(flat_axes) != len(arg_arrays):
+            if len(flat_axes) != len(arg_tensors):
                 raise ValueError(
-                    f"Axis specification length {len(flat_axes)} doesn't match number of arrays {len(arg_arrays)}"
+                    f"Axis specification length {len(flat_axes)} doesn't match number of tensors {len(arg_tensors)}"
                 )
 
-            # Apply batching to each array
+            # Apply batching to each tensor
             from nabla.core.trafos import _prepare_vmap_inputs
 
-            batched_arrays = _prepare_vmap_inputs(arg_arrays, flat_axes)
+            batched_tensors = _prepare_vmap_inputs(arg_tensors, flat_axes)
 
-            # Reconstruct tree structure with batched arrays
-            batched_arg = tree_unflatten(tree_structure, batched_arrays)
+            # Reconstruct tree structure with batched tensors
+            batched_arg = tree_unflatten(tree_structure, batched_tensors)
             batched_args.append(batched_arg)
 
         # Execute function
@@ -376,25 +376,25 @@ def vmap_approach2(func=None, in_axes=0, out_axes=0) -> Callable[..., Any]:
         # Process each output
         unbatched_outputs = []
         for output, axis_spec in zip(outputs_list, standardized_out_axes, strict=False):
-            # Extract flat arrays and axis info for output
+            # Extract flat tensors and axis info for output
             flat_out_axes, out_tree_structure = _extract_axis_info_from_pytree(
                 output, axis_spec
             )
-            output_arrays = _extract_arrays_from_pytree(output)
+            output_tensors = _extract_tensors_from_pytree(output)
 
             # Validate axis specifications
-            if len(flat_out_axes) != len(output_arrays):
+            if len(flat_out_axes) != len(output_tensors):
                 raise ValueError(
-                    f"Output axis specification length {len(flat_out_axes)} doesn't match number of arrays {len(output_arrays)}"
+                    f"Output axis specification length {len(flat_out_axes)} doesn't match number of tensors {len(output_tensors)}"
                 )
 
-            # Apply unbatching to each array
+            # Apply unbatching to each tensor
             from nabla.core.trafos import _prepare_vmap_outputs
 
-            unbatched_arrays = _prepare_vmap_outputs(output_arrays, flat_out_axes)
+            unbatched_tensors = _prepare_vmap_outputs(output_tensors, flat_out_axes)
 
-            # Reconstruct tree structure with unbatched arrays
-            unbatched_output = tree_unflatten(out_tree_structure, unbatched_arrays)
+            # Reconstruct tree structure with unbatched tensors
+            unbatched_output = tree_unflatten(out_tree_structure, unbatched_tensors)
             unbatched_outputs.append(unbatched_output)
 
         return unbatched_outputs[0] if is_single_output else tuple(unbatched_outputs)
@@ -483,17 +483,17 @@ def _vmap_simple_path(func, actual_args, is_list_style, in_axes, out_axes):
     else:
         adapted_in_axes = list(in_axes)
 
-    # Process inputs (simplified for flat arrays)
+    # Process inputs (simplified for flat tensors)
     batched_args = []
     for arg, axis in zip(actual_args, adapted_in_axes, strict=False):
-        arg_arrays = _extract_arrays_from_pytree(arg)
+        arg_tensors = _extract_tensors_from_pytree(arg)
         arg_structure = tree_flatten(arg)[1]
 
-        # All arrays get the same axis treatment
-        array_axes = [axis] * len(arg_arrays)
-        batched_arrays = _prepare_vmap_inputs(arg_arrays, array_axes)
+        # All tensors get the same axis treatment
+        tensor_axes = [axis] * len(arg_tensors)
+        batched_tensors = _prepare_vmap_inputs(arg_tensors, tensor_axes)
 
-        batched_arg = tree_unflatten(arg_structure, batched_arrays)
+        batched_arg = tree_unflatten(arg_structure, batched_tensors)
         batched_args.append(batched_arg)
 
     # Execute function
@@ -514,13 +514,13 @@ def _vmap_simple_path(func, actual_args, is_list_style, in_axes, out_axes):
 
     unbatched_outputs = []
     for output, axis in zip(outputs_list, adapted_out_axes, strict=False):
-        output_arrays = _extract_arrays_from_pytree(output)
+        output_tensors = _extract_tensors_from_pytree(output)
         output_structure = tree_flatten(output)[1]
 
-        array_out_axes = [axis] * len(output_arrays)
-        unbatched_arrays = _prepare_vmap_outputs(output_arrays, array_out_axes)
+        tensor_out_axes = [axis] * len(output_tensors)
+        unbatched_tensors = _prepare_vmap_outputs(output_tensors, tensor_out_axes)
 
-        unbatched_output = tree_unflatten(output_structure, unbatched_arrays)
+        unbatched_output = tree_unflatten(output_structure, unbatched_tensors)
         unbatched_outputs.append(unbatched_output)
 
     return unbatched_outputs[0] if is_single_output else tuple(unbatched_outputs)

@@ -3,26 +3,26 @@
 ## Signature
 
 ```python
-nabla.abs(arg: 'Array') -> 'Array'
+nabla.abs(arg: 'Tensor') -> 'Tensor'
 ```
 
 ## Description
 
-Computes the element-wise absolute value of an array.
+Computes the element-wise absolute value of an tensor.
 
 ## Parameters
 
-- **`arg`** (`Array`): The input array.
+- **`arg`** (`Tensor`): The input tensor.
 
 ## Returns
 
-- `Array`: An array containing the absolute value of each element.
+- `Tensor`: An tensor containing the absolute value of each element.
 
 ## Examples
 
 ```pycon
 >>> import nabla as nb
->>> x = nb.array([-1.5, 0.0, 2.5])
+>>> x = nb.tensor([-1.5, 0.0, 2.5])
 >>> nb.abs(x)
-Array([1.5, 0. , 2.5], dtype=float32)
+Tensor([1.5, 0. , 2.5], dtype=float32)
 ```

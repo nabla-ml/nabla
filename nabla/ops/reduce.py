@@ -22,7 +22,7 @@ import numpy as np
 from max.dtype import DType
 from max.graph import TensorValue, ops
 
-from ..core.array import Array, Shape
+from ..core.tensor import Tensor, Shape
 from .operation import ReductionOperation
 from .view import squeeze, squeeze_batch_dims
 
@@ -58,7 +58,7 @@ class SumOp(ReductionOperation):
         self.axes = axes
         self.keep_dims = keep_dims
 
-    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
         output_symbol = args[0]
 
         # Normalize axes to handle None, int, or collections
@@ -72,7 +72,7 @@ class SumOp(ReductionOperation):
 
         output.tensor_value = output_symbol
 
-    def eagerxpr(self, args: list[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
         if isinstance(self.axes, list):
             numpy_axes: int | tuple[int, ...] | None = tuple(self.axes)
         else:
@@ -84,8 +84,8 @@ class SumOp(ReductionOperation):
         output.impl_(np_result)
 
     def vjp_rule(
-        self, primals: list[Array], cotangent: Array, output: Array
-    ) -> list[Array]:
+        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
+    ) -> list[Tensor]:
         if len(cotangent.shape) > len(primals[0].shape):
             return [cotangent]
 
@@ -102,57 +102,57 @@ class SumOp(ReductionOperation):
         return [broadcast_to(cotangent, self.arg_shape)]
 
     def jvp_rule(
-        self, primals: list[Array], tangents: list[Array], output: Array
-    ) -> Array:
+        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
+    ) -> Tensor:
         return sum(tangents[0], axes=self.axes, keep_dims=True)
 
 
 # noqa: A001 - Intentionally shadowing built-in 'sum' for API consistency
 def sum(
-    arg: Array,
+    arg: Tensor,
     axes: int | list[int] | tuple[int, ...] | None = None,
     keep_dims: bool = False,
-) -> Array:
-    """Calculates the sum of array elements over given axes.
+) -> Tensor:
+    """Calculates the sum of tensor elements over given axes.
 
-    This function reduces an array by summing its elements along the
+    This function reduces an tensor by summing its elements along the
     specified axes. If no axes are provided, the sum of all elements in the
-    array is calculated.
+    tensor is calculated.
 
     Parameters
     ----------
-    arg : Array
-        The input array to be summed.
+    arg : Tensor
+        The input tensor to be summed.
     axes : int | list[int] | tuple[int, ...] | None, optional
         The axis or axes along which to perform the sum. If None (the
         default), the sum is performed over all axes, resulting in a scalar
-        array.
+        tensor.
     keep_dims : bool, optional
         If True, the axes which are reduced are left in the result as
         dimensions with size one. This allows the result to broadcast
-        correctly against the original array. Defaults to False.
+        correctly against the original tensor. Defaults to False.
 
     Returns
     -------
-    Array
-        An array containing the summed values.
+    Tensor
+        An tensor containing the summed values.
 
     Examples
     --------
     >>> import nabla as nb
-    >>> x = nb.array([[1, 2, 3], [4, 5, 6]])
+    >>> x = nb.tensor([[1, 2, 3], [4, 5, 6]])
 
     Sum all elements:
     >>> nb.sum(x)
-    Array([21], dtype=int32)
+    Tensor([21], dtype=int32)
 
     Sum along an axis:
     >>> nb.sum(x, axes=0)
-    Array([5, 7, 9], dtype=int32)
+    Tensor([5, 7, 9], dtype=int32)
 
     Sum along an axis and keep dimensions:
     >>> nb.sum(x, axes=1, keep_dims=True)
-    Array([[ 6],
+    Tensor([[ 6],
            [15]], dtype=int32)
     """
     if axes is not None:
@@ -165,7 +165,7 @@ def sum(
         for axis in axes:
             if not -ndim <= axis < ndim:
                 raise ValueError(
-                    f"axis {axis} is out of bounds for array of dimension {ndim}"
+                    f"axis {axis} is out of bounds for tensor of dimension {ndim}"
                 )
 
         axes = [axis if axis < 0 else axis - len(arg.shape) for axis in axes]
@@ -188,53 +188,53 @@ def sum(
 
 
 def mean(
-    arg: Array,
+    arg: Tensor,
     axes: int | list[int] | tuple[int, ...] | None = None,
     keep_dims: bool = False,
-) -> Array:
-    """Computes the arithmetic mean of array elements over given axes.
+) -> Tensor:
+    """Computes the arithmetic mean of tensor elements over given axes.
 
-    This function calculates the average of an array's elements along the
+    This function calculates the average of an tensor's elements along the
     specified axes. If no axes are provided, the mean of all elements in the
-    array is calculated.
+    tensor is calculated.
 
     Parameters
     ----------
-    arg : Array
-        The input array for which to compute the mean.
+    arg : Tensor
+        The input tensor for which to compute the mean.
     axes : int | list[int] | tuple[int, ...] | None, optional
         The axis or axes along which to compute the mean. If None (the default),
-        the mean is computed over all axes, resulting in a scalar array.
+        the mean is computed over all axes, resulting in a scalar tensor.
     keep_dims : bool, optional
         If True, the axes which are reduced are left in the result as
         dimensions with size one. This allows the result to broadcast
-        correctly against the original array. Defaults to False.
+        correctly against the original tensor. Defaults to False.
 
     Returns
     -------
-    Array
-        An array containing the mean values, typically of a floating-point dtype.
+    Tensor
+        An tensor containing the mean values, typically of a floating-point dtype.
 
     Examples
     --------
     >>> import nabla as nb
-    >>> x = nb.array([[1, 2, 3], [4, 5, 6]])
+    >>> x = nb.tensor([[1, 2, 3], [4, 5, 6]])
 
     Compute the mean of all elements:
     >>> nb.mean(x)
-    Array([3.5], dtype=float32)
+    Tensor([3.5], dtype=float32)
 
     Compute the mean along an axis:
     >>> nb.mean(x, axes=0)
-    Array([2.5, 3.5, 4.5], dtype=float32)
+    Tensor([2.5, 3.5, 4.5], dtype=float32)
 
     Compute the mean along an axis and keep dimensions:
     >>> nb.mean(x, axes=1, keep_dims=True)
-    Array([[2.],
+    Tensor([[2.],
            [5.]], dtype=float32)
     """
     from .binary import div
-    from .creation import array
+    from .creation import tensor
 
     # First compute the sum
     sum_result = sum(arg, axes=axes, keep_dims=keep_dims)
@@ -252,7 +252,7 @@ def mean(
         for axis in axes:
             if not -ndim <= axis < ndim:
                 raise ValueError(
-                    f"axis {axis} is out of bounds for array of dimension {ndim}"
+                    f"axis {axis} is out of bounds for tensor of dimension {ndim}"
                 )
             if axis < 0:
                 normalized_axes.append(len(arg.shape) + axis)
@@ -270,11 +270,11 @@ def mean(
         for dim in arg.shape:
             count *= dim
 
-    # Create count as a scalar array
-    count_array = array(float(count), dtype=arg.dtype)
+    # Create count as a scalar tensor
+    count_tensor = tensor(float(count), dtype=arg.dtype)
 
     # Divide sum by count
-    return div(sum_result, count_array)
+    return div(sum_result, count_tensor)
 
 
 class SumBatchDimsOp(ReductionOperation):
@@ -297,7 +297,7 @@ class SumBatchDimsOp(ReductionOperation):
     def compute_output_batch_dims(self, *input_batch_dims):
         return self._compute_reduction_shape(input_batch_dims[0], self.axes)
 
-    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
         # first we must subtract len(output.shape) from each axis value
         normalized_axes = _normalize_axes(self.axes, len(args[0].shape))
         axes = [ax - len(output.shape) for ax in normalized_axes]
@@ -310,7 +310,7 @@ class SumBatchDimsOp(ReductionOperation):
 
         output.tensor_value = output_symbol
 
-    def eagerxpr(self, args: list[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
         normalized_axes = _normalize_axes(self.axes, len(args[0].shape))
         axes = [ax - len(output.shape) for ax in normalized_axes]
         np_result = np.sum(
@@ -321,8 +321,8 @@ class SumBatchDimsOp(ReductionOperation):
         output.impl_(np_result)
 
     def vjp_rule(
-        self, primals: list[Array], cotangent: Array, output: Array
-    ) -> list[Array]:
+        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
+    ) -> list[Tensor]:
         from .view import broadcast_batch_dims
 
         if len(cotangent.batch_dims) > len(primals[0].batch_dims):
@@ -339,26 +339,26 @@ class SumBatchDimsOp(ReductionOperation):
         return [broadcast_batch_dims(cotangent, self.arg_batch_dims)]
 
     def jvp_rule(
-        self, primals: list[Array], tangents: list[Array], output: Array
-    ) -> Array:
+        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
+    ) -> Tensor:
         return sum_batch_dims(tangents[0], axes=self.axes, keep_dims=True)
 
 
 def sum_batch_dims(
-    arg: Array,
+    arg: Tensor,
     axes: int | list[int] | tuple[int, ...] | None = None,
     keep_dims: bool = False,
-) -> Array:
-    """Calculates the sum of array elements over given batch dimension axes.
+) -> Tensor:
+    """Calculates the sum of tensor elements over given batch dimension axes.
 
     This function is specialized for reducing batch dimensions, which are
     used in function transformations like `vmap`. It operates on the
-    `batch_dims` of an array, leaving the standard `shape` unaffected.
+    `batch_dims` of an tensor, leaving the standard `shape` unaffected.
 
     Parameters
     ----------
-    arg : Array
-        The input array with batch dimensions.
+    arg : Tensor
+        The input tensor with batch dimensions.
     axes : int | list[int] | tuple[int, ...] | None, optional
         The batch dimension axis or axes to sum over. If None, sums over all
         batch dimensions.
@@ -368,8 +368,8 @@ def sum_batch_dims(
 
     Returns
     -------
-    Array
-        An array with specified batch dimensions reduced by the sum operation.
+    Tensor
+        An tensor with specified batch dimensions reduced by the sum operation.
     """
 
     if axes is not None:
@@ -382,7 +382,7 @@ def sum_batch_dims(
         for axis in axes:
             if not -batch_dims_len <= axis < batch_dims_len:
                 raise ValueError(
-                    f"axis {axis} is out of bounds for array with "
+                    f"axis {axis} is out of bounds for tensor with "
                     f"{batch_dims_len} batch dimensions"
                 )
 
@@ -417,7 +417,7 @@ class MaxOp(ReductionOperation):
         self.axes = axes
         self.keep_dims = keep_dims
 
-    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
         output_symbol = args[0]
 
         # Normalize axes to handle None, int, or collections
@@ -431,7 +431,7 @@ class MaxOp(ReductionOperation):
 
         output.tensor_value = output_symbol
 
-    def eagerxpr(self, args: list[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
         if isinstance(self.axes, list):
             numpy_axes: int | tuple[int, ...] | None = tuple(self.axes)
         else:
@@ -443,8 +443,8 @@ class MaxOp(ReductionOperation):
         output.impl_(np_result)
 
     def vjp_rule(
-        self, primals: list[Array], cotangent: Array, output: Array
-    ) -> list[Array]:
+        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
+    ) -> list[Tensor]:
         from .binary import equal
         from .view import broadcast_to
 
@@ -467,8 +467,8 @@ class MaxOp(ReductionOperation):
         return [result]
 
     def jvp_rule(
-        self, primals: list[Array], tangents: list[Array], output: Array
-    ) -> Array:
+        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
+    ) -> Tensor:
         from .binary import equal, mul
         from .view import broadcast_to
 
@@ -487,50 +487,50 @@ class MaxOp(ReductionOperation):
 
 
 def max(
-    arg: Array,
+    arg: Tensor,
     axes: int | list[int] | tuple[int, ...] | None = None,
     keep_dims: bool = False,
-) -> Array:
-    """Finds the maximum value of array elements over given axes.
+) -> Tensor:
+    """Finds the maximum value of tensor elements over given axes.
 
-    This function reduces an array by finding the maximum element along the
+    This function reduces an tensor by finding the maximum element along the
     specified axes. If no axes are provided, the maximum of all elements in the
-    array is returned.
+    tensor is returned.
 
     Parameters
     ----------
-    arg : Array
-        The input array.
+    arg : Tensor
+        The input tensor.
     axes : int | list[int] | tuple[int, ...] | None, optional
         The axis or axes along which to find the maximum. If None (the
         default), the maximum is found over all axes, resulting in a scalar
-        array.
+        tensor.
     keep_dims : bool, optional
         If True, the axes which are reduced are left in the result as
         dimensions with size one. This allows the result to broadcast
-        correctly against the original array. Defaults to False.
+        correctly against the original tensor. Defaults to False.
 
     Returns
     -------
-    Array
-        An array containing the maximum values.
+    Tensor
+        An tensor containing the maximum values.
 
     Examples
     --------
     >>> import nabla as nb
-    >>> x = nb.array([[1, 5, 2], [4, 3, 6]])
+    >>> x = nb.tensor([[1, 5, 2], [4, 3, 6]])
 
     Find the maximum of all elements:
     >>> nb.max(x)
-    Array([6], dtype=int32)
+    Tensor([6], dtype=int32)
 
     Find the maximum along an axis:
     >>> nb.max(x, axes=1)
-    Array([5, 6], dtype=int32)
+    Tensor([5, 6], dtype=int32)
 
     Find the maximum along an axis and keep dimensions:
     >>> nb.max(x, axes=0, keep_dims=True)
-    Array([[4, 5, 6]], dtype=int32)
+    Tensor([[4, 5, 6]], dtype=int32)
     """
     if axes is not None:
         if isinstance(axes, int):
@@ -542,7 +542,7 @@ def max(
         for axis in axes:
             if not -ndim <= axis < ndim:
                 raise ValueError(
-                    f"axis {axis} is out of bounds for array of dimension {ndim}"
+                    f"axis {axis} is out of bounds for tensor of dimension {ndim}"
                 )
 
         axes = [axis if axis < 0 else axis - len(arg.shape) for axis in axes]
@@ -583,10 +583,10 @@ class ArgMaxOp(ReductionOperation):
         self.arg_shape = arg_shape
         self.logical_axis = logical_axis
 
-    def compute_output_dtype(self, arg: Array) -> DType:
+    def compute_output_dtype(self, arg: Tensor) -> DType:
         return DType.int64
 
-    def maxpr(self, args: list[TensorValue], output: Array) -> None:
+    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
         input_symbol = args[0]
         # physical_axis = self._get_physical_axis(output.batch_dims)
 
@@ -610,7 +610,7 @@ class ArgMaxOp(ReductionOperation):
             except ValueError as e:
                 raise ValueError(f"Failed to compute argmax over axis {self.logical_axis}: {e}. \nTry to update the Modular Package to the latest nightly via `pip uninstall -y modular && rm -rf ~/.cache/pip ~/.cache/realtec && pip install --pre modular --index-url https://dl.modular.com/public/nightly/python/simple/`. \nThis should fix this issue.")
 
-    def eagerxpr(self, args: list[Array], output: Array) -> None:
+    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
         primal = args[0].to_numpy()
 
         if self.logical_axis is None:
@@ -630,26 +630,26 @@ class ArgMaxOp(ReductionOperation):
             output.impl_(res)
 
     def vjp_rule(
-        self, primals: list[Array], cotangent: Array, output: Array
-    ) -> list[Array]:
+        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
+    ) -> list[Tensor]:
         from .creation import zeros_like
 
         return [zeros_like(primals[0])]
 
     def jvp_rule(
-        self, primals: list[Array], tangents: list[Array], output: Array
-    ) -> Array:
+        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
+    ) -> Tensor:
         from .creation import zeros_like
 
         return zeros_like(output)
 
 
 def argmax(
-    arg: Array,
+    arg: Tensor,
     axes: int | None = None,
     keep_dims: bool = False,
-) -> Array:
-    """Finds the indices of maximum array elements over a given axis.
+) -> Tensor:
+    """Finds the indices of maximum tensor elements over a given axis.
 
     This function returns the indices of the maximum values along an axis. If
     multiple occurrences of the maximum value exist, the index of the first
@@ -657,11 +657,11 @@ def argmax(
 
     Parameters
     ----------
-    arg : Array
-        The input array.
+    arg : Tensor
+        The input tensor.
     axes : int | None, optional
         The axis along which to find the indices of the maximum values. If
-        None (the default), the array is flattened before finding the index
+        None (the default), the tensor is flattened before finding the index
         of the overall maximum value.
     keep_dims : bool, optional
         If True, the axis which is reduced is left in the result as a
@@ -670,23 +670,23 @@ def argmax(
 
     Returns
     -------
-    Array
-        An array of `int64` integers containing the indices of the maximum
+    Tensor
+        An tensor of `int64` integers containing the indices of the maximum
         elements.
 
     Examples
     --------
     >>> import nabla as nb
-    >>> x = nb.array([1, 5, 2, 5])
+    >>> x = nb.tensor([1, 5, 2, 5])
     >>> nb.argmax(x)
-    Array(1, dtype=int64)
+    Tensor(1, dtype=int64)
 
-    >>> y = nb.array([[1, 5, 2], [4, 3, 6]])
+    >>> y = nb.tensor([[1, 5, 2], [4, 3, 6]])
     >>> nb.argmax(y, axes=1)
-    Array([1, 2], dtype=int64)
+    Tensor([1, 2], dtype=int64)
 
     >>> nb.argmax(y, axes=0, keep_dims=True)
-    Array([[1, 0, 1]], dtype=int64)
+    Tensor([[1, 0, 1]], dtype=int64)
     """
 
     logical_axis: int | None
@@ -698,7 +698,7 @@ def argmax(
     elif isinstance(axes, int):
         if not -ndim <= axes < ndim:
             raise ValueError(
-                f"axis {axes} is out of bounds for array of dimension {ndim}"
+                f"axis {axes} is out of bounds for tensor of dimension {ndim}"
             )
         logical_axis = axes
     elif isinstance(axes, (list, tuple)):
@@ -713,7 +713,7 @@ def argmax(
             )
         if not -ndim <= axis_val < ndim:
             raise ValueError(
-                f"axis {axis_val} is out of bounds for array of dimension {ndim}"
+                f"axis {axis_val} is out of bounds for tensor of dimension {ndim}"
             )
         logical_axis = axis_val
     else:

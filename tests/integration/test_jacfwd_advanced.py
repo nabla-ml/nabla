@@ -36,8 +36,8 @@ def test_multiple_inputs_multiple_outputs():
     # Test inputs
     x_np = np.array([2.0, 3.0])
     y_np = np.array([4.0, 5.0])
-    x_nabla = nb.array(x_np)
-    y_nabla = nb.array(y_np)
+    x_nabla = nb.tensor(x_np)
+    y_nabla = nb.tensor(y_np)
 
     if JAX_AVAILABLE:
         # JAX computation
@@ -109,7 +109,7 @@ def test_matrix_function():
         print(f"JAX jacfwd result: shape {jac_jax.shape}\n{jac_jax}")
 
     # Nabla computation
-    x_nabla = nb.array(x_np)
+    x_nabla = nb.tensor(x_np)
 
     try:
         jac_nabla_fn = nb.jacfwd(matrix_func_nabla)
@@ -163,7 +163,7 @@ def test_nested_jacfwd():
         print(f"JAX Hessian: shape {hessian_jax.shape}\n{hessian_jax}")
 
     # Nabla nested jacfwd
-    x_nabla = nb.array(x_np)
+    x_nabla = nb.tensor(x_np)
 
     try:
         # First jacobian (gradient)
@@ -219,8 +219,8 @@ def test_complex_composition():
             print(f"  d/d_arg{i}: shape {jac.shape}\n{jac}")
 
     # Nabla computation
-    x_nabla = nb.array(x_np)
-    y_nabla = nb.array(y_np)
+    x_nabla = nb.tensor(x_np)
+    y_nabla = nb.tensor(y_np)
 
     try:
         jac_nabla_fn_both = nb.jacfwd(complex_func_nabla, argnums=(0, 1))
@@ -267,7 +267,7 @@ def test_vector_valued_function():
         print(f"JAX jacfwd result: shape {jac_jax.shape}\n{jac_jax}")
 
     # Nabla computation
-    x_nabla = nb.array(x_np)
+    x_nabla = nb.tensor(x_np)
 
     try:
         jac_nabla_fn = nb.jacfwd(vector_func_nabla)

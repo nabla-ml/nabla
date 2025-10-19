@@ -23,7 +23,7 @@ from collections.abc import Sequence
 from max.engine.api import InferenceSession, Model
 from max.graph import DeviceRef, Graph, TensorType
 
-from .array import Array
+from .tensor import Tensor
 from .execution_context import global_execution_context
 
 
@@ -31,7 +31,7 @@ class GraphTracer:
     """Handles computation graph tracing and cache key generation."""
 
     @staticmethod
-    def compute_node_hash(node: Array) -> int:
+    def compute_node_hash(node: Tensor) -> int:
         """Compute a deterministic hash for a computation node."""
         components = [
             str(node.dtype),
@@ -44,7 +44,7 @@ class GraphTracer:
         return hash(node_str)
 
     @staticmethod
-    def get_trace(nodes: Sequence[Array]) -> tuple[list[Array], list[Array], int]:
+    def get_trace(nodes: Sequence[Tensor]) -> tuple[list[Tensor], list[Tensor], int]:
         """
         Perform iterative DFS to get computation trace and cache key.
 
@@ -53,15 +53,15 @@ class GraphTracer:
             trace: Topological ordering of all nodes
             cache_key: Hash key for caching compiled models
         """
-        trace: list[Array] = []
-        inputs: list[Array] = []
-        visited: set[Array] = set()
+        trace: list[Tensor] = []
+        inputs: list[Tensor] = []
+        visited: set[Tensor] = set()
 
         for start_node in nodes:
             if start_node in visited:
                 continue
 
-            stack: list[Array] = [start_node]
+            stack: list[Tensor] = [start_node]
 
             while stack:
                 node = stack[-1]
@@ -92,7 +92,7 @@ class GraphTracer:
         return inputs, trace, cache_key
 
     @staticmethod
-    def _compute_cache_key(trace: list[Array]) -> int:
+    def _compute_cache_key(trace: list[Tensor]) -> int:
         """Compute a cache key from the computation trace."""
         key: int = 0
         for node in trace:
@@ -106,10 +106,10 @@ class ModelFactory:
 
     @staticmethod
     def create_model(
-        inputs: list[Array],
-        trace: list[Array],
-        outputs: list[Array],
-        dynamic_inputs: list[Array] | None = None,
+        inputs: list[Tensor],
+        trace: list[Tensor],
+        outputs: list[Tensor],
+        dynamic_inputs: list[Tensor] | None = None,
         show_graph: bool = False,
     ) -> Model:
         """Create a MAX model from the computation graph."""
@@ -230,7 +230,7 @@ class ModelFactory:
             ) from e
 
     @staticmethod
-    def _validate_node_output(node: Array) -> None:
+    def _validate_node_output(node: Tensor) -> None:
         """Validate that node output matches expected shape and dtype."""
         if node.tensor_value is None:
             raise ValueError(f"Node {node.name} has no tensor value after execution")
@@ -262,18 +262,18 @@ class ModelFactory:
 
 
 def realize_(
-    outputs: list[Array],
-    dynamic_inputs: list[Array] | None = None,
+    outputs: list[Tensor],
+    dynamic_inputs: list[Tensor] | None = None,
     show_graph: bool = False,
-) -> Model | None | tuple[Model, list[Array]]:
+) -> Model | None | tuple[Model, list[Tensor]]:
     """
-    Realize (compute) the given output Arrays.
+    Realize (compute) the given output Tensors.
 
     This is the main entry point for executing computation graphs.
     Uses compilation caching for performance.
 
     Args:
-        outputs: List of Arrays to realize
+        outputs: List of Tensors to realize
         dynamic_inputs: Optional list of dynamic inputs for model compilation
         return_trace_inputs: If True, return tuple of (model, trace_inputs) instead of just model
 
@@ -285,8 +285,8 @@ def realize_(
         return
 
     for output in outputs:
-        if not isinstance(output, Array):
-            raise TypeError(f"All outputs must be Array instances, got {type(output)}")
+        if not isinstance(output, Tensor):
+            raise TypeError(f"All outputs must be Tensor instances, got {type(output)}")
 
     # For JIT compilation with mixed realized/unrealized outputs, we need all outputs
     # to be part of the compiled model. Check if we have mixed states:
@@ -336,9 +336,9 @@ def realize_(
 
 
 # Legacy function aliases for backward compatibility
-def get_trace(nodes: Sequence[Array]) -> tuple[list[Array], list[Array], int]:
+def get_trace(nodes: Sequence[Tensor]) -> tuple[list[Tensor], list[Tensor], int]:
     return GraphTracer.get_trace(nodes)
 
 
-def compute_node_hash(node: Array) -> int:
+def compute_node_hash(node: Tensor) -> int:
     return GraphTracer.compute_node_hash(node)

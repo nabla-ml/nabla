@@ -24,11 +24,11 @@ def test_jit_with_if_else():
 
     device = nb.device("cpu")
 
-    def func(inputs: list[nb.Array]) -> list[nb.Array]:
+    def func(inputs: list[nb.Tensor]) -> list[nb.Tensor]:
         x = inputs[0]
         x = nb.sin(x)
 
-        x = nb.negate(x) if x.to_numpy().item() > 0.5 else x + nb.array([1000.0])
+        x = nb.negate(x) if x.to_numpy().item() > 0.5 else x + nb.tensor([1000.0])
 
         x = x * 2
         return [x]
@@ -36,11 +36,11 @@ def test_jit_with_if_else():
     jitted_func = nb.djit(func)
 
     for _ in range(10):
-        x0 = nb.array([2.0]).to(device)
+        x0 = nb.tensor([2.0]).to(device)
         outputs0 = jitted_func([x0])
         print("Output:", outputs0[0])
 
-        x1 = nb.array([3.0]).to(device)
+        x1 = nb.tensor([3.0]).to(device)
         outputs1 = jitted_func([x1])
         print("Output:", outputs1[0])
 

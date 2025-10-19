@@ -21,43 +21,43 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from ..core.array import Array
+from ..core.tensor import Tensor
 
 
-def tree_flatten(tree: Any) -> tuple[list[Array], Any]:
-    """Flatten a pytree into a list of Arrays and structure info.
+def tree_flatten(tree: Any) -> tuple[list[Tensor], Any]:
+    """Flatten a pytree into a list of Tensors and structure info.
 
     Args:
-        tree: A pytree containing Arrays and other structures
+        tree: A pytree containing Tensors and other structures
 
     Returns:
-        A tuple of (list of Array leaves, structure info for reconstruction)
+        A tuple of (list of Tensor leaves, structure info for reconstruction)
     """
     leaves = []
 
     def _flatten(obj: Any) -> Any:
-        if isinstance(obj, Array):
+        if isinstance(obj, Tensor):
             leaves.append(obj)
-            return None  # Placeholder for Array
+            return None  # Placeholder for Tensor
         elif isinstance(obj, dict):
             keys = sorted(obj.keys())  # Deterministic ordering
             return {k: _flatten(obj[k]) for k in keys}
         elif isinstance(obj, (list | tuple)):
             return type(obj)(_flatten(item) for item in obj)
         else:
-            # Non-Array leaf (int, float, etc.)
+            # Non-Tensor leaf (int, float, etc.)
             return obj
 
     structure = _flatten(tree)
     return leaves, structure
 
 
-def tree_unflatten(structure: Any, leaves: list[Array]) -> Any:
-    """Reconstruct a pytree from structure info and list of Arrays.
+def tree_unflatten(structure: Any, leaves: list[Tensor]) -> Any:
+    """Reconstruct a pytree from structure info and list of Tensors.
 
     Args:
         structure: Structure info from tree_flatten
-        leaves: List of Array values to place at Array positions
+        leaves: List of Tensor values to place at Tensor positions
 
     Returns:
         Reconstructed pytree with the same structure as the original
@@ -65,7 +65,7 @@ def tree_unflatten(structure: Any, leaves: list[Array]) -> Any:
     leaves_iter = iter(leaves)
 
     def _unflatten(struct: Any) -> Any:
-        if struct is None:  # Array placeholder
+        if struct is None:  # Tensor placeholder
             try:
                 return next(leaves_iter)
             except StopIteration:
@@ -84,7 +84,7 @@ def tree_unflatten(structure: Any, leaves: list[Array]) -> Any:
                     f"Tree unflatten error: Not enough leaves for sequence. Expected structure: {structure}, Got {len(leaves)} leaves"
                 )
         else:
-            # Non-Array leaf
+            # Non-Tensor leaf
             return struct
 
     result = _unflatten(structure)
@@ -99,15 +99,15 @@ def tree_unflatten(structure: Any, leaves: list[Array]) -> Any:
     return result
 
 
-def tree_map(func: Callable[[Array], Array], tree: Any) -> Any:
-    """Apply a function to all Array leaves in a pytree.
+def tree_map(func: Callable[[Tensor], Tensor], tree: Any) -> Any:
+    """Apply a function to all Tensor leaves in a pytree.
 
     Args:
-        func: Function to apply to each Array leaf
-        tree: Pytree containing Arrays
+        func: Function to apply to each Tensor leaf
+        tree: Pytree containing Tensors
 
     Returns:
-        Pytree with the same structure but transformed Arrays
+        Pytree with the same structure but transformed Tensors
     """
     leaves, structure = tree_flatten(tree)
     transformed_leaves = [func(leaf) for leaf in leaves]
@@ -120,8 +120,8 @@ def _map_pytree_with_axes(process_func: Callable, tree: Any, axes: Any, *other_a
     and an axes pytree. This is the core engine for vmap's batching and unbatching.
     """
     def _recurse(tree_part, axes_part):
-        if isinstance(tree_part, Array):
-            # Apply the processing function to the array leaf
+        if isinstance(tree_part, Tensor):
+            # Apply the processing function to the tensor leaf
             return process_func(tree_part, axes_part, *other_args)
         elif isinstance(tree_part, dict):
             # If axes is a dict, recurse with matching keys. Otherwise, broadcast the axis.
@@ -132,7 +132,7 @@ def _map_pytree_with_axes(process_func: Callable, tree: Any, axes: Any, *other_a
             axes_list = axes_part if isinstance(axes_part, (list, tuple)) else [axes_part] * len(tree_part)
             return type(tree_part)([_recurse(t, a) for t, a in zip(tree_part, axes_list)])
         else:
-            # Non-Array leaves are returned as is
+            # Non-Tensor leaves are returned as is
             return tree_part
 
     return _recurse(tree, axes)
@@ -145,12 +145,12 @@ def _map_pytree_structure(func, *trees):
     Recursively apply a function to corresponding elements of pytrees.
     This is a more general version of tree_map that can handle multiple trees
     and does not rely on tree_flatten, allowing it to work with structures
-    containing non-Array leaves like scalars.
+    containing non-Tensor leaves like scalars.
     """
     if not trees:
         return None
     first_tree = trees[0]
-    if isinstance(first_tree, Array):
+    if isinstance(first_tree, Tensor):
         return func(*trees)
     if isinstance(first_tree, (list, tuple)):
         return type(first_tree)(_map_pytree_structure(func, *[t[i] for t in trees]) for i in range(len(first_tree)))
@@ -166,37 +166,37 @@ def _convert_to_scalar_if_needed(structure_provider_pytree, result_pytree):
     if the corresponding item in structure_provider_pytree is a scalar.
     """
     def _convert(structure_provider, result):
-        if isinstance(structure_provider, (int, float)) and isinstance(result, Array):
+        if isinstance(structure_provider, (int, float)) and isinstance(result, Tensor):
             if result.shape == ():
                 return result.to_numpy().item()
         return result
     return _map_pytree_structure(_convert, structure_provider_pytree, result_pytree)
 
 
-def _convert_scalars_to_arrays(tree: Any) -> Any:
-    """Recursively convert scalar numbers in a pytree to Nabla Arrays."""
+def _convert_scalars_to_tensors(tree: Any) -> Any:
+    """Recursively convert scalar numbers in a pytree to Nabla Tensors."""
     import nabla as nb
     if isinstance(tree, (int, float)):
-        return nb.array(tree)
-    if isinstance(tree, Array):
+        return nb.tensor(tree)
+    if isinstance(tree, Tensor):
         return tree
     elif isinstance(tree, dict):
-        return {k: _convert_scalars_to_arrays(v) for k, v in tree.items()}
+        return {k: _convert_scalars_to_tensors(v) for k, v in tree.items()}
     elif isinstance(tree, (list, tuple)):
-        return type(tree)(_convert_scalars_to_arrays(x) for x in tree)
+        return type(tree)(_convert_scalars_to_tensors(x) for x in tree)
     else:
         # Return other types (like functions, strings, etc.) unchanged
         return tree
 
 
-def _extract_arrays_from_pytree(tree: Any) -> list[Array]:
-    """Extract all Arrays from a pytree structure.
+def _extract_tensors_from_pytree(tree: Any) -> list[Tensor]:
+    """Extract all Tensors from a pytree structure.
 
     Args:
-        tree: Pytree that may contain Arrays, ints, floats, etc.
+        tree: Pytree that may contain Tensors, ints, floats, etc.
 
     Returns:
-        List of all Arrays found in the tree
+        List of all Tensors found in the tree
     """
     leaves, _ = tree_flatten(tree)
     return leaves
@@ -235,7 +235,7 @@ def _create_jacobian_helpers(func, argnums, args):
     return diff_args, partial_func
 
 
-def _std_basis(args: list[Array]) -> tuple[list[int], list[Array]]:
+def _std_basis(args: list[Tensor]) -> tuple[list[int], list[Tensor]]:
     num_total_arg_elements = 0
     max_rank = 0
     for arg in args:
@@ -249,7 +249,7 @@ def _std_basis(args: list[Array]) -> tuple[list[int], list[Array]]:
 
     batch_ctr = 0
     sizes = list[int]()
-    tangents: list[Array] = []
+    tangents: list[Tensor] = []
 
     for _i, arg in enumerate(args):
         num_elements = 1
@@ -280,7 +280,7 @@ def _std_basis(args: list[Array]) -> tuple[list[int], list[Array]]:
                 batch_ctr += 1
 
             np_tangent = np_tangent.reshape(batched_shape)
-            tangent = Array.from_numpy(np_tangent)
+            tangent = Tensor.from_numpy(np_tangent)
 
             from ..ops.view import broadcast_batch_dims
 
@@ -293,65 +293,65 @@ def _std_basis(args: list[Array]) -> tuple[list[int], list[Array]]:
 
 
 def make_traced_pytree(tree: Any) -> Any:
-    """Create shallow copies of arrays in a pytree and mark them as traced.
+    """Create shallow copies of tensors in a pytree and mark them as traced.
 
     Args:
-        tree: Pytree containing Arrays to copy and mark as traced
+        tree: Pytree containing Tensors to copy and mark as traced
 
     Returns:
-        Pytree with the same structure but traced Arrays
+        Pytree with the same structure but traced Tensors
     """
 
-    def _make_traced_array(array: Array) -> Array:
+    def _make_traced_tensor(tensor: Tensor) -> Tensor:
         from ..ops.view import shallow_copy
 
-        copied_arg = shallow_copy(array)
+        copied_arg = shallow_copy(tensor)
         copied_arg.traced = True
         return copied_arg
 
-    return tree_map(_make_traced_array, tree)
+    return tree_map(_make_traced_tensor, tree)
 
 
 def make_untraced_pytree(tree: Any) -> None:
-    """Disable tracing for arrays in a pytree by clearing their traced flag.
+    """Disable tracing for tensors in a pytree by clearing their traced flag.
 
     Args:
-        tree: Pytree containing Arrays to disable tracing for
+        tree: Pytree containing Tensors to disable tracing for
     """
 
-    def _make_untraced_array(array: Array) -> Array:
-        array.traced = False
-        return array
+    def _make_untraced_tensor(tensor: Tensor) -> Tensor:
+        tensor.traced = False
+        return tensor
 
-    tree_map(_make_untraced_array, tree)
+    tree_map(_make_untraced_tensor, tree)
 
 
-def make_staged_pytree(args: list[Array]) -> None:
-    """Enable staged execution for arrays to optimize performance.
+def make_staged_pytree(args: list[Tensor]) -> None:
+    """Enable staged execution for tensors to optimize performance.
 
     Args:
-        args: Arrays to enable staged execution for
+        args: Tensors to enable staged execution for
     """
 
-    def _make_staged_array(array: Array) -> Array:
-        array.stage_realization = True
-        return array
+    def _make_staged_tensor(tensor: Tensor) -> Tensor:
+        tensor.stage_realization = True
+        return tensor
 
-    tree_map(_make_staged_array, args)
+    tree_map(_make_staged_tensor, args)
 
 
-def make_unstaged_pytree(args: list[Array]) -> None:
-    """Disable staged execution for arrays.
+def make_unstaged_pytree(args: list[Tensor]) -> None:
+    """Disable staged execution for tensors.
 
     Args:
-        args: Arrays to disable staged execution for
+        args: Tensors to disable staged execution for
     """
 
-    def _make_unstaged_array(array: Array) -> Array:
-        array.stage_realization = False
-        return array
+    def _make_unstaged_tensor(tensor: Tensor) -> Tensor:
+        tensor.stage_realization = False
+        return tensor
 
-    tree_map(_make_unstaged_array, args)
+    tree_map(_make_unstaged_tensor, args)
 
 
 def _handle_args_consistently(args):
@@ -365,20 +365,20 @@ def process_transform_inputs(args, convert_scalars=False, apply_staging=False):
     """
     Standardize input processing for all transformations.
     - Handles both list-style and unpacked arguments.
-    - Converts scalars to Arrays if needed.
+    - Converts scalars to Tensors if needed.
     - Creates traced copies for graph capture.
     - Applies staging for performance optimization if requested.
     """
     actual_args, is_list_style = _handle_args_consistently(args)
     
     if convert_scalars:
-        actual_args = _convert_scalars_to_arrays(actual_args)
+        actual_args = _convert_scalars_to_tensors(actual_args)
 
     traced_args = make_traced_pytree(actual_args)
     
     if apply_staging:
-        arrays = _extract_arrays_from_pytree(traced_args)
-        make_staged_pytree(arrays)
+        tensors = _extract_tensors_from_pytree(traced_args)
+        make_staged_pytree(tensors)
 
     # Return everything needed to execute the function and process outputs
     return traced_args, actual_args, is_list_style
@@ -393,14 +393,14 @@ def process_transform_outputs(outputs, original_inputs, is_list_style, untrace=T
     """
     if untrace:
         any_input_traced = any(
-            getattr(arg, "traced", False) for arg in _extract_arrays_from_pytree(original_inputs)
+            getattr(arg, "traced", False) for arg in _extract_tensors_from_pytree(original_inputs)
         )
         if not any_input_traced:
             make_untraced_pytree(outputs)
 
     if unstage:
-        output_arrays = _extract_arrays_from_pytree(outputs)
-        make_unstaged_pytree(output_arrays)
+        output_tensors = _extract_tensors_from_pytree(outputs)
+        make_unstaged_pytree(output_tensors)
 
     # The complex and buggy scalar conversion has been removed.
     # The function now simply returns the processed outputs.
@@ -411,7 +411,7 @@ class Trace:
     """A simple trace container that holds the computation graph."""
 
     def __init__(
-        self, inputs: list[Array] | None, outputs: list[Array] | None = None
+        self, inputs: list[Tensor] | None, outputs: list[Tensor] | None = None
     ) -> None:
         if outputs is None:
             outputs = []
@@ -423,7 +423,7 @@ class Trace:
 
         self.inputs = inputs
         self.outputs = outputs
-        self.trace: list[Array] = []
+        self.trace: list[Tensor] = []
         self._computed = False
 
         # Mark all inputs as traced for autodiff so the computation graph gets captured
@@ -433,7 +433,7 @@ class Trace:
 
     @classmethod
     def trace_function(
-        cls, fn: Callable[[list[Array]], list[Array]], inputs: list[Array]
+        cls, fn: Callable[[list[Tensor]], list[Tensor]], inputs: list[Tensor]
     ) -> Trace:
         """
         Create a trace by executing a function with tracing enabled.
@@ -449,18 +449,18 @@ class Trace:
         # Execute function with tracing enabled
         outputs = fn(inputs)
 
-        # Extract Arrays from outputs and store as list
-        output_arrays = _extract_arrays_from_pytree(outputs)
-        trace.outputs = output_arrays
+        # Extract Tensors from outputs and store as list
+        output_tensors = _extract_tensors_from_pytree(outputs)
+        trace.outputs = output_tensors
 
         make_untraced_pytree(inputs)  # Detach inputs from the trace
 
         # Handle outputs properly - make them untraced
-        make_untraced_pytree(output_arrays)
+        make_untraced_pytree(output_tensors)
 
         return trace
 
-    def get_traced_nodes(self) -> list[Array]:
+    def get_traced_nodes(self) -> list[Tensor]:
         """Get all nodes that belong to this trace in topological order."""
         if not self._computed:
             self._compute_trace()
@@ -468,7 +468,7 @@ class Trace:
 
     def _compute_trace(self) -> None:
         """Compute the topological ordering of traced nodes."""
-        visited: set[Array] = set()
+        visited: set[Tensor] = set()
         self.trace = []
 
         for output in self.outputs:
@@ -476,7 +476,7 @@ class Trace:
 
         self._computed = True
 
-    def _dfs_visit(self, node: Array, visited: set[Array]) -> None:
+    def _dfs_visit(self, node: Tensor, visited: set[Tensor]) -> None:
         """DFS traversal to build topological ordering."""
         if node in visited:
             return
@@ -547,7 +547,7 @@ class Trace:
             else:
                 # check if the arg is a constant scalar, then we can simply show it as the arg directly
                 if (
-                    isinstance(node, Array)
+                    isinstance(node, Tensor)
                     and node.shape == ()
                     and not node.batch_dims
                     and node.impl
@@ -567,7 +567,7 @@ class Trace:
                     if arg_id in var_names:
                         arg_vars.append(var_names[arg_id])
                     else:
-                        # Array from external context - not part of the trace
+                        # Tensor from external context - not part of the trace
                         arg_vars.append("external_const")
 
                 # Format the equation with type annotation
@@ -611,25 +611,25 @@ class Trace:
     @classmethod
     def from_outputs(cls, outputs: Any) -> Trace:
         """Create a trace by discovering traced leaf inputs from outputs."""
-        output_arrays = _extract_arrays_from_pytree(outputs)
-        inputs = cls._discover_traced_inputs(output_arrays)
-        return cls(inputs, output_arrays)
+        output_tensors = _extract_tensors_from_pytree(outputs)
+        inputs = cls._discover_traced_inputs(output_tensors)
+        return cls(inputs, output_tensors)
 
     @staticmethod
-    def _discover_traced_inputs(output_arrays: list[Array]) -> list[Array]:
+    def _discover_traced_inputs(output_tensors: list[Tensor]) -> list[Tensor]:
         """Find traced leaf nodes that serve as inputs for a computation graph."""
-        discovered: list[Array] = []
+        discovered: list[Tensor] = []
         discovered_ids: set[int] = set()
         visited: set[int] = set()
 
-        def _dfs(node: Array) -> None:
+        def _dfs(node: Tensor) -> None:
             node_id = id(node)
             if node_id in visited:
                 return
             visited.add(node_id)
 
             for arg in getattr(node, "args", ()) or ():
-                if isinstance(arg, Array):
+                if isinstance(arg, Tensor):
                     _dfs(arg)
 
             is_traced = getattr(node, "traced", False)
@@ -640,13 +640,13 @@ class Trace:
                     discovered.append(node)
                     discovered_ids.add(node_id)
 
-        for output in output_arrays:
+        for output in output_tensors:
             _dfs(output)
 
         return discovered
 
 
-def _cleanup_cotangents(traced_nodes: list[Array]) -> None:
+def _cleanup_cotangents(traced_nodes: list[Tensor]) -> None:
     """Clean up cotangent values from traced nodes.
 
     Args:
@@ -657,26 +657,26 @@ def _cleanup_cotangents(traced_nodes: list[Array]) -> None:
 
 
 def _compute_pullback(
-    input_arrays: list[Array],
-    output_arrays: list[Array],
-    cotangent_arrays: list[Array],
-) -> list[Array]:
+    input_tensors: list[Tensor],
+    output_tensors: list[Tensor],
+    cotangent_tensors: list[Tensor],
+) -> list[Tensor]:
     """Core reverse-mode gradient computation.
 
     Args:
-        input_arrays: Input arrays to compute gradients for
-        output_arrays: Output arrays from the computation
-        cotangent_arrays: Cotangent vectors for outputs
+        input_tensors: Input tensors to compute gradients for
+        output_tensors: Output tensors from the computation
+        cotangent_tensors: Cotangent vectors for outputs
 
     Returns:
-        List of gradient arrays corresponding to inputs
+        List of gradient tensors corresponding to inputs
     """
     # Build computation trace
-    trace = Trace(input_arrays, output_arrays)
+    trace = Trace(input_tensors, output_tensors)
     traced_nodes = trace.get_traced_nodes()
 
     # Initialize output cotangents
-    for output, cotangent in zip(output_arrays, cotangent_arrays, strict=False):
+    for output, cotangent in zip(output_tensors, cotangent_tensors, strict=False):
         output.cotangent = cotangent
 
     try:
@@ -699,7 +699,7 @@ def _compute_pullback(
                     else:
                         arg.cotangent = arg_cotangent
 
-                if node not in input_arrays:
+                if node not in input_tensors:
                     node.cotangent = None
 
             except Exception as e:
@@ -707,73 +707,73 @@ def _compute_pullback(
                     f"VJP rule failed for operation '{node.name}': {e}"
                 ) from e
 
-        # Collect gradients for input arrays
-        gradient_arrays = []
-        for inp in input_arrays:
+        # Collect gradients for input tensors
+        gradient_tensors = []
+        for inp in input_tensors:
             if inp.cotangent is not None:
-                gradient_arrays.append(inp.cotangent)
+                gradient_tensors.append(inp.cotangent)
             else:
                 from ..ops.creation import zeros_like
 
-                gradient_arrays.append(zeros_like(inp))
+                gradient_tensors.append(zeros_like(inp))
 
-        return gradient_arrays
+        return gradient_tensors
 
     finally:
         _cleanup_cotangents(traced_nodes)
 
 
 def _reconstruct_gradient_structure(
-    gradient_arrays: list[Array],
+    gradient_tensors: list[Tensor],
     inputs: Any,
 ) -> Any:
     """Reconstruct gradients in the same structure as inputs.
 
     Args:
-        gradient_arrays: Flat list of gradient arrays
+        gradient_tensors: Flat list of gradient tensors
         inputs: Original input structure to match
 
     Returns:
         Gradients with the same structure as inputs
     """
     # Use the same flattening/unflattening logic as used for input extraction
-    input_arrays, structure = tree_flatten(inputs)
+    input_tensors, structure = tree_flatten(inputs)
 
     # Validate that we have the right number of gradients
-    if len(gradient_arrays) != len(input_arrays):
+    if len(gradient_tensors) != len(input_tensors):
         raise ValueError(
-            f"Gradient arrays length {len(gradient_arrays)} != "
-            f"input arrays length {len(input_arrays)}"
+            f"Gradient tensors length {len(gradient_tensors)} != "
+            f"input tensors length {len(input_tensors)}"
         )
 
     # Reconstruct the pytree structure with gradients
-    return tree_unflatten(structure, gradient_arrays)
+    return tree_unflatten(structure, gradient_tensors)
 
 
 def backward(outputs: Any, cotangents: Any, retain_graph: bool = False) -> None:
     """Accumulate gradients on traced leaf inputs for the given traced outputs.
     
     Args:
-        outputs: Output arrays to backpropagate from
+        outputs: Output tensors to backpropagate from
         cotangents: Cotangent vectors for outputs
         retain_graph: If False (default), frees the computation graph after backward pass
     """
 
     trace = Trace.from_outputs(outputs)
-    input_arrays = trace.inputs
-    output_arrays = trace.outputs
+    input_tensors = trace.inputs
+    output_tensors = trace.outputs
 
-    cotangent_arrays = _extract_arrays_from_pytree(cotangents)
-    if not cotangent_arrays and output_arrays:
-        raise ValueError("cotangents must contain arrays")
+    cotangent_tensors = _extract_tensors_from_pytree(cotangents)
+    if not cotangent_tensors and output_tensors:
+        raise ValueError("cotangents must contain tensors")
 
     _validate_length_match(
-        cotangent_arrays, output_arrays, "cotangents", "outputs"
+        cotangent_tensors, output_tensors, "cotangents", "outputs"
     )
 
-    gradients = _compute_pullback(input_arrays, output_arrays, cotangent_arrays)
+    gradients = _compute_pullback(input_tensors, output_tensors, cotangent_tensors)
 
-    for inp, grad in zip(input_arrays, gradients, strict=False):
+    for inp, grad in zip(input_tensors, gradients, strict=False):
         if inp.grad is None:
             inp.grad = grad
         else:
@@ -798,28 +798,28 @@ def pullback(
     Returns gradients in the exact same structure as inputs.
 
     Args:
-        inputs: Input arrays or pytree of arrays
-        outputs: Output arrays or pytree of arrays
+        inputs: Input tensors or pytree of tensors
+        outputs: Output tensors or pytree of tensors
         cotangents: Cotangent vectors or pytree of cotangents
 
     Returns:
         Gradients with respect to inputs, in the same structure as inputs
     """
-    # Extract arrays from pytree structures
-    input_arrays = _extract_arrays_from_pytree(inputs)
-    output_arrays = _extract_arrays_from_pytree(outputs)
-    cotangent_arrays = _extract_arrays_from_pytree(cotangents)
+    # Extract tensors from pytree structures
+    input_tensors = _extract_tensors_from_pytree(inputs)
+    output_tensors = _extract_tensors_from_pytree(outputs)
+    cotangent_tensors = _extract_tensors_from_pytree(cotangents)
 
     _validate_length_match(
-        cotangent_arrays, output_arrays, "Cotangent arrays", "output arrays"
+        cotangent_tensors, output_tensors, "Cotangent tensors", "output tensors"
     )
 
     # Core reverse-mode gradient computation
-    gradient_arrays = _compute_pullback(input_arrays, output_arrays, cotangent_arrays)
+    gradient_tensors = _compute_pullback(input_tensors, output_tensors, cotangent_tensors)
 
     # Reconstruct gradients in input structure
     gradients_in_input_structure = _reconstruct_gradient_structure(
-        gradient_arrays, inputs
+        gradient_tensors, inputs
     )
 
     return gradients_in_input_structure
@@ -878,24 +878,24 @@ def pushfwd(
     Returns output tangents in the same structure as outputs.
 
     Args:
-        inputs: Input arrays or pytree of arrays
-        outputs: Output arrays or pytree of arrays
+        inputs: Input tensors or pytree of tensors
+        outputs: Output tensors or pytree of tensors
         tangents: Tangent vectors or pytree of tangents
 
     Returns:
         Tangents with respect to outputs, in the same structure as outputs
     """
-    # Extract arrays from pytree structures
-    input_arrays = _extract_arrays_from_pytree(inputs)
-    output_arrays = _extract_arrays_from_pytree(outputs)
-    tangent_arrays = _extract_arrays_from_pytree(tangents)
+    # Extract tensors from pytree structures
+    input_tensors = _extract_tensors_from_pytree(inputs)
+    output_tensors = _extract_tensors_from_pytree(outputs)
+    tangent_tensors = _extract_tensors_from_pytree(tangents)
 
     _validate_length_match(
-        tangent_arrays, input_arrays, "Tangent arrays", "input arrays"
+        tangent_tensors, input_tensors, "Tangent tensors", "input tensors"
     )
 
     # Core forward-mode gradient computation
-    output_tangents = _compute_pushfwd(input_arrays, output_arrays, tangent_arrays)
+    output_tangents = _compute_pushfwd(input_tensors, output_tensors, tangent_tensors)
 
     # Reconstruct tangents in output structure
     return tree_unflatten(tree_flatten(outputs)[1], output_tangents)
@@ -926,7 +926,7 @@ def xpr(fn: Callable[..., Any], *primals) -> str:
 
     any_arg_traced = any(
         getattr(arg, "traced", False)
-        for arg in _extract_arrays_from_pytree(inputs_pytree)
+        for arg in _extract_tensors_from_pytree(inputs_pytree)
     )
 
     # Make traced copies of all inputs
@@ -938,24 +938,24 @@ def xpr(fn: Callable[..., Any], *primals) -> str:
     # Execute the function with traced inputs
     outputs = fn(*traced_args)
 
-    # Extract output arrays for trace creation
-    output_arrays = _extract_arrays_from_pytree(outputs)
-    if not isinstance(output_arrays, list):
-        output_arrays = [output_arrays] if output_arrays is not None else []
+    # Extract output tensors for trace creation
+    output_tensors = _extract_tensors_from_pytree(outputs)
+    if not isinstance(output_tensors, list):
+        output_tensors = [output_tensors] if output_tensors is not None else []
 
-    # Extract input arrays for trace creation
-    input_arrays = _extract_arrays_from_pytree(traced_inputs_pytree)
-    if not isinstance(input_arrays, list):
-        input_arrays = [input_arrays] if input_arrays is not None else []
+    # Extract input tensors for trace creation
+    input_tensors = _extract_tensors_from_pytree(traced_inputs_pytree)
+    if not isinstance(input_tensors, list):
+        input_tensors = [input_tensors] if input_tensors is not None else []
 
-    # Ensure we have proper Array lists (not Never)
-    if not input_arrays:
-        input_arrays = []
-    if not output_arrays:
-        output_arrays = []
+    # Ensure we have proper Tensor lists (not Never)
+    if not input_tensors:
+        input_tensors = []
+    if not output_tensors:
+        output_tensors = []
 
     # Create trace with the computation graph
-    trace = Trace(input_arrays, output_arrays)  # type: ignore
+    trace = Trace(input_tensors, output_tensors)  # type: ignore
 
     # Make everything untraced before returning
     # make_untraced_pytree(traced_inputs_pytree)

@@ -7,13 +7,13 @@ import nabla as nb
 
 
 def test_vjp_simple():
-    """Test VJP with a simple function that takes a single Array."""
+    """Test VJP with a simple function that takes a single Tensor."""
 
     def simple_func(x):
         return x * 2.0
 
     # Create input
-    x = nb.array([1.0, 2.0, 3.0])
+    x = nb.tensor([1.0, 2.0, 3.0])
 
     # Test VJP
     outputs, vjp_fn = nb.vjp(simple_func, x)
@@ -23,7 +23,7 @@ def test_vjp_simple():
     print(f"Output: {outputs}")
 
     # Test gradients
-    cotangent = nb.array([1.0, 1.0, 1.0])
+    cotangent = nb.tensor([1.0, 1.0, 1.0])
     gradient = vjp_fn(cotangent)  # Returns single gradient since single arg
 
     print(f"Cotangent: {cotangent}")
@@ -38,8 +38,8 @@ def test_vjp_multiple_args():
         return x * y + x
 
     # Create inputs
-    x = nb.array([1.0, 2.0])
-    y = nb.array([3.0, 4.0])
+    x = nb.tensor([1.0, 2.0])
+    y = nb.tensor([3.0, 4.0])
 
     # Test VJP
     outputs, vjp_fn = nb.vjp(multi_arg_func, x, y)
@@ -50,7 +50,7 @@ def test_vjp_multiple_args():
     print(f"Output: {outputs}")
 
     # Test gradients
-    cotangent = nb.array([1.0, 1.0])
+    cotangent = nb.tensor([1.0, 1.0])
     gradients = vjp_fn(cotangent)  # Returns tuple of gradients for multiple args
 
     print(f"Cotangent: {cotangent}")
@@ -66,8 +66,8 @@ def test_vjp_with_kwargs():
         return x * scale
 
     # Create inputs
-    x = nb.array([1.0, 2.0])
-    scale = nb.array([3.0])
+    x = nb.tensor([1.0, 2.0])
+    scale = nb.tensor([3.0])
 
     # For functions with kwargs, wrap them in a lambda or use functools.partial
     # This approach is consistent with JAX's vjp API
@@ -82,7 +82,7 @@ def test_vjp_with_kwargs():
     print(f"Output: {outputs}")
 
     # Test gradients
-    cotangent = nb.array([1.0, 1.0])
+    cotangent = nb.tensor([1.0, 1.0])
     gradients = vjp_fn(cotangent)
 
     print(f"Cotangent: {cotangent}")
@@ -99,8 +99,8 @@ def test_vjp_nested_structure():
         return x + y
 
     # Create nested input structure
-    x = nb.array([1.0, 2.0])
-    y = nb.array([3.0, 4.0])
+    x = nb.tensor([1.0, 2.0])
+    y = nb.tensor([3.0, 4.0])
     data = (x, y)
 
     # Test VJP
@@ -111,7 +111,7 @@ def test_vjp_nested_structure():
     print(f"Output: {outputs}")
 
     # Test gradients
-    cotangent = nb.array([1.0, 1.0])
+    cotangent = nb.tensor([1.0, 1.0])
     gradient = vjp_fn(cotangent)  # Returns tuple of gradients
 
     print(f"Cotangent: {cotangent}")

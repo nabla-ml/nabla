@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.cond(condition: 'Array', true_fn: 'Callable', false_fn: 'Callable') -> 'Array'
+nabla.cond(condition: 'Tensor', true_fn: 'Callable', false_fn: 'Callable') -> 'Tensor'
 ```
 
 ## Description
@@ -17,7 +17,7 @@ evaluates both branches, `cond` only executes the selected function.
 
 ## Parameters
 
-- **`condition`** (`Array`): A scalar boolean array that determines which function to execute.
+- **`condition`** (`Tensor`): A scalar boolean tensor that determines which function to execute.
 
 - **`true_fn`** (`Callable`): The function to be called if `condition` is True.
 
@@ -29,7 +29,7 @@ evaluates both branches, `cond` only executes the selected function.
 
 ## Returns
 
-- `Array`: The result of calling either `true_fn` or `false_fn`.
+- `Tensor`: The result of calling either `true_fn` or `false_fn`.
 
 ## Examples
 
@@ -41,8 +41,8 @@ evaluates both branches, `cond` only executes the selected function.
 >>> def g(x):
     return x + 10
 ...
->>> x = nb.array(5)
+>>> x = nb.tensor(5)
 >>> # Executes g(x) because the condition is False
->>> nb.cond(nb.array(False), f, g, x)
-Array([15], dtype=int32)
+>>> nb.cond(nb.tensor(False), f, g, x)
+Tensor([15], dtype=int32)
 ```

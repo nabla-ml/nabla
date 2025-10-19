@@ -118,8 +118,8 @@ def init_network_params_nabla(layer_sizes, seed=42):
             # Small positive bias for hidden layers to help with dead neurons
             b_np = np.random.normal(0, 0.01, out_size).astype(np.float32)
 
-        W = nb.Array.from_numpy(W_np)
-        b = nb.Array.from_numpy(b_np)
+        W = nb.Tensor.from_numpy(W_np)
+        b = nb.Tensor.from_numpy(b_np)
         params.append((W, b))
     return params
 
@@ -132,7 +132,7 @@ def swish_nabla(x):
 def leaky_relu_nabla(x, alpha=0.01):
     """Leaky ReLU activation function."""
     zeros = nb.zeros_like(x)
-    alpha_val = nb.array(alpha, dtype=x.dtype)
+    alpha_val = nb.tensor(alpha, dtype=x.dtype)
     return nb.where(x > zeros, x, alpha_val * x)
 
 
@@ -256,7 +256,7 @@ def plot_function_approximation(
     ax_main.clear()
     ax_main.set_facecolor(background_color)
 
-    x_grid_nabla = nb.Array.from_numpy(x_grid.reshape(-1, 1))
+    x_grid_nabla = nb.Tensor.from_numpy(x_grid.reshape(-1, 1))
     y_pred_nabla = predict_function_nabla(params, x_grid_nabla)
     y_pred_grid = y_pred_nabla.to_numpy().flatten()
 
@@ -355,8 +355,8 @@ def main():
         x_data, resolution=1000, padding=0.5
     )
 
-    x_data_nabla = nb.Array.from_numpy(x_data.reshape(-1, 1))
-    y_data_nabla = nb.Array.from_numpy(y_data.reshape(-1, 1))
+    x_data_nabla = nb.Tensor.from_numpy(x_data.reshape(-1, 1))
+    y_data_nabla = nb.Tensor.from_numpy(y_data.reshape(-1, 1))
 
     print("🧠 Initializing neural network...")
     params = init_network_params_nabla(layer_sizes, seed=42)

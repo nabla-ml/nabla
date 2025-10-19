@@ -3,19 +3,19 @@
 ## Signature
 
 ```python
-nabla.randn_like(template: 'Array', mean: 'float', std: 'float', seed: 'int') -> 'Array'
+nabla.randn_like(template: 'Tensor', mean: 'float', std: 'float', seed: 'int') -> 'Tensor'
 ```
 
 ## Description
 
-Creates an array with normally distributed random values like a template.
+Creates an tensor with normally distributed random values like a template.
 
-The new array will have the same shape, dtype, device, and batch
-dimensions as the template array.
+The new tensor will have the same shape, dtype, device, and batch
+dimensions as the template tensor.
 
 ## Parameters
 
-- **`template`** (`Array`): The template array to match properties from.
+- **`template`** (`Tensor`): The template tensor to match properties from.
 
 - **`mean`** (`float, optional`): The mean of the normal distribution. Defaults to 0.0.
 
@@ -25,4 +25,4 @@ dimensions as the template array.
 
 ## Returns
 
-- `Array`: A new array with the same properties as the template, filled with normally distributed random values.
+- `Tensor`: A new tensor with the same properties as the template, filled with normally distributed random values.

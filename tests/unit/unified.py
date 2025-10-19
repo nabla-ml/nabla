@@ -19,7 +19,7 @@ OPERATIONS TESTED (40 total):
                not_equal, maximum, minimum
 - REDUCTION (4): sum, mean, max, argmax
 - VIEW (11): transpose, permute, reshape, broadcast_to, squeeze, unsqueeze,
-             array_slice, pad, concatenate, stack, move_axis_to_front
+             tensor_slice, pad, concatenate, stack, move_axis_to_front
 - LINALG (1): matmul
 
 TRANSFORMATION COMBINATIONS TESTED (19 total):
@@ -159,7 +159,7 @@ def jax_matmul_wrapper(x, y):
 
 def get_test_data_for_shapes(
     shapes: tuple[tuple[int, ...], ...], config: OpConfig
-) -> tuple[tuple[nb.Array, ...], tuple[jnp.ndarray, ...]]:
+) -> tuple[tuple[nb.Tensor, ...], tuple[jnp.ndarray, ...]]:
     nabla_primals, jax_primals = [], []
     for i, shape in enumerate(shapes):
         num_elements = int(np.prod(shape)) if shape else 1
@@ -171,13 +171,13 @@ def get_test_data_for_shapes(
                     (jax_base.reshape(shape) % 2 == 0),
                 )
                 if shape
-                else (nb.array(True), jnp.array(True))
+                else (nb.tensor(True), jnp.array(True))
             )
         else:  # Numeric
             if not shape:
                 base_val = 2.5 if config.domain_positive else 1.5
                 nb_val, jax_val = (
-                    nb.array(base_val, dtype=nb.DType.float32),
+                    nb.tensor(base_val, dtype=nb.DType.float32),
                     jnp.array(base_val, dtype="float32"),
                 )
             else:
@@ -433,9 +433,9 @@ view_ops_data = [
         standard_get_args,
     ),
     Operation(
-        "array_slice",
+        "tensor_slice",
         "VIEW",
-        nb.array_slice,
+        nb.tensor_slice,
         jax_slice_wrapper,
         [
             OpConfig(

@@ -21,7 +21,7 @@ import nabla as nb
 
 def create_dataset(
     batch_size: int, input_dim: int, seed: int | None = None
-) -> tuple[nb.Array, nb.Array]:
+) -> tuple[nb.Tensor, nb.Tensor]:
     """Create a simple random dataset for testing.
 
     Args:
@@ -45,7 +45,7 @@ def create_dataset(
 
 def create_sin_dataset(
     batch_size: int = 256, sin_periods: int = 8
-) -> tuple[nb.Array, nb.Array]:
+) -> tuple[nb.Tensor, nb.Tensor]:
     """Create the 8-Period sin dataset from mlp_train_jit.py.
 
     Args:
@@ -63,7 +63,7 @@ def create_sin_dataset(
 
 
 def compute_accuracy(
-    predictions: nb.Array, targets: nb.Array, threshold: float = 0.5
+    predictions: nb.Tensor, targets: nb.Tensor, threshold: float = 0.5
 ) -> float:
     """Compute classification accuracy.
 
@@ -84,7 +84,7 @@ def compute_accuracy(
     return accuracy.to_numpy().item()
 
 
-def compute_correlation(predictions: nb.Array, targets: nb.Array) -> float:
+def compute_correlation(predictions: nb.Tensor, targets: nb.Tensor) -> float:
     """Compute Pearson correlation coefficient.
 
     Args:

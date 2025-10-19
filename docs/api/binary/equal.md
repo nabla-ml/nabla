@@ -3,37 +3,37 @@
 ## Signature
 
 ```python
-nabla.equal(x: 'Array | float | int', y: 'Array | float | int') -> 'Array'
+nabla.equal(x: 'Tensor | float | int', y: 'Tensor | float | int') -> 'Tensor'
 ```
 
 ## Description
 
 Performs element-wise comparison `x == y`.
 
-This function compares two arrays element-wise, returning a boolean array
+This function compares two tensors element-wise, returning a boolean tensor
 indicating where elements of `x` are equal to elements of `y`. It
 supports broadcasting and provides the implementation of the `==` operator
-for Nabla arrays.
+for Nabla tensors.
 
 ## Parameters
 
-- **`x`** (`Array | float | int`): The first input array or scalar.
+- **`x`** (`Tensor | float | int`): The first input tensor or scalar.
 
-- **`y`** (`Array | float | int`): The second input array or scalar. Must be broadcastable to the same shape as `x`.
+- **`y`** (`Tensor | float | int`): The second input tensor or scalar. Must be broadcastable to the same shape as `x`.
 
 ## Returns
 
-- `Array`: A boolean array containing the result of the element-wise equality comparison.
+- `Tensor`: A boolean tensor containing the result of the element-wise equality comparison.
 
 ## Examples
 
 ```pycon
 >>> import nabla as nb
->>> x = nb.array([1, 2, 3])
->>> y = nb.array([1, 5, 3])
+>>> x = nb.tensor([1, 2, 3])
+>>> y = nb.tensor([1, 5, 3])
 >>> nb.equal(x, y)
-Array([ True, False,  True], dtype=bool)
+Tensor([ True, False,  True], dtype=bool)
 
 >>> x == y
-Array([ True, False,  True], dtype=bool)
+Tensor([ True, False,  True], dtype=bool)
 ```

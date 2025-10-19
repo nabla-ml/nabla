@@ -3,26 +3,26 @@
 ## Signature
 
 ```python
-nabla.cos(arg: 'Array') -> 'Array'
+nabla.cos(arg: 'Tensor') -> 'Tensor'
 ```
 
 ## Description
 
-Computes the element-wise cosine of an array.
+Computes the element-wise cosine of an tensor.
 
 ## Parameters
 
-- **`arg`** (`Array`): The input array. Input is expected to be in radians.
+- **`arg`** (`Tensor`): The input tensor. Input is expected to be in radians.
 
 ## Returns
 
-- `Array`: An array containing the cosine of each element in the input.
+- `Tensor`: An tensor containing the cosine of each element in the input.
 
 ## Examples
 
 ```pycon
 >>> import nabla as nb
->>> x = nb.array([0, 1.5707963, 3.1415926])
+>>> x = nb.tensor([0, 1.5707963, 3.1415926])
 >>> nb.cos(x)
-Array([ 1.000000e+00, -4.371139e-08, -1.000000e+00], dtype=float32)
+Tensor([ 1.000000e+00, -4.371139e-08, -1.000000e+00], dtype=float32)
 ```

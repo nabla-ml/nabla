@@ -21,20 +21,20 @@ import nabla as nb
 
 @nb.jit
 def sgd_step(
-    params: list[nb.Array],
-    gradients: list[nb.Array],
-    momentum_states: list[nb.Array] | None = None,
+    params: list[nb.Tensor],
+    gradients: list[nb.Tensor],
+    momentum_states: list[nb.Tensor] | None = None,
     learning_rate: float = 0.01,
     momentum: float = 0.0,
     weight_decay: float = 0.0,
     dampening: float = 0.0,
     nesterov: bool = False,
-) -> tuple[list[nb.Array], list[nb.Array]]:
+) -> tuple[list[nb.Tensor], list[nb.Tensor]]:
     """Perform a single SGD optimization step.
 
     Args:
-        params: List of parameter arrays
-        gradients: List of gradient arrays (same structure as params)
+        params: List of parameter tensors
+        gradients: List of gradient tensors (same structure as params)
         momentum_states: List of momentum buffers (None for first step)
         learning_rate: Learning rate
         momentum: Momentum factor
@@ -80,11 +80,11 @@ def sgd_step(
     return updated_params, updated_momentum_states
 
 
-def init_sgd_state(params: list[nb.Array]) -> list[nb.Array]:
+def init_sgd_state(params: list[nb.Tensor]) -> list[nb.Tensor]:
     """Initialize SGD momentum states.
 
     Args:
-        params: List of parameter arrays
+        params: List of parameter tensors
 
     Returns:
         List of zero-initialized momentum states

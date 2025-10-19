@@ -3,23 +3,23 @@
 ## Signature
 
 ```python
-nabla.ndarange(shape: 'Shape', dtype: 'DType', device: 'Device', batch_dims: 'Shape', traced: 'bool') -> 'Array'
+nabla.ndarange(shape: 'Shape', dtype: 'DType', device: 'Device', batch_dims: 'Shape', traced: 'bool') -> 'Tensor'
 ```
 
 ## Description
 
-Creates an array of a given shape with sequential values.
+Creates an tensor of a given shape with sequential values.
 
-The array is filled with values from 0 to N-1, where N is the total
+The tensor is filled with values from 0 to N-1, where N is the total
 number of elements (the product of the shape dimensions).
 
 ## Parameters
 
-- **`shape`** (`Shape`): The shape of the output array.
+- **`shape`** (`Shape`): The shape of the output tensor.
 
-- **`dtype`** (`DType, optional`): The desired data type for the array. Defaults to DType.float32.
+- **`dtype`** (`DType, optional`): The desired data type for the tensor. Defaults to DType.float32.
 
-- **`device`** (`Device, optional`): The device to place the array on. Defaults to the CPU.
+- **`device`** (`Device, optional`): The device to place the tensor on. Defaults to the CPU.
 
 - **`batch_dims`** (`Shape, optional`): Specifies leading dimensions to be treated as batch dimensions. Defaults to an empty tuple.
 
@@ -27,13 +27,13 @@ number of elements (the product of the shape dimensions).
 
 ## Returns
 
-- `Array`: An array of the specified shape containing values from 0 to N-1.
+- `Tensor`: An tensor of the specified shape containing values from 0 to N-1.
 
 ## Examples
 
 ```pycon
 >>> import nabla as nb
 >>> nb.ndarange((2, 3), dtype=nb.DType.int32)
-Array([[0, 1, 2],
+Tensor([[0, 1, 2],
        [3, 4, 5]], dtype=int32)
 ```

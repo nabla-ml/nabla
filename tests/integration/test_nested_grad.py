@@ -8,13 +8,13 @@ import nabla as nb
 def test_nested_grad_jit_vmap_jacrev():
     """Test nested transformations: jit(vmap(jacrev(func))) against JAX."""
 
-    # Example function using Nabla's array operations
-    def foo_nabla(input_array):
-        return nb.sum(input_array * input_array, axes=0)
+    # Example function using Nabla's tensor operations
+    def foo_nabla(input_tensor):
+        return nb.sum(input_tensor * input_tensor, axes=0)
 
-    # Example function using JAX's array operations
-    def foo_jax(input_array):
-        return jnp.sum(input_array * input_array, axis=0)
+    # Example function using JAX's tensor operations
+    def foo_jax(input_tensor):
+        return jnp.sum(input_tensor * input_tensor, axis=0)
 
     # Fixed seed for reproducible testing
     np.random.seed(42)
@@ -26,7 +26,7 @@ def test_nested_grad_jit_vmap_jacrev():
 
     # Vectorize, differentiate, accelerate in Nabla
     foo_grads_nabla = nb.jit(nb.vmap(nb.jacrev(foo_nabla)))
-    gradients_nabla = foo_grads_nabla(nb.array(np_input))
+    gradients_nabla = foo_grads_nabla(nb.tensor(np_input))
 
     # Check if gradients match
     assert jnp.allclose(

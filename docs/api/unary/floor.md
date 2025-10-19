@@ -3,29 +3,29 @@
 ## Signature
 
 ```python
-nabla.floor(arg: 'Array') -> 'Array'
+nabla.floor(arg: 'Tensor') -> 'Tensor'
 ```
 
 ## Description
 
-Computes the element-wise floor of an array.
+Computes the element-wise floor of an tensor.
 
 The floor of a scalar `x` is the largest integer `i` such that `i <= x`.
 This function is not differentiable and its gradient is zero everywhere.
 
 ## Parameters
 
-- **`arg`** (`Array`): The input array.
+- **`arg`** (`Tensor`): The input tensor.
 
 ## Returns
 
-- `Array`: An array containing the floor of each element.
+- `Tensor`: An tensor containing the floor of each element.
 
 ## Examples
 
 ```pycon
 >>> import nabla as nb
->>> x = nb.array([-1.7, -0.2, 0.2, 1.7])
+>>> x = nb.tensor([-1.7, -0.2, 0.2, 1.7])
 >>> nb.floor(x)
-Array([-2., -1.,  0.,  1.], dtype=float32)
+Tensor([-2., -1.,  0.,  1.], dtype=float32)
 ```

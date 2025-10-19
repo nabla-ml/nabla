@@ -51,7 +51,7 @@ def test_simple_vmap_different_shapes():
     """Test vmap with different input shapes."""
     # Test with different shapes
     a = nb.ones((2, 3), nb.DType.float32)
-    b = nb.array([1.0, 2.0, 3.0], nb.DType.float32)
+    b = nb.tensor([1.0, 2.0, 3.0], nb.DType.float32)
 
     vmapped_add = nb.vmap(simple_add, [0, None])
     result = vmapped_add([a, b])
@@ -69,7 +69,7 @@ def test_simple_vmap_parametrized():
     """Test vmap with different batch sizes."""
     batch_size = 5  # Change this to test different batch sizes
     a = nb.ones((batch_size, 2), nb.DType.float32)
-    b = nb.array([10.0, 20.0], nb.DType.float32)
+    b = nb.tensor([10.0, 20.0], nb.DType.float32)
 
     vmapped_add = nb.vmap(simple_add, [0, None])
     result = vmapped_add([a, b])
@@ -88,7 +88,7 @@ def test_simple_vmap_parametrized():
 def test_vmap_with_sum():
     """Test vmap with reduce operations."""
 
-    def foo(args: list[nb.Array]) -> list[nb.Array]:
+    def foo(args: list[nb.Tensor]) -> list[nb.Tensor]:
         a = args[0]
         c = nb.ndarange((2, 3, 4))
         res = nb.sum(c * a * a, axes=[0])
@@ -127,7 +127,7 @@ def test_vmap_with_sum():
 def test_vmap_expression_compilation():
     """Test that vmap expressions can be compiled and executed."""
 
-    def foo(args: list[nb.Array]) -> list[nb.Array]:
+    def foo(args: list[nb.Tensor]) -> list[nb.Tensor]:
         a = args[0]
         c = nb.ndarange((2, 3, 4))
         res = nb.sum(c * a * a, axes=[0])
@@ -147,20 +147,20 @@ def test_vmap_expression_compilation():
     try:
         res = foo_vmapped([a])
         assert len(res) == 1, "Expected single output from vmapped function"
-        assert hasattr(res[0], "shape"), "Result should be an array with shape"
+        assert hasattr(res[0], "shape"), "Result should be an tensor with shape"
     except Exception as e:
         pytest.fail(f"Failed to execute vmapped function: {e}")
 
 
-def test_vmap_with_different_arrays():
-    """Test vmap with different input array configurations."""
+def test_vmap_with_different_tensors():
+    """Test vmap with different input tensor configurations."""
 
-    def simple_multiply(args: list[nb.Array]) -> list[nb.Array]:
+    def simple_multiply(args: list[nb.Tensor]) -> list[nb.Tensor]:
         a = args[0]
         return [a * a]  # Simple squaring operation
 
-    # Test with 1D array
-    a1d = nb.array([1.0, 2.0, 3.0], nb.DType.float32)
+    # Test with 1D tensor
+    a1d = nb.tensor([1.0, 2.0, 3.0], nb.DType.float32)
     vmapped_1d = nb.vmap(simple_multiply)
     result_1d = vmapped_1d([a1d])
 
@@ -169,8 +169,8 @@ def test_vmap_with_different_arrays():
         "1D vmap result doesn't match expected squared values"
     )
 
-    # Test with 2D array
-    a2d = nb.array([[1.0, 2.0], [3.0, 4.0]], nb.DType.float32)
+    # Test with 2D tensor
+    a2d = nb.tensor([[1.0, 2.0], [3.0, 4.0]], nb.DType.float32)
     vmapped_2d = nb.vmap(simple_multiply)
     result_2d = vmapped_2d([a2d])
 
@@ -183,7 +183,7 @@ def test_vmap_with_different_arrays():
 def test_vmap_batched_matmul():
     """Test batched matrix multiplication using nested vmap."""
 
-    def dot(args: list[nb.Array]) -> list[nb.Array]:
+    def dot(args: list[nb.Tensor]) -> list[nb.Tensor]:
         return [
             nb.sum(
                 args[0] * args[1],
@@ -191,13 +191,13 @@ def test_vmap_batched_matmul():
             )
         ]
 
-    def mv_prod(args: list[nb.Array]) -> list[nb.Array]:
+    def mv_prod(args: list[nb.Tensor]) -> list[nb.Tensor]:
         return nb.vmap(dot, [0, None])(args)
 
-    def mm_prod(args: list[nb.Array]) -> list[nb.Array]:
+    def mm_prod(args: list[nb.Tensor]) -> list[nb.Tensor]:
         return nb.vmap(mv_prod, [None, 1], [1])(args)
 
-    def batched_matmul(args: list[nb.Array]) -> list[nb.Array]:
+    def batched_matmul(args: list[nb.Tensor]) -> list[nb.Tensor]:
         return [nb.vmap(mm_prod, [0, None])([args[0], args[1]])[0]]
 
     # Test data
@@ -237,7 +237,7 @@ def test_vmap_batched_matmul():
 def test_simple_dot_product():
     """Test the basic dot product function used in batched matmul."""
 
-    def dot(args: list[nb.Array]) -> list[nb.Array]:
+    def dot(args: list[nb.Tensor]) -> list[nb.Tensor]:
         return [
             nb.sum(
                 args[0] * args[1],
@@ -246,8 +246,8 @@ def test_simple_dot_product():
         ]
 
     # Test with simple vectors
-    a = nb.array([1.0, 2.0, 3.0], nb.DType.float32)
-    b = nb.array([4.0, 5.0, 6.0], nb.DType.float32)
+    a = nb.tensor([1.0, 2.0, 3.0], nb.DType.float32)
+    b = nb.tensor([4.0, 5.0, 6.0], nb.DType.float32)
 
     result = dot([a, b])
 
@@ -261,7 +261,7 @@ def test_simple_dot_product():
 def test_matrix_vector_product():
     """Test matrix-vector multiplication using vmap."""
 
-    def dot(args: list[nb.Array]) -> list[nb.Array]:
+    def dot(args: list[nb.Tensor]) -> list[nb.Tensor]:
         return [
             nb.sum(
                 args[0] * args[1],
@@ -269,12 +269,12 @@ def test_matrix_vector_product():
             )
         ]
 
-    def mv_prod(args: list[nb.Array]) -> list[nb.Array]:
+    def mv_prod(args: list[nb.Tensor]) -> list[nb.Tensor]:
         return nb.vmap(dot, [0, None])(args)
 
     # Test data: 2x3 matrix times 3-element vector
-    matrix = nb.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], nb.DType.float32)
-    vector = nb.array([1.0, 1.0, 1.0], nb.DType.float32)
+    matrix = nb.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], nb.DType.float32)
+    vector = nb.tensor([1.0, 1.0, 1.0], nb.DType.float32)
 
     result = mv_prod([matrix, vector])
 
@@ -288,16 +288,16 @@ def test_matrix_vector_product():
 def test_batched_matmul_parametrized():
     """Test batched matmul with different dimensions."""
 
-    def dot(args: list[nb.Array]) -> list[nb.Array]:
+    def dot(args: list[nb.Tensor]) -> list[nb.Tensor]:
         return [nb.sum(args[0] * args[1], axes=[0])]
 
-    def mv_prod(args: list[nb.Array]) -> list[nb.Array]:
+    def mv_prod(args: list[nb.Tensor]) -> list[nb.Tensor]:
         return nb.vmap(dot, [0, None])(args)
 
-    def mm_prod(args: list[nb.Array]) -> list[nb.Array]:
+    def mm_prod(args: list[nb.Tensor]) -> list[nb.Tensor]:
         return nb.vmap(mv_prod, [None, 1], [1])(args)
 
-    def batched_matmul(args: list[nb.Array]) -> list[nb.Array]:
+    def batched_matmul(args: list[nb.Tensor]) -> list[nb.Tensor]:
         return [nb.vmap(mm_prod, [0, None])([args[0], args[1]])[0]]
 
     # Create test matrices
@@ -325,7 +325,7 @@ if __name__ == "__main__":
     test_simple_vmap_different_shapes()
     test_vmap_with_sum()
     test_vmap_expression_compilation()
-    test_vmap_with_different_arrays()
+    test_vmap_with_different_tensors()
     test_simple_vmap_parametrized()
     test_simple_dot_product()
     test_matrix_vector_product()

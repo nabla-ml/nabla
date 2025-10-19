@@ -3,9 +3,9 @@
 ## Signature
 
 ```python
-nabla.transpose(arg: 'Array', axis_1: 'int', axis_2: 'int') -> 'Array'
+nabla.transpose(arg: 'Tensor', axis_1: 'int', axis_2: 'int') -> 'Tensor'
 ```
 
 ## Description
 
-Transpose array along two axes.
+Transpose tensor along two axes.

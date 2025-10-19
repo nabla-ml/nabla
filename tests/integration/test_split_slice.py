@@ -36,8 +36,8 @@ def test_concatenate_basic():
     assert np.allclose(res_vmap.to_numpy(), res_jax_vmap), "Vmap results do not match!"
 
 
-def test_array_slice_comprehensive():
-    """Test comprehensive array slice VJP/JVP operations."""
+def test_tensor_slice_comprehensive():
+    """Test comprehensive tensor slice VJP/JVP operations."""
 
     def test_slice_vjp_jvp(slice_func, slice_func_jax, test_name):
         """Helper function to test slice operations."""
@@ -180,8 +180,8 @@ def test_array_slice_comprehensive():
         test_slice_vjp_jvp(slice_func, slice_func_jax, test_name)
 
 
-def test_1d_array_slicing():
-    """Test 1D array slicing operations."""
+def test_1d_tensor_slicing():
+    """Test 1D tensor slicing operations."""
 
     def test_1d_slice_vjp_jvp(slice_func, slice_func_jax, test_name):
         """Helper function for 1D slice testing."""
@@ -235,11 +235,11 @@ def test_1d_array_slicing():
         test_1d_slice_vjp_jvp(slice_func, slice_func_jax, test_name)
 
 
-def test_small_array_slicing():
-    """Test slicing on small arrays."""
+def test_small_tensor_slicing():
+    """Test slicing on small tensors."""
 
     def test_small_slice_vjp_jvp(slice_func, slice_func_jax, test_name, shape):
-        """Helper function for small array slice testing."""
+        """Helper function for small tensor slice testing."""
         # Create small test input
         x = nb.ndarange(shape)
         x_jax = x.to_numpy()
@@ -276,7 +276,7 @@ def test_small_array_slicing():
             vjp_result_nabla.to_numpy(), vjp_result_jax_unwrapped, atol=1e-6
         ), f"Small {test_name}: VJP results don't match!"
 
-    # Test with small arrays
+    # Test with small tensors
     small_test_cases = [
         ((lambda x: x[0:1, 0:1], lambda x: x[0:1, 0:1], "Single element 2D", (2, 2))),
         ((lambda x: x[:, 0], lambda x: x[:, 0], "Column slice", (3, 2))),
@@ -289,9 +289,9 @@ def test_small_array_slicing():
 
 if __name__ == "__main__":
     """Run all slice tests when executed as script."""
-    print("=== Array Slice Tests ===")
+    print("=== Tensor Slice Tests ===")
     test_concatenate_basic()
-    test_array_slice_comprehensive()
-    test_1d_array_slicing()
-    test_small_array_slicing()
-    print("\n🎉 All array slice VJP/JVP/VMAP tests passed!")
+    test_tensor_slice_comprehensive()
+    test_1d_tensor_slicing()
+    test_small_tensor_slicing()
+    print("\n🎉 All tensor slice VJP/JVP/VMAP tests passed!")

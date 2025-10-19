@@ -81,7 +81,7 @@ def with_timeout(timeout_seconds=30):
 
 
 def jax_arange(shape, dtype=jnp.float32):
-    """Create JAX array matching nabla.arange"""
+    """Create JAX tensor matching nabla.arange"""
     return jax.numpy.arange(np.prod(shape), dtype=dtype).reshape(shape)
 
 
@@ -101,21 +101,21 @@ def get_shape_for_rank(rank: int) -> tuple:
 
 def get_test_data_for_ranks(
     rank_x: int, rank_y: int
-) -> tuple[nb.Array, nb.Array, jnp.ndarray, jnp.ndarray]:
+) -> tuple[nb.Tensor, nb.Tensor, jnp.ndarray, jnp.ndarray]:
     """Get test data for specific tensor ranks"""
     shape_x = get_shape_for_rank(rank_x)
     shape_y = get_shape_for_rank(rank_y)
 
     # Handle scalar case specially
     if rank_x == 0:
-        x_nb = 1 + nb.array(2.5)
+        x_nb = 1 + nb.tensor(2.5)
         x_jax = 1 + jnp.array(2.5)
     else:
         x_nb = 1 + nb.ndarange(shape_x)
         x_jax = 1 + jax_arange(shape_x)
 
     if rank_y == 0:
-        y_nb = 1 + nb.array(1.5)
+        y_nb = 1 + nb.tensor(1.5)
         y_jax = 1 + jnp.array(1.5)
     else:
         y_nb = 1 + nb.ndarange(shape_y)
@@ -141,7 +141,7 @@ def get_rank_combinations() -> list[tuple[int, int]]:
 
 
 def compare_nested_structures(nabla_item, jax_item, test_name, item_path=""):
-    """Recursively compare nested structures of arrays and tuples."""
+    """Recursively compare nested structures of tensors and tuples."""
     # If both are tuples, compare recursively
     if isinstance(nabla_item, tuple) and isinstance(jax_item, tuple):
         if len(nabla_item) != len(jax_item):
@@ -157,7 +157,7 @@ def compare_nested_structures(nabla_item, jax_item, test_name, item_path=""):
                 return False
         return True
 
-    # If both are arrays, compare them
+    # If both are tensors, compare them
     elif not isinstance(nabla_item, tuple) and not isinstance(jax_item, tuple):
         if hasattr(nabla_item, "to_numpy"):
             nb_numpy = nabla_item.to_numpy()
@@ -170,7 +170,7 @@ def compare_nested_structures(nabla_item, jax_item, test_name, item_path=""):
 
         if not np.allclose(nb_numpy, np.array(jax_item), rtol=1e-5, atol=1e-6):
             print(
-                f"Array mismatch at {item_path}: shapes {nb_numpy.shape} vs {np.array(jax_item).shape}"
+                f"Tensor mismatch at {item_path}: shapes {nb_numpy.shape} vs {np.array(jax_item).shape}"
             )
             return False
         return True
@@ -190,7 +190,7 @@ def run_test_with_consistency_check(
     Run Nabla and JAX functions separately and check for consistency.
 
     Returns True if:
-    - Both succeed and give same result (numeric or boolean arrays)
+    - Both succeed and give same result (numeric or boolean tensors)
     - Both fail consistently
 
     Returns False if:

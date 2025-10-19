@@ -21,7 +21,7 @@ from max.dtype import DType
 import nabla as nb
 
 
-def accuracy(predictions: nb.Array, targets: nb.Array) -> nb.Array:
+def accuracy(predictions: nb.Tensor, targets: nb.Tensor) -> nb.Tensor:
     """Compute classification accuracy.
 
     Args:
@@ -49,7 +49,7 @@ def accuracy(predictions: nb.Array, targets: nb.Array) -> nb.Array:
     return nb.mean(correct)
 
 
-def top_k_accuracy(predictions: nb.Array, targets: nb.Array, k: int = 5) -> nb.Array:
+def top_k_accuracy(predictions: nb.Tensor, targets: nb.Tensor, k: int = 5) -> nb.Tensor:
     """Compute top-k classification accuracy.
 
     Args:
@@ -72,8 +72,8 @@ def top_k_accuracy(predictions: nb.Array, targets: nb.Array, k: int = 5) -> nb.A
 
 
 def precision(
-    predictions: nb.Array, targets: nb.Array, num_classes: int, class_idx: int = 0
-) -> nb.Array:
+    predictions: nb.Tensor, targets: nb.Tensor, num_classes: int, class_idx: int = 0
+) -> nb.Tensor:
     """Compute precision for a specific class.
 
     Precision = TP / (TP + FP)
@@ -89,12 +89,12 @@ def precision(
     """
     pred_classes = nb.argmax(predictions, axis=-1)
 
-    # Create class indicator arrays
-    class_idx_array = nb.full_like(pred_classes, class_idx)
+    # Create class indicator tensors
+    class_idx_tensor = nb.full_like(pred_classes, class_idx)
 
     # True positives: predicted as class and actually is class
-    pred_is_class = nb.equal(pred_classes, class_idx_array).astype(DType.float32)
-    target_is_class = nb.equal(targets, class_idx_array).astype(DType.float32)
+    pred_is_class = nb.equal(pred_classes, class_idx_tensor).astype(DType.float32)
+    target_is_class = nb.equal(targets, class_idx_tensor).astype(DType.float32)
     tp = nb.sum(pred_is_class * target_is_class)
 
     # False positives: predicted as class but actually is not
@@ -102,13 +102,13 @@ def precision(
     fp = nb.sum(pred_is_class * target_not_class)
 
     # Avoid division by zero
-    epsilon = nb.array([1e-8])
+    epsilon = nb.tensor([1e-8])
     return tp / (tp + fp + epsilon)
 
 
 def recall(
-    predictions: nb.Array, targets: nb.Array, num_classes: int, class_idx: int = 0
-) -> nb.Array:
+    predictions: nb.Tensor, targets: nb.Tensor, num_classes: int, class_idx: int = 0
+) -> nb.Tensor:
     """Compute recall for a specific class.
 
     Recall = TP / (TP + FN)
@@ -124,12 +124,12 @@ def recall(
     """
     pred_classes = nb.argmax(predictions, axis=-1)
 
-    # Create class indicator arrays
-    class_idx_array = nb.full_like(pred_classes, class_idx)
+    # Create class indicator tensors
+    class_idx_tensor = nb.full_like(pred_classes, class_idx)
 
     # True positives: predicted as class and actually is class
-    pred_is_class = nb.equal(pred_classes, class_idx_array).astype(DType.float32)
-    target_is_class = nb.equal(targets, class_idx_array).astype(DType.float32)
+    pred_is_class = nb.equal(pred_classes, class_idx_tensor).astype(DType.float32)
+    target_is_class = nb.equal(targets, class_idx_tensor).astype(DType.float32)
     tp = nb.sum(pred_is_class * target_is_class)
 
     # False negatives: not predicted as class but actually is class
@@ -137,13 +137,13 @@ def recall(
     fn = nb.sum(pred_not_class * target_is_class)
 
     # Avoid division by zero
-    epsilon = nb.array([1e-8])
+    epsilon = nb.tensor([1e-8])
     return tp / (tp + fn + epsilon)
 
 
 def f1_score(
-    predictions: nb.Array, targets: nb.Array, num_classes: int, class_idx: int = 0
-) -> nb.Array:
+    predictions: nb.Tensor, targets: nb.Tensor, num_classes: int, class_idx: int = 0
+) -> nb.Tensor:
     """Compute F1 score for a specific class.
 
     F1 = 2 * (precision * recall) / (precision + recall)
@@ -160,11 +160,11 @@ def f1_score(
     prec = precision(predictions, targets, num_classes, class_idx)
     rec = recall(predictions, targets, num_classes, class_idx)
 
-    epsilon = nb.array([1e-8])
+    epsilon = nb.tensor([1e-8])
     return 2 * (prec * rec) / (prec + rec + epsilon)
 
 
-def mean_squared_error_metric(predictions: nb.Array, targets: nb.Array) -> nb.Array:
+def mean_squared_error_metric(predictions: nb.Tensor, targets: nb.Tensor) -> nb.Tensor:
     """Compute MSE metric for regression tasks.
 
     Args:
@@ -178,7 +178,7 @@ def mean_squared_error_metric(predictions: nb.Array, targets: nb.Array) -> nb.Ar
     return nb.mean(diff * diff)
 
 
-def mean_absolute_error_metric(predictions: nb.Array, targets: nb.Array) -> nb.Array:
+def mean_absolute_error_metric(predictions: nb.Tensor, targets: nb.Tensor) -> nb.Tensor:
     """Compute MAE metric for regression tasks.
 
     Args:
@@ -192,7 +192,7 @@ def mean_absolute_error_metric(predictions: nb.Array, targets: nb.Array) -> nb.A
     return nb.mean(nb.abs(diff))
 
 
-def r_squared(predictions: nb.Array, targets: nb.Array) -> nb.Array:
+def r_squared(predictions: nb.Tensor, targets: nb.Tensor) -> nb.Tensor:
     """Compute R-squared (coefficient of determination) for regression tasks.
 
     R² = 1 - (SS_res / SS_tot)
@@ -213,11 +213,11 @@ def r_squared(predictions: nb.Array, targets: nb.Array) -> nb.Array:
     ss_tot = nb.sum((targets - targets_mean) ** 2)
 
     # R-squared
-    epsilon = nb.array([1e-8])
+    epsilon = nb.tensor([1e-8])
     return 1 - (ss_res / (ss_tot + epsilon))
 
 
-def pearson_correlation(predictions: nb.Array, targets: nb.Array) -> nb.Array:
+def pearson_correlation(predictions: nb.Tensor, targets: nb.Tensor) -> nb.Tensor:
     """Compute Pearson correlation coefficient.
 
     Args:
@@ -227,7 +227,7 @@ def pearson_correlation(predictions: nb.Array, targets: nb.Array) -> nb.Array:
     Returns:
         Scalar correlation coefficient
     """
-    # Flatten arrays for correlation calculation
+    # Flatten tensors for correlation calculation
     pred_flat = predictions.reshape((-1,))
     target_flat = targets.reshape((-1,))
 
@@ -243,7 +243,7 @@ def pearson_correlation(predictions: nb.Array, targets: nb.Array) -> nb.Array:
     pred_std = nb.sqrt(nb.sum(pred_centered**2))
     target_std = nb.sqrt(nb.sum(target_centered**2))
 
-    epsilon = nb.array([1e-8])
+    epsilon = nb.tensor([1e-8])
     return numerator / (pred_std * target_std + epsilon)
 
 

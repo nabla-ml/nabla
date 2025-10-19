@@ -3,7 +3,7 @@
 ## Signature
 
 ```python
-nabla.exp(arg: 'Array') -> 'Array'
+nabla.exp(arg: 'Tensor') -> 'Tensor'
 ```
 
 ## Description
@@ -11,21 +11,21 @@ nabla.exp(arg: 'Array') -> 'Array'
 Computes the element-wise exponential function (e^x).
 
 This function calculates the base-e exponential of each element in the
-input array.
+input tensor.
 
 ## Parameters
 
-- **`arg`** (`Array`): The input array.
+- **`arg`** (`Tensor`): The input tensor.
 
 ## Returns
 
-- `Array`: An array containing the exponential of each element.
+- `Tensor`: An tensor containing the exponential of each element.
 
 ## Examples
 
 ```pycon
 >>> import nabla as nb
->>> x = nb.array([0.0, 1.0, 2.0])
+>>> x = nb.tensor([0.0, 1.0, 2.0])
 >>> nb.exp(x)
-Array([1.       , 2.7182817, 7.389056 ], dtype=float32)
+Tensor([1.       , 2.7182817, 7.389056 ], dtype=float32)
 ```

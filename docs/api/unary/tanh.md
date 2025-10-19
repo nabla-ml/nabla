@@ -3,29 +3,29 @@
 ## Signature
 
 ```python
-nabla.tanh(arg: 'Array') -> 'Array'
+nabla.tanh(arg: 'Tensor') -> 'Tensor'
 ```
 
 ## Description
 
-Computes the element-wise hyperbolic tangent of an array.
+Computes the element-wise hyperbolic tangent of an tensor.
 
 The tanh function is a common activation function in neural networks,
 squashing values to the range `[-1, 1]`.
 
 ## Parameters
 
-- **`arg`** (`Array`): The input array.
+- **`arg`** (`Tensor`): The input tensor.
 
 ## Returns
 
-- `Array`: An array containing the hyperbolic tangent of each element.
+- `Tensor`: An tensor containing the hyperbolic tangent of each element.
 
 ## Examples
 
 ```pycon
 >>> import nabla as nb
->>> x = nb.array([-1.0, 0.0, 1.0, 20.0])
+>>> x = nb.tensor([-1.0, 0.0, 1.0, 20.0])
 >>> nb.tanh(x)
-Array([-0.7615942,  0.       ,  0.7615942,  1.       ], dtype=float32)
+Tensor([-0.7615942,  0.       ,  0.7615942,  1.       ], dtype=float32)
 ```

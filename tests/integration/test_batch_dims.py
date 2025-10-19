@@ -63,10 +63,10 @@
 #     sizes, tangents = nb.core.trafos._std_basis([a, b, c])
 
 #     # Verify we get correct number of sizes and tangents
-#     assert len(sizes) == 3, "Should have 3 sizes for 3 input arrays"
+#     assert len(sizes) == 3, "Should have 3 sizes for 3 input tensors"
 #     assert len(tangents) == sum(sizes), "Total tangents should equal sum of sizes"
 
-#     # Verify sizes match array shapes
+#     # Verify sizes match tensor shapes
 #     expected_sizes = [a.size, b.size, c.size]
 #     assert sizes == expected_sizes, f"Expected sizes {expected_sizes}, got {sizes}"
 

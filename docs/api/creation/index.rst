@@ -6,7 +6,7 @@ Creation
    :caption: Functions
 
    arange.md
-   array.md
+   tensor.md
    full_like.md
    glorot_uniform.md
    he_normal.md

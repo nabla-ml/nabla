@@ -3,34 +3,34 @@
 ## Signature
 
 ```python
-nabla.negate(arg: 'Array') -> 'Array'
+nabla.negate(arg: 'Tensor') -> 'Tensor'
 ```
 
 ## Description
 
-Computes the element-wise numerical negative of an array.
+Computes the element-wise numerical negative of an tensor.
 
-This function returns a new array with each element being the negation
-of the corresponding element in the input array. It also provides the
-implementation for the unary `-` operator on Nabla arrays.
+This function returns a new tensor with each element being the negation
+of the corresponding element in the input tensor. It also provides the
+implementation for the unary `-` operator on Nabla tensors.
 
 ## Parameters
 
-- **`arg`** (`Array`): The input array.
+- **`arg`** (`Tensor`): The input tensor.
 
 ## Returns
 
-- `Array`: An array containing the negated elements.
+- `Tensor`: An tensor containing the negated elements.
 
 ## Examples
 
 ```pycon
 >>> import nabla as nb
->>> x = nb.array([1, -2, 3.5])
+>>> x = nb.tensor([1, -2, 3.5])
 >>> nb.negate(x)
-Array([-1.,  2., -3.5], dtype=float32)
+Tensor([-1.,  2., -3.5], dtype=float32)
 
 Using the `-` operator:
 >>> -x
-Array([-1.,  2., -3.5], dtype=float32)
+Tensor([-1.,  2., -3.5], dtype=float32)
 ```

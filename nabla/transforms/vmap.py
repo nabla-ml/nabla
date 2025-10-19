@@ -17,7 +17,7 @@
 from collections.abc import Callable
 from typing import Any, Union
 
-from ..core.array import Array
+from ..core.tensor import Tensor
 from .utils import (
     _handle_args_consistently,
     _map_pytree_with_axes,
@@ -29,17 +29,17 @@ def _check_in_axes_size(tree: Any, axes: Any) -> int:
     batch_sizes = []
 
     def _collect_sizes(tree_part: Any, axes_part: Any) -> None:
-        if isinstance(tree_part, Array):
+        if isinstance(tree_part, Tensor):
             if axes_part is not None:
                 if len(tree_part.shape) == 0:
                     raise ValueError(
-                        f"Cannot apply axis {axes_part} to scalar array with shape {tree_part.shape}. "
-                        f"Scalar arrays cannot be batched along a specific axis."
+                        f"Cannot apply axis {axes_part} to scalar tensor with shape {tree_part.shape}. "
+                        f"Scalar tensors cannot be batched along a specific axis."
                     )
                 axis = len(tree_part.shape) + axes_part if axes_part < 0 else axes_part
                 if axis >= len(tree_part.shape):
                     raise ValueError(
-                        f"Axis {axes_part} out of bounds for array with shape {tree_part.shape}"
+                        f"Axis {axes_part} out of bounds for tensor with shape {tree_part.shape}"
                     )
                 batch_sizes.append(tree_part.shape[axis])
         elif isinstance(tree_part, dict):
@@ -64,8 +64,8 @@ def _check_in_axes_size(tree: Any, axes: Any) -> int:
         )
     return first_size
 
-def _batch_array(array: Array, axis: int | None, batch_size: int) -> Array:
-    """Process a single array for batching in vmap."""
+def _batch_tensor(tensor: Tensor, axis: int | None, batch_size: int) -> Tensor:
+    """Process a single tensor for batching in vmap."""
     from nabla.ops.unary import incr_batch_dim_ctr
     from nabla.ops.view import (
         broadcast_to,
@@ -74,26 +74,26 @@ def _batch_array(array: Array, axis: int | None, batch_size: int) -> Array:
         unsqueeze,
     )
     if axis is None:
-        batched = unsqueeze(array, [0])
+        batched = unsqueeze(tensor, [0])
         if batch_size > 1:
-            new_shape = (batch_size,) + array.shape
+            new_shape = (batch_size,) + tensor.shape
             batched = broadcast_to(batched, new_shape)
     else:
-        batched = move_axis_to_front(array, axis) if axis != 0 else array
+        batched = move_axis_to_front(tensor, axis) if axis != 0 else tensor
     
     res = incr_batch_dim_ctr(batched)
     return move_axis_to_front_of_batch_dims(res, -1)
 
-def _unbatch_array(array: Array, axis: int | None) -> Array:
-    """Process a single array for unbatching in vmap."""
+def _unbatch_tensor(tensor: Tensor, axis: int | None) -> Tensor:
+    """Process a single tensor for unbatching in vmap."""
     from nabla.ops.unary import decr_batch_dim_ctr
     from nabla.ops.view import (
         move_axis_from_front,
         move_axis_from_front_of_batch_dims,
         squeeze,
     )
-    array = move_axis_from_front_of_batch_dims(array, -1)
-    unbatched = decr_batch_dim_ctr(array)
+    tensor = move_axis_from_front_of_batch_dims(tensor, -1)
+    unbatched = decr_batch_dim_ctr(tensor)
 
     if axis is None:
         return squeeze(unbatched, [0])
@@ -101,11 +101,11 @@ def _unbatch_array(array: Array, axis: int | None) -> Array:
 
 def _batch_input_pytree(tree: Any, axes: Any, batch_size: int) -> Any:
     """Prepare a pytree of inputs for batched execution using the generic mapper."""
-    return _map_pytree_with_axes(_batch_array, tree, axes, batch_size)
+    return _map_pytree_with_axes(_batch_tensor, tree, axes, batch_size)
 
 def _unbatch_output_pytree(tree: Any, axes: Any) -> Any:
     """Restore the original dimensions of a batched output pytree using the generic mapper."""
-    return _map_pytree_with_axes(_unbatch_array, tree, axes)
+    return _map_pytree_with_axes(_unbatch_tensor, tree, axes)
 
 def _broadcast_axis_spec(axis_spec: Any, num_items: int) -> tuple[Any, ...]:
     """Broadcast axis specification to match the number of pytree items."""

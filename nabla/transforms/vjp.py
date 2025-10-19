@@ -17,11 +17,11 @@
 from collections.abc import Callable
 from typing import Any, Literal, overload
 
-from ..core.array import Array
+from ..core.tensor import Tensor
 from .utils import (
-    _convert_scalars_to_arrays,
+    _convert_scalars_to_tensors,
     _convert_to_scalar_if_needed,
-    _extract_arrays_from_pytree,
+    _extract_tensors_from_pytree,
     make_traced_pytree,
     make_untraced_pytree,
     pullback,
@@ -71,8 +71,8 @@ def vjp(
     # Keep a reference to the original primals before conversion
     original_primals = primals
 
-    # Convert all scalar numbers to Nabla arrays to ensure they are traceable
-    primals = _convert_scalars_to_arrays(primals)
+    # Convert all scalar numbers to Nabla tensors to ensure they are traceable
+    primals = _convert_scalars_to_tensors(primals)
 
     # Handle the input structure based on number of arguments
     if len(primals) == 1:
@@ -84,7 +84,7 @@ def vjp(
 
     any_arg_traced = any(
         getattr(arg, "traced", False)
-        for arg in _extract_arrays_from_pytree(inputs_pytree)
+        for arg in _extract_tensors_from_pytree(inputs_pytree)
     )
 
     # Make traced copies of all inputs
@@ -116,9 +116,9 @@ def vjp(
         gradients = pullback(traced_inputs_pytree, outputs, traced_cotangents)
 
         # Check if original cotangents were traced - if so, keep gradients traced
-        cotangent_arrays = _extract_arrays_from_pytree(cotangents)
+        cotangent_tensors = _extract_tensors_from_pytree(cotangents)
         any_cotangent_traced = any(
-            getattr(arr, "traced", False) for arr in cotangent_arrays
+            getattr(arr, "traced", False) for arr in cotangent_tensors
         )
 
         # Only make gradients untraced if original cotangents were not traced

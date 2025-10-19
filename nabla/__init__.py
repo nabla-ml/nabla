@@ -25,7 +25,7 @@ from typing import Any
 # Re-exports: imported here to make them available when importing from nabla
 from max.dtype import DType
 
-from .core.array import Array
+from .core.tensor import Tensor
 from .ops.operation import (
     BinaryOperation,
     Operation,
@@ -115,7 +115,7 @@ def __getattr__(name: str) -> Any:
 # Build the __all__ list
 __all__ = [
     # Core framework
-    "Array",
+    "Tensor",
     # Operations
     "Operation",
     "UnaryOperation",

@@ -150,9 +150,9 @@ def yet_another_internal_function():
 """
 Here's how you might use @nodoc in your actual Nabla modules:
 
-# In nabla/core/array.py
-class Array:
-    '''Main array class - will be documented.'''
+# In nabla/core/tensor.py
+class Tensor:
+    '''Main tensor class - will be documented.'''
     
     def __init__(self, data):
         '''Public constructor - will be documented.'''

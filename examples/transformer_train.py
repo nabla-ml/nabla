@@ -91,7 +91,7 @@ PRINT_INTERVAL = 10  # Print progress every N epochs
 # ============================================================================
 
 
-def positional_encoding(max_seq_len: int, d_model: int) -> nb.Array:
+def positional_encoding(max_seq_len: int, d_model: int) -> nb.Tensor:
     """
     Create sinusoidal positional encodings for transformer inputs.
 
@@ -155,7 +155,7 @@ def scaled_dot_product_attention(q, k, v, mask=None):
 
     # Compute attention scores: Q @ K^T / sqrt(d_k)
     scores = nb.matmul(q, k.permute((0, 1, 3, 2))) / nb.sqrt(
-        nb.array([d_k], dtype=nb.DType.float32)
+        nb.tensor([d_k], dtype=nb.DType.float32)
     )
 
     # Apply mask if provided (set masked positions to large negative value)
@@ -621,10 +621,10 @@ def create_reverse_dataset(batch_size):
     end_tokens_np = np.full((batch_size, 1), 2, dtype=np.int32)  # <END> token (2)
     target_np = np.concatenate([reversed_sequences_np, end_tokens_np], axis=1)
 
-    # Convert numpy arrays to nabla arrays
-    encoder_input = nb.Array.from_numpy(encoder_input_np)
-    decoder_input = nb.Array.from_numpy(decoder_input_np)
-    target = nb.Array.from_numpy(target_np)
+    # Convert numpy tensors to nabla tensors
+    encoder_input = nb.Tensor.from_numpy(encoder_input_np)
+    decoder_input = nb.Tensor.from_numpy(decoder_input_np)
+    target = nb.Tensor.from_numpy(target_np)
 
     return encoder_input, decoder_input, target
 
@@ -957,8 +957,8 @@ def embedding_lookup(token_ids, embedding_matrix):
     # For each token in vocabulary, use where to select appropriate embeddings
     for token_idx in range(vocab_size):
         # Create condition: token_ids == token_idx
-        token_idx_array = nb.array([token_idx], dtype=nb.DType.int32)
-        token_idx_broadcast = nb.broadcast_to(token_idx_array, token_ids.shape)
+        token_idx_tensor = nb.tensor([token_idx], dtype=nb.DType.int32)
+        token_idx_broadcast = nb.broadcast_to(token_idx_tensor, token_ids.shape)
         condition = nb.equal(token_ids, token_idx_broadcast)
 
         # Expand condition to match embedding dimensions (batch, seq_len, d_model)

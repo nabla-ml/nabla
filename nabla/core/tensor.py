@@ -14,7 +14,7 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-"""Core Array class with improved organization."""
+"""Core Tensor class with improved organization."""
 
 from __future__ import annotations
 
@@ -29,15 +29,15 @@ from max.dtype import DType
 from max.graph import TensorValue, TensorValueLike, Value
 
 Shape = tuple[int, ...]
-MaxprCallable = Callable[[list[TensorValue], "Array"], None]
-VJPRule = Callable[[list["Array"], "Array", "Array"], list["Array"]]
-JVPRule = Callable[[list["Array"], list["Array"], "Array"], "Array"]
+MaxprCallable = Callable[[list[TensorValue], "Tensor"], None]
+VJPRule = Callable[[list["Tensor"], "Tensor", "Tensor"], list["Tensor"]]
+JVPRule = Callable[[list["Tensor"], list["Tensor"], "Tensor"], "Tensor"]
 
 _DEFAULT_CPU = CPU()
 
 
-class Array:
-    """Core tensor-like array class with automatic differentiation support."""
+class Tensor:
+    """Core tensor-like tensor class with automatic differentiation support."""
 
     # Class-level type annotations for better Pylance support
     shape: Shape
@@ -45,16 +45,16 @@ class Array:
     dtype: DType
     device: Device
     name: str
-    args: list[Array]
+    args: list[Tensor]
     visited: bool
     tensor_value: Union[Value, TensorValue, TensorValueLike] | None
     maxpr: MaxprCallable | None
     vjp_rule: VJPRule | None
     jvp_rule: JVPRule | None
     traced: bool
-    tangent: Array | None
-    cotangent: Array | None
-    grad: Array | None
+    tangent: Tensor | None
+    cotangent: Tensor | None
+    grad: Tensor | None
     stage_realization: bool
     kernel_impl_path: Path | None
     custom_kernel_path: Path | None
@@ -74,16 +74,16 @@ class Array:
         self.dtype = dtype
         self.logical_device = device
         self.name = name
-        self.args: list[Array] = []
+        self.args: list[Tensor] = []
         self.visited: bool = False
         self.tensor_value: Union[Value, TensorValue, TensorValueLike] | None = None
         self.maxpr: MaxprCallable | None = None
         self.vjp_rule: VJPRule | None = None
         self.jvp_rule: JVPRule | None = None
         self.traced: bool = False
-        self.tangent: Array | None = None
-        self.cotangent: Array | None = None
-        self.grad: Array | None = None
+        self.tangent: Tensor | None = None
+        self.cotangent: Tensor | None = None
+        self.grad: Tensor | None = None
         self.stage_realization: bool = False
         self.kernel_impl_path: Path | None = None
         self.custom_kernel_path: Path | None = None
@@ -99,7 +99,7 @@ class Array:
 
     @property
     def device(self) -> Device:
-        """Get the logical device of this Array. This can differ from the logical device and will show the actual device the buffer lives on."""
+        """Get the logical device of this Tensor. This can differ from the logical device and will show the actual device the buffer lives on."""
         if self._impl is None:
             return self.logical_device
         if isinstance(self._impl, MAXTensor):
@@ -111,11 +111,11 @@ class Array:
 
     @property
     def impl(self) -> MAXTensor | None:
-        """Get the max.Tensor representation of this Array. If the underlying _impl field is a Numpy array, convert it to a Tensor."""
+        """Get the max.Tensor representation of this Tensor. If the underlying _impl field is a Numpy tensor, convert it to a Tensor."""
         if isinstance(self._impl, MAXTensor):
             return self._impl
         elif isinstance(self._impl, np.ndarray):
-            # Convert numpy array to Tensor
+            # Convert numpy tensor to Tensor
             val = MAXTensor.from_numpy(self._impl)
             if val.device != self.logical_device:
                 val = val.to(self.logical_device)
@@ -124,26 +124,26 @@ class Array:
             return None
 
     def impl_(self, value: Union[np.ndarray, MAXTensor] | None) -> None:
-        """Set the implementation of this Array to a Numpy array or Tensor."""
+        """Set the implementation of this Tensor to a Numpy tensor or Tensor."""
         self._impl = value
 
     @property
     def size(self) -> int:
-        """Return the total number of elements in the array."""
+        """Return the total number of elements in the tensor."""
         if not self.shape:
-            return 1  # Scalar array
+            return 1  # Scalar tensor
         size = 1
         for dim in self.shape:
             size *= dim
         return size
 
     @classmethod
-    def from_impl(cls, impl: MAXTensor, name: str = "") -> Array:
-        """Create Array from existing max.Tensor implementation."""
+    def from_impl(cls, impl: MAXTensor, name: str = "") -> Tensor:
+        """Create Tensor from existing max.Tensor implementation."""
         if not isinstance(impl, MAXTensor):
             raise TypeError(f"Data must be a MAX Tensor, got {type(impl)}")
         if impl.shape is None:
-            raise ValueError("Cannot create Array from None shape Tensor")
+            raise ValueError("Cannot create Tensor from None shape Tensor")
 
         instance = cls(
             shape=impl.shape, dtype=impl.dtype, device=impl.device, materialize=True
@@ -152,8 +152,8 @@ class Array:
         instance.name = name
         return instance
 
-    def copy_from(self, other: Array) -> None:
-        """Copy data from another Array."""
+    def copy_from(self, other: Tensor) -> None:
+        """Copy data from another Tensor."""
         if self.shape != other.shape or self.dtype != other.dtype:
             raise ValueError("Shape or dtype mismatch for copy")
         if other._impl is not None:
@@ -161,11 +161,11 @@ class Array:
         else:
             self._impl = None
 
-    def add_arguments(self, *arg_nodes: Array) -> None:
-        """Add an arguments to this Array's computation graph if traced."""
+    def add_arguments(self, *arg_nodes: Tensor) -> None:
+        """Add an arguments to this Tensor's computation graph if traced."""
         for arg in arg_nodes:
-            if not isinstance(arg, Array):
-                raise TypeError(f"Argument must be an Array, got {type(arg)}")
+            if not isinstance(arg, Tensor):
+                raise TypeError(f"Argument must be an Tensor, got {type(arg)}")
             if arg.traced:
                 self.traced = True
             if arg.stage_realization:
@@ -176,7 +176,7 @@ class Array:
                 self.args.append(arg)
 
     def realize(self) -> None:
-        """Force computation of this Array."""
+        """Force computation of this Tensor."""
         if self._impl is not None:
             return
 
@@ -188,46 +188,46 @@ class Array:
 
     def to_numpy(self) -> np.ndarray:
         """Get NumPy representation."""
-        self.realize()  # Ensure the Array is realized before converting
+        self.realize()  # Ensure the Tensor is realized before converting
         if self._impl is None:
-            raise ValueError("Cannot get NumPy array from None impl")
+            raise ValueError("Cannot get NumPy tensor from None impl")
         if isinstance(self._impl, np.ndarray):
             return self._impl
         if not isinstance(self._impl, MAXTensor):
             raise TypeError(
-                f"Cannot convert Array with impl type {type(self._impl)} to NumPy array"
+                f"Cannot convert Tensor with impl type {type(self._impl)} to NumPy tensor"
             )
         return self._impl.to_numpy()
 
     @classmethod
-    def from_numpy(cls, np_array: np.ndarray) -> Array:
-        """Create a new Array from a NumPy array."""
-        if not isinstance(np_array, np.ndarray):
-            raise TypeError(f"Expected numpy.ndarray, got {type(np_array)}")
+    def from_numpy(cls, np_tensor: np.ndarray) -> Tensor:
+        """Create a new Tensor from a NumPy tensor."""
+        if not isinstance(np_tensor, np.ndarray):
+            raise TypeError(f"Expected numpy.ndtensor, got {type(np_tensor)}")
 
-        array = cls(
-            shape=np_array.shape,
-            dtype=DType.from_numpy(np_array.dtype),
+        tensor = cls(
+            shape=np_tensor.shape,
+            dtype=DType.from_numpy(np_tensor.dtype),
             device=_DEFAULT_CPU,
-            name=getattr(np_array, "name", ""),
+            name=getattr(np_tensor, "name", ""),
         )
 
-        # # WORKAROUND: Handle scalar boolean arrays to avoid MAX library bug
+        # # WORKAROUND: Handle scalar boolean tensors to avoid MAX library bug
         # # The MAX library's tensor.view(DType.bool) fails for scalar tensors
-        # if np_array.dtype == bool and np_array.shape == ():
+        # if np_tensor.dtype == bool and np_tensor.shape == ():
         #     # For scalar boolean, convert to float32 to avoid the bug
-        #     float_array = np_array.astype(np.float32)
-        #     array._impl = float_array#MAXTensor.from_numpy(float_array)
+        #     float_tensor = np_tensor.astype(np.float32)
+        #     tensor._impl = float_tensor#MAXTensor.from_numpy(float_tensor)
         #     # Update the dtype to reflect what we actually stored
-        #     array.dtype = DType.float32
+        #     tensor.dtype = DType.float32
         # else:
-        array._impl = np_array  # MAXTensor.from_numpy(np_array)
+        tensor._impl = np_tensor  # MAXTensor.from_numpy(np_tensor)
 
-        # array.logical_device = _DEFAULT_CPU
-        return array
+        # tensor.logical_device = _DEFAULT_CPU
+        return tensor
 
-    def get_arguments(self) -> list[Array]:
-        """Get list of argument Arrays."""
+    def get_arguments(self) -> list[Tensor]:
+        """Get list of argument Tensors."""
         return list(self.args)
 
     def set_maxpr(self, fn: MaxprCallable) -> None:
@@ -235,7 +235,7 @@ class Array:
         self.maxpr = fn
 
     def __repr__(self) -> str:
-        """String representation of the Array."""
+        """String representation of the Tensor."""
         # self.realize()
         from ..utils.formatting import format_shape_dtype_device
 
@@ -245,17 +245,17 @@ class Array:
             )
         else:
             return (
-                f"Array(shape={self.shape}, dtype={self.dtype}, logical_device={self.logical_device}, unrealized):"
+                f"Tensor(shape={self.shape}, dtype={self.dtype}, logical_device={self.logical_device}, unrealized):"
             )
 
-    def to(self, device: Device) -> Array:
-        """Move Array to specified device."""
+    def to(self, device: Device) -> Tensor:
+        """Move Tensor to specified device."""
         from ..ops.unary import transfer_to
 
         return transfer_to(self, device)
 
-    def backward(self, grad: Array | None = None, retain_graph: bool = False) -> None:
-        """Compute gradients flowing into traced leaf inputs that influence this Array.
+    def backward(self, grad: Tensor | None = None, retain_graph: bool = False) -> None:
+        """Compute gradients flowing into traced leaf inputs that influence this Tensor.
         
         Args:
             grad: Optional cotangent tensor; defaults to ones for scalar outputs
@@ -270,8 +270,8 @@ class Array:
             from ..ops.creation import ones_like
 
             grad = ones_like(self)
-        elif not isinstance(grad, Array):
-            raise TypeError("grad must be a Nabla Array")
+        elif not isinstance(grad, Tensor):
+            raise TypeError("grad must be a Nabla Tensor")
 
         from ..transforms.utils import backward as backward_transform
 
@@ -283,62 +283,62 @@ class Array:
         self.traced = bool(val)
 
     # Operator overloading methods
-    def __add__(self, other) -> Array:
+    def __add__(self, other) -> Tensor:
         """Addition operator."""
         from ..ops.binary import add
 
         return add(self, other)
 
-    def __mul__(self, other) -> Array:
+    def __mul__(self, other) -> Tensor:
         """Multiplication operator."""
         from ..ops.binary import mul
 
         return mul(self, other)
 
-    def __sub__(self, other) -> Array:
+    def __sub__(self, other) -> Tensor:
         """Subtraction operator."""
         from ..ops.binary import sub
 
         return sub(self, other)
 
-    def __pow__(self, power) -> Array:
+    def __pow__(self, power) -> Tensor:
         """Power operator."""
         from ..ops.binary import pow as power_op
 
         return power_op(self, power)
 
-    def __truediv__(self, other) -> Array:
+    def __truediv__(self, other) -> Tensor:
         """Division operator."""
         from ..ops.binary import div
 
         return div(self, other)
 
-    def __floordiv__(self, other) -> Array:
+    def __floordiv__(self, other) -> Tensor:
         """Floor division operator (//)."""
         from ..ops.binary import floordiv
 
         return floordiv(self, other)
 
-    def __matmul__(self, other) -> Array:
+    def __matmul__(self, other) -> Tensor:
         """Matrix multiplication operator (@)."""
         from ..ops.linalg import matmul
 
         return matmul(self, other)
 
-    def __neg__(self) -> Array:
+    def __neg__(self) -> Tensor:
         """Negation operator."""
         from ..ops.unary import negate
 
         return negate(self)
 
-    def __mod__(self, other) -> Array:
+    def __mod__(self, other) -> Tensor:
         """Modulo operator (%)."""
         from ..ops.binary import mod
 
         return mod(self, other)
 
     # Comparison operators
-    def __lt__(self, other) -> Array:
+    def __lt__(self, other) -> Tensor:
         """Less than operator (<)."""
         from ..ops.binary import greater_equal
         from ..ops.unary import logical_not
@@ -346,14 +346,14 @@ class Array:
         # a < b is equivalent to not (a >= b)
         return logical_not(greater_equal(self, other))
 
-    def __le__(self, other) -> Array:
+    def __le__(self, other) -> Tensor:
         """Less than or equal operator (<=)."""
         from ..ops.binary import greater_equal
 
         # a <= b is equivalent to b >= a
         return greater_equal(other, self)
 
-    def __gt__(self, other) -> Array:
+    def __gt__(self, other) -> Tensor:
         """Greater than operator (>)."""
         from ..ops.binary import greater_equal
         from ..ops.unary import logical_not
@@ -361,57 +361,57 @@ class Array:
         # a > b is equivalent to not (b >= a)
         return logical_not(greater_equal(other, self))
 
-    def __ge__(self, other) -> Array:
+    def __ge__(self, other) -> Tensor:
         """Greater than or equal operator (>=)."""
         from ..ops.binary import greater_equal
 
         return greater_equal(
             self, other
-        )  # Hash and equality for making Arrays usable as dictionary keys
+        )  # Hash and equality for making Tensors usable as dictionary keys
 
     def __hash__(self) -> int:
-        """Make Arrays hashable based on object identity.
+        """Make Tensors hashable based on object identity.
 
-        This allows Arrays to be used as dictionary keys in optimizers.
-        Two Arrays are considered equal only if they are the same object.
+        This allows Tensors to be used as dictionary keys in optimizers.
+        Two Tensors are considered equal only if they are the same object.
         """
         return id(self)
 
-    # Reverse operators for when Array is on the right-hand side
-    def __radd__(self, other) -> Array:
+    # Reverse operators for when Tensor is on the right-hand side
+    def __radd__(self, other) -> Tensor:
         """Reverse addition operator (other + self)."""
         from ..ops.binary import add
 
         return add(other, self)
 
-    def __rmul__(self, other) -> Array:
+    def __rmul__(self, other) -> Tensor:
         """Reverse multiplication operator (other * self)."""
         from ..ops.binary import mul
 
         return mul(other, self)
 
-    def __rsub__(self, other) -> Array:
+    def __rsub__(self, other) -> Tensor:
         """Reverse subtraction operator (other - self)."""
         from ..ops.binary import sub
 
         return sub(other, self)
 
-    def __rtruediv__(self, other) -> Array:
+    def __rtruediv__(self, other) -> Tensor:
         """Reverse division operator (other / self)."""
         from ..ops.binary import div
 
         return div(other, self)
 
-    def __rpow__(self, other) -> Array:
+    def __rpow__(self, other) -> Tensor:
         """Reverse power operator (other ** self)."""
         from ..ops.binary import pow as power_op
 
         return power_op(other, self)
 
-    def __getitem__(self, key) -> Array:
-        """Array slicing using standard Python syntax.
+    def __getitem__(self, key) -> Tensor:
+        """Tensor slicing using standard Python syntax.
 
-        Supports both basic indexing (slices, integers) and advanced indexing (Array indices).
+        Supports both basic indexing (slices, integers) and advanced indexing (Tensor indices).
 
         Examples::
 
@@ -421,20 +421,20 @@ class Array:
             arr[-2:]        # Negative indices
             arr[..., :2]    # Ellipsis (all dimensions up to last)
 
-            # Advanced indexing with Array indices:
-            indices = nb.array([0, 2, 1])
+            # Advanced indexing with Tensor indices:
+            indices = nb.tensor([0, 2, 1])
             arr[indices]    # Gather elements along first axis
             arr[indices, :] # Gather rows
         """
 
-        # Check if this is advanced indexing with Array indices
-        if isinstance(key, Array):
-            # Single Array index - use gather along axis 0
+        # Check if this is advanced indexing with Tensor indices
+        if isinstance(key, Tensor):
+            # Single Tensor index - use gather along axis 0
             from ..ops.indexing import gather
 
             return gather(self, key, axis=0)
-        elif isinstance(key, tuple) and any(isinstance(k, Array) for k in key):
-            # Mixed indexing with Array indices in tuple
+        elif isinstance(key, tuple) and any(isinstance(k, Tensor) for k in key):
+            # Mixed indexing with Tensor indices in tuple
             return self._handle_mixed_advanced_indexing(key)
 
         # Handle single slice, integer, or ellipsis (original logic)
@@ -442,7 +442,7 @@ class Array:
             key = (key,)
         elif not isinstance(key, tuple):
             raise TypeError(
-                f"Array indices must be integers, slices, ellipsis, Arrays, or tuples, got {type(key)}"
+                f"Tensor indices must be integers, slices, ellipsis, Tensors, or tuples, got {type(key)}"
             )
 
         # Handle ellipsis expansion
@@ -463,13 +463,13 @@ class Array:
             )
             key = expanded_key
 
-        # Special case: if we have indices but the array is scalar, that's an error
+        # Special case: if we have indices but the tensor is scalar, that's an error
         if (
             len(self.shape) == 0
             and len(key) > 0
             and not (len(key) == 1 and key[0] is ...)
         ):
-            raise IndexError(f"Too many indices for array: expected 0, got {len(key)}")
+            raise IndexError(f"Too many indices for tensor: expected 0, got {len(key)}")
 
         # Convert integers to slices and build slice list
         # Track which dimensions should be squeezed (removed) due to integer indexing
@@ -478,7 +478,7 @@ class Array:
         for i, k in enumerate(key):
             if i >= len(self.shape):
                 raise IndexError(
-                    f"Too many indices for array: expected {len(self.shape)}, got {len(key)}"
+                    f"Too many indices for tensor: expected {len(self.shape)}, got {len(key)}"
                 )
 
             if isinstance(k, int):
@@ -492,23 +492,23 @@ class Array:
                 slices.append(k)
             else:
                 raise TypeError(
-                    f"Array index {i} must be an integer or slice, got {type(k)}"
+                    f"Tensor index {i} must be an integer or slice, got {type(k)}"
                 )
 
-        # Create ArraySliceOp with squeeze information
-        from ..ops.view import ArraySliceOp
+        # Create TensorSliceOp with squeeze information
+        from ..ops.view import TensorSliceOp
 
-        op = ArraySliceOp(slices, squeeze_axes)
+        op = TensorSliceOp(slices, squeeze_axes)
         return op.forward(self)
 
-    def astype(self, dtype: DType) -> Array:
-        """Convert array to a different data type.
+    def astype(self, dtype: DType) -> Tensor:
+        """Convert tensor to a different data type.
 
         Args:
             dtype: Target data type
 
         Returns:
-            New Array with the specified data type
+            New Tensor with the specified data type
         """
         if self.dtype == dtype:
             return self  # No conversion needed
@@ -518,15 +518,15 @@ class Array:
 
         return cast(self, dtype)
 
-    def sum(self, axes=None, keep_dims=False) -> Array:
-        """Sum array elements over given axes.
+    def sum(self, axes=None, keep_dims=False) -> Tensor:
+        """Sum tensor elements over given axes.
 
         Args:
             axes: Axis or axes along which to sum. Can be int, list of ints, or None (sum all)
             keep_dims: If True, reduced axes are left as dimensions with size 1
 
         Returns:
-            Array with the sum along the specified axes
+            Tensor with the sum along the specified axes
 
         Examples::
 
@@ -534,18 +534,18 @@ class Array:
             arr.sum(axis=0)     # Sum along first axis
             arr.sum(axis=[0,1]) # Sum along first two axes
         """
-        from ..ops.reduce import sum as array_sum
+        from ..ops.reduce import sum as tensor_sum
 
-        return array_sum(self, axes=axes, keep_dims=keep_dims)
+        return tensor_sum(self, axes=axes, keep_dims=keep_dims)
 
-    def reshape(self, shape: Shape) -> Array:
-        """Change the shape of an array without changing its data.
+    def reshape(self, shape: Shape) -> Tensor:
+        """Change the shape of an tensor without changing its data.
 
         Args:
-            shape: New shape for the array
+            shape: New shape for the tensor
 
         Returns:
-            Array with the new shape
+            Tensor with the new shape
 
         Examples::
 
@@ -556,62 +556,62 @@ class Array:
 
         return reshape(arg=self, shape=shape)
 
-    def permute(self, axes: tuple[int, ...]) -> Array:
-        """Permute the dimensions of the array.
+    def permute(self, axes: tuple[int, ...]) -> Tensor:
+        """Permute the dimensions of the tensor.
 
         Args:
             axes: List of integers specifying the new order of dimensions
 
         Returns:
-            Array with dimensions permuted according to the specified axes
+            Tensor with dimensions permuted according to the specified axes
 
         Examples::
 
-            arr.permute([1, 0]) # If arr.shape is (2, 3), this will return an array with shape (3, 2)
+            arr.permute([1, 0]) # If arr.shape is (2, 3), this will return an tensor with shape (3, 2)
         """
         from ..ops.view import permute
 
         return permute(self, axes)
 
-    def transpose(self, axes: tuple[int, ...]) -> Array:
-        """Permute the dimensions of the array.
+    def transpose(self, axes: tuple[int, ...]) -> Tensor:
+        """Permute the dimensions of the tensor.
 
         Args:
             axes: List of integers specifying the new order of dimensions
 
         Returns:
-            Array with dimensions permuted according to the specified axes
+            Tensor with dimensions permuted according to the specified axes
 
         Examples::
 
-            arr.permute([1, 0]) # If arr.shape is (2, 3), this will return an array with shape (3, 2)
+            arr.permute([1, 0]) # If arr.shape is (2, 3), this will return an tensor with shape (3, 2)
         """
         from ..ops.view import permute
 
         return permute(self, axes)
 
     def at(self, key, value):
-        """Update array at specified indices/slices, returning new array."""
+        """Update tensor at specified indices/slices, returning new tensor."""
         from ..ops.binary import add, sub
         from ..ops.view import pad
 
-        # Convert value to Array if needed
-        if not isinstance(value, Array):
-            # Match the dtype of the original array
+        # Convert value to Tensor if needed
+        if not isinstance(value, Tensor):
+            # Match the dtype of the original tensor
             value_np = np.array(value, dtype=self.dtype.to_numpy())
-            value = Array.from_numpy(value_np)
+            value = Tensor.from_numpy(value_np)
         else:
-            # If value is already an Array, ensure it matches our dtype
+            # If value is already an Tensor, ensure it matches our dtype
             if value.dtype != self.dtype:
                 value_np = value.to_numpy().astype(self.dtype.to_numpy())
-                value = Array.from_numpy(value_np)
+                value = Tensor.from_numpy(value_np)
 
         # Handle single slice, integer, or ellipsis
         if isinstance(key, slice | int | type(...)):
             key = (key,)
         elif not isinstance(key, tuple):
             raise TypeError(
-                f"Array indices must be integers, slices, ellipsis, or tuples, got {type(key)}"
+                f"Tensor indices must be integers, slices, ellipsis, or tuples, got {type(key)}"
             )
 
         # Handle ellipsis expansion (same logic as __getitem__)
@@ -655,10 +655,10 @@ class Array:
             try:
                 if value_np.size == np.prod(sliced_part.shape):
                     # Reshape if same number of elements
-                    value = Array.from_numpy(value_np.reshape(sliced_part.shape))
+                    value = Tensor.from_numpy(value_np.reshape(sliced_part.shape))
                 else:
                     # Try broadcasting
-                    value = Array.from_numpy(
+                    value = Tensor.from_numpy(
                         np.broadcast_to(value_np, sliced_part.shape)
                     )
             except:
@@ -669,10 +669,10 @@ class Array:
         # 3. Calculate the difference
         diff = sub(value, sliced_part)
 
-        # 4. Pad the difference to full array shape (using converted slices)
+        # 4. Pad the difference to full tensor shape (using converted slices)
         padded_diff = pad(diff, slices, self.shape)
 
-        # 5. Add to original array
+        # 5. Add to original tensor
         result = add(self, padded_diff)
 
         return result
@@ -681,31 +681,31 @@ class Array:
     def __eq__(self, other) -> bool:
         """Object identity comparison for hashability.
 
-        This returns True only if both Arrays are the same object.
+        This returns True only if both Tensors are the same object.
         For element-wise comparison, use nb.equal(a, b) explicitly.
         """
-        return isinstance(other, Array) and self is other
+        return isinstance(other, Tensor) and self is other
 
     def __ne__(self, other) -> bool:
         """Object identity inequality comparison for hashability.
 
-        This returns True if the Arrays are different objects.
+        This returns True if the Tensors are different objects.
         For element-wise comparison, use nb.not_equal(a, b) explicitly.
         """
         return not self.__eq__(other)
 
-    def set(self, key, value) -> Array:
-        """Set values at specified indices/slices, returning a new array.
+    def set(self, key, value) -> Tensor:
+        """Set values at specified indices/slices, returning a new tensor.
 
-        This is a functional operation that returns a new Array with the specified
-        values updated, leaving the original Array unchanged.
+        This is a functional operation that returns a new Tensor with the specified
+        values updated, leaving the original Tensor unchanged.
 
         Args:
             key: Index specification (int, slice, tuple of indices/slices, ellipsis)
             value: Value(s) to set at the specified location
 
         Returns:
-            New Array with updated values
+            New Tensor with updated values
 
         Examples:
             new_arr = arr.set(1, 99.0)              # Set single element
@@ -715,51 +715,51 @@ class Array:
         """
         return self.at(key, value)
 
-    def _handle_mixed_advanced_indexing(self, key: tuple) -> Array:
-        """Handle mixed indexing with Array indices and slices/integers.
+    def _handle_mixed_advanced_indexing(self, key: tuple) -> Tensor:
+        """Handle mixed indexing with Tensor indices and slices/integers.
 
         Args:
-            key: Tuple containing mix of Array indices, slices, and integers
+            key: Tuple containing mix of Tensor indices, slices, and integers
 
         Returns:
-            Array result of advanced indexing
+            Tensor result of advanced indexing
         """
         from ..ops.indexing import gather
 
         # For now, implement a simplified version that handles the most common case:
-        # Array index in first position, followed by slices/integers
+        # Tensor index in first position, followed by slices/integers
         # More complex cases can be added later
 
-        # Find the first Array index
-        array_index_pos = None
+        # Find the first Tensor index
+        tensor_index_pos = None
         for i, k in enumerate(key):
-            if isinstance(k, Array):
-                if array_index_pos is None:
-                    array_index_pos = i
+            if isinstance(k, Tensor):
+                if tensor_index_pos is None:
+                    tensor_index_pos = i
                 else:
-                    # Multiple Array indices - more complex case
+                    # Multiple Tensor indices - more complex case
                     raise NotImplementedError(
-                        "Multiple Array indices not yet supported. "
+                        "Multiple Tensor indices not yet supported. "
                         "Use gather/scatter operations directly for complex indexing."
                     )
 
-        if array_index_pos is None:
-            # No Array indices found - shouldn't reach here
-            raise ValueError("Expected Array index in mixed indexing")
+        if tensor_index_pos is None:
+            # No Tensor indices found - shouldn't reach here
+            raise ValueError("Expected Tensor index in mixed indexing")
 
-        array_index = key[array_index_pos]
+        tensor_index = key[tensor_index_pos]
 
-        if array_index_pos == 0:
-            # Array index in first position: arr[indices, slice1, slice2, ...]
+        if tensor_index_pos == 0:
+            # Tensor index in first position: arr[indices, slice1, slice2, ...]
             remaining_key = key[1:]
 
             # First apply gather along axis 0
-            gathered = gather(self, array_index, axis=0)
+            gathered = gather(self, tensor_index, axis=0)
 
             # Then apply remaining indexing if any
             if remaining_key:
                 # The remaining key should be applied starting from the first dimension
-                # after the array-indexed dimension. Since we array-indexed dimension 0,
+                # after the tensor-indexed dimension. Since we tensor-indexed dimension 0,
                 # the remaining key applies to dimensions 1, 2, 3, ... of the original shape
                 # which are dimensions 1, 2, 3, ... of the gathered result.
                 # So we need to prepend a slice(None) to cover the new first dimension from gather
@@ -768,103 +768,103 @@ class Array:
             else:
                 return gathered
         else:
-            # Array index not in first position - more complex
+            # Tensor index not in first position - more complex
             # For now, we'll convert to a sequence of operations
             # This is a simplified implementation
             raise NotImplementedError(
-                f"Array index at position {array_index_pos} not yet supported. "
-                "Use gather operation directly or put Array index first."
+                f"Tensor index at position {tensor_index_pos} not yet supported. "
+                "Use gather operation directly or put Tensor index first."
             )
 
     def __setitem__(self, key, value) -> None:
-        """Array assignment using standard Python syntax.
+        """Tensor assignment using standard Python syntax.
 
-        Supports both basic assignment (slices, integers) and advanced assignment (Array indices).
+        Supports both basic assignment (slices, integers) and advanced assignment (Tensor indices).
 
         Examples::
 
             arr[1:3] = value        # Assign to slice
             arr[:, 2:5] = value     # Assign to slice in second dimension
 
-            # Advanced indexing with Array indices:
-            indices = nb.array([0, 2, 1])
+            # Advanced indexing with Tensor indices:
+            indices = nb.tensor([0, 2, 1])
             arr[indices] = value    # Scatter values to specified indices
         """
-        # Convert value to Array if needed
-        if not isinstance(value, Array):
-            from ..ops.creation import array
+        # Convert value to Tensor if needed
+        if not isinstance(value, Tensor):
+            from ..ops.creation import tensor
 
-            value = array(value)
+            value = tensor(value)
 
-        # Check if this is advanced indexing with Array indices
-        if isinstance(key, Array):
-            # Single Array index - use scatter along axis 0
-            self._setitem_with_array_index(key, value, axis=0)
-        elif isinstance(key, tuple) and any(isinstance(k, Array) for k in key):
-            # Mixed indexing with Array indices
+        # Check if this is advanced indexing with Tensor indices
+        if isinstance(key, Tensor):
+            # Single Tensor index - use scatter along axis 0
+            self._setitem_with_tensor_index(key, value, axis=0)
+        elif isinstance(key, tuple) and any(isinstance(k, Tensor) for k in key):
+            # Mixed indexing with Tensor indices
             self._setitem_mixed_advanced_indexing(key, value)
         else:
             # Basic indexing - not implemented for now
             raise NotImplementedError(
                 "Basic slice assignment not yet implemented. "
-                "Use Array indices for scatter operations."
+                "Use Tensor indices for scatter operations."
             )
 
-    def _setitem_with_array_index(
-        self, indices: Array, values: Array, axis: int = 0
+    def _setitem_with_tensor_index(
+        self, indices: Tensor, values: Tensor, axis: int = 0
     ) -> None:
-        """Helper method for setitem with Array indices.
+        """Helper method for setitem with Tensor indices.
 
         Args:
-            indices: Array of indices where to place values
-            values: Array of values to place
+            indices: Tensor of indices where to place values
+            values: Tensor of values to place
             axis: Axis along which to scatter
         """
         from ..ops.indexing import scatter
 
-        # Create new array by scattering values into a copy of self
-        # Note: This creates a new array rather than in-place modification
-        # In-place modification would require mutable arrays
-        new_array = scatter(
+        # Create new tensor by scattering values into a copy of self
+        # Note: This creates a new tensor rather than in-place modification
+        # In-place modification would require mutable tensors
+        new_tensor = scatter(
             target_shape=self.shape, indices=indices, values=values, axis=axis
         )
 
         # Update self's implementation to point to new data
         # This simulates in-place modification
-        self._impl = new_array._impl
+        self._impl = new_tensor._impl
 
-    def _setitem_mixed_advanced_indexing(self, key: tuple, value: Array) -> None:
+    def _setitem_mixed_advanced_indexing(self, key: tuple, value: Tensor) -> None:
         """Helper method for mixed advanced indexing assignment.
 
         Args:
-            key: Tuple containing mix of Array indices, slices, and integers
-            value: Array to assign
+            key: Tuple containing mix of Tensor indices, slices, and integers
+            value: Tensor to assign
         """
         # For now, implement a simplified version
-        # Find the first Array index
-        array_index_pos = None
+        # Find the first Tensor index
+        tensor_index_pos = None
         for i, k in enumerate(key):
-            if isinstance(k, Array):
-                if array_index_pos is None:
-                    array_index_pos = i
+            if isinstance(k, Tensor):
+                if tensor_index_pos is None:
+                    tensor_index_pos = i
                 else:
                     raise NotImplementedError(
-                        "Multiple Array indices not yet supported"
+                        "Multiple Tensor indices not yet supported"
                     )
 
-        if array_index_pos != 0:
+        if tensor_index_pos != 0:
             raise NotImplementedError(
-                "Array index must be in first position for assignment"
+                "Tensor index must be in first position for assignment"
             )
 
-        array_index = key[0]
+        tensor_index = key[0]
         remaining_key = key[1:]
 
         if remaining_key:
             # Need to handle partial assignment like arr[indices, :, slice] = value
             raise NotImplementedError(
-                "Mixed Array index with slices in assignment not yet supported"
+                "Mixed Tensor index with slices in assignment not yet supported"
             )
         else:
             # Simple case: arr[indices] = value
-            self._setitem_with_array_index(array_index, value, axis=0)
+            self._setitem_with_tensor_index(tensor_index, value, axis=0)

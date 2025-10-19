@@ -3,17 +3,17 @@
 ## Signature
 
 ```python
-nabla.squeeze_batch_dims(arg: 'Array', axes: 'list[int] | None') -> 'Array'
+nabla.squeeze_batch_dims(arg: 'Tensor', axes: 'list[int] | None') -> 'Tensor'
 ```
 
 ## Description
 
-Squeeze array by removing batch dimensions of size 1.
+Squeeze tensor by removing batch dimensions of size 1.
 
 ## Parameters
 
-- **`arg`** (`Input array`): axes: List of batch dimension axes to squeeze. If None, returns array unchanged.
+- **`arg`** (`Input tensor`): axes: List of batch dimension axes to squeeze. If None, returns tensor unchanged.
 
 ## Returns
 
-- `Array with specified batch dimensions of size 1 removed`: 
+- `Tensor with specified batch dimensions of size 1 removed`: 

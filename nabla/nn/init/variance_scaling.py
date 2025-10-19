@@ -21,7 +21,7 @@ import numpy as np
 import nabla as nb
 
 
-def he_normal(shape: tuple[int, ...], seed: int | None = None) -> nb.Array:
+def he_normal(shape: tuple[int, ...], seed: int | None = None) -> nb.Tensor:
     """He normal initialization for ReLU networks.
 
     Uses normal distribution with std = sqrt(2/fan_in) which is optimal
@@ -32,7 +32,7 @@ def he_normal(shape: tuple[int, ...], seed: int | None = None) -> nb.Array:
         seed: Random seed for reproducibility
 
     Returns:
-        Initialized parameter array
+        Initialized parameter tensor
     """
     if seed is not None:
         np.random.seed(seed)
@@ -45,10 +45,10 @@ def he_normal(shape: tuple[int, ...], seed: int | None = None) -> nb.Array:
     std = (2.0 / fan_in) ** 0.5
 
     weights = np.random.normal(0.0, std, shape).astype(np.float32)
-    return nb.Array.from_numpy(weights)
+    return nb.Tensor.from_numpy(weights)
 
 
-def he_uniform(shape: tuple[int, ...], seed: int | None = None) -> nb.Array:
+def he_uniform(shape: tuple[int, ...], seed: int | None = None) -> nb.Tensor:
     """He uniform initialization for ReLU networks.
 
     Uses uniform distribution with bound = sqrt(6/fan_in) which is optimal
@@ -59,7 +59,7 @@ def he_uniform(shape: tuple[int, ...], seed: int | None = None) -> nb.Array:
         seed: Random seed for reproducibility
 
     Returns:
-        Initialized parameter array
+        Initialized parameter tensor
     """
     if seed is not None:
         np.random.seed(seed)
@@ -72,10 +72,10 @@ def he_uniform(shape: tuple[int, ...], seed: int | None = None) -> nb.Array:
     bound = (6.0 / fan_in) ** 0.5
 
     weights = np.random.uniform(-bound, bound, shape).astype(np.float32)
-    return nb.Array.from_numpy(weights)
+    return nb.Tensor.from_numpy(weights)
 
 
-def xavier_normal(shape: tuple[int, ...], seed: int | None = None) -> nb.Array:
+def xavier_normal(shape: tuple[int, ...], seed: int | None = None) -> nb.Tensor:
     """Xavier/Glorot normal initialization.
 
     Uses normal distribution with std = sqrt(2/(fan_in + fan_out)) which
@@ -86,7 +86,7 @@ def xavier_normal(shape: tuple[int, ...], seed: int | None = None) -> nb.Array:
         seed: Random seed for reproducibility
 
     Returns:
-        Initialized parameter array
+        Initialized parameter tensor
     """
     if seed is not None:
         np.random.seed(seed)
@@ -102,10 +102,10 @@ def xavier_normal(shape: tuple[int, ...], seed: int | None = None) -> nb.Array:
     std = (2.0 / (fan_in + fan_out)) ** 0.5
 
     weights = np.random.normal(0.0, std, shape).astype(np.float32)
-    return nb.Array.from_numpy(weights)
+    return nb.Tensor.from_numpy(weights)
 
 
-def xavier_uniform(shape: tuple[int, ...], seed: int | None = None) -> nb.Array:
+def xavier_uniform(shape: tuple[int, ...], seed: int | None = None) -> nb.Tensor:
     """Xavier/Glorot uniform initialization.
 
     Uses uniform distribution with bound = sqrt(6/(fan_in + fan_out)) which
@@ -116,7 +116,7 @@ def xavier_uniform(shape: tuple[int, ...], seed: int | None = None) -> nb.Array:
         seed: Random seed for reproducibility
 
     Returns:
-        Initialized parameter array
+        Initialized parameter tensor
     """
     if seed is not None:
         np.random.seed(seed)
@@ -132,10 +132,10 @@ def xavier_uniform(shape: tuple[int, ...], seed: int | None = None) -> nb.Array:
     bound = (6.0 / (fan_in + fan_out)) ** 0.5
 
     weights = np.random.uniform(-bound, bound, shape).astype(np.float32)
-    return nb.Array.from_numpy(weights)
+    return nb.Tensor.from_numpy(weights)
 
 
-def lecun_normal(shape: tuple[int, ...], seed: int | None = None) -> nb.Array:
+def lecun_normal(shape: tuple[int, ...], seed: int | None = None) -> nb.Tensor:
     """LeCun normal initialization.
 
     Uses normal distribution with std = sqrt(1/fan_in) which is optimal
@@ -146,7 +146,7 @@ def lecun_normal(shape: tuple[int, ...], seed: int | None = None) -> nb.Array:
         seed: Random seed for reproducibility
 
     Returns:
-        Initialized parameter array
+        Initialized parameter tensor
     """
     if seed is not None:
         np.random.seed(seed)
@@ -159,10 +159,10 @@ def lecun_normal(shape: tuple[int, ...], seed: int | None = None) -> nb.Array:
     std = (1.0 / fan_in) ** 0.5
 
     weights = np.random.normal(0.0, std, shape).astype(np.float32)
-    return nb.Array.from_numpy(weights)
+    return nb.Tensor.from_numpy(weights)
 
 
-def initialize_mlp_params(layers: list[int], seed: int = 42) -> list[nb.Array]:
+def initialize_mlp_params(layers: list[int], seed: int = 42) -> list[nb.Tensor]:
     """Initialize MLP parameters with specialized strategy for complex functions.
 
     This is the original initialization strategy from mlp_train_jit.py,
@@ -173,7 +173,7 @@ def initialize_mlp_params(layers: list[int], seed: int = 42) -> list[nb.Array]:
         seed: Random seed for reproducibility
 
     Returns:
-        List of parameter arrays [W1, b1, W2, b2, ...]
+        List of parameter tensors [W1, b1, W2, b2, ...]
     """
     np.random.seed(seed)
     params = []
@@ -201,8 +201,8 @@ def initialize_mlp_params(layers: list[int], seed: int = 42) -> list[nb.Array]:
             # Initialize output bias to middle of target range
             b_np = np.ones((1, fan_out), dtype=np.float32) * 0.5
 
-        w = nb.Array.from_numpy(w_np)
-        b = nb.Array.from_numpy(b_np)
+        w = nb.Tensor.from_numpy(w_np)
+        b = nb.Tensor.from_numpy(b_np)
         params.extend([w, b])
 
     return params

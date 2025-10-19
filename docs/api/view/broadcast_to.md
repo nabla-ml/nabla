@@ -3,9 +3,9 @@
 ## Signature
 
 ```python
-nabla.broadcast_to(arg: 'Array', shape: 'Shape') -> 'Array'
+nabla.broadcast_to(arg: 'Tensor', shape: 'Shape') -> 'Tensor'
 ```
 
 ## Description
 
-Broadcast array to target shape.
+Broadcast tensor to target shape.
