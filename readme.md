@@ -1,12 +1,12 @@
 ![alt text](docs/_static/nabla-logo.png)
 
-Nabla is an open-source Scientific Computing library in Python, featuring:
+Nabla is a Machine Learning library for the emerging Mojo/Python ecosystem, featuring:
 
-- Multidimensional tensor computation with strong GPU acceleration
-- JAX-like composable function transformations: `grad`, `vmap`, `jit`, and other automatic differentiation tools
-- Deep integration with the MAX compiler and custom Mojo kernels
+- Gradient computation the PyTorch way (imperatively via .backward())
+- Purely-functional, JAX-like composable function transformations: `grad`, `vmap`, `jit`, etc.
+- Custom differentiable CPU/GPU kernels
 
-For tutorials and API reference, visit: [nablaml.com](https://nablaml.com/index.html) 🤗
+For tutorials and API reference, visit: [nablaml.com](https://nablaml.com/index.html)
 
 ## Installation
 
