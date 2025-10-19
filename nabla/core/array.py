@@ -23,7 +23,8 @@ from pathlib import Path
 from typing import Union
 
 import numpy as np
-from max.driver import CPU, Device, Tensor
+from max.driver import CPU, Device
+from max.driver import Tensor as MAXTensor
 from max.dtype import DType
 from max.graph import TensorValue, TensorValueLike, Value
 
@@ -57,7 +58,7 @@ class Array:
     stage_realization: bool
     kernel_impl_path: Path | None
     custom_kernel_path: Path | None
-    _impl: Union[np.ndarray, Tensor] | None
+    _impl: Union[np.ndarray, MAXTensor] | None
 
     def __init__(
         self,
@@ -92,7 +93,7 @@ class Array:
         self.creator_op: Operation | None = None
 
         if materialize:
-            self._impl = Tensor(dtype, batch_dims + shape, device=device)
+            self._impl = MAXTensor(dtype, batch_dims + shape, device=device)
         else:
             self._impl = None
 
@@ -101,7 +102,7 @@ class Array:
         """Get the logical device of this Array. This can differ from the logical device and will show the actual device the buffer lives on."""
         if self._impl is None:
             return self.logical_device
-        if isinstance(self._impl, Tensor):
+        if isinstance(self._impl, MAXTensor):
             return self._impl.device
         elif isinstance(self._impl, np.ndarray):
             return _DEFAULT_CPU
@@ -109,20 +110,20 @@ class Array:
             raise TypeError(f"Unsupported implementation type: {type(self._impl)}")
 
     @property
-    def impl(self) -> Tensor | None:
+    def impl(self) -> MAXTensor | None:
         """Get the max.Tensor representation of this Array. If the underlying _impl field is a Numpy array, convert it to a Tensor."""
-        if isinstance(self._impl, Tensor):
+        if isinstance(self._impl, MAXTensor):
             return self._impl
         elif isinstance(self._impl, np.ndarray):
             # Convert numpy array to Tensor
-            val = Tensor.from_numpy(self._impl)
+            val = MAXTensor.from_numpy(self._impl)
             if val.device != self.logical_device:
                 val = val.to(self.logical_device)
             return val
         else:
             return None
 
-    def impl_(self, value: Union[np.ndarray, Tensor] | None) -> None:
+    def impl_(self, value: Union[np.ndarray, MAXTensor] | None) -> None:
         """Set the implementation of this Array to a Numpy array or Tensor."""
         self._impl = value
 
@@ -137,9 +138,9 @@ class Array:
         return size
 
     @classmethod
-    def from_impl(cls, impl: Tensor, name: str = "") -> Array:
-        """Create Array from existing Tensor implementation."""
-        if not isinstance(impl, Tensor):
+    def from_impl(cls, impl: MAXTensor, name: str = "") -> Array:
+        """Create Array from existing max.Tensor implementation."""
+        if not isinstance(impl, MAXTensor):
             raise TypeError(f"Data must be a MAX Tensor, got {type(impl)}")
         if impl.shape is None:
             raise ValueError("Cannot create Array from None shape Tensor")
@@ -192,7 +193,7 @@ class Array:
             raise ValueError("Cannot get NumPy array from None impl")
         if isinstance(self._impl, np.ndarray):
             return self._impl
-        if not isinstance(self._impl, Tensor):
+        if not isinstance(self._impl, MAXTensor):
             raise TypeError(
                 f"Cannot convert Array with impl type {type(self._impl)} to NumPy array"
             )
@@ -216,11 +217,11 @@ class Array:
         # if np_array.dtype == bool and np_array.shape == ():
         #     # For scalar boolean, convert to float32 to avoid the bug
         #     float_array = np_array.astype(np.float32)
-        #     array._impl = float_array#Tensor.from_numpy(float_array)
+        #     array._impl = float_array#MAXTensor.from_numpy(float_array)
         #     # Update the dtype to reflect what we actually stored
         #     array.dtype = DType.float32
         # else:
-        array._impl = np_array  # Tensor.from_numpy(np_array)
+        array._impl = np_array  # MAXTensor.from_numpy(np_array)
 
         # array.logical_device = _DEFAULT_CPU
         return array

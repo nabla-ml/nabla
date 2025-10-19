@@ -16,7 +16,8 @@
 from __future__ import annotations
 
 import numpy as np
-from max.driver import CPU, Device, Tensor
+from max.driver import CPU, Device
+from max.driver import Tensor as MAXTensor
 from max.dtype import DType
 from max.graph import DeviceRef, TensorType, TensorValue, ops
 
@@ -223,7 +224,7 @@ class RandNOp(RandomOp):
         np_result = np.random.normal(
             loc=self.mean, scale=self.std, size=output.shape
         ).astype(DType.to_numpy(output.dtype))
-        output.impl_(Tensor.from_numpy(np_result).to(output.logical_device))
+        output.impl_(MAXTensor.from_numpy(np_result).to(output.logical_device))
 
 
 class RandUniformOp(RandomOp):
@@ -263,7 +264,7 @@ class RandUniformOp(RandomOp):
         np_result = np.random.uniform(
             low=self.lower, high=self.upper, size=output.shape
         ).astype(DType.to_numpy(output.dtype))
-        output.impl_(Tensor.from_numpy(np_result).to(output.logical_device))
+        output.impl_(MAXTensor.from_numpy(np_result).to(output.logical_device))
 
 
 def array(
@@ -414,7 +415,7 @@ class ArangeOp(Operation):
         """Eager-mode execution using numpy."""
         # We can reuse the numpy array we created for the shape calculation
         output.impl_(
-            Tensor.from_numpy(self._np_arange_for_shape).to(output.logical_device)
+            MAXTensor.from_numpy(self._np_arange_for_shape).to(output.logical_device)
         )
 
     def vjp_rule(
