@@ -419,7 +419,7 @@ class Trace:
         if inputs is None:
             if not outputs:
                 raise ValueError("Cannot infer trace inputs without outputs")
-            inputs = self._discover_traced_inputs(outputs)
+            inputs = self._discover_traced_inputs_requiring_grad(outputs)
 
         self.inputs = inputs
         self.outputs = outputs
@@ -612,12 +612,17 @@ class Trace:
     def from_outputs(cls, outputs: Any) -> Trace:
         """Create a trace by discovering traced leaf inputs from outputs."""
         output_tensors = _extract_tensors_from_pytree(outputs)
-        inputs = cls._discover_traced_inputs(output_tensors)
+        inputs = cls._discover_traced_inputs_requiring_grad(output_tensors)
         return cls(inputs, output_tensors)
 
     @staticmethod
-    def _discover_traced_inputs(output_tensors: list[Tensor]) -> list[Tensor]:
-        """Find traced leaf nodes that serve as inputs for a computation graph."""
+    def _discover_traced_inputs_requiring_grad(output_tensors: list[Tensor]) -> list[Tensor]:
+        """Find all nodes with requires_grad=True in the computation graph.
+        
+        This discovers all tensors that have been explicitly marked with requires_grad=True,
+        regardless of whether they are leaf nodes or intermediate computations. This allows
+        gradient accumulation on any node in the graph that the user has marked.
+        """
         discovered: list[Tensor] = []
         discovered_ids: set[int] = set()
         visited: set[int] = set()
@@ -628,14 +633,14 @@ class Trace:
                 return
             visited.add(node_id)
 
+            # Recurse into children first
             for arg in getattr(node, "args", ()) or ():
                 if isinstance(arg, Tensor):
                     _dfs(arg)
 
-            is_traced = getattr(node, "traced", False)
-            node_args = getattr(node, "args", ()) or ()
-
-            if is_traced and not node_args:
+            # Check if this node requires gradients (explicit True check)
+            requires_grad = getattr(node, "requires_grad", None)
+            if requires_grad is True:
                 if node_id not in discovered_ids:
                     discovered.append(node)
                     discovered_ids.add(node_id)
@@ -823,6 +828,108 @@ def pullback(
     )
 
     return gradients_in_input_structure
+
+
+def grad(
+    outputs: Any,
+    inputs: Any,
+    grad_outputs: Any | None = None,
+    create_graph: bool = False,
+) -> Any:
+    """Compute gradients of outputs with respect to inputs (imperative PyTorch-style API).
+    
+    This is similar to PyTorch's torch.autograd.grad() function. It computes and returns
+    gradients without accumulating them in the .grad attribute (unlike backward()).
+    
+    Args:
+        outputs: Output tensor(s) to differentiate. Can be a single tensor or a sequence/tuple.
+        inputs: Input tensor(s) to compute gradients for. Can be a single tensor or sequence/tuple.
+        grad_outputs: Gradient of outputs (cotangents). If None, defaults to ones_like for scalar outputs.
+        create_graph: If True, the gradient computation will be traceable for higher-order derivatives.
+    
+    Returns:
+        Gradients with respect to inputs. Returns a single tensor if inputs is a single tensor,
+        otherwise returns a tuple of tensors matching the structure of inputs.
+    
+    Examples:
+        >>> import nabla as nb
+        >>> from nabla.transforms import autograd
+        >>> 
+        >>> # Simple scalar output
+        >>> x = nb.tensor([1.0, 2.0, 3.0])
+        >>> x.requires_grad_(True)
+        >>> y = nb.sum(x ** 2)
+        >>> grad_x = autograd(y, x)  # Computes dy/dx
+        
+        >>> # Multiple inputs
+        >>> a = nb.tensor([1.0, 2.0])
+        >>> b = nb.tensor([3.0, 4.0])
+        >>> a.requires_grad_(True)
+        >>> b.requires_grad_(True)
+        >>> z = nb.sum(a * b)
+        >>> grad_a, grad_b = autograd(z, [a, b])
+        
+        >>> # Custom grad_outputs
+        >>> output = a ** 2
+        >>> grad_outputs = nb.ones_like(output) * 0.5
+        >>> grads = autograd(output, [a, b], grad_outputs=grad_outputs)
+    """
+    
+    # Normalize inputs to a list and remember if it was a single tensor
+    if isinstance(inputs, Tensor):
+        input_list = [inputs]
+        is_single_input = True
+    elif isinstance(inputs, (list, tuple)):
+        input_list = list(inputs)
+        is_single_input = False
+    else:
+        raise TypeError(f"inputs must be a Tensor or sequence of Tensors, got {type(inputs)}")
+    
+    # Normalize outputs to a list
+    if isinstance(outputs, Tensor):
+        output_list = [outputs]
+    elif isinstance(outputs, (list, tuple)):
+        output_list = list(outputs)
+    else:
+        raise TypeError(f"outputs must be a Tensor or sequence of Tensors, got {type(outputs)}")
+    
+    # Handle grad_outputs (cotangents)
+    if grad_outputs is None:
+        # Default to ones_like for each output
+        from ..ops.creation import ones_like
+        cotangent_list = [ones_like(out) for out in output_list]
+    else:
+        # Normalize grad_outputs to a list
+        if isinstance(grad_outputs, Tensor):
+            cotangent_list = [grad_outputs]
+        elif isinstance(grad_outputs, (list, tuple)):
+            cotangent_list = list(grad_outputs)
+        else:
+            raise TypeError(f"grad_outputs must be a Tensor or sequence of Tensors, got {type(grad_outputs)}")
+        
+        # Validate cotangents match outputs
+        if len(cotangent_list) != len(output_list):
+            raise ValueError(
+                f"Number of grad_outputs ({len(cotangent_list)}) must match "
+                f"number of outputs ({len(output_list)})"
+            )
+    
+    # Compute gradients using the existing pullback infrastructure
+    gradient_tensors = _compute_pullback(input_list, output_list, cotangent_list)
+    
+    # Clean up computation graph unless create_graph=True
+    if not create_graph:
+        trace = Trace(input_list, output_list)
+        traced_nodes = trace.get_traced_nodes()
+        for node in traced_nodes:
+            node.args = []
+            node.traced = False
+    
+    # Return in the same format as inputs (single tensor or tuple)
+    if is_single_input:
+        return gradient_tensors[0]
+    else:
+        return tuple(gradient_tensors)
 
 
 def _compute_pushfwd(inputs, outputs, tangents, trace=None):

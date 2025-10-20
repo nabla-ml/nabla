@@ -52,6 +52,7 @@ class Tensor:
     vjp_rule: VJPRule | None
     jvp_rule: JVPRule | None
     traced: bool
+    requires_grad: bool | None
     tangent: Tensor | None
     cotangent: Tensor | None
     grad: Tensor | None
@@ -83,6 +84,7 @@ class Tensor:
         self.traced: bool = False
         self.tangent: Tensor | None = None
         self.cotangent: Tensor | None = None
+        self.requires_grad: bool | None = None
         self.grad: Tensor | None = None
         self.stage_realization: bool = False
         self.kernel_impl_path: Path | None = None
@@ -277,10 +279,15 @@ class Tensor:
 
         backward_transform(self, grad, retain_graph=retain_graph)
 
-    def requires_grad(self, val: bool = True) -> None:
-        """Opt into or out of gradient tracking for imperative workflows."""
-
+    def requires_grad_(self, val: bool = True) -> Tensor:
+        """Opt into or out of gradient tracking for imperative workflows.
+        
+        This is an in-place operation that returns self for method chaining.
+        Similar to PyTorch's requires_grad_() method.
+        """
+        self.requires_grad = bool(val)
         self.traced = bool(val)
+        return self
 
     # Operator overloading methods
     def __add__(self, other) -> Tensor:

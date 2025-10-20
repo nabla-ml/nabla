@@ -7,5 +7,6 @@ from .jit import jit as jit
 from .jvp import jvp as jvp
 from .utils import xpr as xpr
 from .utils import backward as backward
+from .utils import grad as autograd  # PyTorch-style imperative grad
 from .vjp import vjp as vjp
 from .vmap import vmap as vmap
