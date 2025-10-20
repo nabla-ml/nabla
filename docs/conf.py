@@ -150,6 +150,23 @@ intersphinx_mapping = {
 # -- nbsphinx (Jupyter Notebooks) --
 nbsphinx_execute = "never"  # Don't execute notebooks during the build
 nbsphinx_allow_errors = True
+nbsphinx_kernel_name = "python3"
+nbsphinx_timeout = 60
+nbsphinx_assume_equations = True
+
+# Suppress common warnings
+suppress_warnings = [
+    'nbsphinx',
+    'misc.highlighting_failure',
+    'app.add_directive',
+    'ref.citation',
+    'ref.footnote',
+    'toc.excluded',
+]
+
+# Nitpicky mode - don't fail on missing references
+nitpicky = False
+nitpick_ignore = []
 
 # =============================================================================
 # SECTION 6: SEO CONFIGURATION

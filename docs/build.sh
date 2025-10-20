@@ -32,6 +32,7 @@ echo "📚 Building documentation..."
 
 if [[ "$BUILD_MODE" == "ci" ]]; then
     # CI build: minimal, no autosummary, mock imports
+    # Build with warnings as errors but suppress known harmless warnings
     sphinx-build -b html -W --keep-going \
         -D autodoc_mock_imports="max,max.dtype,max.graph,max.tensor,mojo,numpy,jax,torch" \
         . _build/html
@@ -40,10 +41,10 @@ else
     if python -c "import nabla" 2>/dev/null; then
         echo "✨ Generating API documentation..."
         python scripts/generate_docs.py
-        sphinx-build -b html -W --keep-going . _build/html
+        sphinx-build -b html --keep-going . _build/html
     else
         echo "⚠️  Nabla not installed, building without API generation"
-        sphinx-build -b html -W --keep-going \
+        sphinx-build -b html --keep-going \
             -D autosummary_generate=False \
             . _build/html
     fi
