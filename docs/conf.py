@@ -162,6 +162,7 @@ suppress_warnings = [
     'ref.citation',
     'ref.footnote',
     'toc.excluded',
+    'toc.not_readable',
 ]
 
 # Nitpicky mode - don't fail on missing references
