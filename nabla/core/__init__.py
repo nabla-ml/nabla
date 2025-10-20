@@ -19,3 +19,7 @@
 
 All exports are auto-discovered by the main package.
 """
+
+from .tensor import Tensor
+
+__all__ = ["Tensor"]
