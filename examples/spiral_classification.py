@@ -32,7 +32,7 @@ import numpy as np
 from matplotlib.colors import LinearSegmentedColormap  # type: ignore
 
 import nabla as nb
-from nabla.nn.layers.activations import log_softmax
+from nabla.nn.functional.layers.activations import log_softmax
 
 # =============================================================================
 # DATA GENERATION & PREPROCESSING (NumPy)

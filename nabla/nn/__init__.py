@@ -13,13 +13,52 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
-"""Neural Network module for Nabla."""
+"""Neural Network module for Nabla.
 
+This module provides two APIs:
+
+1. **Imperative API (PyTorch-like)**: For imperative, object-oriented programming
+   - Module: Base class for neural network modules
+   - Sequential, ModuleList, ModuleDict: Container classes
+   - Linear: Fully-connected layer
+   - SGD, Adam: Optimizers
+   
+   Example:
+       >>> from nabla.nn import Module, Linear, Sequential, SGD
+       >>> 
+       >>> class MLP(Module):
+       ...     def __init__(self):
+       ...         super().__init__()
+       ...         self.layers = Sequential(
+       ...             Linear(10, 20),
+       ...             Linear(20, 10)
+       ...         )
+       ...     def forward(self, x):
+       ...         return self.layers(x)
+       >>> 
+       >>> model = MLP()
+       >>> optimizer = SGD(model.parameters(), lr=0.01)
+
+2. **Functional API (JAX-like)**: For functional programming with pure functions
+   - See nabla.nn.functional for loss functions, optimizers, initializers, etc.
+"""
+
+# ============================================================================
+# IMPERATIVE API (PyTorch-like)
+# ============================================================================
+from .module import Module
+from .containers import Sequential, ModuleList, ModuleDict
+from .optim import Optimizer, SGD, Adam
+from .modules import Linear
+
+# ============================================================================
+# FUNCTIONAL API (JAX-like) - Legacy/existing functionality
+# ============================================================================
 # Import submodules for easy access
-from . import architectures, init, layers, losses, optim, utils
-from .architectures import MLPBuilder, create_mlp_config
-from .init import he_normal, initialize_mlp_params, lecun_normal, xavier_normal
-from .layers import (
+# from . import architectures, init, layers, losses, optim, utils
+from .functional.architectures import MLPBuilder, create_mlp_config
+from .functional.init import he_normal, initialize_mlp_params, lecun_normal, xavier_normal
+from .functional.layers import (
     gelu,
     leaky_relu,
     linear_forward,
@@ -35,7 +74,7 @@ from .layers import (
 )
 
 # Import commonly used functions for convenience
-from .losses import (
+from .functional.losses import (
     binary_cross_entropy_loss,
     cross_entropy_loss,
     huber_loss,
@@ -44,7 +83,7 @@ from .losses import (
     softmax_cross_entropy_loss,
     sparse_cross_entropy_loss,
 )
-from .optim import (
+from .functional.optim import (
     adam_step,
     adamw_step,
     cosine_annealing_schedule,
@@ -56,7 +95,7 @@ from .optim import (
     sgd_step,
     warmup_cosine_schedule,
 )
-from .utils import (
+from .functional.utils import (
     accuracy,
     create_dataset,
     create_sin_dataset,
@@ -75,14 +114,35 @@ from .utils import (
 )
 
 __all__ = [
-    # Submodules
+    # ========================================================================
+    # IMPERATIVE API
+    # ========================================================================
+    # Base classes
+    "Module",
+    # Containers
+    "Sequential",
+    "ModuleList",
+    "ModuleDict",
+    # Layers
+    "Linear",
+    # Optimizers
+    "Optimizer",
+    "SGD",
+    "Adam",
+    
+    # ========================================================================
+    # FUNCTIONAL API - Submodules
+    # ========================================================================
     "losses",
     "optim",
     "init",
     "layers",
     "architectures",
     "utils",
-    # Commonly used functions
+    
+    # ========================================================================
+    # FUNCTIONAL API - Commonly used functions
+    # ========================================================================
     # Loss functions
     "mean_squared_error",
     "mean_absolute_error",

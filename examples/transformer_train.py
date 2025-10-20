@@ -62,7 +62,7 @@ from typing import Any
 import numpy as np
 
 import nabla as nb
-from nabla.nn.layers.activations import log_softmax
+from nabla.nn.functional.layers.activations import log_softmax
 
 # ============================================================================
 # CONFIGURATION
