@@ -12,7 +12,7 @@ import nabla
 import nabla.nn
 
 
-def generate_markdown(name, obj, module_path, is_nn=False):
+def generate_markdown(name, obj, module_path, prefix='nabla.'):
     """Generates markdown documentation for a function or class."""
     md = [f"# {name}\n"]
     
@@ -20,9 +20,6 @@ def generate_markdown(name, obj, module_path, is_nn=False):
     docstring = inspect.getdoc(obj)
     if not docstring:
         docstring = f"No documentation available for `{name}`."
-    
-    # Generate signature with proper prefix
-    prefix = "nabla.nn." if is_nn else "nabla."
     
     md.append("## Signature\n")
     if inspect.isclass(obj):
@@ -39,9 +36,68 @@ def generate_markdown(name, obj, module_path, is_nn=False):
     # Module path
     md.append(f"**Source**: `{module_path}`\n")
     
-    # Add the entire docstring as-is
-    # The >>> syntax will be automatically highlighted by Sphinx
-    md.append(docstring)
+    # Process docstring to properly format code examples
+    # Convert doctest-style examples to proper code blocks
+    docstring_lines = docstring.split('\n')
+    processed_lines = []
+    in_example = False
+    example_buffer = []
+    
+    for line in docstring_lines:
+        # Detect example sections (both "Examples" and "Example")
+        if line.strip().startswith('Examples') or line.strip().startswith('Example'):
+            if line.strip() in ['Examples', 'Example', 'Examples:', 'Example:', 'Examples\n-------', 'Example\n-------']:
+                processed_lines.append(line)
+                in_example = True
+                continue
+        
+        # Check if we're at a new section (exits example mode)
+        if in_example and line.strip() and not line.startswith(' ') and line.strip().endswith('---'):
+            # This is a new section header
+            if example_buffer:
+                processed_lines.append('```python')
+                processed_lines.extend(example_buffer)
+                processed_lines.append('```')
+                example_buffer = []
+            in_example = False
+            processed_lines.append(line)
+            continue
+        
+        if in_example:
+            stripped = line.strip()
+            # Start collecting code when we see >>> or ...
+            if stripped.startswith('>>>') or (stripped.startswith('...') and example_buffer):
+                # Remove the >>> or ... prefix but keep indentation structure
+                if stripped.startswith('>>>'):
+                    code_line = stripped[4:]  # Remove '>>> '
+                elif stripped.startswith('...'):
+                    code_line = stripped[4:]  # Remove '... '
+                example_buffer.append(code_line)
+            elif example_buffer and stripped and not stripped.startswith('>>>'):
+                # This might be output or a continuation, end the current code block
+                processed_lines.append('```python')
+                processed_lines.extend(example_buffer)
+                processed_lines.append('```')
+                processed_lines.append(line)
+                example_buffer = []
+            else:
+                # Regular line in examples section (like "Usage as decorator:")
+                if example_buffer:
+                    processed_lines.append('```python')
+                    processed_lines.extend(example_buffer)
+                    processed_lines.append('```')
+                    example_buffer = []
+                processed_lines.append(line)
+        else:
+            processed_lines.append(line)
+    
+    # Don't forget remaining buffered code
+    if example_buffer:
+        processed_lines.append('```python')
+        processed_lines.extend(example_buffer)
+        processed_lines.append('```')
+    
+    md.append('\n'.join(processed_lines))
     md.append("\n")
     
     return '\n'.join(md)
@@ -52,7 +108,7 @@ def main():
     project_root = Path(__file__).parent.parent.parent
     api_dir = project_root / 'docs' / 'api'
     
-    print("Discovering public API from nabla.__all__ and nabla.nn.__all__...")
+    print("Discovering public API from nabla modules...")
     
     # Clean up old docs
     if api_dir.exists():
@@ -65,114 +121,70 @@ def main():
     
     api_dir.mkdir(exist_ok=True)
     
-    # Organize items by category
+    # Organize items by their actual module path to preserve structure
+    # Key: module path (e.g., 'nn/functional/losses'), Value: list of (item_name, obj, module_name, prefix)
     categories = defaultdict(list)
     
-    # Get all public items from nabla (main module)
-    all_items = nabla.__all__
-    print(f"Found {len(all_items)} public items in nabla.__all__")
+    # Define modules to process with their prefixes
+    modules_to_process = [
+        (nabla, nabla.__all__, 'nabla.'),     # Main nabla module
+        (nabla.nn, nabla.nn.__all__, 'nabla.nn.'),  # Neural network module
+    ]
     
-    for item_name in sorted(all_items):
-        try:
-            # Get the actual object
-            obj = getattr(nabla, item_name)
-            
-            # Determine the source module
-            module_name = getattr(obj, '__module__', 'unknown')
-            
-            # Simplify module path for categorization
-            # Only use the first level after 'nabla.' (e.g., 'core', 'transforms', 'ops')
-            if module_name.startswith('nabla.'):
-                parts = module_name.replace('nabla.', '').split('.')
-                category = parts[0] if parts else 'other'
-            else:
-                category = 'other'
-            
-            # Skip 'other' category - not interesting
-            if category == 'other':
+    for module, all_items, default_prefix in modules_to_process:
+        module_name_str = module.__name__
+        print(f"Found {len(all_items)} public items in {module_name_str}.__all__")
+        
+        # Skip submodule names that are not actual objects
+        submodule_names = {'losses', 'optim', 'init', 'layers', 'architectures', 'utils'}
+        
+        for item_name in sorted(all_items):
+            # Skip submodule names
+            if item_name in submodule_names:
+                print(f"  - Skipping submodule name: {item_name}")
                 continue
             
-            categories[category].append((item_name, obj, module_name))
-            
-        except Exception as e:
-            print(f"  - WARNING: Could not process '{item_name}': {e}")
-            continue
-    
-    # Get all public items from nabla.nn
-    nn_items = nabla.nn.__all__
-    print(f"Found {len(nn_items)} public items in nabla.nn.__all__")
-    
-    # Skip submodule names - they're not documentable items
-    submodule_names = {'losses', 'optim', 'init', 'layers', 'architectures', 'utils'}
-    
-    for item_name in sorted(nn_items):
-        # Skip submodule names
-        if item_name in submodule_names:
-            print(f"  - Skipping submodule name: {item_name}")
-            continue
-            
-        try:
-            # Get the actual object from nabla.nn
-            obj = getattr(nabla.nn, item_name)
-            
-            # Determine the source module - this tells us where the item is ACTUALLY defined
-            module_name = getattr(obj, '__module__', 'unknown')
-            
-            # Map the source module to documentation category
-            # The category should match the actual file structure in nabla/nn/
-            
-            if module_name.startswith('nabla.nn.'):
-                # Remove 'nabla.nn.' prefix to get relative path
-                relative_path = module_name.replace('nabla.nn.', '')
-                parts = relative_path.split('.')
+            try:
+                # Get the actual object
+                obj = getattr(module, item_name)
                 
-                if parts[0] == 'functional':
-                    # Items from nabla/nn/functional/* subdirectories
-                    # e.g., nabla.nn.functional.losses.regression -> nn/functional/losses
-                    if len(parts) >= 2:
-                        category = f'nn/functional/{parts[1]}'
+                # Determine the source module
+                obj_module_name = getattr(obj, '__module__', 'unknown')
+                
+                # Build the category path based on the actual module structure
+                # Example: nabla.nn.functional.losses.regression -> nn/functional/losses
+                # Example: nabla.ops.binary -> ops
+                # Example: nabla.transforms.grad -> transforms
+                if obj_module_name.startswith('nabla.'):
+                    # Remove 'nabla.' prefix
+                    relative_path = obj_module_name.replace('nabla.', '')
+                    parts = relative_path.split('.')
+                    
+                    # Build category based on actual module structure
+                    if len(parts) == 1:
+                        # Top-level module file (e.g., nabla.core.tensor)
+                        category = parts[0]
+                    elif len(parts) == 2:
+                        # Module file in subdirectory (e.g., nabla.nn.module, nabla.ops.binary)
+                        # Just use top-level (nn, ops, etc.)
+                        category = parts[0]
                     else:
-                        category = 'nn/functional'
-                elif parts[0] == 'modules':
-                    # Items from nabla/nn/modules/*
-                    category = 'nn/modules'
-                elif parts[0] == 'module':
-                    # Items from module.py -> nn/module
-                    category = 'nn/module'
-                elif parts[0] == 'containers':
-                    # Items from containers.py -> nn/containers
-                    category = 'nn/containers'
-                elif parts[0] == 'optim':
-                    # Items from optim.py -> nn/optim
-                    category = 'nn/optim'
+                        # Deeper structure (e.g., nabla.nn.functional.losses.regression)
+                        # Preserve the structure: nn/functional/losses
+                        category = '/'.join(parts[:-1])  # Remove the file name, keep directory structure
                 else:
-                    # Default fallback
-                    category = 'nn/other'
-            else:
-                # For JIT-wrapped functions (show as nabla.transforms.jit), 
-                # we need to infer the category from context
-                # Check if it's imported from functional submodules based on name patterns
-                if any(x in item_name.lower() for x in ['loss', 'cross_entropy', 'mse', 'mae']):
-                    category = 'nn/functional/losses'
-                elif any(x in item_name.lower() for x in ['accuracy', 'precision', 'recall', 'f1', 'metric', 'dropout', 'regularization', 'dataset', 'gradient_clipping']):
-                    category = 'nn/functional/utils'
-                elif any(x in item_name.lower() for x in ['step', 'schedule', 'init_adam', 'init_sgd']):
-                    category = 'nn/functional/optim'
-                elif any(x in item_name.lower() for x in ['relu', 'sigmoid', 'tanh', 'gelu', 'softmax', 'forward', 'activation']):
-                    category = 'nn/functional/layers'
-                elif any(x in item_name.lower() for x in ['he_', 'xavier_', 'lecun_', 'initialize']):
-                    category = 'nn/functional/init'
-                elif any(x in item_name.lower() for x in ['mlp', 'builder', 'config']):
-                    category = 'nn/functional/architectures'
-                else:
-                    # Default fallback - put in modules
-                    category = 'nn/modules'
-            
-            categories[category].append((item_name, obj, module_name))
-            
-        except Exception as e:
-            print(f"  - WARNING: Could not process 'nn.{item_name}': {e}")
-            continue
+                    # Unknown module, skip
+                    continue
+                
+                # Use the prefix from the module we're processing
+                prefix = default_prefix
+                
+                # Store the item with its category (preserving module structure)
+                categories[category].append((item_name, obj, obj_module_name, prefix))
+                
+            except Exception as e:
+                print(f"  - WARNING: Could not process '{item_name}': {e}")
+                continue
     
     print(f"\nGenerating documentation for {len(categories)} categories...")
     
@@ -183,103 +195,84 @@ def main():
         
         print(f"Processing {category} ({len(items)} items)")
         
-        is_nn_category = category.startswith('nn')
-        
-        for item_name, obj, module_name in items:
+        for item_name, obj, module_name, prefix in items:
             try:
-                markdown_content = generate_markdown(item_name, obj, module_name, is_nn=is_nn_category)
+                markdown_content = generate_markdown(item_name, obj, module_name, prefix=prefix)
                 output_file = category_dir / f"{item_name}.md"
                 output_file.write_text(markdown_content, encoding='utf-8')
                 print(f"  ✓ {item_name}")
             except Exception as e:
                 print(f"  ✗ {item_name}: {e}")
         
-        # Generate category index
-        category_index_rst = [category.replace('/', ' / ').title()]
+        # Generate category index with a nice title
+        category_title = category.replace('/', ' / ').replace('_', ' ').title()
+        category_index_rst = [category_title]
         category_index_rst.append("=" * len(category_index_rst[0]))
         category_index_rst.append("\n.. toctree::")
         category_index_rst.append("   :maxdepth: 1\n")
-        for item_name, _, _ in sorted(items):
+        for item_name, _, _, _ in sorted(items):
             category_index_rst.append(f"   {item_name}.md")
         
         category_index_file = category_dir / "index.rst"
         category_index_file.write_text('\n'.join(category_index_rst), encoding='utf-8')
     
-    # Generate main index
+    # Build hierarchical index structure
+    # Group categories by their parent directories to create proper hierarchy
+    print("\nBuilding hierarchical index structure...")
+    
+    # Collect all unique directory paths
+    all_dirs = set()
+    for category in categories.keys():
+        parts = category.split('/')
+        for i in range(len(parts)):
+            all_dirs.add('/'.join(parts[:i+1]))
+    
+    # Create index files for intermediate directories
+    for dir_path in sorted(all_dirs):
+        dir_parts = dir_path.split('/')
+        dir_full_path = api_dir / dir_path
+        
+        # Skip if this is a leaf category (already has an index)
+        if dir_path in categories:
+            continue
+        
+        # Find all immediate children (both subdirs and leaf categories)
+        children = []
+        for other_dir in sorted(all_dirs):
+            other_parts = other_dir.split('/')
+            # Check if other_dir is an immediate child
+            if len(other_parts) == len(dir_parts) + 1 and other_dir.startswith(dir_path + '/'):
+                children.append(other_parts[-1])
+        
+        if children:
+            dir_full_path.mkdir(parents=True, exist_ok=True)
+            dir_title = dir_parts[-1].replace('_', ' ').title()
+            index_rst = [dir_title]
+            index_rst.append("=" * len(index_rst[0]))
+            index_rst.append("\n.. toctree::")
+            index_rst.append("   :maxdepth: 1\n")
+            for child in sorted(children):
+                index_rst.append(f"   {child}/index")
+            
+            index_file = dir_full_path / "index.rst"
+            index_file.write_text('\n'.join(index_rst), encoding='utf-8')
+            print(f"  Created index for {dir_path}/")
+    
+    # Generate main API index with top-level categories
     print("\nGenerating main API index...")
+    top_level_categories = sorted(set(cat.split('/')[0] for cat in categories.keys()))
+    
     main_index_rst = ["API Reference"]
     main_index_rst.append("=" * len(main_index_rst[0]))
     main_index_rst.append("\nComplete API reference for Nabla.\n")
     main_index_rst.append(".. toctree::")
     main_index_rst.append("   :maxdepth: 2\n")
     
-    # Group categories by top-level module
-    top_level_categories = set()
-    for category in sorted(categories.keys()):
-        top_level = category.split('/')[0]
-        top_level_categories.add(top_level)
-    
-    # Add top-level categories to main index
-    for top_level in sorted(top_level_categories):
-        if top_level == 'nn':
-            # Special handling for nn - create a parent index
-            main_index_rst.append(f"   {top_level}/index")
-        else:
-            # Other modules - direct link to their index
-            main_index_rst.append(f"   {top_level}/index")
+    for top_category in top_level_categories:
+        main_index_rst.append(f"   {top_category}/index")
     
     main_index_file = api_dir / "index.rst"
     main_index_file.write_text('\n'.join(main_index_rst), encoding='utf-8')
-    
-    # Generate nn parent index if we have nn categories
-    nn_categories = [cat for cat in categories.keys() if cat.startswith('nn')]
-    if nn_categories:
-        print("\nGenerating nn parent index...")
-        nn_index_rst = ["Nn"]
-        nn_index_rst.append("=" * len(nn_index_rst[0]))
-        nn_index_rst.append("\nNeural Network module.\n")
-        nn_index_rst.append(".. toctree::")
-        nn_index_rst.append("   :maxdepth: 2\n")
-        
-        # Group nn subcategories
-        nn_subcats = {}
-        for cat in sorted(nn_categories):
-            parts = cat.split('/')
-            if len(parts) == 2:
-                # nn/modules or nn/optim - direct subcategory
-                nn_subcats[parts[1]] = cat
-            elif len(parts) == 3:
-                # nn/functional/losses - needs functional parent
-                if 'functional' not in nn_subcats:
-                    nn_subcats['functional'] = []
-                if isinstance(nn_subcats['functional'], list):
-                    nn_subcats['functional'].append(cat)
-                else:
-                    nn_subcats['functional'] = [cat]
-        
-        # Add direct subcategories (modules, optim)
-        for subcat in sorted([k for k, v in nn_subcats.items() if isinstance(v, str)]):
-            cat = nn_subcats[subcat]
-            nn_index_rst.append(f"   {cat.replace('nn/', '')}/index")
-        
-        # Add functional parent if exists
-        if 'functional' in nn_subcats and isinstance(nn_subcats['functional'], list):
-            nn_index_rst.append(f"   functional/index")
-            
-            # Create functional parent index
-            func_index_rst = ["Functional"]
-            func_index_rst.append("=" * len(func_index_rst[0]))
-            func_index_rst.append("\nFunctional API.\n")
-            func_index_rst.append(".. toctree::")
-            func_index_rst.append("   :maxdepth: 1\n")
-            for cat in sorted(nn_subcats['functional']):
-                func_index_rst.append(f"   {cat.replace('nn/functional/', '')}/index")
-            
-            func_index_file = api_dir / "nn" / "functional" / "index.rst"
-            func_index_file.write_text('\n'.join(func_index_rst), encoding='utf-8')
-        
-        nn_index_file = api_dir / "nn" / "index.rst"
-        nn_index_file.write_text('\n'.join(nn_index_rst), encoding='utf-8')
     
     print(f"\n✅ Done! Generated docs for {sum(len(items) for items in categories.values())} items")
     print(f"   Output: {api_dir}")

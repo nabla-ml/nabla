@@ -22,14 +22,16 @@ Args:
     weight_decay: Weight decay (L2 penalty) (default: 0.0, no decay)
     
 Example:
-    >>> optimizer = Adam(model.parameters(), lr=0.001)
-    >>> 
-    >>> for data, target in dataloader:
-    ...     optimizer.zero_grad()
-    ...     output = model(data)
-    ...     loss = criterion(output, target)
-    ...     loss.backward()
-    ...     optimizer.step()
+```python
+optimizer = Adam(model.parameters(), lr=0.001)
+
+for data, target in dataloader:
+    optimizer.zero_grad()
+    output = model(data)
+    loss = criterion(output, target)
+    loss.backward()
+    optimizer.step()
+```
 
 References:
     Adam: A Method for Stochastic Optimization

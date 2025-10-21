@@ -1,11 +1,9 @@
 Nn
 ==
 
-Neural Network module.
-
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
+   functional/index
    modules/index
    optim/index
-   functional/index

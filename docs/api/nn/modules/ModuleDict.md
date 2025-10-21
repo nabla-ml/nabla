@@ -20,10 +20,12 @@ Args:
     modules: Optional dict of modules to initialize with
     
 Example:
-    >>> components = ModuleDict({
-    ...     'encoder': Linear(10, 5),
-    ...     'decoder': Linear(5, 10)
-    ... })
-    >>> encoded = components['encoder'](x)
-    >>> decoded = components['decoder'](encoded)
+```python
+components = ModuleDict({
+    'encoder': Linear(10, 5),
+    'decoder': Linear(5, 10)
+})
+encoded = components['encoder'](x)
+decoded = components['decoder'](encoded)
+```
 

@@ -72,7 +72,8 @@ html_static_path = ["_static"]
 
 # Patterns to exclude from the build process.
 exclude_patterns = [
-    "_build", "Thumbs.db", ".DS_Store", "**/gen_modules/**", "README.md", "scripts/README.md"
+    "_build", "Thumbs.db", ".DS_Store", "**/gen_modules/**", "README.md", "scripts/README.md",
+    "tutorials/**",  # Temporarily exclude tutorials to test API docs
 ]
 
 # =============================================================================
@@ -128,9 +129,13 @@ myst_enable_extensions = [
     "html_image", "replacements", "smartquotes", "substitution", "tasklist",
 ]
 
-# Enable syntax highlighting for doctest blocks (>>> syntax)
+# Enable syntax highlighting for code blocks
 myst_fence_as_directive = []
 myst_highlight_code_blocks = True
+
+# Configure code block styling
+pygments_style = 'sphinx'
+pygments_dark_style = 'monokai'
 
 # -- Napoleon (Docstrings) --
 napoleon_google_docstring = True

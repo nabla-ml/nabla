@@ -1,8 +1,6 @@
 Functional
 ==========
 
-Functional API.
-
 .. toctree::
    :maxdepth: 1
 
