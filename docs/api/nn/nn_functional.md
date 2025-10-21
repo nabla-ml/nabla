@@ -1,6 +1,4 @@
-# Activation Functions
-
-These functions are generally found within the `nabla.ops` module but are listed here for convenience.
+# Functional API (Activations)
 
 ## `relu`
 
@@ -22,13 +20,13 @@ activation function in neural networks.
 
 **Examples**
 
-Tensor([0., 0., 0., 1., 2.], dtype=float32)
+--
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([-2.0, -0.5, 0.0, 1.0, 2.0])
 >>> nb.relu(x)
+Tensor([0., 0., 0., 1., 2.], dtype=float32)
 ```
-
 
 ---
 ## `sigmoid`
@@ -51,13 +49,13 @@ activation function that squashes values to the range `(0, 1)`.
 
 **Examples**
 
-Tensor([0.26894143, 0.5       , 0.7310586 , 1.        ], dtype=float32)
+--
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([-1.0, 0.0, 1.0, 20.0])
 >>> nb.sigmoid(x)
+Tensor([0.26894143, 0.5       , 0.7310586 , 1.        ], dtype=float32)
 ```
-
 
 ---
 ## `tanh`
@@ -80,13 +78,13 @@ squashing values to the range `[-1, 1]`.
 
 **Examples**
 
-Tensor([-0.7615942,  0.       ,  0.7615942,  1.       ], dtype=float32)
+--
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([-1.0, 0.0, 1.0, 20.0])
 >>> nb.tanh(x)
+Tensor([-0.7615942,  0.       ,  0.7615942,  1.       ], dtype=float32)
 ```
-
 
 ---
 ## `softmax`
@@ -114,20 +112,19 @@ probabilities.
 
 **Examples**
 
-Tensor([0.09003057, 0.24472848, 0.66524094], dtype=float32)
-
+--
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([1.0, 2.0, 3.0])
 >>> nb.softmax(x)
+Tensor([0.09003057, 0.24472848, 0.66524094], dtype=float32)
 ```
 
-Tensor([[0.09003057, 0.24472848, 0.66524094],
-       [0.33333334, 0.33333334, 0.33333334]], dtype=float32)
 ```python
 >>> logits = nb.tensor([[1, 2, 3], [1, 1, 1]])
 >>> nb.softmax(logits, axis=1)
+Tensor([[0.09003057, 0.24472848, 0.66524094],
+       [0.33333334, 0.33333334, 0.33333334]], dtype=float32)
 ```
-
 
 ---

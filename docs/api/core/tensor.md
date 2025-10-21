@@ -137,13 +137,6 @@ values updated, leaving the original Tensor unchanged.
 
  – New Tensor with updated values
 
-**Examples**
-
-new_arr = arr.set(1, 99.0)              # Set single element
-new_arr = arr.set((1, 2), 99.0)         # Set element at (1,2)
-new_arr = arr.set(slice(1, 3), 99.0)    # Set slice
-new_arr = arr.set(..., 99.0)            # Set with ellipsis
-
 
 #### `set_maxpr`
 ```python

@@ -23,15 +23,5 @@ Nabla tensors with each other or with numpy tensors/scalars.
 
 `bool` – True if the tensors are equal within the given tolerance
 
-**Examples**
-
->>> import nabla as nb
->>> a = nb.tensor([1.0, 2.0, 3.0])
->>> b = nb.tensor([1.0, 2.0, 3.000001])
->>> nb.allclose(a, b)
-True
->>> nb.allclose(a, np.array([1.0, 2.0, 3.0]))
-True
-
 
 ---

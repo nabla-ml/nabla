@@ -22,45 +22,34 @@ Creates a function that maps a function over axes of pytrees.
 
 **Examples**
 
-...     return x ** 2
+--
 ```python
 >>> import nabla as nb
 >>> def square(x):
-```
-
-
-Multiple inputs with different axes:
-
-```python
+...     return x ** 2
 >>> x = nb.tensor([[1.0, 2.0], [3.0, 4.0]])
 >>> vmap_square = nb.vmap(square)
 >>> result = vmap_square(x)
 ```
 
-...     return x * y
+Multiple inputs with different axes:
+
 ```python
 >>> def multiply(x, y):
-```
-
-
-As a decorator:
-
-```python
+...     return x * y
 >>> x = nb.tensor([[1.0, 2.0], [3.0, 4.0]])
 >>> y = nb.tensor([10.0, 20.0])
 >>> result = nb.vmap(multiply, in_axes=(0, None))(x, y)
 ```
 
-... def process_batch(x):
-...     return x ** 2 + 1
-```python
->>> @nb.vmap
-```
+As a decorator:
 
 ```python
+>>> @nb.vmap
+... def process_batch(x):
+...     return x ** 2 + 1
 >>> batch = nb.tensor([1.0, 2.0, 3.0, 4.0])
 >>> result = process_batch(batch)
 ```
-
 
 ---

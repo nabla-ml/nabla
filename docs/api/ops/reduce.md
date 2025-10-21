@@ -1,4 +1,4 @@
-# Reduction Ops
+# Reduction Operations
 
 ## `sum`
 
@@ -27,33 +27,30 @@ correctly against the original tensor. Defaults to False.
 
 **Examples**
 
-
-Sum all elements:
+--
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([[1, 2, 3], [4, 5, 6]])
 ```
 
+Sum all elements:
+```python
+>>> nb.sum(x)
 Tensor([21], dtype=int32)
+```
 
 Sum along an axis:
 ```python
->>> nb.sum(x)
-```
-
+>>> nb.sum(x, axes=0)
 Tensor([5, 7, 9], dtype=int32)
+```
 
 Sum along an axis and keep dimensions:
 ```python
->>> nb.sum(x, axes=0)
-```
-
+>>> nb.sum(x, axes=1, keep_dims=True)
 Tensor([[ 6],
        [15]], dtype=int32)
-```python
->>> nb.sum(x, axes=1, keep_dims=True)
 ```
-
 
 ---
 ## `mean`
@@ -82,33 +79,30 @@ correctly against the original tensor. Defaults to False.
 
 **Examples**
 
-
-Compute the mean of all elements:
+--
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([[1, 2, 3], [4, 5, 6]])
 ```
 
+Compute the mean of all elements:
+```python
+>>> nb.mean(x)
 Tensor([3.5], dtype=float32)
+```
 
 Compute the mean along an axis:
 ```python
->>> nb.mean(x)
-```
-
+>>> nb.mean(x, axes=0)
 Tensor([2.5, 3.5, 4.5], dtype=float32)
+```
 
 Compute the mean along an axis and keep dimensions:
 ```python
->>> nb.mean(x, axes=0)
-```
-
+>>> nb.mean(x, axes=1, keep_dims=True)
 Tensor([[2.],
        [5.]], dtype=float32)
-```python
->>> nb.mean(x, axes=1, keep_dims=True)
 ```
-
 
 ---
 ## `max`
@@ -138,32 +132,29 @@ correctly against the original tensor. Defaults to False.
 
 **Examples**
 
-
-Find the maximum of all elements:
+--
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([[1, 5, 2], [4, 3, 6]])
 ```
 
+Find the maximum of all elements:
+```python
+>>> nb.max(x)
 Tensor([6], dtype=int32)
+```
 
 Find the maximum along an axis:
 ```python
->>> nb.max(x)
-```
-
+>>> nb.max(x, axes=1)
 Tensor([5, 6], dtype=int32)
+```
 
 Find the maximum along an axis and keep dimensions:
 ```python
->>> nb.max(x, axes=1)
-```
-
-Tensor([[4, 5, 6]], dtype=int32)
-```python
 >>> nb.max(x, axes=0, keep_dims=True)
+Tensor([[4, 5, 6]], dtype=int32)
 ```
-
 
 ---
 ## `argmax`
@@ -194,25 +185,48 @@ elements.
 
 **Examples**
 
-Tensor(1, dtype=int64)
-
+--
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([1, 5, 2, 5])
 >>> nb.argmax(x)
+Tensor(1, dtype=int64)
 ```
-
-Tensor([1, 2], dtype=int64)
 
 ```python
 >>> y = nb.tensor([[1, 5, 2], [4, 3, 6]])
 >>> nb.argmax(y, axes=1)
+Tensor([1, 2], dtype=int64)
 ```
 
-Tensor([[1, 0, 1]], dtype=int64)
 ```python
 >>> nb.argmax(y, axes=0, keep_dims=True)
+Tensor([[1, 0, 1]], dtype=int64)
 ```
+
+---
+## `sum_batch_dims`
+
+```python
+def sum_batch_dims(arg: 'Tensor', axes: 'int | list[int] | tuple[int, ...] | None' = None, keep_dims: 'bool' = False) -> 'Tensor':
+```
+Calculates the sum of tensor elements over given batch dimension axes.
+
+This function is specialized for reducing batch dimensions, which are
+used in function transformations like `vmap`. It operates on the
+`batch_dims` of an tensor, leaving the standard `shape` unaffected.
+
+**Parameters**
+
+- **`arg`** : `Tensor` – The input tensor with batch dimensions.
+- **`axes`** : `int | list[int] | tuple[int, ...] | None`, optional – The batch dimension axis or axes to sum over. If None, sums over all
+batch dimensions.
+- **`keep_dims`** : `bool`, optional, default: `s` – If True, the reduced batch axes are kept with size one. Defaults
+to False.
+
+**Returns**
+
+`Tensor` – An tensor with specified batch dimensions reduced by the sum operation.
 
 
 ---

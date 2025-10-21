@@ -4,10 +4,9 @@
 This script reads the JSON file that defines the docs hierarchy and emits
 Markdown files into the `docs/api/` tree.
 
-It uses `docstring-parser` to parse NumPy-style docstrings into a structured
-format, and then generates high-quality Markdown with proper sections and
-syntax-highlighted code blocks. This version includes robust error handling
-for malformed or incomplete docstring examples.
+It uses `docstring-parser` for standard sections but implements a robust
+manual parser for the 'Examples' section to ensure correct formatting of
+code snippets and their output.
 
 Usage:
     # From the project root directory:
@@ -19,6 +18,7 @@ import textwrap
 import sys
 import importlib
 import inspect
+import re
 from pathlib import Path
 from docstring_parser import parse
 
@@ -34,15 +34,16 @@ API_ROOT = DOCS_ROOT / "api"
 def extract_docstring_data(full_path: str) -> dict | None:
     """
     Introspects a live object using its full definition path to extract documentation.
+    Crucially, it captures the raw docstring for manual processing of examples.
     """
     try:
         if '.' not in full_path:
             raise ImportError(f"Path '{full_path}' is not a valid object path.")
-        
+
         module_path, object_name = full_path.rsplit('.', 1)
         module = importlib.import_module(module_path)
         obj = getattr(module, object_name)
-        
+
     except (ImportError, AttributeError) as e:
         print(f"  └─ ❌ ERROR: Could not find '{object_name}' in module '{module_path}'.")
         print(f"     Please ensure the path '{full_path}' is correct in `structure.json`.")
@@ -51,7 +52,12 @@ def extract_docstring_data(full_path: str) -> dict | None:
 
     result = {}
     docstring_text = inspect.getdoc(obj)
-    result['docstring_obj'] = parse(docstring_text) if docstring_text else parse("")
+    
+    # STORE THE RAW DOCSTRING for the manual example parser
+    result['raw_docstring'] = docstring_text
+    
+    docstring_obj = parse(textwrap.dedent(docstring_text)) if docstring_text else parse("")
+    result['docstring_obj'] = docstring_obj
 
     try:
         result['signature'] = str(inspect.signature(obj))
@@ -64,10 +70,12 @@ def extract_docstring_data(full_path: str) -> dict | None:
         for name, member in inspect.getmembers(obj):
             if not name.startswith('_') and inspect.isfunction(member) and member.__module__ == original_module_name:
                 method_doc = inspect.getdoc(member)
+                parsed_method_doc = parse(textwrap.dedent(method_doc)) if method_doc else parse("")
                 result['methods'].append({
                     'name': name,
                     'signature': str(inspect.signature(member)),
-                    'docstring_obj': parse(method_doc) if method_doc else parse("")
+                    'docstring_obj': parsed_method_doc,
+                    'raw_docstring': method_doc, # Also store for methods
                 })
     return result
 
@@ -104,17 +112,17 @@ def generate_module_index(module_path: Path, module: dict):
     write_md(module_path / "index.md", lines)
 
 
-def format_docstring_obj_to_md(docstring_obj) -> list[str]:
+def format_docstring_obj_to_md(docstring_obj, raw_docstring: str | None) -> list[str]:
     """
-    Takes a parsed docstring object and converts it to Markdown lines.
-    This version includes robust error handling.
+    Converts a docstring to Markdown. Uses the parsed object for standard
+    sections but uses a robust manual parser for the Examples section.
     """
     md_lines = []
     if docstring_obj.short_description:
         md_lines.extend([docstring_obj.short_description, ""])
     if docstring_obj.long_description:
         md_lines.extend([docstring_obj.long_description, ""])
-    
+
     if docstring_obj.params:
         md_lines.extend(["**Parameters**", ""])
         for param in docstring_obj.params:
@@ -131,21 +139,43 @@ def format_docstring_obj_to_md(docstring_obj) -> list[str]:
         line = f"{type_info} – {docstring_obj.returns.description}"
         md_lines.append(line)
         md_lines.append("")
-        
-    if docstring_obj.examples:
-        md_lines.extend(["**Examples**", ""])
-        for i, example in enumerate(docstring_obj.examples):
-            if example.description:
-                md_lines.extend(example.description.split('\n'))
-            
-            # --- THIS IS THE FIX ---
-            # Check if the snippet exists before trying to access it.
-            if example.snippet:
-                md_lines.append("```python")
-                md_lines.append(example.snippet.strip())
+
+    # --- START: Robust Manual Example Parser ---
+    if raw_docstring and "Examples\n" in raw_docstring:
+        try:
+            _, examples_section = re.split(r'Examples\n\s*------', raw_docstring, maxsplit=1)
+            example_lines = textwrap.dedent(examples_section).strip().split('\n')
+
+            md_lines.extend(["**Examples**", ""])
+
+            in_code_block = False
+            for line in example_lines:
+                is_code_start = line.strip().startswith('>>>')
+                is_blank_line = not line.strip()
+
+                if is_code_start and not in_code_block:
+                    md_lines.append("```python")
+                    md_lines.append(line)
+                    in_code_block = True
+                elif in_code_block:
+                    # A blank line after a code block terminates it.
+                    # This handles multiple distinct examples.
+                    if is_blank_line:
+                        md_lines.append("```")
+                        md_lines.append("") # The blank line itself
+                        in_code_block = False
+                    else:
+                        md_lines.append(line)
+                else:
+                    # This is a description line
+                    md_lines.append(line)
+
+            # If the docstring ends while still in a code block, close it
+            if in_code_block:
                 md_lines.append("```")
-            
-            md_lines.append("")
+        except (ValueError, re.error):
+            md_lines.append("**Examples**\n\n*Warning: Could not parse examples correctly.*")
+    # --- END: Robust Manual Example Parser ---
 
     return md_lines
 
@@ -172,7 +202,8 @@ def generate_subsection_md(module_path: Path, subsection: dict):
             lines.append(f"{'class' if item_type == 'class' else 'def'} {item['name']}{signature}:")
             lines.append("```")
             
-            lines.extend(format_docstring_obj_to_md(data['docstring_obj']))
+            # PASS THE RAW DOCSTRING to the formatter
+            lines.extend(format_docstring_obj_to_md(data['docstring_obj'], data.get('raw_docstring')))
             
             if item_type == 'class' and item.get("show_methods") and data.get("methods"):
                 lines.append("\n### Methods")
@@ -181,7 +212,8 @@ def generate_subsection_md(module_path: Path, subsection: dict):
                     lines.append("```python")
                     lines.append(f"def {method['name']}{method['signature']}:")
                     lines.append("```")
-                    lines.extend(format_docstring_obj_to_md(method['docstring_obj']))
+                    # PASS THE RAW DOCSTRING for methods as well
+                    lines.extend(format_docstring_obj_to_md(method['docstring_obj'], method.get('raw_docstring')))
         else:
             lines.append("*Could not extract documentation. Please check the error messages above and correct `structure.json`.*")
         lines.append("\n---")

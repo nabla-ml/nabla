@@ -26,30 +26,23 @@ the gradient part. Uses VJP directly for efficiency with scalar outputs.
 
 **Examples**
 
-...     return x**2
+--
 ```python
 >>> import nabla as nb
 >>> def my_loss(x):
-```
-
-
-Usage as a decorator:
-
-```python
+...     return x**2
 >>> grad_fn = nb.grad(my_loss)
 >>> grads = grad_fn(nb.tensor(3.0))
 ```
 
-... def my_loss(x):
-...     return x**2
+Usage as a decorator:
+
 ```python
 >>> @nb.grad
-```
-
-```python
+... def my_loss(x):
+...     return x**2
 >>> grads = my_loss(nb.tensor(3.0))  # Returns gradient, not function value
 ```
-
 
 ---
 ## `value_and_grad`
@@ -78,30 +71,23 @@ This is simpler and more efficient than using jacrev/jacfwd for scalar outputs.
 
 **Examples**
 
-...     return x**2
+--
 ```python
 >>> import nabla as nb
 >>> def my_loss(x):
-```
-
-
-Usage as a decorator:
-
-```python
+...     return x**2
 >>> value_and_grad_fn = nb.value_and_grad(my_loss)
 >>> value, grads = value_and_grad_fn(nb.tensor(3.0))
 ```
 
-... def my_loss(x):
-...     return x**2
+Usage as a decorator:
+
 ```python
 >>> @nb.value_and_grad
-```
-
-```python
+... def my_loss(x):
+...     return x**2
 >>> value, grads = my_loss(nb.tensor(3.0))
 ```
-
 
 ---
 ## `vjp`
@@ -130,35 +116,28 @@ The vjp_function always returns gradients as a tuple (matching JAX behavior):
 
 **Examples**
 
-...     return x ** 2
+--
 ```python
 >>> import nabla as nb
 >>> def f(x):
-```
-
-
-Multiple inputs:
-
-```python
+...     return x ** 2
 >>> primals = nb.tensor(3.0)
 >>> y, vjp_fn = nb.vjp(f, primals)
 >>> cotangent = nb.tensor(1.0)
 >>> (grad_x,) = vjp_fn(cotangent)
 ```
 
-...     return x * y + x ** 2
-```python
->>> def f(x, y):
-```
+Multiple inputs:
 
 ```python
+>>> def f(x, y):
+...     return x * y + x ** 2
 >>> x = nb.tensor(3.0)
 >>> y = nb.tensor(4.0)
 >>> output, vjp_fn = nb.vjp(f, x, y)
 >>> cotangent = nb.tensor(1.0)
 >>> grad_x, grad_y = vjp_fn(cotangent)
 ```
-
 
 ---
 ## `jvp`
@@ -185,32 +164,25 @@ auxiliary data returned by func.
 
 **Examples**
 
-...     return x ** 2
+--
 ```python
 >>> import nabla as nb
 >>> def f(x):
-```
-
-
-Multiple inputs:
-
-```python
+...     return x ** 2
 >>> primals = (nb.tensor(3.0),)
 >>> tangents = (nb.tensor(1.0),)
 >>> y, y_dot = nb.jvp(f, primals, tangents)
 ```
 
-...     return x * y + x ** 2
-```python
->>> def f(x, y):
-```
+Multiple inputs:
 
 ```python
+>>> def f(x, y):
+...     return x * y + x ** 2
 >>> primals = (nb.tensor(3.0), nb.tensor(4.0))
 >>> tangents = (nb.tensor(1.0), nb.tensor(0.0))
 >>> output, tangent_out = nb.jvp(f, primals, tangents)
 ```
-
 
 ---
 ## `jacfwd`
@@ -239,46 +211,35 @@ where primal_axes are None (broadcast) and tangent_axes are 0 (vectorize).
 
 **Examples**
 
-...     return x ** 2
+--
 ```python
 >>> import nabla as nb
 >>> def f(x):
-```
-
-
-Vector-valued function:
-
-```python
+...     return x ** 2
 >>> x = nb.tensor([1.0, 2.0, 3.0])
 >>> jac_fn = nb.jacfwd(f)
 >>> jacobian = jac_fn(x)
 ```
 
-...     return nb.stack([x[0] ** 2, x[0] * x[1], x[1] ** 2])
+Vector-valued function:
+
 ```python
 >>> def f(x):
-```
-
-
-Multiple arguments with argnums:
-
-```python
+...     return nb.stack([x[0] ** 2, x[0] * x[1], x[1] ** 2])
 >>> x = nb.tensor([3.0, 4.0])
 >>> jacobian = nb.jacfwd(f)(x)
 ```
 
-...     return x * y + x ** 2
-```python
->>> def f(x, y):
-```
+Multiple arguments with argnums:
 
 ```python
+>>> def f(x, y):
+...     return x * y + x ** 2
 >>> x = nb.tensor([1.0, 2.0])
 >>> y = nb.tensor([3.0, 4.0])
 >>> jac_x = nb.jacfwd(f, argnums=0)(x, y)
 >>> jac_both = nb.jacfwd(f, argnums=(0, 1))(x, y)
 ```
-
 
 ---
 ## `jacrev`
@@ -306,46 +267,35 @@ then a pair of (jacobian, auxiliary_data) is returned.
 
 **Examples**
 
-...     return x ** 2
+--
 ```python
 >>> import nabla as nb
 >>> def f(x):
-```
-
-
-Vector-valued function:
-
-```python
+...     return x ** 2
 >>> x = nb.tensor([1.0, 2.0, 3.0])
 >>> jac_fn = nb.jacrev(f)
 >>> jacobian = jac_fn(x)
 ```
 
-...     return nb.stack([x[0] ** 2, x[0] * x[1], x[1] ** 2])
+Vector-valued function:
+
 ```python
 >>> def f(x):
-```
-
-
-Multiple arguments with argnums:
-
-```python
+...     return nb.stack([x[0] ** 2, x[0] * x[1], x[1] ** 2])
 >>> x = nb.tensor([3.0, 4.0])
 >>> jacobian = nb.jacrev(f)(x)
 ```
 
-...     return x * y + x ** 2
-```python
->>> def f(x, y):
-```
+Multiple arguments with argnums:
 
 ```python
+>>> def f(x, y):
+...     return x * y + x ** 2
 >>> x = nb.tensor([1.0, 2.0])
 >>> y = nb.tensor([3.0, 4.0])
 >>> jac_x = nb.jacrev(f, argnums=0)(x, y)
 >>> jac_both = nb.jacrev(f, argnums=(0, 1))(x, y)
 ```
-
 
 ---
 ## `backward`

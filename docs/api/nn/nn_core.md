@@ -1,4 +1,4 @@
-# Core
+# Core: The Module Class
 
 ## `Module`
 
@@ -22,6 +22,10 @@ Provides:
 
 **Examples**
 
+--
+```python
+>>> from nabla.nn import Module, Linear
+>>> class MLP(Module):
 ...     def __init__(self, layer_sizes):
 ...         super().__init__()
 ...         self.layers = [Linear(layer_sizes[i], layer_sizes[i+1])
@@ -30,15 +34,8 @@ Provides:
 ...         for layer in self.layers:
 ...             x = layer(x)
 ...         return x
-```python
->>> from nabla.nn import Module, Linear
->>> class MLP(Module):
-```
-
-```python
 >>> model = MLP([10, 20, 10])
 >>> params = list(model.parameters())  # Gets all params recursively
 ```
-
 
 ---

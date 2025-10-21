@@ -1,12 +1,16 @@
-# Tensor Operations
+# Low-Level Tensor Operations (nabla.ops)
 
-A comprehensive library of low-level tensor operations.
+The comprehensive library of fundamental tensor operations, organized by submodule.
 
 ```{toctree}
 :maxdepth: 1
 
+binary
 creation
-math
-reductions
-manipulation
+indexing
+linalg
+reduce
+special
+unary
+view
 ```

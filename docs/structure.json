@@ -65,36 +65,29 @@
         },
         {
           "id": "nn",
-          "title": "Neural Networks",
-          "description": "Modules, layers, and optimizers for building neural networks.",
+          "title": "Neural Networks (nabla.nn)",
+          "description": "Provides stateful modules and a functional API for building neural networks.",
           "subsections": [
             {
-              "id": "core",
-              "title": "Core",
+              "id": "nn_core",
+              "title": "Core: The Module Class",
               "items": [
                 {"name": "Module", "type": "class", "path": "nabla.nn.module.Module"}
               ]
             },
             {
-              "id": "layers",
-              "title": "Layers",
+              "id": "nn_modules",
+              "title": "Modules (Stateful OOP Layers)",
               "items": [
-                {"name": "Linear", "type": "class", "path": "nabla.nn.modules.linear.Linear"}
-              ]
-            },
-            {
-              "id": "containers",
-              "title": "Containers",
-              "items": [
+                {"name": "Linear", "type": "class", "path": "nabla.nn.modules.linear.Linear"},
                 {"name": "Sequential", "type": "class", "path": "nabla.nn.containers.Sequential"},
                 {"name": "ModuleList", "type": "class", "path": "nabla.nn.containers.ModuleList"},
                 {"name": "ModuleDict", "type": "class", "path": "nabla.nn.containers.ModuleDict"}
               ]
             },
             {
-              "id": "activations",
-              "title": "Activation Functions",
-              "description": "These functions are generally found within the `nabla.ops` module but are listed here for convenience.",
+              "id": "nn_functional",
+              "title": "Functional API (Activations)",
               "items": [
                   {"name": "relu", "type": "function", "path": "nabla.ops.unary.relu"},
                   {"name": "sigmoid", "type": "function", "path": "nabla.ops.unary.sigmoid"},
@@ -103,7 +96,7 @@
               ]
             },
             {
-              "id": "optimizers",
+              "id": "nn_optimizers",
               "title": "Optimizers",
               "items": [
                   {"name": "Optimizer", "type": "class", "path": "nabla.nn.optim.optimizer.Optimizer"},
@@ -115,60 +108,133 @@
         },
         {
           "id": "ops",
-          "title": "Tensor Operations",
-          "description": "A comprehensive library of low-level tensor operations.",
+          "title": "Low-Level Tensor Operations (nabla.ops)",
+          "description": "The comprehensive library of fundamental tensor operations, organized by submodule.",
           "subsections": [
             {
-              "id": "creation",
-              "title": "Creation Ops",
-              "items": [
-                {"name": "zeros", "type": "function", "path": "nabla.ops.creation.zeros"},
-                {"name": "ones", "type": "function", "path": "nabla.ops.creation.ones"},
-                {"name": "rand", "type": "function", "path": "nabla.ops.creation.rand"},
-                {"name": "randn", "type": "function", "path": "nabla.ops.creation.randn"},
-                {"name": "arange", "type": "function", "path": "nabla.ops.creation.arange"},
-                {"name": "full_like", "type": "function", "path": "nabla.ops.creation.full_like"},
-                {"name": "ones_like", "type": "function", "path": "nabla.ops.creation.ones_like"},
-                {"name": "zeros_like", "type": "function", "path": "nabla.ops.creation.zeros_like"}
-              ]
-            },
-            {
-              "id": "math",
-              "title": "Math Ops",
+              "id": "binary",
+              "title": "Binary Operations",
               "items": [
                 {"name": "add", "type": "function", "path": "nabla.ops.binary.add"},
                 {"name": "sub", "type": "function", "path": "nabla.ops.binary.sub"},
                 {"name": "mul", "type": "function", "path": "nabla.ops.binary.mul"},
                 {"name": "div", "type": "function", "path": "nabla.ops.binary.div"},
                 {"name": "pow", "type": "function", "path": "nabla.ops.binary.pow"},
-                {"name": "negate", "type": "function", "path": "nabla.ops.unary.negate"},
-                {"name": "exp", "type": "function", "path": "nabla.ops.unary.exp"},
-                {"name": "log", "type": "function", "path": "nabla.ops.unary.log"},
-                {"name": "sqrt", "type": "function", "path": "nabla.ops.unary.sqrt"},
+                {"name": "equal", "type": "function", "path": "nabla.ops.binary.equal"},
+                {"name": "not_equal", "type": "function", "path": "nabla.ops.binary.not_equal"},
+                {"name": "greater_equal", "type": "function", "path": "nabla.ops.binary.greater_equal"},
+                {"name": "maximum", "type": "function", "path": "nabla.ops.binary.maximum"},
+                {"name": "minimum", "type": "function", "path": "nabla.ops.binary.minimum"},
+                {"name": "mod", "type": "function", "path": "nabla.ops.binary.mod"},
+                {"name": "floordiv", "type": "function", "path": "nabla.ops.binary.floordiv"}
+              ]
+            },
+            {
+              "id": "creation",
+              "title": "Creation Operations",
+              "items": [
+                {"name": "tensor", "type": "function", "path": "nabla.ops.creation.tensor"},
+                {"name": "zeros", "type": "function", "path": "nabla.ops.creation.zeros"},
+                {"name": "ones", "type": "function", "path": "nabla.ops.creation.ones"},
+                {"name": "rand", "type": "function", "path": "nabla.ops.creation.rand"},
+                {"name": "randn", "type": "function", "path": "nabla.ops.creation.randn"},
+                {"name": "arange", "type": "function", "path": "nabla.ops.creation.arange"},
+                {"name": "zeros_like", "type": "function", "path": "nabla.ops.creation.zeros_like"},
+                {"name": "ones_like", "type": "function", "path": "nabla.ops.creation.ones_like"},
+                {"name": "rand_like", "type": "function", "path": "nabla.ops.creation.rand_like"},
+                {"name": "randn_like", "type": "function", "path": "nabla.ops.creation.randn_like"},
+                {"name": "full_like", "type": "function", "path": "nabla.ops.creation.full_like"},
+                {"name": "triu", "type": "function", "path": "nabla.ops.creation.triu"},
+                {"name": "glorot_uniform", "type": "function", "path": "nabla.ops.creation.glorot_uniform"},
+                {"name": "xavier_uniform", "type": "function", "path": "nabla.ops.creation.xavier_uniform"},
+                {"name": "xavier_normal", "type": "function", "path": "nabla.ops.creation.xavier_normal"},
+                {"name": "he_uniform", "type": "function", "path": "nabla.ops.creation.he_uniform"},
+                {"name": "he_normal", "type": "function", "path": "nabla.ops.creation.he_normal"},
+                {"name": "lecun_uniform", "type": "function", "path": "nabla.ops.creation.lecun_uniform"},
+                {"name": "lecun_normal", "type": "function", "path": "nabla.ops.creation.lecun_normal"},
+                {"name": "ndarange", "type": "function", "path": "nabla.ops.creation.ndarange"},
+                {"name": "ndarange_like", "type": "function", "path": "nabla.ops.creation.ndarange_like"}
+              ]
+            },
+            {
+              "id": "indexing",
+              "title": "Indexing Operations",
+              "items": [
+                {"name": "gather", "type": "function", "path": "nabla.ops.indexing.gather"},
+                {"name": "scatter", "type": "function", "path": "nabla.ops.indexing.scatter"}
+              ]
+            },
+            {
+              "id": "linalg",
+              "title": "Linear Algebra Operations",
+              "items": [
                 {"name": "matmul", "type": "function", "path": "nabla.ops.linalg.matmul"}
               ]
             },
             {
-              "id": "reductions",
-              "title": "Reduction Ops",
+              "id": "reduce",
+              "title": "Reduction Operations",
               "items": [
                 {"name": "sum", "type": "function", "path": "nabla.ops.reduce.sum"},
                 {"name": "mean", "type": "function", "path": "nabla.ops.reduce.mean"},
                 {"name": "max", "type": "function", "path": "nabla.ops.reduce.max"},
-                {"name": "argmax", "type": "function", "path": "nabla.ops.reduce.argmax"}
+                {"name": "argmax", "type": "function", "path": "nabla.ops.reduce.argmax"},
+                {"name": "sum_batch_dims", "type": "function", "path": "nabla.ops.reduce.sum_batch_dims"}
               ]
             },
             {
-              "id": "manipulation",
-              "title": "Manipulation Ops",
+              "id": "special",
+              "title": "Special Operations",
+              "items": [
+                {"name": "softmax", "type": "function", "path": "nabla.ops.special.softmax"},
+                {"name": "logsumexp", "type": "function", "path": "nabla.ops.special.logsumexp"},
+                {"name": "where", "type": "function", "path": "nabla.ops.special.where"},
+                {"name": "cond", "type": "function", "path": "nabla.ops.special.cond"}
+              ]
+            },
+            {
+              "id": "unary",
+              "title": "Unary Operations",
+              "items": [
+                {"name": "negate", "type": "function", "path": "nabla.ops.unary.negate"},
+                {"name": "abs", "type": "function", "path": "nabla.ops.unary.abs"},
+                {"name": "exp", "type": "function", "path": "nabla.ops.unary.exp"},
+                {"name": "log", "type": "function", "path": "nabla.ops.unary.log"},
+                {"name": "sqrt", "type": "function", "path": "nabla.ops.unary.sqrt"},
+                {"name": "sin", "type": "function", "path": "nabla.ops.unary.sin"},
+                {"name": "cos", "type": "function", "path": "nabla.ops.unary.cos"},
+                {"name": "tanh", "type": "function", "path": "nabla.ops.unary.tanh"},
+                {"name": "relu", "type": "function", "path": "nabla.ops.unary.relu"},
+                {"name": "sigmoid", "type": "function", "path": "nabla.ops.unary.sigmoid"},
+                {"name": "floor", "type": "function", "path": "nabla.ops.unary.floor"},
+                {"name": "cast", "type": "function", "path": "nabla.ops.unary.cast"},
+                {"name": "logical_not", "type": "function", "path": "nabla.ops.unary.logical_not"},
+                {"name": "transfer_to", "type": "function", "path": "nabla.ops.unary.transfer_to"},
+                {"name": "incr_batch_dim_ctr", "type": "function", "path": "nabla.ops.unary.incr_batch_dim_ctr"},
+                {"name": "decr_batch_dim_ctr", "type": "function", "path": "nabla.ops.unary.decr_batch_dim_ctr"}
+              ]
+            },
+            {
+              "id": "view",
+              "title": "View & Manipulation Operations",
               "items": [
                 {"name": "reshape", "type": "function", "path": "nabla.ops.view.reshape"},
                 {"name": "transpose", "type": "function", "path": "nabla.ops.view.transpose"},
+                {"name": "permute", "type": "function", "path": "nabla.ops.view.permute"},
                 {"name": "concatenate", "type": "function", "path": "nabla.ops.view.concatenate"},
                 {"name": "stack", "type": "function", "path": "nabla.ops.view.stack"},
+                {"name": "split", "type": "function", "path": "nabla.ops.view.split"},
                 {"name": "squeeze", "type": "function", "path": "nabla.ops.view.squeeze"},
                 {"name": "unsqueeze", "type": "function", "path": "nabla.ops.view.unsqueeze"},
-                {"name": "pad", "type": "function", "path": "nabla.ops.view.pad"}
+                {"name": "pad", "type": "function", "path": "nabla.ops.view.pad"},
+                {"name": "broadcast_to", "type": "function", "path": "nabla.ops.view.broadcast_to"},
+                {"name": "tensor_slice", "type": "function", "path": "nabla.ops.view.tensor_slice"},
+                {"name": "shallow_copy", "type": "function", "path": "nabla.ops.view.shallow_copy"},
+                {"name": "transpose_batch_dims", "type": "function", "path": "nabla.ops.view.transpose_batch_dims"},
+                {"name": "permute_batch_dims", "type": "function", "path": "nabla.ops.view.permute_batch_dims"},
+                {"name": "broadcast_batch_dims", "type": "function", "path": "nabla.ops.view.broadcast_batch_dims"},
+                {"name": "squeeze_batch_dims", "type": "function", "path": "nabla.ops.view.squeeze_batch_dims"},
+                {"name": "unsqueeze_batch_dims", "type": "function", "path": "nabla.ops.view.unsqueeze_batch_dims"}
               ]
             }
           ]

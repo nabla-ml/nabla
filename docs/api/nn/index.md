@@ -1,13 +1,12 @@
-# Neural Networks
+# Neural Networks (nabla.nn)
 
-Modules, layers, and optimizers for building neural networks.
+Provides stateful modules and a functional API for building neural networks.
 
 ```{toctree}
 :maxdepth: 1
 
-core
-layers
-containers
-activations
-optimizers
+nn_core
+nn_modules
+nn_functional
+nn_optimizers
 ```

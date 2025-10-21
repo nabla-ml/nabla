@@ -24,20 +24,6 @@ are still moved. Set to False to disable all automatic device movement/conversio
 
  – JIT-compiled function with optimized execution
 
-**Examples**
-
-As a function call::
-```python
-fast_func = jit(my_func)
-```
-
-As a decorator::
-```python
-@jit
-def my_func(x):
-    return x * 2
-```
-
 
 ---
 ## `djit`

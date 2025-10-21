@@ -16,6 +16,7 @@ All optimizer implementations should inherit from this class.
 
 **Examples**
 
+--
 ```python
 >>> from nabla.nn import SGD
 >>> optimizer = SGD(model.parameters(), lr=0.01)
@@ -23,7 +24,6 @@ All optimizer implementations should inherit from this class.
 >>> optimizer.step()  # Updates parameters
 >>> optimizer.zero_grad()  # Clears gradients
 ```
-
 
 ---
 ## `SGD`
@@ -44,17 +44,17 @@ Implements SGD with optional momentum and weight decay (L2 regularization).
 
 **Examples**
 
+--
+```python
+>>> from nabla.nn import SGD
+>>> optimizer = SGD(model.parameters(), lr=0.01, momentum=0.9)
+>>> for data, target in dataloader:
 ...     optimizer.zero_grad()
 ...     output = model(data)
 ...     loss = criterion(output, target)
 ...     loss.backward()
 ...     optimizer.step()
-```python
->>> from nabla.nn import SGD
->>> optimizer = SGD(model.parameters(), lr=0.01, momentum=0.9)
->>> for data, target in dataloader:
 ```
-
 
 ---
 ## `Adam`
@@ -75,17 +75,6 @@ of gradients and their squares for adaptive learning rates.
 and its square (default: (0.9, 0.999))
 - **`eps`** – Term added to denominator for numerical stability (default: 1e-8)
 - **`weight_decay`** – Weight decay (L2 penalty) (default: 0.0, no decay)
-
-**Examples**
-
->>> optimizer = Adam(model.parameters(), lr=0.001)
->>> 
->>> for data, target in dataloader:
-...     optimizer.zero_grad()
-...     output = model(data)
-...     loss = criterion(output, target)
-...     loss.backward()
-...     optimizer.step()
 
 
 ---
