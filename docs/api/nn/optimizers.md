@@ -10,18 +10,20 @@ Base class for all optimizers.
 Handles parameter updates after gradients are computed via backward().
 All optimizer implementations should inherit from this class.
 
-Parameters
-----------
-params : Iterator[Tensor] or list[Tensor]
-    Iterator or list of parameters to optimize
+**Parameters**
 
-Examples
---------
+- **`params`** : `Iterator[Tensor] or list[Tensor]` – Iterator or list of parameters to optimize
+
+**Examples**
+
+```python
 >>> from nabla.nn import SGD
 >>> optimizer = SGD(model.parameters(), lr=0.01)
 >>> loss.backward()
 >>> optimizer.step()  # Updates parameters
 >>> optimizer.zero_grad()  # Clears gradients
+```
+
 
 ---
 ## `SGD`
@@ -33,27 +35,26 @@ Stochastic Gradient Descent optimizer.
 
 Implements SGD with optional momentum and weight decay (L2 regularization).
 
-Parameters
-----------
-params : Iterator[Tensor] or list[Tensor]
-    Parameters to optimize
-lr : float, optional
-    Learning rate (default: 0.01)
-momentum : float, optional
-    Momentum factor (default: 0.0, no momentum)
-weight_decay : float, optional
-    Weight decay (L2 penalty) (default: 0.0, no decay)
+**Parameters**
 
-Examples
---------
->>> from nabla.nn import SGD
->>> optimizer = SGD(model.parameters(), lr=0.01, momentum=0.9)
->>> for data, target in dataloader:
+- **`params`** : `Iterator[Tensor] or list[Tensor]` – Parameters to optimize
+- **`lr`** : `float`, optional – Learning rate (default: 0.01)
+- **`momentum`** : `float`, optional – Momentum factor (default: 0.0, no momentum)
+- **`weight_decay`** : `float`, optional – Weight decay (L2 penalty) (default: 0.0, no decay)
+
+**Examples**
+
 ...     optimizer.zero_grad()
 ...     output = model(data)
 ...     loss = criterion(output, target)
 ...     loss.backward()
 ...     optimizer.step()
+```python
+>>> from nabla.nn import SGD
+>>> optimizer = SGD(model.parameters(), lr=0.01, momentum=0.9)
+>>> for data, target in dataloader:
+```
+
 
 ---
 ## `Adam`
@@ -66,27 +67,25 @@ Adam optimizer (Adaptive Moment Estimation).
 Implements Adam algorithm with bias correction. Maintains moving averages
 of gradients and their squares for adaptive learning rates.
 
-Args:
-    params: Parameters to optimize
-    lr: Learning rate (default: 0.001)
-    betas: Coefficients for computing running averages of gradient
-           and its square (default: (0.9, 0.999))
-    eps: Term added to denominator for numerical stability (default: 1e-8)
-    weight_decay: Weight decay (L2 penalty) (default: 0.0, no decay)
+**Parameters**
 
-Example:
-    >>> optimizer = Adam(model.parameters(), lr=0.001)
-    >>> 
-    >>> for data, target in dataloader:
-    ...     optimizer.zero_grad()
-    ...     output = model(data)
-    ...     loss = criterion(output, target)
-    ...     loss.backward()
-    ...     optimizer.step()
+- **`params`** – Parameters to optimize
+- **`lr`** – Learning rate (default: 0.001)
+- **`betas`** – Coefficients for computing running averages of gradient
+and its square (default: (0.9, 0.999))
+- **`eps`** – Term added to denominator for numerical stability (default: 1e-8)
+- **`weight_decay`** – Weight decay (L2 penalty) (default: 0.0, no decay)
 
-References:
-    Adam: A Method for Stochastic Optimization
-    Kingma & Ba, ICLR 2015
-    https://arxiv.org/abs/1412.6980
+**Examples**
+
+>>> optimizer = Adam(model.parameters(), lr=0.001)
+>>> 
+>>> for data, target in dataloader:
+...     optimizer.zero_grad()
+...     output = model(data)
+...     loss = criterion(output, target)
+...     loss.backward()
+...     optimizer.step()
+
 
 ---

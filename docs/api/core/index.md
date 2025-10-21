@@ -6,5 +6,4 @@ The fundamental building blocks of Nabla.
 :maxdepth: 1
 
 tensor
-execution_context
 ```

@@ -20,10 +20,8 @@ Provides:
 - Gradient zeroing via .zero_grad()
 - Callable interface: model(x) calls model.forward(x)
 
-Examples
---------
->>> from nabla.nn import Module, Linear
->>> class MLP(Module):
+**Examples**
+
 ...     def __init__(self, layer_sizes):
 ...         super().__init__()
 ...         self.layers = [Linear(layer_sizes[i], layer_sizes[i+1])
@@ -32,7 +30,15 @@ Examples
 ...         for layer in self.layers:
 ...             x = layer(x)
 ...         return x
+```python
+>>> from nabla.nn import Module, Linear
+>>> class MLP(Module):
+```
+
+```python
 >>> model = MLP([10, 20, 10])
 >>> params = list(model.parameters())  # Gets all params recursively
+```
+
 
 ---

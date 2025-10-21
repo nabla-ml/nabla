@@ -11,23 +11,27 @@ This function automatically converts Nabla Tensors to numpy tensors using
 .to_numpy() before comparison, providing a convenient way to compare
 Nabla tensors with each other or with numpy tensors/scalars.
 
-Args:
-    a: Input tensor or scalar
-    b: Input tensor or scalar
-    rtol: Relative tolerance parameter
-    atol: Absolute tolerance parameter
-    equal_nan: Whether to compare NaN's as equal
+**Parameters**
 
-Returns:
-    bool: True if the tensors are equal within the given tolerance
+- **`a`** – Input tensor or scalar
+- **`b`** – Input tensor or scalar
+- **`rtol`** – Relative tolerance parameter
+- **`atol`** – Absolute tolerance parameter
+- **`equal_nan`** – Whether to compare NaN's as equal
 
-Examples:
-    >>> import nabla as nb
-    >>> a = nb.tensor([1.0, 2.0, 3.0])
-    >>> b = nb.tensor([1.0, 2.0, 3.000001])
-    >>> nb.allclose(a, b)
-    True
-    >>> nb.allclose(a, np.array([1.0, 2.0, 3.0]))
-    True
+**Returns**
+
+`bool` – True if the tensors are equal within the given tolerance
+
+**Examples**
+
+>>> import nabla as nb
+>>> a = nb.tensor([1.0, 2.0, 3.0])
+>>> b = nb.tensor([1.0, 2.0, 3.000001])
+>>> nb.allclose(a, b)
+True
+>>> nb.allclose(a, np.array([1.0, 2.0, 3.0]))
+True
+
 
 ---

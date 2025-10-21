@@ -24,17 +24,6 @@
                   "show_methods": true
                 }
               ]
-            },
-            {
-              "id": "execution_context",
-              "title": "Execution Context",
-              "items": [
-                {
-                  "name": "ThreadSafeExecutionContext",
-                  "type": "class",
-                  "path": "nabla.core.execution_context.ThreadSafeExecutionContext"
-                }
-              ]
             }
           ]
         },

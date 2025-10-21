@@ -7,6 +7,7 @@ def reshape(arg: nabla.core.tensor.Tensor, shape: tuple[int, ...]) -> nabla.core
 ```
 Reshape tensor to given shape.
 
+
 ---
 ## `transpose`
 
@@ -14,6 +15,7 @@ Reshape tensor to given shape.
 def transpose(arg: nabla.core.tensor.Tensor, axis_1: int = -2, axis_2: int = -1) -> nabla.core.tensor.Tensor:
 ```
 Transpose tensor along two axes.
+
 
 ---
 ## `concatenate`
@@ -32,6 +34,7 @@ Returns
 -------
     Concatenated tensor
 
+
 ---
 ## `stack`
 
@@ -49,6 +52,7 @@ Returns
 -------
     Stacked tensor
 
+
 ---
 ## `squeeze`
 
@@ -57,6 +61,7 @@ def squeeze(arg: nabla.core.tensor.Tensor, axes: list[int] | None = None) -> nab
 ```
 Squeeze tensor by removing dimensions of size 1.
 
+
 ---
 ## `unsqueeze`
 
@@ -64,6 +69,7 @@ Squeeze tensor by removing dimensions of size 1.
 def unsqueeze(arg: nabla.core.tensor.Tensor, axes: list[int] | None = None) -> nabla.core.tensor.Tensor:
 ```
 Unsqueeze tensor by adding dimensions of size 1.
+
 
 ---
 ## `pad`
@@ -86,5 +92,6 @@ Parameters
 Returns
 -------
     Larger tensor with input placed at sliced location, zeros elsewhere
+
 
 ---
