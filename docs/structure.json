@@ -9,21 +9,15 @@
       "path": "api",
       "modules": [
         {
-          "id": "core",
-          "title": "Core",
-          "description": "The fundamental building blocks of Nabla.",
-          "subsections": [
+          "id": "tensor",
+          "title": "Tensor",
+          "description": "The core n-dimensional array data structure in Nabla.",
+          "items": [
             {
-              "id": "tensor",
-              "title": "Tensor",
-              "items": [
-                {
-                  "name": "Tensor",
-                  "type": "class",
-                  "path": "nabla.core.tensor.Tensor",
-                  "show_methods": true
-                }
-              ]
+              "name": "Tensor",
+              "type": "class",
+              "path": "nabla.core.tensor.Tensor",
+              "show_methods": true
             }
           ]
         },

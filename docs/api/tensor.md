@@ -1,5 +1,7 @@
 # Tensor
 
+The core n-dimensional array data structure in Nabla.
+
 ## `Tensor`
 
 ```python

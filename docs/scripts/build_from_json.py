@@ -4,9 +4,8 @@
 This script reads the JSON file that defines the docs hierarchy and emits
 Markdown files into the `docs/api/` tree.
 
-It uses `docstring-parser` for standard sections but implements a robust
-manual parser for the 'Examples' section to ensure correct formatting of
-code snippets and their output.
+It can generate both module directories (with an index and subsections) and
+top-level single pages for important objects like the Tensor.
 
 Usage:
     # From the project root directory:
@@ -32,10 +31,6 @@ API_ROOT = DOCS_ROOT / "api"
 
 
 def extract_docstring_data(full_path: str) -> dict | None:
-    """
-    Introspects a live object using its full definition path to extract documentation.
-    Crucially, it captures the raw docstring for manual processing of examples.
-    """
     try:
         if '.' not in full_path:
             raise ImportError(f"Path '{full_path}' is not a valid object path.")
@@ -43,7 +38,6 @@ def extract_docstring_data(full_path: str) -> dict | None:
         module_path, object_name = full_path.rsplit('.', 1)
         module = importlib.import_module(module_path)
         obj = getattr(module, object_name)
-
     except (ImportError, AttributeError) as e:
         print(f"  └─ ❌ ERROR: Could not find '{object_name}' in module '{module_path}'.")
         print(f"     Please ensure the path '{full_path}' is correct in `structure.json`.")
@@ -52,10 +46,7 @@ def extract_docstring_data(full_path: str) -> dict | None:
 
     result = {}
     docstring_text = inspect.getdoc(obj)
-
-    # STORE THE RAW DOCSTRING for the manual example parser
     result['raw_docstring'] = docstring_text
-
     docstring_obj = parse(textwrap.dedent(docstring_text)) if docstring_text else parse("")
     result['docstring_obj'] = docstring_obj
 
@@ -75,7 +66,7 @@ def extract_docstring_data(full_path: str) -> dict | None:
                     'name': name,
                     'signature': str(inspect.signature(member)),
                     'docstring_obj': parsed_method_doc,
-                    'raw_docstring': method_doc, # Also store for methods
+                    'raw_docstring': method_doc,
                 })
     return result
 
@@ -94,7 +85,11 @@ def generate_api_index(api_section: dict):
     title = api_section.get("title", "API Reference")
     lines = [f"# {title}", "", "```{toctree}", ":maxdepth: 2", ""]
     for mod in api_section.get("modules", []):
-        lines.append(f"{mod['id']}/index")
+        # If a module has subsections, it's a directory. Otherwise, it's a single page.
+        if "subsections" in mod:
+            lines.append(f"{mod['id']}/index")
+        else:
+            lines.append(f"{mod['id']}")
     lines.append("```")
     write_md(API_ROOT / "index.md", lines)
 
@@ -113,10 +108,6 @@ def generate_module_index(module_path: Path, module: dict):
 
 
 def format_docstring_obj_to_md(docstring_obj, raw_docstring: str | None) -> list[str]:
-    """
-    Converts a docstring to Markdown. Uses the parsed object for standard
-    sections but uses a robust manual parser for the Examples section.
-    """
     md_lines = []
     if docstring_obj.short_description:
         md_lines.extend([docstring_obj.short_description, ""])
@@ -140,71 +131,49 @@ def format_docstring_obj_to_md(docstring_obj, raw_docstring: str | None) -> list
         md_lines.append(line)
         md_lines.append("")
 
-    # --- START: Robust Manual Example Parser ---
     if raw_docstring and "Examples" in raw_docstring:
         try:
-            # THIS IS THE FIX: `[-=]+` matches one or more hyphens or equals signs.
             _, examples_section = re.split(r'Examples\n\s*[-=]+', raw_docstring, maxsplit=1)
             example_lines = textwrap.dedent(examples_section).strip().split('\n')
-
             md_lines.extend(["**Examples**", ""])
-
             in_code_block = False
             for line in example_lines:
                 is_code_start = line.strip().startswith('>>>')
                 is_blank_line = not line.strip()
-
                 if is_code_start and not in_code_block:
                     md_lines.append("```python")
                     md_lines.append(line)
                     in_code_block = True
                 elif in_code_block:
-                    # A blank line after a code block terminates it.
                     if is_blank_line:
                         md_lines.append("```")
-                        md_lines.append("") # The blank line itself
+                        md_lines.append("")
                         in_code_block = False
                     else:
                         md_lines.append(line)
                 else:
-                    # This is a description line
                     md_lines.append(line)
-
-            # If the docstring ends while still in a code block, close it
             if in_code_block:
                 md_lines.append("```")
         except (ValueError, re.error):
             md_lines.append("**Examples**\n\n*Warning: Could not parse examples correctly.*")
-    # --- END: Robust Manual Example Parser ---
-
     return md_lines
 
 
-def generate_subsection_md(module_path: Path, subsection: dict):
-    """
-    Generates the final content Markdown file with properly formatted docstrings.
-    """
-    lines = [f"# {subsection.get('title', subsection['id'].capitalize())}", ""]
-    if subsection.get("description"):
-        lines.extend([subsection["description"], ""])
-
-    for item in subsection.get("items", []):
+def generate_page_from_items(lines: list[str], items: list[dict]):
+    """Helper to populate a page with documentation for a list of items."""
+    for item in items:
         item_path = item["path"]
         item_type = item.get("type", "function")
-        print(f"  -> Processing '{item_path}'...")
-
+        print(f"    -> Processing item '{item_path}'...")
         lines.extend([f"## `{item['name']}`", ""])
         data = extract_docstring_data(item_path)
-
         if data:
             signature = data.get('signature', '()')
             lines.append("```python")
             lines.append(f"{'class' if item_type == 'class' else 'def'} {item['name']}{signature}:")
             lines.append("```")
-
-            # PASS THE RAW DOCSTRING to the formatter
             lines.extend(format_docstring_obj_to_md(data['docstring_obj'], data.get('raw_docstring')))
-
             if item_type == 'class' and item.get("show_methods") and data.get("methods"):
                 lines.append("\n### Methods")
                 for method in sorted(data["methods"], key=lambda m: m['name']):
@@ -212,36 +181,50 @@ def generate_subsection_md(module_path: Path, subsection: dict):
                     lines.append("```python")
                     lines.append(f"def {method['name']}{method['signature']}:")
                     lines.append("```")
-                    # PASS THE RAW DOCSTRING for methods as well
                     lines.extend(format_docstring_obj_to_md(method['docstring_obj'], method.get('raw_docstring')))
         else:
             lines.append("*Could not extract documentation. Please check the error messages above and correct `structure.json`.*")
         lines.append("\n---")
 
+def generate_subsection_md(module_path: Path, subsection: dict):
+    lines = [f"# {subsection.get('title', subsection['id'].capitalize())}", ""]
+    if subsection.get("description"):
+        lines.extend([subsection["description"], ""])
+    generate_page_from_items(lines, subsection.get("items", []))
     write_md(module_path / f"{subsection['id']}.md", lines)
 
+def generate_single_page_md(base_path: Path, module: dict):
+    lines = [f"# {module.get('title', module['id'].capitalize())}", ""]
+    if module.get("description"):
+        lines.extend([module["description"], ""])
+    generate_page_from_items(lines, module.get("items", []))
+    write_md(base_path / f"{module['id']}.md", lines)
 
 def run():
     if str(PROJECT_ROOT) not in sys.path:
         sys.path.insert(0, str(PROJECT_ROOT))
 
     print("Starting Markdown documentation generation from structure.json...")
-
     with open(STRUCTURE_FILE, 'r', encoding='utf8') as fh:
         structure = json.load(fh)
 
     ensure_dir(API_ROOT)
-
     for section in structure.get('sections', []):
         if section.get('type') == 'api':
             print(f"\nProcessing API section: '{section['id']}'")
             generate_api_index(section)
             for module in section.get("modules", []):
-                print(f"  Processing module: '{module['id']}'")
-                module_path = API_ROOT / module['id']
-                generate_module_index(module_path, module)
-                for subsection in module.get("subsections", []):
-                    generate_subsection_md(module_path, subsection)
+                # If a module has subsections, it's a directory with an index.
+                if "subsections" in module:
+                    print(f"  Processing module directory: '{module['id']}'")
+                    module_path = API_ROOT / module['id']
+                    generate_module_index(module_path, module)
+                    for subsection in module.get("subsections", []):
+                        generate_subsection_md(module_path, subsection)
+                # Otherwise, it's a single top-level page.
+                else:
+                    print(f"  Processing single-page module: '{module['id']}'")
+                    generate_single_page_md(API_ROOT, module)
 
     print('\nAll done. Review generated Markdown files under docs/api/')
 

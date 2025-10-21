@@ -3,7 +3,7 @@
 ```{toctree}
 :maxdepth: 2
 
-core/index
+tensor
 transforms/index
 nn/index
 ops/index
