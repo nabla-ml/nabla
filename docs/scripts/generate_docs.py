@@ -146,8 +146,10 @@ def main():
             module_name = getattr(obj, '__module__', 'unknown')
             
             # Simplify module path for categorization
+            # Only use the first level after 'nabla.' (e.g., 'core', 'transforms', 'ops')
             if module_name.startswith('nabla.'):
-                category = module_name.replace('nabla.', '').replace('.', '/')
+                parts = module_name.replace('nabla.', '').split('.')
+                category = parts[0] if parts else 'other'
             else:
                 category = 'other'
             

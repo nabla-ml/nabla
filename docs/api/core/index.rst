@@ -1,5 +1,5 @@
-Core / Tensor
-=============
+Core
+====
 
 .. toctree::
    :maxdepth: 1
