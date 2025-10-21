@@ -14,8 +14,7 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-"""
-Optimizers for imperative neural network training (PyTorch-like API).
+"""Optimizers for imperative neural network training (PyTorch-like API).
 
 Provides optimizer classes that handle parameter updates after gradients
 are computed via backward().
@@ -24,17 +23,17 @@ Available optimizers:
 - SGD: Stochastic Gradient Descent with optional momentum and weight decay
 - Adam: Adaptive Moment Estimation
 
-Example:
-    >>> from nabla.nn import Module, SGD
-    >>> model = MyModel()
-    >>> optimizer = SGD(model.parameters(), lr=0.01, momentum=0.9)
-    >>> 
-    >>> for epoch in range(100):
-    ...     pred = model(x)
-    ...     loss = loss_fn(pred, y)
-    ...     loss.backward()
-    ...     optimizer.step()
-    ...     optimizer.zero_grad()
+Examples
+--------
+>>> from nabla.nn import Module, SGD
+>>> model = MyModel()
+>>> optimizer = SGD(model.parameters(), lr=0.01, momentum=0.9)
+>>> for epoch in range(100):
+...     pred = model(x)
+...     loss = loss_fn(pred, y)
+...     loss.backward()
+...     optimizer.step()
+...     optimizer.zero_grad()
 """
 
 from __future__ import annotations
@@ -42,26 +41,29 @@ from __future__ import annotations
 from typing import Iterator
 
 import nabla as nb
-from ..core.tensor import Tensor
+from ...core.tensor import Tensor
 
 __all__ = ["Optimizer", "SGD", "Adam"]
 
 
 class Optimizer:
-    """
-    Base class for all optimizers.
+    """Base class for all optimizers.
     
     Handles parameter updates after gradients are computed via backward().
     All optimizer implementations should inherit from this class.
     
-    Args:
-        params: Iterator or list of parameters to optimize
+    Parameters
+    ----------
+    params : Iterator[Tensor] or list[Tensor]
+        Iterator or list of parameters to optimize
         
-    Example:
-        >>> optimizer = SGD(model.parameters(), lr=0.01)
-        >>> loss.backward()
-        >>> optimizer.step()  # Updates parameters
-        >>> optimizer.zero_grad()  # Clears gradients
+    Examples
+    --------
+    >>> from nabla.nn import SGD
+    >>> optimizer = SGD(model.parameters(), lr=0.01)
+    >>> loss.backward()
+    >>> optimizer.step()  # Updates parameters
+    >>> optimizer.zero_grad()  # Clears gradients
     """
     
     def __init__(self, params: Iterator[Tensor] | list[Tensor]):
@@ -117,26 +119,31 @@ class Optimizer:
 
 
 class SGD(Optimizer):
-    """
-    Stochastic Gradient Descent optimizer.
+    """Stochastic Gradient Descent optimizer.
     
     Implements SGD with optional momentum and weight decay (L2 regularization).
     
-    Args:
-        params: Parameters to optimize
-        lr: Learning rate (default: 0.01)
-        momentum: Momentum factor (default: 0.0, no momentum)
-        weight_decay: Weight decay (L2 penalty) (default: 0.0, no decay)
+    Parameters
+    ----------
+    params : Iterator[Tensor] or list[Tensor]
+        Parameters to optimize
+    lr : float, optional
+        Learning rate (default: 0.01)
+    momentum : float, optional
+        Momentum factor (default: 0.0, no momentum)
+    weight_decay : float, optional
+        Weight decay (L2 penalty) (default: 0.0, no decay)
         
-    Example:
-        >>> optimizer = SGD(model.parameters(), lr=0.01, momentum=0.9)
-        >>> 
-        >>> for data, target in dataloader:
-        ...     optimizer.zero_grad()
-        ...     output = model(data)
-        ...     loss = criterion(output, target)
-        ...     loss.backward()
-        ...     optimizer.step()
+    Examples
+    --------
+    >>> from nabla.nn import SGD
+    >>> optimizer = SGD(model.parameters(), lr=0.01, momentum=0.9)
+    >>> for data, target in dataloader:
+    ...     optimizer.zero_grad()
+    ...     output = model(data)
+    ...     loss = criterion(output, target)
+    ...     loss.backward()
+    ...     optimizer.step()
     """
     
     def __init__(

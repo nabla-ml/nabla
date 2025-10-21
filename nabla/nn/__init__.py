@@ -23,24 +23,20 @@ This module provides two APIs:
    - Linear: Fully-connected layer
    - SGD, Adam: Optimizers
    
-   Example:
-
-   ```python
-   from nabla.nn import Module, Linear, Sequential, SGD
-   
-   class MLP(Module):
-       def __init__(self):
-           super().__init__()
-           self.layers = Sequential(
-               Linear(10, 20),
-               Linear(20, 10)
-           )
-       def forward(self, x):
-           return self.layers(x)
-   
-   model = MLP()
-   optimizer = SGD(model.parameters(), lr=0.01)
-   ```
+   Examples
+   --------
+   >>> from nabla.nn import Module, Linear, Sequential, SGD
+   >>> class MLP(Module):
+   ...     def __init__(self):
+   ...         super().__init__()
+   ...         self.layers = Sequential(
+   ...             Linear(10, 20),
+   ...             Linear(20, 10)
+   ...         )
+   ...     def forward(self, x):
+   ...         return self.layers(x)
+   >>> model = MLP()
+   >>> optimizer = SGD(model.parameters(), lr=0.01)
 
 2. **Functional API (JAX-like)**: For functional programming with pure functions
    - See nabla.nn.functional for loss functions, optimizers, initializers, etc.
@@ -49,10 +45,10 @@ This module provides two APIs:
 # ============================================================================
 # IMPERATIVE API (PyTorch-like)
 # ============================================================================
-from .module import Module
-from .containers import Sequential, ModuleList, ModuleDict
-from .optim import Optimizer, SGD, Adam
-from .modules import Linear
+from .modules.module import Module
+from .modules.container import Sequential, ModuleList, ModuleDict
+from .optim.optimizer import Optimizer, SGD, Adam
+from .modules.linear import Linear
 
 # ============================================================================
 # FUNCTIONAL API (JAX-like) - Legacy/existing functionality

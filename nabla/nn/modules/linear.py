@@ -19,34 +19,39 @@
 from __future__ import annotations
 
 import nabla as nb
-from ..module import Module
+from .module import Module
 
 __all__ = ["Linear"]
 
 
 class Linear(Module):
-    """
-    Applies a linear transformation: y = x @ W + b
+    """Applies a linear transformation: y = x @ W + b
     
-    Args:
-        in_features: Size of input features
-        out_features: Size of output features
-        bias: If True, adds a learnable bias (default: True)
+    Parameters
+    ----------
+    in_features : int
+        Size of input features
+    out_features : int
+        Size of output features
+    bias : bool, optional
+        If True, adds a learnable bias (default: True)
         
-    Shape:
-        - Input: (*, in_features) where * means any number of dimensions
-        - Output: (*, out_features)
+    Attributes
+    ----------
+    weight : Tensor
+        Learnable weights of shape (in_features, out_features)
+    bias : Tensor
+        Learnable bias of shape (1, out_features) if bias=True
         
-    Attributes:
-        weight: Learnable weights of shape (in_features, out_features)
-        bias: Learnable bias of shape (1, out_features) if bias=True
-        
-    Example:
-        >>> layer = Linear(20, 30)
-        >>> input = nb.rand((128, 20))
-        >>> output = layer(input)
-        >>> print(output.shape)
-        (128, 30)
+    Examples
+    --------
+    >>> import nabla as nb
+    >>> from nabla.nn import Linear
+    >>> layer = Linear(20, 30)
+    >>> input = nb.rand((128, 20))
+    >>> output = layer(input)
+    >>> print(output.shape)
+    (128, 30)
     """
     
     def __init__(self, in_features: int, out_features: int, bias: bool = True):

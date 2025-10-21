@@ -16,6 +16,8 @@
 
 """Imperative layer implementations."""
 
+from .module import Module
+from .container import Sequential, ModuleList, ModuleDict
 from .linear import Linear
 
-__all__ = ["Linear"]
+__all__ = ["Module", "Sequential", "ModuleList", "ModuleDict", "Linear"]

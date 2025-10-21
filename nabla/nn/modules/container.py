@@ -31,25 +31,24 @@ __all__ = ["Sequential", "ModuleList", "ModuleDict"]
 
 
 class Sequential(Module):
-    """
-    Sequential container that applies modules in order.
+    """Sequential container that applies modules in order.
     
     Modules will be added to the container in the order they are passed
     in the constructor. The forward() method automatically chains them.
     
-    Args:
-        *modules: Variable number of modules to add sequentially
+    Parameters
+    ----------
+    *modules : Module
+        Variable number of modules to add sequentially
         
-    Example:
-
-    ```python
-    model = Sequential(
-        Linear(10, 20),
-        ReLU(),
-        Linear(20, 10)
-    )
-    output = model(input)  # Automatically applies layers in order
-    ```
+    Examples
+    --------
+    >>> from nabla.nn import Sequential, Linear
+    >>> model = Sequential(
+    ...     Linear(10, 20),
+    ...     Linear(20, 10)
+    ... )
+    >>> output = model(input)  # Automatically applies layers in order
     """
     
     def __init__(self, *modules):
@@ -82,8 +81,7 @@ class Sequential(Module):
 
 
 class ModuleList(Module):
-    """
-    Container that holds modules in a list.
+    """Container that holds modules in a list.
     
     Like PyTorch's nn.ModuleList - modules are properly registered and can
     be indexed, iterated, and appended to. The modules are registered as
@@ -92,19 +90,20 @@ class ModuleList(Module):
     Note: ModuleList does not define forward() - it's a container that you
     use within your own modules.
     
-    Args:
-        *modules: Variable number of modules to add to the list
+    Parameters
+    ----------
+    *modules : Module
+        Variable number of modules to add to the list
         
-    Example:
-
-    ```python
-    layers = ModuleList([
-        Linear(10, 20),
-        Linear(20, 10)
-    ])
-    for layer in layers:
-        x = layer(x)
-    ```
+    Examples
+    --------
+    >>> from nabla.nn import ModuleList, Linear
+    >>> layers = ModuleList(
+    ...     Linear(10, 20),
+    ...     Linear(20, 10)
+    ... )
+    >>> for layer in layers:
+    ...     x = layer(x)
     """
     
     def __init__(self, *modules):

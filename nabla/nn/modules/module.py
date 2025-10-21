@@ -14,8 +14,7 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-"""
-Base Module class for imperative neural network programming (PyTorch-like API).
+"""Base Module class for imperative neural network programming (PyTorch-like API).
 
 This module provides the foundational Module class that enables:
 - Automatic parameter registration
@@ -24,36 +23,31 @@ This module provides the foundational Module class that enables:
 - Gradient handling
 - Callable models
 
-Example:
-
-```python
-import nabla as nb
-from nabla.nn import Module
-
-class Linear(Module):
-    def __init__(self, in_features, out_features):
-        super().__init__()
-        weight = nb.glorot_uniform((in_features, out_features))
-        weight.requires_grad_(True)
-        self.weight = weight  # Auto-registered!
-    
-    def forward(self, x):
-        return nb.matmul(x, self.weight)
-```
+Examples
+--------
+>>> import nabla as nb
+>>> from nabla.nn import Module
+>>> class Linear(Module):
+...     def __init__(self, in_features, out_features):
+...         super().__init__()
+...         weight = nb.glorot_uniform((in_features, out_features))
+...         weight.requires_grad_(True)
+...         self.weight = weight  # Auto-registered!
+...     def forward(self, x):
+...         return nb.matmul(x, self.weight)
 """
 
 from __future__ import annotations
 
 from typing import Iterator
 
-from ..core.tensor import Tensor
+from ...core.tensor import Tensor
 
 __all__ = ["Module"]
 
 
 class Module:
-    """
-    Base class for all neural network modules (PyTorch-like nn.Module).
+    """Base class for all neural network modules (PyTorch-like nn.Module).
     
     Your models should subclass this class and implement the forward() method.
     
@@ -68,23 +62,20 @@ class Module:
     - Gradient zeroing via .zero_grad()
     - Callable interface: model(x) calls model.forward(x)
     
-    Example:
-
-    ```python
-    class MLP(Module):
-        def __init__(self, layer_sizes):
-            super().__init__()
-            self.layers = [Linear(layer_sizes[i], layer_sizes[i+1])
-                          for i in range(len(layer_sizes)-1)]
-        
-        def forward(self, x):
-            for layer in self.layers:
-                x = layer(x)
-            return x
-    
-    model = MLP([10, 20, 10])
-    params = list(model.parameters())  # Gets all params recursively
-    ```
+    Examples
+    --------
+    >>> from nabla.nn import Module, Linear
+    >>> class MLP(Module):
+    ...     def __init__(self, layer_sizes):
+    ...         super().__init__()
+    ...         self.layers = [Linear(layer_sizes[i], layer_sizes[i+1])
+    ...                       for i in range(len(layer_sizes)-1)]
+    ...     def forward(self, x):
+    ...         for layer in self.layers:
+    ...             x = layer(x)
+    ...         return x
+    >>> model = MLP([10, 20, 10])
+    >>> params = list(model.parameters())  # Gets all params recursively
     """
     
     def __init__(self):
@@ -116,7 +107,7 @@ class Module:
         elif isinstance(value, list) and len(value) > 0:
             # Import here to avoid circular dependency
             if all(isinstance(item, Module) for item in value):
-                from .containers import ModuleList
+                from .container import ModuleList
                 module_list = ModuleList(*value)
                 self._modules[name] = module_list
                 value = module_list
@@ -125,20 +116,20 @@ class Module:
         object.__setattr__(self, name, value)
     
     def parameters(self) -> Iterator[Tensor]:
-        """
-        Recursively yield all parameters from this module and submodules.
+        """Recursively yield all parameters from this module and submodules.
         
         This is the primary way to get all trainable parameters for optimization.
         
-        Returns:
+        Returns
+        -------
+        Iterator[Tensor]
             Iterator over all parameters
             
-        Example:
-
-        ```python
-        model = MyModel()
-        optimizer = SGD(model.parameters(), lr=0.01)
-        ```
+        Examples
+        --------
+        >>> from nabla.nn import SGD
+        >>> model = MyModel()
+        >>> optimizer = SGD(model.parameters(), lr=0.01)
         """
         # Yield own parameters
         for param in self._parameters.values():
@@ -149,24 +140,25 @@ class Module:
             yield from module.parameters()
     
     def named_parameters(self, prefix: str = '') -> Iterator[tuple[str, Tensor]]:
-        """
-        Recursively yield (name, parameter) pairs with hierarchical names.
+        """Recursively yield (name, parameter) pairs with hierarchical names.
         
-        Args:
-            prefix: Prefix to prepend to parameter names (used internally for recursion)
+        Parameters
+        ----------
+        prefix : str, optional
+            Prefix to prepend to parameter names (used internally for recursion)
             
-        Returns:
+        Returns
+        -------
+        Iterator[tuple[str, Tensor]]
             Iterator over (name, parameter) tuples
             
-        Example:
-
-        ```python
-        for name, param in model.named_parameters():
-            print(f"{name}: shape {param.shape}")
-        # layer1.weight: shape (10, 20)
-        # layer1.bias: shape (1, 20)
-        # layer2.weight: shape (20, 10)
-        ```
+        Examples
+        --------
+        >>> for name, param in model.named_parameters():
+        ...     print(f"{name}: shape {param.shape}")
+        layer1.weight: shape (10, 20)
+        layer1.bias: shape (1, 20)
+        layer2.weight: shape (20, 10)
         """
         for name, param in self._parameters.items():
             full_name = f"{prefix}.{name}" if prefix else name
@@ -177,18 +169,17 @@ class Module:
             yield from module.named_parameters(full_name)
     
     def modules(self) -> Iterator[Module]:
-        """
-        Recursively yield all modules including self.
+        """Recursively yield all modules including self.
         
-        Returns:
+        Returns
+        -------
+        Iterator[Module]
             Iterator over all modules in the tree
             
-        Example:
-
-        ```python
-        for module in model.modules():
-            print(module.__class__.__name__)
-        ```
+        Examples
+        --------
+        >>> for module in model.modules():
+        ...     print(module.__class__.__name__)
         """
         yield self
         for module in self._modules.values():
@@ -230,18 +221,15 @@ class Module:
         return self.forward(*args, **kwargs)
     
     def zero_grad(self) -> None:
-        """
-        Zero gradients for all parameters in this module and submodules.
+        """Zero gradients for all parameters in this module and submodules.
         
         Should be called before each backward pass during training.
         
-        Example:
-
-        ```python
-        model.zero_grad()  # Clear all gradients
-        loss.backward()    # Compute new gradients
-        optimizer.step()   # Update parameters
-        ```
+        Examples
+        --------
+        >>> model.zero_grad()  # Clear all gradients
+        >>> loss.backward()    # Compute new gradients
+        >>> optimizer.step()   # Update parameters
         """
         for param in self.parameters():
             param.grad = None
