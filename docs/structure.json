@@ -3,24 +3,6 @@
   "version": "0.1.0",
   "sections": [
     {
-      "id": "getting-started",
-      "title": "Getting Started",
-      "type": "manual",
-      "path": "getting-started"
-    },
-    {
-      "id": "tutorials",
-      "title": "Tutorials",
-      "type": "notebooks",
-      "path": "tutorials",
-      "files": [
-        "autodiff_with_nabla.ipynb",
-        "mlp_training.ipynb",
-        "transformer_training.ipynb",
-        "transforms_uncovered.ipynb"
-      ]
-    },
-    {
       "id": "api",
       "title": "API Reference",
       "type": "api",
@@ -29,33 +11,28 @@
         {
           "id": "core",
           "title": "Core",
-          "description": "Core tensor operations and execution context",
-          "source_module": "nabla.core",
+          "description": "The fundamental building blocks of Nabla.",
           "subsections": [
             {
               "id": "tensor",
               "title": "Tensor",
-              "description": "The fundamental Tensor class",
               "items": [
                 {
                   "name": "Tensor",
                   "type": "class",
                   "path": "nabla.core.tensor.Tensor",
-                  "source": "nabla/core/tensor.py:Tensor",
                   "show_methods": true
                 }
               ]
             },
             {
-              "id": "execution",
+              "id": "execution_context",
               "title": "Execution Context",
-              "description": "Graph execution and compilation utilities",
               "items": [
                 {
-                  "name": "ExecutionContext",
+                  "name": "ThreadSafeExecutionContext",
                   "type": "class",
-                  "path": "nabla.core.execution_context.ExecutionContext",
-                  "source": "nabla/core/execution_context.py:ExecutionContext"
+                  "path": "nabla.core.execution_context.ThreadSafeExecutionContext"
                 }
               ]
             }
@@ -63,40 +40,36 @@
         },
         {
           "id": "transforms",
-          "title": "Transforms",
-          "description": "Function transformations for AD, vectorization, and compilation",
-          "source_module": "nabla.transforms",
+          "title": "Function Transformations",
+          "description": "Tools for automatic differentiation, vectorization, and compilation.",
           "subsections": [
             {
               "id": "autodiff",
               "title": "Automatic Differentiation",
-              "description": "Gradient computation and differentiation",
               "items": [
-                {"name": "grad", "type": "function", "path": "nabla.grad", "source": "nabla/transforms/grad.py:grad"},
-                {"name": "value_and_grad", "type": "function", "path": "nabla.value_and_grad", "source": "nabla/transforms/grad.py:value_and_grad"},
-                {"name": "vjp", "type": "function", "path": "nabla.vjp", "source": "nabla/transforms/vjp.py:vjp"},
-                {"name": "jvp", "type": "function", "path": "nabla.jvp", "source": "nabla/transforms/jvp.py:jvp"},
-                {"name": "jacfwd", "type": "function", "path": "nabla.jacfwd", "source": "nabla/transforms/jacobian.py:jacfwd"},
-                {"name": "jacrev", "type": "function", "path": "nabla.jacrev", "source": "nabla/transforms/jacobian.py:jacrev"},
-                {"name": "backward", "type": "function", "path": "nabla.backward", "source": "nabla/transforms/backward.py:backward"}
+                {"name": "grad", "type": "function", "path": "nabla.grad"},
+                {"name": "value_and_grad", "type": "function", "path": "nabla.value_and_grad"},
+                {"name": "vjp", "type": "function", "path": "nabla.vjp"},
+                {"name": "jvp", "type": "function", "path": "nabla.jvp"},
+                {"name": "jacfwd", "type": "function", "path": "nabla.jacfwd"},
+                {"name": "jacrev", "type": "function", "path": "nabla.jacrev"},
+                {"name": "backward", "type": "function", "path": "nabla.backward"}
               ]
             },
             {
               "id": "vectorization",
               "title": "Vectorization",
-              "description": "Vectorized mapping over batch dimensions",
               "items": [
-                {"name": "vmap", "type": "function", "path": "nabla.vmap", "source": "nabla/transforms/vmap.py:vmap"}
+                {"name": "vmap", "type": "function", "path": "nabla.vmap"}
               ]
             },
             {
               "id": "compilation",
               "title": "Compilation",
-              "description": "JIT compilation and optimization",
               "items": [
-                {"name": "jit", "type": "function", "path": "nabla.jit", "source": "nabla/transforms/jit.py:jit"},
-                {"name": "djit", "type": "function", "path": "nabla.djit", "source": "nabla/transforms/jit.py:djit"},
-                {"name": "xpr", "type": "function", "path": "nabla.xpr", "source": "nabla/transforms/xpr.py:xpr"}
+                {"name": "jit", "type": "function", "path": "nabla.jit"},
+                {"name": "djit", "type": "function", "path": "nabla.djit"},
+                {"name": "xpr", "type": "function", "path": "nabla.xpr"}
               ]
             }
           ]
@@ -104,59 +77,109 @@
         {
           "id": "nn",
           "title": "Neural Networks",
-          "description": "Neural network modules and layers",
-          "source_module": "nabla.nn",
+          "description": "Modules, layers, and optimizers for building neural networks.",
           "subsections": [
             {
               "id": "core",
-              "title": "Core Modules",
+              "title": "Core",
               "items": [
-                {"name": "Module", "type": "class", "path": "nabla.nn.module.Module", "source": "nabla/nn/module.py:Module"},
-                {"name": "Parameter", "type": "class", "path": "nabla.nn.module.Parameter", "source": "nabla/nn/module.py:Parameter"}
+                {"name": "Module", "type": "class", "path": "nabla.nn.module.Module"}
               ]
             },
             {
               "id": "layers",
               "title": "Layers",
               "items": [
-                {"name": "Linear", "type": "class", "path": "nabla.nn.linear.Linear", "source": "nabla/nn/linear.py:Linear"},
-                {"name": "Conv2d", "type": "class", "path": "nabla.nn.conv.Conv2d", "source": "nabla/nn/conv.py:Conv2d"},
-                {"name": "Dropout", "type": "class", "path": "nabla.nn.dropout.Dropout", "source": "nabla/nn/dropout.py:Dropout"}
+                {"name": "Linear", "type": "class", "path": "nabla.nn.modules.linear.Linear"}
+              ]
+            },
+            {
+              "id": "containers",
+              "title": "Containers",
+              "items": [
+                {"name": "Sequential", "type": "class", "path": "nabla.nn.containers.Sequential"},
+                {"name": "ModuleList", "type": "class", "path": "nabla.nn.containers.ModuleList"},
+                {"name": "ModuleDict", "type": "class", "path": "nabla.nn.containers.ModuleDict"}
               ]
             },
             {
               "id": "activations",
               "title": "Activation Functions",
+              "description": "These functions are generally found within the `nabla.ops` module but are listed here for convenience.",
               "items": [
-                {"name": "relu", "type": "function", "path": "nabla.nn.activations.relu", "source": "nabla/nn/activations.py:relu"},
-                {"name": "sigmoid", "type": "function", "path": "nabla.nn.activations.sigmoid", "source": "nabla/nn/activations.py:sigmoid"},
-                {"name": "tanh", "type": "function", "path": "nabla.nn.activations.tanh", "source": "nabla/nn/activations.py:tanh"}
+                  {"name": "relu", "type": "function", "path": "nabla.ops.unary.relu"},
+                  {"name": "sigmoid", "type": "function", "path": "nabla.ops.unary.sigmoid"},
+                  {"name": "tanh", "type": "function", "path": "nabla.ops.unary.tanh"},
+                  {"name": "softmax", "type": "function", "path": "nabla.ops.special.softmax"}
+              ]
+            },
+            {
+              "id": "optimizers",
+              "title": "Optimizers",
+              "items": [
+                  {"name": "Optimizer", "type": "class", "path": "nabla.nn.optim.optimizer.Optimizer"},
+                  {"name": "SGD", "type": "class", "path": "nabla.nn.optim.optimizer.SGD"},
+                  {"name": "Adam", "type": "class", "path": "nabla.nn.optim.optimizer.Adam"}
               ]
             }
           ]
         },
         {
           "id": "ops",
-          "title": "Operations",
-          "description": "Tensor operations and mathematical functions",
-          "source_module": "nabla.ops",
+          "title": "Tensor Operations",
+          "description": "A comprehensive library of low-level tensor operations.",
           "subsections": [
             {
               "id": "creation",
-              "title": "Tensor Creation",
+              "title": "Creation Ops",
               "items": [
-                {"name": "zeros", "type": "function", "path": "nabla.zeros", "source": "nabla/ops/creation.py:zeros"},
-                {"name": "ones", "type": "function", "path": "nabla.ones", "source": "nabla/ops/creation.py:ones"},
-                {"name": "rand", "type": "function", "path": "nabla.rand", "source": "nabla/ops/creation.py:rand"}
+                {"name": "zeros", "type": "function", "path": "nabla.ops.creation.zeros"},
+                {"name": "ones", "type": "function", "path": "nabla.ops.creation.ones"},
+                {"name": "rand", "type": "function", "path": "nabla.ops.creation.rand"},
+                {"name": "randn", "type": "function", "path": "nabla.ops.creation.randn"},
+                {"name": "arange", "type": "function", "path": "nabla.ops.creation.arange"},
+                {"name": "full_like", "type": "function", "path": "nabla.ops.creation.full_like"},
+                {"name": "ones_like", "type": "function", "path": "nabla.ops.creation.ones_like"},
+                {"name": "zeros_like", "type": "function", "path": "nabla.ops.creation.zeros_like"}
               ]
             },
             {
               "id": "math",
-              "title": "Mathematical Operations",
+              "title": "Math Ops",
               "items": [
-                {"name": "add", "type": "function", "path": "nabla.add", "source": "nabla/ops/math.py:add"},
-                {"name": "matmul", "type": "function", "path": "nabla.matmul", "source": "nabla/ops/math.py:matmul"},
-                {"name": "sum", "type": "function", "path": "nabla.sum", "source": "nabla/ops/math.py:sum"}
+                {"name": "add", "type": "function", "path": "nabla.ops.binary.add"},
+                {"name": "sub", "type": "function", "path": "nabla.ops.binary.sub"},
+                {"name": "mul", "type": "function", "path": "nabla.ops.binary.mul"},
+                {"name": "div", "type": "function", "path": "nabla.ops.binary.div"},
+                {"name": "pow", "type": "function", "path": "nabla.ops.binary.pow"},
+                {"name": "negate", "type": "function", "path": "nabla.ops.unary.negate"},
+                {"name": "exp", "type": "function", "path": "nabla.ops.unary.exp"},
+                {"name": "log", "type": "function", "path": "nabla.ops.unary.log"},
+                {"name": "sqrt", "type": "function", "path": "nabla.ops.unary.sqrt"},
+                {"name": "matmul", "type": "function", "path": "nabla.ops.linalg.matmul"}
+              ]
+            },
+            {
+              "id": "reductions",
+              "title": "Reduction Ops",
+              "items": [
+                {"name": "sum", "type": "function", "path": "nabla.ops.reduce.sum"},
+                {"name": "mean", "type": "function", "path": "nabla.ops.reduce.mean"},
+                {"name": "max", "type": "function", "path": "nabla.ops.reduce.max"},
+                {"name": "argmax", "type": "function", "path": "nabla.ops.reduce.argmax"}
+              ]
+            },
+            {
+              "id": "manipulation",
+              "title": "Manipulation Ops",
+              "items": [
+                {"name": "reshape", "type": "function", "path": "nabla.ops.view.reshape"},
+                {"name": "transpose", "type": "function", "path": "nabla.ops.view.transpose"},
+                {"name": "concatenate", "type": "function", "path": "nabla.ops.view.concatenate"},
+                {"name": "stack", "type": "function", "path": "nabla.ops.view.stack"},
+                {"name": "squeeze", "type": "function", "path": "nabla.ops.view.squeeze"},
+                {"name": "unsqueeze", "type": "function", "path": "nabla.ops.view.unsqueeze"},
+                {"name": "pad", "type": "function", "path": "nabla.ops.view.pad"}
               ]
             }
           ]
@@ -164,15 +187,23 @@
         {
           "id": "utils",
           "title": "Utilities",
-          "description": "Helper functions and utilities",
-          "source_module": "nabla.utils",
+          "description": "Helper functions for device management and testing.",
           "subsections": [
             {
               "id": "device",
               "title": "Device Management",
               "items": [
-                {"name": "device", "type": "function", "path": "nabla.device", "source": "nabla/utils/device.py:device"},
-                {"name": "cpu", "type": "function", "path": "nabla.cpu", "source": "nabla/utils/device.py:cpu"}
+                {"name": "device", "type": "function", "path": "nabla.device"},
+                {"name": "cpu", "type": "function", "path": "nabla.cpu"},
+                {"name": "accelerator", "type": "function", "path": "nabla.accelerator"},
+                {"name": "accelerator_count", "type": "function", "path": "nabla.accelerator_count"}
+              ]
+            },
+            {
+              "id": "testing",
+              "title": "Testing",
+              "items": [
+                  {"name": "allclose", "type": "function", "path": "nabla.allclose"}
               ]
             }
           ]
