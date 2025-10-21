@@ -39,7 +39,8 @@ def generate_markdown(name, obj, module_path, is_nn=False):
     # Module path
     md.append(f"**Source**: `{module_path}`\n")
     
-    # Add the entire docstring as-is (assumes docstring is already in markdown format)
+    # Add the entire docstring as-is
+    # The >>> syntax will be automatically highlighted by Sphinx
     md.append(docstring)
     md.append("\n")
     
@@ -211,11 +212,74 @@ def main():
     main_index_rst.append("\nComplete API reference for Nabla.\n")
     main_index_rst.append(".. toctree::")
     main_index_rst.append("   :maxdepth: 2\n")
+    
+    # Group categories by top-level module
+    top_level_categories = set()
     for category in sorted(categories.keys()):
-        main_index_rst.append(f"   {category}/index")
+        top_level = category.split('/')[0]
+        top_level_categories.add(top_level)
+    
+    # Add top-level categories to main index
+    for top_level in sorted(top_level_categories):
+        if top_level == 'nn':
+            # Special handling for nn - create a parent index
+            main_index_rst.append(f"   {top_level}/index")
+        else:
+            # Other modules - direct link to their index
+            main_index_rst.append(f"   {top_level}/index")
     
     main_index_file = api_dir / "index.rst"
     main_index_file.write_text('\n'.join(main_index_rst), encoding='utf-8')
+    
+    # Generate nn parent index if we have nn categories
+    nn_categories = [cat for cat in categories.keys() if cat.startswith('nn')]
+    if nn_categories:
+        print("\nGenerating nn parent index...")
+        nn_index_rst = ["Nn"]
+        nn_index_rst.append("=" * len(nn_index_rst[0]))
+        nn_index_rst.append("\nNeural Network module.\n")
+        nn_index_rst.append(".. toctree::")
+        nn_index_rst.append("   :maxdepth: 2\n")
+        
+        # Group nn subcategories
+        nn_subcats = {}
+        for cat in sorted(nn_categories):
+            parts = cat.split('/')
+            if len(parts) == 2:
+                # nn/modules or nn/optim - direct subcategory
+                nn_subcats[parts[1]] = cat
+            elif len(parts) == 3:
+                # nn/functional/losses - needs functional parent
+                if 'functional' not in nn_subcats:
+                    nn_subcats['functional'] = []
+                if isinstance(nn_subcats['functional'], list):
+                    nn_subcats['functional'].append(cat)
+                else:
+                    nn_subcats['functional'] = [cat]
+        
+        # Add direct subcategories (modules, optim)
+        for subcat in sorted([k for k, v in nn_subcats.items() if isinstance(v, str)]):
+            cat = nn_subcats[subcat]
+            nn_index_rst.append(f"   {cat.replace('nn/', '')}/index")
+        
+        # Add functional parent if exists
+        if 'functional' in nn_subcats and isinstance(nn_subcats['functional'], list):
+            nn_index_rst.append(f"   functional/index")
+            
+            # Create functional parent index
+            func_index_rst = ["Functional"]
+            func_index_rst.append("=" * len(func_index_rst[0]))
+            func_index_rst.append("\nFunctional API.\n")
+            func_index_rst.append(".. toctree::")
+            func_index_rst.append("   :maxdepth: 1\n")
+            for cat in sorted(nn_subcats['functional']):
+                func_index_rst.append(f"   {cat.replace('nn/functional/', '')}/index")
+            
+            func_index_file = api_dir / "nn" / "functional" / "index.rst"
+            func_index_file.write_text('\n'.join(func_index_rst), encoding='utf-8')
+        
+        nn_index_file = api_dir / "nn" / "index.rst"
+        nn_index_file.write_text('\n'.join(nn_index_rst), encoding='utf-8')
     
     print(f"\n✅ Done! Generated docs for {sum(len(items) for items in categories.values())} items")
     print(f"   Output: {api_dir}")

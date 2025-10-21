@@ -128,6 +128,10 @@ myst_enable_extensions = [
     "html_image", "replacements", "smartquotes", "substitution", "tasklist",
 ]
 
+# Enable syntax highlighting for doctest blocks (>>> syntax)
+myst_fence_as_directive = []
+myst_highlight_code_blocks = True
+
 # -- Napoleon (Docstrings) --
 napoleon_google_docstring = True
 napoleon_numpy_docstring = True
