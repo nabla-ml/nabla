@@ -46,4 +46,3 @@ Tensor([1, 2], dtype=int64)
 
 >>> nb.argmax(y, axes=0, keep_dims=True)
 Tensor([[1, 0, 1]], dtype=int64)
-
