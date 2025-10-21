@@ -33,31 +33,29 @@ multiplication of 1D vectors, 2D matrices, and stacks of matrices.
 
 ## Returns
 
-- `Tensor`: The result of the matrix multiplication.
+Tensor
+    The result of the matrix multiplication.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> # Vector-vector product (dot product)
->>> v1 = nb.tensor([1, 2, 3])
->>> v2 = nb.tensor([4, 5, 6])
->>> nb.matmul(v1, v2)
-Tensor([32], dtype=int32)
+```python
+import nabla as nb
+# Vector-vector product (dot product)
+v1 = nb.tensor([1, 2, 3])
+v2 = nb.tensor([4, 5, 6])
+nb.matmul(v1, v2)
+```
 
->>> # Matrix-vector product
->>> M = nb.tensor([[1, 2], [3, 4]])
->>> v = nb.tensor([5, 6])
->>> nb.matmul(M, v)
-Tensor([17, 39], dtype=int32)
+```python
+# Matrix-vector product
+M = nb.tensor([[1, 2], [3, 4]])
+v = nb.tensor([5, 6])
+nb.matmul(M, v)
+```
 
->>> # Batched matrix-matrix product
->>> M1 = nb.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]) # Shape (2, 2, 2)
->>> M2 = nb.tensor([[[9, 1], [2, 3]], [[4, 5], [6, 7]]]) # Shape (2, 2, 2)
->>> nb.matmul(M1, M2)
-Tensor([[[ 13,   7],
-        [ 35,  15]],
-
-       [[ 56,  47],
-        [ 76,  67]]], dtype=int32)
+```python
+# Batched matrix-matrix product
+M1 = nb.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]) # Shape (2, 2, 2)
+M2 = nb.tensor([[[9, 1], [2, 3]], [[4, 5], [6, 7]]]) # Shape (2, 2, 2)
+nb.matmul(M1, M2)
 ```

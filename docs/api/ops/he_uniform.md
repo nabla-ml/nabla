@@ -31,4 +31,5 @@ a uniform distribution U(-a, a) where a = sqrt(6 / fan_in).
 
 ## Returns
 
-- `Tensor`: An tensor initialized with the He uniform distribution.
+Tensor
+    An tensor initialized with the He uniform distribution.

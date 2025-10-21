@@ -14,8 +14,10 @@ Concatenate tensors along an existing axis.
 
 ## Parameters
 
-- **`args`** (`List of tensors to concatenate`): axis: Axis along which to concatenate tensors (default: 0)
+- **`args`** (`List of tensors to concatenate`): 
+
+- **`axis`** (`Axis along which to concatenate tensors (default: 0)`): 
 
 ## Returns
 
-- `Concatenated tensor`: 
+Concatenated tensor

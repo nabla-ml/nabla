@@ -30,24 +30,25 @@ device and with the given data type.
 
 ## Returns
 
-- `Tensor`: A new Nabla tensor containing the provided data.
+Tensor
+    A new Nabla tensor containing the provided data.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> import numpy as np
->>> # Create from a Python list
->>> nb.tensor([1, 2, 3])
-Tensor([1, 2, 3], dtype=int32)
+```python
+import nabla as nb
+import numpy as np
+# Create from a Python list
+nb.tensor([1, 2, 3])
+```
 
->>> # Create from a NumPy tensor
->>> np_arr = np.array([[4.0, 5.0], [6.0, 7.0]])
->>> nb.tensor(np_arr)
-Tensor([[4., 5.],
-       [6., 7.]], dtype=float32)
+```python
+# Create from a NumPy tensor
+np_arr = np.array([[4.0, 5.0], [6.0, 7.0]])
+nb.tensor(np_arr)
+```
 
->>> # Create a scalar tensor
->>> nb.tensor(100, dtype=nb.DType.int64)
-Tensor(100, dtype=int64)
+```python
+# Create a scalar tensor
+nb.tensor(100, dtype=nb.DType.int64)
 ```

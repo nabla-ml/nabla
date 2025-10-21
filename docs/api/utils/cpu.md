@@ -12,5 +12,6 @@ nabla.cpu() -> max._core.driver.Device
 
 Create a CPU device instance.
 
-Returns:
-    An instance of the CPU class.
+## Returns
+
+An instance of the CPU class.

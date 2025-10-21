@@ -21,13 +21,13 @@ Input tensors of non-boolean types will be cast to boolean first.
 
 ## Returns
 
-- `Tensor`: A boolean tensor containing the inverted values.
+Tensor
+    A boolean tensor containing the inverted values.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> x = nb.tensor([True, False, True])
->>> nb.logical_not(x)
-Tensor([False,  True, False], dtype=bool)
+```python
+import nabla as nb
+x = nb.tensor([True, False, True])
+nb.logical_not(x)
 ```

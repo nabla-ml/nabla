@@ -25,17 +25,18 @@ implementation of the `-` operator for Nabla tensors.
 
 ## Returns
 
-- `Tensor`: An tensor containing the result of the element-wise subtraction.
+Tensor
+    An tensor containing the result of the element-wise subtraction.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> x = nb.tensor([10, 20, 30])
->>> y = nb.tensor([1, 2, 3])
->>> nb.sub(x, y)
-Tensor([ 9, 18, 27], dtype=int32)
+```python
+import nabla as nb
+x = nb.tensor([10, 20, 30])
+y = nb.tensor([1, 2, 3])
+nb.sub(x, y)
+```
 
->>> x - y
-Tensor([ 9, 18, 27], dtype=int32)
+```python
+x - y
 ```

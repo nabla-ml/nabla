@@ -24,17 +24,18 @@ operator for Nabla tensors.
 
 ## Returns
 
-- `Tensor`: An tensor containing the result of the element-wise power operation.
+Tensor
+    An tensor containing the result of the element-wise power operation.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> x = nb.tensor([1, 2, 3])
->>> y = nb.tensor([2, 3, 2])
->>> nb.pow(x, y)
-Tensor([1, 8, 9], dtype=int32)
+```python
+import nabla as nb
+x = nb.tensor([1, 2, 3])
+y = nb.tensor([2, 3, 2])
+nb.pow(x, y)
+```
 
->>> x ** y
-Tensor([1, 8, 9], dtype=int32)
+```python
+x ** y
 ```

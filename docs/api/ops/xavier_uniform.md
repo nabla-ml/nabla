@@ -35,4 +35,5 @@ a = gain * sqrt(6 / (fan_in + fan_out)).
 
 ## Returns
 
-- `Tensor`: An tensor initialized with the Xavier uniform distribution.
+Tensor
+    An tensor initialized with the Xavier uniform distribution.

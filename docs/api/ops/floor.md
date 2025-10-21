@@ -21,13 +21,13 @@ This function is not differentiable and its gradient is zero everywhere.
 
 ## Returns
 
-- `Tensor`: An tensor containing the floor of each element.
+Tensor
+    An tensor containing the floor of each element.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> x = nb.tensor([-1.7, -0.2, 0.2, 1.7])
->>> nb.floor(x)
-Tensor([-2., -1.,  0.,  1.], dtype=float32)
+```python
+import nabla as nb
+x = nb.tensor([-1.7, -0.2, 0.2, 1.7])
+nb.floor(x)
 ```

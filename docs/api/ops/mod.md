@@ -24,17 +24,18 @@ implementation of the `%` operator for Nabla tensors.
 
 ## Returns
 
-- `Tensor`: An tensor containing the element-wise remainder.
+Tensor
+    An tensor containing the element-wise remainder.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> x = nb.tensor([10, -10, 9])
->>> y = nb.tensor([3, 3, -3])
->>> nb.mod(x, y)
-Tensor([ 1,  2, -0], dtype=int32)
+```python
+import nabla as nb
+x = nb.tensor([10, -10, 9])
+y = nb.tensor([3, 3, -3])
+nb.mod(x, y)
+```
 
->>> x % y
-Tensor([ 1,  2, -0], dtype=int32)
+```python
+x % y
 ```

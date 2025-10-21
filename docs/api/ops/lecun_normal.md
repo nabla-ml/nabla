@@ -31,4 +31,5 @@ a normal distribution N(0, std^2) where std = sqrt(1 / fan_in).
 
 ## Returns
 
-- `Tensor`: An tensor initialized with the LeCun normal distribution.
+Tensor
+    An tensor initialized with the LeCun normal distribution.

@@ -21,13 +21,13 @@ input tensor.
 
 ## Returns
 
-- `Tensor`: An tensor containing the exponential of each element.
+Tensor
+    An tensor containing the exponential of each element.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> x = nb.tensor([0.0, 1.0, 2.0])
->>> nb.exp(x)
-Tensor([1.       , 2.7182817, 7.389056 ], dtype=float32)
+```python
+import nabla as nb
+x = nb.tensor([0.0, 1.0, 2.0])
+nb.exp(x)
 ```

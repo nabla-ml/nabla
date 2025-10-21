@@ -21,8 +21,9 @@ Args:
         eagerly convert Python scalars to Tensors during the early device pass (to preserve prior semantics).
         Disable by setting to False.
 
-Returns:
-    JIT-compiled function with optimized execution
+## Returns
+
+JIT-compiled function with optimized execution
 
 Note:
     This follows JAX's jit API:

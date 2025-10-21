@@ -24,4 +24,5 @@ it is returned unchanged.
 
 ## Returns
 
-- `Tensor`: A new tensor residing on the target device.
+Tensor
+    A new tensor residing on the target device.

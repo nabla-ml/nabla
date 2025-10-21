@@ -24,5 +24,6 @@ Args:
     holomorphic: Ignored (for JAX compatibility)
     allow_int: Ignored (for JAX compatibility)
 
-Returns:
-    Function that computes the Jacobian using forward-mode autodiff
+## Returns
+
+Function that computes the Jacobian using forward-mode autodiff

@@ -18,8 +18,12 @@ and everything else is zero.
 
 ## Parameters
 
-- **`arg`** (`Input tensor (the smaller tensor to be placed)`): slices: List of slice objects defining where to place the tensor target_shape: The shape of the output tensor
+- **`arg`** (`Input tensor (the smaller tensor to be placed)`): 
+
+- **`slices`** (`List of slice objects defining where to place the tensor`): 
+
+- **`target_shape`** (`The shape of the output tensor`): 
 
 ## Returns
 
-- `Larger tensor with input placed at sliced location, zeros elsewhere`: 
+Larger tensor with input placed at sliced location, zeros elsewhere

@@ -24,14 +24,14 @@ broadcasting.
 
 ## Returns
 
-- `Tensor`: An tensor containing the element-wise maximum of `x` and `y`.
+Tensor
+    An tensor containing the element-wise maximum of `x` and `y`.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> x = nb.tensor([1, 5, 2])
->>> y = nb.tensor([2, 3, 6])
->>> nb.maximum(x, y)
-Tensor([2, 5, 6], dtype=int32)
+```python
+import nabla as nb
+x = nb.tensor([1, 5, 2])
+y = nb.tensor([2, 3, 6])
+nb.maximum(x, y)
 ```

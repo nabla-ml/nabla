@@ -25,18 +25,19 @@ numerically stable way as `exp(x - logsumexp(x))`.
 
 ## Returns
 
-- `Tensor`: An tensor of the same shape as the input, containing the softmax probabilities.
+Tensor
+    An tensor of the same shape as the input, containing the softmax
+    probabilities.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> x = nb.tensor([1.0, 2.0, 3.0])
->>> nb.softmax(x)
-Tensor([0.09003057, 0.24472848, 0.66524094], dtype=float32)
+```python
+import nabla as nb
+x = nb.tensor([1.0, 2.0, 3.0])
+nb.softmax(x)
+```
 
->>> logits = nb.tensor([[1, 2, 3], [1, 1, 1]])
->>> nb.softmax(logits, axis=1)
-Tensor([[0.09003057, 0.24472848, 0.66524094],
-       [0.33333334, 0.33333334, 0.33333334]], dtype=float32)
+```python
+logits = nb.tensor([[1, 2, 3], [1, 1, 1]])
+nb.softmax(logits, axis=1)
 ```

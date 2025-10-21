@@ -29,13 +29,12 @@ number of elements (the product of the shape dimensions).
 
 ## Returns
 
-- `Tensor`: An tensor of the specified shape containing values from 0 to N-1.
+Tensor
+    An tensor of the specified shape containing values from 0 to N-1.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> nb.ndarange((2, 3), dtype=nb.DType.int32)
-Tensor([[0, 1, 2],
-       [3, 4, 5]], dtype=int32)
+```python
+import nabla as nb
+nb.ndarange((2, 3), dtype=nb.DType.int32)
 ```

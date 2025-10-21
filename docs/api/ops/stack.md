@@ -14,8 +14,10 @@ Stack tensors along a new axis.
 
 ## Parameters
 
-- **`tensors`** (`List of tensors to stack`): axis: Axis along which to stack the tensors (default: 0)
+- **`tensors`** (`List of tensors to stack`): 
+
+- **`axis`** (`Axis along which to stack the tensors (default: 0)`): 
 
 ## Returns
 
-- `Stacked tensor`: 
+Stacked tensor

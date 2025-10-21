@@ -26,19 +26,21 @@ The function supports broadcasting among the three input tensors.
 
 ## Returns
 
-- `Tensor`: An tensor with elements from `x` and `y`, depending on `condition`.
+Tensor
+    An tensor with elements from `x` and `y`, depending on `condition`.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> condition = nb.tensor([True, False, True])
->>> x = nb.tensor([1, 2, 3])
->>> y = nb.tensor([10, 20, 30])
->>> nb.where(condition, x, y)
-Tensor([1, 20, 3], dtype=int32)
+```python
+import nabla as nb
+condition = nb.tensor([True, False, True])
+x = nb.tensor([1, 2, 3])
+y = nb.tensor([10, 20, 30])
+nb.where(condition, x, y)
+```
 
 Broadcasting example:
->>> nb.where(nb.tensor([True, False]), nb.tensor(5), nb.tensor([10, 20]))
-Tensor([5, 20], dtype=int32)
+
+```python
+nb.where(nb.tensor([True, False]), nb.tensor(5), nb.tensor([10, 20]))
 ```

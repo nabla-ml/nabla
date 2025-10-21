@@ -26,20 +26,23 @@ occurrence is returned.
 
 ## Returns
 
-- `Tensor`: An tensor of `int64` integers containing the indices of the maximum elements.
+Tensor
+    An tensor of `int64` integers containing the indices of the maximum
+    elements.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> x = nb.tensor([1, 5, 2, 5])
->>> nb.argmax(x)
-Tensor(1, dtype=int64)
+```python
+import nabla as nb
+x = nb.tensor([1, 5, 2, 5])
+nb.argmax(x)
+```
 
->>> y = nb.tensor([[1, 5, 2], [4, 3, 6]])
->>> nb.argmax(y, axes=1)
-Tensor([1, 2], dtype=int64)
+```python
+y = nb.tensor([[1, 5, 2], [4, 3, 6]])
+nb.argmax(y, axes=1)
+```
 
->>> nb.argmax(y, axes=0, keep_dims=True)
-Tensor([[1, 0, 1]], dtype=int64)
+```python
+nb.argmax(y, axes=0, keep_dims=True)
 ```

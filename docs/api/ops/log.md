@@ -22,13 +22,13 @@ added to ensure the input to the logarithm is positive.
 
 ## Returns
 
-- `Tensor`: An tensor containing the natural logarithm of each element.
+Tensor
+    An tensor containing the natural logarithm of each element.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> x = nb.tensor([1.0, 2.71828, 10.0])
->>> nb.log(x)
-Tensor([0.       , 0.9999993, 2.3025851], dtype=float32)
+```python
+import nabla as nb
+x = nb.tensor([1.0, 2.71828, 10.0])
+nb.log(x)
 ```

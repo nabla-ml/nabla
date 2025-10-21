@@ -22,4 +22,5 @@ as the new first dimension of the tensor's logical shape.
 
 ## Returns
 
-- `Tensor`: A new tensor with one fewer batch dimension.
+Tensor
+    A new tensor with one fewer batch dimension.

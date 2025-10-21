@@ -35,4 +35,5 @@ interval `[lower, upper)`.
 
 ## Returns
 
-- `Tensor`: An tensor of the specified shape filled with random values.
+Tensor
+    An tensor of the specified shape filled with random values.

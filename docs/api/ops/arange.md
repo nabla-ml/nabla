@@ -34,21 +34,23 @@ This function follows the JAX/NumPy `arange` API.
 
 ## Returns
 
-- `Tensor`: A 1D tensor of evenly spaced values.
+Tensor
+    A 1D tensor of evenly spaced values.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> # nb.arange(stop)
->>> nb.arange(5)
-Tensor([0., 1., 2., 3., 4.], dtype=float32)
+```python
+import nabla as nb
+# nb.arange(stop)
+nb.arange(5)
+```
 
->>> # nb.arange(start, stop)
->>> nb.arange(5, 10)
-Tensor([5., 6., 7., 8., 9.], dtype=float32)
+```python
+# nb.arange(start, stop)
+nb.arange(5, 10)
+```
 
->>> # nb.arange(start, stop, step)
->>> nb.arange(10, 20, 2, dtype=nb.DType.int32)
-Tensor([10, 12, 14, 16, 18], dtype=int32)
+```python
+# nb.arange(start, stop, step)
+nb.arange(10, 20, 2, dtype=nb.DType.int32)
 ```

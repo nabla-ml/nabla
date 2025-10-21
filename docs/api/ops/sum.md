@@ -26,24 +26,30 @@ tensor is calculated.
 
 ## Returns
 
-- `Tensor`: An tensor containing the summed values.
+Tensor
+    An tensor containing the summed values.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> x = nb.tensor([[1, 2, 3], [4, 5, 6]])
+```python
+import nabla as nb
+x = nb.tensor([[1, 2, 3], [4, 5, 6]])
+```
 
 Sum all elements:
->>> nb.sum(x)
-Tensor([21], dtype=int32)
+
+```python
+nb.sum(x)
+```
 
 Sum along an axis:
->>> nb.sum(x, axes=0)
-Tensor([5, 7, 9], dtype=int32)
+
+```python
+nb.sum(x, axes=0)
+```
 
 Sum along an axis and keep dimensions:
->>> nb.sum(x, axes=1, keep_dims=True)
-Tensor([[ 6],
-       [15]], dtype=int32)
+
+```python
+nb.sum(x, axes=1, keep_dims=True)
 ```

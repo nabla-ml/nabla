@@ -27,4 +27,6 @@ dimensions as the template tensor.
 
 ## Returns
 
-- `Tensor`: A new tensor with the same properties as the template, filled with normally distributed random values.
+Tensor
+    A new tensor with the same properties as the template, filled with
+    normally distributed random values.

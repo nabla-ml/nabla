@@ -16,8 +16,9 @@ Args:
     fn: Function to trace (should take positional arguments)
     *primals: Positional arguments to the function (can be arbitrary pytrees)
 
-Returns:
-    JAX-like string representation of the computation graph
+## Returns
+
+JAX-like string representation of the computation graph
 
 Note:
     This follows the same flexible API as vjp, jvp, and vmap:

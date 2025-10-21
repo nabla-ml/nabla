@@ -22,17 +22,19 @@ implementation for the unary `-` operator on Nabla tensors.
 
 ## Returns
 
-- `Tensor`: An tensor containing the negated elements.
+Tensor
+    An tensor containing the negated elements.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> x = nb.tensor([1, -2, 3.5])
->>> nb.negate(x)
-Tensor([-1.,  2., -3.5], dtype=float32)
+```python
+import nabla as nb
+x = nb.tensor([1, -2, 3.5])
+nb.negate(x)
+```
 
 Using the `-` operator:
->>> -x
-Tensor([-1.,  2., -3.5], dtype=float32)
+
+```python
+-x
 ```

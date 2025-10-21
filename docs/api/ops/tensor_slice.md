@@ -14,8 +14,12 @@ Slice an tensor along specified dimensions.
 
 ## Parameters
 
-- **`arg`** (`Input tensor to slice`): slices: List of slice objects defining the slicing for each dimension squeeze_axes: List of axes that should be squeezed (for JAX compatibility)
+- **`arg`** (`Input tensor to slice`): 
+
+- **`slices`** (`List of slice objects defining the slicing for each dimension`): 
+
+- **`squeeze_axes`** (`List of axes that should be squeezed (for JAX compatibility)`): 
 
 ## Returns
 
-- `Sliced tensor`: 
+Sliced tensor

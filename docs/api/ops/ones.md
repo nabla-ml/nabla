@@ -26,13 +26,13 @@ Creates an tensor of a given shape filled with ones.
 
 ## Returns
 
-- `Tensor`: An tensor of the specified shape and dtype, filled with ones.
+Tensor
+    An tensor of the specified shape and dtype, filled with ones.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> # Create a vector of ones
->>> nb.ones((4,), dtype=nb.DType.float32)
-Tensor([1., 1., 1., 1.], dtype=float32)
+```python
+import nabla as nb
+# Create a vector of ones
+nb.ones((4,), dtype=nb.DType.float32)
 ```

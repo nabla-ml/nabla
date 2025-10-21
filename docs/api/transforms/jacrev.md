@@ -24,8 +24,9 @@ Args:
     allow_int: Optional, bool. Whether to allow differentiating with
         respect to integer valued inputs. Currently ignored.
 
-Returns:
-    A function with the same arguments as `func`, that evaluates the Jacobian of
+## Returns
+
+A function with the same arguments as `func`, that evaluates the Jacobian of
     `func` using reverse-mode automatic differentiation. If `has_aux` is True
     then a pair of (jacobian, auxiliary_data) is returned.
 

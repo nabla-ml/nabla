@@ -14,8 +14,10 @@ Squeeze tensor by removing batch dimensions of size 1.
 
 ## Parameters
 
-- **`arg`** (`Input tensor`): axes: List of batch dimension axes to squeeze. If None, returns tensor unchanged.
+- **`arg`** (`Input tensor`): 
+
+- **`axes`** (`List of batch dimension axes to squeeze. If None, returns tensor unchanged.`): 
 
 ## Returns
 
-- `Tensor with specified batch dimensions of size 1 removed`: 
+Tensor with specified batch dimensions of size 1 removed

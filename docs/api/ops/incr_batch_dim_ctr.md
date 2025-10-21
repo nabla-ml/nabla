@@ -22,4 +22,5 @@ tensor's logical shape as a new batch dimension.
 
 ## Returns
 
-- `Tensor`: A new tensor with an additional batch dimension.
+Tensor
+    A new tensor with an additional batch dimension.

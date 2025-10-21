@@ -33,4 +33,5 @@ distribution N(0, std^2) where std = gain * sqrt(2 / (fan_in + fan_out)).
 
 ## Returns
 
-- `Tensor`: An tensor initialized with the Xavier normal distribution.
+Tensor
+    An tensor initialized with the Xavier normal distribution.

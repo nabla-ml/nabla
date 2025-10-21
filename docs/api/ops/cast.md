@@ -23,16 +23,15 @@ with the specified data type (`dtype`).
 
 ## Returns
 
-- `Tensor`: A new tensor with the elements cast to the specified `dtype`.
+Tensor
+    A new tensor with the elements cast to the specified `dtype`.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> x = nb.tensor([1, 2, 3])
->>> x.dtype
-int32
->>> y = nb.cast(x, nb.float32)
->>> y
-Tensor([1., 2., 3.], dtype=float32)
+```python
+import nabla as nb
+x = nb.tensor([1, 2, 3])
+x.dtype
+y = nb.cast(x, nb.float32)
+y
 ```

@@ -25,17 +25,19 @@ implementation of the `/` operator for Nabla tensors.
 
 ## Returns
 
-- `Tensor`: An tensor containing the result of the element-wise division. The result is typically a floating-point tensor.
+Tensor
+    An tensor containing the result of the element-wise division. The
+    result is typically a floating-point tensor.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> x = nb.tensor([10, 20, 30])
->>> y = nb.tensor([2, 5, 10])
->>> nb.div(x, y)
-Tensor([5., 4., 3.], dtype=float32)
+```python
+import nabla as nb
+x = nb.tensor([10, 20, 30])
+y = nb.tensor([2, 5, 10])
+nb.div(x, y)
+```
 
->>> x / y
-Tensor([5., 4., 3.], dtype=float32)
+```python
+x / y
 ```

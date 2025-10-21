@@ -26,17 +26,18 @@ avoids overflow errors that can occur when `exp(x)` is very large.
 
 ## Returns
 
-- `Tensor`: An tensor containing the result of the `logsumexp` operation.
+Tensor
+    An tensor containing the result of the `logsumexp` operation.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> x = nb.tensor([1.0, 2.0, 3.0])
->>> nb.logsumexp(x)
-Tensor([3.407606], dtype=float32)
+```python
+import nabla as nb
+x = nb.tensor([1.0, 2.0, 3.0])
+nb.logsumexp(x)
+```
 
->>> data = nb.tensor([[1, 2, 3], [4, 5, 6]])
->>> nb.logsumexp(data, axis=1)
-Tensor([3.407606, 6.407606], dtype=float32)
+```python
+data = nb.tensor([[1, 2, 3], [4, 5, 6]])
+nb.logsumexp(data, axis=1)
 ```

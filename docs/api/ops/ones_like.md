@@ -21,14 +21,13 @@ dimensions as the template tensor.
 
 ## Returns
 
-- `Tensor`: A new tensor of ones with the same properties as the template.
+Tensor
+    A new tensor of ones with the same properties as the template.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> x = nb.tensor([[1., 2.], [3., 4.]])
->>> nb.ones_like(x)
-Tensor([[1., 1.],
-       [1., 1.]], dtype=float32)
+```python
+import nabla as nb
+x = nb.tensor([[1., 2.], [3., 4.]])
+nb.ones_like(x)
 ```

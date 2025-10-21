@@ -15,5 +15,6 @@ Get a DeviceRef instance for the specified device.
 Args:
     device: The Device instance to reference.
 
-Returns:
-    A DeviceRef instance for the specified device.
+## Returns
+
+A DeviceRef instance for the specified device.

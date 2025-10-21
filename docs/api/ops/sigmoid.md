@@ -21,13 +21,13 @@ activation function that squashes values to the range `(0, 1)`.
 
 ## Returns
 
-- `Tensor`: An tensor containing the sigmoid of each element.
+Tensor
+    An tensor containing the sigmoid of each element.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> x = nb.tensor([-1.0, 0.0, 1.0, 20.0])
->>> nb.sigmoid(x)
-Tensor([0.26894143, 0.5       , 0.7310586 , 1.        ], dtype=float32)
+```python
+import nabla as nb
+x = nb.tensor([-1.0, 0.0, 1.0, 20.0])
+nb.sigmoid(x)
 ```

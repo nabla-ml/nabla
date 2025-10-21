@@ -23,8 +23,9 @@ Args:
         mode (`static=False` / `djit`), scalars are left as Python scalars (original behavior) but CPU Tensors
         are still moved. Set to False to disable all automatic device movement/conversion.
 
-Returns:
-    JIT-compiled function with optimized execution
+## Returns
+
+JIT-compiled function with optimized execution
 
 Note:
     This follows JAX's jit API:

@@ -26,4 +26,5 @@ used in function transformations like `vmap`. It operates on the
 
 ## Returns
 
-- `Tensor`: An tensor with specified batch dimensions reduced by the sum operation.
+Tensor
+    An tensor with specified batch dimensions reduced by the sum operation.

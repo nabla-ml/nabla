@@ -12,5 +12,6 @@ nabla.accelerator_count() -> int
 
 Get the number of available accelerators (GPUs).
 
-Returns:
-    The number of available accelerators.
+## Returns
+
+The number of available accelerators.

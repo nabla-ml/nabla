@@ -25,17 +25,19 @@ for Nabla tensors.
 
 ## Returns
 
-- `Tensor`: A boolean tensor containing the result of the element-wise equality comparison.
+Tensor
+    A boolean tensor containing the result of the element-wise equality
+    comparison.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> x = nb.tensor([1, 2, 3])
->>> y = nb.tensor([1, 5, 3])
->>> nb.equal(x, y)
-Tensor([ True, False,  True], dtype=bool)
+```python
+import nabla as nb
+x = nb.tensor([1, 2, 3])
+y = nb.tensor([1, 5, 3])
+nb.equal(x, y)
+```
 
->>> x == y
-Tensor([ True, False,  True], dtype=bool)
+```python
+x == y
 ```

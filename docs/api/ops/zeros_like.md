@@ -21,14 +21,13 @@ dimensions as the template tensor.
 
 ## Returns
 
-- `Tensor`: A new tensor of zeros with the same properties as the template.
+Tensor
+    A new tensor of zeros with the same properties as the template.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> x = nb.tensor([[1, 2], [3, 4]], dtype=nb.DType.int32)
->>> nb.zeros_like(x)
-Tensor([[0, 0],
-       [0, 0]], dtype=int32)
+```python
+import nabla as nb
+x = nb.tensor([[1, 2], [3, 4]], dtype=nb.DType.int32)
+nb.zeros_like(x)
 ```

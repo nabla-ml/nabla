@@ -25,26 +25,18 @@ evaluates both branches, `cond` only executes the selected function.
 
 - **`false_fn`** (`Callable`): The function to be called if `condition` is False.
 
-- **``** (`*args`): Positional arguments to be passed to the selected function.
-
-- **``** (`**kwargs`): Keyword arguments to be passed to the selected function.
-
 ## Returns
 
-- `Tensor`: The result of calling either `true_fn` or `false_fn`.
+Tensor
+    The result of calling either `true_fn` or `false_fn`.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> def f(x):
-    return x * 2
-...
->>> def g(x):
-    return x + 10
-...
->>> x = nb.tensor(5)
->>> # Executes g(x) because the condition is False
->>> nb.cond(nb.tensor(False), f, g, x)
-Tensor([15], dtype=int32)
+```python
+import nabla as nb
+def f(x):
+def g(x):
+x = nb.tensor(5)
+# Executes g(x) because the condition is False
+nb.cond(nb.tensor(False), f, g, x)
 ```

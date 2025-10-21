@@ -33,4 +33,5 @@ distribution U(-a, a) where a = sqrt(6 / (fan_in + fan_out)).
 
 ## Returns
 
-- `Tensor`: An tensor initialized with the Glorot uniform distribution.
+Tensor
+    An tensor initialized with the Glorot uniform distribution.

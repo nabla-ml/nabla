@@ -19,11 +19,12 @@ Args:
         first element is considered the output of the mathematical function to be
         differentiated and the second element is auxiliary data. Default False.
 
-Returns:
-    If has_aux is False:
-        Tuple of (outputs, vjp_function) where vjp_function computes gradients.
+## Returns
+
+If has_aux is False:
+Tuple of (outputs, vjp_function) where vjp_function computes gradients.
     If has_aux is True:
-        Tuple of (outputs, vjp_function, aux) where aux is the auxiliary data.
+Tuple of (outputs, vjp_function, aux) where aux is the auxiliary data.
 
     The vjp_function always returns gradients as a tuple (matching JAX behavior):
     - Single argument: vjp_fn(cotangent) -> (gradient,)

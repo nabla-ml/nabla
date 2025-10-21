@@ -24,17 +24,18 @@ operator, which this function implements for Nabla tensors.
 
 ## Returns
 
-- `Tensor`: An tensor containing the result of the element-wise floor division.
+Tensor
+    An tensor containing the result of the element-wise floor division.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> x = nb.tensor([10, -10, 9])
->>> y = nb.tensor([3, 3, 3])
->>> nb.floordiv(x, y)
-Tensor([ 3, -4,  3], dtype=int32)
+```python
+import nabla as nb
+x = nb.tensor([10, -10, 9])
+y = nb.tensor([3, 3, 3])
+nb.floordiv(x, y)
+```
 
->>> x // y
-Tensor([ 3, -4,  3], dtype=int32)
+```python
+x // y
 ```

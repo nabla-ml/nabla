@@ -25,17 +25,18 @@ implementation of the `*` operator for Nabla tensors.
 
 ## Returns
 
-- `Tensor`: An tensor containing the result of the element-wise multiplication.
+Tensor
+    An tensor containing the result of the element-wise multiplication.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> x = nb.tensor([1, 2, 3])
->>> y = nb.tensor([4, 5, 6])
->>> nb.mul(x, y)
-Tensor([4, 10, 18], dtype=int32)
+```python
+import nabla as nb
+x = nb.tensor([1, 2, 3])
+y = nb.tensor([4, 5, 6])
+nb.mul(x, y)
+```
 
->>> x * y
-Tensor([4, 10, 18], dtype=int32)
+```python
+x * y
 ```

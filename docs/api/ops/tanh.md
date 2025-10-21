@@ -21,13 +21,13 @@ squashing values to the range `[-1, 1]`.
 
 ## Returns
 
-- `Tensor`: An tensor containing the hyperbolic tangent of each element.
+Tensor
+    An tensor containing the hyperbolic tangent of each element.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> x = nb.tensor([-1.0, 0.0, 1.0, 20.0])
->>> nb.tanh(x)
-Tensor([-0.7615942,  0.       ,  0.7615942,  1.       ], dtype=float32)
+```python
+import nabla as nb
+x = nb.tensor([-1.0, 0.0, 1.0, 20.0])
+nb.tanh(x)
 ```

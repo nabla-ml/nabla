@@ -26,14 +26,13 @@ Creates an tensor of a given shape filled with zeros.
 
 ## Returns
 
-- `Tensor`: An tensor of the specified shape and dtype, filled with zeros.
+Tensor
+    An tensor of the specified shape and dtype, filled with zeros.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> # Create a 2x3 matrix of zeros
->>> nb.zeros((2, 3), dtype=nb.DType.int32)
-Tensor([[0, 0, 0],
-       [0, 0, 0]], dtype=int32)
+```python
+import nabla as nb
+# Create a 2x3 matrix of zeros
+nb.zeros((2, 3), dtype=nb.DType.int32)
 ```

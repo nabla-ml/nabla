@@ -23,14 +23,16 @@ Args:
     atol: Absolute tolerance parameter
     equal_nan: Whether to compare NaN's as equal
 
-Returns:
-    bool: True if the tensors are equal within the given tolerance
+## Returns
 
-Examples:
-    >>> import nabla as nb
-    >>> a = nb.tensor([1.0, 2.0, 3.0])
-    >>> b = nb.tensor([1.0, 2.0, 3.000001])
-    >>> nb.allclose(a, b)
-    True
-    >>> nb.allclose(a, np.array([1.0, 2.0, 3.0]))
-    True
+bool: True if the tensors are equal within the given tolerance
+
+## Examples
+
+```python
+import nabla as nb
+a = nb.tensor([1.0, 2.0, 3.0])
+b = nb.tensor([1.0, 2.0, 3.000001])
+nb.allclose(a, b)
+nb.allclose(a, np.array([1.0, 2.0, 3.0]))
+```

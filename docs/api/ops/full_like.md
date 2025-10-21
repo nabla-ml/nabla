@@ -23,14 +23,14 @@ dimensions as the template tensor, filled with `fill_value`.
 
 ## Returns
 
-- `Tensor`: A new tensor filled with `fill_value` and with the same properties as the template.
+Tensor
+    A new tensor filled with `fill_value` and with the same properties
+    as the template.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> x = nb.zeros((2, 2))
->>> nb.full_like(x, 7.0)
-Tensor([[7., 7.],
-       [7., 7.]], dtype=float32)
+```python
+import nabla as nb
+x = nb.zeros((2, 2))
+nb.full_like(x, 7.0)
 ```

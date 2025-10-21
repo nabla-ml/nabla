@@ -20,8 +20,9 @@ Args:
         is considered the output of the mathematical function to be differentiated and the
         second element is auxiliary data. Default False.
 
-Returns:
-    If has_aux is False, returns a (outputs, output_tangents) pair.
+## Returns
+
+If has_aux is False, returns a (outputs, output_tangents) pair.
     If has_aux is True, returns a (outputs, output_tangents, aux) tuple where aux is the
     auxiliary data returned by func.
 

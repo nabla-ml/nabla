@@ -25,17 +25,18 @@ of `y`. It supports broadcasting and provides the implementation of the
 
 ## Returns
 
-- `Tensor`: A boolean tensor containing the result of the element-wise comparison.
+Tensor
+    A boolean tensor containing the result of the element-wise comparison.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> x = nb.tensor([1, 5, 3])
->>> y = nb.tensor([2, 5, 1])
->>> nb.greater_equal(x, y)
-Tensor([False,  True,  True], dtype=bool)
+```python
+import nabla as nb
+x = nb.tensor([1, 5, 3])
+y = nb.tensor([2, 5, 1])
+nb.greater_equal(x, y)
+```
 
->>> x >= y
-Tensor([False,  True,  True], dtype=bool)
+```python
+x >= y
 ```

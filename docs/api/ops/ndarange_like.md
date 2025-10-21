@@ -22,14 +22,14 @@ N-1, where N is the total number of elements.
 
 ## Returns
 
-- `Tensor`: A new tensor with the same properties as the template, filled with sequential values.
+Tensor
+    A new tensor with the same properties as the template, filled with
+    sequential values.
 
 ## Examples
 
-```pycon
->>> import nabla as nb
->>> template = nb.zeros((2, 2), dtype=nb.DType.int32)
->>> nb.ndarange_like(template)
-Tensor([[0, 1],
-       [2, 3]], dtype=int32)
+```python
+import nabla as nb
+template = nb.zeros((2, 2), dtype=nb.DType.int32)
+nb.ndarange_like(template)
 ```
