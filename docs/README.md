@@ -1,336 +1,122 @@
-# Documentation Guide
+# Documentation Generation Workflow
 
-This guide explains how to generate and maintain the Nabla documentation.
+This document explains the automated process for generating the Nabla API reference documentation. The system is designed to convert Python docstrings from the `nabla` source code into a structured, navigable set of Markdown files, which can then be used by static site generators like Sphinx or MkDocs.
 
-## Quick Start
+The core principle is to separate the **structure** of the documentation (what goes where) from the **content** (the docstrings themselves).
 
-```bash
-# Generate structured API documentation
-python docs/scripts/generate_docs.py
+## Key Components
 
-# Build the documentation
-cd docs && bash build.sh
+The generation process relies on two key files:
 
-# View the documentation
-open docs/_build/html/index.html
-```
+1.  **`docs/structure.json`**: The blueprint. This file is the single source of truth for the *hierarchy* of the documentation. It defines every page, section, and API item that should be included, and in what order.
+2.  **`docs/scripts/build_from_json.py`**: The engine. This Python script reads the `structure.json` blueprint, introspects the live `nabla` library code to pull out docstrings, formats everything into Markdown, and writes the final `.md` files to the `docs/api/` directory.
 
-## Documentation Scripts
+---
 
-Documentation maintenance scripts are located in `docs/scripts/`:
+## How It Works
 
-- `generate_docs.py` - Generate API documentation from code
-- `generate_sitemap.py` - Create sitemap.xml for SEO
-- `check_indexing.py` - Verify Google indexing status
-- `seo_audit.py` - Run SEO analysis on documentation
-- `fix_seo_issues.py` - Fix common SEO problems
-- `final_seo_report.py` - Generate comprehensive SEO report
+The `build_from_json.py` script executes the following steps:
 
-## Documentation Structure
+1.  **Parse `structure.json`**: The script starts by reading the entire JSON file to understand the desired documentation structure.
 
-The documentation automatically mirrors the Nabla library structure:
+2.  **Traverse the Hierarchy**: It iterates through the defined `modules`. The script is designed to handle two types of modules:
+    *   **Directory Modules** (e.g., `ops`, `nn`): If a module contains a `"subsections"` key, the script creates a corresponding directory (e.g., `docs/api/ops/`) and an `index.md` file for that directory's table of contents. It then generates a separate Markdown file for each subsection.
+    *   **Single-Page Modules** (e.g., `tensor`): If a module does not have subsections and instead has an `"items"` key directly, the script generates a single top-level Markdown file for it (e.g., `docs/api/tensor.md`).
 
-```
-docs/api/
-├── core/          # nabla.core.*
-├── ops/           # nabla.ops.*
-├── transforms/    # nabla.transforms.*
-├── nn/            # nabla.nn.*
-│   ├── layers/    # nabla.nn.layers.*
-│   ├── losses/    # nabla.nn.losses.*
-│   └── ...
-└── utils/         # nabla.utils.*
-```
+3.  **Dynamic Introspection**: For each API item listed in the JSON (like `nabla.ops.binary.add`), the script uses Python's `importlib` and `inspect` modules to:
+    *   Dynamically import the function or class from the live `nabla` library.
+    *   Extract its call signature (e.g., `(x: Tensor, y: Tensor) -> Tensor`).
+    *   Extract its raw, unprocessed docstring.
 
-## Excluding Functions/Classes from Documentation
+4.  **Hybrid Docstring Parsing**: The script uses a two-pronged approach to parse the docstring content:
+    *   **Standard Sections**: For sections like `Parameters`, `Returns`, and general descriptions, it uses the `docstring-parser` library.
+    *   **Examples Section**: To ensure doctests (`>>> ...`) and their output are rendered correctly and in order, the script uses a **robust manual parser**. This parser specifically looks for the `Examples` header and its underline (`--------`), then intelligently processes the following lines to create perfectly formatted Markdown code blocks. This was implemented to fix bugs where the output appeared before the code.
 
-### Method 1: Using `@nodoc` Decorator (Recommended)
+5.  **Markdown Generation**: The parsed signature and docstring data are formatted into clean Markdown, including headers, code blocks with Python syntax highlighting, bullet points for parameters, and horizontal rules to separate items.
 
-```python
-from nabla.utils.docs import nodoc
+6.  **File Output**: The final Markdown content is written to the appropriate file within the `docs/api/` directory. The script will create any necessary directories and files, overwriting old ones to ensure the docs are always up-to-date.
 
-# Exclude a function
-@nodoc
-def internal_helper():
-    """This won't appear in docs."""
-    pass
+---
 
-# Exclude a class
-@nodoc
-class InternalUtility:
-    """This class won't appear in docs."""
-    pass
+## How to Run the Generator
 
-# Exclude methods within a class
-class PublicClass:
-    def public_method(self):
-        """This will appear in docs."""
-        pass
-    
-    @nodoc
-    def _internal_method(self):
-        """This won't appear in docs."""
-        pass
-```
+1.  Make sure you are in your project's virtual environment with all dependencies installed.
+2.  From the **project root directory**, run the script:
 
-### Method 2: Using `__all__` Lists
+    ```bash
+    python docs/scripts/build_from_json.py
+    ```
 
-Define what should be documented in each module:
+3.  The script will print its progress to the console and report any errors, such as a function path not being found. The generated files will appear in `docs/api/`.
 
-```python
-# In your module
-__all__ = ['PublicClass', 'public_function']  # Only these will be documented
+---
 
-class PublicClass:
-    """This will be documented."""
-    pass
+## How to Adapt and Maintain
 
-class InternalClass:
-    """This won't be documented (not in __all__)."""
-    pass
-```
+### Adding a New Function or Class
 
-### Method 3: Naming Convention
+This is the most common task.
 
-Functions/classes starting with `_` are automatically excluded:
+1.  **Find the right location** in the `docs/structure.json` file. For example, if you've added a new binary operation, find the `"ops_binary"` subsection.
+2.  **Add a new JSON object** to the `"items"` array for your function. Make sure the `"path"` points to the correct, full import path of the object.
+
+    ```json
+    // Inside the "items" array for "ops_binary"
+    {
+      "name": "your_new_function",
+      "type": "function",
+      "path": "nabla.ops.binary.your_new_function"
+    }
+    ```
+
+3.  **Re-run the generator script.** Your new function will now appear in the documentation.
+
+### Reorganizing the Documentation
+
+To change the order of items, create new sections, or move a function from one page to another, **you only need to edit `docs/structure.json`**. The script will automatically generate the new file structure on its next run.
+
+---
+
+### Docstring Formatting Conventions
+
+The parser is specifically tuned for **NumPy-style docstrings**. To ensure your docstrings are parsed correctly, please follow this format, especially for the `Examples` section.
 
 ```python
-def public_function():
-    """This will be documented."""
-    pass
+"""A brief one-line summary of the function.
 
-def _private_function():
-    """This won't be documented (starts with _)."""
-    pass
-```
+A more detailed multi-line description of what the function does, its
+features, and any important notes for the user.
 
-## Available Commands
+Parameters
+----------
+arg1 : type
+    Description of the first argument.
+arg2 : type, optional
+    Description of the second argument. Default is `None`.
 
-### Generate Documentation Structure
-```bash
-python scripts/generate_structured_docs.py
-```
-Creates the complete API documentation structure that mirrors your library organization.
+Returns
+-------
+return_type
+    Description of the returned value.
 
-### Build Documentation
-```bash
-cd docs
-make html          # Build HTML documentation
-make clean         # Clean build artifacts
-make clean && make html  # Clean rebuild
-```
+Examples
+--------
+A brief description of the first example.
 
-### Fix Documentation Warnings
-```bash
-python scripts/fix_doc_warnings.py
-```
-Automatically fixes common documentation warnings and formatting issues.
+>>> import nabla as nb
+>>> x = nb.tensor([1, 2, 3])
+>>> your_function(x)
+Tensor([2, 4, 6], dtype=int32)
 
-### Development Server
-```bash
-cd docs/_build/html
-python -m http.server 8000
-# Open http://localhost:8000 in your browser
-```
+Another example, perhaps showing a different use case.
 
-## Configuration
-
-### Sphinx Settings
-Key settings in `docs/conf.py`:
-- **autodoc**: Automatically generates docs from docstrings
-- **autosummary**: Creates module summaries
-- **napoleon**: Supports Google/NumPy style docstrings
-- **nodoc integration**: Respects `@nodoc` decorator
-
-### Custom Skip Function
-The documentation system automatically excludes:
-- Items marked with `@nodoc`
-- Private items (starting with `_`)
-- Items not in `__all__` lists
-- Common internal attributes
-
-## Best Practices
-
-### 1. Use Clear Docstrings
-```python
-def my_function(x, y):
-    """
-    Brief description of what the function does.
-    
-    Args:
-        x: Description of parameter x
-        y: Description of parameter y
-        
-    Returns:
-        Description of return value
-        
-    Example:
-        >>> result = my_function(1, 2)
-        >>> print(result)
-        3
-    """
-    return x + y
-```
-
-### 2. Organize with `@nodoc`
-```python
-# Public API
-def create_tensor(shape):
-    """Create a new tensor with given shape."""
-    return _internal_create_tensor(shape)
-
-# Internal implementation
-@nodoc
-def _internal_create_tensor(shape):
-    """Internal tensor creation logic."""
-    # Implementation details
-    pass
-```
-
-### 3. Use `__all__` for Module Organization
-```python
-# At the top of your module
-__all__ = [
-    'PublicClass',
-    'public_function',
-    'CONSTANT'
-]
-
-# Only items in __all__ will be documented
-```
-
-## Troubleshooting
-
-### Common Issues
-
-**ImportError during build:**
-- Check that all imports work correctly
-- Ensure circular imports are resolved
-- Verify `@nodoc` imports are correct
-
-**Missing documentation:**
-- Check if item is in `__all__` list
-- Verify item doesn't start with `_`
-- Ensure `@nodoc` decorator isn't applied
-
-**Docstring formatting warnings:**
-- Use consistent indentation (4 spaces)
-- Follow Google/NumPy docstring format
-- Run `python scripts/fix_doc_warnings.py`
-
-### Build Errors
-```bash
-# Clean rebuild to fix caching issues
-cd docs && make clean && make html
-
-# Check specific errors
-cd docs && sphinx-build -b html . _build/html
-```
-
-## Files Overview
-
-| File | Purpose |
-|------|---------|
-| `scripts/generate_structured_docs.py` | Creates API documentation structure |
-| `scripts/fix_doc_warnings.py` | Fixes common documentation warnings |
-| `docs/conf.py` | Sphinx configuration |
-| `nabla/utils/docs.py` | Contains `@nodoc` decorator |
-| `docs/Makefile` | Build commands |
-
-## Example Workflow
-
-1. **Mark internal code:**
-   ```python
-   @nodoc
-   def internal_function():
-       pass
-   ```
-
-2. **Generate documentation:**
-   ```bash
-   python scripts/generate_structured_docs.py
-   ```
-
-3. **Build and view:**
-   ```bash
-   cd docs && make html && open _build/html/index.html
-   ```
-
-4. **Fix any warnings:**
-   ```bash
-   python scripts/fix_doc_warnings.py
-   ```
-
-That's it! Your documentation will automatically stay in sync with your code structure and respect your public/private API boundaries.
-
-## SEO & Discoverability
-
-The documentation includes **comprehensive SEO optimization**:
-
-### Automatic SEO Features
-
-- ✅ Page-specific meta tags and descriptions
-- ✅ Open Graph tags for social sharing  
-- ✅ Twitter Cards support
-- ✅ Automatic sitemap generation
-- ✅ Robots.txt configuration
-- ✅ Mobile-responsive design
-- ✅ Clean URL structure
-
-### SEO Best Practices for API Docs
-
-```python
-def your_function(param):
-    """
-    Brief, descriptive summary for search engines.
-    
-    Detailed explanation with keywords like 'GPU-accelerated',
-    'NumPy-compatible', 'machine learning', etc.
-    
-    Args:
-        param: Clear parameter description
-        
-    Returns:
-        Clear return value description
-        
-    Example:
-        >>> import nabla as nb
-        >>> result = your_function(value)
-    """
-```
-
-### Module-Level SEO
-
-Add SEO-friendly module docstrings:
-
-```python
-# At the top of each module
-"""
-Core tensor operations for GPU-accelerated computation.
-
-This module provides NumPy-compatible tensor operations optimized
-for machine learning and scientific computing workloads.
+>>> y = nb.tensor([10, 20, 30])
+>>> your_function(x, arg2=y)
+Tensor([11, 22, 33], dtype=int32)
 """
 ```
 
-## Performance & Analytics
-
-### Build Performance
-
-```bash
-# Monitor build time
-time make html
-
-# Check for SEO issues
-python scripts/fix_doc_warnings.py
-```
-
-### SEO Analysis
-
-```bash
-# View current SEO configuration
-cat docs/conf.py | grep -A 10 "html_meta"
-
-# Check sitemap generation
-ls docs/_build/html/sitemap.xml
-```
+**Key Points:**
+- The section headers (`Parameters`, `Returns`, `Examples`) are followed by an underline of hyphens (`---`).
+- Each example code block starts with `>>>`. The output should follow directly on the next line(s).
+- Blank lines are used to separate examples.
