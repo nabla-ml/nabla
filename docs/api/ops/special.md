@@ -25,7 +25,6 @@ probabilities.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([1.0, 2.0, 3.0])
@@ -67,7 +66,6 @@ correctly against the input tensor. Defaults to False.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([1.0, 2.0, 3.0])
@@ -105,7 +103,6 @@ The function supports broadcasting among the three input tensors.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> condition = nb.tensor([True, False, True])
@@ -148,7 +145,6 @@ evaluates both branches, `cond` only executes the selected function.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> def f(x):

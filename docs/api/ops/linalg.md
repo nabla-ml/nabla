@@ -31,7 +31,6 @@ multiplication of 1D vectors, 2D matrices, and stacks of matrices.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> # Vector-vector product (dot product)

@@ -20,7 +20,6 @@ activation function in neural networks.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([-2.0, -0.5, 0.0, 1.0, 2.0])
@@ -49,7 +48,6 @@ activation function that squashes values to the range `(0, 1)`.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([-1.0, 0.0, 1.0, 20.0])
@@ -78,7 +76,6 @@ squashing values to the range `[-1, 1]`.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([-1.0, 0.0, 1.0, 20.0])
@@ -112,7 +109,6 @@ probabilities.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([1.0, 2.0, 3.0])

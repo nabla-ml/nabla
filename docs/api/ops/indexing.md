@@ -24,7 +24,6 @@ dimension. Defaults to -1.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([[10, 20, 30], [40, 50, 60]])
@@ -69,7 +68,6 @@ specified `indices`.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> target_shape = (3, 4)

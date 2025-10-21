@@ -27,11 +27,10 @@ Permute (reorder) the dimensions of a tensor.
 
 **Examples**
 
---
 ```python
-    >>> x = nb.ones((2, 3, 4))  # shape (2, 3, 4)
-    >>> y = permute(x, (2, 0, 1))  # shape (4, 2, 3)
-    >>> # Dimension 2 -> position 0, dimension 0 -> position 1, dimension 1 -> position 2
+>>> x = nb.ones((2, 3, 4))  # shape (2, 3, 4)
+>>> y = permute(x, (2, 0, 1))  # shape (4, 2, 3)
+>>> # Dimension 2 -> position 0, dimension 0 -> position 1, dimension 1 -> position 2
 ```
 
 ---
@@ -179,14 +178,13 @@ regular transpose works on shape dimensions. The shape dimensions remain unchang
 
 **Examples**
 
---
 ```python
-    >>> import nabla as nb
-    >>> # Tensor with batch_dims=(2, 3, 4) and shape=(5, 6)
-    >>> x = nb.ones((5, 6))
-    >>> x.batch_dims = (2, 3, 4)  # Simulated for example
-    >>> y = transpose_batch_dims(x, -3, -1)  # Swap first and last batch dims
-    >>> # Result has batch_dims=(4, 3, 2) and shape=(5, 6)
+>>> import nabla as nb
+>>> # Tensor with batch_dims=(2, 3, 4) and shape=(5, 6)
+>>> x = nb.ones((5, 6))
+>>> x.batch_dims = (2, 3, 4)  # Simulated for example
+>>> y = transpose_batch_dims(x, -3, -1)  # Swap first and last batch dims
+>>> # Result has batch_dims=(4, 3, 2) and shape=(5, 6)
 ```
 
 ---
@@ -203,14 +201,13 @@ remain unchanged.
 
 **Examples**
 
---
 ```python
-    >>> import nabla as nb
-    >>> # Tensor with batch_dims=(2, 3, 4) and shape=(5, 6)
-    >>> x = nb.ones((5, 6))
-    >>> x.batch_dims = (2, 3, 4)  # Simulated for example
-    >>> y = permute_batch_dims(x, (-1, -3, -2))  # Reorder as (4, 2, 3)
-    >>> # Result has batch_dims=(4, 2, 3) and shape=(5, 6)
+>>> import nabla as nb
+>>> # Tensor with batch_dims=(2, 3, 4) and shape=(5, 6)
+>>> x = nb.ones((5, 6))
+>>> x.batch_dims = (2, 3, 4)  # Simulated for example
+>>> y = permute_batch_dims(x, (-1, -3, -2))  # Reorder as (4, 2, 3)
+>>> # Result has batch_dims=(4, 2, 3) and shape=(5, 6)
 ```
 
 ---

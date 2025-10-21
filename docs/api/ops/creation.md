@@ -27,7 +27,6 @@ Defaults to an empty tuple.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> import numpy as np
@@ -69,7 +68,6 @@ Defaults to an empty tuple.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> # Create a 2x3 matrix of zeros
@@ -101,7 +99,6 @@ Defaults to an empty tuple.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> # Create a vector of ones
@@ -197,7 +194,6 @@ Defaults to an empty tuple.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> # nb.arange(stop)
@@ -234,7 +230,6 @@ dimensions as the template tensor.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([[1, 2], [3, 4]], dtype=nb.DType.int32)
@@ -264,7 +259,6 @@ dimensions as the template tensor.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([[1., 2.], [3., 4.]])
@@ -344,7 +338,6 @@ as the template.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.zeros((2, 2))
@@ -377,7 +370,6 @@ shape and dtype as `x`.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.ndarange((3, 3), dtype=nb.DType.int32)
@@ -612,7 +604,6 @@ Defaults to an empty tuple.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> nb.ndarange((2, 3), dtype=nb.DType.int32)
@@ -643,7 +634,6 @@ sequential values.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> template = nb.zeros((2, 2), dtype=nb.DType.int32)

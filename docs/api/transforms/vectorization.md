@@ -22,7 +22,6 @@ Creates a function that maps a function over axes of pytrees.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> def square(x):

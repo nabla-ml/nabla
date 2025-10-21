@@ -52,10 +52,10 @@ def extract_docstring_data(full_path: str) -> dict | None:
 
     result = {}
     docstring_text = inspect.getdoc(obj)
-    
+
     # STORE THE RAW DOCSTRING for the manual example parser
     result['raw_docstring'] = docstring_text
-    
+
     docstring_obj = parse(textwrap.dedent(docstring_text)) if docstring_text else parse("")
     result['docstring_obj'] = docstring_obj
 
@@ -141,9 +141,10 @@ def format_docstring_obj_to_md(docstring_obj, raw_docstring: str | None) -> list
         md_lines.append("")
 
     # --- START: Robust Manual Example Parser ---
-    if raw_docstring and "Examples\n" in raw_docstring:
+    if raw_docstring and "Examples" in raw_docstring:
         try:
-            _, examples_section = re.split(r'Examples\n\s*------', raw_docstring, maxsplit=1)
+            # THIS IS THE FIX: `[-=]+` matches one or more hyphens or equals signs.
+            _, examples_section = re.split(r'Examples\n\s*[-=]+', raw_docstring, maxsplit=1)
             example_lines = textwrap.dedent(examples_section).strip().split('\n')
 
             md_lines.extend(["**Examples**", ""])
@@ -159,7 +160,6 @@ def format_docstring_obj_to_md(docstring_obj, raw_docstring: str | None) -> list
                     in_code_block = True
                 elif in_code_block:
                     # A blank line after a code block terminates it.
-                    # This handles multiple distinct examples.
                     if is_blank_line:
                         md_lines.append("```")
                         md_lines.append("") # The blank line itself
@@ -201,10 +201,10 @@ def generate_subsection_md(module_path: Path, subsection: dict):
             lines.append("```python")
             lines.append(f"{'class' if item_type == 'class' else 'def'} {item['name']}{signature}:")
             lines.append("```")
-            
+
             # PASS THE RAW DOCSTRING to the formatter
             lines.extend(format_docstring_obj_to_md(data['docstring_obj'], data.get('raw_docstring')))
-            
+
             if item_type == 'class' and item.get("show_methods") and data.get("methods"):
                 lines.append("\n### Methods")
                 for method in sorted(data["methods"], key=lambda m: m['name']):

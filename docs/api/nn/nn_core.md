@@ -22,7 +22,6 @@ Provides:
 
 **Examples**
 
---
 ```python
 >>> from nabla.nn import Module, Linear
 >>> class MLP(Module):

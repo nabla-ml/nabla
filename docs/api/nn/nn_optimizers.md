@@ -16,7 +16,6 @@ All optimizer implementations should inherit from this class.
 
 **Examples**
 
---
 ```python
 >>> from nabla.nn import SGD
 >>> optimizer = SGD(model.parameters(), lr=0.01)
@@ -44,7 +43,6 @@ Implements SGD with optional momentum and weight decay (L2 regularization).
 
 **Examples**
 
---
 ```python
 >>> from nabla.nn import SGD
 >>> optimizer = SGD(model.parameters(), lr=0.01, momentum=0.9)

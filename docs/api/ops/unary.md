@@ -21,7 +21,6 @@ implementation for the unary `-` operator on Nabla tensors.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([1, -2, 3.5])
@@ -53,7 +52,6 @@ Computes the element-wise absolute value of an tensor.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([-1.5, 0.0, 2.5])
@@ -82,7 +80,6 @@ input tensor.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([0.0, 1.0, 2.0])
@@ -112,7 +109,6 @@ added to ensure the input to the logarithm is positive.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([1.0, 2.71828, 10.0])
@@ -141,7 +137,6 @@ compatible with the automatic differentiation system.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([0.0, 4.0, 9.0])
@@ -168,7 +163,6 @@ Computes the element-wise sine of an tensor.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([0, 1.5707963, 3.1415926])
@@ -194,7 +188,6 @@ Computes the element-wise cosine of an tensor.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([0, 1.5707963, 3.1415926])
@@ -223,7 +216,6 @@ squashing values to the range `[-1, 1]`.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([-1.0, 0.0, 1.0, 20.0])
@@ -252,7 +244,6 @@ activation function in neural networks.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([-2.0, -0.5, 0.0, 1.0, 2.0])
@@ -281,7 +272,6 @@ activation function that squashes values to the range `(0, 1)`.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([-1.0, 0.0, 1.0, 20.0])
@@ -310,7 +300,6 @@ This function is not differentiable and its gradient is zero everywhere.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([-1.7, -0.2, 0.2, 1.7])
@@ -340,7 +329,6 @@ with the specified data type (`dtype`).
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([1, 2, 3])
@@ -372,7 +360,6 @@ Input tensors of non-boolean types will be cast to boolean first.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([True, False, True])

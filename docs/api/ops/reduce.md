@@ -27,7 +27,6 @@ correctly against the original tensor. Defaults to False.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([[1, 2, 3], [4, 5, 6]])
@@ -79,7 +78,6 @@ correctly against the original tensor. Defaults to False.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([[1, 2, 3], [4, 5, 6]])
@@ -132,7 +130,6 @@ correctly against the original tensor. Defaults to False.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([[1, 5, 2], [4, 3, 6]])
@@ -185,7 +182,6 @@ elements.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([1, 5, 2, 5])

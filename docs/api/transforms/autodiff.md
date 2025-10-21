@@ -26,7 +26,6 @@ the gradient part. Uses VJP directly for efficiency with scalar outputs.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> def my_loss(x):
@@ -71,7 +70,6 @@ This is simpler and more efficient than using jacrev/jacfwd for scalar outputs.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> def my_loss(x):
@@ -116,7 +114,6 @@ The vjp_function always returns gradients as a tuple (matching JAX behavior):
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> def f(x):
@@ -164,7 +161,6 @@ auxiliary data returned by func.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> def f(x):
@@ -211,7 +207,6 @@ where primal_axes are None (broadcast) and tangent_axes are 0 (vectorize).
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> def f(x):
@@ -267,7 +262,6 @@ then a pair of (jacobian, auxiliary_data) is returned.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> def f(x):

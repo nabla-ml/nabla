@@ -17,7 +17,6 @@ Applies a linear transformation: y = x @ W + b
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> from nabla.nn import Linear
@@ -45,7 +44,6 @@ in the constructor. The forward() method automatically chains them.
 
 **Examples**
 
---
 ```python
 >>> from nabla.nn import Sequential, Linear
 >>> model = Sequential(
@@ -76,7 +74,6 @@ use within your own modules.
 
 **Examples**
 
---
 ```python
 >>> from nabla.nn import ModuleList, Linear
 >>> layers = ModuleList(

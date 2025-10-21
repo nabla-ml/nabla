@@ -86,6 +86,9 @@ Permute the dimensions of the tensor.
 
  – Tensor with dimensions permuted according to the specified axes
 
+**Examples**
+
+*Warning: Could not parse examples correctly.*
 
 #### `realize`
 ```python
@@ -118,6 +121,9 @@ Change the shape of an tensor without changing its data.
 
  – Tensor with the new shape
 
+**Examples**
+
+*Warning: Could not parse examples correctly.*
 
 #### `set`
 ```python
@@ -137,6 +143,9 @@ values updated, leaving the original Tensor unchanged.
 
  – New Tensor with updated values
 
+**Examples**
+
+*Warning: Could not parse examples correctly.*
 
 #### `set_maxpr`
 ```python
@@ -160,6 +169,9 @@ Sum tensor elements over given axes.
 
  – Tensor with the sum along the specified axes
 
+**Examples**
+
+*Warning: Could not parse examples correctly.*
 
 #### `to`
 ```python
@@ -189,5 +201,8 @@ Permute the dimensions of the tensor.
 
  – Tensor with dimensions permuted according to the specified axes
 
+**Examples**
+
+*Warning: Could not parse examples correctly.*
 
 ---

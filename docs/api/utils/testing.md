@@ -23,5 +23,8 @@ Nabla tensors with each other or with numpy tensors/scalars.
 
 `bool` – True if the tensors are equal within the given tolerance
 
+**Examples**
+
+*Warning: Could not parse examples correctly.*
 
 ---

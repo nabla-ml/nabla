@@ -24,7 +24,6 @@ shape as `x`.
 
 **Examples**
 
---
 Calling `add` explicitly:
 
 ```python
@@ -74,7 +73,6 @@ broadcastable to the same shape as `x`.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([10, 20, 30])
@@ -113,7 +111,6 @@ shape as `x`.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([1, 2, 3])
@@ -153,7 +150,6 @@ result is typically a floating-point tensor.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([10, 20, 30])
@@ -191,7 +187,6 @@ as `x`.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([1, 2, 3])
@@ -231,7 +226,6 @@ comparison.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([1, 2, 3])
@@ -271,7 +265,6 @@ comparison.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([1, 2, 3])
@@ -310,7 +303,6 @@ shape as `x`.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([1, 5, 3])
@@ -348,7 +340,6 @@ shape as `x`.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([1, 5, 2])
@@ -381,7 +372,6 @@ shape as `x`.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([1, 5, 2])
@@ -414,7 +404,6 @@ as `x`.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([10, -10, 9])
@@ -452,7 +441,6 @@ to the same shape as `x`.
 
 **Examples**
 
---
 ```python
 >>> import nabla as nb
 >>> x = nb.tensor([10, -10, 9])
