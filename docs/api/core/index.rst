@@ -1,7 +1,10 @@
 Core
 ====
 
+Core tensor operations and execution context
+
 .. toctree::
    :maxdepth: 1
 
-   Tensor.md
+   tensor
+   execution

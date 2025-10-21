@@ -1,13 +1,11 @@
 API Reference
 =============
 
-Complete API reference for Nabla.
-
 .. toctree::
    :maxdepth: 2
 
-   core/index
-   nn/index
-   ops/index
-   transforms/index
-   utils/index
+   api/core/index
+   api/transforms/index
+   api/nn/index
+   api/ops/index
+   api/utils/index

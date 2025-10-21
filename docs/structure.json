@@ -1,0 +1,181 @@
+{
+  "title": "Nabla Documentation",
+  "version": "0.1.0",
+  "sections": [
+    {
+      "id": "getting-started",
+      "title": "Getting Started",
+      "type": "manual",
+      "path": "getting-started"
+    },
+    {
+      "id": "tutorials",
+      "title": "Tutorials",
+      "type": "notebooks",
+      "path": "tutorials",
+      "files": [
+        "autodiff_with_nabla.ipynb",
+        "mlp_training.ipynb",
+        "transformer_training.ipynb",
+        "transforms_uncovered.ipynb"
+      ]
+    },
+    {
+      "id": "api",
+      "title": "API Reference",
+      "type": "api",
+      "path": "api",
+      "modules": [
+        {
+          "id": "core",
+          "title": "Core",
+          "description": "Core tensor operations and execution context",
+          "source_module": "nabla.core",
+          "subsections": [
+            {
+              "id": "tensor",
+              "title": "Tensor",
+              "description": "The fundamental Tensor class",
+              "items": [
+                {
+                  "name": "Tensor",
+                  "type": "class",
+                  "path": "nabla.core.tensor.Tensor",
+                  "show_methods": true
+                }
+              ]
+            },
+            {
+              "id": "execution",
+              "title": "Execution Context",
+              "description": "Graph execution and compilation utilities",
+              "items": [
+                {
+                  "name": "ExecutionContext",
+                  "type": "class",
+                  "path": "nabla.core.execution_context.ExecutionContext"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "transforms",
+          "title": "Transforms",
+          "description": "Function transformations for AD, vectorization, and compilation",
+          "source_module": "nabla.transforms",
+          "subsections": [
+            {
+              "id": "autodiff",
+              "title": "Automatic Differentiation",
+              "description": "Gradient computation and differentiation",
+              "items": [
+                {"name": "grad", "type": "function", "path": "nabla.grad"},
+                {"name": "value_and_grad", "type": "function", "path": "nabla.value_and_grad"},
+                {"name": "vjp", "type": "function", "path": "nabla.vjp"},
+                {"name": "jvp", "type": "function", "path": "nabla.jvp"},
+                {"name": "jacfwd", "type": "function", "path": "nabla.jacfwd"},
+                {"name": "jacrev", "type": "function", "path": "nabla.jacrev"},
+                {"name": "backward", "type": "function", "path": "nabla.backward"}
+              ]
+            },
+            {
+              "id": "vectorization",
+              "title": "Vectorization",
+              "description": "Vectorized mapping over batch dimensions",
+              "items": [
+                {"name": "vmap", "type": "function", "path": "nabla.vmap"}
+              ]
+            },
+            {
+              "id": "compilation",
+              "title": "Compilation",
+              "description": "JIT compilation and optimization",
+              "items": [
+                {"name": "jit", "type": "function", "path": "nabla.jit"},
+                {"name": "djit", "type": "function", "path": "nabla.djit"},
+                {"name": "xpr", "type": "function", "path": "nabla.xpr"}
+              ]
+            }
+          ]
+        },
+        {
+          "id": "nn",
+          "title": "Neural Networks",
+          "description": "Neural network modules and layers",
+          "source_module": "nabla.nn",
+          "subsections": [
+            {
+              "id": "core",
+              "title": "Core Modules",
+              "items": [
+                {"name": "Module", "type": "class", "path": "nabla.nn.module.Module"},
+                {"name": "Parameter", "type": "class", "path": "nabla.nn.module.Parameter"}
+              ]
+            },
+            {
+              "id": "layers",
+              "title": "Layers",
+              "items": [
+                {"name": "Linear", "type": "class", "path": "nabla.nn.linear.Linear"},
+                {"name": "Conv2d", "type": "class", "path": "nabla.nn.conv.Conv2d"},
+                {"name": "Dropout", "type": "class", "path": "nabla.nn.dropout.Dropout"}
+              ]
+            },
+            {
+              "id": "activations",
+              "title": "Activation Functions",
+              "items": [
+                {"name": "relu", "type": "function", "path": "nabla.nn.activations.relu"},
+                {"name": "sigmoid", "type": "function", "path": "nabla.nn.activations.sigmoid"},
+                {"name": "tanh", "type": "function", "path": "nabla.nn.activations.tanh"}
+              ]
+            }
+          ]
+        },
+        {
+          "id": "ops",
+          "title": "Operations",
+          "description": "Tensor operations and mathematical functions",
+          "source_module": "nabla.ops",
+          "subsections": [
+            {
+              "id": "creation",
+              "title": "Tensor Creation",
+              "items": [
+                {"name": "zeros", "type": "function", "path": "nabla.zeros"},
+                {"name": "ones", "type": "function", "path": "nabla.ones"},
+                {"name": "rand", "type": "function", "path": "nabla.rand"}
+              ]
+            },
+            {
+              "id": "math",
+              "title": "Mathematical Operations",
+              "items": [
+                {"name": "add", "type": "function", "path": "nabla.add"},
+                {"name": "matmul", "type": "function", "path": "nabla.matmul"},
+                {"name": "sum", "type": "function", "path": "nabla.sum"}
+              ]
+            }
+          ]
+        },
+        {
+          "id": "utils",
+          "title": "Utilities",
+          "description": "Helper functions and utilities",
+          "source_module": "nabla.utils",
+          "subsections": [
+            {
+              "id": "device",
+              "title": "Device Management",
+              "items": [
+                {"name": "device", "type": "function", "path": "nabla.device"},
+                {"name": "cpu", "type": "function", "path": "nabla.cpu"}
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -40,6 +40,9 @@ jobs:
       - name: Install Dependencies
         run: pip install -r docs/requirements.txt
 
+      - name: Install package (editable)
+        run: pip install -e .
+
       - name: Build Documentation
         run: bash docs/build.sh
 

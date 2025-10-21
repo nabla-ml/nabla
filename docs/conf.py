@@ -161,6 +161,15 @@ nbsphinx_allow_errors = True
 nbsphinx_kernel_name = "python3"
 nbsphinx_timeout = 60
 nbsphinx_assume_equations = True
+# Require pandoc - if not installed, the build will warn but continue
+nbsphinx_requirejs_path = ""
+nbsphinx_prolog = ""
+
+# Check if pandoc is available - if not, exclude notebooks
+import shutil
+if shutil.which("pandoc") is None:
+    print("⚠️  Pandoc not found - excluding notebook tutorials from build")
+    exclude_patterns.append("tutorials/*.ipynb")
 
 # Suppress common warnings
 suppress_warnings = [

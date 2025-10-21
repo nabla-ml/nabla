@@ -1,9 +1,11 @@
-Nn
-==
+Neural Networks
+===============
+
+Neural network modules and layers
 
 .. toctree::
    :maxdepth: 1
 
-   functional/index
-   modules/index
-   optim/index
+   core
+   layers
+   activations
