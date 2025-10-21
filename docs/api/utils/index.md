@@ -2,5 +2,9 @@
 
 Helper functions for device management and testing.
 
-- [Device Management](device.md)
-- [Testing](testing.md)
+```{toctree}
+:maxdepth: 1
+
+device
+testing
+```

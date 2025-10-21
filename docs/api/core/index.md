@@ -2,5 +2,9 @@
 
 The fundamental building blocks of Nabla.
 
-- [Tensor](tensor.md)
-- [Execution Context](execution_context.md)
+```{toctree}
+:maxdepth: 1
+
+tensor
+execution_context
+```

@@ -4,9 +4,8 @@
 This script reads the JSON file that defines the docs hierarchy and emits
 Markdown files into the `docs/api/` tree.
 
-It works by dynamically importing the library's modules using the exact paths
-defined in `structure.json` and inspecting the live objects (classes, functions)
-to extract their docstrings, signatures, and methods.
+It generates `toctree` directives in the index files, which is the correct
+way to create navigation for tools like Sphinx and Jupyter Book.
 
 Usage:
     # From the project root directory:
@@ -32,12 +31,6 @@ API_ROOT = DOCS_ROOT / "api"
 def extract_docstring_data(full_path: str) -> dict | None:
     """
     Introspects a live object using its full definition path to extract documentation.
-
-    Args:
-        full_path: The full dotted path to the object (e.g., "nabla.core.tensor.Tensor").
-
-    Returns:
-        A dictionary with docstring, signature, and methods, or None if not found.
     """
     try:
         if '.' not in full_path:
@@ -89,24 +82,55 @@ def write_md(path: Path, lines: list[str]):
 
 
 def generate_api_index(api_section: dict):
-    lines = [f"# {api_section.get('title', 'API Reference')}", ""]
+    """
+    Generates the main api/index.md file with a `toctree` directive.
+    This is the corrected function.
+    """
+    title = api_section.get("title", "API Reference")
+    lines = [
+        f"# {title}",
+        "",
+        "```{toctree}",
+        ":maxdepth: 2",
+        "",
+    ]
     for mod in api_section.get("modules", []):
-        lines.append(f"## [{mod['title']}]({mod['id']}/)")
+        # The path must be relative to the index file, e.g., 'core/index'
+        lines.append(f"{mod['id']}/index")
+    
+    lines.append("```")
     write_md(API_ROOT / "index.md", lines)
 
 
 def generate_module_index(module_path: Path, module: dict):
-    lines = [f"# {module.get('title', module['id'].capitalize())}", ""]
+    """
+    Generates a module's index.md file (e.g., api/core/index.md) with a `toctree`.
+    This is the corrected function.
+    """
+    title = module.get("title", module['id'].capitalize())
+    lines = [f"# {title}", ""]
     if module.get('description'):
         lines.extend([module['description'], ""])
+    
+    lines.extend([
+        "```{toctree}",
+        ":maxdepth: 1",
+        "",
+    ])
     for subsection in module.get('subsections', []):
-        lines.append(f"- [{subsection['title']}]({subsection['id']}.md)")
+        # The path is just the filename without the extension, e.g., 'tensor'
+        lines.append(f"{subsection['id']}")
+
+    lines.append("```")
     ensure_dir(module_path)
     write_md(module_path / "index.md", lines)
 
 
 def generate_subsection_md(module_path: Path, subsection: dict):
-    """Generates the final Markdown file with embedded docstrings."""
+    """
+    Generates the final content Markdown file with embedded docstrings.
+    This function does not need to change.
+    """
     lines = [f"# {subsection.get('title', subsection['id'].capitalize())}", ""]
     if subsection.get("description"):
         lines.extend([subsection["description"], ""])
@@ -141,7 +165,6 @@ def generate_subsection_md(module_path: Path, subsection: dict):
 
 
 def run():
-    # This is the critical step that allows `importlib` to find your 'nabla' module.
     if str(PROJECT_ROOT) not in sys.path:
         sys.path.insert(0, str(PROJECT_ROOT))
 

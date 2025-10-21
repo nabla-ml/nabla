@@ -2,8 +2,12 @@
 
 Modules, layers, and optimizers for building neural networks.
 
-- [Core](core.md)
-- [Layers](layers.md)
-- [Containers](containers.md)
-- [Activation Functions](activations.md)
-- [Optimizers](optimizers.md)
+```{toctree}
+:maxdepth: 1
+
+core
+layers
+containers
+activations
+optimizers
+```

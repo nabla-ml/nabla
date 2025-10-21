@@ -1,7 +1,11 @@
 # API Reference
 
-## [Core](core/)
-## [Function Transformations](transforms/)
-## [Neural Networks](nn/)
-## [Tensor Operations](ops/)
-## [Utilities](utils/)
+```{toctree}
+:maxdepth: 2
+
+core/index
+transforms/index
+nn/index
+ops/index
+utils/index
+```

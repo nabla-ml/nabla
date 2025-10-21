@@ -2,6 +2,10 @@
 
 Tools for automatic differentiation, vectorization, and compilation.
 
-- [Automatic Differentiation](autodiff.md)
-- [Vectorization](vectorization.md)
-- [Compilation](compilation.md)
+```{toctree}
+:maxdepth: 1
+
+autodiff
+vectorization
+compilation
+```

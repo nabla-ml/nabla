@@ -2,7 +2,11 @@
 
 A comprehensive library of low-level tensor operations.
 
-- [Creation Ops](creation.md)
-- [Math Ops](math.md)
-- [Reduction Ops](reductions.md)
-- [Manipulation Ops](manipulation.md)
+```{toctree}
+:maxdepth: 1
+
+creation
+math
+reductions
+manipulation
+```
