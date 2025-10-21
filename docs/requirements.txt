@@ -1,6 +1,7 @@
 # Sphinx and core extensions
 sphinx>=5.0
 myst-parser>=1.0.0
+docstring_parser
 
 # Theme
 sphinx_book_theme
