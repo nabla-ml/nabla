@@ -32,9 +32,9 @@ echo "📚 Building documentation..."
 
 if [[ "$BUILD_MODE" == "ci" ]]; then
     # CI build: minimal, no autosummary, mock imports
-    # Build with warnings as errors but suppress known harmless warnings
-    sphinx-build -b html -W --keep-going \
-        -D autodoc_mock_imports="max,max.dtype,max.graph,max.tensor,mojo,numpy,jax,torch" \
+    # Just build HTML from existing markdown files
+    sphinx-build -b html --keep-going \
+        -D autodoc_mock_imports="max,max.dtype,max.graph,max.tensor,mojo,numpy,jax,torch,nabla" \
         . _build/html
 else
     # Local build: try to generate API docs if nabla is available

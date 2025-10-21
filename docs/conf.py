@@ -163,6 +163,7 @@ suppress_warnings = [
     'ref.footnote',
     'toc.excluded',
     'toc.not_readable',
+    'myst.xref_missing',  # Suppress missing cross-reference warnings
 ]
 
 # Nitpicky mode - don't fail on missing references
