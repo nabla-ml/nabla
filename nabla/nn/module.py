@@ -25,18 +25,21 @@ This module provides the foundational Module class that enables:
 - Callable models
 
 Example:
-    >>> import nabla as nb
-    >>> from nabla.nn import Module
-    >>> 
-    >>> class Linear(Module):
-    ...     def __init__(self, in_features, out_features):
-    ...         super().__init__()
-    ...         weight = nb.glorot_uniform((in_features, out_features))
-    ...         weight.requires_grad_(True)
-    ...         self.weight = weight  # Auto-registered!
-    ...     
-    ...     def forward(self, x):
-    ...         return nb.matmul(x, self.weight)
+
+```python
+import nabla as nb
+from nabla.nn import Module
+
+class Linear(Module):
+    def __init__(self, in_features, out_features):
+        super().__init__()
+        weight = nb.glorot_uniform((in_features, out_features))
+        weight.requires_grad_(True)
+        self.weight = weight  # Auto-registered!
+    
+    def forward(self, x):
+        return nb.matmul(x, self.weight)
+```
 """
 
 from __future__ import annotations
@@ -66,19 +69,22 @@ class Module:
     - Callable interface: model(x) calls model.forward(x)
     
     Example:
-        >>> class MLP(Module):
-        ...     def __init__(self, layer_sizes):
-        ...         super().__init__()
-        ...         self.layers = [Linear(layer_sizes[i], layer_sizes[i+1])
-        ...                       for i in range(len(layer_sizes)-1)]
-        ...     
-        ...     def forward(self, x):
-        ...         for layer in self.layers:
-        ...             x = layer(x)
-        ...         return x
-        >>> 
-        >>> model = MLP([10, 20, 10])
-        >>> params = list(model.parameters())  # Gets all params recursively
+
+    ```python
+    class MLP(Module):
+        def __init__(self, layer_sizes):
+            super().__init__()
+            self.layers = [Linear(layer_sizes[i], layer_sizes[i+1])
+                          for i in range(len(layer_sizes)-1)]
+        
+        def forward(self, x):
+            for layer in self.layers:
+                x = layer(x)
+            return x
+    
+    model = MLP([10, 20, 10])
+    params = list(model.parameters())  # Gets all params recursively
+    ```
     """
     
     def __init__(self):
@@ -128,8 +134,11 @@ class Module:
             Iterator over all parameters
             
         Example:
-            >>> model = MyModel()
-            >>> optimizer = SGD(model.parameters(), lr=0.01)
+
+        ```python
+        model = MyModel()
+        optimizer = SGD(model.parameters(), lr=0.01)
+        ```
         """
         # Yield own parameters
         for param in self._parameters.values():
@@ -150,11 +159,14 @@ class Module:
             Iterator over (name, parameter) tuples
             
         Example:
-            >>> for name, param in model.named_parameters():
-            ...     print(f"{name}: shape {param.shape}")
-            layer1.weight: shape (10, 20)
-            layer1.bias: shape (1, 20)
-            layer2.weight: shape (20, 10)
+
+        ```python
+        for name, param in model.named_parameters():
+            print(f"{name}: shape {param.shape}")
+        # layer1.weight: shape (10, 20)
+        # layer1.bias: shape (1, 20)
+        # layer2.weight: shape (20, 10)
+        ```
         """
         for name, param in self._parameters.items():
             full_name = f"{prefix}.{name}" if prefix else name
@@ -172,8 +184,11 @@ class Module:
             Iterator over all modules in the tree
             
         Example:
-            >>> for module in model.modules():
-            ...     print(module.__class__.__name__)
+
+        ```python
+        for module in model.modules():
+            print(module.__class__.__name__)
+        ```
         """
         yield self
         for module in self._modules.values():
@@ -221,9 +236,12 @@ class Module:
         Should be called before each backward pass during training.
         
         Example:
-            >>> model.zero_grad()  # Clear all gradients
-            >>> loss.backward()    # Compute new gradients
-            >>> optimizer.step()   # Update parameters
+
+        ```python
+        model.zero_grad()  # Clear all gradients
+        loss.backward()    # Compute new gradients
+        optimizer.step()   # Update parameters
+        ```
         """
         for param in self.parameters():
             param.grad = None

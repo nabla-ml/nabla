@@ -8,26 +8,25 @@ nabla.tanh(arg: nabla.core.tensor.Tensor) -> nabla.core.tensor.Tensor
 
 **Source**: `nabla.ops.unary`
 
-## Description
-
 Computes the element-wise hyperbolic tangent of an tensor.
 
 The tanh function is a common activation function in neural networks,
 squashing values to the range `[-1, 1]`.
 
-## Parameters
+Parameters
+----------
+arg : Tensor
+    The input tensor.
 
-- **`arg`** (`Tensor`): The input tensor.
-
-## Returns
-
+Returns
+-------
 Tensor
     An tensor containing the hyperbolic tangent of each element.
 
-## Examples
+Examples
+--------
+>>> import nabla as nb
+>>> x = nb.tensor([-1.0, 0.0, 1.0, 20.0])
+>>> nb.tanh(x)
+Tensor([-0.7615942,  0.       ,  0.7615942,  1.       ], dtype=float32)
 
-```python
-import nabla as nb
-x = nb.tensor([-1.0, 0.0, 1.0, 20.0])
-nb.tanh(x)
-```

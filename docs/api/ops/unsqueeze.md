@@ -8,6 +8,5 @@ nabla.unsqueeze(arg: nabla.core.tensor.Tensor, axes: list[int] | None = None) ->
 
 **Source**: `nabla.ops.view`
 
-## Description
-
 Unsqueeze tensor by adding dimensions of size 1.
+

@@ -62,6 +62,50 @@ def jvp(
         This follows JAX's jvp API:
         - Only accepts positional arguments
         - For functions requiring keyword arguments, use functools.partial or lambda
+
+    Examples:
+        Basic forward-mode differentiation:
+
+        ```python
+        import nabla as nb
+
+        def f(x):
+            return x ** 2
+
+        # Compute derivative at x=3.0 in direction v=1.0
+        primals = (nb.tensor(3.0),)
+        tangents = (nb.tensor(1.0),)
+        y, y_dot = nb.jvp(f, primals, tangents)
+        # y = 9.0, y_dot = 6.0 (derivative of x^2 at x=3 is 2*3=6)
+        ```
+
+        Multiple inputs:
+
+        ```python
+        import nabla as nb
+
+        def f(x, y):
+            return x * y + x ** 2
+
+        primals = (nb.tensor(3.0), nb.tensor(4.0))
+        tangents = (nb.tensor(1.0), nb.tensor(0.0))  # Differentiate w.r.t. x only
+        output, tangent_out = nb.jvp(f, primals, tangents)
+        ```
+
+        With auxiliary data:
+
+        ```python
+        import nabla as nb
+
+        def f_with_aux(x):
+            y = x ** 2
+            aux = {"intermediate": x * 2}
+            return y, aux
+
+        primals = (nb.tensor(3.0),)
+        tangents = (nb.tensor(1.0),)
+        y, y_dot, aux = nb.jvp(f_with_aux, primals, tangents, has_aux=True)
+        ```
     """
     # Convert scalars to tensors for traceability
     primals = _convert_scalars_to_tensors(primals)

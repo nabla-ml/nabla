@@ -8,8 +8,6 @@ nabla.allclose(a: Union[nabla.core.tensor.Tensor, numpy.ndarray, float, int], b:
 
 **Source**: `nabla.utils.testing`
 
-## Description
-
 Returns True if two tensors are element-wise equal within a tolerance.
 
 This function automatically converts Nabla Tensors to numpy tensors using
@@ -23,16 +21,15 @@ Args:
     atol: Absolute tolerance parameter
     equal_nan: Whether to compare NaN's as equal
 
-## Returns
+Returns:
+    bool: True if the tensors are equal within the given tolerance
 
-bool: True if the tensors are equal within the given tolerance
+Examples:
+    >>> import nabla as nb
+    >>> a = nb.tensor([1.0, 2.0, 3.0])
+    >>> b = nb.tensor([1.0, 2.0, 3.000001])
+    >>> nb.allclose(a, b)
+    True
+    >>> nb.allclose(a, np.array([1.0, 2.0, 3.0]))
+    True
 
-## Examples
-
-```python
-import nabla as nb
-a = nb.tensor([1.0, 2.0, 3.0])
-b = nb.tensor([1.0, 2.0, 3.000001])
-nb.allclose(a, b)
-nb.allclose(a, np.array([1.0, 2.0, 3.0]))
-```

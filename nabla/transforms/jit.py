@@ -212,14 +212,16 @@ def jit(
 
     Example:
         As a function call::
-
-            fast_func = jit(my_func)
+        ```python
+        fast_func = jit(my_func)
+        ```
 
         As a decorator::
-
-            @jit
-            def my_func(x):
-                return x * 2
+        ```python
+        @jit
+        def my_func(x):
+            return x * 2
+        ```
     """
     # Handle being called as a decorator without arguments
     if func is None:

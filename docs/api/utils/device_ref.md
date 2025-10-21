@@ -8,13 +8,11 @@ nabla.device_ref(device: max._core.driver.Device) -> max.graph.type.DeviceRef
 
 **Source**: `nabla.utils.max_interop`
 
-## Description
-
 Get a DeviceRef instance for the specified device.
 
 Args:
     device: The Device instance to reference.
 
-## Returns
+Returns:
+    A DeviceRef instance for the specified device.
 
-A DeviceRef instance for the specified device.

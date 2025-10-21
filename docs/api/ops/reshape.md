@@ -8,6 +8,5 @@ nabla.reshape(arg: nabla.core.tensor.Tensor, shape: tuple[int, ...]) -> nabla.co
 
 **Source**: `nabla.ops.view`
 
-## Description
-
 Reshape tensor to given shape.
+

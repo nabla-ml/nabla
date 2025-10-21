@@ -8,6 +8,5 @@ nabla.broadcast_to(arg: nabla.core.tensor.Tensor, shape: tuple[int, ...]) -> nab
 
 **Source**: `nabla.ops.view`
 
-## Description
-
 Broadcast tensor to target shape.
+

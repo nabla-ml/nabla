@@ -8,8 +8,6 @@ nabla.jit(func: collections.abc.Callable[..., typing.Any] | None = None, static:
 
 **Source**: `nabla.transforms.jit`
 
-## Description
-
 Just-in-time compile a function for performance optimization.
 This can be used as a function call like `jit(func)` or as a decorator `@jit`.
 
@@ -23,9 +21,8 @@ Args:
         mode (`static=False` / `djit`), scalars are left as Python scalars (original behavior) but CPU Tensors
         are still moved. Set to False to disable all automatic device movement/conversion.
 
-## Returns
-
-JIT-compiled function with optimized execution
+Returns:
+    JIT-compiled function with optimized execution
 
 Note:
     This follows JAX's jit API:
@@ -37,11 +34,14 @@ Note:
 
 Example:
     As a function call::
-
-        fast_func = jit(my_func)
+    ```python
+    fast_func = jit(my_func)
+    ```
 
     As a decorator::
+    ```python
+    @jit
+    def my_func(x):
+        return x * 2
+    ```
 
-        @jit
-        def my_func(x):
-            return x * 2

@@ -52,18 +52,22 @@ def value_and_grad(
         A function that computes both the value and gradient of fun.
 
     Examples:
-        Basic usage as a function call::
+        Basic usage as a function call:
 
-            value_and_grad_fn = value_and_grad(my_loss)
-            value, grads = value_and_grad_fn(x)
+        ```python
+        value_and_grad_fn = value_and_grad(my_loss)
+        value, grads = value_and_grad_fn(x)
+        ```
 
-        Usage as a decorator::
+        Usage as a decorator:
 
-            @value_and_grad
-            def my_loss(x):
-                return x**2
+        ```python
+        @value_and_grad
+        def my_loss(x):
+            return x**2
 
-            value, grads = my_loss(3.0)
+        value, grads = my_loss(3.0)
+        ```
     """
 
     # Handle being used as a decorator without arguments
@@ -137,22 +141,26 @@ def grad(
         reduce_axes: Axes to reduce over - currently ignored (default ()).
         mode: Kept for API compatibility but ignored (always uses reverse-mode VJP).
 
-        Returns:
-            A function that computes the gradient of fun.
+    Returns:
+        A function that computes the gradient of fun.
 
-        Examples:
-            Basic usage as a function call::
+    Examples:
+        Basic usage as a function call:
 
-                grad_fn = grad(my_loss)
-                grads = grad_fn(x)
+        ```python
+        grad_fn = grad(my_loss)
+        grads = grad_fn(x)
+        ```
 
-            Usage as a decorator::
+        Usage as a decorator:
 
-                @grad
-                def my_loss(x):
-                    return x**2
+        ```python
+        @grad
+        def my_loss(x):
+            return x**2
 
-                grads = my_loss(3.0)  # Returns gradient, not function value
+        grads = my_loss(3.0)  # Returns gradient, not function value
+        ```
     """
     # Handle decorator pattern: if fun is None, return a decorator
     if fun is None:

@@ -24,20 +24,23 @@ This module provides two APIs:
    - SGD, Adam: Optimizers
    
    Example:
-       >>> from nabla.nn import Module, Linear, Sequential, SGD
-       >>> 
-       >>> class MLP(Module):
-       ...     def __init__(self):
-       ...         super().__init__()
-       ...         self.layers = Sequential(
-       ...             Linear(10, 20),
-       ...             Linear(20, 10)
-       ...         )
-       ...     def forward(self, x):
-       ...         return self.layers(x)
-       >>> 
-       >>> model = MLP()
-       >>> optimizer = SGD(model.parameters(), lr=0.01)
+
+   ```python
+   from nabla.nn import Module, Linear, Sequential, SGD
+   
+   class MLP(Module):
+       def __init__(self):
+           super().__init__()
+           self.layers = Sequential(
+               Linear(10, 20),
+               Linear(20, 10)
+           )
+       def forward(self, x):
+           return self.layers(x)
+   
+   model = MLP()
+   optimizer = SGD(model.parameters(), lr=0.01)
+   ```
 
 2. **Functional API (JAX-like)**: For functional programming with pure functions
    - See nabla.nn.functional for loss functions, optimizers, initializers, etc.

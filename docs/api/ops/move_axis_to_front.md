@@ -8,24 +8,20 @@ nabla.move_axis_to_front(input_tensor: nabla.core.tensor.Tensor, axis: int) -> n
 
 **Source**: `nabla.ops.view`
 
-## Description
-
 Move specified axis to the front (position 0), shifting others right.
 
-## Parameters
+Parameters
+----------
+    input_tensor: Input tensor
+    axis: Axis to move to front
 
-- **`input_tensor`** (`Input tensor`): 
+Returns
+-------
+    Tensor with specified axis moved to front
 
-- **`axis`** (`Axis to move to front`): 
+Examples
+--------
+    >>> x = nb.ones((2, 3, 4))  # shape (2, 3, 4)
+    >>> y = move_axis_to_front(x, 2)  # shape (4, 2, 3)
+    >>> # axis 2 moved to front, others shifted: [2, 0, 1]
 
-## Returns
-
-Tensor with specified axis moved to front
-
-## Examples
-
-```python
-x = nb.ones((2, 3, 4))  # shape (2, 3, 4)
-y = move_axis_to_front(x, 2)  # shape (4, 2, 3)
-# axis 2 moved to front, others shifted: [2, 0, 1]
-```

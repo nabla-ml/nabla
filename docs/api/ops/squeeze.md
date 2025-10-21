@@ -8,6 +8,5 @@ nabla.squeeze(arg: nabla.core.tensor.Tensor, axes: list[int] | None = None) -> n
 
 **Source**: `nabla.ops.view`
 
-## Description
-
 Squeeze tensor by removing dimensions of size 1.
+

@@ -41,12 +41,15 @@ class Sequential(Module):
         *modules: Variable number of modules to add sequentially
         
     Example:
-        >>> model = Sequential(
-        ...     Linear(10, 20),
-        ...     ReLU(),
-        ...     Linear(20, 10)
-        ... )
-        >>> output = model(input)  # Automatically applies layers in order
+
+    ```python
+    model = Sequential(
+        Linear(10, 20),
+        ReLU(),
+        Linear(20, 10)
+    )
+    output = model(input)  # Automatically applies layers in order
+    ```
     """
     
     def __init__(self, *modules):
@@ -93,12 +96,15 @@ class ModuleList(Module):
         *modules: Variable number of modules to add to the list
         
     Example:
-        >>> layers = ModuleList([
-        ...     Linear(10, 20),
-        ...     Linear(20, 10)
-        ... ])
-        >>> for layer in layers:
-        ...     x = layer(x)
+
+    ```python
+    layers = ModuleList([
+        Linear(10, 20),
+        Linear(20, 10)
+    ])
+    for layer in layers:
+        x = layer(x)
+    ```
     """
     
     def __init__(self, *modules):

@@ -8,48 +8,38 @@ nabla.grad(fun: collections.abc.Callable | None = None, argnums: int | collectio
 
 **Source**: `nabla.transforms.grad`
 
-## Description
-
 Creates a function that evaluates the gradient of fun.
 
 This is implemented as a special case of value_and_grad that only returns
 the gradient part. Uses VJP directly for efficiency with scalar outputs.
 
-## Parameters
+Parameters:
+    fun: Function to be differentiated. Should return a scalar.
+    argnums: Which positional argument(s) to differentiate with respect to (default 0).
+    has_aux: Whether fun returns (output, aux) pair (default False).
+    holomorphic: Whether fun is holomorphic - currently ignored (default False).
+    allow_int: Whether to allow integer inputs - currently ignored (default False).
+    reduce_axes: Axes to reduce over - currently ignored (default ()).
+    mode: Kept for API compatibility but ignored (always uses reverse-mode VJP).
 
-- **`fun`** (`Function to be differentiated. Should return a scalar.`): 
+Returns:
+    A function that computes the gradient of fun.
 
-- **`argnums`** (`Which positional argument(s) to differentiate with respect to (default 0).`): 
+Examples:
+    Basic usage as a function call:
 
-- **`has_aux`** (`Whether fun returns (output, aux) pair (default False).`): 
+    ```python
+    grad_fn = grad(my_loss)
+    grads = grad_fn(x)
+    ```
 
-- **`holomorphic`** (`Whether fun is holomorphic - currently ignored (default False).`): 
+    Usage as a decorator:
 
-- **`allow_int`** (`Whether to allow integer inputs - currently ignored (default False).`): 
+    ```python
+    @grad
+    def my_loss(x):
+        return x**2
 
-- **`reduce_axes`** (`Axes to reduce over - currently ignored (default ()).`): 
+    grads = my_loss(3.0)  # Returns gradient, not function value
+    ```
 
-- **`mode`** (`Kept for API compatibility but ignored (always uses reverse-mode VJP).`): 
-
-## Returns
-
-A function that computes the gradient of fun.
-
-## Examples
-
-Basic usage as a function call
-
-```python
-grad_fn = grad(my_loss)
-grads = grad_fn(x)
-```
-
-Usage as a decorator
-
-```python
-@grad
-def my_loss(x):
-    return x**2
-
-grads = my_loss(3.0)  # Returns gradient, not function value
-```
