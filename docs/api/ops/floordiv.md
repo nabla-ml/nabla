@@ -29,12 +29,18 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([10, -10, 9])
->>> y = nb.tensor([3, 3, 3])
->>> nb.floordiv(x, y)
-Tensor([ 3, -4,  3], dtype=int32)
 
->>> x // y
-Tensor([ 3, -4,  3], dtype=int32)
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([10, -10, 9])
+    >>> y = nb.tensor([3, 3, 3])
+    >>> nb.floordiv(x, y)
+    Tensor([ 3, -4,  3], dtype=int32)
+
+
+.. code-block:: python
+
+    >>> x // y
+    Tensor([ 3, -4,  3], dtype=int32)
 

@@ -30,12 +30,18 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([1, 2, 3])
->>> y = nb.tensor([4, 5, 6])
->>> nb.mul(x, y)
-Tensor([4, 10, 18], dtype=int32)
 
->>> x * y
-Tensor([4, 10, 18], dtype=int32)
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([1, 2, 3])
+    >>> y = nb.tensor([4, 5, 6])
+    >>> nb.mul(x, y)
+    Tensor([4, 10, 18], dtype=int32)
+
+
+.. code-block:: python
+
+    >>> x * y
+    Tensor([4, 10, 18], dtype=int32)
 

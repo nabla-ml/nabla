@@ -29,26 +29,35 @@ Callable
 
 Examples
 --------
->>> import nabla as nb
->>> def square(x):
-...     return x ** 2
->>> x = nb.tensor([[1.0, 2.0], [3.0, 4.0]])
->>> vmap_square = nb.vmap(square)
->>> result = vmap_square(x)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> def square(x):
+    ...     return x ** 2
+    >>> x = nb.tensor([[1.0, 2.0], [3.0, 4.0]])
+    >>> vmap_square = nb.vmap(square)
+    >>> result = vmap_square(x)
 
 Multiple inputs with different axes:
 
->>> def multiply(x, y):
-...     return x * y
->>> x = nb.tensor([[1.0, 2.0], [3.0, 4.0]])
->>> y = nb.tensor([10.0, 20.0])
->>> result = nb.vmap(multiply, in_axes=(0, None))(x, y)
+
+.. code-block:: python
+
+    >>> def multiply(x, y):
+    ...     return x * y
+    >>> x = nb.tensor([[1.0, 2.0], [3.0, 4.0]])
+    >>> y = nb.tensor([10.0, 20.0])
+    >>> result = nb.vmap(multiply, in_axes=(0, None))(x, y)
 
 As a decorator:
 
->>> @nb.vmap
-... def process_batch(x):
-...     return x ** 2 + 1
->>> batch = nb.tensor([1.0, 2.0, 3.0, 4.0])
->>> result = process_batch(batch)
+
+.. code-block:: python
+
+    >>> @nb.vmap
+    ... def process_batch(x):
+    ...     return x ** 2 + 1
+    >>> batch = nb.tensor([1.0, 2.0, 3.0, 4.0])
+    >>> result = process_batch(batch)
 

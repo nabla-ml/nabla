@@ -35,15 +35,24 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([1, 5, 2, 5])
->>> nb.argmax(x)
-Tensor(1, dtype=int64)
 
->>> y = nb.tensor([[1, 5, 2], [4, 3, 6]])
->>> nb.argmax(y, axes=1)
-Tensor([1, 2], dtype=int64)
+.. code-block:: python
 
->>> nb.argmax(y, axes=0, keep_dims=True)
-Tensor([[1, 0, 1]], dtype=int64)
+    >>> import nabla as nb
+    >>> x = nb.tensor([1, 5, 2, 5])
+    >>> nb.argmax(x)
+    Tensor(1, dtype=int64)
+
+
+.. code-block:: python
+
+    >>> y = nb.tensor([[1, 5, 2], [4, 3, 6]])
+    >>> nb.argmax(y, axes=1)
+    Tensor([1, 2], dtype=int64)
+
+
+.. code-block:: python
+
+    >>> nb.argmax(y, axes=0, keep_dims=True)
+    Tensor([[1, 0, 1]], dtype=int64)
 

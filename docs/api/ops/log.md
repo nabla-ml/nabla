@@ -26,8 +26,11 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([1.0, 2.71828, 10.0])
->>> nb.log(x)
-Tensor([0.       , 0.9999993, 2.3025851], dtype=float32)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([1.0, 2.71828, 10.0])
+    >>> nb.log(x)
+    Tensor([0.       , 0.9999993, 2.3025851], dtype=float32)
 

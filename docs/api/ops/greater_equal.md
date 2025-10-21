@@ -30,12 +30,18 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([1, 5, 3])
->>> y = nb.tensor([2, 5, 1])
->>> nb.greater_equal(x, y)
-Tensor([False,  True,  True], dtype=bool)
 
->>> x >= y
-Tensor([False,  True,  True], dtype=bool)
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([1, 5, 3])
+    >>> y = nb.tensor([2, 5, 1])
+    >>> nb.greater_equal(x, y)
+    Tensor([False,  True,  True], dtype=bool)
+
+
+.. code-block:: python
+
+    >>> x >= y
+    Tensor([False,  True,  True], dtype=bool)
 

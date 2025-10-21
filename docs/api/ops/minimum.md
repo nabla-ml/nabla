@@ -29,9 +29,12 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([1, 5, 2])
->>> y = nb.tensor([2, 3, 6])
->>> nb.minimum(x, y)
-Tensor([1, 3, 2], dtype=int32)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([1, 5, 2])
+    >>> y = nb.tensor([2, 3, 6])
+    >>> nb.minimum(x, y)
+    Tensor([1, 3, 2], dtype=int32)
 

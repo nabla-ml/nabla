@@ -31,9 +31,12 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> # Create a 2x3 matrix of zeros
->>> nb.zeros((2, 3), dtype=nb.DType.int32)
-Tensor([[0, 0, 0],
-       [0, 0, 0]], dtype=int32)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> # Create a 2x3 matrix of zeros
+    >>> nb.zeros((2, 3), dtype=nb.DType.int32)
+    Tensor([[0, 0, 0],
+    [0, 0, 0]], dtype=int32)
 

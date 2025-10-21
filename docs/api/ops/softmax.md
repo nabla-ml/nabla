@@ -31,13 +31,19 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([1.0, 2.0, 3.0])
->>> nb.softmax(x)
-Tensor([0.09003057, 0.24472848, 0.66524094], dtype=float32)
 
->>> logits = nb.tensor([[1, 2, 3], [1, 1, 1]])
->>> nb.softmax(logits, axis=1)
-Tensor([[0.09003057, 0.24472848, 0.66524094],
-       [0.33333334, 0.33333334, 0.33333334]], dtype=float32)
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([1.0, 2.0, 3.0])
+    >>> nb.softmax(x)
+    Tensor([0.09003057, 0.24472848, 0.66524094], dtype=float32)
+
+
+.. code-block:: python
+
+    >>> logits = nb.tensor([[1, 2, 3], [1, 1, 1]])
+    >>> nb.softmax(logits, axis=1)
+    Tensor([[0.09003057, 0.24472848, 0.66524094],
+    [0.33333334, 0.33333334, 0.33333334]], dtype=float32)
 

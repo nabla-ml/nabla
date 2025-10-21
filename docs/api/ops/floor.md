@@ -25,8 +25,11 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([-1.7, -0.2, 0.2, 1.7])
->>> nb.floor(x)
-Tensor([-2., -1.,  0.,  1.], dtype=float32)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([-1.7, -0.2, 0.2, 1.7])
+    >>> nb.floor(x)
+    Tensor([-2., -1.,  0.,  1.], dtype=float32)
 

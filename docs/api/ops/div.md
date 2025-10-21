@@ -31,12 +31,18 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([10, 20, 30])
->>> y = nb.tensor([2, 5, 10])
->>> nb.div(x, y)
-Tensor([5., 4., 3.], dtype=float32)
 
->>> x / y
-Tensor([5., 4., 3.], dtype=float32)
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([10, 20, 30])
+    >>> y = nb.tensor([2, 5, 10])
+    >>> nb.div(x, y)
+    Tensor([5., 4., 3.], dtype=float32)
+
+
+.. code-block:: python
+
+    >>> x / y
+    Tensor([5., 4., 3.], dtype=float32)
 

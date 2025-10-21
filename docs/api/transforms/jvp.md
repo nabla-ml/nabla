@@ -38,18 +38,24 @@ This follows JAX's jvp API:
 
 Examples
 --------
->>> import nabla as nb
->>> def f(x):
-...     return x ** 2
->>> primals = (nb.tensor(3.0),)
->>> tangents = (nb.tensor(1.0),)
->>> y, y_dot = nb.jvp(f, primals, tangents)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> def f(x):
+    ...     return x ** 2
+    >>> primals = (nb.tensor(3.0),)
+    >>> tangents = (nb.tensor(1.0),)
+    >>> y, y_dot = nb.jvp(f, primals, tangents)
 
 Multiple inputs:
 
->>> def f(x, y):
-...     return x * y + x ** 2
->>> primals = (nb.tensor(3.0), nb.tensor(4.0))
->>> tangents = (nb.tensor(1.0), nb.tensor(0.0))
->>> output, tangent_out = nb.jvp(f, primals, tangents)
+
+.. code-block:: python
+
+    >>> def f(x, y):
+    ...     return x * y + x ** 2
+    >>> primals = (nb.tensor(3.0), nb.tensor(4.0))
+    >>> tangents = (nb.tensor(1.0), nb.tensor(0.0))
+    >>> output, tangent_out = nb.jvp(f, primals, tangents)
 

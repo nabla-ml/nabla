@@ -29,12 +29,18 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([1, 2, 3])
->>> y = nb.tensor([2, 3, 2])
->>> nb.pow(x, y)
-Tensor([1, 8, 9], dtype=int32)
 
->>> x ** y
-Tensor([1, 8, 9], dtype=int32)
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([1, 2, 3])
+    >>> y = nb.tensor([2, 3, 2])
+    >>> nb.pow(x, y)
+    Tensor([1, 8, 9], dtype=int32)
+
+
+.. code-block:: python
+
+    >>> x ** y
+    Tensor([1, 8, 9], dtype=int32)
 

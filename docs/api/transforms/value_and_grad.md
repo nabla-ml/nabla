@@ -36,16 +36,22 @@ Callable
 
 Examples
 --------
->>> import nabla as nb
->>> def my_loss(x):
-...     return x**2
->>> value_and_grad_fn = nb.value_and_grad(my_loss)
->>> value, grads = value_and_grad_fn(nb.tensor(3.0))
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> def my_loss(x):
+    ...     return x**2
+    >>> value_and_grad_fn = nb.value_and_grad(my_loss)
+    >>> value, grads = value_and_grad_fn(nb.tensor(3.0))
 
 Usage as a decorator:
 
->>> @nb.value_and_grad
-... def my_loss(x):
-...     return x**2
->>> value, grads = my_loss(nb.tensor(3.0))
+
+.. code-block:: python
+
+    >>> @nb.value_and_grad
+    ... def my_loss(x):
+    ...     return x**2
+    >>> value, grads = my_loss(nb.tensor(3.0))
 

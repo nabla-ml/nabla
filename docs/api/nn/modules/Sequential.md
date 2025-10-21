@@ -20,10 +20,13 @@ Parameters
     
 Examples
 --------
->>> from nabla.nn import Sequential, Linear
->>> model = Sequential(
-...     Linear(10, 20),
-...     Linear(20, 10)
-... )
->>> output = model(input)  # Automatically applies layers in order
+
+.. code-block:: python
+
+    >>> from nabla.nn import Sequential, Linear
+    >>> model = Sequential(
+    ...     Linear(10, 20),
+    ...     Linear(20, 10)
+    ... )
+    >>> output = model(input)  # Automatically applies layers in order
 

@@ -35,15 +35,18 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> def f(x):
-...     return x * 2
-...
->>> def g(x):
-...     return x + 10
-...
->>> x = nb.tensor(5)
->>> # Executes g(x) because the condition is False
->>> nb.cond(nb.tensor(False), f, g, x)
-Tensor([15], dtype=int32)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> def f(x):
+    ...     return x * 2
+    ...
+    >>> def g(x):
+    ...     return x + 10
+    ...
+    >>> x = nb.tensor(5)
+    >>> # Executes g(x) because the condition is False
+    >>> nb.cond(nb.tensor(False), f, g, x)
+    Tensor([15], dtype=int32)
 

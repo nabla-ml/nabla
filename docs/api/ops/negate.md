@@ -26,12 +26,18 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([1, -2, 3.5])
->>> nb.negate(x)
-Tensor([-1.,  2., -3.5], dtype=float32)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([1, -2, 3.5])
+    >>> nb.negate(x)
+    Tensor([-1.,  2., -3.5], dtype=float32)
 
 Using the `-` operator:
->>> -x
-Tensor([-1.,  2., -3.5], dtype=float32)
+
+.. code-block:: python
+
+    >>> -x
+    Tensor([-1.,  2., -3.5], dtype=float32)
 

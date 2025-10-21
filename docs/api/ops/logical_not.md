@@ -25,8 +25,11 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([True, False, True])
->>> nb.logical_not(x)
-Tensor([False,  True, False], dtype=bool)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([True, False, True])
+    >>> nb.logical_not(x)
+    Tensor([False,  True, False], dtype=bool)
 

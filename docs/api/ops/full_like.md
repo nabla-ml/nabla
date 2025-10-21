@@ -28,9 +28,12 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.zeros((2, 2))
->>> nb.full_like(x, 7.0)
-Tensor([[7., 7.],
-       [7., 7.]], dtype=float32)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.zeros((2, 2))
+    >>> nb.full_like(x, 7.0)
+    Tensor([[7., 7.],
+    [7., 7.]], dtype=float32)
 

@@ -27,9 +27,12 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> template = nb.zeros((2, 2), dtype=nb.DType.int32)
->>> nb.ndarange_like(template)
-Tensor([[0, 1],
-       [2, 3]], dtype=int32)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> template = nb.zeros((2, 2), dtype=nb.DType.int32)
+    >>> nb.ndarange_like(template)
+    Tensor([[0, 1],
+    [2, 3]], dtype=int32)
 

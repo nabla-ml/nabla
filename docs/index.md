@@ -10,6 +10,7 @@ Nabla is a scientific computing library in Python, featuring:
 :maxdepth: 1
 
 api/index
+tutorials/index
 ```
 
 ❤️ If you find Nabla useful, please consider [sponsoring the project on GitHub](https://github.com/sponsors/nabla-ml). Your support helps us continue development!

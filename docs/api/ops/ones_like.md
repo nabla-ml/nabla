@@ -25,9 +25,12 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([[1., 2.], [3., 4.]])
->>> nb.ones_like(x)
-Tensor([[1., 1.],
-       [1., 1.]], dtype=float32)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([[1., 2.], [3., 4.]])
+    >>> nb.ones_like(x)
+    Tensor([[1., 1.],
+    [1., 1.]], dtype=float32)
 

@@ -40,21 +40,27 @@ This follows JAX's vjp API exactly:
 
 Examples
 --------
->>> import nabla as nb
->>> def f(x):
-...     return x ** 2
->>> primals = nb.tensor(3.0)
->>> y, vjp_fn = nb.vjp(f, primals)
->>> cotangent = nb.tensor(1.0)
->>> (grad_x,) = vjp_fn(cotangent)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> def f(x):
+    ...     return x ** 2
+    >>> primals = nb.tensor(3.0)
+    >>> y, vjp_fn = nb.vjp(f, primals)
+    >>> cotangent = nb.tensor(1.0)
+    >>> (grad_x,) = vjp_fn(cotangent)
 
 Multiple inputs:
 
->>> def f(x, y):
-...     return x * y + x ** 2
->>> x = nb.tensor(3.0)
->>> y = nb.tensor(4.0)
->>> output, vjp_fn = nb.vjp(f, x, y)
->>> cotangent = nb.tensor(1.0)
->>> grad_x, grad_y = vjp_fn(cotangent)
+
+.. code-block:: python
+
+    >>> def f(x, y):
+    ...     return x * y + x ** 2
+    >>> x = nb.tensor(3.0)
+    >>> y = nb.tensor(4.0)
+    >>> output, vjp_fn = nb.vjp(f, x, y)
+    >>> cotangent = nb.tensor(1.0)
+    >>> grad_x, grad_y = vjp_fn(cotangent)
 

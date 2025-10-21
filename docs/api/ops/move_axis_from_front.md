@@ -21,6 +21,9 @@ Returns
 
 Examples
 --------
+
+.. code-block:: python
+
     >>> x = nb.ones((4, 2, 3))  # front axis has size 4
     >>> y = move_axis_from_front(x, 2)  # shape (2, 3, 4)
     >>> # front axis moved to position 2: [1, 2, 0]

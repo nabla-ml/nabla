@@ -22,8 +22,11 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([-1.5, 0.0, 2.5])
->>> nb.abs(x)
-Tensor([1.5, 0. , 2.5], dtype=float32)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([-1.5, 0.0, 2.5])
+    >>> nb.abs(x)
+    Tensor([1.5, 0. , 2.5], dtype=float32)
 

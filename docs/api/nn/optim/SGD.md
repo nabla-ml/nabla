@@ -25,12 +25,15 @@ weight_decay : float, optional
     
 Examples
 --------
->>> from nabla.nn import SGD
->>> optimizer = SGD(model.parameters(), lr=0.01, momentum=0.9)
->>> for data, target in dataloader:
-...     optimizer.zero_grad()
-...     output = model(data)
-...     loss = criterion(output, target)
-...     loss.backward()
-...     optimizer.step()
+
+.. code-block:: python
+
+    >>> from nabla.nn import SGD
+    >>> optimizer = SGD(model.parameters(), lr=0.01, momentum=0.9)
+    >>> for data, target in dataloader:
+    ...     optimizer.zero_grad()
+    ...     output = model(data)
+    ...     loss = criterion(output, target)
+    ...     loss.backward()
+    ...     optimizer.step()
 

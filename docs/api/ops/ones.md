@@ -31,8 +31,11 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> # Create a vector of ones
->>> nb.ones((4,), dtype=nb.DType.float32)
-Tensor([1., 1., 1., 1.], dtype=float32)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> # Create a vector of ones
+    >>> nb.ones((4,), dtype=nb.DType.float32)
+    Tensor([1., 1., 1., 1.], dtype=float32)
 

@@ -35,26 +35,35 @@ Callable
 
 Examples
 --------
->>> import nabla as nb
->>> def f(x):
-...     return x ** 2
->>> x = nb.tensor([1.0, 2.0, 3.0])
->>> jac_fn = nb.jacfwd(f)
->>> jacobian = jac_fn(x)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> def f(x):
+    ...     return x ** 2
+    >>> x = nb.tensor([1.0, 2.0, 3.0])
+    >>> jac_fn = nb.jacfwd(f)
+    >>> jacobian = jac_fn(x)
 
 Vector-valued function:
 
->>> def f(x):
-...     return nb.stack([x[0] ** 2, x[0] * x[1], x[1] ** 2])
->>> x = nb.tensor([3.0, 4.0])
->>> jacobian = nb.jacfwd(f)(x)
+
+.. code-block:: python
+
+    >>> def f(x):
+    ...     return nb.stack([x[0] ** 2, x[0] * x[1], x[1] ** 2])
+    >>> x = nb.tensor([3.0, 4.0])
+    >>> jacobian = nb.jacfwd(f)(x)
 
 Multiple arguments with argnums:
 
->>> def f(x, y):
-...     return x * y + x ** 2
->>> x = nb.tensor([1.0, 2.0])
->>> y = nb.tensor([3.0, 4.0])
->>> jac_x = nb.jacfwd(f, argnums=0)(x, y)
->>> jac_both = nb.jacfwd(f, argnums=(0, 1))(x, y)
+
+.. code-block:: python
+
+    >>> def f(x, y):
+    ...     return x * y + x ** 2
+    >>> x = nb.tensor([1.0, 2.0])
+    >>> y = nb.tensor([3.0, 4.0])
+    >>> jac_x = nb.jacfwd(f, argnums=0)(x, y)
+    >>> jac_both = nb.jacfwd(f, argnums=(0, 1))(x, y)
 

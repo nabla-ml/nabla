@@ -33,19 +33,31 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([[1, 2, 3], [4, 5, 6]])
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([[1, 2, 3], [4, 5, 6]])
 
 Compute the mean of all elements:
->>> nb.mean(x)
-Tensor([3.5], dtype=float32)
+
+.. code-block:: python
+
+    >>> nb.mean(x)
+    Tensor([3.5], dtype=float32)
 
 Compute the mean along an axis:
->>> nb.mean(x, axes=0)
-Tensor([2.5, 3.5, 4.5], dtype=float32)
+
+.. code-block:: python
+
+    >>> nb.mean(x, axes=0)
+    Tensor([2.5, 3.5, 4.5], dtype=float32)
 
 Compute the mean along an axis and keep dimensions:
->>> nb.mean(x, axes=1, keep_dims=True)
-Tensor([[2.],
-       [5.]], dtype=float32)
+
+.. code-block:: python
+
+    >>> nb.mean(x, axes=1, keep_dims=True)
+    Tensor([[2.],
+    [5.]], dtype=float32)
 

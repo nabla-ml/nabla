@@ -25,8 +25,11 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([0.0, 4.0, 9.0])
->>> nb.sqrt(x)
-Tensor([0., 2., 3.], dtype=float32)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([0.0, 4.0, 9.0])
+    >>> nb.sqrt(x)
+    Tensor([0., 2., 3.], dtype=float32)
 

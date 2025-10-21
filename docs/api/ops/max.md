@@ -34,18 +34,30 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([[1, 5, 2], [4, 3, 6]])
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([[1, 5, 2], [4, 3, 6]])
 
 Find the maximum of all elements:
->>> nb.max(x)
-Tensor([6], dtype=int32)
+
+.. code-block:: python
+
+    >>> nb.max(x)
+    Tensor([6], dtype=int32)
 
 Find the maximum along an axis:
->>> nb.max(x, axes=1)
-Tensor([5, 6], dtype=int32)
+
+.. code-block:: python
+
+    >>> nb.max(x, axes=1)
+    Tensor([5, 6], dtype=int32)
 
 Find the maximum along an axis and keep dimensions:
->>> nb.max(x, axes=0, keep_dims=True)
-Tensor([[4, 5, 6]], dtype=int32)
+
+.. code-block:: python
+
+    >>> nb.max(x, axes=0, keep_dims=True)
+    Tensor([[4, 5, 6]], dtype=int32)
 

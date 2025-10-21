@@ -22,8 +22,11 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([0, 1.5707963, 3.1415926])
->>> nb.cos(x)
-Tensor([ 1.000000e+00, -4.371139e-08, -1.000000e+00], dtype=float32)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([0, 1.5707963, 3.1415926])
+    >>> nb.cos(x)
+    Tensor([ 1.000000e+00, -4.371139e-08, -1.000000e+00], dtype=float32)
 

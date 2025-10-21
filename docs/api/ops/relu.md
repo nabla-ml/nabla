@@ -25,8 +25,11 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([-2.0, -0.5, 0.0, 1.0, 2.0])
->>> nb.relu(x)
-Tensor([0., 0., 0., 1., 2.], dtype=float32)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([-2.0, -0.5, 0.0, 1.0, 2.0])
+    >>> nb.relu(x)
+    Tensor([0., 0., 0., 1., 2.], dtype=float32)
 

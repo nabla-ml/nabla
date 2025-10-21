@@ -25,8 +25,11 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([-1.0, 0.0, 1.0, 20.0])
->>> nb.tanh(x)
-Tensor([-0.7615942,  0.       ,  0.7615942,  1.       ], dtype=float32)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([-1.0, 0.0, 1.0, 20.0])
+    >>> nb.tanh(x)
+    Tensor([-0.7615942,  0.       ,  0.7615942,  1.       ], dtype=float32)
 

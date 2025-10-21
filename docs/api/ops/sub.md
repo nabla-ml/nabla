@@ -30,12 +30,18 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([10, 20, 30])
->>> y = nb.tensor([1, 2, 3])
->>> nb.sub(x, y)
-Tensor([ 9, 18, 27], dtype=int32)
 
->>> x - y
-Tensor([ 9, 18, 27], dtype=int32)
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([10, 20, 30])
+    >>> y = nb.tensor([1, 2, 3])
+    >>> nb.sub(x, y)
+    Tensor([ 9, 18, 27], dtype=int32)
+
+
+.. code-block:: python
+
+    >>> x - y
+    Tensor([ 9, 18, 27], dtype=int32)
 

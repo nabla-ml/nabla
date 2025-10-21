@@ -25,15 +25,15 @@ Returns:
     bool: True if the tensors are equal within the given tolerance
 
 Examples:
-```python
-import nabla as nb
-a = nb.tensor([1.0, 2.0, 3.0])
-b = nb.tensor([1.0, 2.0, 3.000001])
-nb.allclose(a, b)
-```
+
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> a = nb.tensor([1.0, 2.0, 3.0])
+    >>> b = nb.tensor([1.0, 2.0, 3.000001])
+    >>> nb.allclose(a, b)
     True
-```python
-nb.allclose(a, np.array([1.0, 2.0, 3.0]))
-```
+    >>> nb.allclose(a, np.array([1.0, 2.0, 3.0]))
     True
 

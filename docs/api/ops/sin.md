@@ -24,8 +24,11 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([0, 1.5707963, 3.1415926])
->>> nb.sin(x)
-Tensor([0.0000000e+00, 1.0000000e+00, -8.7422780e-08], dtype=float32)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([0, 1.5707963, 3.1415926])
+    >>> nb.sin(x)
+    Tensor([0.0000000e+00, 1.0000000e+00, -8.7422780e-08], dtype=float32)
 

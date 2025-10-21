@@ -32,19 +32,28 @@ Examples
 --------
 Calling `add` explicitly:
 
->>> import nabla as nb
->>> x = nb.tensor([1, 2, 3])
->>> y = nb.tensor([4, 5, 6])
->>> nb.add(x, y)
-Tensor([5, 7, 9], dtype=int32)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([1, 2, 3])
+    >>> y = nb.tensor([4, 5, 6])
+    >>> nb.add(x, y)
+    Tensor([5, 7, 9], dtype=int32)
 
 Calling `add` via the `+` operator:
 
->>> x + y
-Tensor([5, 7, 9], dtype=int32)
+
+.. code-block:: python
+
+    >>> x + y
+    Tensor([5, 7, 9], dtype=int32)
 
 Broadcasting a scalar:
 
->>> x + 10
-Tensor([11, 12, 13], dtype=int32)
+
+.. code-block:: python
+
+    >>> x + 10
+    Tensor([11, 12, 13], dtype=int32)
 

@@ -30,14 +30,20 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> condition = nb.tensor([True, False, True])
->>> x = nb.tensor([1, 2, 3])
->>> y = nb.tensor([10, 20, 30])
->>> nb.where(condition, x, y)
-Tensor([1, 20, 3], dtype=int32)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> condition = nb.tensor([True, False, True])
+    >>> x = nb.tensor([1, 2, 3])
+    >>> y = nb.tensor([10, 20, 30])
+    >>> nb.where(condition, x, y)
+    Tensor([1, 20, 3], dtype=int32)
 
 Broadcasting example:
->>> nb.where(nb.tensor([True, False]), nb.tensor(5), nb.tensor([10, 20]))
-Tensor([5, 20], dtype=int32)
+
+.. code-block:: python
+
+    >>> nb.where(nb.tensor([True, False]), nb.tensor(5), nb.tensor([10, 20]))
+    Tensor([5, 20], dtype=int32)
 

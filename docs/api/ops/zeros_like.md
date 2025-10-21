@@ -25,9 +25,12 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([[1, 2], [3, 4]], dtype=nb.DType.int32)
->>> nb.zeros_like(x)
-Tensor([[0, 0],
-       [0, 0]], dtype=int32)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([[1, 2], [3, 4]], dtype=nb.DType.int32)
+    >>> nb.zeros_like(x)
+    Tensor([[0, 0],
+    [0, 0]], dtype=int32)
 

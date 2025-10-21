@@ -37,65 +37,96 @@ def generate_markdown(name, obj, module_path, prefix='nabla.'):
     md.append(f"**Source**: `{module_path}`\n")
     
     # Process docstring to properly format code examples
-    # Convert doctest-style examples to proper code blocks
+    # According to Sphinx docs, doctest-style examples should be in literal blocks (::)
+    # which get auto-highlighted. We need to convert examples to proper format.
     docstring_lines = docstring.split('\n')
     processed_lines = []
-    in_example = False
-    example_buffer = []
+    in_example_section = False
+    in_code_block = False
+    code_buffer = []
     
-    for line in docstring_lines:
-        # Detect example sections (both "Examples" and "Example")
-        if line.strip().startswith('Examples') or line.strip().startswith('Example'):
-            if line.strip() in ['Examples', 'Example', 'Examples:', 'Example:', 'Examples\n-------', 'Example\n-------']:
+    for i, line in enumerate(docstring_lines):
+        stripped = line.strip()
+        
+        # Detect "Examples" section header
+        if stripped in ['Examples', 'Example'] or stripped in ['Examples:', 'Example:']:
+            # Check if next line is a separator (----)
+            if i + 1 < len(docstring_lines) and docstring_lines[i + 1].strip().startswith('---'):
                 processed_lines.append(line)
-                in_example = True
+                # Skip the next line (separator) as we'll process it in next iteration
+                in_example_section = True
+                continue
+            elif stripped.endswith(':'):
+                processed_lines.append(line)
+                processed_lines.append('')  # Add blank line
+                in_example_section = True
                 continue
         
-        # Check if we're at a new section (exits example mode)
-        if in_example and line.strip() and not line.startswith(' ') and line.strip().endswith('---'):
-            # This is a new section header
-            if example_buffer:
-                processed_lines.append('```python')
-                processed_lines.extend(example_buffer)
-                processed_lines.append('```')
-                example_buffer = []
-            in_example = False
+        # Skip separator lines right after Examples header
+        if in_example_section and not code_buffer and stripped.startswith('---'):
             processed_lines.append(line)
             continue
         
-        if in_example:
-            stripped = line.strip()
-            # Start collecting code when we see >>> or ...
-            if stripped.startswith('>>>') or (stripped.startswith('...') and example_buffer):
-                # Remove the >>> or ... prefix but keep indentation structure
-                if stripped.startswith('>>>'):
-                    code_line = stripped[4:]  # Remove '>>> '
-                elif stripped.startswith('...'):
-                    code_line = stripped[4:]  # Remove '... '
-                example_buffer.append(code_line)
-            elif example_buffer and stripped and not stripped.startswith('>>>'):
-                # This might be output or a continuation, end the current code block
-                processed_lines.append('```python')
-                processed_lines.extend(example_buffer)
-                processed_lines.append('```')
+        if in_example_section:
+            # Check if we hit a new section (e.g., "Notes", "See Also")
+            if stripped and not line.startswith(' ') and (
+                i + 1 < len(docstring_lines) and docstring_lines[i + 1].strip().startswith('---')
+            ):
+                # Flush any remaining code
+                if code_buffer:
+                    processed_lines.append('')
+                    processed_lines.append('.. code-block:: python')
+                    processed_lines.append('')
+                    for code_line in code_buffer:
+                        processed_lines.append(f'    {code_line}')
+                    code_buffer = []
+                in_example_section = False
+                in_code_block = False
                 processed_lines.append(line)
-                example_buffer = []
+                continue
+            
+            # Handle code lines with >>> or ...
+            if stripped.startswith('>>>') or (stripped.startswith('...') and in_code_block):
+                in_code_block = True
+                code_buffer.append(line.strip())
+            elif in_code_block and stripped and not stripped.startswith('>>>'):
+                # This could be output or end of code block
+                # If it looks like output (no >>> or ...), flush the code block
+                code_buffer.append(line.strip())
+            elif not stripped:
+                # Empty line - could be between code blocks
+                if code_buffer:
+                    # Flush the current code block
+                    processed_lines.append('')
+                    processed_lines.append('.. code-block:: python')
+                    processed_lines.append('')
+                    for code_line in code_buffer:
+                        processed_lines.append(f'    {code_line}')
+                    code_buffer = []
+                    in_code_block = False
+                processed_lines.append(line)
             else:
-                # Regular line in examples section (like "Usage as decorator:")
-                if example_buffer:
-                    processed_lines.append('```python')
-                    processed_lines.extend(example_buffer)
-                    processed_lines.append('```')
-                    example_buffer = []
+                # Regular text in examples section (like "Usage as decorator:")
+                if code_buffer:
+                    processed_lines.append('')
+                    processed_lines.append('.. code-block:: python')
+                    processed_lines.append('')
+                    for code_line in code_buffer:
+                        processed_lines.append(f'    {code_line}')
+                    code_buffer = []
+                    in_code_block = False
                 processed_lines.append(line)
         else:
+            # Not in example section, just pass through
             processed_lines.append(line)
     
-    # Don't forget remaining buffered code
-    if example_buffer:
-        processed_lines.append('```python')
-        processed_lines.extend(example_buffer)
-        processed_lines.append('```')
+    # Flush any remaining code
+    if code_buffer:
+        processed_lines.append('')
+        processed_lines.append('.. code-block:: python')
+        processed_lines.append('')
+        for code_line in code_buffer:
+            processed_lines.append(f'    {code_line}')
     
     md.append('\n'.join(processed_lines))
     md.append("\n")

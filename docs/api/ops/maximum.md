@@ -29,9 +29,12 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([1, 5, 2])
->>> y = nb.tensor([2, 3, 6])
->>> nb.maximum(x, y)
-Tensor([2, 5, 6], dtype=int32)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([1, 5, 2])
+    >>> y = nb.tensor([2, 3, 6])
+    >>> nb.maximum(x, y)
+    Tensor([2, 5, 6], dtype=int32)
 

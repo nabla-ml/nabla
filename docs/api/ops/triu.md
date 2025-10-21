@@ -29,22 +29,25 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.ndarange((3, 3), dtype=nb.DType.int32)
->>> x
-Tensor([[0, 1, 2],
-       [3, 4, 5],
-       [6, 7, 8]], dtype=int32)
-<BLANKLINE>
->>> # Upper triangle with the main diagonal
->>> nb.triu(x, k=0)
-Tensor([[0, 1, 2],
-       [0, 4, 5],
-       [0, 0, 8]], dtype=int32)
-<BLANKLINE>
->>> # Upper triangle above the main diagonal
->>> nb.triu(x, k=1)
-Tensor([[0, 1, 2],
-       [0, 0, 5],
-       [0, 0, 0]], dtype=int32)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.ndarange((3, 3), dtype=nb.DType.int32)
+    >>> x
+    Tensor([[0, 1, 2],
+    [3, 4, 5],
+    [6, 7, 8]], dtype=int32)
+    <BLANKLINE>
+    >>> # Upper triangle with the main diagonal
+    >>> nb.triu(x, k=0)
+    Tensor([[0, 1, 2],
+    [0, 4, 5],
+    [0, 0, 8]], dtype=int32)
+    <BLANKLINE>
+    >>> # Upper triangle above the main diagonal
+    >>> nb.triu(x, k=1)
+    Tensor([[0, 1, 2],
+    [0, 0, 5],
+    [0, 0, 0]], dtype=int32)
 

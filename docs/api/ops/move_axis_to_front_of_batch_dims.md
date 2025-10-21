@@ -21,6 +21,9 @@ Returns
 
 Examples
 --------
+
+.. code-block:: python
+
     >>> x = nb.ones((2, 3, 4))  # shape (2, 3, 4)
     >>> x.batch_dims = (1, 0)  # Simulated for example
     >>> y = move_axis_to_fron_of_batch_dims(x, -1)  # Move last batch dim to front

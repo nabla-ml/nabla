@@ -27,11 +27,14 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([1, 2, 3])
->>> x.dtype
-int32
->>> y = nb.cast(x, nb.float32)
->>> y
-Tensor([1., 2., 3.], dtype=float32)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([1, 2, 3])
+    >>> x.dtype
+    int32
+    >>> y = nb.cast(x, nb.float32)
+    >>> y
+    Tensor([1., 2., 3.], dtype=float32)
 

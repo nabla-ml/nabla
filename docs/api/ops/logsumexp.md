@@ -33,12 +33,18 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([1.0, 2.0, 3.0])
->>> nb.logsumexp(x)
-Tensor([3.407606], dtype=float32)
 
->>> data = nb.tensor([[1, 2, 3], [4, 5, 6]])
->>> nb.logsumexp(data, axis=1)
-Tensor([3.407606, 6.407606], dtype=float32)
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([1.0, 2.0, 3.0])
+    >>> nb.logsumexp(x)
+    Tensor([3.407606], dtype=float32)
+
+
+.. code-block:: python
+
+    >>> data = nb.tensor([[1, 2, 3], [4, 5, 6]])
+    >>> nb.logsumexp(data, axis=1)
+    Tensor([3.407606, 6.407606], dtype=float32)
 

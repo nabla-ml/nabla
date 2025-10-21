@@ -20,9 +20,12 @@ params : Iterator[Tensor] or list[Tensor]
     
 Examples
 --------
->>> from nabla.nn import SGD
->>> optimizer = SGD(model.parameters(), lr=0.01)
->>> loss.backward()
->>> optimizer.step()  # Updates parameters
->>> optimizer.zero_grad()  # Clears gradients
+
+.. code-block:: python
+
+    >>> from nabla.nn import SGD
+    >>> optimizer = SGD(model.parameters(), lr=0.01)
+    >>> loss.backward()
+    >>> optimizer.step()  # Updates parameters
+    >>> optimizer.zero_grad()  # Clears gradients
 

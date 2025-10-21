@@ -31,16 +31,22 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([[10, 20, 30], [40, 50, 60]])
->>> indices = nb.tensor([[0, 2], [1, 0]])
->>> # Gather along axis 1
->>> nb.gather(x, indices, axis=1)
-Tensor([[10, 30],
-       [50, 40]], dtype=int32)
 
->>> # Gather along axis 0
->>> indices = nb.tensor([[0, 1, 0]])
->>> nb.gather(x, indices, axis=0)
-Tensor([[10, 50, 30]], dtype=int32)
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([[10, 20, 30], [40, 50, 60]])
+    >>> indices = nb.tensor([[0, 2], [1, 0]])
+    >>> # Gather along axis 1
+    >>> nb.gather(x, indices, axis=1)
+    Tensor([[10, 30],
+    [50, 40]], dtype=int32)
+
+
+.. code-block:: python
+
+    >>> # Gather along axis 0
+    >>> indices = nb.tensor([[0, 1, 0]])
+    >>> nb.gather(x, indices, axis=0)
+    Tensor([[10, 50, 30]], dtype=int32)
 

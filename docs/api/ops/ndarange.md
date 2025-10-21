@@ -34,8 +34,11 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> nb.ndarange((2, 3), dtype=nb.DType.int32)
-Tensor([[0, 1, 2],
-       [3, 4, 5]], dtype=int32)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> nb.ndarange((2, 3), dtype=nb.DType.int32)
+    Tensor([[0, 1, 2],
+    [3, 4, 5]], dtype=int32)
 

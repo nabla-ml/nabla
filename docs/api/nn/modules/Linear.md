@@ -28,11 +28,14 @@ bias : Tensor
     
 Examples
 --------
->>> import nabla as nb
->>> from nabla.nn import Linear
->>> layer = Linear(20, 30)
->>> input = nb.rand((128, 20))
->>> output = layer(input)
->>> print(output.shape)
-(128, 30)
+
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> from nabla.nn import Linear
+    >>> layer = Linear(20, 30)
+    >>> input = nb.rand((128, 20))
+    >>> output = layer(input)
+    >>> print(output.shape)
+    (128, 30)
 

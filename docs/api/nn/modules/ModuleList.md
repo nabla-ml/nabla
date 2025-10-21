@@ -24,11 +24,14 @@ Parameters
     
 Examples
 --------
->>> from nabla.nn import ModuleList, Linear
->>> layers = ModuleList(
-...     Linear(10, 20),
-...     Linear(20, 10)
-... )
->>> for layer in layers:
-...     x = layer(x)
+
+.. code-block:: python
+
+    >>> from nabla.nn import ModuleList, Linear
+    >>> layers = ModuleList(
+    ...     Linear(10, 20),
+    ...     Linear(20, 10)
+    ... )
+    >>> for layer in layers:
+    ...     x = layer(x)
 

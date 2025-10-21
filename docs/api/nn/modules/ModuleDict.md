@@ -20,12 +20,14 @@ Args:
     modules: Optional dict of modules to initialize with
     
 Example:
-```python
-components = ModuleDict({
-    'encoder': Linear(10, 5),
-    'decoder': Linear(5, 10)
-})
-encoded = components['encoder'](x)
-decoded = components['decoder'](encoded)
-```
+
+
+.. code-block:: python
+
+    >>> components = ModuleDict({
+    ...     'encoder': Linear(10, 5),
+    ...     'decoder': Linear(5, 10)
+    ... })
+    >>> encoded = components['encoder'](x)
+    >>> decoded = components['decoder'](encoded)
 

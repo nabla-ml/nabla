@@ -31,12 +31,18 @@ Tensor
 
 Examples
 --------
->>> import nabla as nb
->>> x = nb.tensor([1, 2, 3])
->>> y = nb.tensor([1, 5, 3])
->>> nb.equal(x, y)
-Tensor([ True, False,  True], dtype=bool)
 
->>> x == y
-Tensor([ True, False,  True], dtype=bool)
+.. code-block:: python
+
+    >>> import nabla as nb
+    >>> x = nb.tensor([1, 2, 3])
+    >>> y = nb.tensor([1, 5, 3])
+    >>> nb.equal(x, y)
+    Tensor([ True, False,  True], dtype=bool)
+
+
+.. code-block:: python
+
+    >>> x == y
+    Tensor([ True, False,  True], dtype=bool)
 

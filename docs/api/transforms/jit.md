@@ -33,6 +33,7 @@ Note:
     * Device auto-movement is a Nabla extension controlled by `auto_device`.
 
 Example:
+
     As a function call::
     ```python
     fast_func = jit(my_func)
