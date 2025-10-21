@@ -1,8 +1,6 @@
 Activation Functions
 ====================
 
-.. currentmodule:: nabla
-
 relu
 ----
 

@@ -41,6 +41,7 @@
                   "name": "Tensor",
                   "type": "class",
                   "path": "nabla.core.tensor.Tensor",
+                  "source": "nabla/core/tensor.py:Tensor",
                   "show_methods": true
                 }
               ]
@@ -53,7 +54,8 @@
                 {
                   "name": "ExecutionContext",
                   "type": "class",
-                  "path": "nabla.core.execution_context.ExecutionContext"
+                  "path": "nabla.core.execution_context.ExecutionContext",
+                  "source": "nabla/core/execution_context.py:ExecutionContext"
                 }
               ]
             }
@@ -70,13 +72,13 @@
               "title": "Automatic Differentiation",
               "description": "Gradient computation and differentiation",
               "items": [
-                {"name": "grad", "type": "function", "path": "nabla.grad"},
-                {"name": "value_and_grad", "type": "function", "path": "nabla.value_and_grad"},
-                {"name": "vjp", "type": "function", "path": "nabla.vjp"},
-                {"name": "jvp", "type": "function", "path": "nabla.jvp"},
-                {"name": "jacfwd", "type": "function", "path": "nabla.jacfwd"},
-                {"name": "jacrev", "type": "function", "path": "nabla.jacrev"},
-                {"name": "backward", "type": "function", "path": "nabla.backward"}
+                {"name": "grad", "type": "function", "path": "nabla.grad", "source": "nabla/transforms/grad.py:grad"},
+                {"name": "value_and_grad", "type": "function", "path": "nabla.value_and_grad", "source": "nabla/transforms/grad.py:value_and_grad"},
+                {"name": "vjp", "type": "function", "path": "nabla.vjp", "source": "nabla/transforms/vjp.py:vjp"},
+                {"name": "jvp", "type": "function", "path": "nabla.jvp", "source": "nabla/transforms/jvp.py:jvp"},
+                {"name": "jacfwd", "type": "function", "path": "nabla.jacfwd", "source": "nabla/transforms/jacobian.py:jacfwd"},
+                {"name": "jacrev", "type": "function", "path": "nabla.jacrev", "source": "nabla/transforms/jacobian.py:jacrev"},
+                {"name": "backward", "type": "function", "path": "nabla.backward", "source": "nabla/transforms/backward.py:backward"}
               ]
             },
             {
@@ -84,7 +86,7 @@
               "title": "Vectorization",
               "description": "Vectorized mapping over batch dimensions",
               "items": [
-                {"name": "vmap", "type": "function", "path": "nabla.vmap"}
+                {"name": "vmap", "type": "function", "path": "nabla.vmap", "source": "nabla/transforms/vmap.py:vmap"}
               ]
             },
             {
@@ -92,9 +94,9 @@
               "title": "Compilation",
               "description": "JIT compilation and optimization",
               "items": [
-                {"name": "jit", "type": "function", "path": "nabla.jit"},
-                {"name": "djit", "type": "function", "path": "nabla.djit"},
-                {"name": "xpr", "type": "function", "path": "nabla.xpr"}
+                {"name": "jit", "type": "function", "path": "nabla.jit", "source": "nabla/transforms/jit.py:jit"},
+                {"name": "djit", "type": "function", "path": "nabla.djit", "source": "nabla/transforms/jit.py:djit"},
+                {"name": "xpr", "type": "function", "path": "nabla.xpr", "source": "nabla/transforms/xpr.py:xpr"}
               ]
             }
           ]
@@ -109,26 +111,26 @@
               "id": "core",
               "title": "Core Modules",
               "items": [
-                {"name": "Module", "type": "class", "path": "nabla.nn.module.Module"},
-                {"name": "Parameter", "type": "class", "path": "nabla.nn.module.Parameter"}
+                {"name": "Module", "type": "class", "path": "nabla.nn.module.Module", "source": "nabla/nn/module.py:Module"},
+                {"name": "Parameter", "type": "class", "path": "nabla.nn.module.Parameter", "source": "nabla/nn/module.py:Parameter"}
               ]
             },
             {
               "id": "layers",
               "title": "Layers",
               "items": [
-                {"name": "Linear", "type": "class", "path": "nabla.nn.linear.Linear"},
-                {"name": "Conv2d", "type": "class", "path": "nabla.nn.conv.Conv2d"},
-                {"name": "Dropout", "type": "class", "path": "nabla.nn.dropout.Dropout"}
+                {"name": "Linear", "type": "class", "path": "nabla.nn.linear.Linear", "source": "nabla/nn/linear.py:Linear"},
+                {"name": "Conv2d", "type": "class", "path": "nabla.nn.conv.Conv2d", "source": "nabla/nn/conv.py:Conv2d"},
+                {"name": "Dropout", "type": "class", "path": "nabla.nn.dropout.Dropout", "source": "nabla/nn/dropout.py:Dropout"}
               ]
             },
             {
               "id": "activations",
               "title": "Activation Functions",
               "items": [
-                {"name": "relu", "type": "function", "path": "nabla.nn.activations.relu"},
-                {"name": "sigmoid", "type": "function", "path": "nabla.nn.activations.sigmoid"},
-                {"name": "tanh", "type": "function", "path": "nabla.nn.activations.tanh"}
+                {"name": "relu", "type": "function", "path": "nabla.nn.activations.relu", "source": "nabla/nn/activations.py:relu"},
+                {"name": "sigmoid", "type": "function", "path": "nabla.nn.activations.sigmoid", "source": "nabla/nn/activations.py:sigmoid"},
+                {"name": "tanh", "type": "function", "path": "nabla.nn.activations.tanh", "source": "nabla/nn/activations.py:tanh"}
               ]
             }
           ]
@@ -143,18 +145,18 @@
               "id": "creation",
               "title": "Tensor Creation",
               "items": [
-                {"name": "zeros", "type": "function", "path": "nabla.zeros"},
-                {"name": "ones", "type": "function", "path": "nabla.ones"},
-                {"name": "rand", "type": "function", "path": "nabla.rand"}
+                {"name": "zeros", "type": "function", "path": "nabla.zeros", "source": "nabla/ops/creation.py:zeros"},
+                {"name": "ones", "type": "function", "path": "nabla.ones", "source": "nabla/ops/creation.py:ones"},
+                {"name": "rand", "type": "function", "path": "nabla.rand", "source": "nabla/ops/creation.py:rand"}
               ]
             },
             {
               "id": "math",
               "title": "Mathematical Operations",
               "items": [
-                {"name": "add", "type": "function", "path": "nabla.add"},
-                {"name": "matmul", "type": "function", "path": "nabla.matmul"},
-                {"name": "sum", "type": "function", "path": "nabla.sum"}
+                {"name": "add", "type": "function", "path": "nabla.add", "source": "nabla/ops/math.py:add"},
+                {"name": "matmul", "type": "function", "path": "nabla.matmul", "source": "nabla/ops/math.py:matmul"},
+                {"name": "sum", "type": "function", "path": "nabla.sum", "source": "nabla/ops/math.py:sum"}
               ]
             }
           ]
@@ -169,8 +171,8 @@
               "id": "device",
               "title": "Device Management",
               "items": [
-                {"name": "device", "type": "function", "path": "nabla.device"},
-                {"name": "cpu", "type": "function", "path": "nabla.cpu"}
+                {"name": "device", "type": "function", "path": "nabla.device", "source": "nabla/utils/device.py:device"},
+                {"name": "cpu", "type": "function", "path": "nabla.cpu", "source": "nabla/utils/device.py:cpu"}
               ]
             }
           ]
