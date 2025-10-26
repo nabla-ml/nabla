@@ -6,4 +6,5 @@ Helper functions for device management and testing.
 :maxdepth: 1
 
 device/index
+testing/index
 ```
