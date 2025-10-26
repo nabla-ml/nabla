@@ -81,32 +81,6 @@ def write_md(path: Path, lines: list[str]):
     print(f"✓ Wrote {path}")
 
 
-def generate_api_index(api_section: dict):
-    title = api_section.get("title", "API Reference")
-    lines = [f"# {title}", "", "```{toctree}", ":maxdepth: 2", ""]
-    for mod in api_section.get("modules", []):
-        # If a module has subsections, it's a directory. Otherwise, it's a single page.
-        if "subsections" in mod:
-            lines.append(f"{mod['id']}/index")
-        else:
-            lines.append(f"{mod['id']}")
-    lines.append("```")
-    write_md(API_ROOT / "index.md", lines)
-
-
-def generate_module_index(module_path: Path, module: dict):
-    title = module.get("title", module['id'].capitalize())
-    lines = [f"# {title}", ""]
-    if module.get('description'):
-        lines.extend([module['description'], ""])
-    lines.extend(["```{toctree}", ":maxdepth: 1", ""])
-    for subsection in module.get('subsections', []):
-        lines.append(f"{subsection['id']}")
-    lines.append("```")
-    ensure_dir(module_path)
-    write_md(module_path / "index.md", lines)
-
-
 def format_docstring_obj_to_md(docstring_obj, raw_docstring: str | None) -> list[str]:
     md_lines = []
     if docstring_obj.short_description:
@@ -171,7 +145,7 @@ def generate_page_from_items(lines: list[str], items: list[dict]):
         if data:
             signature = data.get('signature', '()')
             lines.append("```python")
-            lines.append(f"{'class' if item_type == 'class' else 'def'} {item['name']}{signature}:")
+            lines.append(f"{ 'class' if item_type == 'class' else 'def' } {item['name']}{signature}:")
             lines.append("```")
             lines.extend(format_docstring_obj_to_md(data['docstring_obj'], data.get('raw_docstring')))
             if item_type == 'class' and item.get("show_methods") and data.get("methods"):
@@ -186,19 +160,34 @@ def generate_page_from_items(lines: list[str], items: list[dict]):
             lines.append("*Could not extract documentation. Please check the error messages above and correct `structure.json`.*")
         lines.append("\n---")
 
-def generate_subsection_md(module_path: Path, subsection: dict):
-    lines = [f"# {subsection.get('title', subsection['id'].capitalize())}", ""]
-    if subsection.get("description"):
-        lines.extend([subsection["description"], ""])
-    generate_page_from_items(lines, subsection.get("items", []))
-    write_md(module_path / f"{subsection['id']}.md", lines)
+def process_directory(base_path: Path, config: dict):
+    """Recursively processes a directory configuration from structure.json."""
+    ensure_dir(base_path)
 
-def generate_single_page_md(base_path: Path, module: dict):
-    lines = [f"# {module.get('title', module['id'].capitalize())}", ""]
-    if module.get("description"):
-        lines.extend([module["description"], ""])
-    generate_page_from_items(lines, module.get("items", []))
-    write_md(base_path / f"{module['id']}.md", lines)
+    # If there are items, this is a leaf node, generate the page.
+    if "items" in config:
+        title = config.get('title', config['id'].capitalize())
+        lines = [f"# {title}", ""]
+        if config.get("description"):
+            lines.extend([config["description"], ""])
+        generate_page_from_items(lines, config.get("items", []))
+        write_md(base_path / "index.md", lines)
+        return
+
+    # If there are subsections, create an index and recurse.
+    if "subsections" in config:
+        title = config.get("title", config['id'].capitalize())
+        lines = [f"# {title}", ""]
+        if config.get('description'):
+            lines.extend([config['description'], ""])
+        lines.extend(["```{toctree}", ":maxdepth: 1", ""])
+        for subsection in config.get('subsections', []):
+            lines.append(f"{subsection['id']}/index")
+        lines.append("```")
+        write_md(base_path / "index.md", lines)
+
+        for subsection in config.get("subsections", []):
+            process_directory(base_path / subsection['id'], subsection)
 
 def run():
     if str(PROJECT_ROOT) not in sys.path:
@@ -212,19 +201,18 @@ def run():
     for section in structure.get('sections', []):
         if section.get('type') == 'api':
             print(f"\nProcessing API section: '{section['id']}'")
-            generate_api_index(section)
+            # Generate top-level API index (api/index.md)
+            api_index_lines = [f"# {section.get('title', 'API Reference')}", "", "```{toctree}", ":maxdepth: 2", ""]
             for module in section.get("modules", []):
-                # If a module has subsections, it's a directory with an index.
-                if "subsections" in module:
-                    print(f"  Processing module directory: '{module['id']}'")
-                    module_path = API_ROOT / module['id']
-                    generate_module_index(module_path, module)
-                    for subsection in module.get("subsections", []):
-                        generate_subsection_md(module_path, subsection)
-                # Otherwise, it's a single top-level page.
-                else:
-                    print(f"  Processing single-page module: '{module['id']}'")
-                    generate_single_page_md(API_ROOT, module)
+                api_index_lines.append(f"{module['id']}/index")
+            api_index_lines.append("```")
+            write_md(API_ROOT / "index.md", api_index_lines)
+
+            # Process each top-level module
+            for module in section.get("modules", []):
+                print(f"  Processing module: '{module['id']}'")
+                module_path = API_ROOT / module['id']
+                process_directory(module_path, module)
 
     print('\nAll done. Review generated Markdown files under docs/api/')
 

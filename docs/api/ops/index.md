@@ -5,12 +5,5 @@ The comprehensive library of fundamental tensor operations, organized by submodu
 ```{toctree}
 :maxdepth: 1
 
-binary
-creation
-indexing
-linalg
-reduce
-special
-unary
-view
+binary/index
 ```
