@@ -49,6 +49,9 @@ from .transforms import (
 from .utils.max_interop import accelerator, accelerator_count, cpu, device, device_ref
 from .utils.testing import allclose
 
+from . import nn
+from . import optim
+
 
 # Lazy loading for operations (imported on first access)
 def _build_ops_registry():
@@ -143,6 +146,9 @@ __all__ = [
     "accelerator_count",
     # Types
     "DType",
+    # Modules
+    "nn",
+    "optim",
 ] + list(_ops_registry.keys())  # Add all operation names
 
 

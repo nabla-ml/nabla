@@ -14,20 +14,8 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-from .variance_scaling import (
-    he_normal,
-    he_uniform,
-    initialize_mlp_params,
-    lecun_normal,
-    xavier_normal,
-    xavier_uniform,
-)
+from .optimizer import Optimizer
+from .sgd import SGD
+from .adam import Adam
 
-__all__ = [
-    "he_normal",
-    "he_uniform",
-    "xavier_normal",
-    "xavier_uniform",
-    "lecun_normal",
-    "initialize_mlp_params",
-]
+__all__ = ["Optimizer", "SGD", "Adam"]

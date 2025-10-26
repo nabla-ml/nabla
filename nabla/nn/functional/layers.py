@@ -14,8 +14,27 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-"""Optimizer implementations."""
+import nabla as nb
+from .activations import relu
 
-from .optimizer import Optimizer, SGD, Adam
+__all__ = ["linear_forward", "mlp_forward"]
 
-__all__ = ["Optimizer", "SGD", "Adam"]
+def linear_forward(
+    x: nb.Tensor, weight: nb.Tensor, bias: nb.Tensor | None = None
+) -> nb.Tensor:
+    """Forward pass through a linear layer."""
+    output = nb.matmul(x, weight)
+    if bias is not None:
+        output = output + bias
+    return output
+
+
+def mlp_forward(x: nb.Tensor, params: list[nb.Tensor]) -> nb.Tensor:
+    """MLP forward pass through all layers."""
+    output = x
+    for i in range(0, len(params) - 1, 2):
+        w, b = params[i], params[i + 1]
+        output = nb.matmul(output, w) + b
+        if i < len(params) - 2:
+            output = relu(output)
+    return output

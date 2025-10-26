@@ -15,11 +15,31 @@
 # ===----------------------------------------------------------------------=== #
 
 from .base import Module
-from .containers import Sequential, ModuleList, ModuleDict
-from .linear import Linear
-from .activation import ReLU, Sigmoid, Tanh, LeakyReLU, GELU
+from .. import functional as F
 
-__all__ = [
-    "Module", "Sequential", "ModuleList", "ModuleDict", "Linear",
-    "ReLU", "Sigmoid", "Tanh", "LeakyReLU", "GELU"
-]
+__all__ = ["ReLU", "Sigmoid", "Tanh", "LeakyReLU", "GELU"]
+
+
+class ReLU(Module):
+    def forward(self, x):
+        return F.relu(x)
+
+class Sigmoid(Module):
+    def forward(self, x):
+        return F.sigmoid(x)
+
+class Tanh(Module):
+    def forward(self, x):
+        return F.tanh(x)
+
+class LeakyReLU(Module):
+    def __init__(self, negative_slope=0.01):
+        super().__init__()
+        self.negative_slope = negative_slope
+
+    def forward(self, x):
+        return F.leaky_relu(x, self.negative_slope)
+
+class GELU(Module):
+    def forward(self, x):
+        return F.gelu(x)

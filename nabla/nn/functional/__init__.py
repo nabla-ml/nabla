@@ -14,10 +14,12 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-from .mlp import MLPBuilder, create_mlp_config, create_mlp_forward_and_loss
+from .activations import *
+from .init import *
+from .layers import *
+from .losses import *
+from .optim import *
 
-__all__ = [
-    "create_mlp_config",
-    "create_mlp_forward_and_loss",
-    "MLPBuilder",
-]
+__all__ = (
+    activations.__all__ + init.__all__ + layers.__all__ + losses.__all__ + optim.__all__
+)

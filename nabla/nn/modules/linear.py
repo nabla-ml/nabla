@@ -14,78 +14,37 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-"""Linear (fully-connected) layer implementation."""
-
 from __future__ import annotations
 
 import nabla as nb
-from .module import Module
+from .base import Module
+from ..functional import layers as F
 
 __all__ = ["Linear"]
 
 
 class Linear(Module):
-    """Applies a linear transformation: y = x @ W + b
-    
-    Parameters
-    ----------
-    in_features : int
-        Size of input features
-    out_features : int
-        Size of output features
-    bias : bool, optional
-        If True, adds a learnable bias (default: True)
-        
-    Attributes
-    ----------
-    weight : Tensor
-        Learnable weights of shape (in_features, out_features)
-    bias : Tensor
-        Learnable bias of shape (1, out_features) if bias=True
-        
-    Examples
-    --------
-    >>> import nabla as nb
-    >>> from nabla.nn import Linear
-    >>> layer = Linear(20, 30)
-    >>> input = nb.rand((128, 20))
-    >>> output = layer(input)
-    >>> print(output.shape)
-    (128, 30)
-    """
-    
+    """Applies a linear transformation to the incoming data: y = xA^T + b."""
+
     def __init__(self, in_features: int, out_features: int, bias: bool = True):
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
-        self.use_bias = bias
         
         # Initialize weight with Glorot/Xavier uniform initialization
         weight = nb.glorot_uniform((in_features, out_features))
         weight.requires_grad_(True)
-        self.weight = weight  # Auto-registered as parameter!
+        self.weight = weight
         
-        # Initialize bias if requested
         if bias:
             bias_tensor = nb.zeros((1, out_features))
             bias_tensor.requires_grad_(True)
-            self.bias = bias_tensor  # Auto-registered as parameter!
-    
+            self.bias = bias_tensor
+        else:
+            self.bias = None
+
     def forward(self, x: nb.Tensor) -> nb.Tensor:
-        """
-        Forward pass of the linear layer.
-        
-        Args:
-            x: Input tensor of shape (*, in_features)
-            
-        Returns:
-            Output tensor of shape (*, out_features)
-        """
-        out = nb.matmul(x, self.weight)
-        if self.use_bias:
-            out = out + self.bias
-        return out
-    
-    def __repr__(self) -> str:
-        return (f"Linear(in_features={self.in_features}, "
-                f"out_features={self.out_features}, bias={self.use_bias})")
+        return F.linear_forward(x, self.weight, self.bias)
+
+    def extra_repr(self) -> str:
+        return f'in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}'
