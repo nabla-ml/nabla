@@ -8,6 +8,13 @@ class ReLU():
 Base class for all neural network modules, inspired by PyTorch's nn.Module.
 
 
+### Methods
+
+#### `forward`
+```python
+def forward(self, x):
+```
+
 ---
 ## `LeakyReLU`
 
@@ -16,6 +23,13 @@ class LeakyReLU(negative_slope=0.01):
 ```
 Base class for all neural network modules, inspired by PyTorch's nn.Module.
 
+
+### Methods
+
+#### `forward`
+```python
+def forward(self, x):
+```
 
 ---
 ## `Sigmoid`
@@ -26,6 +40,13 @@ class Sigmoid():
 Base class for all neural network modules, inspired by PyTorch's nn.Module.
 
 
+### Methods
+
+#### `forward`
+```python
+def forward(self, x):
+```
+
 ---
 ## `Tanh`
 
@@ -34,5 +55,12 @@ class Tanh():
 ```
 Base class for all neural network modules, inspired by PyTorch's nn.Module.
 
+
+### Methods
+
+#### `forward`
+```python
+def forward(self, x):
+```
 
 ---
