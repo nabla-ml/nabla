@@ -44,6 +44,8 @@ from .modules import (
 
 # Functional API
 from . import functional
+from . import functional_utils
+from .functional_utils import functional_call
 
 __all__ = [
     # Imperative Modules
@@ -57,7 +59,10 @@ __all__ = [
     "Tanh",
     "LeakyReLU",
     "GELU",
+    # Functional Utilities
+    "functional_call",
     # Sub-packages
     "modules",
     "functional",
+    "functional_utils",
 ]

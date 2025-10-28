@@ -17,5 +17,7 @@
 from .optimizer import Optimizer
 from .sgd import SGD
 from .adam import Adam
+from . import functional_utils
+from .functional_utils import functional_adam_step
 
-__all__ = ["Optimizer", "SGD", "Adam"]
+__all__ = ["Optimizer", "SGD", "Adam", "functional_adam_step", "functional_utils"]

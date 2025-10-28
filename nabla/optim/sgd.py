@@ -14,6 +14,8 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
+from collections import defaultdict
+import nabla as nb
 from .optimizer import Optimizer
 from ..nn import functional as F
 
@@ -41,17 +43,27 @@ class SGD(Optimizer):
                 if p.grad is None:
                     continue
                 
-                state = self.state[p]
-                
+                # print(f"Parameter: {p.name}, shape: {p.shape}")
+                # print(f"Gradient: {p.grad.to_numpy()}")
+
+                param_state = self.state[p]
+                momentum_buffer = param_state.get('momentum_buffer')
+
                 new_param, new_buf = F.sgd_step(
                     p,
                     p.grad,
-                    state.get('momentum_buffer'),
+                    momentum_buffer,
                     lr=group['lr'],
                     momentum=group['momentum'],
                     weight_decay=group['weight_decay'],
                 )
+                
+                new_param.realize()
+                # print(f"New param value: {new_param.to_numpy()}")
 
-                p._impl = new_param._impl
+                # print(f"Old impl: {p.to_numpy()}")
+                p.copy_from(new_param)
+                # print(f"New impl: {p.to_numpy()}")
+
                 if new_buf is not None:
-                    state['momentum_buffer'] = new_buf
+                    param_state['momentum_buffer'] = new_buf

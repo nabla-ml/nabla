@@ -19,32 +19,93 @@
 import nabla as nb
 
 
-def test_jit_with_if_else():
+def test_jit_with_if_else_backward():
     """Test JIT compilation with conditional statements"""
 
-    device = nb.device("cpu")
+    def func(inputs: list[nb.Tensor]) -> list[nb.Tensor]:
+        input = inputs[0].requires_grad_(True)
+        x = input + 1
+        if x.item() == 5.0:
+            x = x * x
+        else:
+            x = x * x * x
+
+        x.backward(nb.ones_like(x))
+        return [input.grad]
+
+    jitted_func = nb.djit(func)
+
+    for _ in range(10):
+        x0 = nb.tensor([4.0])
+        outputs0 = jitted_func([x0])
+        print("Output:", outputs0[0])
+
+        x1 = nb.tensor([5.0])
+        outputs1 = jitted_func([x1])
+        print("Output:", outputs1[0])
+
+
+
+def test_jit_with_if_else_grad_imperative():
+    """Test JIT compilation with conditional statements"""
 
     def func(inputs: list[nb.Tensor]) -> list[nb.Tensor]:
-        x = inputs[0]
-        x = nb.sin(x)
+        input = inputs[0].requires_grad_(True)
+        x = input + 1
+        if x.item() == 5.0:
+            x = x * x
+        else:
+            x = x * x * x
 
-        x = nb.negate(x) if x.to_numpy().item() > 0.5 else x + nb.tensor([1000.0])
+        x_grad = nb.transforms.utils.grad(x, input)
+        return [x_grad]
 
-        x = x * 2
+    jitted_func = nb.djit(func)
+
+    for _ in range(10):
+        x0 = nb.tensor([4.0])
+        outputs0 = jitted_func([x0])
+        print("Output:", outputs0[0])
+
+        x1 = nb.tensor([5.0])
+        outputs1 = jitted_func([x1])
+        print("Output:", outputs1[0])
+
+
+def test_jit_with_if_else_grad_functional():
+    """Test JIT compilation with conditional statements"""
+
+    @nb.grad
+    def func(inputs: list[nb.Tensor]) -> list[nb.Tensor]:
+        input = inputs[0]
+        x = input + 1
+        if x.item() == 5.0:
+            x = x * x
+        else:
+            x = x * x * x
+
         return [x]
 
     jitted_func = nb.djit(func)
 
     for _ in range(10):
-        x0 = nb.tensor([2.0]).to(device)
+        x0 = nb.tensor([4.0])
         outputs0 = jitted_func([x0])
         print("Output:", outputs0[0])
 
-        x1 = nb.tensor([3.0]).to(device)
+        x1 = nb.tensor([5.0])
         outputs1 = jitted_func([x1])
         print("Output:", outputs1[0])
 
 
 if __name__ == "__main__":
+    # Expected outputs:
+    # For input 4.0: gradient should be 10
+    # For input 5.0: gradient should be 108
     print("Testing Dynamic JIT Compilation")
-    test_jit_with_if_else()
+    print("\n--- Test 1: JIT with If-Else ---")
+    test_jit_with_if_else_backward()
+    print("\n--- Test 2: JIT with If-Else (Imperative) ---")
+    test_jit_with_if_else_grad_imperative()
+    print("\n--- Test 3: JIT with If-Else (Functional) ---")
+    test_jit_with_if_else_grad_functional()

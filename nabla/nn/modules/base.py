@@ -16,6 +16,8 @@
 
 from __future__ import annotations
 from typing import Iterator, OrderedDict
+
+from ...transforms import jit
 from collections import OrderedDict
 
 from ...core.tensor import Tensor
@@ -31,6 +33,7 @@ class Module:
         object.__setattr__(self, '_buffers', OrderedDict())
         object.__setattr__(self, '_modules', OrderedDict())
         object.__setattr__(self, '_training', True)
+        object.__setattr__(self, '_compiled_forward', None)
 
     def __setattr__(self, name: str, value) -> None:
         """Intercept attribute setting to auto-register parameters and submodules."""
@@ -58,6 +61,23 @@ class Module:
 
     def forward(self, *args, **kwargs):
         raise NotImplementedError(f"{self.__class__.__name__} must implement forward() method")
+
+    def compile(self, **jit_kwargs):
+        import nabla as nb
+
+        def functional_forward(params_and_buffers, *args, **kwargs):
+            return nb.nn.functional_call(self, params_and_buffers, args, kwargs)
+
+        jitted_functional = nb.jit(functional_forward, **jit_kwargs)
+
+        def wrapper(*args, **kwargs):
+            params_and_buffers = {
+                **dict(self.named_parameters()),
+                **dict(self.named_buffers())
+            }
+            return jitted_functional(params_and_buffers, *args, **kwargs)
+
+        return wrapper
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)

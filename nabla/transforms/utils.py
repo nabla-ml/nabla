@@ -202,6 +202,23 @@ def _extract_tensors_from_pytree(tree: Any) -> list[Tensor]:
     return leaves
 
 
+def _is_graph_building_required(pytree: Any) -> bool:
+    """Check if any tensor in the pytree is undergoing staged realization for JIT.
+
+    This is a heuristic to automatically enable create_graph or retain_graph
+    when inside a JIT transformation, as the output tensors will have the
+    stage_realization flag set.
+
+    Args:
+        pytree: A pytree containing tensors.
+
+    Returns:
+        True if graph building is likely required, False otherwise.
+    """
+    tensors = _extract_tensors_from_pytree(pytree)
+    return any(tensor.stage_realization for tensor in tensors)
+
+
 def _validate_length_match(list1, list2, name1, name2):
     """Check if two lists have the same length."""
     if len(list1) != len(list2):
@@ -755,14 +772,19 @@ def _reconstruct_gradient_structure(
     return tree_unflatten(structure, gradient_tensors)
 
 
-def backward(outputs: Any, cotangents: Any, retain_graph: bool = False) -> None:
+def backward(outputs: Any, cotangents: Any, retain_graph: bool | None = None) -> None:
     """Accumulate gradients on traced leaf inputs for the given traced outputs.
     
     Args:
         outputs: Output tensors to backpropagate from
         cotangents: Cotangent vectors for outputs
-        retain_graph: If False (default), frees the computation graph after backward pass
+        retain_graph: If False, frees the computation graph after backward pass.
+                      If True, the graph is retained. If None (default), the graph
+                      is retained only if any output is an unmaterialized trace node.
     """
+    if retain_graph is None:
+        # Default to retaining the graph if any output is an unmaterialized trace node
+        retain_graph = _is_graph_building_required(outputs)
 
     trace = Trace.from_outputs(outputs)
     input_tensors = trace.inputs
@@ -834,7 +856,7 @@ def grad(
     outputs: Any,
     inputs: Any,
     grad_outputs: Any | None = None,
-    create_graph: bool = False,
+    retain_graph: bool | None = None,
 ) -> Any:
     """Compute gradients of outputs with respect to inputs (imperative PyTorch-style API).
     
@@ -845,7 +867,8 @@ def grad(
         outputs: Output tensor(s) to differentiate. Can be a single tensor or a sequence/tuple.
         inputs: Input tensor(s) to compute gradients for. Can be a single tensor or sequence/tuple.
         grad_outputs: Gradient of outputs (cotangents). If None, defaults to ones_like for scalar outputs.
-        create_graph: If True, the gradient computation will be traceable for higher-order derivatives.
+        retain_graph: If True, the graph is retained for higher-order derivatives. If None (default),
+                      it's enabled automatically if any output is an unmaterialized trace node.
     
     Returns:
         Gradients with respect to inputs. Returns a single tensor if inputs is a single tensor,
@@ -892,6 +915,11 @@ def grad(
         output_list = list(outputs)
     else:
         raise TypeError(f"outputs must be a Tensor or sequence of Tensors, got {type(outputs)}")
+
+    # Determine effective retain_graph value
+    effective_retain_graph = retain_graph
+    if effective_retain_graph is None:
+        effective_retain_graph = _is_graph_building_required(output_list)
     
     # Handle grad_outputs (cotangents)
     if grad_outputs is None:
@@ -917,8 +945,8 @@ def grad(
     # Compute gradients using the existing pullback infrastructure
     gradient_tensors = _compute_pullback(input_list, output_list, cotangent_list)
     
-    # Clean up computation graph unless create_graph=True
-    if not create_graph:
+    # Clean up computation graph unless retain_graph=True
+    if not effective_retain_graph:
         trace = Trace(input_list, output_list)
         traced_nodes = trace.get_traced_nodes()
         for node in traced_nodes:

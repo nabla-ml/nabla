@@ -19,6 +19,7 @@ from typing import Iterator
 from collections import defaultdict
 
 from ..core.tensor import Tensor
+from ..core.graph_execution import realize_
 
 __all__ = ["Optimizer"]
 
@@ -38,66 +39,35 @@ class Optimizer:
         self.state = defaultdict(dict)
         self.param_groups = []
 
-        param_groups = list(params)
-        if len(param_groups) == 0:
+        param_groups_input = list(params)
+        if len(param_groups_input) == 0:
             raise ValueError("optimizer got an empty parameter list")
-        if not isinstance(param_groups[0], dict):
-            param_groups = [{'params': param_groups}]
+        if not isinstance(param_groups_input[0], dict):
+            param_groups_input = [{'params': param_groups_input}]
 
-        for param_group in param_groups:
-            self.add_param_group(param_group)
+        # Directly process initial param_groups
+        for param_group in param_groups_input:
+            # Add default values to the param_group
+            for k, v in self.defaults.items():
+                param_group.setdefault(k, v)
+            
+            # Ensure params are in a list
+            param_group['params'] = list(param_group['params'])
 
-    def add_param_group(self, param_group: dict):
-        """Add a param group to the Optimizer's param_groups list."""
-        # Add default values to the param_group
-        for k, v in self.defaults.items():
-            param_group.setdefault(k, v)
-        
-        # Ensure params are in a list
-        param_group['params'] = list(param_group['params'])
+            # Basic checks
+            if not param_group['params']:
+                raise ValueError("optimizer got an empty parameter list in a group")
 
-        # Basic checks
-        if not param_group['params']:
-            raise ValueError("optimizer got an empty parameter list in a group")
+            self.param_groups.append(param_group)
 
-        self.param_groups.append(param_group)
-
+    def step(self) -> None:
+        """Performs a single optimization step."""
+        # This method will be implemented by subclasses.
+        raise NotImplementedError
+    
     def zero_grad(self) -> None:
-        """Sets the gradients of all optimized Tensors to None."""
+        """Clears the gradients of all optimized parameters."""
         for group in self.param_groups:
             for p in group['params']:
                 if p.grad is not None:
                     p.grad = None
-
-    def step(self) -> None:
-        """Performs a single optimization step."""
-        raise NotImplementedError(
-            f"{self.__class__.__name__} must implement step() method"
-        )
-
-    def state_dict(self) -> dict:
-        """
-        Returns the state of the optimizer as a dict.
-
-        It contains two entries:
-        * state - a dict holding current optimization state. Its content
-            differs between optimizer classes.
-        * param_groups - a list containing all parameter groups.
-        """
-        # Note: Tensors in state are not cloned, just referenced.
-        return {
-            'state': self.state,
-            'param_groups': self.param_groups,
-        }
-
-    def load_state_dict(self, state_dict: dict):
-        """
-        Loads the optimizer state.
-
-        Args:
-            state_dict (dict): optimizer state. Should be an object returned
-                from a call to :meth:`state_dict`.
-        """
-        # A more robust implementation would deeply copy the state.
-        self.state = state_dict['state']
-        self.param_groups = state_dict['param_groups']

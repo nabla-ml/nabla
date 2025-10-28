@@ -14,6 +14,7 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
+from collections import defaultdict
 import nabla as nb
 from .optimizer import Optimizer
 from ..nn import functional as F
@@ -35,33 +36,41 @@ class Adam(Optimizer):
             raise ValueError(f"Invalid beta parameter at index 1: {betas[1]}")
         if not 0.0 <= weight_decay:
             raise ValueError(f"Invalid weight_decay value: {weight_decay}")
-            
         defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay)
         super().__init__(params, defaults)
 
-    def step(self) -> None:
-        """Performs a single optimization step."""
-        for group in self.param_groups:
+    def _step_internal(self, param_groups: list[dict], state: dict) -> tuple[list[dict], dict]:
+        updated_param_groups = []
+        updated_state = defaultdict(dict)
+
+        for group in param_groups:
+            updated_group = group.copy()
+            updated_params_in_group = []
+
             for p in group['params']:
                 if p.grad is None:
+                    updated_params_in_group.append(p)
+                    if p in state:
+                        updated_state[p] = state[p]
                     continue
                 
-                state = self.state[p]
+                p_state = state.get(p, {})
 
-                # State initialization
-                if len(state) == 0:
-                    state['step'] = 0
-                    state['exp_avg'] = nb.zeros_like(p)
-                    state['exp_avg_sq'] = nb.zeros_like(p)
+                # State initialization (if not already present in the input state)
+                if 'step' not in p_state:
+                    p_state['step'] = nb.tensor(0, dtype=nb.DType.int32) # Use nb.tensor for JIT compatibility
+                    p_state['exp_avg'] = nb.zeros_like(p)
+                    p_state['exp_avg_sq'] = nb.zeros_like(p)
 
-                state['step'] += 1
+                # Increment step for the current parameter
+                current_step = p_state['step'] + 1 # This will create a new tensor for step
 
                 new_param, new_exp_avg, new_exp_avg_sq = F.adam_step(
                     p,
                     p.grad,
-                    state['exp_avg'],
-                    state['exp_avg_sq'],
-                    state['step'],
+                    p_state['exp_avg'],
+                    p_state['exp_avg_sq'],
+                    current_step, # Pass the incremented step
                     lr=group['lr'],
                     beta1=group['betas'][0],
                     beta2=group['betas'][1],
@@ -69,6 +78,15 @@ class Adam(Optimizer):
                     weight_decay=group['weight_decay'],
                 )
 
-                p._impl = new_param._impl
-                state['exp_avg'] = new_exp_avg
-                state['exp_avg_sq'] = new_exp_avg_sq
+                updated_params_in_group.append(new_param)
+
+                updated_p_state = {} # Create a new state dict for the updated parameter
+                updated_p_state['step'] = current_step
+                updated_p_state['exp_avg'] = new_exp_avg
+                updated_p_state['exp_avg_sq'] = new_exp_avg_sq
+                updated_state[p] = updated_p_state # Associate state with the original parameter object
+
+            updated_group['params'] = updated_params_in_group
+            updated_param_groups.append(updated_group)
+        
+        return updated_param_groups, updated_state

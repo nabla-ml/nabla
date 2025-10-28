@@ -200,6 +200,13 @@ class Tensor:
                 f"Cannot convert Tensor with impl type {type(self._impl)} to NumPy tensor"
             )
         return self._impl.to_numpy()
+    
+    def item(self) -> Union[float, int, bool]:
+        """Get the single value of a scalar Tensor as a standard Python type.
+
+        Raises an error if the Tensor is not a scalar.
+        """
+        return self.to_numpy().item()
 
     @classmethod
     def from_numpy(cls, np_tensor: np.ndarray) -> Tensor:
@@ -256,12 +263,13 @@ class Tensor:
 
         return transfer_to(self, device)
 
-    def backward(self, grad: Tensor | None = None, retain_graph: bool = False) -> None:
+    def backward(self, grad: Tensor | None = None, retain_graph: bool | None = None) -> None:
         """Compute gradients flowing into traced leaf inputs that influence this Tensor.
         
         Args:
             grad: Optional cotangent tensor; defaults to ones for scalar outputs
-            retain_graph: If False (default), frees the computation graph after backward pass
+            retain_graph: If False, frees the computation graph. If True, it's retained.
+                          If None (default), it's retained only if inside a trace.
         """
 
         if grad is None:
@@ -286,7 +294,6 @@ class Tensor:
         Similar to PyTorch's requires_grad_() method.
         """
         self.requires_grad = bool(val)
-        self.traced = bool(val)
         return self
 
     # Operator overloading methods
