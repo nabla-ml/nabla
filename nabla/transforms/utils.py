@@ -788,6 +788,10 @@ def backward(outputs: Any, cotangents: Any, retain_graph: bool | None = None) ->
 
     trace = Trace.from_outputs(outputs)
     input_tensors = trace.inputs
+    # print("\n INput Tensors in backward():")
+    # for t in input_tensors:
+    #     print(t)
+    # print("\n")
     output_tensors = trace.outputs
 
     cotangent_tensors = _extract_tensors_from_pytree(cotangents)
@@ -812,7 +816,7 @@ def backward(outputs: Any, cotangents: Any, retain_graph: bool | None = None) ->
         traced_nodes = trace.get_traced_nodes()
         for node in traced_nodes:
             node.args = []
-            node.traced = False
+            # node.traced = False , we acutally need THIS!
 
 
 def pullback(

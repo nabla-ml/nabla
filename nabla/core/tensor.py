@@ -293,7 +293,8 @@ class Tensor:
         This is an in-place operation that returns self for method chaining.
         Similar to PyTorch's requires_grad_() method.
         """
-        self.requires_grad = bool(val)
+        self.requires_grad = val
+        self.traced = val
         return self
 
     # Operator overloading methods

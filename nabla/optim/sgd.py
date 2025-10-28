@@ -57,13 +57,16 @@ class SGD(Optimizer):
                     momentum=group['momentum'],
                     weight_decay=group['weight_decay'],
                 )
-                
-                new_param.realize()
-                # print(f"New param value: {new_param.to_numpy()}")
 
                 # print(f"Old impl: {p.to_numpy()}")
-                p.copy_from(new_param)
+                p._impl = new_param._impl
+                # new_param.realize()
+                # print(f"New param value: {new_param.to_numpy()}")
+
+                
+                # p.copy_from(new_param)
                 # print(f"New impl: {p.to_numpy()}")
+                # print(p.requires_grad, p.traced)
 
                 if new_buf is not None:
                     param_state['momentum_buffer'] = new_buf

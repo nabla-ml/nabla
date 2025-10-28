@@ -39,9 +39,9 @@ class Module:
         """Intercept attribute setting to auto-register parameters and submodules."""
         if hasattr(self, '_parameters') and name in self._parameters:
             del self._parameters[name]
-        if hasattr(self, '_buffers') and name in self._buffers:
+        elif hasattr(self, '_buffers') and name in self._buffers:
             del self._buffers[name]
-        if hasattr(self, '_modules') and name in self._modules:
+        elif hasattr(self, '_modules') and name in self._modules:
             del self._modules[name]
 
         object.__setattr__(self, name, value)
