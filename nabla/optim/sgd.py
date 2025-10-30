@@ -38,17 +38,18 @@ class SGD(Optimizer):
 
     def step(self) -> None:
         """Performs a single optimization step."""
+        original_params_and_buffers: list[nb.Tensor] = []
+        symbolic_updated_params_and_buffers: list[nb.Tensor] = []
+
         for group in self.param_groups:
             for p in group['params']:
                 if p.grad is None:
                     continue
                 
-                # print(f"Parameter: {p.name}, shape: {p.shape}")
-                # print(f"Gradient: {p.grad.to_numpy()}")
-
                 param_state = self.state[p]
                 momentum_buffer = param_state.get('momentum_buffer')
 
+                # Symbolically compute new parameter and momentum buffer
                 new_param, new_buf = F.sgd_step(
                     p,
                     p.grad,
@@ -58,15 +59,22 @@ class SGD(Optimizer):
                     weight_decay=group['weight_decay'],
                 )
 
-                # print(f"Old impl: {p.to_numpy()}")
-                p._impl = new_param._impl
-                # new_param.realize()
-                # print(f"New param value: {new_param.to_numpy()}")
-
-                
-                # p.copy_from(new_param)
-                # print(f"New impl: {p.to_numpy()}")
-                # print(p.requires_grad, p.traced)
+                # Collect original and symbolic updated tensors
+                original_params_and_buffers.append(p)
+                symbolic_updated_params_and_buffers.append(new_param)
 
                 if new_buf is not None:
+                    # If momentum buffer exists, add it to the lists
+                    # and update the state to hold the symbolic new_buf
+                    original_params_and_buffers.append(momentum_buffer)
+                    symbolic_updated_params_and_buffers.append(new_buf)
                     param_state['momentum_buffer'] = new_buf
+
+        # Realize all symbolic tensors in a single batched operation
+        nb.core.graph_execution.realize_(symbolic_updated_params_and_buffers)
+        print("SGD step completed: parameters and momentum buffers updated.")
+        print("Original params and buffers:", original_params_and_buffers)
+        print("Symbolic updated params and buffers:", symbolic_updated_params_and_buffers)
+        
+        # Perform in-place updates on the original parameter and momentum buffer tensors
+        self._update_params_inplace(original_params_and_buffers, symbolic_updated_params_and_buffers)

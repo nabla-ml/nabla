@@ -71,3 +71,17 @@ class Optimizer:
             for p in group['params']:
                 if p.grad is not None:
                     p.grad = None
+
+    def _update_params_inplace(self, original_tensors: list[Tensor], new_tensors: list[Tensor]) -> None:
+        """
+        Updates the underlying implementation (_impl) of original_tensors with the
+        realized implementations from new_tensors. This performs an in-place update
+        without changing the Tensor objects themselves.
+        """
+        if len(original_tensors) != len(new_tensors):
+            raise ValueError("Mismatched lengths for original_tensors and new_tensors")
+
+        for original_t, new_t in zip(original_tensors, new_tensors):
+            if new_t._impl is None:
+                raise ValueError(f"New tensor {new_t.name} has no realized implementation.")
+            original_t.impl_(new_t._impl)
