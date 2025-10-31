@@ -661,6 +661,7 @@ class Trace:
                 if node_id not in discovered_ids:
                     discovered.append(node)
                     discovered_ids.add(node_id)
+                return  # Do not discover further upstream, this would interfere with the Trace inputs logic
 
         for output in output_tensors:
             _dfs(output)
@@ -782,27 +783,38 @@ def backward(outputs: Any, cotangents: Any, retain_graph: bool | None = None) ->
                       If True, the graph is retained. If None (default), the graph
                       is retained only if any output is an unmaterialized trace node.
     """
+    if isinstance(outputs, Tensor):
+        outputs = [outputs]
+    if isinstance(cotangents, Tensor):
+        cotangents = [cotangents]
+
+    if not isinstance(outputs, (list, tuple)):
+        raise TypeError(f"outputs must be a Tensor or sequence of Tensors, got {type(outputs)}")
+    if not isinstance(cotangents, (list, tuple)):
+        raise TypeError(f"cotangents must be a Tensor or sequence of Tensors, got {type(cotangents)}")
+
     if retain_graph is None:
         # Default to retaining the graph if any output is an unmaterialized trace node
         retain_graph = _is_graph_building_required(outputs)
 
     trace = Trace.from_outputs(outputs)
     input_tensors = trace.inputs
-    # print("\n INput Tensors in backward():")
-    # for t in input_tensors:
-    #     print(t)
-    # print("\n")
     output_tensors = trace.outputs
 
-    cotangent_tensors = _extract_tensors_from_pytree(cotangents)
-    if not cotangent_tensors and output_tensors:
-        raise ValueError("cotangents must contain tensors")
+    # cotangent_tensors = _extract_tensors_from_pytree(cotangents)
+    # if not cotangent_tensors and output_tensors:
+    #     raise ValueError("cotangents must contain tensors")
+
+    # print("Outputs:", output_tensors)
+    # print("Cotangents:", cotangents)
 
     _validate_length_match(
-        cotangent_tensors, output_tensors, "cotangents", "outputs"
+        cotangents, output_tensors, "cotangents", "outputs"
     )
 
-    gradients = _compute_pullback(input_tensors, output_tensors, cotangent_tensors)
+    gradients = _compute_pullback(input_tensors, output_tensors, cotangents)
+
+    all_grads = []
 
     for inp, grad in zip(input_tensors, gradients, strict=False):
         if inp.grad is None:
@@ -811,6 +823,14 @@ def backward(outputs: Any, cotangents: Any, retain_graph: bool | None = None) ->
             from ..ops.binary import add
 
             inp.grad = add(inp.grad, grad)
+            
+        all_grads.append(inp.grad)
+
+    from ..core.graph_execution import realize_
+    realize_(all_grads)
+
+    # for grad in all_grads:
+    #     print("grad:", grad)
 
     if not retain_graph:
         traced_nodes = trace.get_traced_nodes()

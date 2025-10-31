@@ -271,7 +271,6 @@ class Tensor:
             retain_graph: If False, frees the computation graph. If True, it's retained.
                           If None (default), it's retained only if inside a trace.
         """
-
         if grad is None:
             if self.shape != () or self.batch_dims:
                 raise ValueError(
@@ -294,7 +293,7 @@ class Tensor:
         Similar to PyTorch's requires_grad_() method.
         """
         self.requires_grad = val
-        self.traced = val
+        self.traced = val if not self.traced else self.traced
         return self
 
     # Operator overloading methods

@@ -70,11 +70,8 @@ class SGD(Optimizer):
                     symbolic_updated_params_and_buffers.append(new_buf)
                     param_state['momentum_buffer'] = new_buf
 
-        # Realize all symbolic tensors in a single batched operation
+        # # Realize all symbolic tensors in a single batched operation
         nb.core.graph_execution.realize_(symbolic_updated_params_and_buffers)
-        print("SGD step completed: parameters and momentum buffers updated.")
-        print("Original params and buffers:", original_params_and_buffers)
-        print("Symbolic updated params and buffers:", symbolic_updated_params_and_buffers)
-        
+
         # Perform in-place updates on the original parameter and momentum buffer tensors
         self._update_params_inplace(original_params_and_buffers, symbolic_updated_params_and_buffers)
