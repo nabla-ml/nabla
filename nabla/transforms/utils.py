@@ -801,13 +801,6 @@ def backward(outputs: Any, cotangents: Any, retain_graph: bool | None = None) ->
     input_tensors = trace.inputs
     output_tensors = trace.outputs
 
-    # cotangent_tensors = _extract_tensors_from_pytree(cotangents)
-    # if not cotangent_tensors and output_tensors:
-    #     raise ValueError("cotangents must contain tensors")
-
-    # print("Outputs:", output_tensors)
-    # print("Cotangents:", cotangents)
-
     _validate_length_match(
         cotangents, output_tensors, "cotangents", "outputs"
     )
@@ -827,7 +820,7 @@ def backward(outputs: Any, cotangents: Any, retain_graph: bool | None = None) ->
         all_grads.append(inp.grad)
 
     from ..core.graph_execution import realize_
-    realize_(all_grads)
+    realize_(outputs + all_grads)
 
     # for grad in all_grads:
     #     print("grad:", grad)
