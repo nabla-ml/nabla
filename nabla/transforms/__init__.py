@@ -4,6 +4,7 @@ from .jacfwd import jacfwd as jacfwd
 from .jacrev import jacrev as jacrev
 from .jit import djit as djit
 from .jit import jit as jit
+from .jit import compile as compile
 from .jvp import jvp as jvp
 from .utils import xpr as xpr
 from .utils import backward as backward

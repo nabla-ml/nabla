@@ -35,13 +35,13 @@ def train(inputs, targets):
     return loss
 
 # 4. Compile the training step with dynamic JIT (static JIT does not work here)
-jitted_train = nb.djit(train)
+compiled_train = nb.compile(train)
 
 # 5. Training loop with synthetic data
 for i in range(1000):
     inputs = nb.randn((10, 1))
     targets = nb.sin(5 * inputs)
-    loss = jitted_train(inputs, targets)
+    loss = compiled_train(inputs, targets)
 
     if (i + 1) % 100 == 0:
         print(f"Epoch {i+1}, Loss: {loss}")

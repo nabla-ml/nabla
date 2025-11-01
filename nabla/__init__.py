@@ -37,9 +37,11 @@ from .transforms import (
     backward,
     djit,
     grad,
+    autograd,
     jacfwd,
     jacrev,
     jit,
+    compile,
     jvp,
     value_and_grad,
     vjp,
@@ -132,9 +134,11 @@ __all__ = [
     "vmap",
     "jit",
     "djit",
+    "compile",
     "jacrev",
     "jacfwd",
     "grad",
+    "autograd"
     "backward",
     "value_and_grad",
     # Utilities
