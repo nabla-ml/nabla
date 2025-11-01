@@ -263,13 +263,14 @@ class Tensor:
 
         return transfer_to(self, device)
 
-    def backward(self, grad: Tensor | None = None, retain_graph: bool | None = None) -> None:
+    def backward(self, grad: Tensor | None = None, retain_graph: bool | None = None, show_graph: bool = False) -> None:
         """Compute gradients flowing into traced leaf inputs that influence this Tensor.
         
         Args:
             grad: Optional cotangent tensor; defaults to ones for scalar outputs
             retain_graph: If False, frees the computation graph. If True, it's retained.
                           If None (default), it's retained only if inside a trace.
+            show_graph: If True, prints the compiled graph during backward pass
         """
         if grad is None:
             if self.shape != () or self.batch_dims:
@@ -284,7 +285,7 @@ class Tensor:
 
         from ..transforms.utils import backward as backward_transform
 
-        backward_transform(self, grad, retain_graph=retain_graph)
+        backward_transform(self, grad, retain_graph=retain_graph, show_graph=show_graph)
 
     def requires_grad_(self, val: bool = True) -> Tensor:
         """Opt into or out of gradient tracking for imperative workflows.

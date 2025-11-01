@@ -773,7 +773,7 @@ def _reconstruct_gradient_structure(
     return tree_unflatten(structure, gradient_tensors)
 
 
-def backward(outputs: Any, cotangents: Any, retain_graph: bool | None = None) -> None:
+def backward(outputs: Any, cotangents: Any, retain_graph: bool | None = None, show_graph: bool = False) -> None:
     """Accumulate gradients on traced leaf inputs for the given traced outputs.
     
     Args:
@@ -782,6 +782,7 @@ def backward(outputs: Any, cotangents: Any, retain_graph: bool | None = None) ->
         retain_graph: If False, frees the computation graph after backward pass.
                       If True, the graph is retained. If None (default), the graph
                       is retained only if any output is an unmaterialized trace node.
+        show_graph: If True, prints the compiled graph during backward pass
     """
     if isinstance(outputs, Tensor):
         outputs = [outputs]
@@ -820,10 +821,7 @@ def backward(outputs: Any, cotangents: Any, retain_graph: bool | None = None) ->
         all_grads.append(inp.grad)
 
     from ..core.graph_execution import realize_
-    realize_(outputs + all_grads)
-
-    # for grad in all_grads:
-    #     print("grad:", grad)
+    realize_(outputs + all_grads, show_graph=show_graph)
 
     if not retain_graph:
         traced_nodes = trace.get_traced_nodes()

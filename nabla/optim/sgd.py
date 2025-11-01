@@ -36,8 +36,12 @@ class SGD(Optimizer):
         defaults = dict(lr=lr, momentum=momentum, weight_decay=weight_decay)
         super().__init__(params, defaults)
 
-    def step(self) -> None:
-        """Performs a single optimization step."""
+    def step(self, show_graph: bool = False) -> None:
+        """Performs a single optimization step.
+        
+        Args:
+            show_graph: If True, prints the compiled graph during optimizer step
+        """
         original_params_and_buffers: list[nb.Tensor] = []
         symbolic_updated_params_and_buffers: list[nb.Tensor] = []
 
@@ -71,7 +75,7 @@ class SGD(Optimizer):
                     param_state['momentum_buffer'] = new_buf
 
         # # Realize all symbolic tensors in a single batched operation
-        nb.core.graph_execution.realize_(symbolic_updated_params_and_buffers)
+        nb.core.graph_execution.realize_(symbolic_updated_params_and_buffers, show_graph=show_graph)
 
         # Perform in-place updates on the original parameter and momentum buffer tensors
         self._update_params_inplace(original_params_and_buffers, symbolic_updated_params_and_buffers)
