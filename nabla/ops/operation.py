@@ -220,10 +220,10 @@ class BinaryOperation(Operation):
             for _ in range(len(output_shape) - len(arg2.shape)):
                 arg2 = unsqueeze(arg2, [-len(arg2.shape) - 1])
 
-        if arg1.traced:
+        if arg1.traced or arg1.requires_grad:
             arg1 = broadcast_to(arg1, output_shape)
             arg1 = broadcast_batch_dims(arg1, output_batch_dims)
-        if arg2.traced:
+        if arg2.traced or arg2.requires_grad:
             arg2 = broadcast_to(arg2, output_shape)
             arg2 = broadcast_batch_dims(arg2, output_batch_dims)
 

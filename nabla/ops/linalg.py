@@ -93,10 +93,10 @@ class MatMulOp(BinaryOperation):
             arg1.batch_dims, arg2.batch_dims
         )
         output_dtype = self.compute_output_dtype(arg1, arg2)
-        if arg1.traced:
+        if arg1.traced or arg1.requires_grad:
             arg1 = broadcast_to(arg1, output_shape[:-2] + arg1.shape[-2:])
             arg1 = broadcast_batch_dims(arg1, output_batch_dims)
-        if arg2.traced:
+        if arg2.traced or arg2.requires_grad:
             arg2 = broadcast_to(arg2, output_shape[:-2] + arg2.shape[-2:])
             arg2 = broadcast_batch_dims(arg2, output_batch_dims)
 

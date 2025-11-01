@@ -26,18 +26,18 @@ def train(inputs, targets):
     optimizer.zero_grad()
     predictions = model.forward(inputs)
     loss = nb.sum((predictions - targets) ** 2)
-    loss.backward(show_graph=True) # show MAX graph for debugging
-    optimizer.step(show_graph=True)
+    loss.backward(show_graph=False) # show MAX graph for debugging
+    optimizer.step(show_graph=False)
     return loss
 
 # 4. Compile the training step with dynamic JIT (static JIT does not work here)
 compiled_train = nb.compile(train)
 
 # 5. Training loop with synthetic data
-for i in range(10):
+for i in range(1000):
     inputs = nb.randn((10, 1))
     targets = nb.sin(5 * inputs)
     loss = compiled_train(inputs, targets)
 
-    if (i + 1) % 1 == 0:
+    if (i + 1) % 100 == 0:
         print(f"Epoch {i+1}, Loss: {loss}")

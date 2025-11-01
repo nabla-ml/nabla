@@ -369,7 +369,6 @@ def test_requires_grad_returns_self():
     # Should return the same tensor object
     assert result is x
     assert x.requires_grad is True
-    assert x.traced is True
 
 
 def test_backward_clears_computation_graph():

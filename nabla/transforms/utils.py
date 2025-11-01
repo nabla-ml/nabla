@@ -641,27 +641,25 @@ class Trace:
         gradient accumulation on any node in the graph that the user has marked.
         """
         discovered: list[Tensor] = []
-        discovered_ids: set[int] = set()
         visited: set[int] = set()
 
         def _dfs(node: Tensor) -> None:
             node_id = id(node)
             if node_id in visited:
                 return
+            
             visited.add(node_id)
 
             # Recurse into children first
-            for arg in getattr(node, "args", ()) or ():
-                if isinstance(arg, Tensor):
-                    _dfs(arg)
+            any_args_require_grad = False
+            if node.args is not None:
+                for arg in node.args:
+                    if arg.requires_grad:
+                        any_args_require_grad = True
+                        _dfs(arg)
 
-            # Check if this node requires gradients (explicit True check)
-            requires_grad = getattr(node, "requires_grad", None)
-            if requires_grad is True:
-                if node_id not in discovered_ids:
-                    discovered.append(node)
-                    discovered_ids.add(node_id)
-                return  # Do not discover further upstream, this would interfere with the Trace inputs logic
+            if node.requires_grad and not any_args_require_grad:
+                discovered.append(node)
 
         for output in output_tensors:
             _dfs(output)
@@ -811,6 +809,7 @@ def backward(outputs: Any, cotangents: Any, retain_graph: bool | None = None, sh
     all_grads = []
 
     for inp, grad in zip(input_tensors, gradients, strict=False):
+        grad.requires_grad = False
         if inp.grad is None:
             inp.grad = grad
         else:
@@ -827,7 +826,6 @@ def backward(outputs: Any, cotangents: Any, retain_graph: bool | None = None, sh
         traced_nodes = trace.get_traced_nodes()
         for node in traced_nodes:
             node.args = []
-            # node.traced = False , we acutally need THIS!
 
 
 def pullback(

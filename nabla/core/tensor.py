@@ -172,8 +172,10 @@ class Tensor:
                 self.traced = True
             if arg.stage_realization:
                 self.stage_realization = True
+            if arg.requires_grad:
+                self.requires_grad = True
 
-        if self.traced or self.stage_realization:
+        if self.traced or self.stage_realization or self.requires_grad:
             for arg in arg_nodes:
                 self.args.append(arg)
 
@@ -294,7 +296,6 @@ class Tensor:
         Similar to PyTorch's requires_grad_() method.
         """
         self.requires_grad = val
-        self.traced = val if not self.traced else self.traced
         return self
 
     # Operator overloading methods
