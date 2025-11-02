@@ -54,9 +54,9 @@ class AddOneCustomOp(nb.UnaryOperation):
         raise NotImplementedError("JVP not implemented for AddOneCustomOp")
 
 
-def add_one_custom(arg: nb.Tensor) -> list[nb.Tensor]:
+def add_one_custom(arg: nb.Tensor) -> nb.Tensor:
     """Custom unary operation that adds one to the input."""
-    return [AddOneCustomOp().forward(arg)]
+    return AddOneCustomOp().forward(arg)
 
 
 if __name__ == "__main__":
