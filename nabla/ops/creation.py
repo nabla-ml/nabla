@@ -75,6 +75,7 @@ def _create_filled_tensor(
     device: Device = _DEFAULT_CPU,
     batch_dims: Shape = (),
     traced: bool = False,
+    stage_realization: bool = False,
 ) -> Tensor:
     """Create tensor filled with constant value using broadcasting."""
     _validate_shape(shape)
@@ -90,6 +91,7 @@ def _create_filled_tensor(
                 np.array([fill_value], dtype=DType.to_numpy(dtype))
             ).to(device)
             scalar_1d.traced = traced
+            scalar_1d.stage_realization = stage_realization
 
             if not shape:
                 # For scalar boolean, reshape (1,) to ()
@@ -105,6 +107,7 @@ def _create_filled_tensor(
                 np.array([fill_value], dtype=np.float32)
             ).to(device)
             scalar_float.traced = traced
+            scalar_float.stage_realization = stage_realization
 
             if not shape:
                 # Convert scalar float to scalar bool
@@ -119,6 +122,7 @@ def _create_filled_tensor(
             device
         )
         scalar.traced = traced
+        scalar.stage_realization = stage_realization
 
         if not shape:
             tensor = scalar
@@ -441,6 +445,7 @@ def arange(
     device: Device = _DEFAULT_CPU,
     traced: bool = False,
     batch_dims: Shape = (),
+    stage_realization: bool = False,
 ) -> Tensor:
     """Returns evenly spaced values within a given interval.
 
@@ -467,6 +472,8 @@ def arange(
     batch_dims : Shape, optional
         Specifies leading dimensions to be treated as batch dimensions.
         Defaults to an empty tuple.
+    stage_realization : bool, optional
+        Whether to stage realization during JIT compilation. Defaults to False.
 
     Returns
     -------
@@ -506,6 +513,7 @@ def arange(
     op = ArangeOp(start=start, stop=stop, step=step, dtype=dtype, device=device)
     arr = op.forward()
     arr.traced = traced
+    arr.stage_realization = stage_realization
     if batch_dims:
         arr = broadcast_batch_dims(arr, batch_dims)
     return arr
@@ -517,6 +525,7 @@ def ndarange(
     device: Device = _DEFAULT_CPU,
     batch_dims: Shape = (),
     traced: bool = False,
+    stage_realization: bool = False,
 ) -> Tensor:
     """Creates an tensor of a given shape with sequential values.
 
@@ -536,6 +545,8 @@ def ndarange(
         Defaults to an empty tuple.
     traced : bool, optional
         Whether the operation should be traced in the graph. Defaults to False.
+    stage_realization : bool, optional
+        Whether to stage realization for JIT compilation. Defaults to False.
 
     Returns
     -------
@@ -549,9 +560,10 @@ def ndarange(
     Tensor([[0, 1, 2],
            [3, 4, 5]], dtype=int32)
     """
-    return arange(
-        0, int(np.prod(shape)), 1, dtype=dtype, device=device, traced=traced
+    res = arange(
+        0, int(np.prod(shape)), 1, dtype=dtype, device=device, traced=traced, stage_realization=stage_realization
     ).reshape(shape)
+    return res
 
 
 def ndarange_like(template: Tensor) -> Tensor:
@@ -585,7 +597,8 @@ def ndarange_like(template: Tensor) -> Tensor:
         template.dtype,
         template.logical_device,
         template.batch_dims,
-        template.traced,
+        traced=template.traced,
+        stage_realization=template.stage_realization,
     )
 
 
@@ -598,6 +611,7 @@ def randn(
     seed: int = _DEFAULT_SEED,
     batch_dims: Shape = (),
     traced: bool = False,
+    stage_realization: bool = False,
 ) -> Tensor:
     """Creates an tensor with normally distributed random values.
 
@@ -624,6 +638,8 @@ def randn(
         Defaults to an empty tuple.
     traced : bool, optional
         Whether the operation should be traced in the graph. Defaults to False.
+    stage_realization : bool, optional
+        Whether to stage realization for JIT compilation. Defaults to False.
 
     Returns
     -------
@@ -632,6 +648,7 @@ def randn(
     """
     arr = RandNOp(shape, dtype, mean, std, device, seed).forward()
     arr.traced = traced
+    arr.stage_realization = stage_realization
     return broadcast_batch_dims(arr, batch_dims) if batch_dims else arr
 
 
@@ -669,6 +686,7 @@ def randn_like(
         seed,
         template.batch_dims,
         traced=template.traced,
+        stage_realization=template.stage_realization,
     )
     return res
 
@@ -682,6 +700,7 @@ def rand(
     seed: int = _DEFAULT_SEED,
     batch_dims: Shape = (),
     traced: bool = False,
+    stage_realization: bool = False,
 ) -> Tensor:
     """Creates an tensor with uniformly distributed random values.
 
@@ -707,6 +726,8 @@ def rand(
         Defaults to an empty tuple.
     traced : bool, optional
         Whether the operation should be traced in the graph. Defaults to False.
+    stage_realization : bool, optional
+        Whether to stage realization for JIT compilation. Defaults to False.
 
     Returns
     -------
@@ -715,6 +736,7 @@ def rand(
     """
     arr = RandUniformOp(shape, dtype, lower, upper, device, seed).forward()
     arr.traced = traced
+    arr.stage_realization = stage_realization
     return broadcast_batch_dims(arr, batch_dims) if batch_dims else arr
 
 
@@ -752,6 +774,7 @@ def rand_like(
         seed,
         template.batch_dims,
         traced=template.traced,
+        stage_realization=template.stage_realization,
     )
     return res
 
@@ -762,6 +785,7 @@ def zeros(
     device: Device = _DEFAULT_CPU,
     batch_dims: Shape = (),
     traced: bool = False,
+    stage_realization: bool = False,
 ) -> Tensor:
     """Creates an tensor of a given shape filled with zeros.
 
@@ -778,6 +802,8 @@ def zeros(
         Defaults to an empty tuple.
     traced : bool, optional
         Whether the operation should be traced in the graph. Defaults to False.
+    stage_realization : bool, optional
+        Whether to stage realization for JIT compilation. Defaults to False.
 
     Returns
     -------
@@ -792,7 +818,7 @@ def zeros(
     Tensor([[0, 0, 0],
            [0, 0, 0]], dtype=int32)
     """
-    return _create_filled_tensor(shape, 0.0, dtype, device, batch_dims, traced=traced)
+    return _create_filled_tensor(shape, 0.0, dtype, device, batch_dims, traced=traced, stage_realization=stage_realization)
 
 
 def ones(
@@ -801,6 +827,7 @@ def ones(
     device: Device = _DEFAULT_CPU,
     batch_dims: Shape = (),
     traced: bool = False,
+    stage_realization: bool = False,
 ) -> Tensor:
     """Creates an tensor of a given shape filled with ones.
 
@@ -817,6 +844,8 @@ def ones(
         Defaults to an empty tuple.
     traced : bool, optional
         Whether the operation should be traced in the graph. Defaults to False.
+    stage_realization : bool, optional
+        Whether to stage realization for JIT compilation. Defaults to False.
 
     Returns
     -------
@@ -830,7 +859,7 @@ def ones(
     >>> nb.ones((4,), dtype=nb.DType.float32)
     Tensor([1., 1., 1., 1.], dtype=float32)
     """
-    return _create_filled_tensor(shape, 1.0, dtype, device, batch_dims, traced=traced)
+    return _create_filled_tensor(shape, 1.0, dtype, device, batch_dims, traced=traced, stage_realization=stage_realization)
 
 
 def zeros_like(template: Tensor) -> Tensor:
@@ -863,6 +892,7 @@ def zeros_like(template: Tensor) -> Tensor:
         template.logical_device,
         template.batch_dims,
         traced=template.traced,
+        stage_realization=template.stage_realization,
     )
 
 
@@ -896,6 +926,7 @@ def ones_like(template: Tensor) -> Tensor:
         template.logical_device,
         template.batch_dims,
         traced=template.traced,
+        stage_realization=template.stage_realization,
     )
 
 
@@ -932,7 +963,8 @@ def full_like(template: Tensor, fill_value: float) -> Tensor:
         template.dtype,
         template.logical_device,
         template.batch_dims,
-        template.traced,
+        traced=template.traced,
+        stage_realization=template.stage_realization,
     )
 
 
