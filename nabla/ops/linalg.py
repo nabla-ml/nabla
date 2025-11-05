@@ -470,15 +470,15 @@ def _normalize_padding(padding, name: str = "padding") -> tuple[tuple[int, int],
     
     if isinstance(padding, (tuple, list)):
         if len(padding) == 2:
-            # (pad_h, pad_w) format
+            # Check if this is already normalized format: ((pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right))
+            if isinstance(padding[0], (tuple, list)) and isinstance(padding[1], (tuple, list)):
+                return tuple(tuple(p) for p in padding)
+            # Otherwise it's (pad_h, pad_w) format - symmetric padding
             pad_h, pad_w = padding
             return ((pad_h, pad_h), (pad_w, pad_w))
         elif len(padding) == 4:
             # (pad_h_top, pad_h_bottom, pad_w_left, pad_w_right) format
             return ((padding[0], padding[1]), (padding[2], padding[3]))
-        elif len(padding) == 2 and isinstance(padding[0], (tuple, list)):
-            # ((pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right)) format
-            return tuple(tuple(p) for p in padding)
         else:
             raise ValueError(
                 f"{name} tuple must have length 2 or 4, got {len(padding)}"
@@ -803,7 +803,7 @@ class Conv2DOp(Operation):
         
         Given cotangent ∂L/∂output, computes:
         - ∂L/∂input: using conv2d_transpose with weight
-        - ∂L/∂weight: using permuted conv2d between input and cotangent
+        - ∂L/∂weight: using either permuted conv2d (groups=1) or unfold+bmm (groups>1)
         
         Based on the mathematical derivation in conv2d_manual_grad.py.
         """
@@ -811,7 +811,7 @@ class Conv2DOp(Operation):
         
         # Get dimensions
         N, C_in, H_in, W_in = input_arr.shape
-        C_out, _, K_H, K_W = weight_arr.shape
+        C_out, C_in_per_group, K_H, K_W = weight_arr.shape
         _, _, H_out, W_out = output.shape
         
         # Parse stride and dilation
@@ -858,65 +858,121 @@ class Conv2DOp(Operation):
         grad_input_padded = conv2d_transpose(
             cotangent, weight_arr,
             stride=self.stride,
-            padding=(0, 0),  # No padding in conv_transpose2d itself
+            padding=0,  # No padding in conv_transpose2d itself
             output_padding=(op_h_padded, op_w_padded),
             dilation=self.dilation,
             groups=self.groups
         )
         
-        # Crop if needed
+        # Crop if needed (using nabla slicing)
+        from ..ops.view import tensor_slice
         if crop_h_end > 0:
-            grad_input_padded = grad_input_padded[:, :, :-crop_h_end, :]
+            grad_input_padded = tensor_slice(
+                grad_input_padded,
+                [slice(None), slice(None), slice(None, -crop_h_end), slice(None)]
+            )
         if crop_w_end > 0:
-            grad_input_padded = grad_input_padded[:, :, :, :-crop_w_end]
+            grad_input_padded = tensor_slice(
+                grad_input_padded,
+                [slice(None), slice(None), slice(None), slice(None, -crop_w_end)]
+            )
         
         # Remove padding to get gradient w.r.t. original input
-        h_end = H_padded - pad_h_bottom if pad_h_bottom > 0 else H_padded
-        w_end = W_padded - pad_w_right if pad_w_right > 0 else W_padded
-        grad_input = grad_input_padded[:, :, pad_h_top:h_end, pad_w_left:w_end]
-        
-        # === 2. Gradient w.r.t. Weight (∂L/∂W) ===
-        # Strategy: Permute input and cotangent to use conv2d
-        # For now, only implement groups=1 case
-        
-        if self.groups != 1:
-            raise NotImplementedError("VJP for grouped convolution (groups > 1) not yet implemented")
-        
-        # Pad input manually using numpy (for now - TODO: make this work in graph mode)
-        import numpy as np
-        input_np = input_arr.to_numpy()
-        if pad_h_top > 0 or pad_h_bottom > 0 or pad_w_left > 0 or pad_w_right > 0:
-            input_np = np.pad(
-                input_np,
-                ((0, 0), (0, 0), (pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right)),
-                mode='constant',
-                constant_values=0
-            )
-        input_padded = Tensor.from_numpy(input_np)
-        
-        # Compute effective padded dimensions for cropping
-        H_pad_eff = d_h * (K_H - 1) + s_h * (H_out - 1) + 1
-        W_pad_eff = d_w * (K_W - 1) + s_w * (W_out - 1) + 1
-        
-        # Crop input if needed
-        input_cropped = input_padded[:, :, :H_pad_eff, :W_pad_eff]
-        
-        # Permute: (N, C, H, W) -> (C, N, H, W)
-        from ..ops.view import permute
-        input_perm = permute(input_cropped, (1, 0, 2, 3))
-        cotangent_perm = permute(cotangent, (1, 0, 2, 3))
-        
-        # Convolve with swapped stride/dilation
-        grad_weight_perm = conv2d(
-            input_perm, cotangent_perm,
-            stride=(d_h, d_w),
-            dilation=(s_h, s_w),
-            padding=(0, 0),
-            groups=1
+        h_end = H_padded - pad_h_bottom if pad_h_bottom > 0 else None
+        w_end = W_padded - pad_w_right if pad_w_right > 0 else None
+        grad_input = tensor_slice(
+            grad_input_padded,
+            [slice(None), slice(None), slice(pad_h_top, h_end), slice(pad_w_left, w_end)]
         )
         
-        # Permute back: (C_out, C_in, K_H, K_W) <- (C_in, C_out, K_H, K_W)  
-        grad_weight = permute(grad_weight_perm, (1, 0, 2, 3))
+        # === 2. Gradient w.r.t. Weight (∂L/∂W) ===
+        # Strategy depends on groups:
+        # - groups=1: Efficient method using permuted conv2d
+        # - groups>1: General method using unfold + batch matmul
+        
+        # Pad input using nabla operations
+        from ..ops.view import pad as nabla_pad
+        if pad_h_top > 0 or pad_h_bottom > 0 or pad_w_left > 0 or pad_w_right > 0:
+            # Create target shape with padding
+            target_shape = (N, C_in, H_in + pad_h_top + pad_h_bottom, W_in + pad_w_left + pad_w_right)
+            # Create slices for placing original input in padded tensor
+            slices = [
+                slice(None),  # N
+                slice(None),  # C_in
+                slice(pad_h_top, pad_h_top + H_in),  # H
+                slice(pad_w_left, pad_w_left + W_in)   # W
+            ]
+            input_padded = nabla_pad(input_arr, slices, target_shape)
+        else:
+            input_padded = input_arr
+        
+        if self.groups == 1:
+            # Efficient method for standard convolutions
+            # Compute effective padded dimensions for cropping
+            H_pad_eff = d_h * (K_H - 1) + s_h * (H_out - 1) + 1
+            W_pad_eff = d_w * (K_W - 1) + s_w * (W_out - 1) + 1
+            
+            # Crop input if needed
+            input_cropped = tensor_slice(
+                input_padded,
+                [slice(None), slice(None), slice(None, H_pad_eff), slice(None, W_pad_eff)]
+            )
+            
+            # Permute: (N, C, H, W) -> (C, N, H, W)
+            from ..ops.view import permute
+            input_perm = permute(input_cropped, (1, 0, 2, 3))
+            cotangent_perm = permute(cotangent, (1, 0, 2, 3))
+            
+            # Convolve with swapped stride/dilation
+            grad_weight_perm = conv2d(
+                input_perm, cotangent_perm,
+                stride=(d_h, d_w),
+                dilation=(s_h, s_w),
+                padding=0,
+                groups=1
+            )
+            
+            # Permute back: (C_out, C_in, K_H, K_W) <- (C_in, C_out, K_H, K_W)  
+            grad_weight = permute(grad_weight_perm, (1, 0, 2, 3))
+        else:
+            # General method for grouped convolutions using unfold + batch matmul
+            from ..ops.view import reshape, permute
+            from ..ops.special import unfold
+            
+            C_out_g = C_out // self.groups
+            L = H_out * W_out
+            
+            # Reshape grad_output: (N, C_out, H_out, W_out) -> (N, groups, C_out_g, L)
+            grad_output_reshaped = reshape(cotangent, (N, self.groups, C_out_g, L))
+            # Permute and reshape: -> (groups, C_out_g, N * L)
+            grad_output_reshaped = permute(grad_output_reshaped, (1, 2, 0, 3))
+            grad_output_reshaped = reshape(grad_output_reshaped, (self.groups, C_out_g, N * L))
+            
+            # Reshape input_padded: (N * groups, C_in_per_group, H_padded, W_padded)
+            X_padded_reshaped = reshape(input_padded, (N * self.groups, C_in_per_group, input_padded.shape[2], input_padded.shape[3]))
+            
+            # Unfold input_padded
+            unfolded_X = unfold(
+                X_padded_reshaped,
+                kernel_size=(K_H, K_W),
+                dilation=(d_h, d_w),
+                padding=0,
+                stride=(s_h, s_w)
+            )
+            # Shape: (N * groups, C_in_per_group * K_H * K_W, L)
+            
+            # Reshape: -> (N, groups, C_in_per_group * K_H * K_W, L)
+            unfolded_X = reshape(unfolded_X, (N, self.groups, C_in_per_group * K_H * K_W, L))
+            # Permute and reshape: -> (groups, N * L, C_in_per_group * K_H * K_W)
+            unfolded_X = permute(unfolded_X, (1, 0, 3, 2))
+            unfolded_X = reshape(unfolded_X, (self.groups, N * L, C_in_per_group * K_H * K_W))
+            
+            # Batch matmul: (groups, C_out_g, N*L) @ (groups, N*L, C_in_per_group*K_H*K_W)
+            # Result: (groups, C_out_g, C_in_per_group * K_H * K_W)
+            grad_K_bmm = matmul(grad_output_reshaped, unfolded_X)
+            
+            # Reshape to final weight shape: (C_out, C_in_per_group, K_H, K_W)
+            grad_weight = reshape(grad_K_bmm, (C_out, C_in_per_group, K_H, K_W))
         
         return [grad_input, grad_weight]
     
@@ -1244,8 +1300,145 @@ class Conv2DTransposeOp(Operation):
     def vjp_rule(
         self, primals: list[Tensor], cotangent: Tensor, output: Tensor
     ) -> list[Tensor]:
-        """VJP rule - to be implemented after testing."""
-        raise NotImplementedError("VJP for conv2d_transpose will be implemented after testing")
+        """VJP rule for conv2d_transpose.
+        
+        Given cotangent ∂L/∂output, computes:
+        - ∂L/∂input: using conv2d with cropped/padded cotangent
+        - ∂L/∂weight: using unfold + batch matmul approach
+        
+        Based on the mathematical derivation in conv2d_transpose_manual_grad.py.
+        """
+        input_arr, weight_arr = primals
+        
+        # Get dimensions
+        N, C_in, H_in, W_in = input_arr.shape
+        # Weight shape for transpose conv: (C_in, C_out // groups, K_H, K_W)
+        _, C_out_per_group, K_H, K_W = weight_arr.shape
+        C_out = C_out_per_group * self.groups
+        _, _, H_out, W_out = output.shape
+        
+        # Parse stride and dilation
+        s_h, s_w = self.stride
+        d_h, d_w = self.dilation
+        
+        # Get padding (always tuple format for transpose conv)
+        (pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right) = self.padding
+        
+        # === 1. Gradient w.r.t. Input (∂L/∂X) ===
+        # Strategy: Crop/pad grad_output, then apply conv2d
+        
+        # Compute the expected dimensions after ideal backward pass
+        H_prime = (H_in - 1) * s_h + d_h * (K_H - 1) + 1
+        W_prime = (W_in - 1) * s_w + d_w * (K_W - 1) + 1
+        
+        # Compute total padding applied
+        total_padding_h = H_prime - H_out
+        total_padding_w = W_prime - W_out
+        
+        # Determine if we need to crop or pad
+        if total_padding_h >= 0:
+            pad_h0 = total_padding_h // 2
+            pad_h1 = total_padding_h - pad_h0
+            crop_h_start = 0
+            crop_h_end_amount = 0
+        else:
+            pad_h0 = pad_h1 = 0
+            crop_h_start = (-total_padding_h) // 2
+            crop_h_end_amount = -total_padding_h - crop_h_start
+        
+        if total_padding_w >= 0:
+            pad_w0 = total_padding_w // 2
+            pad_w1 = total_padding_w - pad_w0
+            crop_w_start = 0
+            crop_w_end_amount = 0
+        else:
+            pad_w0 = pad_w1 = 0
+            crop_w_start = (-total_padding_w) // 2
+            crop_w_end_amount = -total_padding_w - crop_w_start
+        
+        # Apply cropping if necessary (using nabla slicing)
+        from ..ops.view import tensor_slice
+        if crop_h_end_amount > 0 or crop_w_end_amount > 0:
+            h_end = H_out - crop_h_end_amount if crop_h_end_amount > 0 else None
+            w_end = W_out - crop_w_end_amount if crop_w_end_amount > 0 else None
+            grad_output_cropped = tensor_slice(
+                cotangent,
+                [slice(None), slice(None), slice(crop_h_start, h_end), slice(crop_w_start, w_end)]
+            )
+        else:
+            grad_output_cropped = cotangent
+        
+        # Apply padding if necessary (using nabla pad)
+        from ..ops.view import pad as nabla_pad
+        if pad_h0 > 0 or pad_h1 > 0 or pad_w0 > 0 or pad_w1 > 0:
+            cropped_shape = grad_output_cropped.shape
+            target_shape = (cropped_shape[0], cropped_shape[1], 
+                          cropped_shape[2] + pad_h0 + pad_h1, 
+                          cropped_shape[3] + pad_w0 + pad_w1)
+            slices = [
+                slice(None),  # N
+                slice(None),  # C_out
+                slice(pad_h0, pad_h0 + cropped_shape[2]),  # H
+                slice(pad_w0, pad_w0 + cropped_shape[3])   # W
+            ]
+            grad_output_padded = nabla_pad(grad_output_cropped, slices, target_shape)
+        else:
+            grad_output_padded = grad_output_cropped
+        
+        # Apply conv2d with swapped stride and dilation
+        grad_input = conv2d(
+            grad_output_padded, weight_arr,
+            stride=(s_h, s_w),
+            padding=0,
+            dilation=(d_h, d_w),
+            groups=self.groups
+        )
+        
+        # === 2. Gradient w.r.t. Weight (∂L/∂K) ===
+        # Strategy: Use unfold + batch matmul approach
+        
+        from ..ops.view import reshape, permute
+        from ..ops.special import unfold
+        
+        C_in_g = C_in // self.groups
+        C_out_g = C_out // self.groups
+        L = H_in * W_in
+        
+        # Reshape grad_output for unfolding: (N, C_out, H_out, W_out)
+        # For groups, reshape to (N * groups, C_out_g, H_out, W_out)
+        grad_output_reshaped = reshape(cotangent, (N * self.groups, C_out_g, H_out, W_out))
+        
+        # Unfold grad_output to extract patches
+        unfolded_grad_output = unfold(
+            grad_output_reshaped,
+            kernel_size=(K_H, K_W),
+            dilation=(d_h, d_w),
+            padding=(pad_h_top, pad_w_left),  # Use symmetric padding (top/left)
+            stride=(s_h, s_w)
+        )
+        # Shape: (N * groups, C_out_g * K_H * K_W, L)
+        
+        # Reshape unfolded: (N * groups, C_out_g * K_H * K_W, L) -> (N, groups, C_out_g * K_H * K_W, L)
+        unfolded_grad_output = reshape(unfolded_grad_output, (N, self.groups, C_out_g * K_H * K_W, L))
+        # Permute to (groups, N, L, C_out_g * K_H * K_W) -> (groups, N * L, C_out_g * K_H * K_W)
+        unfolded_grad_output = permute(unfolded_grad_output, (1, 0, 3, 2))
+        unfolded_grad_output = reshape(unfolded_grad_output, (self.groups, N * L, C_out_g * K_H * K_W))
+        
+        # Reshape input: (N, C_in, H_in, W_in) -> (N, groups, C_in_g, L)
+        x_reshaped = reshape(input_arr, (N, self.groups, C_in_g, L))
+        # Permute to (groups, C_in_g, N, L) -> (groups, C_in_g, N * L)
+        x_reshaped = permute(x_reshaped, (1, 2, 0, 3))
+        x_reshaped = reshape(x_reshaped, (self.groups, C_in_g, N * L))
+        
+        # Batch matmul: (groups, C_in_g, N * L) @ (groups, N * L, C_out_g * K_H * K_W)
+        # Result: (groups, C_in_g, C_out_g * K_H * K_W)
+        grad_K_bmm = matmul(x_reshaped, unfolded_grad_output)
+        
+        # Reshape to final weight shape: (C_in, C_out_g, K_H, K_W)
+        grad_K_bmm = reshape(grad_K_bmm, (self.groups, C_in_g, C_out_g, K_H, K_W))
+        grad_weight = reshape(grad_K_bmm, (C_in, C_out_g, K_H, K_W))
+        
+        return [grad_input, grad_weight]
     
     def jvp_rule(
         self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
