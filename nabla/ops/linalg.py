@@ -28,10 +28,10 @@ from max.graph import TensorValue, ops
 
 from ..core.tensor import Tensor
 from ..utils.shape_utils import get_broadcasted_shape
-from .operation import BinaryOperation
+from .operation import Operation, BinaryOperation
 
 # Public API
-__all__ = ["matmul"]
+__all__ = ["matmul", "conv2d", "conv2d_transpose"]
 
 
 class MatMulOp(BinaryOperation):
@@ -391,14 +391,961 @@ def matmul(arg0: Tensor | float | int, arg1: Tensor | float | int) -> Tensor:
     return _matmul_op.forward(arg0, arg1)
 
 
-# # --- Convolution operations using im2col and col2im ---
-# # Global operation instances
-# _conv2d_op_cache = {}
-# _conv2d_transpose_op_cache = {}
+# ===----------------------------------------------------------------------=== #
+# Convolution Operations
+# ===----------------------------------------------------------------------=== #
+
+# Global operation caches for efficiency
+_conv2d_op_cache = {}
+_conv2d_transpose_op_cache = {}
 
 
-# # --- Helper functions for normalization ---
-# def _normalize_tuple(value, n, name):
+def _normalize_tuple(value, n: int, name: str) -> tuple:
+    """Normalize a parameter to a tuple of length n.
+    
+    Parameters
+    ----------
+    value : int or tuple
+        The value to normalize
+    n : int
+        The desired tuple length
+    name : str
+        Parameter name for error messages
+        
+    Returns
+    -------
+    tuple
+        Normalized tuple of length n
+    """
+    if isinstance(value, int):
+        return (value,) * n
+    elif isinstance(value, (tuple, list)):
+        if len(value) == n:
+            return tuple(value)
+        else:
+            raise ValueError(
+                f"{name} must be an int or a tuple of {n} ints, got {value}"
+            )
+    else:
+        raise TypeError(
+            f"{name} must be an int or a tuple, got {type(value)}"
+        )
+
+
+def _normalize_padding(padding, name: str = "padding") -> tuple[tuple[int, int], tuple[int, int]]:
+    """Normalize padding argument to ((pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right)).
+    
+    Supports several formats matching PyTorch:
+    - int: same padding on all sides
+    - (pad_h, pad_w): symmetric padding for height and width
+    - (pad_h_top, pad_h_bottom, pad_w_left, pad_w_right): explicit padding
+    - ((pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right)): already normalized
+    - "valid": no padding
+    - "same": padding to preserve spatial dimensions (only for stride=1)
+    
+    Parameters
+    ----------
+    padding : int, tuple, or str
+        Padding specification
+    name : str
+        Parameter name for error messages
+        
+    Returns
+    -------
+    tuple
+        ((pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right))
+    """
+    if isinstance(padding, str):
+        if padding.lower() == "valid":
+            return ((0, 0), (0, 0))
+        elif padding.lower() == "same":
+            # For "same" padding, we need kernel size and dilation which we don't have here
+            # This will be handled in the operation class
+            return "same"  # Return as-is, will be computed later
+        else:
+            raise ValueError(f"Unknown string padding '{padding}'. Use 'valid' or 'same'.")
+    
+    if isinstance(padding, int):
+        return ((padding, padding), (padding, padding))
+    
+    if isinstance(padding, (tuple, list)):
+        if len(padding) == 2:
+            # (pad_h, pad_w) format
+            pad_h, pad_w = padding
+            return ((pad_h, pad_h), (pad_w, pad_w))
+        elif len(padding) == 4:
+            # (pad_h_top, pad_h_bottom, pad_w_left, pad_w_right) format
+            return ((padding[0], padding[1]), (padding[2], padding[3]))
+        elif len(padding) == 2 and isinstance(padding[0], (tuple, list)):
+            # ((pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right)) format
+            return tuple(tuple(p) for p in padding)
+        else:
+            raise ValueError(
+                f"{name} tuple must have length 2 or 4, got {len(padding)}"
+            )
+    
+    raise TypeError(f"{name} must be an int, tuple, or 'valid'/'same', got {type(padding)}")
+
+
+class Conv2DOp(Operation):
+    """2D Convolution operation with PyTorch-compatible NCHW layout.
+    
+    Input Layout: NCHW (batch, channels, height, width)
+    Weight Layout: (out_channels, in_channels/groups, kernel_height, kernel_width)
+    
+    This matches PyTorch's nn.Conv2d exactly.
+    """
+    
+    def __init__(
+        self,
+        stride: tuple[int, int],
+        padding: tuple[tuple[int, int], tuple[int, int]] | str,
+        dilation: tuple[int, int],
+        groups: int,
+    ):
+        super().__init__("conv2d")
+        self.stride = stride
+        self.padding = padding
+        self.dilation = dilation
+        self.groups = groups
+    
+    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
+        """Compute output shape for NCHW layout."""
+        if len(input_shapes) != 2:
+            raise ValueError(f"Conv2D requires 2 input shapes, got {len(input_shapes)}")
+        
+        input_shape, weight_shape = input_shapes
+        n, c_in, h_in, w_in = input_shape
+        c_out, c_in_per_group, k_h, k_w = weight_shape
+        
+        # Validate channel dimensions
+        if c_in != c_in_per_group * self.groups:
+            raise ValueError(
+                f"Input channels ({c_in}) must equal weight in_channels/groups "
+                f"({c_in_per_group}) * groups ({self.groups}) = {c_in_per_group * self.groups}"
+            )
+        
+        # Handle "same" padding
+        if self.padding == "same":
+            if self.stride != (1, 1):
+                raise ValueError("padding='same' is only supported for stride=1")
+            # For "same" padding with stride=1, output size equals input size
+            h_out, w_out = h_in, w_in
+        else:
+            # Regular padding calculation
+            (pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right) = self.padding
+            dil_h, dil_w = self.dilation
+            s_h, s_w = self.stride
+            
+            # PyTorch formula: floor((H + 2*pad - dilation*(kernel-1) - 1) / stride + 1)
+            h_out = (h_in + pad_h_top + pad_h_bottom - dil_h * (k_h - 1) - 1) // s_h + 1
+            w_out = (w_in + pad_w_left + pad_w_right - dil_w * (k_w - 1) - 1) // s_w + 1
+        
+        if h_out <= 0 or w_out <= 0:
+            raise ValueError(
+                f"Computed non-positive output dimensions: ({n}, {c_out}, {h_out}, {w_out})"
+            )
+        
+        return (n, c_out, h_out, w_out)
+    
+    def _validate_inputs(self, input_tensor: Tensor, weight_tensor: Tensor) -> None:
+        """Validate input tensors."""
+        if not isinstance(input_tensor, Tensor) or not isinstance(weight_tensor, Tensor):
+            raise TypeError("Both arguments must be Tensor instances")
+        
+        if len(input_tensor.shape) != 4:
+            raise ValueError(f"Input must be 4D (NCHW), got shape {input_tensor.shape}")
+        
+        if len(weight_tensor.shape) != 4:
+            raise ValueError(f"Weight must be 4D, got shape {weight_tensor.shape}")
+        
+        if input_tensor.dtype != weight_tensor.dtype:
+            raise ValueError(
+                f"Input and weight dtypes must match: {input_tensor.dtype} vs {weight_tensor.dtype}"
+            )
+        
+        if input_tensor.logical_device != weight_tensor.logical_device:
+            raise ValueError(
+                f"Input and weight must be on same device: "
+                f"{input_tensor.logical_device} vs {weight_tensor.logical_device}"
+            )
+    
+    def forward(self, *args: Tensor) -> Tensor:
+        """Forward pass for convolution."""
+        if len(args) != 2:
+            raise ValueError(f"Conv2D requires 2 arguments, got {len(args)}")
+        
+        from .operation import move_to_best_device
+        args = move_to_best_device(*args)
+        input_tensor, weight_tensor = args
+        
+        self._validate_inputs(input_tensor, weight_tensor)
+        
+        output_shape = self.compute_output_shape(input_tensor.shape, weight_tensor.shape)
+        output_dtype = input_tensor.dtype
+        output_batch_dims = input_tensor.batch_dims
+        
+        res = Tensor(
+            shape=output_shape,
+            dtype=output_dtype,
+            device=input_tensor.logical_device,
+            materialize=False,
+            name=self.name,
+            batch_dims=output_batch_dims,
+        )
+        
+        res.set_maxpr(self.maxpr)
+        res.add_arguments(input_tensor, weight_tensor)
+        res.vjp_rule = self.vjp_rule
+        res.jvp_rule = self.jvp_rule
+        res.custom_kernel_path = self.custom_kernel_path()
+        
+        if not res.stage_realization:
+            self.eagerxpr([input_tensor, weight_tensor], res)
+        
+        res.creator_op = self
+        return res
+    
+    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
+        """MAX graph implementation - convert NCHW to NHWC for MAX ops.
+        
+        Note: MAX backend runtime currently does not support dilation > 1.
+        This is a known limitation of the MAX engine (as of 2025). Operations with
+        dilation > 1 will work in eager mode (using PyTorch) but will fail in JIT mode.
+        """
+        input_val, weight_val = args
+        
+        # Convert NCHW -> NHWC for input: (N,C,H,W) -> (N,H,W,C)
+        input_nhwc = ops.permute(input_val, (0, 2, 3, 1))
+        
+        # Convert weight from (C_out, C_in/g, H, W) to (H, W, C_in/g, C_out)
+        weight_hwio = ops.permute(weight_val, (2, 3, 1, 0))
+        
+        # Compute "same" padding if needed
+        if self.padding == "same":
+            k_h = weight_val.shape[2]
+            k_w = weight_val.shape[3]
+            dil_h, dil_w = self.dilation
+            # For "same" padding: total_pad = dilation * (kernel - 1)
+            total_pad_h = dil_h * (k_h - 1)
+            total_pad_w = dil_w * (k_w - 1)
+            pad_h_top = total_pad_h // 2
+            pad_h_bottom = total_pad_h - pad_h_top
+            pad_w_left = total_pad_w // 2
+            pad_w_right = total_pad_w - pad_w_left
+            padding_for_max = (pad_h_top, pad_h_bottom, pad_w_left, pad_w_right)
+        else:
+            (pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right) = self.padding
+            padding_for_max = (pad_h_top, pad_h_bottom, pad_w_left, pad_w_right)
+        
+        # Call MAX conv2d with NHWC layout
+        result_nhwc = ops.conv2d(
+            x=input_nhwc,
+            filter=weight_hwio,
+            stride=self.stride,
+            dilation=self.dilation,
+            padding=padding_for_max,
+            groups=self.groups,
+        )
+        
+        # Convert result back from NHWC -> NCHW: (N,H,W,C) -> (N,C,H,W)
+        output.tensor_value = ops.permute(result_nhwc, (0, 3, 1, 2))
+    
+    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
+        """Eager execution using pure NumPy with im2col."""
+        input_tensor, weight_tensor = args
+        
+        # Get input as numpy arrays (already in NCHW format)
+        input_np = input_tensor.to_numpy()
+        weight_np = weight_tensor.to_numpy()
+        
+        # Extract dimensions
+        N, C_in, H_in, W_in = input_np.shape
+        C_out, _, K_h, K_w = weight_np.shape
+        
+        # Compute padding
+        if self.padding == "same":
+            # For 'same', compute padding to keep spatial dims constant (stride=1 assumed)
+            pad_h = ((H_in - 1) * self.stride[0] + self.dilation[0] * (K_h - 1) + 1 - H_in)
+            pad_w = ((W_in - 1) * self.stride[1] + self.dilation[1] * (K_w - 1) + 1 - W_in)
+            pad_h = max(0, pad_h)
+            pad_w = max(0, pad_w)
+            pad_h_top = pad_h // 2
+            pad_h_bottom = pad_h - pad_h_top
+            pad_w_left = pad_w // 2
+            pad_w_right = pad_w - pad_w_left
+        else:
+            (pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right) = self.padding
+        
+        # Apply padding
+        if pad_h_top > 0 or pad_h_bottom > 0 or pad_w_left > 0 or pad_w_right > 0:
+            input_padded = np.pad(
+                input_np,
+                ((0, 0), (0, 0), (pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right)),
+                mode='constant',
+                constant_values=0
+            )
+        else:
+            input_padded = input_np
+        
+        _, _, H_padded, W_padded = input_padded.shape
+        
+        # Compute output dimensions
+        H_out = (H_padded - self.dilation[0] * (K_h - 1) - 1) // self.stride[0] + 1
+        W_out = (W_padded - self.dilation[1] * (K_w - 1) - 1) // self.stride[1] + 1
+        
+        # Handle groups
+        if self.groups > 1:
+            # Grouped convolution
+            C_in_per_group = C_in // self.groups
+            C_out_per_group = C_out // self.groups
+            output_np = np.zeros((N, C_out, H_out, W_out), dtype=input_np.dtype)
+            
+            for g in range(self.groups):
+                # Extract group inputs and weights
+                input_g = input_padded[:, g * C_in_per_group:(g + 1) * C_in_per_group, :, :]
+                weight_g = weight_np[g * C_out_per_group:(g + 1) * C_out_per_group, :, :, :]
+                
+                # Perform convolution for this group
+                output_g = self._conv2d_numpy_single_group(
+                    input_g, weight_g, H_out, W_out, K_h, K_w
+                )
+                
+                output_np[:, g * C_out_per_group:(g + 1) * C_out_per_group, :, :] = output_g
+        else:
+            # Standard convolution (groups=1)
+            output_np = self._conv2d_numpy_single_group(
+                input_padded, weight_np, H_out, W_out, K_h, K_w
+            )
+        
+        output.impl_(output_np)
+    
+    def _conv2d_numpy_single_group(self, input_np, weight_np, H_out, W_out, K_h, K_w):
+        """Helper function to perform conv2d for a single group using vectorized im2col."""
+        N, C_in, H_padded, W_padded = input_np.shape
+        C_out = weight_np.shape[0]
+        
+        # Fast path for common case: stride=1, dilation=1
+        if self.stride == (1, 1) and self.dilation == (1, 1):
+            # Use numpy's stride tricks for efficient patch extraction
+            from numpy.lib.stride_tricks import as_strided
+            
+            # Create sliding window view of input
+            # Shape: (N, C_in, H_out, W_out, K_h, K_w)
+            shape = (N, C_in, H_out, W_out, K_h, K_w)
+            strides = (
+                input_np.strides[0],  # N
+                input_np.strides[1],  # C_in
+                input_np.strides[2],  # H step
+                input_np.strides[3],  # W step
+                input_np.strides[2],  # K_h step
+                input_np.strides[3],  # K_w step
+            )
+            patches = as_strided(input_np, shape=shape, strides=strides)
+            
+            # Reshape for matrix multiplication
+            # patches: (N, C_in, H_out, W_out, K_h, K_w) -> (N, H_out, W_out, C_in * K_h * K_w)
+            patches = patches.transpose(0, 2, 3, 1, 4, 5).reshape(N, H_out, W_out, -1)
+            
+            # weight: (C_out, C_in, K_h, K_w) -> (C_out, C_in * K_h * K_w)
+            weight_reshaped = weight_np.reshape(C_out, -1)
+            
+            # Matrix multiply: (N, H_out, W_out, C_in*K_h*K_w) @ (C_in*K_h*K_w, C_out) -> (N, H_out, W_out, C_out)
+            output_np = np.dot(patches, weight_reshaped.T)
+            
+            # Transpose back to NCHW: (N, H_out, W_out, C_out) -> (N, C_out, H_out, W_out)
+            output_np = output_np.transpose(0, 3, 1, 2)
+            
+        else:
+            # General case with stride/dilation: use optimized loop with einsum
+            output_np = np.zeros((N, C_out, H_out, W_out), dtype=input_np.dtype)
+            
+            # Extract all patches at once for each output position
+            for h_out in range(H_out):
+                for w_out in range(W_out):
+                    h_start = h_out * self.stride[0]
+                    w_start = w_out * self.stride[1]
+                    
+                    # Extract patch with dilation (vectorized)
+                    h_indices = h_start + np.arange(K_h) * self.dilation[0]
+                    w_indices = w_start + np.arange(K_w) * self.dilation[1]
+                    
+                    # Check bounds
+                    h_valid = h_indices < H_padded
+                    w_valid = w_indices < W_padded
+                    
+                    if h_valid.all() and w_valid.all():
+                        # All indices valid - fast path
+                        # Extract patch: (N, C_in, K_h, K_w)
+                        patch = input_np[:, :, h_indices[:, None], w_indices]
+                        
+                        # Compute conv: einsum 'nchw,ochw->no' then assign to output
+                        # (N, C_in, K_h, K_w) * (C_out, C_in, K_h, K_w) -> (N, C_out)
+                        output_np[:, :, h_out, w_out] = np.einsum('nchw,ochw->no', patch, weight_np)
+                    else:
+                        # Handle boundary conditions
+                        for kh in range(K_h):
+                            for kw in range(K_w):
+                                h_in = h_start + kh * self.dilation[0]
+                                w_in = w_start + kw * self.dilation[1]
+                                
+                                if h_in < H_padded and w_in < W_padded:
+                                    input_patch = input_np[:, :, h_in, w_in]  # (N, C_in)
+                                    weight_patch = weight_np[:, :, kh, kw]    # (C_out, C_in)
+                                    output_np[:, :, h_out, w_out] += np.dot(input_patch, weight_patch.T)
+        
+        return output_np
+    
+    def vjp_rule(
+        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
+    ) -> list[Tensor]:
+        """VJP rule for conv2d.
+        
+        Given cotangent ∂L/∂output, computes:
+        - ∂L/∂input: using conv2d_transpose with weight
+        - ∂L/∂weight: using permuted conv2d between input and cotangent
+        
+        Based on the mathematical derivation in conv2d_manual_grad.py.
+        """
+        input_arr, weight_arr = primals
+        
+        # Get dimensions
+        N, C_in, H_in, W_in = input_arr.shape
+        C_out, _, K_H, K_W = weight_arr.shape
+        _, _, H_out, W_out = output.shape
+        
+        # Parse stride and dilation
+        s_h, s_w = self.stride
+        d_h, d_w = self.dilation
+        
+        # Get normalized padding - handle "same" and "valid" specially
+        if self.padding == "same":
+            # For "same" padding with stride=1, we need to compute actual padding
+            # Same padding formula: total_pad = (kernel - 1) * dilation
+            pad_h_total = (K_H - 1) * d_h
+            pad_w_total = (K_W - 1) * d_w
+            pad_h_top = pad_h_total // 2
+            pad_h_bottom = pad_h_total - pad_h_top
+            pad_w_left = pad_w_total // 2
+            pad_w_right = pad_w_total - pad_w_left
+        elif self.padding == "valid":
+            pad_h_top = pad_h_bottom = pad_w_left = pad_w_right = 0
+        else:
+            (pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right) = self.padding
+        
+        # === 1. Gradient w.r.t. Input (∂L/∂X) ===
+        # Strategy: Use conv2d_transpose to "undo" the convolution
+        
+        # First, compute the padded input dimensions
+        H_padded = H_in + pad_h_top + pad_h_bottom
+        W_padded = W_in + pad_w_left + pad_w_right
+        
+        # Compute the dimensions after conv_transpose2d
+        H_prime = (H_out - 1) * s_h + d_h * (K_H - 1) + 1
+        W_prime = (W_out - 1) * s_w + d_w * (K_W - 1) + 1
+        
+        # Compute output_padding needed
+        op_h_padded = H_padded - H_prime
+        op_w_padded = W_padded - W_prime
+        
+        # Compute cropping needed (if output_padding would be negative)
+        crop_h_end = max(0, -op_h_padded)
+        crop_w_end = max(0, -op_w_padded)
+        op_h_padded = max(0, op_h_padded)
+        op_w_padded = max(0, op_w_padded)
+        
+        # Apply conv_transpose2d
+        grad_input_padded = conv2d_transpose(
+            cotangent, weight_arr,
+            stride=self.stride,
+            padding=(0, 0),  # No padding in conv_transpose2d itself
+            output_padding=(op_h_padded, op_w_padded),
+            dilation=self.dilation,
+            groups=self.groups
+        )
+        
+        # Crop if needed
+        if crop_h_end > 0:
+            grad_input_padded = grad_input_padded[:, :, :-crop_h_end, :]
+        if crop_w_end > 0:
+            grad_input_padded = grad_input_padded[:, :, :, :-crop_w_end]
+        
+        # Remove padding to get gradient w.r.t. original input
+        h_end = H_padded - pad_h_bottom if pad_h_bottom > 0 else H_padded
+        w_end = W_padded - pad_w_right if pad_w_right > 0 else W_padded
+        grad_input = grad_input_padded[:, :, pad_h_top:h_end, pad_w_left:w_end]
+        
+        # === 2. Gradient w.r.t. Weight (∂L/∂W) ===
+        # Strategy: Permute input and cotangent to use conv2d
+        # For now, only implement groups=1 case
+        
+        if self.groups != 1:
+            raise NotImplementedError("VJP for grouped convolution (groups > 1) not yet implemented")
+        
+        # Pad input manually using numpy (for now - TODO: make this work in graph mode)
+        import numpy as np
+        input_np = input_arr.to_numpy()
+        if pad_h_top > 0 or pad_h_bottom > 0 or pad_w_left > 0 or pad_w_right > 0:
+            input_np = np.pad(
+                input_np,
+                ((0, 0), (0, 0), (pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right)),
+                mode='constant',
+                constant_values=0
+            )
+        input_padded = Tensor.from_numpy(input_np)
+        
+        # Compute effective padded dimensions for cropping
+        H_pad_eff = d_h * (K_H - 1) + s_h * (H_out - 1) + 1
+        W_pad_eff = d_w * (K_W - 1) + s_w * (W_out - 1) + 1
+        
+        # Crop input if needed
+        input_cropped = input_padded[:, :, :H_pad_eff, :W_pad_eff]
+        
+        # Permute: (N, C, H, W) -> (C, N, H, W)
+        from ..ops.view import permute
+        input_perm = permute(input_cropped, (1, 0, 2, 3))
+        cotangent_perm = permute(cotangent, (1, 0, 2, 3))
+        
+        # Convolve with swapped stride/dilation
+        grad_weight_perm = conv2d(
+            input_perm, cotangent_perm,
+            stride=(d_h, d_w),
+            dilation=(s_h, s_w),
+            padding=(0, 0),
+            groups=1
+        )
+        
+        # Permute back: (C_out, C_in, K_H, K_W) <- (C_in, C_out, K_H, K_W)  
+        grad_weight = permute(grad_weight_perm, (1, 0, 2, 3))
+        
+        return [grad_input, grad_weight]
+    
+    
+    def jvp_rule(
+        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
+    ) -> Tensor:
+        """JVP rule - to be implemented after testing."""
+        raise NotImplementedError("JVP for conv2d will be implemented after testing")
+
+
+def conv2d(
+    input_tensor: Tensor,
+    weight: Tensor,
+    stride: int | tuple[int, int] = 1,
+    padding: int | tuple | str = 0,
+    dilation: int | tuple[int, int] = 1,
+    groups: int = 1,
+) -> Tensor:
+    """2D convolution with PyTorch-compatible NCHW layout.
+    
+    Applies a 2D convolution over an input tensor. This function matches
+    PyTorch's F.conv2d exactly in terms of input/output shapes and semantics.
+    
+    Parameters
+    ----------
+    input_tensor : Tensor
+        Input tensor of shape (N, C_in, H, W)
+    weight : Tensor
+        Convolution kernel of shape (C_out, C_in/groups, K_H, K_W)
+    stride : int or tuple, optional
+        Stride of the convolution. Default: 1
+    padding : int, tuple, or str, optional
+        Padding added to input. Can be:
+        - int: same padding on all sides
+        - (pad_h, pad_w): symmetric padding
+        - 'valid': no padding
+        - 'same': padding to preserve size (stride=1 only)
+        Default: 0
+    dilation : int or tuple, optional
+        Spacing between kernel elements. Default: 1
+    groups : int, optional
+        Number of blocked connections. Default: 1
+        
+    Returns
+    -------
+    Tensor
+        Output tensor of shape (N, C_out, H_out, W_out)
+        
+    Examples
+    --------
+    >>> import nabla as nb
+    >>> # Simple 2D convolution
+    >>> x = nb.zeros((1, 3, 32, 32))  # NCHW
+    >>> w = nb.zeros((64, 3, 3, 3))   # (out_ch, in_ch, H, W)
+    >>> y = nb.conv2d(x, w)
+    >>> y.shape
+    (1, 64, 30, 30)
+    """
+    # Normalize parameters
+    norm_stride = _normalize_tuple(stride, 2, "stride")
+    norm_dilation = _normalize_tuple(dilation, 2, "dilation")
+    norm_padding = _normalize_padding(padding, "padding")
+    
+    # Cache operation instances for efficiency
+    cache_key = (norm_stride, norm_padding, norm_dilation, groups)
+    if cache_key not in _conv2d_op_cache:
+        _conv2d_op_cache[cache_key] = Conv2DOp(
+            stride=norm_stride,
+            padding=norm_padding,
+            dilation=norm_dilation,
+            groups=groups,
+        )
+    
+    op = _conv2d_op_cache[cache_key]
+    return op.forward(input_tensor, weight)
+
+
+class Conv2DTransposeOp(Operation):
+    """2D Transposed Convolution with PyTorch-compatible NCHW layout.
+    
+    Input Layout: NCHW (batch, channels, height, width)
+    Weight Layout: (in_channels, out_channels/groups, kernel_height, kernel_width)
+    
+    Note: For transposed convolution, the weight layout is transposed compared to conv2d.
+    This matches PyTorch's nn.ConvTranspose2d.
+    """
+    
+    def __init__(
+        self,
+        stride: tuple[int, int],
+        padding: tuple[tuple[int, int], tuple[int, int]],
+        output_padding: tuple[int, int],
+        dilation: tuple[int, int],
+        groups: int,
+    ):
+        super().__init__("conv2d_transpose")
+        self.stride = stride
+        self.padding = padding
+        self.output_padding = output_padding
+        self.dilation = dilation
+        self.groups = groups
+    
+    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
+        """Compute output shape for NCHW layout transposed convolution."""
+        if len(input_shapes) != 2:
+            raise ValueError(f"Conv2DTranspose requires 2 input shapes, got {len(input_shapes)}")
+        
+        input_shape, weight_shape = input_shapes
+        n, c_in, h_in, w_in = input_shape
+        c_in_w, c_out_per_group, k_h, k_w = weight_shape
+        
+        # Validate channel dimensions
+        if c_in != c_in_w:
+            raise ValueError(
+                f"Input channels ({c_in}) must match weight input channels ({c_in_w})"
+            )
+        
+        c_out = c_out_per_group * self.groups
+        
+        # PyTorch formula for transposed convolution:
+        # H_out = (H_in - 1) * stride - 2*padding + dilation*(kernel-1) + output_padding + 1
+        (pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right) = self.padding
+        out_pad_h, out_pad_w = self.output_padding
+        dil_h, dil_w = self.dilation
+        s_h, s_w = self.stride
+        
+        # Use symmetric padding for the formula (PyTorch assumes symmetric)
+        pad_h = pad_h_top  # Assuming symmetric
+        pad_w = pad_w_left
+        
+        h_out = (h_in - 1) * s_h - 2 * pad_h + dil_h * (k_h - 1) + out_pad_h + 1
+        w_out = (w_in - 1) * s_w - 2 * pad_w + dil_w * (k_w - 1) + out_pad_w + 1
+        
+        if h_out <= 0 or w_out <= 0:
+            raise ValueError(
+                f"Computed non-positive output dimensions: ({n}, {c_out}, {h_out}, {w_out})"
+            )
+        
+        return (n, c_out, h_out, w_out)
+    
+    def _validate_inputs(self, input_tensor: Tensor, weight_tensor: Tensor) -> None:
+        """Validate input tensors."""
+        if not isinstance(input_tensor, Tensor) or not isinstance(weight_tensor, Tensor):
+            raise TypeError("Both arguments must be Tensor instances")
+        
+        if len(input_tensor.shape) != 4:
+            raise ValueError(f"Input must be 4D (NCHW), got shape {input_tensor.shape}")
+        
+        if len(weight_tensor.shape) != 4:
+            raise ValueError(f"Weight must be 4D, got shape {weight_tensor.shape}")
+        
+        if input_tensor.dtype != weight_tensor.dtype:
+            raise ValueError(
+                f"Input and weight dtypes must match: {input_tensor.dtype} vs {weight_tensor.dtype}"
+            )
+        
+        if input_tensor.logical_device != weight_tensor.logical_device:
+            raise ValueError(
+                f"Input and weight must be on same device: "
+                f"{input_tensor.logical_device} vs {weight_tensor.logical_device}"
+            )
+    
+    def forward(self, *args: Tensor) -> Tensor:
+        """Forward pass for transposed convolution."""
+        if len(args) != 2:
+            raise ValueError(f"Conv2DTranspose requires 2 arguments, got {len(args)}")
+        
+        from .operation import move_to_best_device
+        args = move_to_best_device(*args)
+        input_tensor, weight_tensor = args
+        
+        self._validate_inputs(input_tensor, weight_tensor)
+        
+        output_shape = self.compute_output_shape(input_tensor.shape, weight_tensor.shape)
+        output_dtype = input_tensor.dtype
+        output_batch_dims = input_tensor.batch_dims
+        
+        res = Tensor(
+            shape=output_shape,
+            dtype=output_dtype,
+            device=input_tensor.logical_device,
+            materialize=False,
+            name=self.name,
+            batch_dims=output_batch_dims,
+        )
+        
+        res.set_maxpr(self.maxpr)
+        res.add_arguments(input_tensor, weight_tensor)
+        res.vjp_rule = self.vjp_rule
+        res.jvp_rule = self.jvp_rule
+        res.custom_kernel_path = self.custom_kernel_path()
+        
+        if not res.stage_realization:
+            self.eagerxpr([input_tensor, weight_tensor], res)
+        
+        res.creator_op = self
+        return res
+    
+    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
+        """MAX graph implementation - convert NCHW to NHWC for MAX ops."""
+        input_val, weight_val = args
+        
+        # Convert NCHW -> NHWC for input: (N,C,H,W) -> (N,H,W,C)
+        input_nhwc = ops.permute(input_val, (0, 2, 3, 1))
+        
+        # For transposed conv, weight is (C_in, C_out/g, H, W)
+        # MAX expects (H, W, C_out, C_in) for conv2d_transpose
+        # So we transpose: (C_in, C_out/g, H, W) -> (H, W, C_out/g, C_in)
+        weight_hwoi = ops.permute(weight_val, (2, 3, 1, 0))
+        
+        (pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right) = self.padding
+        padding_for_max = (pad_h_top, pad_h_bottom, pad_w_left, pad_w_right)
+        
+        # Call MAX conv2d_transpose with NHWC layout
+        result_nhwc = ops.conv2d_transpose(
+            x=input_nhwc,
+            filter=weight_hwoi,
+            stride=self.stride,
+            dilation=self.dilation,
+            padding=padding_for_max,
+            output_paddings=self.output_padding,
+        )
+        
+        # Convert result back from NHWC -> NCHW: (N,H,W,C) -> (N,C,H,W)
+        output.tensor_value = ops.permute(result_nhwc, (0, 3, 1, 2))
+    
+    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
+        """Eager execution using pure NumPy."""
+        input_tensor, weight_tensor = args
+        
+        # Get input as numpy arrays (already in NCHW format)
+        input_np = input_tensor.to_numpy()
+        weight_np = weight_tensor.to_numpy()
+        
+        # Extract dimensions
+        N, C_in, H_in, W_in = input_np.shape
+        # Weight shape: (C_in, C_out // groups, K_h, K_w) for transposed conv
+        _, C_out_per_group, K_h, K_w = weight_np.shape
+        C_out = C_out_per_group * self.groups
+        
+        # Compute output dimensions
+        (pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right) = self.padding
+        
+        H_out = (H_in - 1) * self.stride[0] - pad_h_top - pad_h_bottom + self.dilation[0] * (K_h - 1) + self.output_padding[0] + 1
+        W_out = (W_in - 1) * self.stride[1] - pad_w_left - pad_w_right + self.dilation[1] * (K_w - 1) + self.output_padding[1] + 1
+        
+        # Initialize output
+        output_np = np.zeros((N, C_out, H_out, W_out), dtype=input_np.dtype)
+        
+        # Handle groups
+        C_in_per_group = C_in // self.groups
+        
+        # Optimized transposed convolution using vectorized operations
+        # Fast path for common case: groups=1, stride=(1,1) or (2,2), dilation=(1,1)
+        if self.groups == 1 and self.dilation == (1, 1):
+            # Vectorized approach: process all input positions at once
+            for h_in in range(H_in):
+                h_out_start = h_in * self.stride[0] - pad_h_top
+                h_indices = h_out_start + np.arange(K_h) * self.dilation[0]
+                h_valid = (h_indices >= 0) & (h_indices < H_out)
+                
+                for w_in in range(W_in):
+                    w_out_start = w_in * self.stride[1] - pad_w_left
+                    w_indices = w_out_start + np.arange(K_w) * self.dilation[1]
+                    w_valid = (w_indices >= 0) & (w_indices < W_out)
+                    
+                    # Create meshgrid for valid positions
+                    h_valid_idx = np.where(h_valid)[0]
+                    w_valid_idx = np.where(w_valid)[0]
+                    
+                    if len(h_valid_idx) > 0 and len(w_valid_idx) > 0:
+                        # Extract input slice: (N, C_in)
+                        input_slice = input_np[:, :, h_in, w_in]  # (N, C_in)
+                        
+                        # Extract weight slice for valid kernel positions
+                        # weight_np: (C_in, C_out, K_h, K_w)
+                        weight_slice = weight_np[:, :, h_valid_idx[:, None], w_valid_idx]  # (C_in, C_out, len(h), len(w))
+                        
+                        # Compute contribution: einsum 'nc,cohw->nohw'
+                        # (N, C_in) * (C_in, C_out, H_k, W_k) -> (N, C_out, H_k, W_k)
+                        contrib = np.einsum('nc,cohw->nohw', input_slice, weight_slice)
+                        
+                        # Scatter to output
+                        h_out_idx = h_indices[h_valid_idx]
+                        w_out_idx = w_indices[w_valid_idx]
+                        for i, h_out in enumerate(h_out_idx):
+                            for j, w_out in enumerate(w_out_idx):
+                                output_np[:, :, h_out, w_out] += contrib[:, :, i, j]
+        else:
+            # General case: handle groups and arbitrary dilation
+            for n in range(N):
+                for g in range(self.groups):
+                    c_in_start = g * C_in_per_group
+                    c_out_start = g * C_out_per_group
+                    
+                    for c_in_local in range(C_in_per_group):
+                        c_in = c_in_start + c_in_local
+                        
+                        for h_in in range(H_in):
+                            for w_in in range(W_in):
+                                input_val = input_np[n, c_in, h_in, w_in]
+                                
+                                h_out_start = h_in * self.stride[0] - pad_h_top
+                                w_out_start = w_in * self.stride[1] - pad_w_left
+                                
+                                # Vectorize the kernel loop
+                                h_indices = h_out_start + np.arange(K_h) * self.dilation[0]
+                                w_indices = w_out_start + np.arange(K_w) * self.dilation[1]
+                                
+                                h_valid = (h_indices >= 0) & (h_indices < H_out)
+                                w_valid = (w_indices >= 0) & (w_indices < W_out)
+                                
+                                for kh in np.where(h_valid)[0]:
+                                    h_out = h_indices[kh]
+                                    for kw in np.where(w_valid)[0]:
+                                        w_out = w_indices[kw]
+                                        
+                                        # Vectorize output channel dimension
+                                        weight_vals = weight_np[c_in, :, kh, kw]  # (C_out_per_group,)
+                                        output_np[n, c_out_start:c_out_start + C_out_per_group, h_out, w_out] += input_val * weight_vals
+        
+        output.impl_(output_np)
+    
+    def vjp_rule(
+        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
+    ) -> list[Tensor]:
+        """VJP rule - to be implemented after testing."""
+        raise NotImplementedError("VJP for conv2d_transpose will be implemented after testing")
+    
+    def jvp_rule(
+        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
+    ) -> Tensor:
+        """JVP rule - to be implemented after testing."""
+        raise NotImplementedError("JVP for conv2d_transpose will be implemented after testing")
+
+
+def conv2d_transpose(
+    input_tensor: Tensor,
+    weight: Tensor,
+    stride: int | tuple[int, int] = 1,
+    padding: int | tuple = 0,
+    output_padding: int | tuple[int, int] = 0,
+    dilation: int | tuple[int, int] = 1,
+    groups: int = 1,
+) -> Tensor:
+    """2D transposed convolution with PyTorch-compatible NCHW layout.
+    
+    Applies a 2D transposed convolution (also called deconvolution) over an input tensor.
+    This function matches PyTorch's F.conv_transpose2d exactly.
+    
+    Parameters
+    ----------
+    input_tensor : Tensor
+        Input tensor of shape (N, C_in, H, W)
+    weight : Tensor
+        Convolution kernel of shape (C_in, C_out/groups, K_H, K_W)
+        Note: Different from conv2d! First dim is input channels.
+    stride : int or tuple, optional
+        Stride of the convolution. Default: 1
+    padding : int or tuple, optional
+        Padding added to input. Can be:
+        - int: same padding on all sides
+        - (pad_h, pad_w): symmetric padding
+        Default: 0
+    output_padding : int or tuple, optional
+        Additional size added to output shape. Default: 0
+    dilation : int or tuple, optional
+        Spacing between kernel elements. Default: 1
+    groups : int, optional
+        Number of blocked connections. Default: 1
+        
+    Returns
+    -------
+    Tensor
+        Output tensor of shape (N, C_out, H_out, W_out)
+        
+    Examples
+    --------
+    >>> import nabla as nb
+    >>> # Simple 2D transposed convolution
+    >>> x = nb.zeros((1, 64, 8, 8))    # NCHW
+    >>> w = nb.zeros((64, 3, 3, 3))    # (in_ch, out_ch, H, W) - note the order!
+    >>> y = nb.conv2d_transpose(x, w, stride=2)
+    >>> y.shape
+    (1, 3, 17, 17)
+    """
+    # Normalize parameters
+    norm_stride = _normalize_tuple(stride, 2, "stride")
+    norm_dilation = _normalize_tuple(dilation, 2, "dilation")
+    norm_output_padding = _normalize_tuple(output_padding, 2, "output_padding")
+    
+    # For transpose conv, "same" padding doesn't make sense, so we don't support it
+    if isinstance(padding, str):
+        raise ValueError("String padding ('same', 'valid') not supported for conv2d_transpose")
+    norm_padding = _normalize_padding(padding, "padding")
+    
+    # Cache operation instances for efficiency
+    cache_key = (norm_stride, norm_padding, norm_output_padding, norm_dilation, groups)
+    if cache_key not in _conv2d_transpose_op_cache:
+        _conv2d_transpose_op_cache[cache_key] = Conv2DTransposeOp(
+            stride=norm_stride,
+            padding=norm_padding,
+            output_padding=norm_output_padding,
+            dilation=norm_dilation,
+            groups=groups,
+        )
+    
+    op = _conv2d_transpose_op_cache[cache_key]
+    return op.forward(input_tensor, weight)
+
+
+# # --- Old commented code below this line ---
+
+# # --- Commented placeholder for conv2d_transpose ---
+# # This will be implemented after conv2d is tested
+
+# class Conv2DTransposeOp(Operation):
+#     """2D Transposed Convolution - to be implemented."""
+#     pass
+
+# def conv2d_transpose(...):
+#     """2D transposed convolution - to be implemented."""
+#     pass
+
+
+# # --- Old commented code below this line ---
+
+# def flip(x: Tensor, axis: int | tuple[int, ...]) -> Tensor:
 #     if isinstance(value, int):
 #         return (value,) * n
 #     elif isinstance(value, tuple | list):
