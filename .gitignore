@@ -95,3 +95,6 @@ poetry.lock
 # tmp files
 tmp.py
 GEMINI.md
+
+# Experimental Mojo bindings (stealth mode)
+nabla_mojo/
