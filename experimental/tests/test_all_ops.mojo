@@ -67,13 +67,13 @@ Batch 6 Tests (tensor manipulation):
 53. pad - pad tensor
 """
 
-from max_interop.utils import (
+from max_graph.utils import (
     Device, TensorType, TensorValue, Graph, Tensor, DeviceRef
 )
-from max_interop.types import (
+from max_graph.types import (
     DeviceType
 )
-from max_interop.ops import (
+from max_graph.ops import (
     add, sub, mul, matmul,
     div, abs, negate, relu, sigmoid, tanh, exp, log, sqrt, mean,
     atanh, cos, equal, erf, floor, gelu, greater, greater_equal, is_inf, is_nan,

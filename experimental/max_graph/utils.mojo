@@ -13,7 +13,7 @@ struct PythonBridge:
     @staticmethod
     fn setup() raises:
         """Initialize Python path for MAX interop."""
-        Python.add_to_path("./max_interop/max_backend")
+        Python.add_to_path("./max_graph/max_python")
     
     @staticmethod
     fn get_module(name: String) raises -> PythonObject:
@@ -68,8 +68,8 @@ struct OpRegistry:
         """
         Self.check_same_context([a, b])
         
-        var max_interop = PythonBridge.get_module("main")
-        var op_func = max_interop.__getattr__(op_name)
+        var max_graph = PythonBridge.get_module("main")
+        var op_func = max_graph.__getattr__(op_name)
         
         var result_tensor = op_func(
             a.get_graph()[].graph, 
@@ -90,8 +90,8 @@ struct OpRegistry:
         Returns:
             Result tensor in the same graph context.
         """
-        var max_interop = PythonBridge.get_module("main")
-        var op_func = max_interop.__getattr__(op_name)
+        var max_graph = PythonBridge.get_module("main")
+        var op_func = max_graph.__getattr__(op_name)
         
         var result_tensor = op_func(
             x.get_graph()[].graph,
@@ -123,7 +123,7 @@ struct Graph(Copyable, Movable):
         PythonBridge.setup()
         self.name = name
         
-        var max_interop = PythonBridge.get_module("main")
+        var max_graph = PythonBridge.get_module("main")
         var builtins = PythonBridge.get_builtins()
         
         # Convert input types to Python list
@@ -131,8 +131,8 @@ struct Graph(Copyable, Movable):
         for i in range(len(input_types)):
             _ = python_input_types.append(input_types[i].to_python())
         
-        # Get the MaxGraph class from max_interop
-        var MaxGraphClass = max_interop.__getattr__("MaxGraph")
+        # Get the MaxGraph class from max_graph
+        var MaxGraphClass = max_graph.__getattr__("MaxGraph")
         
         # Create graph with or without custom extensions
         if len(custom_extensions) > 0:

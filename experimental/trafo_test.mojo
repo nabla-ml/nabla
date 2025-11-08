@@ -1,12 +1,12 @@
-from max_interop.ops import (
+from max_graph.ops import (
     add, sub, mul, matmul,
     div, sqrt, tanh, gelu, softmax, layer_norm,
     reshape, transpose, permute, concat, split,
 )
-from max_interop.types import (
+from max_graph.types import (
     Device, DeviceType, TensorType, TensorValue, Tensor
 )
-from max_interop.utils import (
+from max_graph.utils import (
     PythonBridge, Graph, DeviceRef
 )
 from python import Python

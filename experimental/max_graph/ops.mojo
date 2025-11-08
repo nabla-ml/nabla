@@ -1026,8 +1026,8 @@ fn band_part(x: TensorValue, num_lower: Int, num_upper: Int) raises -> TensorVal
     Returns:
         Band-extracted tensor.
     """
-    var max_interop = PythonBridge.get_module("main")
-    var result_tensor = max_interop.band_part(
+    var max_graph = PythonBridge.get_module("main")
+    var result_tensor = max_graph.band_part(
         x.get_graph()[].graph,
         x.to_python(),
         num_lower,
@@ -1051,12 +1051,12 @@ fn conv3d(input: TensorValue, weight: TensorValue,
         Convolved tensor.
     """
     OpRegistry.check_same_context([input, weight])
-    var max_interop = PythonBridge.get_module("main")
+    var max_graph = PythonBridge.get_module("main")
     var stride_tuple = PythonBridge.shape_to_python(stride)
     var padding_tuple = PythonBridge.shape_to_python(padding)
     var dilation_tuple = PythonBridge.shape_to_python(dilation)
     
-    var result_tensor = max_interop.conv3d(
+    var result_tensor = max_graph.conv3d(
         input.get_graph()[].graph,
         input.to_python(),
         weight.to_python(),
@@ -1096,8 +1096,8 @@ fn masked_scatter(x: TensorValue, mask: TensorValue, source: TensorValue, out_di
         Scattered tensor.
     """
     OpRegistry.check_same_context([x, mask, source])
-    var max_interop = PythonBridge.get_module("main")
-    var result_tensor = max_interop.masked_scatter(
+    var max_graph = PythonBridge.get_module("main")
+    var result_tensor = max_graph.masked_scatter(
         x.get_graph()[].graph,
         x.to_python(),
         mask.to_python(),
