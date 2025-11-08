@@ -2,7 +2,7 @@
 from python import Python, PythonObject
 from memory import ArcPointer
 from .utils import PythonBridge, Graph
-from .driver import CPU, Accelerator, Device as DriverDevice
+from .driver import CPU, Accelerator, Device
 from . import ops
 
 
@@ -43,7 +43,7 @@ struct Tensor(ImplicitlyCopyable, Movable):
         return Tensor(max_tensor)
     
     @staticmethod
-    fn zeros(shape: List[Int], dtype: DType, device: DriverDevice) raises -> Tensor:
+    fn zeros(shape: List[Int], dtype: DType, device: Device) raises -> Tensor:
         """Create a tensor filled with zeros.
         
         Args:
@@ -60,7 +60,7 @@ struct Tensor(ImplicitlyCopyable, Movable):
         return Tensor(driver.Tensor.zeros(python_shape, python_dtype, device.to_python()))
     
     @staticmethod
-    fn scalar(value: PythonObject, dtype: DType, device: DriverDevice) raises -> Tensor:
+    fn scalar(value: PythonObject, dtype: DType, device: Device) raises -> Tensor:
         """Create a scalar (rank-0) tensor.
         
         Args:
@@ -76,7 +76,7 @@ struct Tensor(ImplicitlyCopyable, Movable):
         return Tensor(driver.Tensor.scalar(value, python_dtype, device.to_python()))
     
     @staticmethod
-    fn create(shape: List[Int], dtype: DType, device: DriverDevice, pinned: Bool = False) raises -> Tensor:
+    fn create(shape: List[Int], dtype: DType, device: Device, pinned: Bool = False) raises -> Tensor:
         """Create a new tensor with given dtype, shape, and device.
         
         Args:
@@ -111,7 +111,7 @@ struct Tensor(ImplicitlyCopyable, Movable):
         """
         return self.tensor
     
-    fn copy(self, device: DriverDevice) raises -> Tensor:
+    fn copy(self, device: Device) raises -> Tensor:
         """Creates a copy on the specified device using the .to() method.
         
         Args:
@@ -189,13 +189,13 @@ struct Tensor(ImplicitlyCopyable, Movable):
         """Synchronize the tensor's device stream."""
         _ = self.tensor.stream.synchronize()
     
-    fn device(self) raises -> DriverDevice:
+    fn device(self) raises -> Device:
         """Device on which tensor is resident.
         
         Returns:
             The device this tensor is on.
         """
-        return DriverDevice(self.tensor.device)
+        return Device(self.tensor.device)
     
     fn stream(self) raises -> PythonObject:
         """Stream to which tensor is bound.
@@ -328,38 +328,38 @@ struct DeviceType(Copyable, Movable, ImplicitlyCopyable):
         return self.value != other.value
 
 
-struct Device:
-    """Device wrapper - legacy compatibility.
+# struct Device(Copyable, Movable):
+#     """Device wrapper - legacy compatibility.
     
-    Note: Prefer using CPU and Accelerator structs from driver module directly.
-    """
-    var device_type: DeviceType
-    var device_obj: PythonObject
+#     Note: Prefer using CPU and Accelerator structs from driver module directly.
+#     """
+#     var device_type: DeviceType
+#     var device_obj: PythonObject
     
-    fn __init__(out self, device_type: DeviceType) raises:
-        """Create a device from DeviceType.
+#     fn __init__(out self, device_type: DeviceType) raises:
+#         """Create a device from DeviceType.
         
-        Args:
-            device_type: The type of device (CPU or Accelerator).
-        """
-        self.device_type = device_type
+#         Args:
+#             device_type: The type of device (CPU or Accelerator).
+#         """
+#         self.device_type = device_type
         
-        if device_type == DeviceType.CPU():
-            var cpu_dev = CPU()
-            self.device_obj = cpu_dev.to_python()
-        elif device_type == DeviceType.Accelerator() or device_type == DeviceType.GPU():
-            var accel_dev = Accelerator()
-            self.device_obj = accel_dev.to_python()
-        else:
-            raise Error("Unsupported device type: " + device_type.value)
+#         if device_type == DeviceType.CPU():
+#             var cpu_dev = CPU()
+#             self.device_obj = cpu_dev.to_python()
+#         elif device_type == DeviceType.Accelerator() or device_type == DeviceType.GPU():
+#             var accel_dev = Accelerator()
+#             self.device_obj = accel_dev.to_python()
+#         else:
+#             raise Error("Unsupported device type: " + device_type.value)
     
-    fn to_python(self) -> PythonObject:
-        """Get underlying Python device object.
+#     fn to_python(self) -> PythonObject:
+#         """Get underlying Python device object.
         
-        Returns:
-            Python MAX Device object.
-        """
-        return self.device_obj
+#         Returns:
+#             Python MAX Device object.
+#         """
+#         return self.device_obj
 
 
 # ============================================================================
