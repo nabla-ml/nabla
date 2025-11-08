@@ -103,8 +103,22 @@ struct Tensor(ImplicitlyCopyable, Movable, Writable):
         """Check if tensor_value is set."""
         return self._storage[].tensor_value.__bool__()
     
-    fn parents(self) -> List[ArcPointer[TensorImpl]]:
-        return self._storage[].parents.copy()
+    fn data(self) raises -> MaxTensor:
+        """Get the underlying MaxTensor data. Raises if not set."""
+        if len(self._storage[].data) == 0:
+            raise Error("Data is not set")
+        return self._storage[].data[0]
+    
+    fn has_data(self) -> Bool:
+        """Check if data is set."""
+        return len(self._storage[].data) > 0
+    
+    fn parents(self) raises -> List[Tensor]:
+        """Get parent tensors (returns proper Tensor objects, not ArcPointers)."""
+        var result = List[Tensor]()
+        for parent_ptr in self._storage[].parents:
+            result.append(Tensor(parent_ptr))
+        return result^
     
     fn has_parents(self) -> Bool:
         """Check if this tensor has parent tensors."""
@@ -223,6 +237,28 @@ struct Tensor(ImplicitlyCopyable, Movable, Writable):
     
     fn set_grad(mut self, value: Tensor):
         self._storage[].grad = [value._storage]
+    
+    # Utility methods for graph management
+    fn add_parent(mut self, parent: Tensor):
+        """Add a parent tensor to the computation graph."""
+        self._storage[].parents.append(parent._storage)
+    
+    fn set_parents(mut self, parents: List[Tensor]) raises:
+        """Set all parent tensors at once."""
+        self._storage[].parents.clear()
+        for parent in parents:
+            self._storage[].parents.append(parent._storage)
+    
+    fn ndim(self) -> Int:
+        """Get the number of dimensions."""
+        return len(self._storage[].shape)
+    
+    fn numel(self) -> Int:
+        """Get the total number of elements."""
+        var total = 1
+        for dim in self._storage[].shape:
+            total *= dim
+        return total
     
     fn write_to[W: Writer](self, mut writer: W):
         try:
