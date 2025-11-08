@@ -2424,7 +2424,7 @@ fn test_batch13() raises:
     print("="*60)
 
 
-fn test_all_ops() raises:
+fn main() raises:
     print("="*60)
     print("Running ALL MAX Operations Tests")
     print("="*60)

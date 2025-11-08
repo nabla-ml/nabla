@@ -230,7 +230,10 @@ struct MaxModel:
 # ============================================================================
 
 struct DeviceRef:
-    """Device reference for specifying device types in operations."""
+    """Device reference for specifying device types in operations.
+    
+    Note: This is for graph.DeviceRef compatibility, not driver.Device.
+    """
     var device_str: String
     
     fn __init__(out self, device_type: String, id: Int = 0):
@@ -248,8 +251,14 @@ struct DeviceRef:
         return DeviceRef("cpu", id)
     
     @staticmethod
+    fn Accelerator(id: Int = 0) -> DeviceRef:
+        """Create an Accelerator (GPU) device reference."""
+        return DeviceRef("gpu", id)
+    
+    # Deprecated: GPU is now Accelerator
+    @staticmethod
     fn GPU(id: Int = 0) -> DeviceRef:
-        """Create a GPU device reference."""
+        """[DEPRECATED] Use Accelerator() instead. Creates a GPU device reference."""
         return DeviceRef("gpu", id)
     
     fn to_string(self) -> String:

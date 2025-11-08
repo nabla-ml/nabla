@@ -1178,6 +1178,7 @@ fn constant(ctx: ArcPointer[Graph], value: PythonObject, dtype: DType, device: D
     """
     var ops = PythonBridge.get_module("main")
     var python_dtype = DTypeConverter.to_python(dtype)
+    # Note: DeviceType.Accelerator() or DeviceType.GPU() both map to "gpu:0"
     var device_str = String("cpu:0") if device.device_type == DeviceType.CPU() else String("gpu:0")
     var result_tensor = ops.constant(ctx[].graph, value, python_dtype, device_str)
     return TensorValue(ctx, result_tensor)
@@ -1356,6 +1357,7 @@ fn range_op(ctx: ArcPointer[Graph], start: Int, stop: Int, step: Int, dtype: DTy
     else:
         dtype_str = "float32"
     
+    # Note: DeviceType.Accelerator() or DeviceType.GPU() both map to "gpu:0"
     var device_str = String("cpu:0") if device.device_type == DeviceType.CPU() else String("gpu:0")
     
     var result_tensor = ops.range_op(ctx[].graph, start, stop, step, None, dtype_str, device_str)
@@ -1390,6 +1392,7 @@ fn transfer_to(x: TensorValue, device: Device) raises -> TensorValue:
         Tensor transferred to specified device.
     """
     var ops = PythonBridge.get_module("main")
+    # Note: DeviceType.Accelerator() or DeviceType.GPU() both map to "gpu:0"
     var device_str = String("cpu:0") if device.device_type == DeviceType.CPU() else String("gpu:0")
     var result_tensor = ops.transfer_to(x.get_graph()[].graph, x.to_python(), device_str)
     return TensorValue(x.get_graph(), result_tensor)

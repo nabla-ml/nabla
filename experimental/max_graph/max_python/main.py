@@ -16,99 +16,6 @@ from max.driver import CPU, Tensor
 from max.dtype import DType
 from max.graph import DeviceRef, Graph, TensorType, ops, TensorValue
 
-# To create a computational graph, use the Graph() class from the MAX Python API. When initializing, specify a name for the graph and define the types of inputs it will accept.
-
-# def add_tensors(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-#     # 1. Build the graph
-#     input_type = TensorType(
-#         dtype=DType.float32, shape=(1,), device=DeviceRef.CPU()
-#     )
-#     with Graph(
-#         "simple_add_graph", input_types=(input_type, input_type)
-#     ) as graph:
-#         lhs, rhs = graph.inputs
-#         out = ops.add(lhs, rhs)
-#         graph.output(out)
-
-# Inside the context manager, access the graph's inputs using the inputs property. This returns a symbolic tensor representing the input arguments.
-
-# The symbolic tensor is a placeholder that represents the shape and type of data that will flow through the graph during the execution, rather than containing the actual numeric values like in eager execution.
-
-# Then use the add() function from the ops package to add the two input tensors. This creates a new symbolic tensor representing the sum.
-
-# Finally, set the output of the graph using the output() method. This specifies which tensors should be returned when the graph is executed.
-
-# Now, add a print() function to the graph to see what's created.
-
-# def add_tensors(a: np.ndarray, b: np.ndarray) -> dict[str, any]:
-#     # 1. Build the graph
-#         # ...
-#         print("final graph:", graph)
-
-# The output will show us the structure of our graph, including the input it expects and the operations it will perform. This helps us understand how our graph will process data when we use it.
-
-# Next, let's load the graph into an inference session.
-
-# 2. Create an inference session
-# Now that our graph is constructed, let's set up an environment where it can operate. This involves creating an inference session and loading our graph into it.
-
-# Create an InferenceSession() instance that loads and runs the graph inside the add_tensors() function.
-
-# def add_tensors(a: np.ndarray, b: np.ndarray) -> dict[str, any]:
-#     # 1. Build the graph
-#     # ...
-#     # 2. Create an inference session
-#     session = engine.InferenceSession(devices=[CPU()])
-#     model = session.load(graph)
-
-# This step transforms our abstract graph into a computational model that's ready for execution.
-
-# To ensure our model is set up correctly, let's examine its input requirements.
-
-# Print the graph's input metadata by using the input_metadata property.
-
-# def add_tensors(a: np.ndarray, b: np.ndarray) -> dict[str, any]:
-#     # 1. Build the graph
-#     # ...
-#     # 2. Create an inference session
-#     session = engine.InferenceSession(devices=[CPU()])
-#     model = session.load(graph)
-#     for tensor in model.input_metadata:
-#         print(
-#             f"name: {tensor.name}, shape: {tensor.shape}, dtype: {tensor.dtype}"
-#         )
-
-# This will output the exact specifications of the input our model expects, helping us prepare appropriate data for processing.
-
-# Next, let's execute the graph.
-
-# 3. Execute the graph
-# To give the model something to add, create two inputs of a shape and a data type that match our graph's input requirements. Then pass the inputs to the execute() function:
-
-# def add_tensors(a: np.ndarray, b: np.ndarray) -> dict[str, any]:
-#     # ...
-#     # 2. Create an inference session
-#     # ...
-#     # 3. Execute the graph
-#     output = model.execute(a, b)[0]
-#     assert isinstance(output, Tensor) # We don't want MojoValue
-#     result = output.to_numpy()
-#     return result
-
-# Notice that the execute() function returns a list of outputs. We know we want the first element and must assert that the type is Tensor so we can convert it to a NumPy array.
-
-# 4. Run the example
-# Now that we've built our graph, created an inference session, and defined how to execute the graph, let's put it all together and run our complete example.
-
-# At the end of your addition.py file, add the following code:
-
-# if __name__ == "__main__":
-#     input0 = np.array([1.0], dtype=np.float32)
-#     input1 = np.array([1.0], dtype=np.float32)
-#     result = add_tensors(input0, input1)
-#     print("result:", result)
-
-
 class MaxGraph:
     """Wrapper for MAX Graph that simplifies graph construction
     
@@ -1521,5 +1428,4 @@ def while_loop(ctx: MaxGraph, initial_values, predicate, body) -> list:
     """
     with ctx.graph:
         return ops.while_loop(initial_values, predicate, body)
-
 
