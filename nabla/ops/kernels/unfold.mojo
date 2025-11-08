@@ -1,5 +1,5 @@
 from runtime.asyncrt import DeviceContextPtr
-from tensor_internal import InputTensor, OutputTensor
+from tensor import InputTensor, OutputTensor
 from algorithm import elementwise
 from layout import LayoutTensor, RuntimeLayout
 from utils.index import IndexList
