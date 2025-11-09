@@ -11,7 +11,7 @@ wrapping the Python MAX driver API with type-safe Mojo structs.
 
 from python import Python, PythonObject
 from .utils import PythonBridge
-
+from .types import DeviceType
 
 # ============================================================================
 # DEVICE BASE CLASS
@@ -32,6 +32,22 @@ struct Device(Copyable, Movable):
         """
         self._device = device_obj
     
+    fn __init__(out self, device_type: DeviceType) raises:
+        """Create a device from DeviceType.
+        
+        Args:
+            device_type: The type of device (CPU or Accelerator).
+        """
+        
+        if device_type == DeviceType.CPU():
+            var cpu_dev = CPU()
+            self._device = cpu_dev.to_python()
+        elif device_type == DeviceType.Accelerator() or device_type == DeviceType.GPU():
+            var accel_dev = Accelerator()
+            self._device = accel_dev.to_python()
+        else:
+            raise Error("Unsupported device type: " + device_type.value)
+    
     fn to_python(self) -> PythonObject:
         """Get the underlying Python Device object.
         
@@ -50,6 +66,28 @@ struct Device(Copyable, Movable):
             The device ID.
         """
         return Int(self._device.id)
+
+    fn __eq__(self, other: Device) raises -> Bool:
+        """Equality comparison between two Device instances.
+        
+        Args:
+            other: The other Device to compare with.
+        
+        Returns:
+            True if both devices are the same, False otherwise.
+        """
+        return Bool(self._device == other.to_python())
+
+    fn __ne__(self, other: Device) raises -> Bool:
+        """Inequality comparison between two Device instances.
+        
+        Args:
+            other: The other Device to compare with.
+        
+        Returns:
+            True if both devices are different, False otherwise.
+        """
+        return Bool(self._device != other.to_python())
     
     fn label(self) raises -> String:
         """Returns device label.

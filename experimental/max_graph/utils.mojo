@@ -106,7 +106,7 @@ struct OpRegistry:
 # GRAPH BUILDER - Graph construction API
 # ============================================================================
 
-struct Graph(Copyable, Movable):
+struct Graph(Copyable, Movable, Writable):
     """MAX computation graph builder."""
     var graph: PythonObject
     var name: String
@@ -178,12 +178,18 @@ struct Graph(Copyable, Movable):
         """Check if two graphs are different."""
         return Bool(self.graph != other.graph)
 
+    fn write_to[W: Writer](self, mut writer: W):
+        try:
+            writer.write(self.graph.__str__())
+        except:
+            writer.write("Error while writing Graph to string")
+
 
 # ============================================================================
 # MODEL EXECUTION - Compiled model wrapper
 # ============================================================================
 
-struct MaxModel:
+struct MaxModel(Copyable, Movable):
     """Compiled MAX model for inference."""
     var model: PythonObject
     

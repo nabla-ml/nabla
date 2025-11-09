@@ -104,6 +104,9 @@ class MaxGraph:
         session = engine.InferenceSession(devices=devices)
         model = session.load(self.graph)
         return MaxModel(model)
+    
+    def __str__(self) -> str:
+        return self.graph.__str__()
 
 
 class MaxModel:

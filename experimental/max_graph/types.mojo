@@ -327,48 +327,12 @@ struct DeviceType(Copyable, Movable, ImplicitlyCopyable):
     fn __ne__(self, other: DeviceType) -> Bool:
         return self.value != other.value
 
-
-# struct Device(Copyable, Movable):
-#     """Device wrapper - legacy compatibility.
-    
-#     Note: Prefer using CPU and Accelerator structs from driver module directly.
-#     """
-#     var device_type: DeviceType
-#     var device_obj: PythonObject
-    
-#     fn __init__(out self, device_type: DeviceType) raises:
-#         """Create a device from DeviceType.
-        
-#         Args:
-#             device_type: The type of device (CPU or Accelerator).
-#         """
-#         self.device_type = device_type
-        
-#         if device_type == DeviceType.CPU():
-#             var cpu_dev = CPU()
-#             self.device_obj = cpu_dev.to_python()
-#         elif device_type == DeviceType.Accelerator() or device_type == DeviceType.GPU():
-#             var accel_dev = Accelerator()
-#             self.device_obj = accel_dev.to_python()
-#         else:
-#             raise Error("Unsupported device type: " + device_type.value)
-    
-#     fn to_python(self) -> PythonObject:
-#         """Get underlying Python device object.
-        
-#         Returns:
-#             Python MAX Device object.
-#         """
-#         return self.device_obj
-
-
 # ============================================================================
 # 3. DTYPE CONVERSION - Centralized dtype handling
 # ============================================================================
 
 struct DTypeConverter:
     """Converts Mojo DType to MAX DType."""
-    
     @staticmethod
     fn to_python(dtype: DType) raises -> PythonObject:
         """Convert Mojo DType to Python MAX DType."""
@@ -390,6 +354,28 @@ struct DTypeConverter:
             return max_dtype.bool
         else:
             raise Error("Unsupported DType")
+
+    @staticmethod
+    fn to_numpy(dtype: DType) raises -> PythonObject:
+        """Convert Mojo DType to numpy dtype string."""
+        if dtype == DType.float32:
+            return "float32"
+        elif dtype == DType.float64:
+            return "float64"
+        elif dtype == DType.int32:
+            return "int32"
+        elif dtype == DType.int64:
+            return "int64"
+        elif dtype == DType.int8:
+            return "int8"
+        elif dtype == DType.uint8:
+            return "uint8"
+        elif dtype == DType.bool:
+            return "bool"
+        else:
+            raise Error("Unsupported DType")
+
+
 
 
 # ============================================================================
