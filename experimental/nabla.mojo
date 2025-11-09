@@ -8,6 +8,7 @@ from max_graph.utils import (
 )
 from python import Python, PythonObject
 from memory import ArcPointer, UnsafePointer
+from time import perf_counter_ns
 
 struct TensorImpl(Copyable, Movable):
     """Unsafe access to internal representation of the Tensor."""
@@ -344,6 +345,36 @@ fn ndarange(shape: List[Int], dtype: DType = DType.float32) raises -> Tensor:
     var np_arange = np.arange(0, end, 1, dtype=DTypeConverter.to_numpy(dtype)).reshape(np_shape)
     var tensor = Tensor(shape, dtype, stage_realization=False)
     tensor.set_data(MaxTensor.from_numpy(np_arange))
+    return tensor
+
+fn randn(shape: List[Int], mean: Float32 = 0.0, std: Float32 = 1.0, dtype: DType = DType.float32) raises -> Tensor:
+    """Create a tensor with random values from a normal distribution.
+    
+    Args:
+        shape: The shape of the tensor.
+        mean: Mean of the normal distribution (default: 0.0).
+        std: Standard deviation of the normal distribution (default: 1.0).
+        dtype: Data type of the tensor (default: DType.float32).
+    """
+    var np = PythonBridge.get_module("numpy")
+    var np_randn = np.random.normal(mean, std, list_to_python_tuple(shape)).astype(DTypeConverter.to_numpy(dtype))
+    var tensor = Tensor(shape, dtype, stage_realization=False)
+    tensor.set_data(MaxTensor.from_numpy(np_randn))
+    return tensor
+
+fn randu(shape: List[Int], low: Float32 = 0.0, high: Float32 = 1.0, dtype: DType = DType.float32) raises -> Tensor:
+    """Create a tensor with random values from a uniform distribution.
+    
+    Args:
+        shape: The shape of the tensor.
+        low: Lower bound of the uniform distribution (inclusive, default: 0.0).
+        high: Upper bound of the uniform distribution (exclusive, default: 1.0).
+        dtype: Data type of the tensor (default: DType.float32).
+    """
+    var np = PythonBridge.get_module("numpy")
+    var np_randu = np.random.uniform(low, high, list_to_python_tuple(shape)).astype(DTypeConverter.to_numpy(dtype))
+    var tensor = Tensor(shape, dtype, stage_realization=False)
+    tensor.set_data(MaxTensor.from_numpy(np_randu))
     return tensor
 
 fn is_broadcastable(shape_a: List[Int], shape_b: List[Int]) raises -> Bool:
@@ -1058,12 +1089,10 @@ struct Callable(Copyable, Movable):
                 
                 # Now build the computation graph
                 for var tensor in trace:
-                    print("DEBUG: Building", tensor.name())
                     var parent_tvs = List[TensorValue]()
                     if tensor.has_parents():
                         var parents = tensor.parents()
                         for i in range(len(parents)):
-                            print("  Parent", i, ":", parents[i].name(), "has_tensor_value:", parents[i].has_tensor_value())
                             parent_tvs.append(parents[i].tensor_value())
                     if tensor.has_maxpr():
                         var maxpr_fn = tensor.maxpr()
@@ -1105,126 +1134,3 @@ struct Callable(Copyable, Movable):
                 output.remove_tensor_value()
 
             return unmaterialized_outputs^
-
-fn main() raises:
-
-    print("=== Test 0: Just broadcast, no other ops ===\n")
-    fn test0(args: List[Tensor]) raises -> List[Tensor]:
-        var a = args[0]  # [1, 1]
-        var b = broadcast(a, [2, 3])
-        return [b]
-    
-    var t0_a = full(5.0, [1, 1])
-    var c0 = Callable(test0, "test0", True)
-    var r0 = c0([t0_a])
-    print("Success! Result:", r0[0], "\n")
-
-    print("=== Test 1: Single arg with div operation ===\n")
-    fn test1(args: List[Tensor]) raises -> List[Tensor]:
-        var scale_factor = args[0]  # [1, 1]
-        var x_raw = args[1]  # [2, 3]
-        var x_broadcast = broadcast(scale_factor, [2, 3])
-        var x = x_raw + x_broadcast
-        return [x]
-    
-    var t1_scale = full(2.0, [1, 1])
-    var t1_x = full(10.0, [2, 3])
-    var c1 = Callable(test1, "test1", True)
-    var r1 = c1([t1_scale, t1_x])
-    print("Success! Result:", r1[0], "\n")
-
-    print("=== Test 2: Multiple broadcasts from same arg ===\n")
-    fn test2(args: List[Tensor]) raises -> List[Tensor]:
-        var scale = args[0]  # [1, 1]
-        var a = args[1]  # [2, 3]
-        var b = args[2]  # [3, 4]
-        var scale_a = broadcast(scale, [2, 3])
-        var scale_b = broadcast(scale, [3, 4])
-        var a_scaled = a / scale_a
-        var b_scaled = b / scale_b
-        return [a_scaled, b_scaled]
-    
-    var t2_scale = full(2.0, [1, 1])
-    var t2_a = full(10.0, [2, 3])
-    var t2_b = full(20.0, [3, 4])
-    var c2 = Callable(test2, "test2", True)
-    var r2 = c2([t2_scale, t2_a, t2_b])
-    print("Success! Result 1:", r2[0])
-    print("Result 2:", r2[1], "\n")
-
-    print("=== Test 3: With matmul ===\n")
-    fn test3(args: List[Tensor]) raises -> List[Tensor]:
-        var x = args[0]  # [2, 3]
-        var w = args[1]  # [3, 4]
-        var z = x @ w
-        return [z]
-    
-    var t3_x = full(1.0, [2, 3])
-    var t3_w = full(2.0, [3, 4])
-    var c3 = Callable(test3, "test3", True)
-    var r3 = c3([t3_x, t3_w])
-    print("Success! Result:", r3[0], "\n")
-
-    print("=== Test 4: Matmul + add (with broadcast) ===\n")
-    fn test4(args: List[Tensor]) raises -> List[Tensor]:
-        var x = args[0]  # [2, 3]
-        var w = args[1]  # [3, 4]
-        var b = args[2]  # [1, 4]
-        var z = x @ w
-        var result = z + b  # Broadcast [1,4] to [2,4]
-        return [result]
-    
-    var t4_x = full(1.0, [2, 3])
-    var t4_w = full(2.0, [3, 4])
-    var t4_b = full(0.5, [1, 4])
-    var c4 = Callable(test4, "test4", True)
-    var r4 = c4([t4_x, t4_w, t4_b])
-    print("Success! Result:", r4[0], "\n")
-
-    print("=== Test 5: Full layer (matmul + add + relu) ===\n")
-    fn test5(args: List[Tensor]) raises -> List[Tensor]:
-        var x = args[0]  # [2, 3]
-        var w = args[1]  # [3, 4]
-        var b = args[2]  # [1, 4]
-        var z = x @ w
-        var z_bias = z + b
-        var a = relu(z_bias)
-        return [a]
-    
-    var t5_x = full(1.0, [2, 3])
-    var t5_w = full(2.0, [3, 4])
-    var t5_b = full(0.5, [1, 4])
-    var c5 = Callable(test5, "test5", True)
-    var r5 = c5([t5_x, t5_w, t5_b])
-    print("Success! Result:", r5[0], "\n")
-
-    print("=== Test 6: With broadcast scaling ===\n")
-    fn test6(args: List[Tensor]) raises -> List[Tensor]:
-        var scale = args[0]  # [1, 1]
-        var x_raw = args[1]  # [2, 3]
-        var w_raw = args[2]  # [3, 4]
-        var x = x_raw / broadcast(scale, [2, 3])
-        var w = w_raw / broadcast(scale, [3, 4])
-        var z = x @ w
-        return [z]
-    
-    var t6_scale = full(100.0, [1, 1])
-    var t6_x = full(50.0, [2, 3])
-    var t6_w = full(200.0, [3, 4])
-    var c6 = Callable(test6, "test6", True)
-    var r6 = c6([t6_scale, t6_x, t6_w])
-    print("Success! Result:", r6[0], "\n")
-
-    print("=== Test 7: With internal constant (ones) ===\n")
-    fn test7(args: List[Tensor]) raises -> List[Tensor]:
-        var x = args[0]  # [2, 3]
-        var offset = ones([2, 3])  # Constant created inside
-        var result = x + offset
-        return [result]
-    
-    var t7_x = full(5.0, [2, 3])
-    var c7 = Callable(test7, "test7", True)
-    var r7 = c7([t7_x])
-    print("Success! Result:", r7[0], "\n")
-
-    print("=== All incremental tests passed! ===\n")
