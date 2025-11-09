@@ -19,9 +19,9 @@ struct TensorImpl(Copyable, Movable):
     var parents: List[ArcPointer[TensorImpl]]
     var visited: Bool
     var tensor_value: Optional[TensorValue]
-    var maxpr: List[fn(List[TensorValue]) raises -> TensorValue]
-    var vjp_rule: List[fn(List[Tensor], Tensor, mut Tensor) raises -> List[Tensor]]
-    var jvp_rule: List[fn(List[Tensor], List[Tensor], Tensor) raises -> Tensor]
+    var maxpr: List[fn(List[TensorValue], Dict[String, List[Int]]) raises -> TensorValue]
+    var vjp_rule: List[fn(List[Tensor], Tensor, Dict[String, List[Int]]) raises -> List[Tensor]]
+    var jvp_rule: List[fn(List[Tensor], List[Tensor], Dict[String, List[Int]]) raises -> Tensor]
     var traced: Bool
     var requires_grad: Bool
     var tangent: List[ArcPointer[TensorImpl]]
@@ -30,7 +30,7 @@ struct TensorImpl(Copyable, Movable):
     var stage_realization: Bool
     var custom_kernel_path: String
     var data: List[MaxTensor]
-    var metadata: Dict[String, List[Int]]
+    var kwargs: Dict[String, List[Int]]
 
     fn __init__(out self, shape: List[Int], dtype: DType = DType.float32, stage_realization: Bool = False) raises:
         self.shape = shape.copy()
@@ -55,7 +55,7 @@ struct TensorImpl(Copyable, Movable):
             self.data = []
         else:
             self.data = [MaxTensor.zeros(self.shape, self.dtype, self.device)]
-        self.metadata = {}
+        self.kwargs = {}
 
 struct Tensor(ImplicitlyCopyable, Movable, Writable):
     var _storage: ArcPointer[TensorImpl]
@@ -131,16 +131,16 @@ struct Tensor(ImplicitlyCopyable, Movable, Writable):
         """Check if this tensor has parent tensors."""
         return len(self._storage[].parents) > 0
 
-    fn metadata(self) -> Dict[String, List[Int]]:
-        return self._storage[].metadata.copy()
+    fn kwargs(self) -> Dict[String, List[Int]]:
+        return self._storage[].kwargs.copy()
 
     fn __getitem__(self, key: String) raises -> List[Int]:
-        if not key in self._storage[].metadata:
+        if not key in self._storage[].kwargs:
             raise Error("Metadata key not found: " + key)
-        return self._storage[].metadata[key].copy()
+        return self._storage[].kwargs[key].copy()
 
     fn __setitem__(mut self, key: String, value: List[Int]):
-        self._storage[].metadata[key] = value.copy()
+        self._storage[].kwargs[key] = value.copy()
 
     # Setter methods
     fn set_name(mut self, value: String):
@@ -180,7 +180,7 @@ struct Tensor(ImplicitlyCopyable, Movable, Writable):
         self._storage[].tensor_value = Optional[TensorValue](None)
     
     # Getters/Setters for autodiff-related fields
-    fn maxpr(self) raises -> fn(List[TensorValue]) raises -> TensorValue:
+    fn maxpr(self) raises -> fn(List[TensorValue], Dict[String, List[Int]]) raises -> TensorValue:
         """Get the maxpr rule. Raises if not set."""
         if len(self._storage[].maxpr) == 0:
             raise Error("maxpr rule is not set")
@@ -189,11 +189,11 @@ struct Tensor(ImplicitlyCopyable, Movable, Writable):
     fn has_maxpr(self) -> Bool:
         """Check if maxpr rule is set."""
         return len(self._storage[].maxpr) > 0
-    
-    fn set_maxpr(mut self, value: fn(List[TensorValue]) raises -> TensorValue):
+
+    fn set_maxpr(mut self, value: fn(List[TensorValue], Dict[String, List[Int]]) raises -> TensorValue):
         self._storage[].maxpr = [value]
     
-    fn vjp_rule(self) raises -> fn(List[Tensor], Tensor, mut Tensor) raises -> List[Tensor]:
+    fn vjp_rule(self) raises -> fn(List[Tensor], Tensor, Dict[String, List[Int]]) raises -> List[Tensor]:
         """Get the VJP rule. Raises if not set."""
         if len(self._storage[].vjp_rule) == 0:
             raise Error("VJP rule is not set")
@@ -203,14 +203,14 @@ struct Tensor(ImplicitlyCopyable, Movable, Writable):
         """Check if VJP rule is set."""
         return len(self._storage[].vjp_rule) > 0
     
-    fn set_vjp_rule(mut self, value: fn(List[Tensor], Tensor, mut Tensor) raises -> List[Tensor]):
+    fn set_vjp_rule(mut self, value: fn(List[Tensor], Tensor, Dict[String, List[Int]]) raises -> List[Tensor]):
         self._storage[].vjp_rule = [value]
     
     fn has_jvp_rule(self) -> Bool:
         """Check if JVP rule is set."""
         return len(self._storage[].jvp_rule) > 0
-    
-    fn set_jvp_rule(mut self, value: fn(List[Tensor], List[Tensor], Tensor) raises -> Tensor):
+
+    fn set_jvp_rule(mut self, value: fn(List[Tensor], List[Tensor], Dict[String, List[Int]]) raises -> Tensor):
         self._storage[].jvp_rule = [value]
     
     # Getters/Setters for tangent/cotangent/grad
@@ -288,8 +288,14 @@ struct Tensor(ImplicitlyCopyable, Movable, Writable):
     fn __add__(self, other: Self) raises -> Self:
         return add(self, other)
 
+    fn __sub__(self, other: Self) raises -> Self:
+        return sub(self, other)
+
     fn __mul__(self, other: Self) raises -> Self:
         return mul(self, other)
+
+    fn __truediv__(self, other: Self) raises -> Self:
+        return div(self, other)
 
     fn __matmul__(self, other: Self) raises -> Self:
         return matmul(self, other)
@@ -302,12 +308,21 @@ fn list_to_python_tuple(lst: List[Int]) raises -> PythonObject:
     return py.tuple(py_list)
     
 # creation ops
-fn ones(shape: List[Int], dtype: DType = DType.float32) raises -> Tensor:
+fn full(value: Float32, shape: List[Int], dtype: DType = DType.float32) raises -> Tensor:
+    """Create a tensor full of a scalar value."""
     var tensor = Tensor(shape, dtype, stage_realization=False)
     var np = PythonBridge.get_module("numpy")
-    var np_ones = np.ones(list_to_python_tuple(shape), dtype=DTypeConverter.to_numpy(dtype))
-    tensor.set_data(MaxTensor.from_numpy(np_ones))
+    var np_full = np.full(list_to_python_tuple(shape), value, dtype=DTypeConverter.to_numpy(dtype))
+    tensor.set_data(MaxTensor.from_numpy(np_full))
     return tensor
+
+fn zeros(shape: List[Int], dtype: DType = DType.float32) raises -> Tensor:
+    """Create a tensor full of zeros using the full operation."""
+    return full(0.0, shape, dtype)
+
+fn ones(shape: List[Int], dtype: DType = DType.float32) raises -> Tensor:
+    """Create a tensor full of ones using the full operation."""
+    return full(1.0, shape, dtype)
 
 fn arange(start: Int, stop: Int, step: Int = 1, dtype: DType = DType.float32) raises -> Tensor:
     var np = PythonBridge.get_module("numpy")
@@ -331,37 +346,69 @@ fn ndarange(shape: List[Int], dtype: DType = DType.float32) raises -> Tensor:
     tensor.set_data(MaxTensor.from_numpy(np_arange))
     return tensor
 
+fn is_broadcastable(shape_a: List[Int], shape_b: List[Int]) raises -> Bool:
+    """Check if two shapes are broadcastable and return True if they are."""
+    var ndim_a = len(shape_a)
+    var ndim_b = len(shape_b)
+    var max_ndim = max(ndim_a, ndim_b)
+    
+    for i in range(max_ndim):
+        var dim_a = shape_a[ndim_a - max_ndim + i] if i >= (max_ndim - ndim_a) else 1
+        var dim_b = shape_b[ndim_b - max_ndim + i] if i >= (max_ndim - ndim_b) else 1
+        
+        if dim_a != dim_b and dim_a != 1 and dim_b != 1:
+            return False
+    
+    return True
+
+fn broadcast_shapes(shape_a: List[Int], shape_b: List[Int]) raises -> List[Int]:
+    """Compute the broadcasted shape of two input shapes."""
+    if not is_broadcastable(shape_a, shape_b):
+        raise Error("Input shapes are not broadcastable")
+    
+    var ndim_a = len(shape_a)
+    var ndim_b = len(shape_b)
+    var max_ndim = max(ndim_a, ndim_b)
+    
+    var result_shape = List[Int]()
+    for i in range(max_ndim):
+        var dim_a = shape_a[ndim_a - max_ndim + i] if i >= (max_ndim - ndim_a) else 1
+        var dim_b = shape_b[ndim_b - max_ndim + i] if i >= (max_ndim - ndim_b) else 1
+        result_shape.append(max(dim_a, dim_b))
+    
+    return result_shape^
+
 trait Operation:
     @staticmethod
-    fn name() -> String:
+    fn name(kwargs: Dict[String, List[Int]]) -> String:
         pass
 
     @staticmethod
-    fn shape(inputs: List[Tensor]) raises -> List[Int]:
+    fn shape(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
         pass
 
     @staticmethod
-    fn dtype(inputs: List[Tensor]) raises -> DType:
+    fn dtype(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> DType:
         pass
 
     @staticmethod
-    fn device(inputs: List[Tensor]) raises -> Device:
+    fn device(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Device:
         pass
 
     @staticmethod
-    fn batch_dims(inputs: List[Tensor]) raises -> List[Int]:
+    fn batch_dims(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
         pass
 
     @staticmethod
-    fn maxpr(inputs: List[TensorValue]) raises -> TensorValue:
+    fn maxpr(inputs: List[TensorValue], kwargs: Dict[String, List[Int]]) raises -> TensorValue:
         pass
 
     @staticmethod
-    fn vjp_rule(primals: List[Tensor], cotangent: Tensor, output: Tensor) raises -> List[Tensor]:
+    fn vjp_rule(primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]) raises -> List[Tensor]:
         pass
 
     @staticmethod
-    fn jvp_rule(primals: List[Tensor], tangents: List[Tensor], output: Tensor) raises -> Tensor:
+    fn jvp_rule(primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Tensor:
         pass
 
     @staticmethod
@@ -375,24 +422,29 @@ trait Operation:
         return String("")
 
     @staticmethod
-    fn execute(inputs: List[Tensor]) raises -> Tensor:
+    fn execute(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Tensor:
         var res = Tensor(
-            shape=Self.shape(inputs), 
-            dtype=Self.dtype(inputs), 
+            shape=Self.shape(inputs, kwargs), 
+            dtype=Self.dtype(inputs, kwargs), 
             stage_realization=True)
-        res.set_name(Self.name())
+        res.set_name(Self.name(kwargs))
         res.set_parents(inputs)
         res.set_maxpr(Self.maxpr)
         res.set_vjp_rule(Self.vjp_rule)
         res.set_jvp_rule(Self.jvp_rule)
         res.set_custom_kernel_path(Self.custom_kernel_path())
         res.set_parents(inputs)
+        # Store kwargs on the tensor so they can be used during realization
+        # BUT: don't copy "is_arg" metadata to child tensors
+        for key in kwargs.keys():
+            if key != "is_arg":
+                res[key] = kwargs[key].copy()
         return res
 
 
 trait BinaryOp(Operation):
     @staticmethod
-    fn batch_dims(inputs: List[Tensor]) raises -> List[Int]:
+    fn batch_dims(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
         if len(inputs) != 2:
             raise Error("BinaryOp requires exactly 2 input tensors")
         if inputs[0].batch_dims() != inputs[1].batch_dims():
@@ -400,15 +452,18 @@ trait BinaryOp(Operation):
         return inputs[0].batch_dims()
 
     @staticmethod
-    fn shape(inputs: List[Tensor]) raises -> List[Int]:
+    fn shape(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
         if len(inputs) != 2:
             raise Error("BinaryOp requires exactly 2 input tensors")
-        if inputs[0].shape() != inputs[1].shape():
-            raise Error("Input tensors must have the same shape for BinaryOp")
-        return inputs[0].shape()
+        
+        var shape_a = inputs[0].shape()
+        var shape_b = inputs[1].shape()
+        
+        # Use the helper function to compute broadcasted shape
+        return broadcast_shapes(shape_a, shape_b)
     
     @staticmethod
-    fn dtype(inputs: List[Tensor]) raises -> DType:
+    fn dtype(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> DType:
         if len(inputs) != 2:
             raise Error("BinaryOp requires exactly 2 input tensors")
         if inputs[0].dtype() != inputs[1].dtype():
@@ -416,7 +471,7 @@ trait BinaryOp(Operation):
         return inputs[0].dtype()
     
     @staticmethod
-    fn device(inputs: List[Tensor]) raises -> Device:
+    fn device(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Device:
         if len(inputs) != 2:
             raise Error("BinaryOp requires exactly 2 input tensors")
         if inputs[0].device() != inputs[1].device():
@@ -424,69 +479,69 @@ trait BinaryOp(Operation):
         return inputs[0].device()
     
     @staticmethod
-    fn maxpr(inputs: List[TensorValue]) raises -> TensorValue:
+    fn maxpr(inputs: List[TensorValue], kwargs: Dict[String, List[Int]]) raises -> TensorValue:
         pass
 
     @staticmethod
-    fn vjp_rule(primals: List[Tensor], cotangent: Tensor, output: Tensor) raises -> List[Tensor]:
+    fn vjp_rule(primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]) raises -> List[Tensor]:
         pass
 
     @staticmethod
-    fn jvp_rule(primals: List[Tensor], tangents: List[Tensor], output: Tensor) raises -> Tensor:
+    fn jvp_rule(primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Tensor:
         pass
 
 
 struct AddOp(BinaryOp):
     @staticmethod
-    fn name() -> String:
+    fn name(kwargs: Dict[String, List[Int]]) -> String:
         return "add"
 
     @staticmethod
-    fn maxpr(inputs: List[TensorValue]) raises -> TensorValue:
+    fn maxpr(inputs: List[TensorValue], kwargs: Dict[String, List[Int]]) raises -> TensorValue:
         return ops.add(inputs[0], inputs[1])
 
     @staticmethod
-    fn vjp_rule(primals: List[Tensor], cotangent: Tensor, output: Tensor) raises -> List[Tensor]:
+    fn vjp_rule(primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]) raises -> List[Tensor]:
         return [cotangent, cotangent]
 
     @staticmethod
-    fn jvp_rule(primals: List[Tensor], tangents: List[Tensor], output: Tensor) raises -> Tensor:
+    fn jvp_rule(primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Tensor:
         return tangents[0] + tangents[1]
 
 fn add(a: Tensor, b: Tensor) raises -> Tensor:
-    return AddOp.execute([a, b])
+    return AddOp.execute([a, b], {})
 
 struct MulOp(BinaryOp):
     @staticmethod
-    fn name() -> String:
+    fn name(kwargs: Dict[String, List[Int]]) -> String:
         return "mul"
 
     @staticmethod
-    fn maxpr(inputs: List[TensorValue]) raises -> TensorValue:
+    fn maxpr(inputs: List[TensorValue], kwargs: Dict[String, List[Int]]) raises -> TensorValue:
         return ops.mul(inputs[0], inputs[1])
 
     @staticmethod
-    fn vjp_rule(primals: List[Tensor], cotangent: Tensor, output: Tensor) raises -> List[Tensor]:
+    fn vjp_rule(primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]) raises -> List[Tensor]:
         var grad_a = cotangent * primals[1]
         var grad_b = cotangent * primals[0]
         return [grad_a, grad_b]
 
     @staticmethod
-    fn jvp_rule(primals: List[Tensor], tangents: List[Tensor], output: Tensor) raises -> Tensor:
+    fn jvp_rule(primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Tensor:
         var term1 = tangents[0] * primals[1]
         var term2 = primals[0] * tangents[1]
         return term1 + term2
 
 fn mul(a: Tensor, b: Tensor) raises -> Tensor:
-    return MulOp.execute([a, b])
+    return MulOp.execute([a, b], {})
 
 struct Matmul(Operation):
     @staticmethod
-    fn name() -> String:
+    fn name(kwargs: Dict[String, List[Int]]) -> String:
         return "matmul"
 
     @staticmethod
-    fn shape(inputs: List[Tensor]) raises -> List[Int]:
+    fn shape(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
         if len(inputs) != 2:
             raise Error("Matmul requires exactly 2 input tensors")
         var a_shape = inputs[0].shape()
@@ -499,7 +554,7 @@ struct Matmul(Operation):
         return result_shape^
 
     @staticmethod
-    fn batch_dims(inputs: List[Tensor]) raises -> List[Int]:
+    fn batch_dims(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
         if len(inputs) != 2:
             raise Error("Matmul requires exactly 2 input tensors")
         if inputs[0].batch_dims() != inputs[1].batch_dims():
@@ -507,7 +562,7 @@ struct Matmul(Operation):
         return inputs[0].batch_dims()
 
     @staticmethod
-    fn dtype(inputs: List[Tensor]) raises -> DType:
+    fn dtype(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> DType:
         if len(inputs) != 2:
             raise Error("Matmul requires exactly 2 input tensors")
         if inputs[0].dtype() != inputs[1].dtype():
@@ -515,7 +570,7 @@ struct Matmul(Operation):
         return inputs[0].dtype()
 
     @staticmethod
-    fn device(inputs: List[Tensor]) raises -> Device:
+    fn device(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Device:
         if len(inputs) != 2:
             raise Error("Matmul requires exactly 2 input tensors")
         if inputs[0].device() != inputs[1].device():
@@ -523,20 +578,255 @@ struct Matmul(Operation):
         return inputs[0].device()
 
     @staticmethod
-    fn maxpr(inputs: List[TensorValue]) raises -> TensorValue:
+    fn maxpr(inputs: List[TensorValue], kwargs: Dict[String, List[Int]]) raises -> TensorValue:
         return ops.matmul(inputs[0], inputs[1])
 
     @staticmethod
-    fn vjp_rule(primals: List[Tensor], cotangent: Tensor, output: Tensor) raises -> List[Tensor]:
+    fn vjp_rule(primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]) raises -> List[Tensor]:
         raise Error("VJP rule for Matmul not implemented yet")
 
     @staticmethod
-    fn jvp_rule(primals: List[Tensor], tangents: List[Tensor], output: Tensor) raises -> Tensor:
+    fn jvp_rule(primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Tensor:
         raise Error("JVP rule for Matmul not implemented yet")
 
 fn matmul(a: Tensor, b: Tensor) raises -> Tensor:
-    return Matmul.execute([a, b])
+    return Matmul.execute([a, b], {})
 
+struct SubOp(BinaryOp):
+    @staticmethod
+    fn name(kwargs: Dict[String, List[Int]]) -> String:
+        return "sub"
+
+    @staticmethod
+    fn maxpr(inputs: List[TensorValue], kwargs: Dict[String, List[Int]]) raises -> TensorValue:
+        return ops.sub(inputs[0], inputs[1])
+
+    @staticmethod
+    fn vjp_rule(primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]) raises -> List[Tensor]:
+        var grad_a = cotangent
+        var grad_b = mul(cotangent, ones(cotangent.shape(), cotangent.dtype()))
+        # Negate grad_b
+        var neg_one = ones(cotangent.shape(), cotangent.dtype())
+        # Create a tensor fulled with -1
+        var np = PythonBridge.get_module("numpy")
+        var np_neg_ones = np.full(list_to_python_tuple(cotangent.shape()), -1.0, dtype=DTypeConverter.to_numpy(cotangent.dtype()))
+        var neg_one_tensor = Tensor(cotangent.shape(), cotangent.dtype(), stage_realization=False)
+        neg_one_tensor.set_data(MaxTensor.from_numpy(np_neg_ones))
+        grad_b = mul(cotangent, neg_one_tensor)
+        return [grad_a, grad_b]
+
+    @staticmethod
+    fn jvp_rule(primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Tensor:
+        return sub(tangents[0], tangents[1])
+
+fn sub(a: Tensor, b: Tensor) raises -> Tensor:
+    return SubOp.execute([a, b], {})
+
+struct DivOp(BinaryOp):
+    @staticmethod
+    fn name(kwargs: Dict[String, List[Int]]) -> String:
+        return "div"
+
+    @staticmethod
+    fn maxpr(inputs: List[TensorValue], kwargs: Dict[String, List[Int]]) raises -> TensorValue:
+        return ops.div(inputs[0], inputs[1])
+
+    @staticmethod
+    fn vjp_rule(primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]) raises -> List[Tensor]:
+        # d/da (a/b) = 1/b
+        var grad_a = div(cotangent, primals[1])
+        # d/db (a/b) = -a/(b^2)
+        var b_squared = mul(primals[1], primals[1])
+        var neg_a = sub(
+            Tensor(primals[0].shape(), primals[0].dtype(), stage_realization=False),
+            primals[0]
+        )
+        var grad_b_temp = div(neg_a, b_squared)
+        var grad_b = mul(cotangent, grad_b_temp)
+        return [grad_a, grad_b]
+
+    @staticmethod
+    fn jvp_rule(primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Tensor:
+        # d/da (a/b) * da + d/db (a/b) * db
+        # = (1/b) * da + (-a/b^2) * db
+        var term1 = div(tangents[0], primals[1])
+        var b_squared = mul(primals[1], primals[1])
+        var neg_a = sub(
+            Tensor(primals[0].shape(), primals[0].dtype(), stage_realization=False),
+            primals[0]
+        )
+        var term2_temp = div(neg_a, b_squared)
+        var term2 = mul(term2_temp, tangents[1])
+        return add(term1, term2)
+
+fn div(a: Tensor, b: Tensor) raises -> Tensor:
+    return DivOp.execute([a, b], {})
+
+struct ReluOp(Operation):
+    @staticmethod
+    fn name(kwargs: Dict[String, List[Int]]) -> String:
+        return "relu"
+
+    @staticmethod
+    fn shape(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
+        if len(inputs) != 1:
+            raise Error("Relu requires exactly 1 input tensor")
+        return inputs[0].shape()
+
+    @staticmethod
+    fn batch_dims(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
+        if len(inputs) != 1:
+            raise Error("Relu requires exactly 1 input tensor")
+        return inputs[0].batch_dims()
+
+    @staticmethod
+    fn dtype(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> DType:
+        if len(inputs) != 1:
+            raise Error("Relu requires exactly 1 input tensor")
+        return inputs[0].dtype()
+
+    @staticmethod
+    fn device(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Device:
+        if len(inputs) != 1:
+            raise Error("Relu requires exactly 1 input tensor")
+        return inputs[0].device()
+
+    @staticmethod
+    fn maxpr(inputs: List[TensorValue], kwargs: Dict[String, List[Int]]) raises -> TensorValue:
+        return ops.relu(inputs[0])
+
+    @staticmethod
+    fn vjp_rule(primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]) raises -> List[Tensor]:
+        # relu'(x) = 1 if x > 0 else 0
+        # For now, we'll approximate with a simple multiplication
+        # In practice, you'd need to track where relu was > 0
+        raise Error("VJP rule for Relu not implemented yet")
+
+    @staticmethod
+    fn jvp_rule(primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Tensor:
+        raise Error("JVP rule for Relu not implemented yet")
+
+fn relu(x: Tensor) raises -> Tensor:
+    return ReluOp.execute([x], {})
+
+struct ReshapeOp(Operation):
+    @staticmethod
+    fn name(kwargs: Dict[String, List[Int]]) -> String:
+        return "reshape"
+
+    @staticmethod
+    fn shape(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
+        if len(inputs) != 1:
+            raise Error("Reshape requires exactly 1 input tensor")
+        if not "target_shape" in kwargs:
+            raise Error("Reshape requires 'target_shape' in kwargs")
+        return kwargs["target_shape"].copy()
+
+    @staticmethod
+    fn batch_dims(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
+        if len(inputs) != 1:
+            raise Error("Reshape requires exactly 1 input tensor")
+        return inputs[0].batch_dims()
+
+    @staticmethod
+    fn dtype(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> DType:
+        if len(inputs) != 1:
+            raise Error("Reshape requires exactly 1 input tensor")
+        return inputs[0].dtype()
+
+    @staticmethod
+    fn device(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Device:
+        if len(inputs) != 1:
+            raise Error("Reshape requires exactly 1 input tensor")
+        return inputs[0].device()
+
+    @staticmethod
+    fn maxpr(inputs: List[TensorValue], kwargs: Dict[String, List[Int]]) raises -> TensorValue:
+        if not "target_shape" in kwargs:
+            raise Error("Reshape requires 'target_shape' in kwargs")
+        var target_shape = kwargs["target_shape"].copy()
+        return ops.reshape(inputs[0], target_shape)
+
+    @staticmethod
+    fn vjp_rule(primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]) raises -> List[Tensor]:
+        # Gradient of reshape is just reshaping back to original shape
+        var original_shape = primals[0].shape()
+        var grad_kwargs = Dict[String, List[Int]]()
+        grad_kwargs["target_shape"] = original_shape.copy()
+        var grad = ReshapeOp.execute([cotangent], grad_kwargs)
+        return [grad]
+
+    @staticmethod
+    fn jvp_rule(primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Tensor:
+        # Forward-mode AD for reshape is just reshaping the tangent
+        return ReshapeOp.execute([tangents[0]], kwargs)
+
+fn reshape(x: Tensor, target_shape: List[Int]) raises -> Tensor:
+    var kwargs = Dict[String, List[Int]]()
+    kwargs["target_shape"] = target_shape.copy()
+    return ReshapeOp.execute([x], kwargs)
+
+struct BroadcastOp(Operation):
+    @staticmethod
+    fn name(kwargs: Dict[String, List[Int]]) -> String:
+        return "broadcast"
+
+    @staticmethod
+    fn shape(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
+        if len(inputs) != 1:
+            raise Error("Broadcast requires exactly 1 input tensor")
+        if not "target_shape" in kwargs:
+            raise Error("Broadcast requires 'target_shape' in kwargs")
+        
+        var input_shape = inputs[0].shape()
+        var target_shape = kwargs["target_shape"].copy()
+        
+        # Check if input can be broadcast to target
+        if not is_broadcastable(input_shape, target_shape):
+            raise Error("Input shape cannot be broadcast to target shape")
+        
+        return target_shape.copy()
+
+    @staticmethod
+    fn batch_dims(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
+        if len(inputs) != 1:
+            raise Error("Broadcast requires exactly 1 input tensor")
+        return inputs[0].batch_dims()
+
+    @staticmethod
+    fn dtype(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> DType:
+        if len(inputs) != 1:
+            raise Error("Broadcast requires exactly 1 input tensor")
+        return inputs[0].dtype()
+
+    @staticmethod
+    fn device(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Device:
+        if len(inputs) != 1:
+            raise Error("Broadcast requires exactly 1 input tensor")
+        return inputs[0].device()
+
+    @staticmethod
+    fn maxpr(inputs: List[TensorValue], kwargs: Dict[String, List[Int]]) raises -> TensorValue:
+        if not "target_shape" in kwargs:
+            raise Error("Broadcast requires 'target_shape' in kwargs")
+        var target_shape = kwargs["target_shape"].copy()
+        return ops.broadcast_to(inputs[0], target_shape)
+
+    @staticmethod
+    fn vjp_rule(primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]) raises -> List[Tensor]:
+        # Gradient of broadcast is sum reduction over the broadcast dimensions
+        # For now, just return the cotangent (simplified)
+        raise Error("VJP rule for Broadcast not implemented yet")
+
+    @staticmethod
+    fn jvp_rule(primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Tensor:
+        # Forward-mode AD for broadcast is just broadcasting the tangent
+        return BroadcastOp.execute([tangents[0]], kwargs)
+
+fn broadcast(x: Tensor, target_shape: List[Int]) raises -> Tensor:
+    var kwargs = Dict[String, List[Int]]()
+    kwargs["target_shape"] = target_shape.copy()
+    return BroadcastOp.execute([x], kwargs)
 
 
 fn reset_visited(mut tensors: List[Tensor]) raises:
@@ -573,6 +863,27 @@ fn get_unmaterialized_recursive(mut outputs: List[Tensor], mut trace: List[Tenso
                 get_unmaterialized_recursive(parents, trace, inputs)
                 trace.append(output)
 
+fn get_unmaterialized_recursive_with_constants(
+    mut outputs: List[Tensor], 
+    mut trace: List[Tensor], 
+    mut inputs: List[Tensor],
+    mut constants: List[Tensor]
+) raises -> None:
+    """DFS that separates materialized inputs into args (marked with 'is_arg') and constants."""
+    for var output in outputs:
+        if not output.visited():
+            if output.has_data():
+                # Check if this tensor is marked as an arg
+                if "is_arg" in output.kwargs():
+                    inputs.append(output)
+                else:
+                    constants.append(output)
+            else:
+                output.set_visited(True)
+                var parents = output.parents()
+                get_unmaterialized_recursive_with_constants(parents, trace, inputs, constants)
+                trace.append(output)
+
 fn get_dependency_trace(outputs: List[Tensor]) raises -> Tuple[List[Tensor], List[Tensor]]:
     var trace: List[Tensor] = []
     var inputs: List[Tensor] = []
@@ -590,6 +901,17 @@ fn get_unmaterialized_trace(outputs: List[Tensor]) raises -> Tuple[List[Tensor],
     get_unmaterialized_recursive(_outputs, trace, inputs)
     reset_visited(_outputs)
     return (trace^, inputs^)
+
+fn get_unmaterialized_trace_with_constants(outputs: List[Tensor]) raises -> Tuple[List[Tensor], List[Tensor], List[Tensor]]:
+    """Get trace separating inputs (marked with 'is_arg') from constants (created inside function)."""
+    var trace: List[Tensor] = []
+    var inputs: List[Tensor] = []
+    var constants: List[Tensor] = []
+    var _outputs = outputs.copy()
+    reset_visited(_outputs)
+    get_unmaterialized_recursive_with_constants(_outputs, trace, inputs, constants)
+    reset_visited(_outputs)
+    return (trace^, inputs^, constants^)
 
 fn realize(mut outputs: List[Tensor]) raises:
     """Realize all tensors in the graph by assigning dummy data."""
@@ -620,7 +942,7 @@ fn realize(mut outputs: List[Tensor]) raises:
         
         if tensor.has_maxpr():
             var maxpr_fn = tensor.maxpr()
-            tensor.set_tensor_value(maxpr_fn(parent_tvs))
+            tensor.set_tensor_value(maxpr_fn(parent_tvs, tensor.kwargs()))
             if not tensor.has_tensor_value():
                 raise Error("maxpr did not set tensor_value for tensor: " + tensor.name())
         else:
@@ -650,10 +972,11 @@ fn realize(mut outputs: List[Tensor]) raises:
     for var output in outputs:
         output.remove_tensor_value()
 
-struct Callable:
+struct Callable(Copyable, Movable):
     var func: fn(args: List[Tensor]) raises -> List[Tensor]
     var name: String
     var compiled_model: Dict[UInt64, ArcPointer[MaxModel]]
+    var constants: Dict[UInt64, List[Tensor]]  # Store constants per compiled model
     var compiled: Bool
 
 
@@ -661,6 +984,7 @@ struct Callable:
         self.func = func
         self.name = name
         self.compiled_model = {}
+        self.constants = {}
         self.compiled = compiled
 
     fn compile(mut self) raises:
@@ -675,41 +999,75 @@ struct Callable:
                 if not arg.has_data():
                     raise Error("All input tensors must be materialized for compiled execution")
 
-            var unmaterialized_outputs = self.func(args)
-            # get a hash value based on String(shape) + String(dtype) + String(name) of each tensor in teh trace
-            var trace_tuple = get_unmaterialized_trace(unmaterialized_outputs)
-            var trace = trace_tuple[0].copy() 
-            var trace_inputs = trace_tuple[1].copy()
+            # Mark all args with "is_arg" metadata
+            # NOTE: args uses ArcPointer, so modifying through the list modifies the shared storage
+            var mut_args = List[Tensor]()
+            for i in range(len(args)):
+                # Create a wrapper that marks this specific arg
+                var arg = args[i]
+                arg["is_arg"] = List[Int]()
+                mut_args.append(arg)
+            
+            var unmaterialized_outputs = self.func(mut_args)
+            # get trace with constants separated
+            var trace_tuple = get_unmaterialized_trace_with_constants(unmaterialized_outputs)
+            var trace = trace_tuple[0].copy()
+            # var inputs = trace_tuple[1].copy()
+            var constants = trace_tuple[2].copy()
 
             var key: UInt64 = 0
-            for tensor in trace_inputs:
-                var tensor_hash: UInt64 = hash(tensor.name()) + hash(tensor.shape().__str__()) + hash(String(tensor.dtype()))
+            # Hash based on the original args
+            for arg in args:
+                var tensor_hash: UInt64 = hash(arg.name()) + hash(arg.shape().__str__()) + hash(String(arg.dtype()))
+                key = key ^ (tensor_hash + 0x9E3779B9 + (key << 6) + (key >> 2))
+            for var constant in constants:
+                var tensor_hash: UInt64 = hash(constant.name()) + hash(constant.shape().__str__()) + hash(String(constant.dtype()))
                 key = key ^ (tensor_hash + 0x9E3779B9 + (key << 6) + (key >> 2))
             for tensor in trace:
                 var tensor_hash: UInt64 = hash(tensor.name()) + hash(tensor.shape().__str__()) + hash(String(tensor.dtype()))
                 key = key ^ (tensor_hash + 0x9E3779B9 + (key << 6) + (key >> 2))
             key = key % 1000000007
-            
+
+        
             # check for available compiled model
             if not key in self.compiled_model:
-                # compile new model
+                # Store constants for this compiled model
+                self.constants[key] = constants.copy()
+                
+                # compile new model using inputs (args + constants) as graph inputs
                 var input_types = List[TensorType]()
-                for tensor in trace_inputs:
-                    input_types.append(TensorType(tensor.dtype(), tensor.shape(), tensor.device()))
+                # First add args
+                for arg in args:
+                    input_types.append(TensorType(arg.dtype(), arg.shape(), arg.device()))
+                # Then add constants
+                for constant in constants:
+                    input_types.append(TensorType(constant.dtype(), constant.shape(), constant.device()))
 
                 var graph = Graph(self.name + "_compiled_model", input_types)
                 var graph_inputs = graph.inputs()
-                for i in range(len(input_types)):
-                    trace_inputs[i].set_tensor_value(graph_inputs[i])
+                
+                # Set tensor values for all inputs (args first, then constants)
+                var idx = 0
+                var _args = args.copy()
+                for i in range(len(args)):
+                    _args[i].set_tensor_value(graph_inputs[idx])
+                    idx += 1
+                for i in range(len(constants)):
+                    constants[i].set_tensor_value(graph_inputs[idx])
+                    idx += 1
+                
+                # Now build the computation graph
                 for var tensor in trace:
+                    print("DEBUG: Building", tensor.name())
                     var parent_tvs = List[TensorValue]()
                     if tensor.has_parents():
                         var parents = tensor.parents()
-                        for parent in parents:
-                            parent_tvs.append(parent.tensor_value())
+                        for i in range(len(parents)):
+                            print("  Parent", i, ":", parents[i].name(), "has_tensor_value:", parents[i].has_tensor_value())
+                            parent_tvs.append(parents[i].tensor_value())
                     if tensor.has_maxpr():
                         var maxpr_fn = tensor.maxpr()
-                        tensor.set_tensor_value(maxpr_fn(parent_tvs))
+                        tensor.set_tensor_value(maxpr_fn(parent_tvs, tensor.kwargs()))
                         if not tensor.has_tensor_value():
                             raise Error("maxpr did not set tensor_value for tensor: " + tensor.name())
                     else:
@@ -719,19 +1077,28 @@ struct Callable:
                     outputs_tvs.append(output.tensor_value())
                 graph.output(outputs_tvs)
                 self.compiled_model[key] = ArcPointer(graph.compile())
+                
+                # Clean up tensor values from inputs and constants after compilation
+                for var arg in _args:
+                    arg.remove_tensor_value()
+                for var constant in constants:
+                    constant.remove_tensor_value()
             
-            # execute compiled model
+            # execute compiled model with args + constants
             var max_inputs = List[MaxTensor]()
+            # First add the args data
             for arg in args:
                 max_inputs.append(arg.data())
+            # Then add the constants data
+            if key in self.constants:
+                for i in range(len(self.constants[key])):
+                    max_inputs.append(self.constants[key][i].data())
 
             max_outputs = self.compiled_model[key][].execute(max_inputs)
             for i in range(len(unmaterialized_outputs)):
                 unmaterialized_outputs[i].set_data(max_outputs[i])
 
             # cleanups: reset tensor values in the graph
-            for var tensor in trace_inputs:
-                tensor.remove_tensor_value()
             for var tensor in trace:
                 tensor.remove_tensor_value()
             for var output in unmaterialized_outputs:
@@ -741,28 +1108,123 @@ struct Callable:
 
 fn main() raises:
 
-    fn foo(args: List[Tensor]) raises -> List[Tensor]:
-        var x = args[0]   # (2, 3)
-        var w1 = args[1]  # (3, 5)
-        var b1 = args[2]  # (2, 5)
-        var w2 = args[3]  # (5, 4)
-        var b2 = args[4]  # (2, 4)
+    print("=== Test 0: Just broadcast, no other ops ===\n")
+    fn test0(args: List[Tensor]) raises -> List[Tensor]:
+        var a = args[0]  # [1, 1]
+        var b = broadcast(a, [2, 3])
+        return [b]
+    
+    var t0_a = full(5.0, [1, 1])
+    var c0 = Callable(test0, "test0", True)
+    var r0 = c0([t0_a])
+    print("Success! Result:", r0[0], "\n")
 
-        var hidden = x @ w1          # (2, 5)
-        var hidden_bias = hidden + b1  # (2, 5)
-        var logits = hidden_bias @ w2  # (2, 4)
-        var output = logits + b2       # (2, 4)
-        return [output]
+    print("=== Test 1: Single arg with div operation ===\n")
+    fn test1(args: List[Tensor]) raises -> List[Tensor]:
+        var scale_factor = args[0]  # [1, 1]
+        var x_raw = args[1]  # [2, 3]
+        var x_broadcast = broadcast(scale_factor, [2, 3])
+        var x = x_raw + x_broadcast
+        return [x]
+    
+    var t1_scale = full(2.0, [1, 1])
+    var t1_x = full(10.0, [2, 3])
+    var c1 = Callable(test1, "test1", True)
+    var r1 = c1([t1_scale, t1_x])
+    print("Success! Result:", r1[0], "\n")
 
-    var foo_jitted = Callable(foo, "foo_jitted", True)
+    print("=== Test 2: Multiple broadcasts from same arg ===\n")
+    fn test2(args: List[Tensor]) raises -> List[Tensor]:
+        var scale = args[0]  # [1, 1]
+        var a = args[1]  # [2, 3]
+        var b = args[2]  # [3, 4]
+        var scale_a = broadcast(scale, [2, 3])
+        var scale_b = broadcast(scale, [3, 4])
+        var a_scaled = a / scale_a
+        var b_scaled = b / scale_b
+        return [a_scaled, b_scaled]
+    
+    var t2_scale = full(2.0, [1, 1])
+    var t2_a = full(10.0, [2, 3])
+    var t2_b = full(20.0, [3, 4])
+    var c2 = Callable(test2, "test2", True)
+    var r2 = c2([t2_scale, t2_a, t2_b])
+    print("Success! Result 1:", r2[0])
+    print("Result 2:", r2[1], "\n")
 
-    for it in range(100):
-        print("Iteration: " + String(it))
-        var x = ndarange([2, 3])
-        var w1 = ones([3, 5])
-        var b1 = ones([2, 5])
-        var w2 = ones([5, 4])
-        var b2 = ones([2, 4])
+    print("=== Test 3: With matmul ===\n")
+    fn test3(args: List[Tensor]) raises -> List[Tensor]:
+        var x = args[0]  # [2, 3]
+        var w = args[1]  # [3, 4]
+        var z = x @ w
+        return [z]
+    
+    var t3_x = full(1.0, [2, 3])
+    var t3_w = full(2.0, [3, 4])
+    var c3 = Callable(test3, "test3", True)
+    var r3 = c3([t3_x, t3_w])
+    print("Success! Result:", r3[0], "\n")
 
-        var res = foo_jitted([x, w1, b1, w2, b2])
-        print(res[0])
+    print("=== Test 4: Matmul + add (with broadcast) ===\n")
+    fn test4(args: List[Tensor]) raises -> List[Tensor]:
+        var x = args[0]  # [2, 3]
+        var w = args[1]  # [3, 4]
+        var b = args[2]  # [1, 4]
+        var z = x @ w
+        var result = z + b  # Broadcast [1,4] to [2,4]
+        return [result]
+    
+    var t4_x = full(1.0, [2, 3])
+    var t4_w = full(2.0, [3, 4])
+    var t4_b = full(0.5, [1, 4])
+    var c4 = Callable(test4, "test4", True)
+    var r4 = c4([t4_x, t4_w, t4_b])
+    print("Success! Result:", r4[0], "\n")
+
+    print("=== Test 5: Full layer (matmul + add + relu) ===\n")
+    fn test5(args: List[Tensor]) raises -> List[Tensor]:
+        var x = args[0]  # [2, 3]
+        var w = args[1]  # [3, 4]
+        var b = args[2]  # [1, 4]
+        var z = x @ w
+        var z_bias = z + b
+        var a = relu(z_bias)
+        return [a]
+    
+    var t5_x = full(1.0, [2, 3])
+    var t5_w = full(2.0, [3, 4])
+    var t5_b = full(0.5, [1, 4])
+    var c5 = Callable(test5, "test5", True)
+    var r5 = c5([t5_x, t5_w, t5_b])
+    print("Success! Result:", r5[0], "\n")
+
+    print("=== Test 6: With broadcast scaling ===\n")
+    fn test6(args: List[Tensor]) raises -> List[Tensor]:
+        var scale = args[0]  # [1, 1]
+        var x_raw = args[1]  # [2, 3]
+        var w_raw = args[2]  # [3, 4]
+        var x = x_raw / broadcast(scale, [2, 3])
+        var w = w_raw / broadcast(scale, [3, 4])
+        var z = x @ w
+        return [z]
+    
+    var t6_scale = full(100.0, [1, 1])
+    var t6_x = full(50.0, [2, 3])
+    var t6_w = full(200.0, [3, 4])
+    var c6 = Callable(test6, "test6", True)
+    var r6 = c6([t6_scale, t6_x, t6_w])
+    print("Success! Result:", r6[0], "\n")
+
+    print("=== Test 7: With internal constant (ones) ===\n")
+    fn test7(args: List[Tensor]) raises -> List[Tensor]:
+        var x = args[0]  # [2, 3]
+        var offset = ones([2, 3])  # Constant created inside
+        var result = x + offset
+        return [result]
+    
+    var t7_x = full(5.0, [2, 3])
+    var c7 = Callable(test7, "test7", True)
+    var r7 = c7([t7_x])
+    print("Success! Result:", r7[0], "\n")
+
+    print("=== All incremental tests passed! ===\n")
