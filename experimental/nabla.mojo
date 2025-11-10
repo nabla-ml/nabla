@@ -1,28 +1,43 @@
-import max_graph.ops as ops
-from max_graph.types import (
-    Device, DeviceType, TensorType, TensorValue, CPU
-)
-from max_graph.types import Tensor as MaxTensor, DTypeConverter
-from max_graph.utils import (
-    PythonBridge, Graph, DeviceRef, MaxModel
+from max_bindings import (
+    MaxTensor,
+    MaxTensorValue,
+    MaxTensorType,
+    MaxDType,
+    MaxDevice,
+    MaxGraph,
+    MaxInferenceSession,
+    MaxModel,
+    graph_ops,
+    _list_to_py_tuple,
+    _list_to_py_list,
+    _py_tuple_to_mojo_int_list,
+    _py_list_to_mojo_int_list,
 )
 from python import Python, PythonObject
 from memory import ArcPointer, UnsafePointer
 from time import perf_counter_ns
 
+
 struct TensorImpl(Copyable, Movable):
     """Unsafe access to internal representation of the Tensor."""
+
     var shape: List[Int]
     var batch_dims: List[Int]
     var dtype: DType
-    var device: Device
+    var device: MaxDevice
     var name: String
     var parents: List[ArcPointer[TensorImpl]]
     var visited: Bool
-    var tensor_value: Optional[TensorValue]
-    var maxpr: List[fn(List[TensorValue], Dict[String, List[Int]]) raises -> TensorValue]
-    var vjp_rule: List[fn(List[Tensor], Tensor, Dict[String, List[Int]]) raises -> List[Tensor]]
-    var jvp_rule: List[fn(List[Tensor], List[Tensor], Dict[String, List[Int]]) raises -> Tensor]
+    var tensor_value: Optional[MaxTensorValue]
+    var maxpr: List[
+        fn (List[MaxTensorValue], Dict[String, List[Int]]) raises -> MaxTensorValue
+    ]
+    var vjp_rule: List[
+        fn (List[Tensor], Tensor, Dict[String, List[Int]]) raises -> List[Tensor]
+    ]
+    var jvp_rule: List[
+        fn (List[Tensor], List[Tensor], Dict[String, List[Int]]) raises -> Tensor
+    ]
     var traced: Bool
     var requires_grad: Bool
     var tangent: List[ArcPointer[TensorImpl]]
@@ -33,15 +48,20 @@ struct TensorImpl(Copyable, Movable):
     var data: List[MaxTensor]
     var kwargs: Dict[String, List[Int]]
 
-    fn __init__(out self, shape: List[Int], dtype: DType = DType.float32, stage_realization: Bool = False) raises:
+    fn __init__(
+        out self,
+        shape: List[Int],
+        dtype: DType = DType.float32,
+        stage_realization: Bool = False,
+    ) raises:
         self.shape = shape.copy()
         self.batch_dims = List[Int]()
         self.dtype = dtype
-        self.device = CPU().as_device()
+        self.device = MaxDevice.cpu()
         self.name = String("zeros")
         self.parents = []
         self.visited = False
-        self.tensor_value = Optional[TensorValue](None)
+        self.tensor_value = Optional[MaxTensorValue](None)
         self.maxpr = []
         self.vjp_rule = []
         self.jvp_rule = []
@@ -55,8 +75,13 @@ struct TensorImpl(Copyable, Movable):
         if self.stage_realization:
             self.data = []
         else:
-            self.data = [MaxTensor.zeros(self.shape, self.dtype, self.device)]
+            var np_zeros = Python.import_module("numpy").zeros(
+                _list_to_py_tuple(shape),
+                dtype=MaxDType.from_dtype(dtype).to_numpy_dtype(),
+            )
+            self.data = [MaxTensor.from_numpy(np_zeros)]
         self.kwargs = {}
+
 
 struct Tensor(ImplicitlyCopyable, Movable, Writable):
     var _storage: ArcPointer[TensorImpl]
@@ -64,70 +89,75 @@ struct Tensor(ImplicitlyCopyable, Movable, Writable):
     fn __init__(out self, storage: ArcPointer[TensorImpl]) raises:
         self._storage = storage
 
-    fn __init__(out self, shape: List[Int], dtype: DType = DType.float32, stage_realization: Bool = False) raises:
+    fn __init__(
+        out self,
+        shape: List[Int],
+        dtype: DType = DType.float32,
+        stage_realization: Bool = False,
+    ) raises:
         self._storage = ArcPointer(TensorImpl(shape, dtype, stage_realization))
 
     # Getter methods
     fn name(self) -> String:
         return self._storage[].name
-    
+
     fn shape(self) -> List[Int]:
         return self._storage[].shape.copy()
-    
+
     fn dtype(self) -> DType:
         return self._storage[].dtype
-    
-    fn device(self) -> Device:
+
+    fn device(self) -> MaxDevice:
         return self._storage[].device.copy()
-    
+
     fn visited(self) -> Bool:
         return self._storage[].visited
-    
+
     fn requires_grad(self) -> Bool:
         return self._storage[].requires_grad
-    
+
     fn traced(self) -> Bool:
         return self._storage[].traced
-    
+
     fn stage_realization(self) -> Bool:
         return self._storage[].stage_realization
-    
+
     fn custom_kernel_path(self) -> String:
         return self._storage[].custom_kernel_path
-    
+
     fn batch_dims(self) -> List[Int]:
         return self._storage[].batch_dims.copy()
-    
-    fn tensor_value(self) raises -> TensorValue:
+
+    fn tensor_value(self) raises -> MaxTensorValue:
         """Get the tensor value. Raises if not set."""
         if not self._storage[].tensor_value:
-            raise Error("TensorValue is not set")
+            raise Error("MaxTensorValue is not set")
         return self._storage[].tensor_value.value()
-    
+
     fn has_tensor_value(self) -> Bool:
         """Check if tensor_value is set."""
         return self._storage[].tensor_value.__bool__()
-    
+
     fn data(self) raises -> MaxTensor:
         """Get the underlying MaxTensor data. Raises if not set."""
         if len(self._storage[].data) == 0:
             raise Error("Data is not set")
         return self._storage[].data[0]
-    
+
     fn has_data(self) -> Bool:
         """Check if data is set."""
         return len(self._storage[].data) > 0
 
     fn set_data(mut self, value: MaxTensor):
         self._storage[].data = [value]
-    
+
     fn parents(self) raises -> List[Tensor]:
         """Get parent tensors (returns proper Tensor objects, not ArcPointers)."""
         var result = List[Tensor]()
         for parent_ptr in self._storage[].parents:
             result.append(Tensor(parent_ptr))
         return result^
-    
+
     fn has_parents(self) -> Bool:
         """Check if this tensor has parent tensors."""
         return len(self._storage[].parents) > 0
@@ -146,136 +176,159 @@ struct Tensor(ImplicitlyCopyable, Movable, Writable):
     # Setter methods
     fn set_name(mut self, value: String):
         self._storage[].name = value
-    
+
     fn set_visited(mut self, value: Bool):
         self._storage[].visited = value
-    
+
     fn set_requires_grad(mut self, value: Bool):
         self._storage[].requires_grad = value
-    
+
     fn set_traced(mut self, value: Bool):
         self._storage[].traced = value
-    
+
     fn set_stage_realization(mut self, value: Bool):
         self._storage[].stage_realization = value
-    
+
     fn set_custom_kernel_path(mut self, value: String):
         self._storage[].custom_kernel_path = value
-    
+
     fn set_shape(mut self, value: List[Int]):
         self._storage[].shape = value.copy()
-    
+
     fn set_batch_dims(mut self, value: List[Int]):
         self._storage[].batch_dims = value.copy()
-    
+
     fn set_dtype(mut self, value: DType):
         self._storage[].dtype = value
-    
-    fn set_device(mut self, value: Device):
+
+    fn set_device(mut self, value: MaxDevice):
         self._storage[].device = value.copy()
-    
-    fn set_tensor_value(mut self, value: TensorValue):
+
+    fn set_tensor_value(mut self, value: MaxTensorValue):
         self._storage[].tensor_value = value
 
     fn remove_tensor_value(mut self):
-        self._storage[].tensor_value = Optional[TensorValue](None)
-    
+        self._storage[].tensor_value = Optional[MaxTensorValue](None)
+
     # Getters/Setters for autodiff-related fields
-    fn maxpr(self) raises -> fn(List[TensorValue], Dict[String, List[Int]]) raises -> TensorValue:
+    fn maxpr(
+        self,
+    ) raises -> fn (
+        List[MaxTensorValue], Dict[String, List[Int]]
+    ) raises -> MaxTensorValue:
         """Get the maxpr rule. Raises if not set."""
         if len(self._storage[].maxpr) == 0:
             raise Error("maxpr rule is not set")
         return self._storage[].maxpr[0]
-    
+
     fn has_maxpr(self) -> Bool:
         """Check if maxpr rule is set."""
         return len(self._storage[].maxpr) > 0
 
-    fn set_maxpr(mut self, value: fn(List[TensorValue], Dict[String, List[Int]]) raises -> TensorValue):
+    fn set_maxpr(
+        mut self,
+        value: fn (
+            List[MaxTensorValue], Dict[String, List[Int]]
+        ) raises -> MaxTensorValue,
+    ):
         self._storage[].maxpr = [value]
-    
-    fn vjp_rule(self) raises -> fn(List[Tensor], Tensor, Dict[String, List[Int]]) raises -> List[Tensor]:
+
+    fn vjp_rule(
+        self,
+    ) raises -> fn (List[Tensor], Tensor, Dict[String, List[Int]]) raises -> List[
+        Tensor
+    ]:
         """Get the VJP rule. Raises if not set."""
         if len(self._storage[].vjp_rule) == 0:
             raise Error("VJP rule is not set")
         return self._storage[].vjp_rule[0]
-    
+
     fn has_vjp_rule(self) -> Bool:
         """Check if VJP rule is set."""
         return len(self._storage[].vjp_rule) > 0
-    
-    fn set_vjp_rule(mut self, value: fn(List[Tensor], Tensor, Dict[String, List[Int]]) raises -> List[Tensor]):
+
+    fn set_vjp_rule(
+        mut self,
+        value: fn (List[Tensor], Tensor, Dict[String, List[Int]]) raises -> List[
+            Tensor
+        ],
+    ):
         self._storage[].vjp_rule = [value]
-    
+
     fn has_jvp_rule(self) -> Bool:
         """Check if JVP rule is set."""
         return len(self._storage[].jvp_rule) > 0
 
-    fn set_jvp_rule(mut self, value: fn(List[Tensor], List[Tensor], Dict[String, List[Int]]) raises -> Tensor):
+    fn set_jvp_rule(
+        mut self,
+        value: fn (
+            List[Tensor], List[Tensor], Dict[String, List[Int]]
+        ) raises -> Tensor,
+    ):
         self._storage[].jvp_rule = [value]
-    
+
     # Getters/Setters for tangent/cotangent/grad
     fn tangent(self) raises -> Tensor:
         """Get the tangent. Raises if not set."""
         if len(self._storage[].tangent) == 0:
             raise Error("Tangent is not set")
         return Tensor(self._storage[].tangent[0])
-    
+
     fn has_tangent(self) -> Bool:
         """Check if tangent is set."""
         return len(self._storage[].tangent) > 0
-    
+
     fn set_tangent(mut self, value: Tensor):
         self._storage[].tangent = [value._storage]
-    
+
     fn cotangent(self) raises -> Tensor:
         """Get the cotangent. Raises if not set."""
         if len(self._storage[].cotangent) == 0:
             raise Error("Cotangent is not set")
         return Tensor(self._storage[].cotangent[0])
-    
+
     fn has_cotangent(self) -> Bool:
         """Check if cotangent is set."""
         return len(self._storage[].cotangent) > 0
-    
+
     fn set_cotangent(mut self, value: Tensor):
         self._storage[].cotangent = [value._storage]
-    
+
     fn grad(self) raises -> Tensor:
         """Get the gradient. Raises if not set."""
         if len(self._storage[].grad) == 0:
             raise Error("Gradient is not set")
         return Tensor(self._storage[].grad[0])
-    
+
     fn has_grad(self) -> Bool:
         """Check if gradient is set."""
         return len(self._storage[].grad) > 0
-    
+
     fn set_grad(mut self, value: Tensor):
         self._storage[].grad = [value._storage]
-    
+
     # Utility methods for graph management
     fn add_parent(mut self, parent: Tensor):
         """Add a parent tensor to the computation graph."""
         self._storage[].parents.append(parent._storage)
-    
+
     fn set_parents(mut self, parents: List[Tensor]) raises:
         """Set all parent tensors at once."""
         self._storage[].parents.clear()
         for parent in parents:
             self._storage[].parents.append(parent._storage)
-    
+
     fn ndim(self) -> Int:
         """Get the number of dimensions."""
         return len(self._storage[].shape)
-    
+
     fn numel(self) -> Int:
         """Get the total number of elements."""
         var total = 1
         for dim in self._storage[].shape:
             total *= dim
         return total
-    
+
     fn write_to[W: Writer](self, mut writer: W):
         try:
             if not self.has_data():
@@ -301,113 +354,148 @@ struct Tensor(ImplicitlyCopyable, Movable, Writable):
     fn __matmul__(self, other: Self) raises -> Self:
         return matmul(self, other)
 
-fn list_to_python_tuple(lst: List[Int]) raises -> PythonObject:
-    var py = PythonBridge.get_module("builtins")
-    var py_list = py.list([])
-    for item in lst:
-        py_list.append(item)
-    return py.tuple(py_list)
-    
+    fn __neg__(self) raises -> Self:
+        return neg(self)
+
+
 # creation ops
-fn full(value: Float32, shape: List[Int], dtype: DType = DType.float32) raises -> Tensor:
+fn full(
+    value: Float32, shape: List[Int], dtype: DType = DType.float32
+) raises -> Tensor:
     """Create a tensor full of a scalar value."""
-    var tensor = Tensor(shape, dtype, stage_realization=False)
-    var np = PythonBridge.get_module("numpy")
-    var np_full = np.full(list_to_python_tuple(shape), value, dtype=DTypeConverter.to_numpy(dtype))
+    var tensor = Tensor(shape, dtype, stage_realization=True)
+    var np_full = Python.import_module("numpy").full(
+        _list_to_py_tuple(shape),
+        value,
+        dtype=MaxDType.from_dtype(dtype).to_numpy_dtype(),
+    )
     tensor.set_data(MaxTensor.from_numpy(np_full))
+    tensor.set_stage_realization(False)
     return tensor
+
 
 fn zeros(shape: List[Int], dtype: DType = DType.float32) raises -> Tensor:
     """Create a tensor full of zeros using the full operation."""
     return full(0.0, shape, dtype)
 
+
 fn ones(shape: List[Int], dtype: DType = DType.float32) raises -> Tensor:
     """Create a tensor full of ones using the full operation."""
     return full(1.0, shape, dtype)
 
-fn arange(start: Int, stop: Int, step: Int = 1, dtype: DType = DType.float32) raises -> Tensor:
-    var np = PythonBridge.get_module("numpy")
-    var np_arange = np.arange(start, stop, step, dtype=DTypeConverter.to_numpy(dtype))
-    var shape = List[Int]()
-    shape.append(Int(np_arange.shape[0]))
-    var tensor = Tensor(shape, dtype, stage_realization=False)
+
+fn arange(
+    start: Int, stop: Int, step: Int = 1, dtype: DType = DType.float32
+) raises -> Tensor:
+    var np_arange = Python.import_module("numpy").arange(
+        start, stop, step, dtype=MaxDType.from_dtype(dtype).to_numpy_dtype()
+    )
+    var shape = [Int(np_arange.shape[0])]
+    var tensor = Tensor(shape, dtype, stage_realization=True)
     tensor.set_data(MaxTensor.from_numpy(np_arange))
+    tensor.set_stage_realization(False)
     return tensor
+
 
 fn ndarange(shape: List[Int], dtype: DType = DType.float32) raises -> Tensor:
-    var np = PythonBridge.get_module("numpy")
-    var py = PythonBridge.get_module("builtins")
     var end = 1
-    var np_shape = py.list([])
     for dim in shape:
         end *= dim
-        np_shape.append(dim)
-    var np_arange = np.arange(0, end, 1, dtype=DTypeConverter.to_numpy(dtype)).reshape(np_shape)
-    var tensor = Tensor(shape, dtype, stage_realization=False)
+    var np_shape = _list_to_py_list(shape)
+    var np_arange = (
+        Python.import_module("numpy")
+        .arange(0, end, 1, dtype=MaxDType.from_dtype(dtype).to_numpy_dtype())
+        .reshape(np_shape)
+    )
+    var tensor = Tensor(shape, dtype, stage_realization=True)
     tensor.set_data(MaxTensor.from_numpy(np_arange))
+    tensor.set_stage_realization(False)
     return tensor
 
-fn randn(shape: List[Int], mean: Float32 = 0.0, std: Float32 = 1.0, dtype: DType = DType.float32) raises -> Tensor:
+
+fn randn(
+    shape: List[Int],
+    mean: Float32 = 0.0,
+    std: Float32 = 1.0,
+    dtype: DType = DType.float32,
+) raises -> Tensor:
     """Create a tensor with random values from a normal distribution.
-    
+
     Args:
         shape: The shape of the tensor.
         mean: Mean of the normal distribution (default: 0.0).
         std: Standard deviation of the normal distribution (default: 1.0).
         dtype: Data type of the tensor (default: DType.float32).
     """
-    var np = PythonBridge.get_module("numpy")
-    var np_randn = np.random.normal(mean, std, list_to_python_tuple(shape)).astype(DTypeConverter.to_numpy(dtype))
-    var tensor = Tensor(shape, dtype, stage_realization=False)
+    var np_randn = (
+        Python.import_module("numpy")
+        .random.normal(mean, std, _list_to_py_tuple(shape))
+        .astype(MaxDType.from_dtype(dtype).to_numpy_dtype())
+    )
+    var tensor = Tensor(shape, dtype, stage_realization=True)
     tensor.set_data(MaxTensor.from_numpy(np_randn))
+    tensor.set_stage_realization(False)
     return tensor
 
-fn randu(shape: List[Int], low: Float32 = 0.0, high: Float32 = 1.0, dtype: DType = DType.float32) raises -> Tensor:
+
+fn randu(
+    shape: List[Int],
+    low: Float32 = 0.0,
+    high: Float32 = 1.0,
+    dtype: DType = DType.float32,
+) raises -> Tensor:
     """Create a tensor with random values from a uniform distribution.
-    
+
     Args:
         shape: The shape of the tensor.
         low: Lower bound of the uniform distribution (inclusive, default: 0.0).
         high: Upper bound of the uniform distribution (exclusive, default: 1.0).
         dtype: Data type of the tensor (default: DType.float32).
     """
-    var np = PythonBridge.get_module("numpy")
-    var np_randu = np.random.uniform(low, high, list_to_python_tuple(shape)).astype(DTypeConverter.to_numpy(dtype))
-    var tensor = Tensor(shape, dtype, stage_realization=False)
+    var np_randu = (
+        Python.import_module("numpy")
+        .random.uniform(low, high, _list_to_py_tuple(shape))
+        .astype(MaxDType.from_dtype(dtype).to_numpy_dtype())
+    )
+    var tensor = Tensor(shape, dtype, stage_realization=True)
     tensor.set_data(MaxTensor.from_numpy(np_randu))
+    tensor.set_stage_realization(False)
     return tensor
+
 
 fn is_broadcastable(shape_a: List[Int], shape_b: List[Int]) raises -> Bool:
     """Check if two shapes are broadcastable and return True if they are."""
     var ndim_a = len(shape_a)
     var ndim_b = len(shape_b)
     var max_ndim = max(ndim_a, ndim_b)
-    
+
     for i in range(max_ndim):
         var dim_a = shape_a[ndim_a - max_ndim + i] if i >= (max_ndim - ndim_a) else 1
         var dim_b = shape_b[ndim_b - max_ndim + i] if i >= (max_ndim - ndim_b) else 1
-        
+
         if dim_a != dim_b and dim_a != 1 and dim_b != 1:
             return False
-    
+
     return True
+
 
 fn broadcast_shapes(shape_a: List[Int], shape_b: List[Int]) raises -> List[Int]:
     """Compute the broadcasted shape of two input shapes."""
     if not is_broadcastable(shape_a, shape_b):
         raise Error("Input shapes are not broadcastable")
-    
+
     var ndim_a = len(shape_a)
     var ndim_b = len(shape_b)
     var max_ndim = max(ndim_a, ndim_b)
-    
+
     var result_shape = List[Int]()
     for i in range(max_ndim):
         var dim_a = shape_a[ndim_a - max_ndim + i] if i >= (max_ndim - ndim_a) else 1
         var dim_b = shape_b[ndim_b - max_ndim + i] if i >= (max_ndim - ndim_b) else 1
         result_shape.append(max(dim_a, dim_b))
-    
+
     return result_shape^
+
 
 trait Operation:
     @staticmethod
@@ -423,23 +511,33 @@ trait Operation:
         pass
 
     @staticmethod
-    fn device(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Device:
+    fn device(
+        inputs: List[Tensor], kwargs: Dict[String, List[Int]]
+    ) raises -> MaxDevice:
         pass
 
     @staticmethod
-    fn batch_dims(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
+    fn batch_dims(
+        inputs: List[Tensor], kwargs: Dict[String, List[Int]]
+    ) raises -> List[Int]:
         pass
 
     @staticmethod
-    fn maxpr(inputs: List[TensorValue], kwargs: Dict[String, List[Int]]) raises -> TensorValue:
+    fn maxpr(
+        inputs: List[MaxTensorValue], kwargs: Dict[String, List[Int]]
+    ) raises -> MaxTensorValue:
         pass
 
     @staticmethod
-    fn vjp_rule(primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]) raises -> List[Tensor]:
+    fn vjp_rule(
+        primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]
+    ) raises -> List[Tensor]:
         pass
 
     @staticmethod
-    fn jvp_rule(primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Tensor:
+    fn jvp_rule(
+        primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]
+    ) raises -> Tensor:
         pass
 
     @staticmethod
@@ -455,9 +553,10 @@ trait Operation:
     @staticmethod
     fn execute(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Tensor:
         var res = Tensor(
-            shape=Self.shape(inputs, kwargs), 
-            dtype=Self.dtype(inputs, kwargs), 
-            stage_realization=True)
+            shape=Self.shape(inputs, kwargs),
+            dtype=Self.dtype(inputs, kwargs),
+            stage_realization=True,
+        )
         res.set_name(Self.name(kwargs))
         res.set_parents(inputs)
         res.set_maxpr(Self.maxpr)
@@ -475,7 +574,9 @@ trait Operation:
 
 trait BinaryOp(Operation):
     @staticmethod
-    fn batch_dims(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
+    fn batch_dims(
+        inputs: List[Tensor], kwargs: Dict[String, List[Int]]
+    ) raises -> List[Int]:
         if len(inputs) != 2:
             raise Error("BinaryOp requires exactly 2 input tensors")
         if inputs[0].batch_dims() != inputs[1].batch_dims():
@@ -486,13 +587,13 @@ trait BinaryOp(Operation):
     fn shape(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
         if len(inputs) != 2:
             raise Error("BinaryOp requires exactly 2 input tensors")
-        
+
         var shape_a = inputs[0].shape()
         var shape_b = inputs[1].shape()
-        
+
         # Use the helper function to compute broadcasted shape
         return broadcast_shapes(shape_a, shape_b)
-    
+
     @staticmethod
     fn dtype(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> DType:
         if len(inputs) != 2:
@@ -500,25 +601,33 @@ trait BinaryOp(Operation):
         if inputs[0].dtype() != inputs[1].dtype():
             raise Error("Input tensors must have the same dtype for BinaryOp")
         return inputs[0].dtype()
-    
+
     @staticmethod
-    fn device(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Device:
+    fn device(
+        inputs: List[Tensor], kwargs: Dict[String, List[Int]]
+    ) raises -> MaxDevice:
         if len(inputs) != 2:
             raise Error("BinaryOp requires exactly 2 input tensors")
         if inputs[0].device() != inputs[1].device():
             raise Error("Input tensors must be on the same device for BinaryOp")
         return inputs[0].device()
-    
+
     @staticmethod
-    fn maxpr(inputs: List[TensorValue], kwargs: Dict[String, List[Int]]) raises -> TensorValue:
+    fn maxpr(
+        inputs: List[MaxTensorValue], kwargs: Dict[String, List[Int]]
+    ) raises -> MaxTensorValue:
         pass
 
     @staticmethod
-    fn vjp_rule(primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]) raises -> List[Tensor]:
+    fn vjp_rule(
+        primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]
+    ) raises -> List[Tensor]:
         pass
 
     @staticmethod
-    fn jvp_rule(primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Tensor:
+    fn jvp_rule(
+        primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]
+    ) raises -> Tensor:
         pass
 
 
@@ -528,19 +637,29 @@ struct AddOp(BinaryOp):
         return "add"
 
     @staticmethod
-    fn maxpr(inputs: List[TensorValue], kwargs: Dict[String, List[Int]]) raises -> TensorValue:
-        return ops.add(inputs[0], inputs[1])
+    fn maxpr(
+        inputs: List[MaxTensorValue], kwargs: Dict[String, List[Int]]
+    ) raises -> MaxTensorValue:
+        return MaxTensorValue(
+            graph_ops().add(inputs[0].to_python(), inputs[1].to_python())
+        )
 
     @staticmethod
-    fn vjp_rule(primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]) raises -> List[Tensor]:
+    fn vjp_rule(
+        primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]
+    ) raises -> List[Tensor]:
         return [cotangent, cotangent]
 
     @staticmethod
-    fn jvp_rule(primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Tensor:
+    fn jvp_rule(
+        primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]
+    ) raises -> Tensor:
         return tangents[0] + tangents[1]
+
 
 fn add(a: Tensor, b: Tensor) raises -> Tensor:
     return AddOp.execute([a, b], {})
+
 
 struct MulOp(BinaryOp):
     @staticmethod
@@ -548,23 +667,33 @@ struct MulOp(BinaryOp):
         return "mul"
 
     @staticmethod
-    fn maxpr(inputs: List[TensorValue], kwargs: Dict[String, List[Int]]) raises -> TensorValue:
-        return ops.mul(inputs[0], inputs[1])
+    fn maxpr(
+        inputs: List[MaxTensorValue], kwargs: Dict[String, List[Int]]
+    ) raises -> MaxTensorValue:
+        return MaxTensorValue(
+            graph_ops().mul(inputs[0].to_python(), inputs[1].to_python())
+        )
 
     @staticmethod
-    fn vjp_rule(primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]) raises -> List[Tensor]:
+    fn vjp_rule(
+        primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]
+    ) raises -> List[Tensor]:
         var grad_a = cotangent * primals[1]
         var grad_b = cotangent * primals[0]
         return [grad_a, grad_b]
 
     @staticmethod
-    fn jvp_rule(primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Tensor:
+    fn jvp_rule(
+        primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]
+    ) raises -> Tensor:
         var term1 = tangents[0] * primals[1]
         var term2 = primals[0] * tangents[1]
         return term1 + term2
 
+
 fn mul(a: Tensor, b: Tensor) raises -> Tensor:
     return MulOp.execute([a, b], {})
+
 
 struct Matmul(Operation):
     @staticmethod
@@ -585,7 +714,9 @@ struct Matmul(Operation):
         return result_shape^
 
     @staticmethod
-    fn batch_dims(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
+    fn batch_dims(
+        inputs: List[Tensor], kwargs: Dict[String, List[Int]]
+    ) raises -> List[Int]:
         if len(inputs) != 2:
             raise Error("Matmul requires exactly 2 input tensors")
         if inputs[0].batch_dims() != inputs[1].batch_dims():
@@ -601,7 +732,9 @@ struct Matmul(Operation):
         return inputs[0].dtype()
 
     @staticmethod
-    fn device(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Device:
+    fn device(
+        inputs: List[Tensor], kwargs: Dict[String, List[Int]]
+    ) raises -> MaxDevice:
         if len(inputs) != 2:
             raise Error("Matmul requires exactly 2 input tensors")
         if inputs[0].device() != inputs[1].device():
@@ -609,19 +742,29 @@ struct Matmul(Operation):
         return inputs[0].device()
 
     @staticmethod
-    fn maxpr(inputs: List[TensorValue], kwargs: Dict[String, List[Int]]) raises -> TensorValue:
-        return ops.matmul(inputs[0], inputs[1])
+    fn maxpr(
+        inputs: List[MaxTensorValue], kwargs: Dict[String, List[Int]]
+    ) raises -> MaxTensorValue:
+        return MaxTensorValue(
+            graph_ops().matmul(inputs[0].to_python(), inputs[1].to_python())
+        )
 
     @staticmethod
-    fn vjp_rule(primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]) raises -> List[Tensor]:
+    fn vjp_rule(
+        primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]
+    ) raises -> List[Tensor]:
         raise Error("VJP rule for Matmul not implemented yet")
 
     @staticmethod
-    fn jvp_rule(primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Tensor:
+    fn jvp_rule(
+        primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]
+    ) raises -> Tensor:
         raise Error("JVP rule for Matmul not implemented yet")
+
 
 fn matmul(a: Tensor, b: Tensor) raises -> Tensor:
     return Matmul.execute([a, b], {})
+
 
 struct SubOp(BinaryOp):
     @staticmethod
@@ -629,29 +772,29 @@ struct SubOp(BinaryOp):
         return "sub"
 
     @staticmethod
-    fn maxpr(inputs: List[TensorValue], kwargs: Dict[String, List[Int]]) raises -> TensorValue:
-        return ops.sub(inputs[0], inputs[1])
+    fn maxpr(
+        inputs: List[MaxTensorValue], kwargs: Dict[String, List[Int]]
+    ) raises -> MaxTensorValue:
+        return MaxTensorValue(
+            graph_ops().sub(inputs[0].to_python(), inputs[1].to_python())
+        )
 
     @staticmethod
-    fn vjp_rule(primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]) raises -> List[Tensor]:
-        var grad_a = cotangent
-        var grad_b = mul(cotangent, ones(cotangent.shape(), cotangent.dtype()))
-        # Negate grad_b
-        var neg_one = ones(cotangent.shape(), cotangent.dtype())
-        # Create a tensor fulled with -1
-        var np = PythonBridge.get_module("numpy")
-        var np_neg_ones = np.full(list_to_python_tuple(cotangent.shape()), -1.0, dtype=DTypeConverter.to_numpy(cotangent.dtype()))
-        var neg_one_tensor = Tensor(cotangent.shape(), cotangent.dtype(), stage_realization=False)
-        neg_one_tensor.set_data(MaxTensor.from_numpy(np_neg_ones))
-        grad_b = mul(cotangent, neg_one_tensor)
-        return [grad_a, grad_b]
+    fn vjp_rule(
+        primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]
+    ) raises -> List[Tensor]:
+        return [cotangent, -cotangent]
 
     @staticmethod
-    fn jvp_rule(primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Tensor:
+    fn jvp_rule(
+        primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]
+    ) raises -> Tensor:
         return sub(tangents[0], tangents[1])
+
 
 fn sub(a: Tensor, b: Tensor) raises -> Tensor:
     return SubOp.execute([a, b], {})
+
 
 struct DivOp(BinaryOp):
     @staticmethod
@@ -659,86 +802,120 @@ struct DivOp(BinaryOp):
         return "div"
 
     @staticmethod
-    fn maxpr(inputs: List[TensorValue], kwargs: Dict[String, List[Int]]) raises -> TensorValue:
-        return ops.div(inputs[0], inputs[1])
+    fn maxpr(
+        inputs: List[MaxTensorValue], kwargs: Dict[String, List[Int]]
+    ) raises -> MaxTensorValue:
+        return MaxTensorValue(
+            graph_ops().div(inputs[0].to_python(), inputs[1].to_python())
+        )
 
     @staticmethod
-    fn vjp_rule(primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]) raises -> List[Tensor]:
-        # d/da (a/b) = 1/b
-        var grad_a = div(cotangent, primals[1])
-        # d/db (a/b) = -a/(b^2)
-        var b_squared = mul(primals[1], primals[1])
-        var neg_a = sub(
-            Tensor(primals[0].shape(), primals[0].dtype(), stage_realization=False),
-            primals[0]
-        )
-        var grad_b_temp = div(neg_a, b_squared)
-        var grad_b = mul(cotangent, grad_b_temp)
-        return [grad_a, grad_b]
+    fn vjp_rule(
+        primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]
+    ) raises -> List[Tensor]:
+        return [
+            cotangent / primals[1],
+            -(cotangent * primals[0]) / (primals[1] * primals[1]),
+        ]
 
     @staticmethod
-    fn jvp_rule(primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Tensor:
-        # d/da (a/b) * da + d/db (a/b) * db
-        # = (1/b) * da + (-a/b^2) * db
-        var term1 = div(tangents[0], primals[1])
-        var b_squared = mul(primals[1], primals[1])
-        var neg_a = sub(
-            Tensor(primals[0].shape(), primals[0].dtype(), stage_realization=False),
-            primals[0]
+    fn jvp_rule(
+        primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]
+    ) raises -> Tensor:
+        return tangents[0] / primals[1] - (primals[0] * tangents[1]) / (
+            primals[1] * primals[1]
         )
-        var term2_temp = div(neg_a, b_squared)
-        var term2 = mul(term2_temp, tangents[1])
-        return add(term1, term2)
+
 
 fn div(a: Tensor, b: Tensor) raises -> Tensor:
     return DivOp.execute([a, b], {})
 
-struct ReluOp(Operation):
+
+trait UnaryOp(Operation):
+    @staticmethod
+    fn batch_dims(
+        inputs: List[Tensor], kwargs: Dict[String, List[Int]]
+    ) raises -> List[Int]:
+        if len(inputs) != 1:
+            raise Error("UnaryOp requires exactly 1 input tensor")
+        return inputs[0].batch_dims()
+
+    @staticmethod
+    fn shape(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
+        if len(inputs) != 1:
+            raise Error("UnaryOp requires exactly 1 input tensor")
+        return inputs[0].shape()
+
+    @staticmethod
+    fn dtype(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> DType:
+        if len(inputs) != 1:
+            raise Error("UnaryOp requires exactly 1 input tensor")
+        return inputs[0].dtype()
+
+    @staticmethod
+    fn device(
+        inputs: List[Tensor], kwargs: Dict[String, List[Int]]
+    ) raises -> MaxDevice:
+        if len(inputs) != 1:
+            raise Error("UnaryOp requires exactly 1 input tensor")
+        return inputs[0].device()
+
+
+struct ReluOp(UnaryOp):
     @staticmethod
     fn name(kwargs: Dict[String, List[Int]]) -> String:
         return "relu"
 
     @staticmethod
-    fn shape(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
-        if len(inputs) != 1:
-            raise Error("Relu requires exactly 1 input tensor")
-        return inputs[0].shape()
+    fn maxpr(
+        inputs: List[MaxTensorValue], kwargs: Dict[String, List[Int]]
+    ) raises -> MaxTensorValue:
+        return MaxTensorValue(graph_ops().relu(inputs[0].to_python()))
 
     @staticmethod
-    fn batch_dims(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
-        if len(inputs) != 1:
-            raise Error("Relu requires exactly 1 input tensor")
-        return inputs[0].batch_dims()
-
-    @staticmethod
-    fn dtype(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> DType:
-        if len(inputs) != 1:
-            raise Error("Relu requires exactly 1 input tensor")
-        return inputs[0].dtype()
-
-    @staticmethod
-    fn device(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Device:
-        if len(inputs) != 1:
-            raise Error("Relu requires exactly 1 input tensor")
-        return inputs[0].device()
-
-    @staticmethod
-    fn maxpr(inputs: List[TensorValue], kwargs: Dict[String, List[Int]]) raises -> TensorValue:
-        return ops.relu(inputs[0])
-
-    @staticmethod
-    fn vjp_rule(primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]) raises -> List[Tensor]:
-        # relu'(x) = 1 if x > 0 else 0
-        # For now, we'll approximate with a simple multiplication
-        # In practice, you'd need to track where relu was > 0
+    fn vjp_rule(
+        primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]
+    ) raises -> List[Tensor]:
         raise Error("VJP rule for Relu not implemented yet")
 
     @staticmethod
-    fn jvp_rule(primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Tensor:
+    fn jvp_rule(
+        primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]
+    ) raises -> Tensor:
         raise Error("JVP rule for Relu not implemented yet")
+
 
 fn relu(x: Tensor) raises -> Tensor:
     return ReluOp.execute([x], {})
+
+
+struct NegOp(UnaryOp):
+    @staticmethod
+    fn name(kwargs: Dict[String, List[Int]]) -> String:
+        return "neg"
+
+    @staticmethod
+    fn maxpr(
+        inputs: List[MaxTensorValue], kwargs: Dict[String, List[Int]]
+    ) raises -> MaxTensorValue:
+        return MaxTensorValue(graph_ops().neg(inputs[0].to_python()))
+
+    @staticmethod
+    fn vjp_rule(
+        primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]
+    ) raises -> List[Tensor]:
+        return [-cotangent]
+
+    @staticmethod
+    fn jvp_rule(
+        primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]
+    ) raises -> Tensor:
+        return -tangents[0]
+
+
+fn neg(a: Tensor) raises -> Tensor:
+    return NegOp.execute([a], {})
+
 
 struct ReshapeOp(Operation):
     @staticmethod
@@ -754,7 +931,9 @@ struct ReshapeOp(Operation):
         return kwargs["target_shape"].copy()
 
     @staticmethod
-    fn batch_dims(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
+    fn batch_dims(
+        inputs: List[Tensor], kwargs: Dict[String, List[Int]]
+    ) raises -> List[Int]:
         if len(inputs) != 1:
             raise Error("Reshape requires exactly 1 input tensor")
         return inputs[0].batch_dims()
@@ -766,20 +945,30 @@ struct ReshapeOp(Operation):
         return inputs[0].dtype()
 
     @staticmethod
-    fn device(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Device:
+    fn device(
+        inputs: List[Tensor], kwargs: Dict[String, List[Int]]
+    ) raises -> MaxDevice:
         if len(inputs) != 1:
             raise Error("Reshape requires exactly 1 input tensor")
         return inputs[0].device()
 
     @staticmethod
-    fn maxpr(inputs: List[TensorValue], kwargs: Dict[String, List[Int]]) raises -> TensorValue:
+    fn maxpr(
+        inputs: List[MaxTensorValue], kwargs: Dict[String, List[Int]]
+    ) raises -> MaxTensorValue:
         if not "target_shape" in kwargs:
             raise Error("Reshape requires 'target_shape' in kwargs")
         var target_shape = kwargs["target_shape"].copy()
-        return ops.reshape(inputs[0], target_shape)
+        # return bindings_reshape(inputs[0], target_shape)
+
+        return MaxTensorValue(
+            graph_ops().reshape(inputs[0].to_python(), _list_to_py_tuple(target_shape))
+        )
 
     @staticmethod
-    fn vjp_rule(primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]) raises -> List[Tensor]:
+    fn vjp_rule(
+        primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]
+    ) raises -> List[Tensor]:
         # Gradient of reshape is just reshaping back to original shape
         var original_shape = primals[0].shape()
         var grad_kwargs = Dict[String, List[Int]]()
@@ -788,14 +977,18 @@ struct ReshapeOp(Operation):
         return [grad]
 
     @staticmethod
-    fn jvp_rule(primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Tensor:
+    fn jvp_rule(
+        primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]
+    ) raises -> Tensor:
         # Forward-mode AD for reshape is just reshaping the tangent
         return ReshapeOp.execute([tangents[0]], kwargs)
+
 
 fn reshape(x: Tensor, target_shape: List[Int]) raises -> Tensor:
     var kwargs = Dict[String, List[Int]]()
     kwargs["target_shape"] = target_shape.copy()
     return ReshapeOp.execute([x], kwargs)
+
 
 struct BroadcastOp(Operation):
     @staticmethod
@@ -808,18 +1001,20 @@ struct BroadcastOp(Operation):
             raise Error("Broadcast requires exactly 1 input tensor")
         if not "target_shape" in kwargs:
             raise Error("Broadcast requires 'target_shape' in kwargs")
-        
+
         var input_shape = inputs[0].shape()
         var target_shape = kwargs["target_shape"].copy()
-        
+
         # Check if input can be broadcast to target
         if not is_broadcastable(input_shape, target_shape):
             raise Error("Input shape cannot be broadcast to target shape")
-        
+
         return target_shape.copy()
 
     @staticmethod
-    fn batch_dims(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
+    fn batch_dims(
+        inputs: List[Tensor], kwargs: Dict[String, List[Int]]
+    ) raises -> List[Int]:
         if len(inputs) != 1:
             raise Error("Broadcast requires exactly 1 input tensor")
         return inputs[0].batch_dims()
@@ -831,28 +1026,43 @@ struct BroadcastOp(Operation):
         return inputs[0].dtype()
 
     @staticmethod
-    fn device(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Device:
+    fn device(
+        inputs: List[Tensor], kwargs: Dict[String, List[Int]]
+    ) raises -> MaxDevice:
         if len(inputs) != 1:
             raise Error("Broadcast requires exactly 1 input tensor")
         return inputs[0].device()
 
     @staticmethod
-    fn maxpr(inputs: List[TensorValue], kwargs: Dict[String, List[Int]]) raises -> TensorValue:
+    fn maxpr(
+        inputs: List[MaxTensorValue], kwargs: Dict[String, List[Int]]
+    ) raises -> MaxTensorValue:
         if not "target_shape" in kwargs:
             raise Error("Broadcast requires 'target_shape' in kwargs")
         var target_shape = kwargs["target_shape"].copy()
-        return ops.broadcast_to(inputs[0], target_shape)
+        # return bindings_broadcast_to(inputs[0], target_shape)
+
+        return MaxTensorValue(
+            graph_ops().broadcast_to(
+                inputs[0].to_python(), _list_to_py_tuple(target_shape)
+            )
+        )
 
     @staticmethod
-    fn vjp_rule(primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]) raises -> List[Tensor]:
+    fn vjp_rule(
+        primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]
+    ) raises -> List[Tensor]:
         # Gradient of broadcast is sum reduction over the broadcast dimensions
         # For now, just return the cotangent (simplified)
         raise Error("VJP rule for Broadcast not implemented yet")
 
     @staticmethod
-    fn jvp_rule(primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Tensor:
+    fn jvp_rule(
+        primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]
+    ) raises -> Tensor:
         # Forward-mode AD for broadcast is just broadcasting the tangent
         return BroadcastOp.execute([tangents[0]], kwargs)
+
 
 fn broadcast(x: Tensor, target_shape: List[Int]) raises -> Tensor:
     var kwargs = Dict[String, List[Int]]()
@@ -872,7 +1082,10 @@ fn print_trace(trace: List[Tensor]) raises -> None:
     for t in trace:
         print(t.name())
 
-fn get_dependencies_recursive(mut outputs: List[Tensor], mut trace: List[Tensor], mut inputs: List[Tensor]) raises -> None:
+
+fn get_dependencies_recursive(
+    mut outputs: List[Tensor], mut trace: List[Tensor], mut inputs: List[Tensor]
+) raises -> None:
     for var output in outputs:
         if not output.visited():
             if output.has_parents():
@@ -881,9 +1094,12 @@ fn get_dependencies_recursive(mut outputs: List[Tensor], mut trace: List[Tensor]
                 get_dependencies_recursive(parents, trace, inputs)
                 trace.append(output)
             else:
-                inputs.append(output)               
+                inputs.append(output)
 
-fn get_unmaterialized_recursive(mut outputs: List[Tensor], mut trace: List[Tensor], mut inputs: List[Tensor]) raises -> None:
+
+fn get_unmaterialized_recursive(
+    mut outputs: List[Tensor], mut trace: List[Tensor], mut inputs: List[Tensor]
+) raises -> None:
     for var output in outputs:
         if not output.visited():
             if output.has_data():
@@ -894,13 +1110,15 @@ fn get_unmaterialized_recursive(mut outputs: List[Tensor], mut trace: List[Tenso
                 get_unmaterialized_recursive(parents, trace, inputs)
                 trace.append(output)
 
+
 fn get_unmaterialized_recursive_with_constants(
-    mut outputs: List[Tensor], 
-    mut trace: List[Tensor], 
+    mut outputs: List[Tensor],
+    mut trace: List[Tensor],
     mut inputs: List[Tensor],
-    mut constants: List[Tensor]
+    mut constants: List[Tensor],
 ) raises -> None:
-    """DFS that separates materialized inputs into args (marked with 'is_arg') and constants."""
+    """DFS that separates materialized inputs into args (marked with 'is_arg') and constants.
+    """
     for var output in outputs:
         if not output.visited():
             if output.has_data():
@@ -912,10 +1130,15 @@ fn get_unmaterialized_recursive_with_constants(
             else:
                 output.set_visited(True)
                 var parents = output.parents()
-                get_unmaterialized_recursive_with_constants(parents, trace, inputs, constants)
+                get_unmaterialized_recursive_with_constants(
+                    parents, trace, inputs, constants
+                )
                 trace.append(output)
 
-fn get_dependency_trace(outputs: List[Tensor]) raises -> Tuple[List[Tensor], List[Tensor]]:
+
+fn get_dependency_trace(
+    outputs: List[Tensor],
+) raises -> Tuple[List[Tensor], List[Tensor]]:
     var trace: List[Tensor] = []
     var inputs: List[Tensor] = []
     var _outputs = outputs.copy()
@@ -924,7 +1147,10 @@ fn get_dependency_trace(outputs: List[Tensor]) raises -> Tuple[List[Tensor], Lis
     reset_visited(_outputs)
     return (trace^, inputs^)
 
-fn get_unmaterialized_trace(outputs: List[Tensor]) raises -> Tuple[List[Tensor], List[Tensor]]:
+
+fn get_unmaterialized_trace(
+    outputs: List[Tensor],
+) raises -> Tuple[List[Tensor], List[Tensor]]:
     var trace: List[Tensor] = []
     var inputs: List[Tensor] = []
     var _outputs = outputs.copy()
@@ -933,8 +1159,12 @@ fn get_unmaterialized_trace(outputs: List[Tensor]) raises -> Tuple[List[Tensor],
     reset_visited(_outputs)
     return (trace^, inputs^)
 
-fn get_unmaterialized_trace_with_constants(outputs: List[Tensor]) raises -> Tuple[List[Tensor], List[Tensor], List[Tensor]]:
-    """Get trace separating inputs (marked with 'is_arg') from constants (created inside function)."""
+
+fn get_unmaterialized_trace_with_constants(
+    outputs: List[Tensor],
+) raises -> Tuple[List[Tensor], List[Tensor], List[Tensor]]:
+    """Get trace separating inputs (marked with 'is_arg') from constants (created inside function).
+    """
     var trace: List[Tensor] = []
     var inputs: List[Tensor] = []
     var constants: List[Tensor] = []
@@ -944,48 +1174,60 @@ fn get_unmaterialized_trace_with_constants(outputs: List[Tensor]) raises -> Tupl
     reset_visited(_outputs)
     return (trace^, inputs^, constants^)
 
+
 fn realize(mut outputs: List[Tensor]) raises:
     """Realize all tensors in the graph by assigning dummy data."""
     var unmaterialized_tuple = get_unmaterialized_trace(outputs)
     var unmaterialized_trace = unmaterialized_tuple[0].copy()
     var materialized_inputs = unmaterialized_tuple[1].copy()
-    var input_types = List[TensorType]()
+    var input_types = List[MaxTensorType]()
     for tensor in materialized_inputs:
-        input_types.append(TensorType(tensor.dtype(), tensor.shape(), tensor.device()))
+        input_types.append(
+            MaxTensorType(
+                MaxDType.from_dtype(tensor.dtype()), tensor.shape(), tensor.device()
+            )
+        )
 
     # initialize MAX graph
-    var graph = Graph("realization_graph", input_types)
+    var graph = MaxGraph("realization_graph", input_types)
 
-    # retreive inputs as TensorValues
-    var graph_inputs = graph.inputs()
+    with graph:
+        # retreive inputs as MaxTensorValues
+        var graph_inputs = graph.inputs()
 
-    # set twein tensor values for materialized inputs
-    for i in range(len(input_types)):
-        materialized_inputs[i].set_tensor_value(graph_inputs[i])
+        # set twein tensor values for materialized inputs
+        for i in range(len(input_types)):
+            materialized_inputs[i].set_tensor_value(graph_inputs[i])
 
-    # iterate through the unmaterialized trace and create tensor values wrt. the maxpr of each operation
-    for var tensor in unmaterialized_trace:
-        var parent_tvs = List[TensorValue]()
-        if tensor.has_parents():
-            var parents = tensor.parents()
-            for parent in parents:
-                parent_tvs.append(parent.tensor_value())
-        
-        if tensor.has_maxpr():
-            var maxpr_fn = tensor.maxpr()
-            tensor.set_tensor_value(maxpr_fn(parent_tvs, tensor.kwargs()))
-            if not tensor.has_tensor_value():
-                raise Error("maxpr did not set tensor_value for tensor: " + tensor.name())
-        else:
-            raise Error("No maxpr defined for tensor: " + tensor.name())
+        # iterate through the unmaterialized trace and create tensor values wrt. the maxpr of each operation
+        for var tensor in unmaterialized_trace:
+            var parent_tvs = List[MaxTensorValue]()
+            if tensor.has_parents():
+                var parents = tensor.parents()
+                for parent in parents:
+                    parent_tvs.append(parent.tensor_value())
 
-    var outputs_tvs = List[TensorValue]()
-    for output in outputs:
-        outputs_tvs.append(output.tensor_value())
+            if tensor.has_maxpr():
+                var maxpr_fn = tensor.maxpr()
+                tensor.set_tensor_value(maxpr_fn(parent_tvs, tensor.kwargs()))
+                if not tensor.has_tensor_value():
+                    raise Error(
+                        "maxpr did not set tensor_value for tensor: " + tensor.name()
+                    )
+            else:
+                raise Error("No maxpr defined for tensor: " + tensor.name())
 
-    graph.output(outputs_tvs)
+        var outputs_tvs = List[MaxTensorValue]()
+        for output in outputs:
+            outputs_tvs.append(output.tensor_value())
 
-    var model = graph.compile()
+        graph.output(outputs_tvs)
+
+    # create MAX inference session and load the graph
+    var session = MaxInferenceSession([MaxDevice.cpu()])
+    var model = session.load(graph)
+
+    # prepare input data
     var input_data = List[MaxTensor]()
     for tensor in materialized_inputs:
         input_data.append(tensor.data())
@@ -1003,15 +1245,20 @@ fn realize(mut outputs: List[Tensor]) raises:
     for var output in outputs:
         output.remove_tensor_value()
 
+
 struct Callable(Copyable, Movable):
-    var func: fn(args: List[Tensor]) raises -> List[Tensor]
+    var func: fn (args: List[Tensor]) raises -> List[Tensor]
     var name: String
     var compiled_model: Dict[UInt64, ArcPointer[MaxModel]]
-    var constants: Dict[UInt64, List[Tensor]]  # Store constants per compiled model
+    var constants: Dict[UInt64, List[Tensor]]
     var compiled: Bool
 
-
-    fn __init__(out self, func: fn(args: List[Tensor]) raises -> List[Tensor], name: String, compiled: Bool = False) raises:
+    fn __init__(
+        out self,
+        func: fn (args: List[Tensor]) raises -> List[Tensor],
+        name: String,
+        compiled: Bool = False,
+    ) raises:
         self.func = func
         self.name = name
         self.compiled_model = {}
@@ -1028,7 +1275,9 @@ struct Callable(Copyable, Movable):
             # check if indeed all args are materialized
             for arg in args:
                 if not arg.has_data():
-                    raise Error("All input tensors must be materialized for compiled execution")
+                    raise Error(
+                        "All input tensors must be materialized for compiled execution"
+                    )
 
             # Mark all args with "is_arg" metadata
             # NOTE: args uses ArcPointer, so modifying through the list modifies the shared storage
@@ -1038,10 +1287,12 @@ struct Callable(Copyable, Movable):
                 var arg = args[i]
                 arg["is_arg"] = List[Int]()
                 mut_args.append(arg)
-            
+
             var unmaterialized_outputs = self.func(mut_args)
             # get trace with constants separated
-            var trace_tuple = get_unmaterialized_trace_with_constants(unmaterialized_outputs)
+            var trace_tuple = get_unmaterialized_trace_with_constants(
+                unmaterialized_outputs
+            )
             var trace = trace_tuple[0].copy()
             # var inputs = trace_tuple[1].copy()
             var constants = trace_tuple[2].copy()
@@ -1049,70 +1300,101 @@ struct Callable(Copyable, Movable):
             var key: UInt64 = 0
             # Hash based on the original args
             for arg in args:
-                var tensor_hash: UInt64 = hash(arg.name()) + hash(arg.shape().__str__()) + hash(String(arg.dtype()))
+                var tensor_hash: UInt64 = (
+                    hash(arg.name())
+                    + hash(arg.shape().__str__())
+                    + hash(String(arg.dtype()))
+                )
                 key = key ^ (tensor_hash + 0x9E3779B9 + (key << 6) + (key >> 2))
             for var constant in constants:
-                var tensor_hash: UInt64 = hash(constant.name()) + hash(constant.shape().__str__()) + hash(String(constant.dtype()))
+                var tensor_hash: UInt64 = (
+                    hash(constant.name())
+                    + hash(constant.shape().__str__())
+                    + hash(String(constant.dtype()))
+                )
                 key = key ^ (tensor_hash + 0x9E3779B9 + (key << 6) + (key >> 2))
             for tensor in trace:
-                var tensor_hash: UInt64 = hash(tensor.name()) + hash(tensor.shape().__str__()) + hash(String(tensor.dtype()))
+                var tensor_hash: UInt64 = (
+                    hash(tensor.name())
+                    + hash(tensor.shape().__str__())
+                    + hash(String(tensor.dtype()))
+                )
                 key = key ^ (tensor_hash + 0x9E3779B9 + (key << 6) + (key >> 2))
             key = key % 1000000007
 
-        
             # check for available compiled model
             if not key in self.compiled_model:
                 # Store constants for this compiled model
                 self.constants[key] = constants.copy()
-                
+
                 # compile new model using inputs (args + constants) as graph inputs
-                var input_types = List[TensorType]()
+                var input_types = List[MaxTensorType]()
                 # First add args
                 for arg in args:
-                    input_types.append(TensorType(arg.dtype(), arg.shape(), arg.device()))
+                    input_types.append(
+                        MaxTensorType(
+                            MaxDType.from_dtype(arg.dtype()), arg.shape(), arg.device()
+                        )
+                    )
                 # Then add constants
                 for constant in constants:
-                    input_types.append(TensorType(constant.dtype(), constant.shape(), constant.device()))
+                    input_types.append(
+                        MaxTensorType(
+                            MaxDType.from_dtype(constant.dtype()),
+                            constant.shape(),
+                            constant.device(),
+                        )
+                    )
 
-                var graph = Graph(self.name + "_compiled_model", input_types)
-                var graph_inputs = graph.inputs()
-                
-                # Set tensor values for all inputs (args first, then constants)
-                var idx = 0
-                var _args = args.copy()
-                for i in range(len(args)):
-                    _args[i].set_tensor_value(graph_inputs[idx])
-                    idx += 1
-                for i in range(len(constants)):
-                    constants[i].set_tensor_value(graph_inputs[idx])
-                    idx += 1
-                
-                # Now build the computation graph
-                for var tensor in trace:
-                    var parent_tvs = List[TensorValue]()
-                    if tensor.has_parents():
-                        var parents = tensor.parents()
-                        for i in range(len(parents)):
-                            parent_tvs.append(parents[i].tensor_value())
-                    if tensor.has_maxpr():
-                        var maxpr_fn = tensor.maxpr()
-                        tensor.set_tensor_value(maxpr_fn(parent_tvs, tensor.kwargs()))
-                        if not tensor.has_tensor_value():
-                            raise Error("maxpr did not set tensor_value for tensor: " + tensor.name())
-                    else:
-                        raise Error("No maxpr defined for tensor: " + tensor.name())
-                var outputs_tvs = List[TensorValue]()
-                for output in unmaterialized_outputs:
-                    outputs_tvs.append(output.tensor_value())
-                graph.output(outputs_tvs)
-                self.compiled_model[key] = ArcPointer(graph.compile())
-                
+                var graph = MaxGraph(self.name + "_compiled_model", input_types)
+
+                with graph:
+                    var graph_inputs = graph.inputs()
+
+                    # Set tensor values for all inputs (args first, then constants)
+                    var idx = 0
+                    var _args = args.copy()
+                    for i in range(len(args)):
+                        _args[i].set_tensor_value(graph_inputs[idx])
+                        idx += 1
+                    for i in range(len(constants)):
+                        constants[i].set_tensor_value(graph_inputs[idx])
+                        idx += 1
+
+                    # Now build the computation graph
+                    for var tensor in trace:
+                        var parent_tvs = List[MaxTensorValue]()
+                        if tensor.has_parents():
+                            var parents = tensor.parents()
+                            for i in range(len(parents)):
+                                parent_tvs.append(parents[i].tensor_value())
+                        if tensor.has_maxpr():
+                            var maxpr_fn = tensor.maxpr()
+                            tensor.set_tensor_value(
+                                maxpr_fn(parent_tvs, tensor.kwargs())
+                            )
+                            if not tensor.has_tensor_value():
+                                raise Error(
+                                    "maxpr did not set tensor_value for tensor: "
+                                    + tensor.name()
+                                )
+                        else:
+                            raise Error("No maxpr defined for tensor: " + tensor.name())
+                    var outputs_tvs = List[MaxTensorValue]()
+                    for output in unmaterialized_outputs:
+                        outputs_tvs.append(output.tensor_value())
+                    graph.output(outputs_tvs)
+
+                # Create MAX inference session and load the compiled graph
+                var session = MaxInferenceSession([MaxDevice.cpu()])
+                self.compiled_model[key] = ArcPointer(session.load(graph))
+
                 # Clean up tensor values from inputs and constants after compilation
-                for var arg in _args:
+                for var arg in args:
                     arg.remove_tensor_value()
                 for var constant in constants:
                     constant.remove_tensor_value()
-            
+
             # execute compiled model with args + constants
             var max_inputs = List[MaxTensor]()
             # First add the args data
