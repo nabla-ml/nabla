@@ -1,4 +1,4 @@
-from nabla import Tensor, randn, Callable, full, relu 
+from nabla.all import Tensor, randn, Callable, full, relu
 from time import perf_counter_ns
 
 
@@ -62,7 +62,7 @@ fn main() raises:
         all_args.append(w_out)
         all_args.append(b_out)
         
-        var res = mlp_callable(all_args)
+        _ = mlp_callable(all_args)
         
         var t_iter_end = perf_counter_ns()
         var iter_time_ms = (t_iter_end - t_iter_start) / 1_000_000

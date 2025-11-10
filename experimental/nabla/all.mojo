@@ -1,4 +1,4 @@
-from max_bindings import (
+from .max_bindings import (
     MaxTensor,
     MaxTensorValue,
     MaxTensorType,
@@ -16,7 +16,12 @@ from max_bindings import (
 from python import Python, PythonObject
 from memory import ArcPointer, UnsafePointer
 from time import perf_counter_ns
+from builtin._location import __call_location
 
+# helper function for debugging
+@always_inline
+fn err_loc() -> String:
+    return "\n" + String(__call_location())
 
 struct TensorImpl(Copyable, Movable):
     """Unsafe access to internal representation of the Tensor."""
@@ -131,7 +136,7 @@ struct Tensor(ImplicitlyCopyable, Movable, Writable):
     fn tensor_value(self) raises -> MaxTensorValue:
         """Get the tensor value. Raises if not set."""
         if not self._storage[].tensor_value:
-            raise Error("MaxTensorValue is not set")
+            raise Error("MaxTensorValue is not set" + err_loc())
         return self._storage[].tensor_value.value()
 
     fn has_tensor_value(self) -> Bool:
@@ -141,7 +146,7 @@ struct Tensor(ImplicitlyCopyable, Movable, Writable):
     fn data(self) raises -> MaxTensor:
         """Get the underlying MaxTensor data. Raises if not set."""
         if len(self._storage[].data) == 0:
-            raise Error("Data is not set")
+            raise Error("Data is not set" + err_loc())
         return self._storage[].data[0]
 
     fn has_data(self) -> Bool:
@@ -167,7 +172,7 @@ struct Tensor(ImplicitlyCopyable, Movable, Writable):
 
     fn __getitem__(self, key: String) raises -> List[Int]:
         if not key in self._storage[].kwargs:
-            raise Error("Metadata key not found: " + key)
+            raise Error("Metadata key not found: " + key + err_loc())
         return self._storage[].kwargs[key].copy()
 
     fn __setitem__(mut self, key: String, value: List[Int]):
@@ -218,7 +223,7 @@ struct Tensor(ImplicitlyCopyable, Movable, Writable):
     ) raises -> MaxTensorValue:
         """Get the maxpr rule. Raises if not set."""
         if len(self._storage[].maxpr) == 0:
-            raise Error("maxpr rule is not set")
+            raise Error("maxpr rule is not set" + err_loc())
         return self._storage[].maxpr[0]
 
     fn has_maxpr(self) -> Bool:
@@ -240,7 +245,7 @@ struct Tensor(ImplicitlyCopyable, Movable, Writable):
     ]:
         """Get the VJP rule. Raises if not set."""
         if len(self._storage[].vjp_rule) == 0:
-            raise Error("VJP rule is not set")
+            raise Error("VJP rule is not set" + err_loc())
         return self._storage[].vjp_rule[0]
 
     fn has_vjp_rule(self) -> Bool:
@@ -271,7 +276,7 @@ struct Tensor(ImplicitlyCopyable, Movable, Writable):
     fn tangent(self) raises -> Tensor:
         """Get the tangent. Raises if not set."""
         if len(self._storage[].tangent) == 0:
-            raise Error("Tangent is not set")
+            raise Error("Tangent is not set" + err_loc())
         return Tensor(self._storage[].tangent[0])
 
     fn has_tangent(self) -> Bool:
@@ -284,7 +289,7 @@ struct Tensor(ImplicitlyCopyable, Movable, Writable):
     fn cotangent(self) raises -> Tensor:
         """Get the cotangent. Raises if not set."""
         if len(self._storage[].cotangent) == 0:
-            raise Error("Cotangent is not set")
+            raise Error("Cotangent is not set" + err_loc())
         return Tensor(self._storage[].cotangent[0])
 
     fn has_cotangent(self) -> Bool:
@@ -297,7 +302,7 @@ struct Tensor(ImplicitlyCopyable, Movable, Writable):
     fn grad(self) raises -> Tensor:
         """Get the gradient. Raises if not set."""
         if len(self._storage[].grad) == 0:
-            raise Error("Gradient is not set")
+            raise Error("Gradient is not set" + err_loc())
         return Tensor(self._storage[].grad[0])
 
     fn has_grad(self) -> Bool:
@@ -337,7 +342,7 @@ struct Tensor(ImplicitlyCopyable, Movable, Writable):
             else:
                 writer.write(self._storage[].data[0].to_numpy().__str__())
         except:
-            writer.write("Error while converting Tensor to string")
+            writer.write("Error while converting Tensor to string" + err_loc())
 
     fn __add__(self, other: Self) raises -> Self:
         return add(self, other)
@@ -482,7 +487,8 @@ fn is_broadcastable(shape_a: List[Int], shape_b: List[Int]) raises -> Bool:
 fn broadcast_shapes(shape_a: List[Int], shape_b: List[Int]) raises -> List[Int]:
     """Compute the broadcasted shape of two input shapes."""
     if not is_broadcastable(shape_a, shape_b):
-        raise Error("Input shapes are not broadcastable")
+        var msg = "Shapes " + shape_a.__str__() + " and " + shape_b.__str__() + " are not broadcastable"
+        raise Error(msg + err_loc())
 
     var ndim_a = len(shape_a)
     var ndim_b = len(shape_b)
@@ -543,7 +549,7 @@ trait Operation:
     @staticmethod
     fn stage_realization(inputs: List[Tensor]) raises -> Bool:
         if len(inputs) != 2:
-            raise Error("BinaryOp requires exactly 2 input tensors")
+            raise Error("BinaryOp requires exactly 2 input tensors" + err_loc())
         return inputs[0].stage_realization() or inputs[1].stage_realization()
 
     @staticmethod
@@ -552,24 +558,32 @@ trait Operation:
 
     @staticmethod
     fn execute(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> Tensor:
-        var res = Tensor(
-            shape=Self.shape(inputs, kwargs),
-            dtype=Self.dtype(inputs, kwargs),
-            stage_realization=True,
-        )
-        res.set_name(Self.name(kwargs))
-        res.set_parents(inputs)
-        res.set_maxpr(Self.maxpr)
-        res.set_vjp_rule(Self.vjp_rule)
-        res.set_jvp_rule(Self.jvp_rule)
-        res.set_custom_kernel_path(Self.custom_kernel_path())
-        res.set_parents(inputs)
-        # Store kwargs on the tensor so they can be used during realization
-        # BUT: don't copy "is_arg" metadata to child tensors
-        for key in kwargs.keys():
-            if key != "is_arg":
-                res[key] = kwargs[key].copy()
-        return res
+        try:
+            var res = Tensor(
+                shape=Self.shape(inputs, kwargs),
+                dtype=Self.dtype(inputs, kwargs),
+                stage_realization=True,
+            )
+            res.set_name(Self.name(kwargs))
+            res.set_parents(inputs)
+            res.set_maxpr(Self.maxpr)
+            res.set_vjp_rule(Self.vjp_rule)
+            res.set_jvp_rule(Self.jvp_rule)
+            res.set_custom_kernel_path(Self.custom_kernel_path())
+            res.set_parents(inputs)
+            # Store kwargs on the tensor so they can be used during realization
+            # BUT: don't copy "is_arg" metadata to child tensors
+            for key in kwargs.keys():
+                if key != "is_arg":
+                    res[key] = kwargs[key].copy()
+            return res
+        except err:
+            raise Error(
+                "Error during execution of operation '"
+                + Self.name(kwargs)
+                + "': "
+                + String(err)
+            )
 
 
 trait BinaryOp(Operation):
@@ -578,15 +592,15 @@ trait BinaryOp(Operation):
         inputs: List[Tensor], kwargs: Dict[String, List[Int]]
     ) raises -> List[Int]:
         if len(inputs) != 2:
-            raise Error("BinaryOp requires exactly 2 input tensors")
+            raise Error("BinaryOp requires exactly 2 input tensors" + err_loc())
         if inputs[0].batch_dims() != inputs[1].batch_dims():
-            raise Error("Input tensors must have the same batch_dims for BinaryOp")
+            raise Error("Input tensors must have the same batch_dims for BinaryOp" + err_loc())
         return inputs[0].batch_dims()
 
     @staticmethod
     fn shape(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
         if len(inputs) != 2:
-            raise Error("BinaryOp requires exactly 2 input tensors")
+            raise Error("BinaryOp requires exactly 2 input tensors" + err_loc())
 
         var shape_a = inputs[0].shape()
         var shape_b = inputs[1].shape()
@@ -597,9 +611,9 @@ trait BinaryOp(Operation):
     @staticmethod
     fn dtype(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> DType:
         if len(inputs) != 2:
-            raise Error("BinaryOp requires exactly 2 input tensors")
+            raise Error("BinaryOp requires exactly 2 input tensors" + err_loc())
         if inputs[0].dtype() != inputs[1].dtype():
-            raise Error("Input tensors must have the same dtype for BinaryOp")
+            raise Error("Input tensors must have the same dtype for BinaryOp" + err_loc())
         return inputs[0].dtype()
 
     @staticmethod
@@ -607,9 +621,9 @@ trait BinaryOp(Operation):
         inputs: List[Tensor], kwargs: Dict[String, List[Int]]
     ) raises -> MaxDevice:
         if len(inputs) != 2:
-            raise Error("BinaryOp requires exactly 2 input tensors")
+            raise Error("BinaryOp requires exactly 2 input tensors" + err_loc())
         if inputs[0].device() != inputs[1].device():
-            raise Error("Input tensors must be on the same device for BinaryOp")
+            raise Error("Input tensors must be on the same device for BinaryOp" + err_loc())
         return inputs[0].device()
 
     @staticmethod
@@ -658,7 +672,10 @@ struct AddOp(BinaryOp):
 
 
 fn add(a: Tensor, b: Tensor) raises -> Tensor:
-    return AddOp.execute([a, b], {})
+    try:
+        return AddOp.execute([a, b], {})
+    except err:
+        raise Error("Error in Add operation: " + String(err) + err_loc())
 
 
 struct MulOp(BinaryOp):
@@ -703,13 +720,13 @@ struct Matmul(Operation):
     @staticmethod
     fn shape(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
         if len(inputs) != 2:
-            raise Error("Matmul requires exactly 2 input tensors")
+            raise Error("Matmul requires exactly 2 input tensors" + err_loc())
         var a_shape = inputs[0].shape()
         var b_shape = inputs[1].shape()
         if len(a_shape) < 2 or len(b_shape) < 2:
-            raise Error("Input tensors must be at least 2D for Matmul")
+            raise Error("Input tensors must be at least 2D for Matmul" + err_loc())
         if a_shape[-1] != b_shape[-2]:
-            raise Error("Inner dimensions must match for Matmul")
+            raise Error("Inner dimensions must match for Matmul" + err_loc())
         var result_shape = a_shape[0:-1] + b_shape[0:-2] + [b_shape[-1]]
         return result_shape^
 
@@ -718,17 +735,17 @@ struct Matmul(Operation):
         inputs: List[Tensor], kwargs: Dict[String, List[Int]]
     ) raises -> List[Int]:
         if len(inputs) != 2:
-            raise Error("Matmul requires exactly 2 input tensors")
+            raise Error("Matmul requires exactly 2 input tensors" + err_loc())
         if inputs[0].batch_dims() != inputs[1].batch_dims():
-            raise Error("Input tensors must have the same batch_dims for Matmul")
+            raise Error("Input tensors must have the same batch_dims for Matmul" + err_loc())
         return inputs[0].batch_dims()
 
     @staticmethod
     fn dtype(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> DType:
         if len(inputs) != 2:
-            raise Error("Matmul requires exactly 2 input tensors")
+            raise Error("Matmul requires exactly 2 input tensors" + err_loc())
         if inputs[0].dtype() != inputs[1].dtype():
-            raise Error("Input tensors must have the same dtype for Matmul")
+            raise Error("Input tensors must have the same dtype for Matmul" + err_loc())
         return inputs[0].dtype()
 
     @staticmethod
@@ -736,9 +753,9 @@ struct Matmul(Operation):
         inputs: List[Tensor], kwargs: Dict[String, List[Int]]
     ) raises -> MaxDevice:
         if len(inputs) != 2:
-            raise Error("Matmul requires exactly 2 input tensors")
+            raise Error("Matmul requires exactly 2 input tensors" + err_loc())
         if inputs[0].device() != inputs[1].device():
-            raise Error("Input tensors must be on the same device for Matmul")
+            raise Error("Input tensors must be on the same device for Matmul" + err_loc())
         return inputs[0].device()
 
     @staticmethod
@@ -753,13 +770,13 @@ struct Matmul(Operation):
     fn vjp_rule(
         primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]
     ) raises -> List[Tensor]:
-        raise Error("VJP rule for Matmul not implemented yet")
+        raise Error("VJP rule for Matmul not implemented yet" + err_loc())
 
     @staticmethod
     fn jvp_rule(
         primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]
     ) raises -> Tensor:
-        raise Error("JVP rule for Matmul not implemented yet")
+        raise Error("JVP rule for Matmul not implemented yet" + err_loc())
 
 
 fn matmul(a: Tensor, b: Tensor) raises -> Tensor:
@@ -837,19 +854,19 @@ trait UnaryOp(Operation):
         inputs: List[Tensor], kwargs: Dict[String, List[Int]]
     ) raises -> List[Int]:
         if len(inputs) != 1:
-            raise Error("UnaryOp requires exactly 1 input tensor")
+            raise Error("UnaryOp requires exactly 1 input tensor" + err_loc())
         return inputs[0].batch_dims()
 
     @staticmethod
     fn shape(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
         if len(inputs) != 1:
-            raise Error("UnaryOp requires exactly 1 input tensor")
+            raise Error("UnaryOp requires exactly 1 input tensor" + err_loc())
         return inputs[0].shape()
 
     @staticmethod
     fn dtype(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> DType:
         if len(inputs) != 1:
-            raise Error("UnaryOp requires exactly 1 input tensor")
+            raise Error("UnaryOp requires exactly 1 input tensor" + err_loc())
         return inputs[0].dtype()
 
     @staticmethod
@@ -857,7 +874,7 @@ trait UnaryOp(Operation):
         inputs: List[Tensor], kwargs: Dict[String, List[Int]]
     ) raises -> MaxDevice:
         if len(inputs) != 1:
-            raise Error("UnaryOp requires exactly 1 input tensor")
+            raise Error("UnaryOp requires exactly 1 input tensor" + err_loc())
         return inputs[0].device()
 
 
@@ -870,23 +887,26 @@ struct ReluOp(UnaryOp):
     fn maxpr(
         inputs: List[MaxTensorValue], kwargs: Dict[String, List[Int]]
     ) raises -> MaxTensorValue:
-        return MaxTensorValue(graph_ops().relu(inputs[0].to_python()))
+        raise Error("MaxPR for Relu not implemented yet" + err_loc())
 
     @staticmethod
     fn vjp_rule(
         primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]
     ) raises -> List[Tensor]:
-        raise Error("VJP rule for Relu not implemented yet")
+        raise Error("VJP rule for Relu not implemented yet" + err_loc())
 
     @staticmethod
     fn jvp_rule(
         primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]
     ) raises -> Tensor:
-        raise Error("JVP rule for Relu not implemented yet")
+        raise Error("JVP rule for Relu not implemented yet" + err_loc())
 
 
 fn relu(x: Tensor) raises -> Tensor:
-    return ReluOp.execute([x], {})
+    try:
+        return ReluOp.execute([x], {})
+    except err:
+        raise Error("Error in ReLU operation: " + String(err) + err_loc())
 
 
 struct NegOp(UnaryOp):
@@ -925,9 +945,9 @@ struct ReshapeOp(Operation):
     @staticmethod
     fn shape(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
         if len(inputs) != 1:
-            raise Error("Reshape requires exactly 1 input tensor")
+            raise Error("Reshape requires exactly 1 input tensor" + err_loc())
         if not "target_shape" in kwargs:
-            raise Error("Reshape requires 'target_shape' in kwargs")
+            raise Error("Reshape requires 'target_shape' in kwargs" + err_loc())
         return kwargs["target_shape"].copy()
 
     @staticmethod
@@ -935,13 +955,13 @@ struct ReshapeOp(Operation):
         inputs: List[Tensor], kwargs: Dict[String, List[Int]]
     ) raises -> List[Int]:
         if len(inputs) != 1:
-            raise Error("Reshape requires exactly 1 input tensor")
+            raise Error("Reshape requires exactly 1 input tensor" + err_loc())
         return inputs[0].batch_dims()
 
     @staticmethod
     fn dtype(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> DType:
         if len(inputs) != 1:
-            raise Error("Reshape requires exactly 1 input tensor")
+            raise Error("Reshape requires exactly 1 input tensor" + err_loc())
         return inputs[0].dtype()
 
     @staticmethod
@@ -949,7 +969,7 @@ struct ReshapeOp(Operation):
         inputs: List[Tensor], kwargs: Dict[String, List[Int]]
     ) raises -> MaxDevice:
         if len(inputs) != 1:
-            raise Error("Reshape requires exactly 1 input tensor")
+            raise Error("Reshape requires exactly 1 input tensor" + err_loc())
         return inputs[0].device()
 
     @staticmethod
@@ -957,10 +977,8 @@ struct ReshapeOp(Operation):
         inputs: List[MaxTensorValue], kwargs: Dict[String, List[Int]]
     ) raises -> MaxTensorValue:
         if not "target_shape" in kwargs:
-            raise Error("Reshape requires 'target_shape' in kwargs")
+            raise Error("Reshape requires 'target_shape' in kwargs" + err_loc())
         var target_shape = kwargs["target_shape"].copy()
-        # return bindings_reshape(inputs[0], target_shape)
-
         return MaxTensorValue(
             graph_ops().reshape(inputs[0].to_python(), _list_to_py_tuple(target_shape))
         )
@@ -998,16 +1016,16 @@ struct BroadcastOp(Operation):
     @staticmethod
     fn shape(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
         if len(inputs) != 1:
-            raise Error("Broadcast requires exactly 1 input tensor")
+            raise Error("Broadcast requires exactly 1 input tensor" + err_loc())
         if not "target_shape" in kwargs:
-            raise Error("Broadcast requires 'target_shape' in kwargs")
+            raise Error("Broadcast requires 'target_shape' in kwargs" + err_loc())
 
         var input_shape = inputs[0].shape()
         var target_shape = kwargs["target_shape"].copy()
 
         # Check if input can be broadcast to target
         if not is_broadcastable(input_shape, target_shape):
-            raise Error("Input shape cannot be broadcast to target shape")
+            raise Error("Input shape cannot be broadcast to target shape" + err_loc())
 
         return target_shape.copy()
 
@@ -1016,13 +1034,13 @@ struct BroadcastOp(Operation):
         inputs: List[Tensor], kwargs: Dict[String, List[Int]]
     ) raises -> List[Int]:
         if len(inputs) != 1:
-            raise Error("Broadcast requires exactly 1 input tensor")
+            raise Error("Broadcast requires exactly 1 input tensor" + err_loc())
         return inputs[0].batch_dims()
 
     @staticmethod
     fn dtype(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> DType:
         if len(inputs) != 1:
-            raise Error("Broadcast requires exactly 1 input tensor")
+            raise Error("Broadcast requires exactly 1 input tensor" + err_loc())
         return inputs[0].dtype()
 
     @staticmethod
@@ -1030,7 +1048,7 @@ struct BroadcastOp(Operation):
         inputs: List[Tensor], kwargs: Dict[String, List[Int]]
     ) raises -> MaxDevice:
         if len(inputs) != 1:
-            raise Error("Broadcast requires exactly 1 input tensor")
+            raise Error("Broadcast requires exactly 1 input tensor" + err_loc())
         return inputs[0].device()
 
     @staticmethod
@@ -1038,7 +1056,7 @@ struct BroadcastOp(Operation):
         inputs: List[MaxTensorValue], kwargs: Dict[String, List[Int]]
     ) raises -> MaxTensorValue:
         if not "target_shape" in kwargs:
-            raise Error("Broadcast requires 'target_shape' in kwargs")
+            raise Error("Broadcast requires 'target_shape' in kwargs" + err_loc())
         var target_shape = kwargs["target_shape"].copy()
         # return bindings_broadcast_to(inputs[0], target_shape)
 
@@ -1054,7 +1072,7 @@ struct BroadcastOp(Operation):
     ) raises -> List[Tensor]:
         # Gradient of broadcast is sum reduction over the broadcast dimensions
         # For now, just return the cotangent (simplified)
-        raise Error("VJP rule for Broadcast not implemented yet")
+        raise Error("VJP rule for Broadcast not implemented yet" + err_loc())
 
     @staticmethod
     fn jvp_rule(
@@ -1200,28 +1218,32 @@ fn realize(mut outputs: List[Tensor]) raises:
             materialized_inputs[i].set_tensor_value(graph_inputs[i])
 
         # iterate through the unmaterialized trace and create tensor values wrt. the maxpr of each operation
-        for var tensor in unmaterialized_trace:
-            var parent_tvs = List[MaxTensorValue]()
-            if tensor.has_parents():
-                var parents = tensor.parents()
-                for parent in parents:
-                    parent_tvs.append(parent.tensor_value())
+        try:
+            for var tensor in unmaterialized_trace:
+                var parent_tvs = List[MaxTensorValue]()
+                if tensor.has_parents():
+                    var parents = tensor.parents()
+                    for parent in parents:
+                        parent_tvs.append(parent.tensor_value())
 
-            if tensor.has_maxpr():
-                var maxpr_fn = tensor.maxpr()
-                tensor.set_tensor_value(maxpr_fn(parent_tvs, tensor.kwargs()))
-                if not tensor.has_tensor_value():
-                    raise Error(
-                        "maxpr did not set tensor_value for tensor: " + tensor.name()
-                    )
-            else:
-                raise Error("No maxpr defined for tensor: " + tensor.name())
+                if tensor.has_maxpr():
+                    var maxpr_fn = tensor.maxpr()
+                    tensor.set_tensor_value(maxpr_fn(parent_tvs, tensor.kwargs()))
+                    if not tensor.has_tensor_value():
+                        raise Error(
+                            "maxpr did not set tensor_value for tensor: "
+                            + tensor.name()
+                        )
+                else:
+                    raise Error("No maxpr defined for tensor: " + tensor.name())
 
-        var outputs_tvs = List[MaxTensorValue]()
-        for output in outputs:
-            outputs_tvs.append(output.tensor_value())
+            var outputs_tvs = List[MaxTensorValue]()
+            for output in outputs:
+                outputs_tvs.append(output.tensor_value())
 
-        graph.output(outputs_tvs)
+            graph.output(outputs_tvs)
+        except err:
+            raise Error("Failed to build graph during realize: " + String(err))
 
     # create MAX inference session and load the graph
     var session = MaxInferenceSession([MaxDevice.cpu()])
@@ -1276,7 +1298,7 @@ struct Callable(Copyable, Movable):
             for arg in args:
                 if not arg.has_data():
                     raise Error(
-                        "All input tensors must be materialized for compiled execution"
+                        "All input tensors must be materialized for compiled execution" + err_loc()
                     )
 
             # Mark all args with "is_arg" metadata
@@ -1362,28 +1384,38 @@ struct Callable(Copyable, Movable):
                         idx += 1
 
                     # Now build the computation graph
-                    for var tensor in trace:
-                        var parent_tvs = List[MaxTensorValue]()
-                        if tensor.has_parents():
-                            var parents = tensor.parents()
-                            for i in range(len(parents)):
-                                parent_tvs.append(parents[i].tensor_value())
-                        if tensor.has_maxpr():
-                            var maxpr_fn = tensor.maxpr()
-                            tensor.set_tensor_value(
-                                maxpr_fn(parent_tvs, tensor.kwargs())
-                            )
-                            if not tensor.has_tensor_value():
-                                raise Error(
-                                    "maxpr did not set tensor_value for tensor: "
-                                    + tensor.name()
+                    try:
+                        for var tensor in trace:
+                            var parent_tvs = List[MaxTensorValue]()
+                            if tensor.has_parents():
+                                var parents = tensor.parents()
+                                for i in range(len(parents)):
+                                    parent_tvs.append(parents[i].tensor_value())
+                            if tensor.has_maxpr():
+                                var maxpr_fn = tensor.maxpr()
+                                tensor.set_tensor_value(
+                                    maxpr_fn(parent_tvs, tensor.kwargs())
                                 )
-                        else:
-                            raise Error("No maxpr defined for tensor: " + tensor.name())
-                    var outputs_tvs = List[MaxTensorValue]()
-                    for output in unmaterialized_outputs:
-                        outputs_tvs.append(output.tensor_value())
-                    graph.output(outputs_tvs)
+                                if not tensor.has_tensor_value():
+                                    raise Error(
+                                        "maxpr did not set tensor_value for tensor: "
+                                        + tensor.name()
+                                    )
+                            else:
+                                raise Error(
+                                    "No maxpr defined for tensor: " + tensor.name()
+                                )
+                        var outputs_tvs = List[MaxTensorValue]()
+                        for output in unmaterialized_outputs:
+                            outputs_tvs.append(output.tensor_value())
+                        graph.output(outputs_tvs)
+                    except err:
+                        raise Error(
+                            "Failed to compile function '"
+                            + self.name
+                            + "': "
+                            + String(err)
+                        )
 
                 # Create MAX inference session and load the compiled graph
                 var session = MaxInferenceSession([MaxDevice.cpu()])
