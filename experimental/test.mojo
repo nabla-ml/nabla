@@ -1,19 +1,22 @@
-from nabla.all import Tensor, randn, Callable, full, relu
+from nabla.all import Tensor, randn, Callable, full, relu, err_loc, matmul
 from time import perf_counter_ns
 
 
 fn main() raises:
     fn mlp(args: List[Tensor]) raises -> List[Tensor]:
-        var h1 = relu(args[0] @ args[1] + args[2])
-        var h2 = relu(h1 @ args[3] + args[4])
-        var h3 = relu(h2 @ args[5] + args[6])
-        var h4 = relu(h3 @ args[7] + args[8])
-        var h5 = relu(h4 @ args[9] + args[10])
-        var h6 = relu(h5 @ args[11] + args[12])
-        var h7 = relu(h6 @ args[13] + args[14])
-        var h8 = relu(h7 @ args[15] + args[16])
-        var output = h8 @ args[17] + args[18]        
-        return [output]
+        try:
+            var h1 = relu(args[0] @ args[1] + args[2])
+            var h2 = relu(h1 @ args[3] + args[4])
+            var h3 = relu(h2 @ args[5] + args[6])
+            var h4 = relu(h3 @ args[7] + args[8])
+            var h5 = relu(h4 @ args[9] + args[10])
+            var h6 = relu(matmul(h5, args[11]) + args[12])
+            var h7 = relu(h6 @ args[13] + args[14])
+            var h8 = relu(h7 @ args[15] + args[16])
+            var output = h8 @ args[17] + args[18]
+            return [output]
+        except err:
+            raise Error("\nError in MLP computation:", err)
     
     var w1 = randn([512, 2048], 0.0, 0.02)
     var b1 = randn([2048], 0.0, 0.01)
@@ -23,7 +26,7 @@ fn main() raises:
     var b3 = randn([4096], 0.0, 0.01)
     var w4 = randn([4096, 4096], 0.0, 0.02)
     var b4 = randn([4096], 0.0, 0.01)
-    var w5 = randn([4096, 2048], 0.0, 0.02)
+    var w5 = randn([4092, 2048], 0.0, 0.02)
     var b5 = randn([2048], 0.0, 0.01)
     var w6 = randn([2048, 1024], 0.0, 0.02)
     var b6 = randn([1024], 0.0, 0.01)

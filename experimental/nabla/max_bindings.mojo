@@ -310,7 +310,7 @@ struct MaxDeviceStream(Movable):
 # ============================================================================
 
 
-struct MaxTensor(ImplicitlyCopyable, Movable):
+struct MaxTensor(ImplicitlyCopyable, Movable, Stringable):
     """Wrapper for max.driver.Tensor."""
 
     var _py_tensor: PythonObject
@@ -348,6 +348,12 @@ struct MaxTensor(ImplicitlyCopyable, Movable):
     fn device(self) raises -> MaxDevice:
         """Get device tensor resides on."""
         return MaxDevice(self._py_tensor.device)
+
+    fn __str__(self) -> String:
+        try:
+            return String(self._py_tensor)
+        except:
+            return "Error when converting MaxTensor to String"
 
     fn rank(self) raises -> Int:
         """Get tensor rank (number of dimensions)."""
