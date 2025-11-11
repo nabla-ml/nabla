@@ -1,4 +1,4 @@
-from nabla.all import Tensor, randn, Callable, full, relu, err_loc, matmul
+from nabla.all import Tensor, randn, jit, full, relu, err_loc, matmul
 from time import perf_counter_ns
 
 
@@ -26,7 +26,7 @@ fn main() raises:
     var b3 = randn([4096], 0.0, 0.01)
     var w4 = randn([4096, 4096], 0.0, 0.02)
     var b4 = randn([4096], 0.0, 0.01)
-    var w5 = randn([4092, 2048], 0.0, 0.02)
+    var w5 = randn([4096, 2048], 0.0, 0.02)
     var b5 = randn([2048], 0.0, 0.01)
     var w6 = randn([2048, 1024], 0.0, 0.02)
     var b6 = randn([1024], 0.0, 0.01)
@@ -37,7 +37,7 @@ fn main() raises:
     var w_out = randn([256, 10], 0.0, 0.02)
     var b_out = randn([10], 0.0, 0.01)
 
-    var mlp_callable = Callable(mlp, "mlp", True)
+    var mlp_jit = jit(mlp)
     for it in range(20000):
         var t_iter_start = perf_counter_ns()
         
@@ -65,7 +65,7 @@ fn main() raises:
         all_args.append(w_out)
         all_args.append(b_out)
         
-        _ = mlp_callable(all_args)
+        _ = mlp_jit(all_args)
         
         var t_iter_end = perf_counter_ns()
         var iter_time_ms = (t_iter_end - t_iter_start) / 1_000_000

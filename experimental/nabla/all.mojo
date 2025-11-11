@@ -178,6 +178,11 @@ struct Tensor(ImplicitlyCopyable, Movable, Writable):
     fn __setitem__(mut self, key: String, value: List[Int]):
         self._storage[].kwargs[key] = value.copy()
 
+    fn to_numpy(self) raises -> PythonObject:
+        if not self.has_data():
+            raise Error("\nTensor data is not materialized" + err_loc())
+        return self.data().to_numpy()
+
     # Setter methods
     fn set_name(mut self, value: String):
         self._storage[].name = value
@@ -214,6 +219,12 @@ struct Tensor(ImplicitlyCopyable, Movable, Writable):
 
     fn remove_tensor_value(mut self):
         self._storage[].tensor_value = Optional[MaxTensorValue](None)
+
+    fn to_numpy_ptr[dtype: DType](self) raises -> UnsafePointer[Scalar[dtype]]:
+        """Get an unsafe pointer to the underlying data copy on the Host."""
+        if not self.has_data():
+            raise Error("\nTensor data is not materialized" + err_loc())
+        return self.to_numpy().__array_interface__["data"][0].unsafe_get_as_pointer[dtype]()
 
     # Getters/Setters for autodiff-related fields
     fn maxpr(
@@ -1576,6 +1587,9 @@ struct Callable(Copyable, Movable):
                 output.remove_tensor_value()
 
             return unmaterialized_outputs^
+
+fn jit(func: fn (args: List[Tensor]) raises -> List[Tensor]) raises -> Callable:
+    return Callable(func, "func", True)
 
 trait Module(Copyable, Movable):
     fn __call__(self, args: List[Tensor]) raises -> List[Tensor]:
