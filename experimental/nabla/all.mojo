@@ -26,7 +26,6 @@ fn err_loc() -> String:
     return "\n" + String(__call_location())
 
 
-
 struct MoTree(Copyable, Movable):
     alias Treeable = Variant[Self, Tensor, Int, Float32, Dict[String, Self]]
     var data: List[Self.Treeable]
@@ -59,7 +58,7 @@ struct MoTree(Copyable, Movable):
         self.data = List[Self.Treeable]()
         for d in init_data:
             self.data.append(d.copy())
-            
+
         if not self.data[0].isa[Tensor]():
             raise "Error: The list shoudl contain of Tensors directly"
 
@@ -74,7 +73,7 @@ struct MoTree(Copyable, Movable):
         self.data = List[Self.Treeable]()
         for d in init_data:
             self.data.append(d.copy())
-       
+
     fn __setitem__(mut self, _key: Variant[String, Int], value: Self.Treeable) raises:
         if _key.isa[Int]():
             var idx = _key[Int]
@@ -93,7 +92,7 @@ struct MoTree(Copyable, Movable):
                 self.data[idx] = value[Dict[String, Self]].copy()
             else:
                 raise Error("Cannot setitem of MoTree on unknown Type.")
-            
+
         elif _key.isa[String]():
             if len(self.data) == 0:
                 self.data.append(Dict[String, Self]())
@@ -112,7 +111,6 @@ struct MoTree(Copyable, Movable):
                 self.data[0][Dict[String, Self]][key] = value[Float32]
             else:
                 raise Error("Cannot setitem of MoTree on unknown Type.")
-        
 
     fn __getitem__(self, key: Variant[String, Int]) raises -> Self:
         if key.isa[String]():
@@ -170,7 +168,6 @@ struct MoTree(Copyable, Movable):
             return self.data[0][Float32]
         else:
             raise Error("Value cannot be converted to a Float32")
-
 
     fn get_all_tensors(self) raises -> List[Tensor]:
         var tensors = List[Tensor]()
@@ -396,7 +393,11 @@ struct Tensor(ImplicitlyCopyable, Movable, Writable):
         """Get an unsafe pointer to the underlying data copy on the Host."""
         if not self.has_data():
             raise Error("\nTensor data is not materialized" + err_loc())
-        return self.to_numpy().__array_interface__["data"][0].unsafe_get_as_pointer[dtype]()
+        return (
+            self.to_numpy()
+            .__array_interface__["data"][0]
+            .unsafe_get_as_pointer[dtype]()
+        )
 
     # Getters/Setters for autodiff-related fields
     fn maxpr(
@@ -697,7 +698,13 @@ fn is_broadcastable(shape_a: List[Int], shape_b: List[Int]) raises -> Bool:
 fn broadcast_shapes(shape_a: List[Int], shape_b: List[Int]) raises -> List[Int]:
     """Compute the broadcasted shape of two input shapes."""
     if not is_broadcastable(shape_a, shape_b):
-        var msg = "Shapes " + shape_a.__str__() + " and " + shape_b.__str__() + " are not broadcastable"
+        var msg = (
+            "Shapes "
+            + shape_a.__str__()
+            + " and "
+            + shape_b.__str__()
+            + " are not broadcastable"
+        )
         raise Error(msg + err_loc())
 
     var ndim_a = len(shape_a)
@@ -898,6 +905,7 @@ struct AddOp(BinaryOp):
     ) raises -> Tensor:
         return tangents[0] + tangents[1]
 
+
 @always_inline
 fn add(a: Tensor, b: Tensor) raises -> Tensor:
     try:
@@ -934,6 +942,7 @@ struct MulOp(BinaryOp):
         var term1 = tangents[0] * primals[1]
         var term2 = primals[0] * tangents[1]
         return term1 + term2
+
 
 @always_inline
 fn mul(a: Tensor, b: Tensor) raises -> Tensor:
@@ -974,7 +983,9 @@ struct Matmul(Operation):
         if len(inputs) != 2:
             raise Error("\nMatmul requires exactly 2 input tensors" + err_loc())
         if inputs[0].batch_dims() != inputs[1].batch_dims():
-            raise Error("\nInput tensors must have the same batch_dims for Matmul" + err_loc())
+            raise Error(
+                "\nInput tensors must have the same batch_dims for Matmul" + err_loc()
+            )
         return inputs[0].batch_dims()
 
     @staticmethod
@@ -982,7 +993,9 @@ struct Matmul(Operation):
         if len(inputs) != 2:
             raise Error("\nMatmul requires exactly 2 input tensors" + err_loc())
         if inputs[0].dtype() != inputs[1].dtype():
-            raise Error("\nInput tensors must have the same dtype for Matmul" + err_loc())
+            raise Error(
+                "\nInput tensors must have the same dtype for Matmul" + err_loc()
+            )
         return inputs[0].dtype()
 
     @staticmethod
@@ -992,7 +1005,9 @@ struct Matmul(Operation):
         if len(inputs) != 2:
             raise Error("\nMatmul requires exactly 2 input tensors" + err_loc())
         if inputs[0].device() != inputs[1].device():
-            raise Error("\nInput tensors must be on the same device for Matmul" + err_loc())
+            raise Error(
+                "\nInput tensors must be on the same device for Matmul" + err_loc()
+            )
         return inputs[0].device()
 
     @staticmethod
@@ -1014,6 +1029,7 @@ struct Matmul(Operation):
         primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]
     ) raises -> Tensor:
         raise Error("\nJVP rule for Matmul not implemented yet" + err_loc())
+
 
 @always_inline
 fn matmul(a: Tensor, b: Tensor) raises -> Tensor:
@@ -1048,6 +1064,7 @@ struct SubOp(BinaryOp):
         primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]
     ) raises -> Tensor:
         return sub(tangents[0], tangents[1])
+
 
 @always_inline
 fn sub(a: Tensor, b: Tensor) raises -> Tensor:
@@ -1086,6 +1103,7 @@ struct DivOp(BinaryOp):
         return tangents[0] / primals[1] - (primals[0] * tangents[1]) / (
             primals[1] * primals[1]
         )
+
 
 @always_inline
 fn div(a: Tensor, b: Tensor) raises -> Tensor:
@@ -1135,7 +1153,6 @@ struct ReluOp(UnaryOp):
         inputs: List[MaxTensorValue], kwargs: Dict[String, List[Int]]
     ) raises -> MaxTensorValue:
         return MaxTensorValue(graph_ops().relu(inputs[0].to_python()))
-        
 
     @staticmethod
     fn vjp_rule(
@@ -1148,6 +1165,7 @@ struct ReluOp(UnaryOp):
         primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]
     ) raises -> Tensor:
         raise Error("\nJVP rule for Relu not implemented yet" + err_loc())
+
 
 @always_inline
 fn relu(x: Tensor) raises -> Tensor:
@@ -1180,6 +1198,7 @@ struct NegOp(UnaryOp):
     ) raises -> Tensor:
         return -tangents[0]
 
+
 @always_inline
 fn neg(a: Tensor) raises -> Tensor:
     try:
@@ -1202,7 +1221,8 @@ struct ReshapeOp(Operation):
             for key in kwargs.keys():
                 available_keys.append(key)
             raise Error(
-                "\nReshape requires 'target_shape' in kwargs, but it was not found. Available keys: "
+                "\nReshape requires 'target_shape' in kwargs, but it was not found."
+                " Available keys: "
                 + available_keys.__str__()
                 + err_loc()
             )
@@ -1239,7 +1259,8 @@ struct ReshapeOp(Operation):
             for key in kwargs.keys():
                 available_keys.append(key)
             raise Error(
-                "\nReshape.maxpr requires 'target_shape' in kwargs, but it was not found. Available keys: "
+                "\nReshape.maxpr requires 'target_shape' in kwargs, but it was not"
+                " found. Available keys: "
                 + available_keys.__str__()
                 + err_loc()
             )
@@ -1265,6 +1286,7 @@ struct ReshapeOp(Operation):
     ) raises -> Tensor:
         # Forward-mode AD for reshape is just reshaping the tangent
         return ReshapeOp.execute([tangents[0]], kwargs)
+
 
 @always_inline
 fn reshape(x: Tensor, target_shape: List[Int]) raises -> Tensor:
@@ -1354,6 +1376,7 @@ struct BroadcastOp(Operation):
     ) raises -> Tensor:
         # Forward-mode AD for broadcast is just broadcasting the tangent
         return BroadcastOp.execute([tangents[0]], kwargs)
+
 
 @always_inline
 fn broadcast(x: Tensor, target_shape: List[Int]) raises -> Tensor:
@@ -1483,16 +1506,19 @@ struct ExecutionContext(ImplicitlyCopyable, Movable):
         self.model_dict_ptr[][key] = val
 
 
-fn realize(mut unmaterialized_output: Tensor, _ctx: Optional[ExecutionContext] = None) raises:
+fn realize(
+    mut unmaterialized_output: Tensor, _ctx: Optional[ExecutionContext] = None
+) raises:
     var unmaterialized_outputs = [unmaterialized_output]
     return realize(unmaterialized_outputs, _ctx)
 
-fn realize(mut unmaterialized_outputs: List[Tensor], _ctx: Optional[ExecutionContext] = None) raises:
+
+fn realize(
+    mut unmaterialized_outputs: List[Tensor], _ctx: Optional[ExecutionContext] = None
+) raises:
     """Realize all tensors' data."""
     # get trace with constants separated
-    var trace_tuple = get_unmaterialized_trace_with_constants(
-        unmaterialized_outputs
-    )
+    var trace_tuple = get_unmaterialized_trace_with_constants(unmaterialized_outputs)
     var trace = trace_tuple[0].copy()
     var constants = trace_tuple[2].copy()
 
@@ -1554,28 +1580,20 @@ fn realize(mut unmaterialized_outputs: List[Tensor], _ctx: Optional[ExecutionCon
                             parent_tvs.append(parents[i].tensor_value())
                     if tensor.has_maxpr():
                         var maxpr_fn = tensor.maxpr()
-                        tensor.set_tensor_value(
-                            maxpr_fn(parent_tvs, tensor.kwargs())
-                        )
+                        tensor.set_tensor_value(maxpr_fn(parent_tvs, tensor.kwargs()))
                         if not tensor.has_tensor_value():
                             raise Error(
                                 "maxpr did not set tensor_value for tensor: "
                                 + tensor.name()
                             )
                     else:
-                        raise Error(
-                            "No maxpr defined for tensor: " + tensor.name()
-                        )
+                        raise Error("No maxpr defined for tensor: " + tensor.name())
                 var outputs_tvs = List[MaxTensorValue]()
                 for output in unmaterialized_outputs:
                     outputs_tvs.append(output.tensor_value())
                 graph.output(outputs_tvs)
             except err:
-                raise Error(
-                    "Failed to compile function '"
-                    + "': "
-                    + String(err)
-                )
+                raise Error("Failed to compile function '" + "': " + String(err))
 
         # Create MAX inference session and load the compiled graph
         var session = MaxInferenceSession([MaxDevice.cpu()])
@@ -1626,13 +1644,14 @@ struct Callable(Copyable, Movable):
 
     fn __call__(mut self, all_args: MoTree) raises -> MoTree:
         if not self.compiled:
-            return self.func(all_args)            
+            return self.func(all_args)
         else:
             var args = all_args.get_all_tensors()
             for ref arg in args:
                 if not arg.has_data():
                     raise Error(
-                        "All input tensors must be materialized for compiled execution" + err_loc()
+                        "All input tensors must be materialized for compiled execution"
+                        + err_loc()
                     )
                 arg["is_arg"] = List[Int]()
 
@@ -1774,10 +1793,12 @@ struct Callable(Copyable, Movable):
             for var output in unmaterialized_outputs:
                 output.remove_tensor_value()
 
-            return _unmaterialized_outputs^ # now materialized!
+            return _unmaterialized_outputs^  # now materialized!
+
 
 fn jit(func: fn (args: MoTree) raises -> MoTree) raises -> Callable:
     return Callable(func, "func", True)
+
 
 trait Module(Copyable, Movable):
     fn __call__(self, args: List[Tensor]) raises -> List[Tensor]:
@@ -1830,7 +1851,7 @@ struct MLP(Module):
     fn __init__(out self, layer_dims: List[Int]) raises:
         self.layers = []
         for i in range(1, len(layer_dims)):
-            self.layers.append(Linear(layer_dims[i-1], layer_dims[i]))
+            self.layers.append(Linear(layer_dims[i - 1], layer_dims[i]))
         self._ctx = ExecutionContext()
 
     fn __call__(self, args: List[Tensor]) raises -> List[Tensor]:

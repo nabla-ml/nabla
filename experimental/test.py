@@ -4,7 +4,7 @@ import time
 
 def mlp(args):
     """MLP forward pass using function with all weights passed as arguments.
-    
+
     Args layout: [input, w1, b1, w2, b2, w3, b3, w4, b4, w5, b5, w6, b6, w7, b7, w8, b8, w_out, b_out]
     """
     input_tensor = args[0]
@@ -26,7 +26,7 @@ def mlp(args):
     b8 = args[16]
     w_out = args[17]
     b_out = args[18]
-    
+
     # Forward pass
     h1 = torch.relu(input_tensor @ w1 + b1)
     h2 = torch.relu(h1 @ w2 + b2)
@@ -37,7 +37,7 @@ def mlp(args):
     h7 = torch.relu(h6 @ w7 + b7)
     h8 = torch.relu(h7 @ w8 + b8)
     output = h8 @ w_out + b_out
-    
+
     return output
 
 
@@ -45,7 +45,7 @@ def main():
     # Create all weights ONCE before the loop
     print("Creating weights...")
     t_weight_start = time.perf_counter()
-    
+
     w1 = torch.randn(512, 2048) * 0.02
     b1 = torch.randn(2048) * 0.01
     w2 = torch.randn(2048, 4096) * 0.02
@@ -64,33 +64,48 @@ def main():
     b8 = torch.randn(256) * 0.01
     w_out = torch.randn(256, 10) * 0.02
     b_out = torch.randn(10) * 0.01
-    
+
     t_weight_end = time.perf_counter()
     print(f"Weights created in {(t_weight_end - t_weight_start) * 1000:.3f}ms")
     print("Starting training loop...")
     print("")
-    
+
     # Run stress test
     for it in range(20000):
         t_iter_start = time.perf_counter()
-        
+
         # Create input tensor filled with iteration number
         input_tensor = torch.full((4, 512), float(it))
-        
+
         # Pack all arguments: input + all weights and biases
         all_args = [
             input_tensor,
-            w1, b1, w2, b2, w3, b3, w4, b4,
-            w5, b5, w6, b6, w7, b7, w8, b8,
-            w_out, b_out
+            w1,
+            b1,
+            w2,
+            b2,
+            w3,
+            b3,
+            w4,
+            b4,
+            w5,
+            b5,
+            w6,
+            b6,
+            w7,
+            b7,
+            w8,
+            b8,
+            w_out,
+            b_out,
         ]
-        
+
         # Forward pass
         output = mlp(all_args)
-        
+
         t_iter_end = time.perf_counter()
         iter_time_ms = (t_iter_end - t_iter_start) * 1000
-        
+
         # Print progress
         if it % 100 == 0:
             print(f"Iteration {it} | Time: {iter_time_ms:.3f}ms")

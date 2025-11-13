@@ -1,5 +1,13 @@
-from nabla.all import MoTree, ExecutionContext, ndarange, randn, realize, relu, full, jit
-
+from nabla.all import (
+    MoTree,
+    ExecutionContext,
+    ndarange,
+    randn,
+    realize,
+    relu,
+    full,
+    jit,
+)
 
 
 fn foo(args: MoTree) raises -> MoTree:
@@ -11,9 +19,8 @@ fn foo(args: MoTree) raises -> MoTree:
 
 
 fn main() raises:
-
     var foo_jit = jit(foo)
-    
+
     for it in range(10000):
         var args = MoTree()
         args.arg = ndarange([4, 1])
@@ -25,7 +32,6 @@ fn main() raises:
         _ = tensors.copy()
 
         var res = foo_jit(args).as_tensor()
-        
 
         if it % 100 == 0:
             print("\nIteration", it)

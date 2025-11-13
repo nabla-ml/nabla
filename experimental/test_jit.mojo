@@ -34,20 +34,20 @@ fn main() raises:
         randn([512, 256], 0.0, 0.02),
         randn([256], 0.0, 0.01),
         randn([256, 10], 0.0, 0.02),
-        randn([10], 0.0, 0.01)
+        randn([10], 0.0, 0.01),
     ]
 
     var mlp_jit = jit(mlp)
 
     for it in range(20000):
         var t_iter_start = perf_counter_ns()
-        
+
         var input = randn([4, 512])
 
         var output = mlp_jit([input] + params.copy())
         var t_iter_end = perf_counter_ns()
         var iter_time_ms = (t_iter_end - t_iter_start) / 1_000_000
-        
+
         if it % 100 == 0:
             print("Iteration", it, "| Time:", iter_time_ms, "ms")
             print(output.as_tensor())
