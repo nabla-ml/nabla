@@ -17,11 +17,183 @@ from python import Python, PythonObject
 from memory import ArcPointer, UnsafePointer
 from time import perf_counter_ns
 from builtin._location import __call_location
+from utils import Variant
+
 
 # helper function for debugging
 @always_inline
 fn err_loc() -> String:
     return "\n" + String(__call_location())
+
+
+
+struct MoTree(Copyable, Movable):
+    alias Treeable = Variant[Self, Tensor, Int, Float32, Dict[String, Self]]
+    var data: List[Self.Treeable]
+
+    fn __init__(out self) raises:
+        self.data = []
+
+    @implicit
+    fn __init__(out self, init_data: Tensor) raises:
+        self.data = List[Self.Treeable]()
+        self.data.append(init_data)
+
+    @implicit
+    fn __init__(out self, init_data: Int) raises:
+        self.data = List[Self.Treeable]()
+        self.data.append(init_data)
+
+    @implicit
+    fn __init__(out self, init_data: Float32) raises:
+        self.data = List[Self.Treeable]()
+        self.data.append(init_data)
+
+    @implicit
+    fn __init__(out self, init_data: Dict[String, Self]) raises:
+        self.data = List[Self.Treeable]()
+        self.data.append(init_data.copy())
+
+    @implicit
+    fn __init__(out self, init_data: List[Self]) raises:
+        self.data = List[Self.Treeable]()
+        for d in init_data:
+            self.data.append(d.copy())
+            
+        if not self.data[0].isa[Tensor]():
+            raise "Error: The list shoudl contain of Tensors directly"
+
+    @implicit
+    fn __init__(out self, init_data: List[Tensor]) raises:
+        self.data = List[Self.Treeable]()
+        for d in init_data:
+            self.data.append(d.copy())
+
+    @implicit
+    fn __init__(out self, *init_data: Self) raises:
+        self.data = List[Self.Treeable]()
+        for d in init_data:
+            self.data.append(d.copy())
+       
+    fn __setitem__(mut self, _key: Variant[String, Int], value: Self.Treeable) raises:
+        if _key.isa[Int]():
+            var idx = _key[Int]
+            if idx >= len(self.data):
+                raise Error("Index out of range in seetitem for MoTree")
+
+            if value.isa[Self]():
+                self.data[idx] = value[Self].copy()
+            elif value.isa[Tensor]():
+                self.data[idx] = value[Tensor]
+            elif value.isa[Int]():
+                self.data[idx] = value[Int]
+            elif value.isa[Float32]():
+                self.data[idx] = value[Float32]
+            elif value.isa[Dict[String, Self]]():
+                self.data[idx] = value[Dict[String, Self]].copy()
+            else:
+                raise Error("Cannot setitem of MoTree on unknown Type.")
+            
+        elif _key.isa[String]():
+            if len(self.data) == 0:
+                self.data.append(Dict[String, Self]())
+
+            if not self.data[0].isa[Dict[String, Self]]():
+                raise Error("MoTree is not a dictionary!")
+
+            var key = _key[String]
+            if value.isa[Self]():
+                self.data[0][Dict[String, Self]][key] = value[Self].copy()
+            elif value.isa[Tensor]():
+                self.data[0][Dict[String, Self]][key] = value[Tensor]
+            elif value.isa[Int]():
+                self.data[0][Dict[String, Self]][key] = value[Int]
+            elif value.isa[Float32]():
+                self.data[0][Dict[String, Self]][key] = value[Float32]
+            else:
+                raise Error("Cannot setitem of MoTree on unknown Type.")
+        
+
+    fn __getitem__(self, key: Variant[String, Int]) raises -> Self:
+        if key.isa[String]():
+            var k = key[String]
+            if len(self.data) == 1:
+                if self.data[0].isa[Dict[String, Self]]():
+                    return self.data[0][Dict[String, Self]][k].copy()
+                else:
+                    raise Error("Unknsupported return type in getitem")
+            else:
+                raise Error("Cannot get item with key:", k)
+
+        elif key.isa[Int]():
+            var idx = key[Int]
+            if idx < len(self.data):
+                if self.data[idx].isa[Self]():
+                    return self.data[idx][Self].copy()
+                elif self.data[idx].isa[Tensor]():
+                    return self.data[idx][Tensor]
+                elif self.data[idx].isa[Int]():
+                    return self.data[idx][Int]
+                elif self.data[idx].isa[Float32]():
+                    return self.data[idx][Float32]
+                elif self.data[idx].isa[Dict[String, Self]]():
+                    return self.data[idx][Dict[String, Self]]
+                else:
+                    raise Error("Unknsupported return type in getitem")
+            else:
+                raise Error("Cannot get item at idx:", idx)
+        else:
+            raise Error("Cannot retreive value, unknown key")
+
+    fn as_tensor(self) raises -> Tensor:
+        if self.data[0].isa[Tensor]():
+            return self.data[0][Tensor]
+        elif self.data[0].isa[Int]():
+            return full(self.data[0][Int], [], DType.int32)
+        elif self.data[0].isa[Float32]():
+            return full(self.data[0][Int], [], DType.int32)
+        else:
+            raise Error("Value cannot be converted to a Tensor")
+
+    fn as_int(self) raises -> Int:
+        if self.data[0].isa[Int]():
+            return self.data[0][Int]
+        elif self.data[0].isa[Float32]():
+            return Int(self.data[0][Float32])
+        else:
+            raise Error("Value cannot be converted to an Int")
+
+    fn as_float32(self) raises -> Float32:
+        if self.data[0].isa[Int]():
+            return Float32(self.data[0][Int])
+        elif self.data[0].isa[Float32]():
+            return self.data[0][Float32]
+        else:
+            raise Error("Value cannot be converted to a Float32")
+
+
+    fn get_all_tensors(self) raises -> List[Tensor]:
+        var tensors = List[Tensor]()
+        _retreive_tensors_rec(self, tensors)
+        return tensors^
+
+    fn __getattr__(self, name: String) raises -> Self:
+        return self[name]
+
+    fn __setattr__(mut self, name: String, val: Self) raises:
+        self[name] = val.copy()
+
+
+fn _retreive_tensors_rec(curr: MoTree, mut tensors: List[Tensor]) raises -> None:
+    for val in curr.data:
+        if val.isa[Tensor]():
+            tensors.append(val[Tensor])
+        elif val.isa[Dict[String, MoTree]]():
+            for value in val[Dict[String, MoTree]].values():
+                _retreive_tensors_rec(value, tensors)
+        else:
+            return
+
 
 struct TensorImpl(Copyable, Movable):
     """Unsafe access to internal representation of the Tensor."""
@@ -1298,7 +1470,24 @@ fn get_unmaterialized_trace_with_constants(
     return (trace^, inputs^, constants^)
 
 
-fn realize(mut unmaterialized_outputs: List[Tensor], ctx: ArcPointer[Dict[UInt64, ArcPointer[MaxModel]]]) raises:
+struct ExecutionContext(ImplicitlyCopyable, Movable):
+    var model_dict_ptr: ArcPointer[Dict[UInt64, ArcPointer[MaxModel]]]
+
+    fn __init__(out self) raises:
+        self.model_dict_ptr = ArcPointer(Dict[UInt64, ArcPointer[MaxModel]]())
+
+    fn __getitem__(self, key: UInt64) raises -> ArcPointer[MaxModel]:
+        return self.model_dict_ptr[][key]
+
+    fn __setitem__(mut self, key: UInt64, val: ArcPointer[MaxModel]) raises:
+        self.model_dict_ptr[][key] = val
+
+
+fn realize(mut unmaterialized_output: Tensor, _ctx: Optional[ExecutionContext] = None) raises:
+    var unmaterialized_outputs = [unmaterialized_output]
+    return realize(unmaterialized_outputs, _ctx)
+
+fn realize(mut unmaterialized_outputs: List[Tensor], _ctx: Optional[ExecutionContext] = None) raises:
     """Realize all tensors' data."""
     # get trace with constants separated
     var trace_tuple = get_unmaterialized_trace_with_constants(
@@ -1324,8 +1513,14 @@ fn realize(mut unmaterialized_outputs: List[Tensor], ctx: ArcPointer[Dict[UInt64
         key = key ^ (tensor_hash + 0x9E3779B9 + (key << 6) + (key >> 2))
     key = key % 1000000007
 
+    # creat or use exection context
+    if not _ctx:
+        ctx = ExecutionContext()
+    else:
+        ctx = _ctx[]
+
     # check for available compiled model
-    if not key in ctx[]:
+    if not key in ctx.model_dict_ptr[]:
         # compile new model using inputs (args + constants) as graph inputs
         var input_types = List[MaxTensorType]()
         # Then add constants
@@ -1384,7 +1579,7 @@ fn realize(mut unmaterialized_outputs: List[Tensor], ctx: ArcPointer[Dict[UInt64
 
         # Create MAX inference session and load the compiled graph
         var session = MaxInferenceSession([MaxDevice.cpu()])
-        ctx[][key] = ArcPointer(session.load(graph))
+        ctx[key] = ArcPointer(session.load(graph))
 
         # Clean up tensor values from constants after compilation
         for var constant in constants:
@@ -1396,7 +1591,7 @@ fn realize(mut unmaterialized_outputs: List[Tensor], ctx: ArcPointer[Dict[UInt64
     for i in range(len(constants)):
         max_inputs.append(constants[i].data())
 
-    max_outputs = ctx[][key][].execute(max_inputs)
+    max_outputs = ctx[key][].execute(max_inputs)
     for i in range(len(unmaterialized_outputs)):
         unmaterialized_outputs[i].set_data(max_outputs[i])
 
@@ -1408,7 +1603,7 @@ fn realize(mut unmaterialized_outputs: List[Tensor], ctx: ArcPointer[Dict[UInt64
 
 
 struct Callable(Copyable, Movable):
-    var func: fn (args: List[Tensor]) raises -> List[Tensor]
+    var func: fn (args: MoTree) raises -> MoTree
     var name: String
     var compiled_model: Dict[UInt64, ArcPointer[MaxModel]]
     var constants: Dict[UInt64, List[Tensor]]
@@ -1416,7 +1611,7 @@ struct Callable(Copyable, Movable):
 
     fn __init__(
         out self,
-        func: fn (args: List[Tensor]) raises -> List[Tensor],
+        func: fn (args: MoTree) raises -> MoTree,
         name: String,
         compiled: Bool = False,
     ) raises:
@@ -1429,27 +1624,20 @@ struct Callable(Copyable, Movable):
     fn compile(mut self) raises:
         self.compiled = True
 
-    fn __call__(mut self, args: List[Tensor]) raises -> List[Tensor]:
+    fn __call__(mut self, all_args: MoTree) raises -> MoTree:
         if not self.compiled:
-            return self.func(args)
+            return self.func(all_args)            
         else:
-            # check if indeed all args are materialized
-            for arg in args:
+            var args = all_args.get_all_tensors()
+            for ref arg in args:
                 if not arg.has_data():
                     raise Error(
                         "All input tensors must be materialized for compiled execution" + err_loc()
                     )
-
-            # Mark all args with "is_arg" metadata
-            # NOTE: args uses ArcPointer, so modifying through the list modifies the shared storage
-            var mut_args = List[Tensor]()
-            for i in range(len(args)):
-                # Create a wrapper that marks this specific arg
-                var arg = args[i]
                 arg["is_arg"] = List[Int]()
-                mut_args.append(arg)
 
-            var unmaterialized_outputs = self.func(mut_args)
+            var _unmaterialized_outputs = self.func(all_args)
+            var unmaterialized_outputs = _unmaterialized_outputs.get_all_tensors()
             # get trace with constants separated
             var trace_tuple = get_unmaterialized_trace_with_constants(
                 unmaterialized_outputs
@@ -1586,9 +1774,9 @@ struct Callable(Copyable, Movable):
             for var output in unmaterialized_outputs:
                 output.remove_tensor_value()
 
-            return unmaterialized_outputs^
+            return _unmaterialized_outputs^ # now materialized!
 
-fn jit(func: fn (args: List[Tensor]) raises -> List[Tensor]) raises -> Callable:
+fn jit(func: fn (args: MoTree) raises -> MoTree) raises -> Callable:
     return Callable(func, "func", True)
 
 trait Module(Copyable, Movable):
@@ -1598,7 +1786,7 @@ trait Module(Copyable, Movable):
     fn params(self) raises -> List[Tensor]:
         ...
 
-    fn ctx(self) raises -> ArcPointer[Dict[UInt64, ArcPointer[MaxModel]]]:
+    fn ctx(self) raises -> ExecutionContext:
         ...
 
     fn execute(self, args: List[Tensor]) raises -> List[Tensor]:
@@ -1618,12 +1806,12 @@ trait Module(Copyable, Movable):
 struct Linear(Module):
     var weight: Tensor
     var bias: Tensor
-    var _ctx: ArcPointer[Dict[UInt64, ArcPointer[MaxModel]]]
+    var _ctx: ExecutionContext
 
     fn __init__(out self, in_dim: Int, out_dim: Int) raises:
         self.weight = randn([in_dim, out_dim])
         self.bias = randn([out_dim])
-        self._ctx = ArcPointer(Dict[UInt64, ArcPointer[MaxModel]]())
+        self._ctx = ExecutionContext()
 
     fn __call__(self, args: List[Tensor]) raises -> List[Tensor]:
         return [relu(args[0] @ self.weight + self.bias)]
@@ -1631,19 +1819,19 @@ struct Linear(Module):
     fn params(self) raises -> List[Tensor]:
         return [self.weight, self.bias]
 
-    fn ctx(self) raises -> ArcPointer[Dict[UInt64, ArcPointer[MaxModel]]]:
+    fn ctx(self) raises -> ExecutionContext:
         return self._ctx
 
 
 struct MLP(Module):
     var layers: List[Linear]
-    var _ctx: ArcPointer[Dict[UInt64, ArcPointer[MaxModel]]]
+    var _ctx: ExecutionContext
 
     fn __init__(out self, layer_dims: List[Int]) raises:
         self.layers = []
         for i in range(1, len(layer_dims)):
             self.layers.append(Linear(layer_dims[i-1], layer_dims[i]))
-        self._ctx = ArcPointer(Dict[UInt64, ArcPointer[MaxModel]]())
+        self._ctx = ExecutionContext()
 
     fn __call__(self, args: List[Tensor]) raises -> List[Tensor]:
         var hidden = args.copy()
@@ -1657,5 +1845,5 @@ struct MLP(Module):
             layer_params.extend(layer.params())
         return layer_params^
 
-    fn ctx(self) raises -> ArcPointer[Dict[UInt64, ArcPointer[MaxModel]]]:
+    fn ctx(self) raises -> ExecutionContext:
         return self._ctx

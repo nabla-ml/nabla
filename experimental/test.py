@@ -75,7 +75,7 @@ def main():
         t_iter_start = time.perf_counter()
         
         # Create input tensor filled with iteration number
-        input_tensor = torch.full((64, 512), float(it))
+        input_tensor = torch.full((4, 512), float(it))
         
         # Pack all arguments: input + all weights and biases
         all_args = [

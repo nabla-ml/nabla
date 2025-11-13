@@ -1,5 +1,6 @@
 from nabla.all import Tensor, randn, Callable, full, relu, err_loc, matmul, MLP, Linear, ndarange
 from time import perf_counter_ns
+from utils import Variant
 
 
 fn main() raises:
