@@ -1,5 +1,5 @@
-from nabla_new.core.tensor import Tensor
-from nabla_new.core.execution import ExecutionContext, realize
+from nabla.core.tensor import Tensor
+from nabla.core.execution import ExecutionContext, realize
 
 
 trait Module(Copyable, Movable):

@@ -1,7 +1,7 @@
-from nabla_new.core.tensor import Tensor
-from nabla_new.core.motree import MoTree
-from nabla_new.core.execution import get_unmaterialized_trace_with_constants
-from nabla_new.max_bindings import (
+from nabla.core.tensor import Tensor
+from nabla.core.motree import MoTree
+from nabla.core.execution import get_unmaterialized_trace_with_constants
+from nabla.utils.max_bindings import (
     MaxTensorType,
     MaxDType,
     MaxGraph,
@@ -9,9 +9,9 @@ from nabla_new.max_bindings import (
     MaxTensorValue,
     MaxInferenceSession,
     MaxDevice,
-    MaxTensor,  
+    MaxTensor,
 )
-from nabla_new.utils import err_loc
+from nabla.utils.debug import err_loc
 from memory import ArcPointer
 
 

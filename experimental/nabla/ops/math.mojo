@@ -1,7 +1,7 @@
-from nabla_new.core.tensor import Tensor
-from nabla_new.max_bindings import MaxTensorValue, MaxDevice, graph_ops
-from nabla_new.utils import err_loc
-from nabla_new.ops.interface import Operation, BinaryOp, UnaryOp
+from nabla.core.tensor import Tensor
+from nabla.utils.max_bindings import MaxTensorValue, MaxDevice, graph_ops
+from nabla.utils.debug import err_loc
+from nabla.ops.interface import Operation, BinaryOp, UnaryOp
 
 
 struct AddOp(BinaryOp):

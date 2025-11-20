@@ -1,8 +1,8 @@
-from nabla_new.core.tensor import Tensor
-from nabla_new.core.execution import ExecutionContext
-from nabla_new.ops.creation import randn
-from nabla_new.ops.math import matmul, add
-from nabla_new.ops.activations import relu
+from nabla.core.tensor import Tensor
+from nabla.core.execution import ExecutionContext
+from nabla.ops.creation import randn
+from nabla.ops.math import matmul, add
+from nabla.ops.activations import relu
 from .module import Module
 
 

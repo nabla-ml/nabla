@@ -1,6 +1,6 @@
-from nabla_new.core.tensor import Tensor
-from nabla_new.max_bindings import MaxTensorValue, MaxDevice
-from nabla_new.utils import err_loc
+from nabla.core.tensor import Tensor
+from nabla.utils.max_bindings import MaxTensorValue, MaxDevice
+from nabla.utils.debug import err_loc
 
 
 fn is_broadcastable(shape_a: List[Int], shape_b: List[Int]) raises -> Bool:

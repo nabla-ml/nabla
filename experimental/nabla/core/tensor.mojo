@@ -1,4 +1,4 @@
-from ..max_bindings import (
+from ..utils.max_bindings import (
     MaxTensor,
     MaxTensorValue,
     MaxDType,
@@ -6,7 +6,7 @@ from ..max_bindings import (
     _list_to_py_tuple,
     _list_to_py_list,
 )
-from ..utils import err_loc
+from ..utils.debug import err_loc
 from python import Python, PythonObject
 from memory import ArcPointer, UnsafePointer
 

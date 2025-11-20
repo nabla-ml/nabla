@@ -1,7 +1,7 @@
-import nabla_new as nb
+import nabla as nb
 
 
-fn main() raises:
+fn test_refactor() raises:
     print("Testing Nabla Refactor...")
 
     # Test Tensor creation

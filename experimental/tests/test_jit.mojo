@@ -1,6 +1,6 @@
-from nabla_new import Tensor, MoTree, jit, relu, randn
+from nabla import Tensor, MoTree, jit, relu, randn
 from time import perf_counter_ns
-from nabla_new.utils import err_loc
+from nabla.utils.debug import err_loc
 
 
 fn mlp(args: MoTree) raises -> MoTree:
@@ -16,7 +16,7 @@ fn mlp(args: MoTree) raises -> MoTree:
     return output
 
 
-fn main() raises:
+fn test_jit() raises:
     var params = [
         randn([512, 2048], 0.0, 0.02),
         randn([2048], 0.0, 0.01),
@@ -40,7 +40,7 @@ fn main() raises:
 
     var mlp_jit = jit(mlp)
 
-    for it in range(20000):
+    for it in range(100):
         var t_iter_start = perf_counter_ns()
 
         var input = randn([4, 512])
@@ -49,6 +49,6 @@ fn main() raises:
         var t_iter_end = perf_counter_ns()
         var iter_time_ms = (t_iter_end - t_iter_start) / 1_000_000
 
-        if it % 100 == 0:
+        if it % 10 == 0:
             print("Iteration", it, "| Time:", iter_time_ms, "ms")
             print(output.as_tensor())

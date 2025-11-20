@@ -1,6 +1,11 @@
-from nabla_new.core.tensor import Tensor
-from nabla_new  .max_bindings import MaxTensor, MaxDType, _list_to_py_tuple, _list_to_py_list
-from nabla_new.utils import err_loc
+from nabla.core.tensor import Tensor
+from nabla.utils.max_bindings import (
+    MaxTensor,
+    MaxDType,
+    _list_to_py_tuple,
+    _list_to_py_list,
+)
+from nabla.utils.debug import err_loc
 from python import Python
 
 

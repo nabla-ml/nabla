@@ -1,7 +1,12 @@
-from nabla_new.core.tensor import Tensor
-from nabla_new.max_bindings import MaxTensorValue, MaxDevice, graph_ops, _list_to_py_tuple
-from nabla_new.utils import err_loc
-from nabla_new.ops.interface import Operation, is_broadcastable
+from nabla.core.tensor import Tensor
+from nabla.utils.max_bindings import (
+    MaxTensorValue,
+    MaxDevice,
+    graph_ops,
+    _list_to_py_tuple,
+)
+from nabla.utils.debug import err_loc
+from nabla.ops.interface import Operation, is_broadcastable
 
 
 struct ReshapeOp(Operation):

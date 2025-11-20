@@ -1,7 +1,7 @@
-import nabla_new as nb
+import nabla as nb
 
 
-fn main() raises:
+fn test_exports() raises:
     print("Testing explicit module exports...")
 
     # Test core types

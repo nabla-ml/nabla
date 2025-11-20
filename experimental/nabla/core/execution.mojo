@@ -1,5 +1,5 @@
 from memory import ArcPointer
-from nabla_new.max_bindings import (
+from nabla.utils.max_bindings import (
     MaxModel,
     MaxGraph,
     MaxTensorType,
@@ -12,7 +12,7 @@ from nabla_new.max_bindings import (
     _list_to_py_tuple,
 )
 from .tensor import Tensor
-from ..utils import err_loc
+from nabla.utils.debug import err_loc
 
 
 struct ExecutionContext(ImplicitlyCopyable, Movable):

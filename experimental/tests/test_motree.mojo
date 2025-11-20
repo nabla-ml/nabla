@@ -1,4 +1,4 @@
-from nabla_new import (
+from nabla import (
     MoTree,
     ndarange,
     randn,
@@ -16,10 +16,10 @@ fn foo(args: MoTree) raises -> MoTree:
     return relu(x @ w1 + b1 + full(sth, []))
 
 
-fn main() raises:
+fn test_motree() raises:
     var foo_jit = jit(foo)
 
-    for it in range(10000):
+    for it in range(100):
         var args = MoTree()
         args.arg = ndarange([4, 1])
         args.w1 = randn([1, 4])
@@ -31,7 +31,7 @@ fn main() raises:
 
         var res = foo_jit(args).as_tensor()
 
-        if it % 100 == 0:
+        if it % 10 == 0:
             print("\nIteration", it)
             for tensor in tensors:
                 print(tensor)

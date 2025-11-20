@@ -1,7 +1,7 @@
-from nabla_new.core.tensor import Tensor
-from nabla_new.max_bindings import MaxTensorValue, graph_ops
-from nabla_new.utils import err_loc
-from nabla_new.ops.interface import UnaryOp
+from nabla.core.tensor import Tensor
+from nabla.utils.max_bindings import MaxTensorValue, graph_ops
+from nabla.utils.debug import err_loc
+from nabla.ops.interface import UnaryOp
 
 
 struct ReluOp(UnaryOp):
