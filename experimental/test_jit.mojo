@@ -1,5 +1,6 @@
-from nabla.all import Tensor, randn, jit, full, relu, err_loc, matmul, MoTree
+from nabla_new import Tensor, MoTree, jit, relu, randn
 from time import perf_counter_ns
+from nabla_new.utils import err_loc
 
 
 fn mlp(args: MoTree) raises -> MoTree:
@@ -8,7 +9,7 @@ fn mlp(args: MoTree) raises -> MoTree:
     var h3 = relu(h2 @ args[5].as_tensor() + args[6].as_tensor())
     var h4 = relu(h3 @ args[7].as_tensor() + args[8].as_tensor())
     var h5 = relu(h4 @ args[9].as_tensor() + args[10].as_tensor())
-    var h6 = relu(matmul(h5, args[11].as_tensor()) + args[12].as_tensor())
+    var h6 = relu(h5 @ args[11].as_tensor() + args[12].as_tensor())
     var h7 = relu(h6 @ args[13].as_tensor() + args[14].as_tensor())
     var h8 = relu(h7 @ args[15].as_tensor() + args[16].as_tensor())
     var output = h8 @ args[17].as_tensor() + args[18].as_tensor()
