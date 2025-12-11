@@ -153,9 +153,17 @@ class ModelFactory:
                         and input_node.impl is not None
                     ):
                         from max.graph.ops import constant
+                        import numpy as np
+
+                        np_data = input_node.to_numpy()
+                        # WORKAROUND: ops.constant has a bug where it interprets
+                        # np.array(1, dtype=float32) as shape [1] instead of []
+                        # So for scalars, we convert to Python scalar using .item()
+                        if isinstance(np_data, np.ndarray) and np_data.shape == ():
+                            np_data = np_data.item()
 
                         input_node.tensor_value = constant(
-                            input_node.to_numpy(),
+                            np_data,
                             input_node.dtype,
                             DeviceRef.from_device(input_node.logical_device),
                         )  # add tensor_value as constant weight to the graph

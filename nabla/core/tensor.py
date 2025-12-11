@@ -108,6 +108,9 @@ class Tensor:
             return self._impl.device
         elif isinstance(self._impl, np.ndarray):
             return _DEFAULT_CPU
+        elif isinstance(self._impl, (list, tuple)):
+            # Container tensor
+            return _DEFAULT_CPU
         else:
             raise TypeError(f"Unsupported implementation type: {type(self._impl)}")
 
@@ -195,8 +198,8 @@ class Tensor:
         self.realize()  # Ensure the Tensor is realized before converting
         if self._impl is None:
             raise ValueError("Cannot get NumPy tensor from None impl")
-        if isinstance(self._impl, np.ndarray):
-            return self._impl
+        if isinstance(self._impl, (np.ndarray, np.generic)):
+            return np.asarray(self._impl)
         if not isinstance(self._impl, MAXTensor):
             raise TypeError(
                 f"Cannot convert Tensor with impl type {type(self._impl)} to NumPy tensor"

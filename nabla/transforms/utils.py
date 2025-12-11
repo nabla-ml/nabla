@@ -24,6 +24,12 @@ from typing import Any
 from ..core.tensor import Tensor
 
 
+
+class _TensorPlaceholder:
+    """Sentinel class to represent a Tensor in the flattened structure."""
+    pass
+
+
 def tree_flatten(tree: Any) -> tuple[list[Tensor], Any]:
     """Flatten a pytree into a list of Tensors and structure info.
 
@@ -38,7 +44,7 @@ def tree_flatten(tree: Any) -> tuple[list[Tensor], Any]:
     def _flatten(obj: Any) -> Any:
         if isinstance(obj, Tensor):
             leaves.append(obj)
-            return None  # Placeholder for Tensor
+            return _TensorPlaceholder()  # Placeholder for Tensor
         elif isinstance(obj, dict):
             keys = sorted(obj.keys())  # Deterministic ordering
             return {k: _flatten(obj[k]) for k in keys}
@@ -65,7 +71,7 @@ def tree_unflatten(structure: Any, leaves: list[Tensor]) -> Any:
     leaves_iter = iter(leaves)
 
     def _unflatten(struct: Any) -> Any:
-        if struct is None:  # Tensor placeholder
+        if isinstance(struct, _TensorPlaceholder):  # Tensor placeholder
             try:
                 return next(leaves_iter)
             except StopIteration:
@@ -97,6 +103,7 @@ def tree_unflatten(structure: Any, leaves: list[Tensor]) -> Any:
         pass
 
     return result
+
 
 
 def tree_map(func: Callable[[Tensor], Tensor], tree: Any) -> Any:

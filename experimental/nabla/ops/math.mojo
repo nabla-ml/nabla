@@ -97,7 +97,7 @@ struct Matmul(Operation):
                 + b_shape.__str__()
                 + err_loc()
             )
-        var result_shape = a_shape[0:-1] + b_shape[0:-2] + [b_shape[-1]]
+        var result_shape = List(a_shape[0:-1]) + List(b_shape[0:-2]) + List(b_shape[-1])
         return result_shape^
 
     @staticmethod
