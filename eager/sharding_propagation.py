@@ -1,22 +1,19 @@
 """
-Shardy Propagation: Algorithms and Graph Logic
+Sharding Propagation: Algorithms and Templates
 ==============================================
 
-This module implements the logic for propagating sharding constraints through a
-computation graph. It includes:
-
-1.  **Factor Logic**: Intermediate representations (FactorSharding) for propagation.
-2.  **Rule System**: OpShardingRule and templates for defining operation semantics.
-3.  **Propagation Algorithm**: The 3-phase collect/resolve/update algorithm.
-4.  **Graph Layer**: Operation and ShardingPass definitions.
-5.  **Templates**: Factory functions for common operation rules (matmul, etc.).
+This module implements the logic for propagating sharding constraints.
+It provides:
+1.  **Rule System**: OpShardingRule and templates for defining operation semantics.
+2.  **Propagation Algorithm**: Core logic to propagate specs through a rule.
+3.  **Templates**: Factory functions for common operation rules (matmul, etc.).
 """
 
 from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Dict, List, Optional, Set, Tuple, Union
 
-from core import DeviceMesh, DimSpec, ShardingSpec, GraphTensor
+from .sharding import DeviceMesh, DimSpec, ShardingSpec
 
 # --- Enums ---
 
@@ -545,170 +542,6 @@ def propagate_sharding(
         changed = True
     
     return changed
-
-
-# --- Graph Layer ---
-
-@dataclass
-class Operation:
-    """An operation connecting input/output GraphTensors through an OpShardingRule."""
-    name: str
-    rule: OpShardingRule
-    inputs: List[GraphTensor]
-    outputs: List[GraphTensor]
-    op_priority: int = OpPriority.CONTRACTION  # Default to medium priority
-    
-    def __repr__(self) -> str:
-        in_names = [t.name for t in self.inputs]
-        out_names = [t.name for t in self.outputs]
-        return f"Operation('{self.name}', inputs={in_names}, outputs={out_names})"
-
-
-@dataclass
-class DataFlowEdge:
-    """Bridge between sources and targets that must share the same sharding (e.g., control flow)."""
-    sources: List[GraphTensor]
-    targets: List[GraphTensor]
-    owner: Optional[GraphTensor] = None
-    
-    def __post_init__(self):
-        if self.owner is None and self.targets:
-            self.owner = self.targets[0]
-    
-    def to_identity_rule(self) -> OpShardingRule:
-        """Convert to identity sharding rule (all dims map to same factors)."""
-        if not self.sources:
-            return OpShardingRule([], [], {})
-        
-        ref_shape = self.sources[0].shape
-        factor_names = [f"df{i}" for i in range(len(ref_shape))]
-        factor_sizes = {f"df{i}": ref_shape[i] for i in range(len(ref_shape))}
-        
-        def make_mapping(tensor: GraphTensor) -> Dict[int, List[str]]:
-            return {i: [factor_names[i]] for i in range(len(tensor.shape))}
-        
-        input_mappings = [make_mapping(t) for t in self.sources]
-        output_mappings = [make_mapping(t) for t in self.targets]
-        
-        return OpShardingRule(input_mappings, output_mappings, factor_sizes)
-
-
-class ShardingPass:
-    """Compiler pass that propagates shardings to fixed point."""
-    
-    def __init__(self, ops: List[Operation], 
-                 data_flow_edges: List[DataFlowEdge] = None,
-                 max_iterations: int = 20,
-                 use_op_priority: bool = False,
-                 use_priority_iteration: bool = False,
-                 strategy: PropagationStrategy = PropagationStrategy.BASIC):
-        self.ops = ops
-        self.data_flow_edges = data_flow_edges or []
-        self.max_iterations = max_iterations
-        self.use_op_priority = use_op_priority
-        self.use_priority_iteration = use_priority_iteration
-        self.strategy = strategy
-        self.iteration_count = 0
-
-    def _get_sorted_ops(self) -> List[Operation]:
-        if not self.use_op_priority:
-            return self.ops
-        return sorted(self.ops, key=lambda op: op.op_priority)
-    
-    def _get_user_priority_levels(self) -> List[int]:
-        priorities = set()
-        for op in self.ops:
-            for t in op.inputs + op.outputs:
-                for dim in t.spec.dim_specs:
-                    priorities.add(dim.priority)
-        return sorted(priorities)
-
-    def run_pass(self) -> int:
-        self.iteration_count = 0
-        sorted_ops = self._get_sorted_ops()
-        
-        if self.use_priority_iteration:
-            return self._run_priority_iteration(sorted_ops)
-        else:
-            return self._run_simple_iteration(sorted_ops)
-    
-    def _run_simple_iteration(self, sorted_ops: List[Operation]) -> int:
-        while self.iteration_count < self.max_iterations:
-            self.iteration_count += 1
-            changed = self._propagate_once(sorted_ops, max_priority=None)
-            if not changed:
-                return self.iteration_count
-        
-        raise RuntimeError(
-            f"Sharding propagation did not converge after {self.max_iterations} iterations"
-        )
-    
-    def _run_priority_iteration(self, sorted_ops: List[Operation]) -> int:
-        priority_levels = self._get_user_priority_levels()
-        
-        for current_max_priority in priority_levels:
-            level_iterations = 0
-            max_level_iterations = self.max_iterations
-            
-            while level_iterations < max_level_iterations:
-                self.iteration_count += 1
-                level_iterations += 1
-                
-                changed = self._propagate_once(sorted_ops, max_priority=current_max_priority)
-                if not changed:
-                    break
-            
-            if level_iterations >= max_level_iterations:
-                raise RuntimeError(
-                    f"Sharding propagation did not converge at priority level "
-                    f"{current_max_priority} after {max_level_iterations} iterations"
-                )
-        
-        return self.iteration_count
-    
-    def _propagate_once(self, sorted_ops: List[Operation], max_priority: Optional[int]) -> bool:
-        changed = False
-        
-        for op in sorted_ops:
-            in_specs = [t.spec for t in op.inputs]
-            out_specs = [t.spec for t in op.outputs]
-            
-            if propagate_sharding(op.rule, in_specs, out_specs, self.strategy, max_priority):
-                changed = True
-        
-        for edge in self.data_flow_edges:
-            rule = edge.to_identity_rule()
-            source_specs = [t.spec for t in edge.sources]
-            target_specs = [t.spec for t in edge.targets]
-            
-            if propagate_sharding(rule, source_specs, target_specs, self.strategy, max_priority):
-                changed = True
-        
-        return changed
-    
-    def get_sharding_summary(self) -> Dict[str, str]:
-        summary = {}
-        seen = set()
-        
-        for op in self.ops:
-            for t in op.inputs + op.outputs:
-                if t.name not in seen:
-                    summary[t.name] = str(t.spec)
-                    seen.add(t.name)
-        return summary
-    
-    def get_propagation_table(self) -> str:
-        lines = ["Sharding Propagation Summary", "=" * 40]
-        for op in self.ops:
-            lines.append(f"\nOperation: {op.name}")
-            lines.append(f"  Rule: {op.rule.to_einsum_notation()}")
-            lines.append(f"  Inputs:")
-            for t in op.inputs:
-                lines.append(f"    {t.name}: {t.spec}")
-            lines.append(f"  Outputs:")
-            for t in op.outputs:
-                lines.append(f"    {t.name}: {t.spec}")
-        return "\n".join(lines)
 
 
 # --- Template Factories ---

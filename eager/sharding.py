@@ -1,11 +1,10 @@
 """
-Shardy Core: Physical and Representation Layers
+Sharding Core: Physical and Representation Layers
 ===============================================
 
-This module implements the fundamental data structures for the Shardy system:
+This module implements the fundamental data structures for the Sharding system:
 1.  **Physical Layer**: DeviceMesh for logical device organization.
 2.  **Representation Layer**: ShardingSpec and DimSpec for tensor sharding.
-3.  **Tensor Layer**: DistributedTensor and GraphTensor definitions.
 
 This file contains state definitions only and does not contain propagation algorithms.
 """
@@ -344,49 +343,49 @@ class ShardingSpec:
         return min((d.priority for d in self.dim_specs), default=0)
 
 
-# --- Execution Layer: Distributed Tensor ---
-
-class DistributedTensor:
-    """A tensor distributed across devices according to a ShardingSpec."""
+def compute_local_shape(
+    global_shape: Tuple[int, ...],
+    sharding: ShardingSpec,
+    device_id: int,
+) -> Tuple[int, ...]:
+    """Compute the local shard shape for a device.
     
-    def __init__(self, global_shape: Tuple[int, ...], spec: ShardingSpec, dtype_size: int = 4):
-        self.global_shape = global_shape
-        self.spec = spec
-        self.mesh = spec.mesh
-        self.dtype_size = dtype_size  # Bytes per element (4 for float32)
+    Args:
+        global_shape: The global tensor shape
+        sharding: The sharding specification
+        device_id: The device ID to compute shape for
+        
+    Returns:
+        The local shape on that device
+        
+    Example:
+        >>> mesh = DeviceMesh("m", (2,), ("x",))
+        >>> spec = ShardingSpec(mesh, [DimSpec(["x"]), DimSpec([])])
+        >>> compute_local_shape((8, 4), spec, device_id=0)
+        (4, 4)  # First half of dim 0
+    """
+    local_shape = []
+    for dim_idx in range(len(global_shape)):
+        if dim_idx >= len(sharding.dim_specs):
+            # Implicitly replicated if dim spec missing
+            local_shape.append(global_shape[dim_idx])
+            continue
 
-    @property
-    def shape(self) -> Tuple[int, ...]:
-        return self.global_shape
-
-    def get_local_shape(self, device_id: int) -> Tuple[int, ...]:
-        """Get the local tensor shape on a specific device."""
-        local_shape = []
-        for dim_idx in range(len(self.global_shape)):
-            start, end, padding = self.get_local_interval(dim_idx, device_id)
-            local_shape.append(end - start + padding)
-        return tuple(local_shape)
-
-    def get_local_interval(self, dim_idx: int, device_id: int) -> Tuple[int, int, int]:
-        """Return (start, end, padding) for this dimension on the given device."""
-        # Handle dimensions beyond spec (implicit replication for scalars, etc.)
-        if dim_idx >= len(self.spec.dim_specs):
-            return 0, self.global_shape[dim_idx], 0
-
-        dim_spec = self.spec.dim_specs[dim_idx]
-        global_len = self.global_shape[dim_idx]
+        dim_spec = sharding.dim_specs[dim_idx]
+        global_len = global_shape[dim_idx]
         
         # Fully replicated dimension
         if not dim_spec.axes:
-            return 0, global_len, 0
+            local_shape.append(global_len)
+            continue
 
         # Calculate shard index from major-to-minor axis coordinates
         total_shards = 1
         my_shard_index = 0
         
         for axis_name in dim_spec.axes:
-            size = self.mesh.get_axis_size(axis_name)
-            coord = self.mesh.get_coordinate(device_id, axis_name)
+            size = sharding.mesh.get_axis_size(axis_name)
+            coord = sharding.mesh.get_coordinate(device_id, axis_name)
             my_shard_index = (my_shard_index * size) + coord
             total_shards *= size
         
@@ -396,42 +395,23 @@ class DistributedTensor:
         theoretical_end = start + chunk_size
         real_end = min(theoretical_end, global_len)
         
-        # Handle padding for uneven sharding
-        padding = 0
-        if start >= global_len:
-            # This shard is entirely padding
-            return 0, 0, chunk_size
-        if theoretical_end > global_len:
-            # Partial padding needed
-            padding = theoretical_end - global_len
+        # Handle padding
+        length = max(0, real_end - start)
+        # In a real implementation we might need to handle padding
+        local_shape.append(length)
 
-        return start, real_end, padding
+    return tuple(local_shape)
 
-    def get_byte_size(self) -> int:
-        """Get total byte size of the global tensor."""
-        return int(np.prod(self.global_shape)) * self.dtype_size
+
+def get_num_shards(sharding: ShardingSpec) -> int:
+    """Get the total number of shards for this sharding spec.
     
-    def get_local_byte_size(self, device_id: int) -> int:
-        """Get byte size of the local shard on a device."""
-        local_shape = self.get_local_shape(device_id)
-        return int(np.prod(local_shape)) * self.dtype_size
-
-
-class GraphTensor(DistributedTensor):
-    """A named tensor in the computation graph with associated sharding."""
+    This equals the total number of devices in the mesh.
     
-    def __init__(self, name: str, shape: Tuple[int, ...], mesh: DeviceMesh, 
-                 initial_spec: ShardingSpec = None):
-        if initial_spec is None:
-            # Default: fully open, unspecified sharding
-            # From Shardy spec: "no sharding attribute on a tensor is equivalent 
-            # to a fully open tensor sharding"
-            initial_spec = ShardingSpec(
-                mesh, 
-                [DimSpec([], is_open=True) for _ in shape]
-            )
-        super().__init__(shape, initial_spec)
-        self.name = name
-    
-    def __repr__(self) -> str:
-        return f"GraphTensor('{self.name}', shape={self.shape}, spec={self.spec})"
+    Args:
+        sharding: The sharding specification
+        
+    Returns:
+        Number of shards (devices)
+    """
+    return len(sharding.mesh.devices)

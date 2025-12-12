@@ -18,9 +18,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from max import driver, graph
+from max.driver import Device
+from max.dtype import DType
 
 if TYPE_CHECKING:
     from .ops import Operation
+    from .sharding import ShardingSpec
 
 
 class TensorImpl:
@@ -41,7 +44,7 @@ class TensorImpl:
         grad: Gradient TensorImpl, populated after backward pass.
         batch_dims: Number of batch dimensions (always prefix of physical shape).
     """
-    __slots__ = ('_values', '_storages', 'sharding', 'parents', 'op', 'op_kwargs', 'traced', 'grad', 'batch_dims')
+    __slots__ = ('_values', '_storages', 'sharding', 'parents', 'op', 'op_kwargs', 'traced', 'grad', 'batch_dims', 'cached_shape', 'cached_dtype', 'cached_device')
     
     _values: list[graph.BufferValue | graph.TensorValue]
     _storages: list[driver.Tensor] | None
@@ -52,6 +55,10 @@ class TensorImpl:
     traced: bool
     grad: TensorImpl | None
     batch_dims: int
+    # Cached metadata for sharding (survives graph consumption)
+    cached_shape: tuple[int, ...] | None
+    cached_dtype: DType | None
+    cached_device: Device | None
     
     def __init__(
         self,
@@ -62,7 +69,7 @@ class TensorImpl:
         op_kwargs: dict[str, Any] | None = None,
         traced: bool = False,
         batch_dims: int = 0,
-        sharding: object | None = None,
+        sharding: ShardingSpec | None = None,
     ):
         # Normalize values to list
         if values is None:
@@ -87,6 +94,11 @@ class TensorImpl:
         self.traced = traced
         self.grad = None
         self.batch_dims = batch_dims
+        
+        # Initialize cached metadata (populated during operation execution)
+        self.cached_shape = None
+        self.cached_dtype = None
+        self.cached_device = None
         
         # Validate sharding consistency (basic checks for now)
         self._validate_sharding()
@@ -185,18 +197,50 @@ class TensorImpl:
     
     @property
     def logical_shape(self) -> tuple[int, ...] | None:
-        """Logical shape of shard 0 (excluding batch dims prefix)."""
+        """Logical local shape of shard 0 (excluding batch dims prefix).
+        
+        For sharded tensors, this returns the LOCAL shard shape.
+        Use global_shape for the full tensor shape.
+        """
         return self.logical_local_shape(0)
     
     @property
+    def global_shape(self) -> tuple[int, ...] | None:
+        """Global logical shape of the tensor (excludes batch dims).
+        
+        This is the shape of the full tensor before sharding.
+        For unsharded tensors, this equals logical_shape.
+        """
+        if self.cached_shape is not None:
+            # Exclude batch dims from cached shape
+            return tuple(int(d) for d in self.cached_shape[self.batch_dims:])
+        # Fallback: unsharded case, use local shape
+        return self.logical_shape
+    
+    @property
     def ndim(self) -> int | None:
-        """Number of logical dimensions."""
-        shape = self.logical_shape
+        """Number of logical dimensions (based on global shape)."""
+        shape = self.global_shape
         return len(shape) if shape is not None else None
     
     def __repr__(self) -> str:
         shards_str = f", shards={self.num_shards}" if self.is_sharded else ""
         return f"TensorImpl(op={self.op_name}, traced={self.traced}, parents={len(self.parents)}, batch_dims={self.batch_dims}{shards_str})"
+    
+    def cache_metadata(self, value: graph.TensorValue | graph.BufferValue) -> None:
+        """Cache shape/dtype/device from a TensorValue (survives graph consumption).
+        
+        This metadata is used by the sharding compiler after the MAX graph
+        has been consumed by evaluation.
+        
+        Args:
+            value: The TensorValue or BufferValue to extract metadata from.
+        """
+        tensor_type = value.type.as_tensor() if hasattr(value.type, 'as_tensor') else value.type
+        self.cached_shape = tuple(tensor_type.shape)
+        self.cached_dtype = tensor_type.dtype
+        device = tensor_type.device
+        self.cached_device = device.to_device() if hasattr(device, 'to_device') else device
 
 
 def get_topological_order(impl: TensorImpl) -> list[TensorImpl]:

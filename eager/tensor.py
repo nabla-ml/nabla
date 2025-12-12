@@ -242,8 +242,31 @@ class Tensor(DLPackArray, HasTensorValue):
 
     @property
     def shape(self) -> graph.Shape:
+        """Returns the global logical shape of the tensor.
+        
+        For sharded tensors, this returns the full tensor shape (not shard shape).
+        Use local_shape to get the shape of individual shards.
+        """
+        # Prefer global_shape for consistency (always returns global)
+        if self._impl.global_shape is not None:
+            return graph.Shape(self._impl.global_shape)
+        # Fallback for unrealized tensors without cached shape
         shape = self._backing_value.shape
         return shape if isinstance(shape, graph.Shape) else graph.Shape(shape)
+    
+    def local_shape(self, shard_idx: int = 0) -> graph.Shape:
+        """Returns the shape of a specific shard.
+        
+        Args:
+            shard_idx: Index of the shard (default: 0)
+            
+        Returns:
+            Shape of the specified shard. For unsharded tensors, equals shape.
+        """
+        local = self._impl.logical_local_shape(shard_idx)
+        if local is not None:
+            return graph.Shape(local)
+        return self.shape  # Fallback to global
 
     @property
     def dtype(self) -> DType:

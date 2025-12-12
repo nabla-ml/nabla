@@ -29,7 +29,7 @@ from .tensor_impl import (
 )
 
 # Compute graph
-from .compute_graph import GRAPH, driver_tensor_type
+from .compute_graph import GRAPH, driver_tensor_type, compile_with_sharding
 
 # Main Tensor class
 from .tensor import Tensor
@@ -68,6 +68,16 @@ from .pytree import (
 
 # Random generation
 from . import random
+
+# Sharding infrastructure (core definitions)
+from .sharding import (
+    DeviceMesh,
+    DimSpec,
+    ShardingSpec,
+    compute_local_shape,
+    get_num_shards,
+)
+from .compute_graph import GRAPH, driver_tensor_type, compile_with_sharding
 
 __all__ = [
     # Context
@@ -108,4 +118,11 @@ __all__ = [
     "with_batch_dims",
     # Random
     "random",
+    # Sharding
+    "DeviceMesh",
+    "DimSpec",
+    "ShardingSpec",
+    "compute_local_shape",
+    "get_num_shards",
+    "compile_with_sharding",
 ]

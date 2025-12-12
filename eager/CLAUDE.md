@@ -14,7 +14,11 @@ eager/
 ├── binary_ops.py      # Implementation: Concrete op implementations (Add, Mul...)
 ├── compute_graph.py   # Engine: Computation graph manager & compilation entry point
 ├── context.py         # Utilities: Thread-local settings (device, dtype)
-└── pytree.py          # Utilities: JAX-compatible tree flattening/unflattening
+├── pytree.py          # Utilities: JAX-compatible tree flattening/unflattening
+├── sharding.py        # Sharding: Core state definitions (DeviceMesh, ShardingSpec)
+├── sharding_propagation.py # Sharding: Propagation logic and templates
+└── shardy/            # (Removed)
+
 ```
 
 ## 2. Core Philosophy
@@ -132,6 +136,196 @@ We aim to encapsulate the flexibility of PyTorch with the functional purity of J
 | **Gradients** | `.backward()` on a tensor (Imperative). | `grad(func)` transformation (Functional). | **Both**. We support `Tensor.backward()` (via `parents` graph) AND `grad(func)` (via graph transformation). |
 | **Vectorization** | `vmap` is added on top. | `vmap` is core to the design. | **Core**. `batch_dims` exists on every tensor low-level to support intrinsic vectorization. |
 | **Sharding** | `DTensor` (Mesh based). | `sharding_constraint` (Mesh based). | **Intrinsic**. `TensorImpl.sharding` is a first-class citizen of the tensor state. |
+
+### Sharding Architecture
+| Component | Implementation | Key Properties |
+| :--- | :--- | :--- |
+| **Physical** | `sharding.DeviceMesh` | Logical view of devices (e.g., 2x4 mesh). N-dimensional coordinates. |
+| **Spec** | `sharding.ShardingSpec` | `sharding<@mesh, [dim_specs], replicated={axes}>`. Describes how a tensor is distributed. |
+| **Storage** | `TensorImpl.sharding` | **Intrinsic**. Sharding is a first-class citizen of variable state. |
+| **Logic** | `sharding_propagation` | Contains `OpShardingRuleTemplate` and `propagate_sharding` algorithm. |
+| **Compiler** | `compute_graph.compile_with_sharding` | Multi-phase compiler: Graph Walk -> Propagation -> MAX Graph Rewrite. |
+
+**Files**:
+- `eager/sharding.py`: Core types (`DeviceMesh`, `ShardingSpec`, `DimSpec`).
+- `eager/sharding_propagation.py`: Propagation engine and reusable templates.
+- `eager/compute_graph.py`: Contains compilation entry point.
+
+
+
+
+
+---
+
+## Compilation Flow (Detailed)
+
+Understanding the compilation flow is critical. There are **two phases** and **two paths**.
+
+### Phase 1: Graph Construction (Cheap, No Compilation)
+
+Every operation adds nodes to a MAX graph, but **nothing is compiled yet**.
+
+```
+User Code                    Internal State
+──────────                   ──────────────
+x = Tensor.zeros((4,8))      → TensorValue added to GRAPH.graph
+                             → TensorImpl created with _values=[TensorValue]
+                             → cached_shape = (4, 8)
+
+y = add(x, x)                → ops.add() adds node to GRAPH.graph
+                             → New TensorImpl: _values=[result], parents=[x._impl]
+                             → cached_shape = (4, 8)
+
+[Nothing compiled. Just symbolic graph nodes.]
+```
+
+### Phase 2: Realization (Decision Point)
+
+When user requests data (`print(y)`, `y.item()`, etc.), `GRAPH.evaluate()` is called.
+
+```mermaid
+graph TD
+    A[y.realize called] --> B[GRAPH.evaluate]
+    B --> C{Any sharding<br/>annotations?}
+    C -->|No| D[Normal Path]
+    C -->|Yes| E{All ops<br/>traced?}
+    E -->|No| F[Error: Can't rebuild]
+    E -->|Yes| G[Sharded Path]
+    D --> H[Compile existing MAX graph]
+    G --> I[Build NEW sharded MAX graph]
+    H --> J[Execute & populate _storages]
+    I --> J
+```
+
+---
+
+### Path A: Normal Compilation (No Sharding)
+
+**When**: No tensor in the graph has a `sharding` annotation.
+
+**Steps**:
+
+| Step | Location | What Happens |
+|------|----------|--------------|
+| 1 | `evaluate()` | Collect all unrealized tensors from `GRAPH.unrealized` |
+| 2 | `_needs_sharded_compilation()` | Check → returns `False` |
+| 3 | `_evaluate_normal()` | Set outputs on existing MAX graph |
+| 4 | `_core.lower()` | Remove dead values, optimize |
+| 5 | `session.load(graph)` | **COMPILE** MAX graph to executable model |
+| 6 | `model(inputs)` | **EXECUTE** on device |
+| 7 | Post-process | Populate `_storages`, clear `_values`, reinit graph |
+
+**Code path**: `compute_graph.py` → `_evaluate_normal()`
+
+---
+
+### Path B: Sharded Compilation
+
+**When**: Any tensor in the graph has `sharding is not None`.
+
+**Prerequisite**: All operation tensors must be `traced=True` (so we can walk parents).
+
+**Steps**:
+
+| Step | Location | What Happens |
+|------|----------|--------------|
+| 1 | `evaluate()` | Collect unrealized tensors |
+| 2 | `_needs_sharded_compilation()` | Walk parents graph, detect sharding → returns `True` |
+| 3 | `_collect_execution_graph()` | Build topological list of ops, stop at realized inputs |
+| 4 | `_evaluate_sharded()` | **Currently**: Create dummy shards (zeros) |
+| | | **TODO**: Run Shardy propagation |
+| | | **TODO**: Build sharded MAX graph with local shapes |
+| | | **TODO**: Insert collective ops (all-gather, reduce-scatter) |
+| 5 | Compile | Compile the NEW sharded MAX graph |
+| 6 | Execute | Execute sharded ops |
+| 7 | Post-process | Populate `_storages` with list of per-device shards |
+
+**Code path**: `compute_graph.py` → `_evaluate_sharded()`
+
+---
+
+### Graph Construction vs Compilation: Why Two Graphs?
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ EAGERLY BUILT MAX GRAPH (during user operations)                       │
+│ ─────────────────────────────────────────────────                      │
+│ Purpose: Shape oracle, record of operations                            │
+│ Contains: Global shapes, unsharded ops                                 │
+│ Used by: Normal path (compiled directly)                               │
+│ Sharded path: NOT compiled, only used for shape info                   │
+└─────────────────────────────────────────────────────────────────────────┘
+                              │
+           ┌──────────────────┴──────────────────┐
+           ▼                                     ▼
+┌─────────────────────┐              ┌─────────────────────────────────┐
+│ NORMAL PATH         │              │ SHARDED PATH                    │
+│ Compile as-is       │              │ Build NEW graph from:           │
+│                     │              │   - TensorImpl.parents (ops)    │
+│                     │              │   - TensorImpl.cached_shape     │
+│                     │              │   - TensorImpl.sharding         │
+│                     │              │ With: Local shapes + collectives│
+└─────────────────────┘              └─────────────────────────────────┘
+```
+
+The key insight: **building a MAX graph is cheap** (just symbolic nodes). We only pay the cost of compilation once, at realize time, on whichever graph we actually need.
+
+---
+
+### Sharding Data Flow
+
+```
+1. Operation.__call__
+   └─▶ maxpr() creates TensorValue (symbolic, global shape)
+   └─▶ cache_metadata() stores shape/dtype/device in TensorImpl
+   └─▶ User sets sharding: tensor._impl.sharding = spec
+
+2. GRAPH.evaluate()
+   └─▶ _collect_execution_graph(): Walk parents, find all ops
+   └─▶ _needs_sharded_compilation(): Check for any sharding
+   └─▶ If sharded:
+       └─▶ For each unrealized tensor:
+           └─▶ Use ShardingSpec + DistributedTensor to compute local shapes
+           └─▶ Create driver.Tensor for each shard
+           └─▶ Populate _storages as list
+
+3. After evaluation:
+   └─▶ tensor.shape → returns GLOBAL shape (from cached_shape)
+   └─▶ tensor.local_shape(i) → returns shard i's shape
+   └─▶ tensor._impl._storages → list of driver.Tensors (one per device)
+```
+
+---
+
+### Usage Example
+
+```python
+from eager import Tensor, add, DeviceMesh, DimSpec, ShardingSpec
+
+# Setup mesh: 2 devices along "x" axis
+mesh = DeviceMesh("cluster", (2,), ("x",))
+spec = ShardingSpec(mesh, [DimSpec(["x"]), DimSpec([])])
+
+# Create sharded tensor
+x = Tensor.zeros((4, 8), traced=True)
+x._impl.sharding = spec
+
+# Operations preserve global shape semantics
+y = add(x, x)
+y._impl.sharding = spec
+
+# Before realize: shapes are global
+print(y.shape)        # [4, 8] (global)
+
+# Realize triggers sharded compilation
+print(y)              # triggers GRAPH.evaluate()
+
+# After realize: global shape preserved, local available
+print(y.shape)        # [4, 8] (global)
+print(y.local_shape(0))  # [2, 8] (shard 0)
+print(y.local_shape(1))  # [2, 8] (shard 1)
+print(y._impl.num_shards)  # 2
+```
 
 ## 6. Guide to Extending
 

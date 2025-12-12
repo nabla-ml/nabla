@@ -22,6 +22,8 @@ if TYPE_CHECKING:
     from max import graph
     from .tensor_impl import TensorImpl
     from .tensor import Tensor
+    from .sharding import ShardingSpec
+    from .sharding_propagation import OpShardingRule
 
 
 class Operation(ABC):
@@ -110,6 +112,7 @@ class Operation(ABC):
                 op_kwargs=kwargs if kwargs else None,
                 traced=any_traced,
             )
+            output_impl.cache_metadata(result_tree)  # Cache for sharding compiler
             return Tensor(impl=output_impl)
         
         # Multi-output case - use pytree wrapping with sibling tracking
@@ -191,7 +194,7 @@ class Operation(ABC):
         self,
         inputs: list[Tensor],
         output: Tensor,
-    ) -> None:
+    ) -> OpShardingRule | None:
         """Propagate or infer sharding annotations.
         
         Given the input and output tensors, this rule can:
@@ -213,6 +216,14 @@ class Operation(ABC):
         raise NotImplementedError(
             f"Operation '{self.name}' does not implement sharding_rule"
         )
+    
+    def get_sharding_rule_template(self) -> Any:
+        """Get the sharding rule template for this operation.
+        
+        Returns:
+            OpShardingRuleTemplate or None
+        """
+        return None
     
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(name={self.name!r})"

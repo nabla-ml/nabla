@@ -513,6 +513,7 @@ def wrap_tensor_values(
                 op_kwargs=op_kwargs,
                 traced=traced,
             )
+            output_impl.cache_metadata(leaf)  # Cache for sharding compiler
             # Create Tensor wrapper
             wrapped_leaves.append(Tensor(impl=output_impl))
         else:
