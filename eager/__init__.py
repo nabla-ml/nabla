@@ -11,10 +11,47 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-"""Experimental APIs for the MAX platform."""
+"""Experimental eager execution APIs for the MAX platform."""
 
-from . import functional, ops, pytree, random, tensor
+# Context managers and defaults
+from .context import (
+    defaults,
+    default_device,
+    default_dtype,
+    defaults_like,
+)
+
+# Core tensor infrastructure
+from .tensor_impl import (
+    TensorImpl,
+    get_topological_order,
+    print_computation_graph,
+)
+
+# Compute graph
+from .compute_graph import GRAPH, driver_tensor_type
+
+# Main Tensor class
+from .tensor import Tensor
+
+# Operation base class
 from .ops import Operation
+
+# Binary operations
+from .binary_ops import (
+    add,
+    mul,
+    sub, 
+    div,
+    matmul,
+    AddOp,
+    MulOp,
+    SubOp,
+    DivOp,
+    MatmulOp,
+)
+
+# Pytree utilities
 from .pytree import (
     PyTreeDef,
     broadcast_prefix,
@@ -28,19 +65,38 @@ from .pytree import (
     untraced,
     with_batch_dims,
 )
-from .tensor import Tensor, TensorImpl
+
+# Random generation
+from . import random
 
 __all__ = [
-    "Operation",
-    "PyTreeDef",
+    # Context
+    "defaults",
+    "default_device", 
+    "default_dtype",
+    "defaults_like",
+    # Core
     "Tensor",
     "TensorImpl",
+    "GRAPH",
+    "get_topological_order",
+    "print_computation_graph",
+    "driver_tensor_type",
+    # Operations
+    "Operation",
+    "add",
+    "mul",
+    "sub",
+    "div",
+    "matmul",
+    "AddOp",
+    "MulOp",
+    "SubOp",
+    "DivOp",
+    "MatmulOp",
+    # Pytree
+    "PyTreeDef",
     "broadcast_prefix",
-    "functional",
-    "ops",
-    "pytree",
-    "random",
-    "tensor",
     "tensor_leaves",
     "traced",
     "tree_flatten",
@@ -50,5 +106,6 @@ __all__ = [
     "tree_unflatten",
     "untraced",
     "with_batch_dims",
+    # Random
+    "random",
 ]
-

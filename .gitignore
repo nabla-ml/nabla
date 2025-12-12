@@ -91,7 +91,3 @@ __pypackages__/
 
 # Poetry
 poetry.lock
-
-# tmp files
-tmp.py
-GEMINI.md
