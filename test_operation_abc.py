@@ -168,21 +168,31 @@ def test_op_args_storage():
     print("Test: op_args Storage")
     print("=" * 50)
     
-    # Untraced: op_args should be None (memory optimization)
+    # Untraced: op_args should be empty tuple (memory optimization)
+    # Note: OutputRefs is created, but op_args is empty tuple
     x_untraced = Tensor.ones((2, 2))
     y_untraced = binary_ops.add(x_untraced, x_untraced)
-    assert y_untraced._impl.op_args is None, "Untraced should not store op_args"
-    print(f"  Untraced op_args: {y_untraced._impl.op_args}")
+    
+    # Check via output_refs
+    assert y_untraced._impl.output_refs is not None, "Untraced should have OutputRefs"
+    refs_untraced = y_untraced._impl.output_refs
+    assert refs_untraced.op_args == (), f"Untraced op_args should be empty, got {refs_untraced.op_args}"
+    print(f"  Untraced op_args: {refs_untraced.op_args}")
     
     # Traced: op_args should contain original inputs
     x_traced = Tensor.ones((2, 2), traced=True)
     y_traced = binary_ops.add(x_traced, x_traced)
-    assert y_traced._impl.op_args is not None, "Traced should store op_args"
-    assert len(y_traced._impl.op_args) == 2, f"Should have 2 args, got {len(y_traced._impl.op_args)}"
-    assert y_traced._impl.op_args[0] is x_traced, "First arg should be x_traced"
-    assert y_traced._impl.op_args[1] is x_traced, "Second arg should be x_traced" 
-    print(f"  Traced op_args: {len(y_traced._impl.op_args)} args")
-    print(f"  Args match original inputs: {y_traced._impl.op_args[0] is x_traced}")
+    
+    assert y_traced._impl.output_refs is not None, "Traced should have OutputRefs"
+    refs_traced = y_traced._impl.output_refs
+    op_args = refs_traced.op_args
+    
+    assert op_args is not None, "Traced should store op_args"
+    assert len(op_args) == 2, f"Should have 2 args, got {len(op_args)}"
+    assert op_args[0] is x_traced, "First arg should be x_traced"
+    assert op_args[1] is x_traced, "Second arg should be x_traced" 
+    print(f"  Traced op_args: {len(op_args)} args")
+    print(f"  Args match original inputs: {op_args[0] is x_traced}")
     
     print("✓ op_args storage works!")
 
@@ -243,13 +253,17 @@ def test_mixed_args_traced_stores_all():
     y = reshape_op(x, shape)
     
     # Verify op_args contains both the tensor AND the shape
-    assert y._impl.op_args is not None, "Traced should store op_args"
-    assert len(y._impl.op_args) == 2, f"Should have 2 args: {len(y._impl.op_args)}"
-    assert y._impl.op_args[0] is x, "First arg should be the tensor"
-    assert y._impl.op_args[1] == (2, 3), f"Second arg should be shape tuple: {y._impl.op_args[1]}"
+    # Use output_refs to access op_args
+    assert y._impl.output_refs is not None, "Traced should have OutputRefs"
+    op_args = y._impl.output_refs.op_args
     
-    print(f"  op_args[0] is Tensor: {isinstance(y._impl.op_args[0], Tensor)}")
-    print(f"  op_args[1] is shape tuple: {y._impl.op_args[1]}")
+    assert op_args is not None, "Traced should store op_args"
+    assert len(op_args) == 2, f"Should have 2 args: {len(op_args)}"
+    assert op_args[0] is x, "First arg should be the tensor"
+    assert op_args[1] == (2, 3), f"Second arg should be shape tuple: {op_args[1]}"
+    
+    print(f"  op_args[0] is Tensor: {isinstance(op_args[0], Tensor)}")
+    print(f"  op_args[1] is shape tuple: {op_args[1]}")
     print("✓ Mixed args stored correctly for VJP/JVP access!")
 
 

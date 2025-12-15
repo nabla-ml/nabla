@@ -27,41 +27,43 @@ from max.dtype import DType
 if TYPE_CHECKING:
     from .ops import Operation
     from .sharding import ShardingSpec
+    from .tracing import OutputRefs
 
 
 class TensorImpl:
     """Complete computation graph node containing all tensor internals.
     
     TensorImpl holds both the actual data storage and the autograd graph
-    structure. When `traced=True`, parent references are stored to enable
-    backward pass computation.
+    structure. When `traced=True`, parent references are accessible via
+    the shared OutputRefs instance.
     
     Attributes:
         _values: List of graph values for lazy execution (one per shard).
         _storages: List of realized driver.Tensors (one per shard), or None if unrealized.
         sharding: Sharding specification (None = unsharded, single shard).
-        op_args: Original positional args (stored only when traced=True).
-        op_kwargs: Keyword arguments (stored only when traced=True).
         traced: Whether this node is part of a traced computation graph.
         tangent: Tangent TensorImpl for JVP (forward-mode autodiff).
         cotangent: Cotangent TensorImpl for VJP (reverse-mode autodiff).
         batch_dims: Number of batch dimensions (always prefix of physical shape).
+        output_refs: Shared OutputRefs instance (holds op, op_args, op_kwargs).
+        output_index: Position among sibling outputs (0-indexed).
     
     Properties:
-        parents: List of parent TensorImpls (derived from op_args when traced).
+        parents: List of parent TensorImpls (derived from output_refs.op_args).
+        op: The operation that created this tensor (from output_refs).
+        op_name: Name of the operation (from output_refs).
     """
-    __slots__ = ('_values', '_storages', 'sharding', 'op', 'op_args', 'op_kwargs', 'traced','tangent', 'cotangent', 'batch_dims', 'cached_shape', 'cached_dtype', 'cached_device')
+    __slots__ = ('_values', '_storages', 'sharding', 'traced','tangent', 'cotangent', 'batch_dims', 'output_refs', 'output_index', 'cached_shape', 'cached_dtype', 'cached_device', '__weakref__')
     
     _values: list[graph.BufferValue | graph.TensorValue]
     _storages: list[driver.Tensor] | None
     sharding: object | None
-    op: Operation | None
-    op_args: tuple[Any, ...] | None  # Original positional args (for VJP/JVP access)
-    op_kwargs: dict[str, Any] | None  # Original keyword args (for VJP/JVP access)
     traced: bool
     tangent: TensorImpl | None   # For JVP (forward-mode autodiff)
     cotangent: TensorImpl | None # For VJP (reverse-mode autodiff)
     batch_dims: int
+    output_refs: OutputRefs | None   # Shared OutputRefs instance (set by Operation.__call__)
+    output_index: int            # Position among sibling outputs (0-indexed)
     # Cached metadata for sharding (survives graph consumption)
     cached_shape: tuple[int, ...] | None
     cached_dtype: DType | None
@@ -71,9 +73,6 @@ class TensorImpl:
         self,
         storages: driver.Tensor | list[driver.Tensor] | None = None,
         values: graph.BufferValue | graph.TensorValue | list[graph.BufferValue | graph.TensorValue] | None = None,
-        op: Operation | None = None,
-        op_args: tuple[Any, ...] | None = None,
-        op_kwargs: dict[str, Any] | None = None,
         traced: bool = False,
         batch_dims: int = 0,
         sharding: ShardingSpec | None = None,
@@ -95,14 +94,14 @@ class TensorImpl:
             self._storages = [storages]
         
         self.sharding = sharding
-        self.op = op
-        # Only store op_args/op_kwargs when traced (to allow GC in untraced mode)
-        self.op_args = op_args if traced else None
-        self.op_kwargs = op_kwargs if traced else None
         self.traced = traced
         self.tangent = None    # Populated during JVP
         self.cotangent = None  # Populated during VJP
         self.batch_dims = batch_dims
+        
+        # Tracing: multi-output operation tracking
+        self.output_refs = None   # Shared OutputRefs instance (set by Operation.__call__)
+        self.output_index = 0     # Position among siblings
         
         # Initialize cached metadata (populated during operation execution)
         self.cached_shape = None
@@ -156,26 +155,38 @@ class TensorImpl:
         return self.sharding is not None
     
     @property
+    def op(self) -> Operation | None:
+        """Get the operation that produced this tensor."""
+        if self.output_refs is None:
+            return None
+        return self.output_refs.op
+    
+    @property
     def op_name(self) -> str | None:
         """Get the operation name."""
-        if self.op is None:
+        if self.output_refs is None:
             return None
-        if hasattr(self.op, 'name'):
-            return self.op.name
-        return getattr(self.op, '__name__', None)
+        op = self.output_refs.op
+        if hasattr(op, 'name'):
+            return op.name
+        return getattr(op, '__name__', None)
     
     @property
     def parents(self) -> list[TensorImpl]:
         """Get parent TensorImpls (derived from op_args).
         
         Returns an empty list if not traced or op_args is None.
-        This is computed on-demand from the stored op_args.
+        op_args now stores TensorImpl refs directly (not Tensor wrappers).
         """
-        if self.op_args is None:
+        if self.output_refs is None:
             return []
-        # Import here to avoid circular dependency
-        from .tensor import Tensor
-        return [arg._impl for arg in self.op_args if isinstance(arg, Tensor)]
+        
+        # Flatten the pytree of op_args and extract TensorImpls
+        from . import pytree
+        return [
+            arg for arg in pytree.tree_leaves(self.output_refs.op_args)
+            if isinstance(arg, TensorImpl)
+        ]
     
     @property
     def is_leaf(self) -> bool:

@@ -119,11 +119,10 @@ class Operation(ABC):
         def value_to_tensor(x: Any) -> Any:
             """Convert TensorValue -> Tensor, pass through everything else."""
             if pytree.is_tensor_value(x):
+                # NOTE: We don't pass op/args to TensorImpl anymore.
+                # They are now stored in the shared OutputRefs instance.
                 impl = TensorImpl(
                     values=x,
-                    op=self,
-                    op_args=args,
-                    op_kwargs=kwargs if kwargs else None,
                     traced=any_traced,
                 )
                 impl.cache_metadata(x)
@@ -137,6 +136,48 @@ class Operation(ABC):
         
         # Convert outputs: TensorValue -> Tensor
         output = pytree.tree_map(value_to_tensor, result_tree)
+        
+        # Populate OutputRefs for multi-output operation tracking
+        # Flatten outputs to get all TensorImpl leaves
+        output_impls = [
+            x._impl for x in pytree.tree_leaves(output) 
+            if isinstance(x, Tensor)
+        ]
+        
+        if output_impls:
+            # Create OutputRefs with weak references to avoid cycles
+            import weakref
+            from .tracing import OutputRefs
+            
+            # Get the output tree structure
+            _, output_tree_def = pytree.tree_flatten(output, is_leaf=pytree.is_tensor)
+            
+            # Create weak references to all output TensorImpls
+            weak_refs = tuple(weakref.ref(impl) for impl in output_impls)
+            
+            # Create shared OutputRefs instance with operation metadata
+            # Only store op_args/kwargs if traced (to allow GC in untraced mode)
+            # CRITICAL: Store TensorImpl refs, not Tensor wrappers, to preserve
+            # the weak-ref GC strategy (Tensor holds weak ref to TensorImpl)
+            def to_impl(x: Any) -> Any:
+                """Convert Tensor -> TensorImpl, pass through everything else."""
+                return x._impl if isinstance(x, Tensor) else x
+            
+            stored_args = pytree.tree_map(to_impl, args) if any_traced else ()
+            stored_kwargs = pytree.tree_map(to_impl, kwargs) if any_traced and kwargs else None
+            
+            output_refs = OutputRefs(
+                _refs=weak_refs, 
+                tree_def=output_tree_def,
+                op=self,
+                op_args=stored_args,
+                op_kwargs=stored_kwargs
+            )
+            
+            # Populate each output with the shared OutputRefs and its index
+            for idx, impl in enumerate(output_impls):
+                impl.output_refs = output_refs
+                impl.output_index = idx
         
         # JVP mode: if any input has tangent, propagate to output
         if any_has_tangent:
