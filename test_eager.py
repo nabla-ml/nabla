@@ -49,7 +49,6 @@ def test_tensor_impl_structure():
     print(f"  op: {impl.op}")
     print(f"  op_name: {impl.op_name}")
     print(f"  traced: {impl.traced}")
-    print(f"  grad: {impl.grad}")
     print(f"  is_leaf: {impl.is_leaf}")
     print(f"  is_realized: {impl.is_realized}")
     print("✓ TensorImpl structure is correct!\n")

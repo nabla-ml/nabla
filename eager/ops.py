@@ -32,9 +32,15 @@ class Operation(ABC):
     Each operation defines:
     - name: Unique identifier (e.g., 'add', 'matmul', 'sum')
     - maxpr(): Symbolic lowering to MAX graph (the ONLY execution path)
-    - __call__(): Execute the operation on Tensors
+    - __call__(): Execute the operation on Tensors (auto-detects JVP mode)
     - vjp_rule(): Reverse-mode autodiff (optional)
     - jvp_rule(): Forward-mode autodiff (optional)
+    
+    JVP Mode:
+        When any input Tensor has its ._impl.tangent set, __call__ automatically:
+        1. Computes the primal output normally via maxpr
+        2. Calls jvp_rule to compute the output tangent
+        3. Attaches the output tangent to the output Tensor's ._impl.tangent
     
     Batch dimensions are always the prefix of the physical shape.
     In maxpr(), translate logical axes to physical by adding batch_dims:
@@ -71,8 +77,12 @@ class Operation(ABC):
         - Input: Tensors -> TensorValues, everything else unchanged
         - Output: TensorValues -> Tensors, everything else unchanged
         
-        maxpr receives the SAME pytree structure as __call__, just with
-        TensorValues instead of Tensors. Output structure must match.
+        JVP Mode:
+            If any input Tensor has ._impl.tangent set, this method:
+            1. Computes primal output normally
+            2. Extracts tangents from inputs
+            3. Calls jvp_rule(primals, tangents, output) to get output tangent
+            4. Attaches output tangent to output._impl.tangent
         
         Args:
             *args: Pytree of inputs (Tensors and non-Tensors)
@@ -89,13 +99,17 @@ class Operation(ABC):
         
         # Track if any input Tensor is traced (for graph building)
         any_traced = False
+        # Track if any input has tangent (for JVP mode)
+        any_has_tangent = False
         
         def tensor_to_value(x: Any) -> Any:
             """Convert Tensor -> TensorValue, pass through everything else."""
-            nonlocal any_traced
+            nonlocal any_traced, any_has_tangent
             if isinstance(x, Tensor):
                 if x._impl.traced:
                     any_traced = True
+                if x._impl.tangent is not None:
+                    any_has_tangent = True
                 return g.TensorValue(x)
             return x
         
@@ -119,7 +133,25 @@ class Operation(ABC):
             result_tree = self.maxpr(*converted_args, **kwargs)
         
         # Convert outputs: TensorValue -> Tensor
-        return pytree.tree_map(value_to_tensor, result_tree)
+        output = pytree.tree_map(value_to_tensor, result_tree)
+        
+        # JVP mode: if any input has tangent, propagate to output
+        if any_has_tangent:
+            # Extract tangents (structure matches args)
+            tangents = pytree.tree_map(
+                lambda x: Tensor(impl=x._impl.tangent) if isinstance(x, Tensor) and x._impl.tangent else None,
+                args
+            )
+            # Compute output tangent
+            output_tangent = self.jvp_rule(args, tangents, output)
+            # Attach to output (mutates output._impl.tangent in place)
+            if output_tangent is not None:
+                pytree.tree_map(
+                    lambda o, t: setattr(o._impl, 'tangent', t._impl) if isinstance(o, Tensor) and isinstance(t, Tensor) else None,
+                    output, output_tangent
+                )
+        
+        return output
     
     # ===== Autodiff Rules (Optional) =====
     
@@ -170,31 +202,30 @@ class Operation(ABC):
         primals: Any,
         tangents: Any,
         output: Any,
-    ) -> tuple[Any, Any]:
+    ) -> Any:
         """Jacobian-vector product for forward-mode autodiff.
         
         Given input tangents (directional derivatives), compute the output tangent.
+        The primal output is already computed and provided for use as a "residual".
         
         All arguments are pytrees (nested dict/list/tuple) with Tensors at leaves.
         This matches __call__'s flexibility.
         
         Args:
             primals: Original input args (same structure as passed to __call__).
-            tangents: Tangent vectors matching primals structure. Use None for
+            tangents: Tangent vectors matching primals structure. None for
                 leaves that are not differentiated (non-Tensors or constants).
-            output: The forward pass output pytree.
+            output: The already-computed forward pass output pytree.
+                Often useful as a "free residual" (e.g., exp(x) tangent = output * tangent_in).
             
         Returns:
-            Tuple of (output pytree, output tangent pytree). Both should have
-            the same structure as the forward pass output.
+            Output tangent pytree matching the output structure.
+            Return None for outputs that don't have tangents.
             
-        Accessing Static Params:
-            Static parameters are available in the primals pytree directly.
-            
-        Note:
-            Use pytree utilities for processing:
-                from . import pytree
-                out_tangent = pytree.tree_map(compute_tangent, primals, tangents)
+        Example for exp:
+            def jvp_rule(self, primals, tangents, output):
+                # d/dt exp(x + t*dx) = exp(x) * dx = output * tangent
+                return output * tangents[0]
         """
         raise NotImplementedError(
             f"Operation '{self.name}' does not implement jvp_rule"

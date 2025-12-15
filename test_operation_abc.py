@@ -254,6 +254,266 @@ def test_mixed_args_traced_stores_all():
 
 
 # =============================================================================
+# Tests for Creation Ops (Operation ABC pattern)
+# =============================================================================
+
+def test_creation_ops_have_op_attribute():
+    """Verify creation ops produce tensors with proper op attribute."""
+    print("\n" + "=" * 50)
+    print("Test: Creation Ops Have Op Attribute")
+    print("=" * 50)
+    
+    from eager import creation
+    
+    z = creation.zeros((2, 2))
+    o = creation.ones((2, 2))
+    a = creation.arange(0, 5)
+    c = creation.constant(np.array([1, 2, 3], dtype=np.float32))
+    u = creation.uniform((3,))
+    g = creation.gaussian((3,))
+    
+    assert z._impl.op is not None, "zeros should have op"
+    assert o._impl.op is not None, "ones should have op"
+    assert a._impl.op is not None, "arange should have op"
+    assert c._impl.op is not None, "constant should have op"
+    assert u._impl.op is not None, "uniform should have op"
+    assert g._impl.op is not None, "gaussian should have op"
+    
+    print(f"  zeros op: {z._impl.op.name}")
+    print(f"  ones op: {o._impl.op.name}")
+    print(f"  arange op: {a._impl.op.name}")
+    print(f"  constant op: {c._impl.op.name}")
+    print(f"  uniform op: {u._impl.op.name}")
+    print(f"  gaussian op: {g._impl.op.name}")
+    
+    print("✓ Creation ops have proper op attributes!")
+
+
+def test_creation_ops_correct_values():
+    """Verify creation ops produce correct values."""
+    print("\n" + "=" * 50)
+    print("Test: Creation Ops Correct Values")
+    print("=" * 50)
+    
+    from eager import creation
+    
+    z = creation.zeros((3,))
+    o = creation.ones((3,))
+    a = creation.arange(0, 5)
+    f = creation.full((2,), 7.0)
+    
+    assert np.allclose(np.from_dlpack(z), [0, 0, 0])
+    assert np.allclose(np.from_dlpack(o), [1, 1, 1])
+    assert np.allclose(np.from_dlpack(a), [0, 1, 2, 3, 4])
+    assert np.allclose(np.from_dlpack(f), [7, 7])
+    
+    print("  zeros: [0, 0, 0] ✓")
+    print("  ones: [1, 1, 1] ✓")
+    print("  arange(0, 5): [0, 1, 2, 3, 4] ✓")
+    print("  full((2,), 7.0): [7, 7] ✓")
+    
+    print("✓ Creation ops produce correct values!")
+
+
+def test_tensor_factory_uses_creation_ops():
+    """Verify Tensor factory methods use creation ops internally."""
+    print("\n" + "=" * 50)
+    print("Test: Tensor Factory Uses Creation Ops")
+    print("=" * 50)
+    
+    z = Tensor.zeros((2, 2))
+    o = Tensor.ones((2, 2))
+    a = Tensor.arange(0, 3)
+    
+    # Should have op attributes from creation module
+    assert z._impl.op is not None, "Tensor.zeros should have op"
+    assert o._impl.op is not None, "Tensor.ones should have op"
+    assert a._impl.op is not None, "Tensor.arange should have op"
+    
+    assert z._impl.op.name == "zeros"
+    assert o._impl.op.name == "ones"  
+    assert a._impl.op.name == "arange"
+    
+    print(f"  Tensor.zeros -> op.name: {z._impl.op.name}")
+    print(f"  Tensor.ones -> op.name: {o._impl.op.name}")
+    print(f"  Tensor.arange -> op.name: {a._impl.op.name}")
+    
+    print("✓ Tensor factory methods use creation ops!")
+
+
+# =============================================================================
+# Tests for Conditional Logic (Triggers Eager Evaluation)
+# =============================================================================
+
+def test_item_triggers_evaluation():
+    """Test that .item() triggers lazy graph compilation and execution."""
+    print("\n" + "=" * 50)
+    print("Test: .item() Triggers Evaluation")
+    print("=" * 50)
+    
+    # Build a computation graph
+    x = Tensor.constant(5.0)
+    y = x * 2 + 3  # Should be 13.0
+    
+    # .item() should trigger evaluation
+    result = y.item()
+    
+    assert result == 13.0, f"Expected 13.0, got {result}"
+    print(f"  x * 2 + 3 = {result}")
+    print("✓ .item() triggers evaluation correctly!")
+
+
+def test_bool_conversion_triggers_evaluation():
+    """Test that bool(tensor) triggers evaluation for conditionals."""
+    print("\n" + "=" * 50)
+    print("Test: bool() Triggers Evaluation")
+    print("=" * 50)
+    
+    # Build computation
+    x = Tensor.constant(1.0)
+    y = x + 0.5  # 1.5, truthy
+    
+    # bool() should trigger evaluation
+    if y:
+        result = "truthy"
+    else:
+        result = "falsy"
+    
+    assert result == "truthy", f"Expected truthy, got {result}"
+    print(f"  bool(1.5) -> {result}")
+    
+    # Test falsy case
+    z = Tensor.constant(0.0)
+    if z:
+        result2 = "truthy"
+    else:
+        result2 = "falsy"
+    
+    assert result2 == "falsy", f"Expected falsy, got {result2}"
+    print(f"  bool(0.0) -> {result2}")
+    print("✓ bool() triggers evaluation correctly!")
+
+
+def test_conditional_branching():
+    """Test conditional branching based on computed tensor values."""
+    print("\n" + "=" * 50)
+    print("Test: Conditional Branching")
+    print("=" * 50)
+    
+    def compute_with_branch(x_val: float) -> str:
+        x = Tensor.constant(x_val)
+        y = x * x - 4  # x² - 4
+        
+        # This should trigger evaluation
+        if y.item() > 0:
+            return "positive"
+        elif y.item() < 0:
+            return "negative"
+        else:
+            return "zero"
+    
+    # x=3: 9-4=5 > 0
+    assert compute_with_branch(3.0) == "positive"
+    print("  3² - 4 = 5 -> positive ✓")
+    
+    # x=1: 1-4=-3 < 0
+    assert compute_with_branch(1.0) == "negative"
+    print("  1² - 4 = -3 -> negative ✓")
+    
+    # x=2: 4-4=0
+    assert compute_with_branch(2.0) == "zero"
+    print("  2² - 4 = 0 -> zero ✓")
+    
+    print("✓ Conditional branching works!")
+
+
+def test_iterative_computation():
+    """Test while-loop style computation using tensor values as conditions."""
+    print("\n" + "=" * 50)
+    print("Test: Iterative Computation")
+    print("=" * 50)
+    
+    # Compute sum 1 + 2 + 3 + ... until sum >= 10
+    total = Tensor.constant(0.0)
+    i = 1
+    
+    while total.item() < 10:
+        total = total + Tensor.constant(float(i))
+        i += 1
+    
+    result = total.item()
+    # 1+2+3+4 = 10
+    assert result == 10.0, f"Expected 10.0, got {result}"
+    assert i == 5, f"Expected 5 iterations, got {i}"
+    
+    print(f"  Sum 1+2+3+4 = {result} (after {i-1} iterations)")
+    print("✓ Iterative computation works!")
+
+
+def test_chained_conditionals():
+    """Test multiple evaluations in sequence."""
+    print("\n" + "=" * 50)
+    print("Test: Chained Conditionals")  
+    print("=" * 50)
+    
+    results = []
+    
+    for val in [1.0, 2.0, 3.0, 4.0, 5.0]:
+        x = Tensor.constant(val)
+        y = x * 2
+        # Each .item() triggers a fresh evaluation
+        results.append(y.item())
+    
+    expected = [2.0, 4.0, 6.0, 8.0, 10.0]
+    assert results == expected, f"Expected {expected}, got {results}"
+    
+    print(f"  [1,2,3,4,5] * 2 = {results}")
+    print("✓ Chained conditionals work!")
+
+
+def test_graph_conditional_graph():
+    """Test interleaved: graph -> conditional -> graph -> conditional -> result.
+    
+    This tests that lazy graphs work correctly between control flow points.
+    """
+    print("\n" + "=" * 50)
+    print("Test: Graph -> Conditional -> Graph -> Conditional")  
+    print("=" * 50)
+    
+    # Phase 1: Build lazy graph
+    x = Tensor.constant(3.0)
+    y = x * x  # 9.0
+    
+    # Conditional 1: triggers eval of y
+    if y.item() > 5:
+        scale = 2.0
+    else:
+        scale = 0.5
+    
+    # Phase 2: Build another lazy graph using conditional result
+    z = y * scale + 1  # 9*2+1 = 19
+    
+    # Conditional 2: triggers eval of z
+    if z.item() > 10:
+        message = "large"
+    else:
+        message = "small"
+    
+    # Phase 3: Build final lazy graph
+    final = z + 100  # 19+100 = 119
+    
+    result = final.item()
+    
+    assert result == 119.0, f"Expected 119.0, got {result}"
+    assert message == "large", f"Expected 'large', got {message}"
+    
+    print(f"  x=3, y=x²=9, scale=2 (since 9>5)")
+    print(f"  z=y*scale+1=19, message='large' (since 19>10)")
+    print(f"  final=z+100=119 ✓")
+    print("✓ Interleaved graph/conditional pattern works!")
+
+
+# =============================================================================
 # Run All Tests
 # =============================================================================
 
@@ -276,6 +536,19 @@ if __name__ == "__main__":
     # Mixed args (new flexible signature)
     test_mixed_positional_args()
     test_mixed_args_traced_stores_all()
+    
+    # Creation ops (Operation ABC pattern)
+    test_creation_ops_have_op_attribute()
+    test_creation_ops_correct_values()
+    test_tensor_factory_uses_creation_ops()
+    
+    # Conditional logic (triggers eager evaluation)
+    test_item_triggers_evaluation()
+    test_bool_conversion_triggers_evaluation()
+    test_conditional_branching()
+    test_iterative_computation()
+    test_chained_conditionals()
+    test_graph_conditional_graph()
     
     print("\n" + "=" * 60)
     print(" ALL TESTS PASSED!")

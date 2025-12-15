@@ -11,15 +11,26 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-"""Binary operations for the eager module."""
+"""Binary operations for the eager module.
+
+All binary ops implement jvp_rule for forward-mode autodiff:
+- add(x, y): d(x+y) = dx + dy
+- sub(x, y): d(x-y) = dx - dy  
+- mul(x, y): d(x*y) = y*dx + x*dy
+- div(x, y): d(x/y) = dx/y - x*dy/y²
+- matmul(x, y): d(x@y) = dx@y + x@dy
+"""
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from max.graph import TensorValue, ops
 
 from .ops import Operation
+
+if TYPE_CHECKING:
+    from .tensor import Tensor
 
 
 class AddOp(Operation):
@@ -32,6 +43,17 @@ class AddOp(Operation):
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         """Add two tensors element-wise."""
         return ops.add(args[0], args[1])
+    
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """d(x + y) = dx + dy"""
+        dx, dy = tangents[0], tangents[1]
+        if dx is None and dy is None:
+            return None
+        if dx is None:
+            return dy
+        if dy is None:
+            return dx
+        return dx + dy
 
 
 class MulOp(Operation):
@@ -44,6 +66,19 @@ class MulOp(Operation):
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         """Multiply two tensors element-wise."""
         return ops.mul(args[0], args[1])
+    
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """d(x * y) = y*dx + x*dy"""
+        x, y = primals[0], primals[1]
+        dx, dy = tangents[0], tangents[1]
+        
+        result = None
+        if dx is not None:
+            result = y * dx
+        if dy is not None:
+            term = x * dy
+            result = term if result is None else result + term
+        return result
 
 
 class SubOp(Operation):
@@ -56,6 +91,20 @@ class SubOp(Operation):
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         """Subtract two tensors element-wise."""
         return ops.sub(args[0], args[1])
+    
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """d(x - y) = dx - dy"""
+        dx, dy = tangents[0], tangents[1]
+        if dx is None and dy is None:
+            return None
+        if dx is None:
+            # 0 - dy = -dy
+            from .tensor import Tensor
+            zero = Tensor.zeros(dy.shape, dtype=dy.dtype, device=dy.device)
+            return zero - dy
+        if dy is None:
+            return dx
+        return dx - dy
 
 
 class DivOp(Operation):
@@ -68,6 +117,25 @@ class DivOp(Operation):
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         """Divide two tensors element-wise."""
         return ops.div(args[0], args[1])
+    
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """d(x / y) = dx/y - x*dy/y²"""
+        x, y = primals[0], primals[1]
+        dx, dy = tangents[0], tangents[1]
+        
+        result = None
+        if dx is not None:
+            result = dx / y
+        if dy is not None:
+            # -x * dy / y² = -output * dy / y
+            term = output * dy / y
+            if result is None:
+                from .tensor import Tensor
+                zero = Tensor.zeros(term.shape, dtype=term.dtype, device=term.device)
+                result = zero - term
+            else:
+                result = result - term
+        return result
 
 
 class MatmulOp(Operation):
@@ -80,6 +148,19 @@ class MatmulOp(Operation):
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         """Matrix multiplication of two tensors."""
         return ops.matmul(args[0], args[1])
+    
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """d(x @ y) = dx @ y + x @ dy"""
+        x, y = primals[0], primals[1]
+        dx, dy = tangents[0], tangents[1]
+        
+        result = None
+        if dx is not None:
+            result = dx @ y
+        if dy is not None:
+            term = x @ dy
+            result = term if result is None else result + term
+        return result
 
 
 # ===== Singleton instances exposed as functions =====

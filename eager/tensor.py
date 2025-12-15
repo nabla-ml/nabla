@@ -40,8 +40,9 @@ from .context import (
 from .tensor_impl import TensorImpl, get_topological_order, print_computation_graph
 from .compute_graph import GRAPH, driver_tensor_type
 
-# Import binary ops
+# Import ops modules
 from . import binary_ops
+from . import creation
 
 
 class Tensor(DLPackArray, HasTensorValue):
@@ -114,18 +115,6 @@ class Tensor(DLPackArray, HasTensorValue):
         return self._impl.traced
     
     @property
-    def grad(self) -> Tensor | None:
-        """Get the gradient tensor, if computed by backward pass."""
-        if self._impl.grad is None:
-            return None
-        return Tensor(impl=self._impl.grad)
-    
-    @grad.setter
-    def grad(self, value: Tensor | None) -> None:
-        """Set the gradient tensor."""
-        self._impl.grad = value._impl if value is not None else None
-    
-    @property
     def batch_dims(self) -> int:
         """Number of batch dimensions (prefix of physical shape, used by vmap)."""
         return self._impl.batch_dims
@@ -165,10 +154,7 @@ class Tensor(DLPackArray, HasTensorValue):
         dtype: DType | None = None,
         device: Device | None = None,
     ) -> Tensor:
-        dtype, device = defaults(dtype, device)
-        with GRAPH.graph:
-            result = ops.constant(value, dtype, device)
-        return Tensor(value=result)
+        return creation.constant(value, dtype=dtype, device=device)
 
     @classmethod
     def full(
@@ -180,14 +166,7 @@ class Tensor(DLPackArray, HasTensorValue):
         device: Device | None = None,
         traced: bool = False,
     ) -> Tensor:
-        dtype, device = defaults(dtype, device)
-        with GRAPH.graph:
-            const = ops.constant(value, dtype, device)
-            result = ops.broadcast_to(const, shape)
-        t = Tensor(value=result)
-        if traced:
-            t._impl.traced = True
-        return t
+        return creation.full(shape, value, dtype=dtype, device=device, traced=traced)
 
     @classmethod
     def zeros(
@@ -198,7 +177,7 @@ class Tensor(DLPackArray, HasTensorValue):
         device: Device | None = None,
         traced: bool = False,
     ) -> Tensor:
-        return cls.full(shape, value=0, dtype=dtype, device=device, traced=traced)
+        return creation.zeros(shape, dtype=dtype, device=device, traced=traced)
 
     @classmethod
     def ones(
@@ -209,7 +188,7 @@ class Tensor(DLPackArray, HasTensorValue):
         device: Device | None = None,
         traced: bool = False,
     ) -> Tensor:
-        return cls.full(shape, value=1, dtype=dtype, device=device, traced=traced)
+        return creation.ones(shape, dtype=dtype, device=device, traced=traced)
 
     @classmethod
     def arange(
@@ -221,12 +200,7 @@ class Tensor(DLPackArray, HasTensorValue):
         dtype: DType | None = None,
         device: Device | None = None,
     ) -> Tensor:
-        dtype, device = defaults(dtype, device)
-        if stop is None:
-            start, stop = 0, start
-        with GRAPH.graph:
-            result = ops.range(start, stop, step, dtype=dtype, device=device)
-        return Tensor(value=result)
+        return creation.arange(start, stop, step, dtype=dtype, device=device)
 
     # ===== Properties =====
 

@@ -40,13 +40,14 @@ class TensorImpl:
         op_args: Original positional args (stored only when traced=True).
         op_kwargs: Keyword arguments (stored only when traced=True).
         traced: Whether this node is part of a traced computation graph.
-        grad: Gradient TensorImpl, populated after backward pass.
+        tangent: Tangent TensorImpl for JVP (forward-mode autodiff).
+        cotangent: Cotangent TensorImpl for VJP (reverse-mode autodiff).
         batch_dims: Number of batch dimensions (always prefix of physical shape).
     
     Properties:
         parents: List of parent TensorImpls (derived from op_args when traced).
     """
-    __slots__ = ('_values', '_storages', 'sharding', 'op', 'op_args', 'op_kwargs', 'traced', 'grad', 'batch_dims', 'cached_shape', 'cached_dtype', 'cached_device')
+    __slots__ = ('_values', '_storages', 'sharding', 'op', 'op_args', 'op_kwargs', 'traced','tangent', 'cotangent', 'batch_dims', 'cached_shape', 'cached_dtype', 'cached_device')
     
     _values: list[graph.BufferValue | graph.TensorValue]
     _storages: list[driver.Tensor] | None
@@ -55,7 +56,8 @@ class TensorImpl:
     op_args: tuple[Any, ...] | None  # Original positional args (for VJP/JVP access)
     op_kwargs: dict[str, Any] | None  # Original keyword args (for VJP/JVP access)
     traced: bool
-    grad: TensorImpl | None
+    tangent: TensorImpl | None   # For JVP (forward-mode autodiff)
+    cotangent: TensorImpl | None # For VJP (reverse-mode autodiff)
     batch_dims: int
     # Cached metadata for sharding (survives graph consumption)
     cached_shape: tuple[int, ...] | None
@@ -95,7 +97,8 @@ class TensorImpl:
         self.op_args = op_args if traced else None
         self.op_kwargs = op_kwargs if traced else None
         self.traced = traced
-        self.grad = None
+        self.tangent = None    # Populated during JVP
+        self.cotangent = None  # Populated during VJP
         self.batch_dims = batch_dims
         
         # Initialize cached metadata (populated during operation execution)

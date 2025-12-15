@@ -51,6 +51,19 @@ from .binary_ops import (
     MatmulOp,
 )
 
+# Creation operations (including random)
+from .creation import (
+    constant,
+    full,
+    zeros,
+    ones,
+    arange,
+    uniform,
+    gaussian,
+    normal,
+    CreationOp,
+)
+
 # Pytree utilities
 from .pytree import (
     PyTreeDef,
@@ -66,8 +79,6 @@ from .pytree import (
     with_batch_dims,
 )
 
-# Random generation
-from . import random
 
 # Sharding infrastructure (core definitions)
 from .sharding import (
@@ -116,8 +127,16 @@ __all__ = [
     "tree_unflatten",
     "untraced",
     "with_batch_dims",
-    # Random
-    "random",
+    # Creation (including random)
+    "constant",
+    "full",
+    "zeros",
+    "ones",
+    "arange",
+    "uniform",
+    "gaussian",
+    "normal",
+    "CreationOp",
     # Sharding
     "DeviceMesh",
     "DimSpec",
