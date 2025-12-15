@@ -71,7 +71,6 @@ from .creation import (
 # Pytree utilities
 from .pytree import (
     PyTreeDef,
-    broadcast_prefix,
     tensor_leaves,
     traced,
     tree_flatten,

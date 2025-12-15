@@ -696,7 +696,6 @@ def main():
     # Pytree tests
     test_pytree_flatten_unflatten()
     test_pytree_tree_map()
-    test_pytree_broadcast_prefix()
     test_pytree_traced_untraced()
     
     # NEW: Traced vs Untraced + Weakrefs tests
