@@ -64,22 +64,22 @@ class Operation(ABC):
         """
         ...
     
-    def __call__(self, *args: Tensor, **kwargs: Any) -> Any:
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Execute the operation on Tensors.
         
-        This method:
-        1. Extracts graph values from input Tensors
-        2. Calls maxpr() within the graph context
-        3. Wraps the result pytree in Tensors with proper tracing
+        Uses symmetric tree_map for input/output conversion:
+        - Input: Tensors -> TensorValues, everything else unchanged
+        - Output: TensorValues -> Tensors, everything else unchanged
+        
+        maxpr receives the SAME pytree structure as __call__, just with
+        TensorValues instead of Tensors. Output structure must match.
         
         Args:
-            *args: Input Tensors
+            *args: Pytree of inputs (Tensors and non-Tensors)
             **kwargs: Operation-specific parameters
             
         Returns:
-            A pytree of Tensors matching the structure returned by maxpr().
-            For single-output ops, returns a single Tensor.
-            For multi-output ops, returns tuple/list/dict of Tensors.
+            Pytree matching maxpr's output, with TensorValues wrapped as Tensors.
         """
         from .tensor import Tensor
         from .tensor_impl import TensorImpl
@@ -87,74 +87,79 @@ class Operation(ABC):
         from . import pytree
         from max import graph as g
         
-        # Determine if any input is traced
-        parent_impls: list[TensorImpl] = []
+        # Track if any input Tensor is traced (for graph building)
         any_traced = False
-        for arg in args:
-            if isinstance(arg, Tensor):
-                parent_impls.append(arg._impl)
-                if arg._impl.traced:
+        
+        def tensor_to_value(x: Any) -> Any:
+            """Convert Tensor -> TensorValue, pass through everything else."""
+            nonlocal any_traced
+            if isinstance(x, Tensor):
+                if x._impl.traced:
                     any_traced = True
+                return g.TensorValue(x)
+            return x
         
-        # Execute maxpr within graph context
+        def value_to_tensor(x: Any) -> Any:
+            """Convert TensorValue -> Tensor, pass through everything else."""
+            if pytree.is_tensor_value(x):
+                impl = TensorImpl(
+                    values=x,
+                    op=self,
+                    op_args=args,
+                    op_kwargs=kwargs if kwargs else None,
+                    traced=any_traced,
+                )
+                impl.cache_metadata(x)
+                return Tensor(impl=impl)
+            return x
+        
+        # Convert inputs: Tensor -> TensorValue
         with GRAPH.graph:
-            # Get TensorValues from Tensors
-            tensor_values = [g.TensorValue(arg) for arg in args]
-            result_tree = self.maxpr(*tensor_values, **kwargs)
+            converted_args = pytree.tree_map(tensor_to_value, args)
+            result_tree = self.maxpr(*converted_args, **kwargs)
         
-        # Handle single TensorValue output (common case, optimize for it)
-        if pytree.is_tensor_value(result_tree):
-            # Single output - create TensorImpl directly (no sibling tracking needed)
-            output_impl = TensorImpl(
-                values=result_tree,
-                parents=parent_impls,
-                op=self,
-                op_kwargs=kwargs if kwargs else None,
-                traced=any_traced,
-            )
-            output_impl.cache_metadata(result_tree)  # Cache for sharding compiler
-            return Tensor(impl=output_impl)
-        
-        # Multi-output case - use pytree wrapping with sibling tracking
-        return pytree.wrap_tensor_values(
-            result_tree,
-            parent_impls=parent_impls,
-            op=self,
-            op_kwargs=kwargs if kwargs else None,
-            traced=any_traced,
-        )
+        # Convert outputs: TensorValue -> Tensor
+        return pytree.tree_map(value_to_tensor, result_tree)
     
     # ===== Autodiff Rules (Optional) =====
     
     def vjp_rule(
         self, 
-        primals: list[Tensor],
+        primals: Any,
         cotangent: Any,
         output: Any,
-    ) -> list[Tensor | None]:
+    ) -> Any:
         """Vector-Jacobian product for reverse-mode autodiff.
         
         Given the output cotangent (grad w.r.t. output), compute cotangents
         for each input primal. Return None for inputs that don't need gradients.
         
+        All arguments and return values are pytrees (nested dict/list/tuple)
+        with Tensors at the leaves. This matches __call__'s flexibility.
+        
         Args:
-            primals: Original input Tensors to this operation
-            cotangent: Gradient flowing back from the output. For single-output
-                ops, this is a Tensor. For multi-output ops, this is a pytree
-                matching the output structure (with Tensors at each leaf).
-            output: The forward pass output. For single-output ops, this is a
-                Tensor. For multi-output ops, this is a pytree of Tensors.
-                Access operation kwargs via output.op_kwargs (or first element
-                if pytree).
+            primals: Original input args (same structure as passed to __call__).
+                This is the full pytree including non-Tensor static params.
+            cotangent: Gradient flowing back from the output. Structure matches
+                the output pytree.
+            output: The forward pass output pytree.
             
         Returns:
-            List of gradients for each primal (None if not differentiable)
+            Pytree of gradients matching the primals structure. Use None for
+            leaves that are not differentiable (non-Tensors or Tensors without
+            gradients).
+            
+        Accessing Static Params:
+            Static parameters are available in the primals pytree directly.
+            Additional context available via:
+            - output._impl.op_args: Original positional args tuple
+            - output._impl.op_kwargs: Keyword arguments dict
             
         Note:
-            For multi-output ops, you can use pytree utilities:
+            Use pytree utilities for processing:
                 from . import pytree
-                cot_leaves = pytree.tree_leaves(cotangent)
-                out_leaves = pytree.tensor_leaves(output)
+                leaves = pytree.tree_leaves(primals)
+                grads = pytree.tree_map(compute_grad, primals, cotangent)
         """
         raise NotImplementedError(
             f"Operation '{self.name}' does not implement vjp_rule"
@@ -162,27 +167,34 @@ class Operation(ABC):
     
     def jvp_rule(
         self,
-        primals: list[Tensor],
-        tangents: list[Tensor | None],
+        primals: Any,
+        tangents: Any,
         output: Any,
     ) -> tuple[Any, Any]:
         """Jacobian-vector product for forward-mode autodiff.
         
         Given input tangents (directional derivatives), compute the output tangent.
         
+        All arguments are pytrees (nested dict/list/tuple) with Tensors at leaves.
+        This matches __call__'s flexibility.
+        
         Args:
-            primals: Original input Tensors to this operation
-            tangents: Tangent vectors for each primal (None if not differentiated)
-            output: The forward pass output (single Tensor or pytree of Tensors).
-                Access operation kwargs via output.op_kwargs (or first element
-                if pytree).
+            primals: Original input args (same structure as passed to __call__).
+            tangents: Tangent vectors matching primals structure. Use None for
+                leaves that are not differentiated (non-Tensors or constants).
+            output: The forward pass output pytree.
             
         Returns:
             Tuple of (output pytree, output tangent pytree). Both should have
             the same structure as the forward pass output.
             
+        Accessing Static Params:
+            Static parameters are available in the primals pytree directly.
+            
         Note:
-            For multi-output ops, return tangents as a matching pytree.
+            Use pytree utilities for processing:
+                from . import pytree
+                out_tangent = pytree.tree_map(compute_tangent, primals, tangents)
         """
         raise NotImplementedError(
             f"Operation '{self.name}' does not implement jvp_rule"
@@ -192,22 +204,26 @@ class Operation(ABC):
     
     def sharding_rule(
         self,
-        inputs: list[Tensor],
-        output: Tensor,
-    ) -> OpShardingRule | None:
+        inputs: Any,
+        output: Any,
+    ) -> Any:
         """Propagate or infer sharding annotations.
         
-        Given the input and output tensors, this rule can:
+        Given the input and output tensors (as pytrees), this rule can:
         - Propagate sharding from inputs to output (forward)
         - Propagate sharding from output to inputs (backward)
         - Infer optimal sharding based on operation semantics
         
-        The rule reads/writes sharding annotations via tensor._impl.sharding.
-        Operation kwargs are accessible via output.op_kwargs.
+        All arguments are pytrees matching the structure of __call__ args/outputs.
         
         Args:
-            inputs: Input Tensors with their current sharding annotations
-            output: Output Tensor with its current sharding annotation
+            inputs: Input pytree with current sharding annotations.
+                Access sharding via tensor._impl.sharding for each Tensor leaf.
+            output: Output pytree with current sharding annotation.
+            
+        Returns:
+            An OpShardingRule or None. The rule may also mutate sharding
+            annotations in-place on the input/output tensors.
             
         Note:
             This is bidirectional - the rule may update sharding on

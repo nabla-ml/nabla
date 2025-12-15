@@ -456,6 +456,21 @@ def with_batch_dims(tree: Any, delta: int) -> Any:
 # Multi-output operation helpers
 # =============================================================================
 
+def is_tensor(obj: Any) -> bool:
+    """Check if an object is a Tensor.
+    
+    Used to identify which args need conversion in Operation.__call__.
+    
+    Args:
+        obj: Any object to check
+        
+    Returns:
+        True if obj is a Tensor
+    """
+    from .tensor import Tensor
+    return isinstance(obj, Tensor)
+
+
 def is_tensor_value(obj: Any) -> bool:
     """Check if an object is a MAX graph TensorValue.
     
@@ -469,57 +484,3 @@ def is_tensor_value(obj: Any) -> bool:
     """
     from max import graph
     return isinstance(obj, (graph.TensorValue, graph.BufferValue))
-
-
-def wrap_tensor_values(
-    result_tree: Any,
-    parent_impls: list,
-    op: Any,
-    op_kwargs: dict | None,
-    traced: bool,
-) -> Any:
-    """Wrap a pytree of TensorValues into a pytree of Tensors.
-    
-    Creates TensorImpl and Tensor wrappers for each TensorValue leaf.
-    All outputs will naturally be tracked in GRAPH.unrealized and will
-    be realized together when any tensor is evaluated.
-    
-    Args:
-        result_tree: A pytree where leaves are TensorValues from maxpr
-        parent_impls: List of parent TensorImpls (inputs to the op)
-        op: The Operation instance
-        op_kwargs: Keyword arguments passed to the operation
-        traced: Whether to enable tracing on output tensors
-        
-    Returns:
-        A pytree with the same structure, where TensorValue leaves
-        are replaced with Tensor objects
-    """
-    from .tensor import Tensor
-    from .tensor_impl import TensorImpl
-    
-    # Collect all leaves and structure
-    leaves, treedef = tree_flatten(result_tree, is_leaf=is_tensor_value)
-    
-    # Wrap each TensorValue leaf
-    wrapped_leaves = []
-    for leaf in leaves:
-        if is_tensor_value(leaf):
-            # Create TensorImpl for this output
-            output_impl = TensorImpl(
-                values=leaf,
-                parents=parent_impls,
-                op=op,
-                op_kwargs=op_kwargs,
-                traced=traced,
-            )
-            output_impl.cache_metadata(leaf)  # Cache for sharding compiler
-            # Create Tensor wrapper
-            wrapped_leaves.append(Tensor(impl=output_impl))
-        else:
-            # Non-TensorValue leaf (e.g., None, int) - pass through
-            wrapped_leaves.append(leaf)
-    
-    # Reconstruct the pytree with wrapped Tensors
-    return tree_unflatten(treedef, wrapped_leaves)
-

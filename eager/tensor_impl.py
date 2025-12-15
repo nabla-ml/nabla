@@ -37,21 +37,23 @@ class TensorImpl:
         _values: List of graph values for lazy execution (one per shard).
         _storages: List of realized driver.Tensors (one per shard), or None if unrealized.
         sharding: Sharding specification (None = unsharded, single shard).
-        parents: List of parent TensorImpls (populated when traced=True).
-        op: The Operation object that created this tensor.
-        op_kwargs: Keyword arguments passed to the operation (for vjp_rule).
+        op_args: Original positional args (stored only when traced=True).
+        op_kwargs: Keyword arguments (stored only when traced=True).
         traced: Whether this node is part of a traced computation graph.
         grad: Gradient TensorImpl, populated after backward pass.
         batch_dims: Number of batch dimensions (always prefix of physical shape).
+    
+    Properties:
+        parents: List of parent TensorImpls (derived from op_args when traced).
     """
-    __slots__ = ('_values', '_storages', 'sharding', 'parents', 'op', 'op_kwargs', 'traced', 'grad', 'batch_dims', 'cached_shape', 'cached_dtype', 'cached_device')
+    __slots__ = ('_values', '_storages', 'sharding', 'op', 'op_args', 'op_kwargs', 'traced', 'grad', 'batch_dims', 'cached_shape', 'cached_dtype', 'cached_device')
     
     _values: list[graph.BufferValue | graph.TensorValue]
     _storages: list[driver.Tensor] | None
     sharding: object | None
-    parents: list[TensorImpl]
     op: Operation | None
-    op_kwargs: dict[str, Any] | None
+    op_args: tuple[Any, ...] | None  # Original positional args (for VJP/JVP access)
+    op_kwargs: dict[str, Any] | None  # Original keyword args (for VJP/JVP access)
     traced: bool
     grad: TensorImpl | None
     batch_dims: int
@@ -64,8 +66,8 @@ class TensorImpl:
         self,
         storages: driver.Tensor | list[driver.Tensor] | None = None,
         values: graph.BufferValue | graph.TensorValue | list[graph.BufferValue | graph.TensorValue] | None = None,
-        parents: list[TensorImpl] | None = None,
         op: Operation | None = None,
+        op_args: tuple[Any, ...] | None = None,
         op_kwargs: dict[str, Any] | None = None,
         traced: bool = False,
         batch_dims: int = 0,
@@ -88,9 +90,10 @@ class TensorImpl:
             self._storages = [storages]
         
         self.sharding = sharding
-        self.parents = list(parents) if (traced and parents) else []
         self.op = op
-        self.op_kwargs = op_kwargs
+        # Only store op_args/op_kwargs when traced (to allow GC in untraced mode)
+        self.op_args = op_args if traced else None
+        self.op_kwargs = op_kwargs if traced else None
         self.traced = traced
         self.grad = None
         self.batch_dims = batch_dims
@@ -154,6 +157,19 @@ class TensorImpl:
         if hasattr(self.op, 'name'):
             return self.op.name
         return getattr(self.op, '__name__', None)
+    
+    @property
+    def parents(self) -> list[TensorImpl]:
+        """Get parent TensorImpls (derived from op_args).
+        
+        Returns an empty list if not traced or op_args is None.
+        This is computed on-demand from the stored op_args.
+        """
+        if self.op_args is None:
+            return []
+        # Import here to avoid circular dependency
+        from .tensor import Tensor
+        return [arg._impl for arg in self.op_args if isinstance(arg, Tensor)]
     
     @property
     def is_leaf(self) -> bool:

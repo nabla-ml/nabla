@@ -352,6 +352,30 @@ class MyOp(Operation):
         return [cotangent * y, cotangent * x]
 ```
 
+### Mixed Positional Arguments (JAX Convention)
+
+`Operation.__call__` supports **mixed positional args** following JAX's convention:
+- **Tensor args**: Converted to TensorValues and traced
+- **Non-Tensor args**: Passed through as "static params" (shapes, axes, scalars)
+
+```python
+class ReshapeOp(Operation):
+    @property
+    def name(self): return "reshape"
+
+    def maxpr(self, x, shape):
+        # x is TensorValue, shape is tuple (passed through unchanged)
+        return ops.reshape(x, shape)
+
+# Usage: reshape_op(tensor, (3, 4))  # shape is static param
+```
+
+**Key points for static params:**
+- Non-Tensor positional args pass directly to `maxpr`
+- Static params are also available in `**kwargs`
+- VJP/JVP `primals` list only contains Tensor inputs
+- Static params accessible via `output.op_kwargs` in VJP/JVP rules
+
 ### Adding a Multi-Output Operation
 
 Operations can return **pytrees** (tuples, lists, dicts) of TensorValues:
@@ -378,3 +402,4 @@ class SplitOp(Operation):
 - The `Operation.__call__` method wraps each `TensorValue` in a `Tensor`
 - For VJP: `cotangent` and `output` have the same pytree structure as `maxpr`'s return
 - All outputs are tracked in `GRAPH.unrealized` and realize together automatically
+
