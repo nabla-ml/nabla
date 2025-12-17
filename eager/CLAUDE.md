@@ -218,75 +218,88 @@ def vjp_rule(self, primals, cotangent, output):
 
 ---
 
-## 7. Latest Changes (December 2024): vmap-Ready Operation ABCs
+## 7. Vmap Transform Implementation
 
-This section documents recent additions to prepare the `eager` module for `vmap` transformations.
+The `vmap` transform is fully implemented in `vmap_trafo.py`.
 
-### 7.1 New Files
+### 7.1 Project Structure (Updated)
 
-| File | Purpose |
-|------|---------|
-| `view_ops.py` | View operations for axis manipulation |
-| `test_vmap_ready.py` | 11 tests for batch_dims and view ops |
-
-### 7.2 Key Concepts
-
-**`batch_dims` (Integer Counter)**
-- `TensorImpl.batch_dims` counts how many leading axes are "batch" axes
-- `Tensor.shape` returns the **logical shape** (excludes batch dims)
-- `physical_shape = batch_shape + logical_shape`
-
-```python
-# Physical: (5, 3, 4) with batch_dims=1
-# Batch shape: (5,)
-# Logical shape: (3, 4) ← what Tensor.shape returns
+```text
+eager/
+├── tensor.py          # Public API: User-facing Tensor class
+├── tensor_impl.py     # Internal: TensorImpl state container
+├── tracing.py         # Internal: OutputRefs for operation tracing
+├── ops.py             # Base Operation class & autodiff dispatch
+├── binary_ops.py      # Binary ops with batch_dims support
+├── view_ops.py        # View operations for axis manipulation
+├── vmap_trafo.py      # ✅ NEW: vmap transform implementation
+├── creation.py        # Creation ops (Zeros, Ones, Arange...)
+├── multi_output_ops.py # Multi-output ops (Split, Unbind...)
+├── graph_utils.py     # Graph traversal utilities
+├── compute_graph.py   # Graph compilation & execution
+├── context.py         # Thread-local settings (device, dtype)
+├── pytree.py          # JAX-compatible tree utilities
+├── sharding.py        # DeviceMesh, ShardingSpec definitions
+└── sharding_propagation.py # Sharding inference logic
 ```
 
-### 7.3 BinaryOperation ABC
-
-Added to `ops.py`. All binary ops (`AddOp`, `MulOp`, etc.) now inherit from this.
-
-- **Computes**: `output_batch_dims = max(x.batch_dims, y.batch_dims)`
-- **For traced tensors**: Explicit unsqueeze + broadcast to ensure correct gradient shapes
-
-### 7.4 View Operations
-
-| Operation | Signature | Purpose |
-|-----------|-----------|---------|
-| `unsqueeze` | `(x, axis)` | Add dimension at axis |
-| `squeeze` | `(x, axis)` | Remove dimension at axis |
-| `swap_axes` | `(x, axis1, axis2)` | Swap two axes |
-| `moveaxis` | `(x, source, destination)` | Move axis |
-| `broadcast_to` | `(x, shape)` | Explicit broadcast |
-| `incr_batch_dims` | `(x)` | Increment batch_dims counter |
-| `decr_batch_dims` | `(x)` | Decrement batch_dims counter |
-| `move_axis_to_batch_dims` | `(x, axis)` | Move axis to front, incr batch_dims |
-| `move_axis_from_batch_dims` | `(x, batch_axis, logical_destination)` | Move batch axis to logical shape |
-
-### 7.5 Critical Semantics
-
-**`move_axis_to_batch_dims(x, axis)`**
-- Takes any physical axis index
-- Moves it to position 0 (front of physical shape)
-- Increments `batch_dims`
-
-**`move_axis_from_batch_dims(x, batch_axis, logical_destination)`**
-- `logical_destination` specifies where in the **logical shape** the axis goes
-- Decrements `batch_dims`
+### 7.2 Vmap Usage
 
 ```python
-# Input: physical=(2,5,3,4), batch_dims=2, logical=(3,4)
-y = move_axis_from_batch_dims(x, batch_axis=0, logical_destination=2)
-# Output: physical=(5,3,4,2), batch_dims=1, logical=(3,4,2)
+from eager import vmap, Tensor
+
+# Basic usage
+@vmap
+def square(x): return x * x
+result = square(Tensor.arange(0, 5))
+
+# Multiple inputs with different axes
+vmap(add, in_axes=(0, None))(batched_x, scalar_y)
+
+# Dict axis spec for pytree inputs
+vmap(process, in_axes={'w': 0, 'b': None})(params_dict)
+
+# Pure broadcast with explicit size
+vmap(fn, in_axes=None, axis_size=10)(scalar)
+
+# Nested vmap (multiple batch dims)
+vmap(vmap(fn))(batch_of_batches)
 ```
 
-### 7.6 Next Steps for vmap Implementation
+### 7.3 Key Design: Prefix Pytree Semantics
 
-1. **Implement `vmap` transform** using view ops:
-   - `_batch_tensor`: `move_axis_to_batch_dims` or `unsqueeze` + `incr_batch_dims`
-   - `_unbatch_tensor`: `move_axis_from_batch_dims` or `decr_batch_dims` + `squeeze`
-   
-2. **Add VJP/JVP rules** to view ops (currently forward-only)
+Axis specifications follow JAX's "prefix pytree" pattern:
+- **Scalar (int/None)**: Broadcasts to all tensor leaves
+- **Container**: Must structurally match the input
 
-3. **Handle sharding + vmap interaction**: Sharding applies to physical shapes, vmap's logical abstraction is separate
+```python
+# Scalar broadcasts to all keys
+vmap(fn, in_axes=0)({"a": x, "b": y})  # Both batched on axis 0
+
+# Dict matches pytree structure
+vmap(fn, in_axes={"a": 0, "b": None})({"a": x, "b": y})  # a batched, b broadcast
+```
+
+### 7.4 Core Components
+
+| Component | Purpose |
+|-----------|---------|
+| `_map_prefix(fn, tree, prefix)` | Apply fn to tensor leaves with prefix broadcasting |
+| `_collect_from_prefix(fn, tree, prefix)` | Collect results for validation |
+| `_batch_tensor(tensor, axis, batch_size)` | Move axis to batch_dims |
+| `_unbatch_tensor(tensor, axis)` | Restore axis from batch_dims |
+
+### 7.5 How It Works
+
+1. **Batch inputs**: Move specified axes to `batch_dims` via `move_axis_to_batch_dims`
+2. **Execute function**: Ops work transparently with `batch_dims`
+3. **Unbatch outputs**: Restore axes via `move_axis_from_batch_dims`
+
+The `batch_dims` counter on `TensorImpl` tracks how many leading physical axes are batch axes. User code only sees logical shapes.
+
+### 7.6 Next Steps
+
+1. **Add VJP/JVP rules** to view ops (currently forward-only)
+2. **Implement `vjp_trafo.py`**: Reverse-mode autodiff transform
+3. **Handle sharding + vmap**: Sharding applies to physical shapes
 

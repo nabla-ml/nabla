@@ -95,6 +95,15 @@ from .pytree import (
     with_batch_dims,
 )
 
+# Function transforms
+from .vmap_trafo import vmap
+
+# Reduction operations
+from .reduction_ops import reduce_sum
+
+# View operations (shape-aware)
+from .view_ops import reshape
+
 
 # Sharding infrastructure (core definitions)
 from .sharding import (
@@ -141,9 +150,10 @@ __all__ = [
     "decr_batch_dims",
     "move_axis_to_batch_dims",
     "move_axis_from_batch_dims",
+    # Transforms
+    "vmap",
     # Pytree
     "PyTreeDef",
-    "broadcast_prefix",
     "tensor_leaves",
     "traced",
     "tree_flatten",

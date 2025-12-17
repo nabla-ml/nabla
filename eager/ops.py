@@ -393,34 +393,36 @@ class BinaryOperation(Operation):
         # Import view ops lazily to avoid circular imports
         from . import view_ops
         
-        # Get physical shapes and batch dims
-        x_shape = x.shape
-        y_shape = y.shape
+        # Use PHYSICAL shapes (includes batch dims) for correct splitting
+        x_physical = x._impl.physical_shape
+        y_physical = y._impl.physical_shape
         x_batch = x._impl.batch_dims
         y_batch = y._impl.batch_dims
         
         # Split into batch and logical shapes
-        x_batch_shape = x_shape[:x_batch]
-        x_logical_shape = x_shape[x_batch:]
-        y_batch_shape = y_shape[:y_batch]
-        y_logical_shape = y_shape[y_batch:]
+        x_batch_shape = x_physical[:x_batch]
+        x_logical_shape = x_physical[x_batch:]
+        y_batch_shape = y_physical[:y_batch]
+        y_logical_shape = y_physical[y_batch:]
         
         # Compute broadcasted shapes for batch and logical separately
         out_batch_shape = self._broadcast_shapes(x_batch_shape, y_batch_shape)
         out_logical_shape = self._broadcast_shapes(x_logical_shape, y_logical_shape)
-        out_shape = out_batch_shape + out_logical_shape
+        out_physical_shape = out_batch_shape + out_logical_shape
         
         # Prepare x: unsqueeze then broadcast if needed
         if x._impl.traced:
-            x = self._unsqueeze_to_rank(x, len(out_shape), x_batch, out_batch_dims)
-            if tuple(x.shape) != out_shape:
-                x = view_ops.broadcast_to(x, out_shape)
+            x = self._unsqueeze_to_rank(x, len(out_physical_shape), x_batch, out_batch_dims)
+            current_physical = x._impl.physical_shape
+            if current_physical != out_physical_shape:
+                x = view_ops.broadcast_to(x, out_physical_shape)
         
         # Prepare y: unsqueeze then broadcast if needed  
         if y._impl.traced:
-            y = self._unsqueeze_to_rank(y, len(out_shape), y_batch, out_batch_dims)
-            if tuple(y.shape) != out_shape:
-                y = view_ops.broadcast_to(y, out_shape)
+            y = self._unsqueeze_to_rank(y, len(out_physical_shape), y_batch, out_batch_dims)
+            current_physical = y._impl.physical_shape
+            if current_physical != out_physical_shape:
+                y = view_ops.broadcast_to(y, out_physical_shape)
         
         return x, y
     

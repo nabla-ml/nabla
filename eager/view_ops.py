@@ -151,6 +151,51 @@ class BroadcastToOp(Operation):
         return ops.broadcast_to(x, shape)
 
 
+class ReshapeOp(Operation):
+    """Reshape tensor to a new shape.
+    
+    CRITICAL: shape is the LOGICAL shape (user's view).
+    Batch dimensions are preserved and prepended to the physical shape.
+    """
+    
+    @property
+    def name(self) -> str:
+        return "reshape"
+    
+    def maxpr(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
+        """Reshape x to target shape (receives PHYSICAL shape)."""
+        return ops.reshape(x, shape)
+    
+    def __call__(self, x: Tensor, *, shape: tuple[int, ...]) -> Tensor:
+        """Reshape LOGICAL shape, preserving batch dimensions.
+        
+        Args:
+            x: Input tensor
+            shape: New logical shape (can include -1 for inference)
+            
+        Returns:
+            Tensor with new logical shape, batch dims unchanged
+            
+        Example:
+            # Physical: (batch=5, 12), batch_dims=1, logical: (12,)
+            y = reshape(x, shape=(3, 4))
+            # Physical: (batch=5, 3, 4), batch_dims=1, logical: (3, 4)
+        """
+        batch_dims = x._impl.batch_dims
+        batch_shape = x._impl.batch_shape
+        
+        # Build physical shape = batch_shape + logical shape
+        physical_shape = tuple(batch_shape) + tuple(shape)
+        
+        # Call base class with physical shape
+        result = super().__call__(x, shape=physical_shape)
+        
+        # Preserve batch_dims
+        result._impl.batch_dims = batch_dims
+        
+        return result
+
+
 # =============================================================================
 # Batch Dims Management Operations
 # =============================================================================
@@ -232,39 +277,68 @@ class MoveAxisToBatchDimsOp(Operation):
     """Move an axis from logical shape to batch dims.
     
     This operation:
-    1. Moves the specified axis to the front of batch dims (position 0)
-    2. Increments batch_dims counter
+    1. Takes a LOGICAL axis index (user's view, unaware of existing batch dims)
+    2. Translates to physical axis by adding batch_dims offset
+    3. Moves that physical axis to position 0 (front of batch dims)
+    4. Increments batch_dims counter
     
     Used by vmap to convert a logical axis into a batch axis.
+    
+    Example:
+        Input: physical=(B, H, W, C) = (2, 3, 4, 5), batch_dims=1
+               logical=(H, W, C) = (3, 4, 5)
+        
+        move_axis_to_batch_dims(x, axis=2)  # axis=2 is C in logical
+        
+        physical_axis = 1 + 2 = 3  (C is at physical position 3)
+        Output: physical=(C, B, H, W) = (5, 2, 3, 4), batch_dims=2
+                logical=(H, W) = (3, 4)
     """
     
     @property
     def name(self) -> str:
         return "move_axis_to_batch_dims"
     
-    def maxpr(self, x: TensorValue, *, axis: int) -> TensorValue:
-        """Move axis to front."""
+    def maxpr(self, x: TensorValue, *, physical_axis: int) -> TensorValue:
+        """Move physical_axis to front. Called internally with translated axis."""
         rank = len(x.type.shape)
-        
-        # Normalize negative index (relative to logical dims)
-        if axis < 0:
-            axis = rank + axis
         
         # Move to front
         order = list(range(rank))
-        order.pop(axis)
-        order.insert(0, axis)
+        order.pop(physical_axis)
+        order.insert(0, physical_axis)
         
-        # Use ops.permute for full permutation
         return ops.permute(x, tuple(order))
     
     def __call__(self, x: Tensor, *, axis: int) -> Tensor:
-        """Move axis to batch dims and increment counter."""
-        # First move the axis to front via parent's __call__
-        result = super().__call__(x, axis=axis)
+        """Move logical axis to batch dims and increment counter.
         
-        # Then increment batch_dims
-        result._impl.batch_dims = x._impl.batch_dims + 1
+        Args:
+            x: Input tensor
+            axis: LOGICAL axis index (relative to user-visible shape)
+        """
+        from .tensor import Tensor
+        from .tensor_impl import TensorImpl
+        
+        batch_dims = x._impl.batch_dims
+        logical_rank = len(x.shape)  # This is logical rank
+        
+        # Normalize negative axis (relative to logical shape)
+        if axis < 0:
+            axis = logical_rank + axis
+        
+        if axis < 0 or axis >= logical_rank:
+            raise ValueError(f"axis {axis} out of bounds for logical shape of rank {logical_rank}")
+        
+        # Translate logical axis to physical axis
+        physical_axis = batch_dims + axis
+        
+        # Call parent's __call__ with the physical axis
+        # We pass physical_axis as kwarg which maxpr expects
+        result = super().__call__(x, physical_axis=physical_axis)
+        
+        # Increment batch_dims on result
+        result._impl.batch_dims = batch_dims + 1
         
         return result
 
@@ -273,11 +347,10 @@ class MoveAxisFromBatchDimsOp(Operation):
     """Move an axis from batch dims to logical shape.
     
     This operation:
-    1. Moves the specified batch axis to a position in the logical shape
-    2. Decrements batch_dims counter
-    
-    The `destination` parameter specifies where in the LOGICAL shape (after 
-    batch_dims is decremented) the axis should be placed.
+    1. Takes batch_axis (index within batch dims, 0 = outermost)
+    2. Takes logical_destination (where in logical shape to place it)
+    3. Translates to physical indices and performs the move
+    4. Decrements batch_dims counter
     
     Used by vmap to convert a batch axis back to logical.
     
@@ -286,6 +359,11 @@ class MoveAxisFromBatchDimsOp(Operation):
                logical=(H, W) = (3, 4)
         
         move_axis_from_batch_dims(x, batch_axis=0, logical_destination=2)
+        
+        # batch_axis=0 means C (physical index 0)
+        # logical_destination=2 means end of new logical shape
+        # new_batch_dims = 1, new logical will have rank 3
+        # physical_destination = 1 + 2 = 3
         
         Output: physical=(B, H, W, C) = (5, 3, 4, 2), batch_dims=1
                 logical=(H, W, C) = (3, 4, 2)
@@ -299,54 +377,23 @@ class MoveAxisFromBatchDimsOp(Operation):
         self, 
         x: TensorValue, 
         *, 
-        batch_axis: int = 0,
-        logical_destination: int = 0
+        physical_source: int,
+        physical_destination: int
     ) -> TensorValue:
-        """Move batch_axis to logical_destination position.
+        """Move axis from physical_source to physical_destination.
         
-        Args:
-            x: Input tensor
-            batch_axis: Which batch axis to move (0 = outermost)
-            logical_destination: Where to place axis in logical shape (0 = first logical dim)
+        physical_destination is the FINAL position in the output tensor.
+        This is called internally with already-translated physical indices.
         """
         rank = len(x.type.shape)
-        batch_dims = batch_axis + 1  # Will be decremented, but we need current value for calc
         
-        # Normalize batch_axis
-        if batch_axis < 0:
-            batch_axis = rank + batch_axis
-        
-        # Convert logical_destination to physical position
-        # After batch_axis is removed, batch_dims will be decremented
-        # So physical position = (batch_dims - 1) + logical_destination
-        # But we also need to account for the batch_axis being removed
-        # 
-        # Current layout: [batch_0, ..., batch_axis, ..., batch_{n-1}, logical_0, ...]
-        # We want: [batch_0, ..., batch_{n-1} (minus batch_axis), logical_0, ..., moved_axis, ...]
-        
-        # Build permutation: remove batch_axis, insert at physical_destination
+        # Build permutation: this is equivalent to numpy.moveaxis
         order = list(range(rank))
-        order.pop(batch_axis)
-        
-        # Physical destination = (current_batch_dims - 1) + logical_destination
-        # Note: We don't know batch_dims in maxpr, so we use the simpler approach:
-        # Just insert at the position that makes logical sense
-        # After removing batch_axis from front, the remaining batch dims shift left
-        # Then we insert at position = logical_destination (relative to start of logical shape)
-        
-        # Actually, we need to think about this more carefully.
-        # If we have [B0, B1, L0, L1, L2] with batch_dims=2 and want to move B0 to logical pos 2:
-        # After removing B0: [B1, L0, L1, L2]  (now batch_dims will be 1)
-        # Insert B0 at logical position 2 means after L1: [B1, L0, L1, B0, L2]
-        # Physical position = new_batch_dims + logical_destination = 1 + 2 = 3
-        
-        # But we're in maxpr, we don't have batch_dims info here. 
-        # Let's compute it based on the assumption that caller passes correct values.
-        # We'll handle the actual batch_dims in __call__.
-        
-        # For now, just do the permutation assuming we want to move batch_axis
-        # to be at the end (as a simple default)
-        order.insert(len(order), batch_axis)  # Insert at end as fallback
+        order.pop(physical_source)
+        # Insert directly at physical_destination
+        # After pop, if source < destination, the indices after source shift down by 1
+        # So inserting at physical_destination in the popped list gives the right result
+        order.insert(physical_destination, physical_source)
         
         return ops.permute(x, tuple(order))
     
@@ -362,47 +409,68 @@ class MoveAxisFromBatchDimsOp(Operation):
         Args:
             x: Input tensor
             batch_axis: Which batch axis to move (0 = outermost batch dim)
-            logical_destination: Where in logical shape to place it (0 = first logical dim)
+            logical_destination: Where in LOGICAL shape to place it (0 = first logical dim)
         """
         from .tensor import Tensor
         from .tensor_impl import TensorImpl
+        from .compute_graph import GRAPH
+        from max import graph as g
         
-        if x._impl.batch_dims <= 0:
-            raise ValueError("No batch dims to move from")
-        
-        rank = len(x._impl.physical_shape)
         current_batch_dims = x._impl.batch_dims
         
-        # Normalize batch_axis (relative to batch dims, so 0 is outermost)
+        if current_batch_dims <= 0:
+            raise ValueError("No batch dims to move from")
+        
+        physical_shape = x._impl.physical_shape
+        rank = len(physical_shape)
+        logical_rank = rank - current_batch_dims
+        
+        # Normalize batch_axis (relative to batch dims)
         if batch_axis < 0:
             batch_axis = current_batch_dims + batch_axis
         
         if batch_axis < 0 or batch_axis >= current_batch_dims:
             raise ValueError(f"batch_axis {batch_axis} out of bounds for batch_dims={current_batch_dims}")
         
+        # batch_axis IS the physical source (it's within the batch prefix)
+        physical_source = batch_axis
+        
         # New batch_dims after moving one out
         new_batch_dims = current_batch_dims - 1
         
-        # Normalize logical_destination (relative to logical shape after removal)
-        logical_rank = rank - current_batch_dims  # Current logical rank
-        if logical_destination < 0:
-            logical_destination = logical_rank + 1 + logical_destination  # +1 because we add one
+        # New logical rank after adding one axis
+        new_logical_rank = logical_rank + 1
         
-        # Physical destination = new_batch_dims + logical_destination
+        # Normalize logical_destination (relative to new logical shape)
+        if logical_destination < 0:
+            logical_destination = new_logical_rank + logical_destination
+        
+        if logical_destination < 0 or logical_destination > new_logical_rank:
+            raise ValueError(f"logical_destination {logical_destination} out of bounds for new logical rank {new_logical_rank}")
+        
+        # Translate to physical destination
+        # After batch_dims becomes new_batch_dims, logical starts at new_batch_dims
         physical_destination = new_batch_dims + logical_destination
         
-        # Build the permutation
-        order = list(range(rank))
-        order.pop(batch_axis)
-        order.insert(physical_destination, batch_axis)
+        # Execute the permutation via maxpr
+        with GRAPH.graph:
+            input_value = g.TensorValue(x)
+            result_value = self.maxpr(
+                input_value, 
+                physical_source=physical_source,
+                physical_destination=physical_destination
+            )
         
-        # Apply permutation using moveaxis-style logic
-        result = moveaxis(x, batch_axis, physical_destination)
+        # Create result TensorImpl
+        result_impl = TensorImpl(
+            values=result_value,
+            traced=x._impl.traced,
+            batch_dims=new_batch_dims,
+            sharding=x._impl.sharding,
+        )
+        result_impl.cache_metadata(result_value)
         
-        # Update batch_dims on the result
-        result._impl.batch_dims = new_batch_dims
-        
-        return result
+        return Tensor(impl=result_impl)
 
 
 # =============================================================================
@@ -559,6 +627,36 @@ def move_axis_from_batch_dims(
     )
 
 
+# =============================================================================
+# Reshape (Logical Shape)
+# =============================================================================
+
+_reshape_op = ReshapeOp()
+
+
+def reshape(x: Tensor, shape: tuple[int, ...]) -> Tensor:
+    """Reshape tensor to a new LOGICAL shape.
+    
+    The shape argument specifies the new user-visible shape.
+    Batch dimensions are preserved and prepended automatically.
+    
+    Args:
+        x: Input tensor
+        shape: New logical shape (can include -1 for inference)
+        
+    Returns:
+        Tensor with new logical shape, batch dims unchanged
+        
+    Example:
+        # Inside vmap: physical (batch=5, 12), batch_dims=1
+        # User sees logical: (12,)
+        
+        y = reshape(x, (3, 4))  # Reshape logical to (3, 4)
+        # Physical output: (batch=5, 3, 4), logical: (3, 4)
+    """
+    return _reshape_op(x, shape=shape)
+
+
 __all__ = [
     # Classes
     "UnsqueezeOp",
@@ -566,6 +664,7 @@ __all__ = [
     "SwapAxesOp",
     "MoveAxisOp",
     "BroadcastToOp",
+    "ReshapeOp",
     "IncrBatchDimsOp",
     "DecrBatchDimsOp",
     "MoveAxisToBatchDimsOp",
@@ -576,8 +675,10 @@ __all__ = [
     "swap_axes",
     "moveaxis",
     "broadcast_to",
+    "reshape",
     "incr_batch_dims",
     "decr_batch_dims",
     "move_axis_to_batch_dims",
     "move_axis_from_batch_dims",
 ]
+

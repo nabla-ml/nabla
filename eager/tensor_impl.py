@@ -256,6 +256,14 @@ class TensorImpl:
         shape = self.global_shape
         return len(shape) if shape is not None else None
     
+    @property
+    def batch_shape(self) -> tuple[int, ...] | None:
+        """Shape of batch dimensions (first batch_dims axes of physical shape)."""
+        physical = self.physical_shape
+        if physical is None:
+            return None
+        return physical[:self.batch_dims]
+    
     def __repr__(self) -> str:
         shards_str = f", shards={self.num_shards}" if self.is_sharded else ""
         return f"TensorImpl(op={self.op_name}, traced={self.traced}, parents={len(self.parents)}, batch_dims={self.batch_dims}{shards_str})"
