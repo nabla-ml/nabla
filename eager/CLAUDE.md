@@ -215,3 +215,78 @@ def vjp_rule(self, primals, cotangent, output):
     # Compute gradients...
     return grads
 ```
+
+---
+
+## 7. Latest Changes (December 2024): vmap-Ready Operation ABCs
+
+This section documents recent additions to prepare the `eager` module for `vmap` transformations.
+
+### 7.1 New Files
+
+| File | Purpose |
+|------|---------|
+| `view_ops.py` | View operations for axis manipulation |
+| `test_vmap_ready.py` | 11 tests for batch_dims and view ops |
+
+### 7.2 Key Concepts
+
+**`batch_dims` (Integer Counter)**
+- `TensorImpl.batch_dims` counts how many leading axes are "batch" axes
+- `Tensor.shape` returns the **logical shape** (excludes batch dims)
+- `physical_shape = batch_shape + logical_shape`
+
+```python
+# Physical: (5, 3, 4) with batch_dims=1
+# Batch shape: (5,)
+# Logical shape: (3, 4) ← what Tensor.shape returns
+```
+
+### 7.3 BinaryOperation ABC
+
+Added to `ops.py`. All binary ops (`AddOp`, `MulOp`, etc.) now inherit from this.
+
+- **Computes**: `output_batch_dims = max(x.batch_dims, y.batch_dims)`
+- **For traced tensors**: Explicit unsqueeze + broadcast to ensure correct gradient shapes
+
+### 7.4 View Operations
+
+| Operation | Signature | Purpose |
+|-----------|-----------|---------|
+| `unsqueeze` | `(x, axis)` | Add dimension at axis |
+| `squeeze` | `(x, axis)` | Remove dimension at axis |
+| `swap_axes` | `(x, axis1, axis2)` | Swap two axes |
+| `moveaxis` | `(x, source, destination)` | Move axis |
+| `broadcast_to` | `(x, shape)` | Explicit broadcast |
+| `incr_batch_dims` | `(x)` | Increment batch_dims counter |
+| `decr_batch_dims` | `(x)` | Decrement batch_dims counter |
+| `move_axis_to_batch_dims` | `(x, axis)` | Move axis to front, incr batch_dims |
+| `move_axis_from_batch_dims` | `(x, batch_axis, logical_destination)` | Move batch axis to logical shape |
+
+### 7.5 Critical Semantics
+
+**`move_axis_to_batch_dims(x, axis)`**
+- Takes any physical axis index
+- Moves it to position 0 (front of physical shape)
+- Increments `batch_dims`
+
+**`move_axis_from_batch_dims(x, batch_axis, logical_destination)`**
+- `logical_destination` specifies where in the **logical shape** the axis goes
+- Decrements `batch_dims`
+
+```python
+# Input: physical=(2,5,3,4), batch_dims=2, logical=(3,4)
+y = move_axis_from_batch_dims(x, batch_axis=0, logical_destination=2)
+# Output: physical=(5,3,4,2), batch_dims=1, logical=(3,4,2)
+```
+
+### 7.6 Next Steps for vmap Implementation
+
+1. **Implement `vmap` transform** using view ops:
+   - `_batch_tensor`: `move_axis_to_batch_dims` or `unsqueeze` + `incr_batch_dims`
+   - `_unbatch_tensor`: `move_axis_from_batch_dims` or `decr_batch_dims` + `squeeze`
+   
+2. **Add VJP/JVP rules** to view ops (currently forward-only)
+
+3. **Handle sharding + vmap interaction**: Sharding applies to physical shapes, vmap's logical abstraction is separate
+

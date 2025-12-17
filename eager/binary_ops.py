@@ -16,7 +16,11 @@
 
 """Binary operations for the eager module.
 
-All binary ops implement jvp_rule for forward-mode autodiff:
+All binary ops inherit from BinaryOperation ABC which handles:
+- batch_dims-aware broadcasting for vmap support
+- Explicit unsqueeze+broadcast for traced tensors (correct gradient shapes)
+
+JVP rules for forward-mode autodiff:
 - add(x, y): d(x+y) = dx + dy
 - sub(x, y): d(x-y) = dx - dy  
 - mul(x, y): d(x*y) = y*dx + x*dy
@@ -30,13 +34,13 @@ from typing import Any, TYPE_CHECKING
 
 from max.graph import TensorValue, ops
 
-from .ops import Operation
+from .ops import BinaryOperation
 
 if TYPE_CHECKING:
     from .tensor import Tensor
 
 
-class AddOp(Operation):
+class AddOp(BinaryOperation):
     """Element-wise addition operation."""
     
     @property
@@ -59,7 +63,7 @@ class AddOp(Operation):
         return dx + dy
 
 
-class MulOp(Operation):
+class MulOp(BinaryOperation):
     """Element-wise multiplication operation."""
     
     @property
@@ -84,7 +88,7 @@ class MulOp(Operation):
         return result
 
 
-class SubOp(Operation):
+class SubOp(BinaryOperation):
     """Element-wise subtraction operation."""
     
     @property
@@ -110,7 +114,7 @@ class SubOp(Operation):
         return dx - dy
 
 
-class DivOp(Operation):
+class DivOp(BinaryOperation):
     """Element-wise division operation."""
     
     @property
@@ -141,7 +145,7 @@ class DivOp(Operation):
         return result
 
 
-class MatmulOp(Operation):
+class MatmulOp(BinaryOperation):
     """Matrix multiplication operation."""
     
     @property

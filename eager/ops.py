@@ -319,3 +319,172 @@ class Operation(ABC):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(name={self.name!r})"
 
+
+class BinaryOperation(Operation):
+    """Abstract base class for binary element-wise operations.
+    
+    Handles batch_dims-aware broadcasting for vmap support:
+    1. Compute output batch_dims = max(input1.batch_dims, input2.batch_dims)
+    2. For traced inputs, unsqueeze and broadcast to match output shapes
+    
+    Subclasses only need to implement:
+    - name property
+    - maxpr(x, y) -> TensorValue (the actual element-wise operation)
+    - jvp_rule (optional)
+    - vjp_rule (optional)
+    """
+    
+    def __call__(self, x: Tensor, y: Tensor) -> Tensor:
+        """Execute binary operation with batch_dims-aware broadcasting.
+        
+        For traced tensors, explicitly broadcasts to ensure correct gradient shapes.
+        For untraced tensors, relies on MAX's implicit broadcasting.
+        
+        Args:
+            x: First input tensor
+            y: Second input tensor
+            
+        Returns:
+            Result tensor with batch_dims = max(x.batch_dims, y.batch_dims)
+        """
+        from .tensor import Tensor
+        
+        # Determine output batch_dims
+        x_batch = x._impl.batch_dims
+        y_batch = y._impl.batch_dims
+        out_batch_dims = max(x_batch, y_batch)
+        
+        # Check if any input is traced (need explicit broadcasting for gradients)
+        any_traced = x._impl.traced or y._impl.traced
+        
+        # If traced, we need to unsqueeze and broadcast for correct gradient shapes
+        if any_traced:
+            x, y = self._prepare_for_broadcast(x, y, out_batch_dims)
+        
+        # Delegate to parent's __call__ which handles maxpr execution and JVP
+        result = super().__call__(x, y)
+        
+        # Set output batch_dims
+        if isinstance(result, Tensor):
+            result._impl.batch_dims = out_batch_dims
+        
+        return result
+    
+    def _prepare_for_broadcast(
+        self, 
+        x: Tensor, 
+        y: Tensor, 
+        out_batch_dims: int
+    ) -> tuple[Tensor, Tensor]:
+        """Prepare tensors for broadcasting when traced.
+        
+        This ensures correct gradient shapes by:
+        1. Unsqueezing to match ranks (batch dims and logical dims separately)
+        2. Broadcasting to output shape
+        
+        Args:
+            x: First tensor
+            y: Second tensor  
+            out_batch_dims: Target batch dims for output
+            
+        Returns:
+            Tuple of (prepared_x, prepared_y)
+        """
+        # Import view ops lazily to avoid circular imports
+        from . import view_ops
+        
+        # Get physical shapes and batch dims
+        x_shape = x.shape
+        y_shape = y.shape
+        x_batch = x._impl.batch_dims
+        y_batch = y._impl.batch_dims
+        
+        # Split into batch and logical shapes
+        x_batch_shape = x_shape[:x_batch]
+        x_logical_shape = x_shape[x_batch:]
+        y_batch_shape = y_shape[:y_batch]
+        y_logical_shape = y_shape[y_batch:]
+        
+        # Compute broadcasted shapes for batch and logical separately
+        out_batch_shape = self._broadcast_shapes(x_batch_shape, y_batch_shape)
+        out_logical_shape = self._broadcast_shapes(x_logical_shape, y_logical_shape)
+        out_shape = out_batch_shape + out_logical_shape
+        
+        # Prepare x: unsqueeze then broadcast if needed
+        if x._impl.traced:
+            x = self._unsqueeze_to_rank(x, len(out_shape), x_batch, out_batch_dims)
+            if tuple(x.shape) != out_shape:
+                x = view_ops.broadcast_to(x, out_shape)
+        
+        # Prepare y: unsqueeze then broadcast if needed  
+        if y._impl.traced:
+            y = self._unsqueeze_to_rank(y, len(out_shape), y_batch, out_batch_dims)
+            if tuple(y.shape) != out_shape:
+                y = view_ops.broadcast_to(y, out_shape)
+        
+        return x, y
+    
+    def _unsqueeze_to_rank(
+        self, 
+        t: Tensor, 
+        target_rank: int,
+        current_batch_dims: int,
+        target_batch_dims: int
+    ) -> Tensor:
+        """Unsqueeze tensor to target rank, adding dims at correct positions.
+        
+        Adds dimensions at:
+        - The start of batch dims (to match target_batch_dims)
+        - The start of logical dims (to match target logical rank)
+        """
+        from . import view_ops
+        
+        current_shape = t.shape
+        current_rank = len(current_shape)
+        
+        # Number of batch dims to add at front
+        batch_dims_to_add = target_batch_dims - current_batch_dims
+        
+        # Number of logical dims to add (after batch dims)
+        current_logical_rank = current_rank - current_batch_dims
+        target_logical_rank = target_rank - target_batch_dims
+        logical_dims_to_add = target_logical_rank - current_logical_rank
+        
+        # Add batch dims at front
+        for _ in range(batch_dims_to_add):
+            t = view_ops.unsqueeze(t, axis=0)
+        
+        # Add logical dims after batch (at position = new batch_dims)
+        for _ in range(logical_dims_to_add):
+            t = view_ops.unsqueeze(t, axis=target_batch_dims)
+        
+        return t
+    
+    @staticmethod
+    def _broadcast_shapes(
+        shape1: tuple[int, ...], 
+        shape2: tuple[int, ...]
+    ) -> tuple[int, ...]:
+        """Compute broadcasted shape for two shapes.
+        
+        Standard numpy-style broadcasting rules.
+        """
+        # Pad shorter shape with 1s at front
+        max_len = max(len(shape1), len(shape2))
+        s1 = (1,) * (max_len - len(shape1)) + tuple(shape1)
+        s2 = (1,) * (max_len - len(shape2)) + tuple(shape2)
+        
+        result = []
+        for d1, d2 in zip(s1, s2):
+            if d1 == d2:
+                result.append(d1)
+            elif d1 == 1:
+                result.append(d2)
+            elif d2 == 1:
+                result.append(d1)
+            else:
+                raise ValueError(
+                    f"Cannot broadcast shapes {shape1} and {shape2}"
+                )
+        return tuple(result)
+

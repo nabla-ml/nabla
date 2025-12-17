@@ -38,8 +38,21 @@ from .compute_graph import GRAPH, driver_tensor_type, compile_with_sharding
 # Main Tensor class
 from .tensor import Tensor
 
-# Operation base class
-from .ops import Operation
+# Operation base classes
+from .ops import Operation, BinaryOperation
+
+# View operations (for vmap support)
+from .view_ops import (
+    unsqueeze,
+    squeeze,
+    swap_axes,
+    moveaxis,
+    broadcast_to,
+    incr_batch_dims,
+    decr_batch_dims,
+    move_axis_to_batch_dims,
+    move_axis_from_batch_dims,
+)
 
 # Binary operations
 from .binary_ops import (
@@ -118,6 +131,16 @@ __all__ = [
     "SubOp",
     "DivOp",
     "MatmulOp",
+    # View operations
+    "unsqueeze",
+    "squeeze",
+    "swap_axes",
+    "moveaxis",
+    "broadcast_to",
+    "incr_batch_dims",
+    "decr_batch_dims",
+    "move_axis_to_batch_dims",
+    "move_axis_from_batch_dims",
     # Pytree
     "PyTreeDef",
     "broadcast_prefix",
