@@ -557,3 +557,146 @@ class ReduceOperation(Operation):
         
         return result
 
+
+class UnaryOperation(Operation):
+    """Abstract base class for element-wise unary operations.
+    
+    Handles:
+    - Preserving batch_dims on output for vmap support
+    - JVP mode (forward-mode autodiff)
+    
+    Subclasses only need to implement:
+    - name property
+    - maxpr(x) -> TensorValue (the actual element-wise operation)
+    - jvp_rule (optional)
+    - vjp_rule (optional)
+    
+    Examples: relu, sigmoid, tanh, exp, log, sqrt, neg, abs, sin, cos
+    """
+    
+    def __call__(self, x: Tensor) -> Tensor:
+        """Execute unary operation, preserving batch dimensions.
+        
+        Args:
+            x: Input tensor
+            
+        Returns:
+            Result tensor with same batch_dims as input
+        """
+        from .tensor import Tensor
+        
+        batch_dims = x._impl.batch_dims
+        
+        # Delegate to parent's __call__ which handles maxpr and JVP
+        result = super().__call__(x)
+        
+        # Preserve batch_dims on output
+        if isinstance(result, Tensor):
+            result._impl.batch_dims = batch_dims
+        
+        return result
+
+
+class LogicalAxisOperation(Operation):
+    """Abstract base class for operations that take axis parameters on LOGICAL shape.
+    
+    This ABC handles the common pattern of:
+    1. Normalizing negative axes (relative to logical shape)
+    2. Translating logical axis -> physical axis (by adding batch_dims offset)
+    3. Calling the underlying MAX operation with physical axis
+    4. Preserving batch_dims on output
+    
+    For operations that need to work on physical axes directly (e.g., vmap internals),
+    use the base Operation class instead.
+    
+    Subclasses must implement:
+    - name property
+    - maxpr(x, *, axis: int) -> TensorValue
+    - axis_offset_for_insert (class attribute): True for unsqueeze (axis + 1 normalization)
+    
+    Examples: UnsqueezeOp, SqueezeOp
+    """
+    
+    # Override in subclass: True for unsqueeze (inserting adds +1 to axis normalization)
+    axis_offset_for_insert: bool = False
+    
+    def __call__(self, x: Tensor, *, axis: int = 0) -> Tensor:
+        """Execute operation at logical axis, translating to physical axis.
+        
+        Args:
+            x: Input tensor
+            axis: Logical axis index (supports negative indexing)
+            
+        Returns:
+            Result tensor with same batch_dims as input
+        """
+        from .tensor import Tensor
+        
+        batch_dims = x._impl.batch_dims
+        logical_ndim = len(x.shape)
+        
+        # Normalize negative axis to positive (relative to logical shape)
+        if axis < 0:
+            # For insert operations (unsqueeze), we need +1 since we're adding
+            offset = 1 if self.axis_offset_for_insert else 0
+            axis = logical_ndim + offset + axis
+        
+        # Translate: logical axis -> physical axis
+        physical_axis = batch_dims + axis
+        
+        # Call parent which passes physical axis to maxpr
+        result = super().__call__(x, axis=physical_axis)
+        
+        # Preserve batch_dims
+        if isinstance(result, Tensor):
+            result._impl.batch_dims = batch_dims
+        
+        return result
+
+
+class LogicalShapeOperation(Operation):
+    """Abstract base class for operations that take shape parameters on LOGICAL shape.
+    
+    This ABC handles the common pattern of:
+    1. Getting the current batch_shape from input tensor
+    2. Prepending batch_shape to the user-provided logical shape
+    3. Calling the underlying MAX operation with physical shape
+    4. Preserving batch_dims on output
+    
+    Subclasses must implement:
+    - name property
+    - maxpr(x, *, shape: tuple) -> TensorValue
+    
+    Examples: ReshapeOp, BroadcastToOp
+    """
+    
+    def __call__(self, x: Tensor, *, shape: tuple[int, ...]) -> Tensor:
+        """Execute operation with logical shape, prepending batch_shape.
+        
+        Args:
+            x: Input tensor
+            shape: Logical target shape
+            
+        Returns:
+            Result tensor with same batch_dims as input, new logical shape
+        """
+        from .tensor import Tensor
+        
+        batch_dims = x._impl.batch_dims
+        batch_shape = x._impl.batch_shape
+        
+        # Build physical shape = batch_shape + logical shape
+        # Handle case when batch_dims=0 (batch_shape is None)
+        if batch_shape is None:
+            physical_shape = tuple(shape)
+        else:
+            physical_shape = tuple(batch_shape) + tuple(shape)
+        
+        # Call parent which passes physical shape to maxpr
+        result = super().__call__(x, shape=physical_shape)
+        
+        # Preserve batch_dims
+        if isinstance(result, Tensor):
+            result._impl.batch_dims = batch_dims
+        
+        return result

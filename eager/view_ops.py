@@ -40,36 +40,97 @@ if TYPE_CHECKING:
 
 
 # =============================================================================
-# Unsqueeze / Squeeze Operations
+# Unsqueeze / Squeeze Operations  
 # =============================================================================
+#
+# Two variants of each operation:
+# - UnsqueezeOp/SqueezeOp: User-facing, operates on LOGICAL axes
+#   (inherits LogicalAxisOperation which handles axis translation)
+# - UnsqueezePhysicalOp/SqueezePhysicalOp: Internal ops for vmap,
+#   operates directly on PHYSICAL axes (inherits base Operation)
 
-class UnsqueezeOp(Operation):
-    """Add a dimension of size 1 at the specified axis.
+from .ops import LogicalAxisOperation, LogicalShapeOperation
+
+
+class UnsqueezeOp(LogicalAxisOperation):
+    """Add a dimension of size 1 at the specified LOGICAL axis.
     
-    Does not affect batch_dims counter - caller must adjust if needed.
+    Automatically translates logical axis to physical axis by adding batch_dims offset.
+    Preserves batch_dims on output.
+    
+    Args:
+        axis: Logical axis position (supports negative indexing)
+        
+    Example:
+        # logical shape (8,) with batch_dims=1 -> physical (4, 8)
+        # unsqueeze(axis=0) -> logical (1, 8) -> physical (4, 1, 8)
     """
+    
+    axis_offset_for_insert = True  # For unsqueeze: negative axis needs +1
     
     @property
     def name(self) -> str:
         return "unsqueeze"
     
     def maxpr(self, x: TensorValue, *, axis: int = 0) -> TensorValue:
-        """Add dimension at axis position."""
+        """Add dimension at the given physical axis position."""
         return ops.unsqueeze(x, axis)
 
 
-class SqueezeOp(Operation):
-    """Remove a dimension of size 1 at the specified axis.
+class SqueezeOp(LogicalAxisOperation):
+    """Remove a dimension of size 1 at the specified LOGICAL axis.
     
-    Does not affect batch_dims counter - caller must adjust if needed.
+    Automatically translates logical axis to physical axis by adding batch_dims offset.
+    Preserves batch_dims on output.
+    
+    Args:
+        axis: Logical axis position to squeeze (supports negative indexing, must be size 1)
+        
+    Example:
+        # logical shape (1, 8) with batch_dims=1 -> physical (4, 1, 8)
+        # squeeze(axis=0) -> logical (8,) -> physical (4, 8)
     """
+    
+    axis_offset_for_insert = False  # For squeeze: no offset needed
     
     @property
     def name(self) -> str:
         return "squeeze"
     
     def maxpr(self, x: TensorValue, *, axis: int = 0) -> TensorValue:
-        """Remove dimension at axis position."""
+        """Remove dimension at the given physical axis position."""
+        return ops.squeeze(x, axis)
+
+
+class UnsqueezePhysicalOp(Operation):
+    """Add a dimension of size 1 at the specified PHYSICAL axis.
+    
+    Internal operation for vmap. Does NOT translate axis.
+    Does NOT preserve batch_dims - caller must manage.
+    """
+    
+    @property
+    def name(self) -> str:
+        return "unsqueeze_physical"
+    
+    def maxpr(self, x: TensorValue, *, axis: int = 0) -> TensorValue:
+        """Add dimension at the given physical axis position."""
+        return ops.unsqueeze(x, axis)
+
+
+class SqueezePhysicalOp(Operation):
+    """Remove a dimension of size 1 at the specified PHYSICAL axis.
+    
+    Internal operation for vmap. Does NOT translate axis.
+    Does NOT preserve batch_dims - caller must manage.
+    """
+    
+    @property
+    def name(self) -> str:
+        return "squeeze_physical"
+    
+    def maxpr(self, x: TensorValue, *, axis: int = 0) -> TensorValue:
+        """Remove dimension at the given physical axis position."""
         return ops.squeeze(x, axis)
 
 
@@ -133,13 +194,24 @@ class MoveAxisOp(Operation):
 
 
 # =============================================================================
-# Broadcast Operations
+# Broadcast and Reshape Operations
 # =============================================================================
+#
+# Both operations take a shape parameter on LOGICAL shape and need to
+# preserve batch_dims. They inherit from LogicalShapeOperation.
 
-class BroadcastToOp(Operation):
-    """Broadcast tensor to a target shape.
+
+class BroadcastToOp(LogicalShapeOperation):
+    """Broadcast tensor to a target LOGICAL shape.
+    
+    Automatically prepends batch_shape to create physical shape.
+    Preserves batch_dims on output.
     
     Uses numpy broadcasting rules.
+    
+    Example:
+        # logical shape (3, 1) with batch_dims=1 -> physical (4, 3, 1)
+        # broadcast_to(shape=(3, 5)) -> logical (3, 5) -> physical (4, 3, 5)
     """
     
     @property
@@ -147,15 +219,20 @@ class BroadcastToOp(Operation):
         return "broadcast_to"
     
     def maxpr(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
-        """Broadcast x to target shape."""
+        """Broadcast x to target physical shape."""
         return ops.broadcast_to(x, shape)
 
 
-class ReshapeOp(Operation):
-    """Reshape tensor to a new shape.
+class ReshapeOp(LogicalShapeOperation):
+    """Reshape tensor to a new LOGICAL shape.
     
-    CRITICAL: shape is the LOGICAL shape (user's view).
-    Batch dimensions are preserved and prepended to the physical shape.
+    Automatically prepends batch_shape to create physical shape.
+    Preserves batch_dims on output.
+    
+    Example:
+        # Physical: (batch=5, 12), batch_dims=1, logical: (12,)
+        y = reshape(x, shape=(3, 4))
+        # Physical: (batch=5, 3, 4), batch_dims=1, logical: (3, 4)
     """
     
     @property
@@ -163,42 +240,114 @@ class ReshapeOp(Operation):
         return "reshape"
     
     def maxpr(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
-        """Reshape x to target shape (receives PHYSICAL shape)."""
+        """Reshape x to target physical shape."""
         return ops.reshape(x, shape)
+
+
+class BroadcastBatchDimsOp(Operation):
+    """Broadcast only the BATCH dimensions to a target batch shape.
     
-    def __call__(self, x: Tensor, *, shape: tuple[int, ...]) -> Tensor:
-        """Reshape LOGICAL shape, preserving batch dimensions.
+    Keeps the logical shape unchanged, only broadcasts the batch prefix.
+    Updates batch_dims to match the new batch shape length.
+    
+    This is useful for aligning batch dimensions between tensors
+    before operations like matmul.
+    
+    Example:
+        # Input: physical (1, 8, 4), batch_dims=1, logical (8, 4)
+        # broadcast_batch_dims(batch_shape=(5,))
+        # Output: physical (5, 8, 4), batch_dims=1, logical (8, 4)
+        
+        # Input: physical (8, 4), batch_dims=0, logical (8, 4)
+        # broadcast_batch_dims(batch_shape=(5, 3))
+        # Output: physical (5, 3, 8, 4), batch_dims=2, logical (8, 4)
+    """
+    
+    @property
+    def name(self) -> str:
+        return "broadcast_batch_dims"
+    
+    def maxpr(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
+        """Broadcast x to target physical shape."""
+        return ops.broadcast_to(x, shape)
+    
+    def __call__(self, x: "Tensor", *, batch_shape: tuple[int, ...]) -> "Tensor":
+        """Broadcast batch dimensions to target batch shape.
         
         Args:
             x: Input tensor
-            shape: New logical shape (can include -1 for inference)
+            batch_shape: Target batch shape
             
         Returns:
-            Tensor with new logical shape, batch dims unchanged
-            
-        Example:
-            # Physical: (batch=5, 12), batch_dims=1, logical: (12,)
-            y = reshape(x, shape=(3, 4))
-            # Physical: (batch=5, 3, 4), batch_dims=1, logical: (3, 4)
+            Tensor with new batch_shape, same logical shape
         """
-        batch_dims = x._impl.batch_dims
-        batch_shape = x._impl.batch_shape
+        from .tensor import Tensor
         
-        # Build physical shape = batch_shape + logical shape
-        physical_shape = tuple(batch_shape) + tuple(shape)
+        logical_shape = tuple(x.shape)
         
-        # Call base class with physical shape
+        # Build physical shape = target batch_shape + logical_shape
+        physical_shape = tuple(batch_shape) + logical_shape
+        
+        # Call parent which passes physical shape to maxpr
         result = super().__call__(x, shape=physical_shape)
         
-        # Preserve batch_dims
-        result._impl.batch_dims = batch_dims
+        # Set batch_dims to match new batch shape
+        if isinstance(result, Tensor):
+            result._impl.batch_dims = len(batch_shape)
         
         return result
+
+
+class BroadcastToPhysicalOp(Operation):
+    """Broadcast tensor to a target PHYSICAL shape.
+    
+    Internal operation for vmap. Does NOT translate shape.
+    Does NOT preserve batch_dims - caller must manage.
+    """
+    
+    @property
+    def name(self) -> str:
+        return "broadcast_to_physical"
+    
+    def maxpr(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
+        """Broadcast x to target physical shape."""
+        return ops.broadcast_to(x, shape)
 
 
 # =============================================================================
 # Batch Dims Management Operations
 # =============================================================================
+
+
+def _copy_impl_with_batch_dims(x: "Tensor", new_batch_dims: int) -> "Tensor":
+    """Create a new Tensor with modified batch_dims (metadata-only operation).
+    
+    This helper extracts the common pattern of creating a new TensorImpl
+    with a different batch_dims count while preserving all other state.
+    
+    Args:
+        x: Source tensor
+        new_batch_dims: New value for batch_dims counter
+        
+    Returns:
+        New Tensor with updated batch_dims
+    """
+    from .tensor import Tensor
+    from .tensor_impl import TensorImpl
+    
+    new_impl = TensorImpl(
+        storages=x._impl._storages,
+        values=x._impl._values,
+        traced=x._impl.traced,
+        batch_dims=new_batch_dims,
+        sharding=x._impl.sharding,
+    )
+    new_impl.cached_shape = x._impl.cached_shape
+    new_impl.cached_dtype = x._impl.cached_dtype
+    new_impl.cached_device = x._impl.cached_device
+    
+    return Tensor(impl=new_impl)
+
 
 class IncrBatchDimsOp(Operation):
     """Increment the batch_dims counter by 1.
@@ -217,22 +366,7 @@ class IncrBatchDimsOp(Operation):
     
     def __call__(self, x: Tensor) -> Tensor:
         """Increment batch_dims and return new tensor."""
-        from .tensor import Tensor
-        from .tensor_impl import TensorImpl
-        
-        # Create new impl with incremented batch_dims
-        new_impl = TensorImpl(
-            storages=x._impl._storages,
-            values=x._impl._values,
-            traced=x._impl.traced,
-            batch_dims=x._impl.batch_dims + 1,
-            sharding=x._impl.sharding,
-        )
-        new_impl.cached_shape = x._impl.cached_shape
-        new_impl.cached_dtype = x._impl.cached_dtype
-        new_impl.cached_device = x._impl.cached_device
-        
-        return Tensor(impl=new_impl)
+        return _copy_impl_with_batch_dims(x, x._impl.batch_dims + 1)
 
 
 class DecrBatchDimsOp(Operation):
@@ -252,25 +386,9 @@ class DecrBatchDimsOp(Operation):
     
     def __call__(self, x: Tensor) -> Tensor:
         """Decrement batch_dims and return new tensor."""
-        from .tensor import Tensor
-        from .tensor_impl import TensorImpl
-        
         if x._impl.batch_dims <= 0:
             raise ValueError("Cannot decrement batch_dims below 0")
-        
-        # Create new impl with decremented batch_dims
-        new_impl = TensorImpl(
-            storages=x._impl._storages,
-            values=x._impl._values,
-            traced=x._impl.traced,
-            batch_dims=x._impl.batch_dims - 1,
-            sharding=x._impl.sharding,
-        )
-        new_impl.cached_shape = x._impl.cached_shape
-        new_impl.cached_dtype = x._impl.cached_dtype
-        new_impl.cached_device = x._impl.cached_device
-        
-        return Tensor(impl=new_impl)
+        return _copy_impl_with_batch_dims(x, x._impl.batch_dims - 1)
 
 
 class MoveAxisToBatchDimsOp(Operation):
@@ -412,9 +530,6 @@ class MoveAxisFromBatchDimsOp(Operation):
             logical_destination: Where in LOGICAL shape to place it (0 = first logical dim)
         """
         from .tensor import Tensor
-        from .tensor_impl import TensorImpl
-        from .compute_graph import GRAPH
-        from max import graph as g
         
         current_batch_dims = x._impl.batch_dims
         
@@ -452,25 +567,18 @@ class MoveAxisFromBatchDimsOp(Operation):
         # After batch_dims becomes new_batch_dims, logical starts at new_batch_dims
         physical_destination = new_batch_dims + logical_destination
         
-        # Execute the permutation via maxpr
-        with GRAPH.graph:
-            input_value = g.TensorValue(x)
-            result_value = self.maxpr(
-                input_value, 
-                physical_source=physical_source,
-                physical_destination=physical_destination
-            )
-        
-        # Create result TensorImpl
-        result_impl = TensorImpl(
-            values=result_value,
-            traced=x._impl.traced,
-            batch_dims=new_batch_dims,
-            sharding=x._impl.sharding,
+        # Call parent's __call__ with physical indices
+        result = super().__call__(
+            x, 
+            physical_source=physical_source,
+            physical_destination=physical_destination
         )
-        result_impl.cache_metadata(result_value)
         
-        return Tensor(impl=result_impl)
+        # Set new batch_dims on result
+        if isinstance(result, Tensor):
+            result._impl.batch_dims = new_batch_dims
+        
+        return result
 
 
 # =============================================================================
@@ -478,10 +586,15 @@ class MoveAxisFromBatchDimsOp(Operation):
 # =============================================================================
 
 _unsqueeze_op = UnsqueezeOp()
+_unsqueeze_physical_op = UnsqueezePhysicalOp()
 _squeeze_op = SqueezeOp()
+_squeeze_physical_op = SqueezePhysicalOp()
 _swap_axes_op = SwapAxesOp()
 _moveaxis_op = MoveAxisOp()
 _broadcast_to_op = BroadcastToOp()
+_broadcast_batch_dims_op = BroadcastBatchDimsOp()
+_broadcast_to_physical_op = BroadcastToPhysicalOp()
+_reshape_op = ReshapeOp()
 _incr_batch_dims_op = IncrBatchDimsOp()
 _decr_batch_dims_op = DecrBatchDimsOp()
 _move_axis_to_batch_dims_op = MoveAxisToBatchDimsOp()
@@ -514,6 +627,16 @@ def squeeze(x: Tensor, axis: int = 0) -> Tensor:
     return _squeeze_op(x, axis=axis)
 
 
+def unsqueeze_physical(x: Tensor, axis: int = 0) -> Tensor:
+    """Add dimension at PHYSICAL axis (for vmap internals)."""
+    return _unsqueeze_physical_op(x, axis=axis)
+
+
+def squeeze_physical(x: Tensor, axis: int = 0) -> Tensor:
+    """Remove dimension at PHYSICAL axis (for vmap internals)."""
+    return _squeeze_physical_op(x, axis=axis)
+
+
 def swap_axes(x: Tensor, axis1: int, axis2: int) -> Tensor:
     """Swap two axes of a tensor.
     
@@ -543,16 +666,53 @@ def moveaxis(x: Tensor, source: int, destination: int) -> Tensor:
 
 
 def broadcast_to(x: Tensor, shape: tuple[int, ...]) -> Tensor:
-    """Broadcast tensor to target shape.
+    """Broadcast tensor to target LOGICAL shape.
+    
+    Automatically prepends batch_shape to create physical shape.
     
     Args:
         x: Input tensor
-        shape: Target shape (must be broadcast-compatible)
+        shape: Target logical shape (must be broadcast-compatible)
         
     Returns:
         Tensor broadcasted to shape
     """
     return _broadcast_to_op(x, shape=shape)
+
+
+def broadcast_batch_dims(x: Tensor, batch_shape: tuple[int, ...]) -> Tensor:
+    """Broadcast only batch dimensions to target batch shape.
+    
+    Keeps the logical shape unchanged, only broadcasts the batch prefix.
+    
+    Args:
+        x: Input tensor
+        batch_shape: Target batch shape
+        
+    Returns:
+        Tensor with new batch_shape, same logical shape
+    """
+    return _broadcast_batch_dims_op(x, batch_shape=batch_shape)
+
+
+def broadcast_to_physical(x: Tensor, shape: tuple[int, ...]) -> Tensor:
+    """Broadcast tensor to target PHYSICAL shape (for vmap internals)."""
+    return _broadcast_to_physical_op(x, shape=shape)
+
+
+def reshape(x: Tensor, shape: tuple[int, ...]) -> Tensor:
+    """Reshape tensor to new LOGICAL shape.
+    
+    Automatically prepends batch_shape to create physical shape.
+    
+    Args:
+        x: Input tensor
+        shape: Target logical shape (can include -1 for inference)
+        
+    Returns:
+        Tensor with new logical shape, batch dims unchanged
+    """
+    return _reshape_op(x, shape=shape)
 
 
 def incr_batch_dims(x: Tensor) -> Tensor:
@@ -627,58 +787,37 @@ def move_axis_from_batch_dims(
     )
 
 
-# =============================================================================
-# Reshape (Logical Shape)
-# =============================================================================
-
-_reshape_op = ReshapeOp()
-
-
-def reshape(x: Tensor, shape: tuple[int, ...]) -> Tensor:
-    """Reshape tensor to a new LOGICAL shape.
-    
-    The shape argument specifies the new user-visible shape.
-    Batch dimensions are preserved and prepended automatically.
-    
-    Args:
-        x: Input tensor
-        shape: New logical shape (can include -1 for inference)
-        
-    Returns:
-        Tensor with new logical shape, batch dims unchanged
-        
-    Example:
-        # Inside vmap: physical (batch=5, 12), batch_dims=1
-        # User sees logical: (12,)
-        
-        y = reshape(x, (3, 4))  # Reshape logical to (3, 4)
-        # Physical output: (batch=5, 3, 4), logical: (3, 4)
-    """
-    return _reshape_op(x, shape=shape)
-
-
 __all__ = [
-    # Classes
+    # User-facing classes (logical axis/shape operations)
     "UnsqueezeOp",
-    "SqueezeOp", 
+    "SqueezeOp",
     "SwapAxesOp",
     "MoveAxisOp",
     "BroadcastToOp",
+    "BroadcastBatchDimsOp",
     "ReshapeOp",
     "IncrBatchDimsOp",
     "DecrBatchDimsOp",
     "MoveAxisToBatchDimsOp",
     "MoveAxisFromBatchDimsOp",
-    # Functions
+    # Internal classes (physical axis/shape operations, for vmap)
+    "UnsqueezePhysicalOp",
+    "SqueezePhysicalOp",
+    "BroadcastToPhysicalOp",
+    # User-facing functions
     "unsqueeze",
     "squeeze",
     "swap_axes",
     "moveaxis",
     "broadcast_to",
+    "broadcast_batch_dims",
     "reshape",
     "incr_batch_dims",
     "decr_batch_dims",
     "move_axis_to_batch_dims",
     "move_axis_from_batch_dims",
+    # Internal functions (physical Operations)
+    "unsqueeze_physical",
+    "squeeze_physical",
+    "broadcast_to_physical",
 ]
-

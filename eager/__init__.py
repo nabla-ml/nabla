@@ -39,7 +39,7 @@ from .compute_graph import GRAPH, driver_tensor_type, compile_with_sharding
 from .tensor import Tensor
 
 # Operation base classes
-from .ops import Operation, BinaryOperation, ReduceOperation
+from .ops import Operation, BinaryOperation, ReduceOperation, UnaryOperation
 
 # View operations (for vmap support)
 from .view_ops import (
@@ -66,6 +66,20 @@ from .binary_ops import (
     SubOp,
     DivOp,
     MatmulOp,
+)
+
+# Unary operations
+from .unary_ops import (
+    relu,
+    sigmoid,
+    tanh,
+    exp,
+    neg,
+    ReluOp,
+    SigmoidOp,
+    TanhOp,
+    ExpOp,
+    NegOp,
 )
 
 # Creation operations (including random)
@@ -132,6 +146,7 @@ __all__ = [
     "Operation",
     "BinaryOperation",
     "ReduceOperation",
+    "UnaryOperation",
     # Binary operations
     "add",
     "mul",
@@ -148,6 +163,17 @@ __all__ = [
     "mean",
     "ReduceSumOp",
     "MeanOp",
+    # Unary operations
+    "relu",
+    "sigmoid",
+    "tanh",
+    "exp",
+    "neg",
+    "ReluOp",
+    "SigmoidOp",
+    "TanhOp",
+    "ExpOp",
+    "NegOp",
     # View operations
     "unsqueeze",
     "squeeze",

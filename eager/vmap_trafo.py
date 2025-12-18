@@ -255,7 +255,7 @@ def _batch_tensor(tensor: Tensor, axis: AxisSpec, batch_dim) -> Tensor:
     
     if axis is None:
         # Broadcast: unsqueeze at front, optionally broadcast, mark as batch
-        t = view_ops.unsqueeze(tensor, axis=0)
+        t = view_ops.unsqueeze_physical(tensor, axis=0)
         # Build target shape with Dim object (handles symbolic/static!)
         target_shape = (batch_dim,) + tuple(tensor.shape)
         # Check if we need to broadcast (skip if batch_dim is already size 1)
@@ -275,7 +275,7 @@ def _unbatch_tensor(tensor: Tensor, axis: AxisSpec) -> Tensor:
     if axis is None:
         # Squeeze out the broadcast dimension
         t = view_ops.decr_batch_dims(tensor)
-        return view_ops.squeeze(t, axis=0)
+        return view_ops.squeeze_physical(t, axis=0)
     
     # Move outermost batch dim to specified logical position
     return view_ops.move_axis_from_batch_dims(tensor, batch_axis=0, logical_destination=axis)

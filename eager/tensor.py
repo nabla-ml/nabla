@@ -205,6 +205,33 @@ class Tensor(DLPackArray, HasTensorValue):
     ) -> Tensor:
         return creation.arange(start, stop, step, dtype=dtype, device=device)
 
+    @classmethod
+    def uniform(
+        cls,
+        shape: ShapeLike,
+        low: float = 0.0,
+        high: float = 1.0,
+        *,
+        dtype: DType | None = None,
+        device: Device | None = None,
+    ) -> Tensor:
+        return creation.uniform(shape, low, high, dtype=dtype, device=device)
+
+    @classmethod
+    def gaussian(
+        cls,
+        shape: ShapeLike,
+        mean: float = 0.0,
+        std: float = 1.0,
+        *,
+        dtype: DType | None = None,
+        device: Device | None = None,
+    ) -> Tensor:
+        return creation.gaussian(shape, mean, std, dtype=dtype, device=device)
+    
+    # Alias for gaussian
+    normal = gaussian
+
     # ===== Properties =====
 
     @property
