@@ -154,19 +154,31 @@ def _needs_sharded_compilation(
     return True, op_impls, leaf_impls
 
 
+# Module-level epoch counter for detecting graph resets (used by compile transform)
+_GRAPH_EPOCH: int = 0
+
+
 class ComputeGraph:
     """Computation graph for managing tensor operations.
 
     This class manages the directed acyclic graph (DAG) of tensor operations
     for lazy evaluation and optimization. It tracks both realized tensors
     (with concrete data in memory) and unrealized tensors (pending computations).
+    
+    Attributes:
+        epoch: Unique identifier for this graph instance. Changes when graph is reset.
     """
 
     graph: graph.Graph
     sources: dict[_core.Value[Any], Tensor]
     unrealized: weakref.WeakValueDictionary[int, Tensor]
+    epoch: int
 
     def __init__(self, context: mlir.Context | None = None, seed: int = 0):
+        global _GRAPH_EPOCH
+        _GRAPH_EPOCH += 1
+        self.epoch = _GRAPH_EPOCH
+        
         self.context = context or mlir.Context()
         self.sources = {}
         self.unrealized = weakref.WeakValueDictionary()
@@ -175,17 +187,50 @@ class ComputeGraph:
         with self.graph:
             ops.random.set_seed(seed)
 
-    async def evaluate(self, tensor: Tensor) -> None:
-        """Evaluates and realizes the specified tensor.
+    async def evaluate(
+        self, 
+        tensor: Tensor,
+        *extra_outputs,
+        return_model: bool = False,
+    ) -> Any:
+        """Evaluates and realizes the specified tensor(s).
         
         Automatically detects if sharding annotations are present and uses
         the sharded compilation path when needed.
+        
+        Args:
+            tensor: Primary tensor to evaluate.
+            *extra_outputs: Additional tensors/pytrees to evaluate. All Tensor
+                leaves will be extracted and included in evaluation.
+            return_model: If True, returns the compiled model for caching.
+                The model can be reused to execute the same graph with different
+                input values (same shapes/dtypes).
+        
+        Returns:
+            If return_model=True, returns (model, ordered_inputs) tuple.
+            Otherwise returns None.
         """
+        from .pytree import tree_leaves
+        from .tensor import Tensor
+        
         sys.last_value = None
         sys.last_traceback = None
         gc.collect()
 
-        unrealized = list(self.unrealized.values())
+        # Collect all unrealized tensors + explicit outputs
+        all_unrealized = set(self.unrealized.values())
+        
+        # Add explicit outputs (extract Tensor leaves from pytrees)
+        for out in extra_outputs:
+            if isinstance(out, Tensor):
+                all_unrealized.add(out)
+            else:
+                # Handle pytree
+                for leaf in tree_leaves(out):
+                    if isinstance(leaf, Tensor):
+                        all_unrealized.add(leaf)
+        
+        unrealized = list(all_unrealized)
         
         # Check if we need sharded compilation
         needs_sharding, op_impls, leaf_impls = _needs_sharded_compilation(unrealized)
@@ -193,12 +238,25 @@ class ComputeGraph:
         if needs_sharding:
             # Sharded compilation path
             await self._evaluate_sharded(unrealized, op_impls, leaf_impls)
+            return None  # Sharded path doesn't support return_model yet
         else:
-            # Normal compilation path (existing behavior)
-            await self._evaluate_normal(unrealized)
+            # Normal compilation path
+            return await self._evaluate_normal(unrealized, return_model=return_model)
     
-    async def _evaluate_normal(self, unrealized: list[Tensor]) -> None:
-        """Normal (non-sharded) evaluation path."""
+    async def _evaluate_normal(
+        self, 
+        unrealized: list[Tensor],
+        return_model: bool = False,
+    ) -> Any:
+        """Normal (non-sharded) evaluation path.
+        
+        Args:
+            unrealized: List of tensors to evaluate.
+            return_model: If True, return (model, inputs) for caching.
+        
+        Returns:
+            (model, inputs) if return_model=True, else None.
+        """
         with self.graph:
             self.graph.output(
                 ops.random._peek_seed(), *map(graph.TensorValue, unrealized)
@@ -232,9 +290,14 @@ class ComputeGraph:
         for t in self.sources.values():
             t._value = None
 
+        # Capture model before resetting graph (if requested)
+        result = (model, inputs) if return_model else None
+
         ComputeGraph.__init__(
             self, context=self.graph._context, seed=seed_val.item()
         )
+        
+        return result
     
     async def _evaluate_sharded(
         self,
@@ -319,15 +382,33 @@ class ComputeGraph:
         # Re-initialize the graph for next evaluation
         ComputeGraph.__init__(self, context=self.graph._context, seed=0)
 
-    def add_source(self, tensor: Tensor) -> None:
+    def add_input(self, tensor: Tensor) -> None:
+        """Adds an arbitrary tensor as an input to the graph (for realized tensors)."""
         if tensor.storage is None:
-            raise TypeError("Only realized tensors may be graph sources.")
+            raise TypeError("Only realized tensors may be graph inputs.")
 
         op = _core.Operation._from_cmlir(self.graph._mlir_op)
         assert isinstance(op, mo.GraphOp)
         block = op.regions[0].front
         with self.graph:
-            type = driver_tensor_type(tensor.storage).as_buffer().to_mlir()
+            # Three-tier fallback for shape:
+            # 1. _values (if unrealized) - most current, includes symbolic dims
+            # 2. cached_shape (if set) - persisted symbolic shape from previous operations
+            # 3. storage.shape (always available) - concrete static shape
+            if tensor._impl._values:
+                shape = tensor._impl._values[0].type.shape
+            elif tensor._impl.cached_shape is not None:
+                shape = tensor._impl.cached_shape
+            else:
+                shape = tensor.storage.shape
+            
+            tensor_type = graph.TensorType(
+                tensor.dtype,
+                shape,
+                graph.DeviceRef.from_device(tensor.device)
+            )
+            
+            type = tensor_type.as_buffer().to_mlir()
             inputs = op.function_type.inputs
             op.function_type = builtin.FunctionType([*inputs, type])
             tensor._value = graph.BufferValue.from_mlir(

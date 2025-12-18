@@ -224,9 +224,9 @@ class Tensor(DLPackArray, HasTensorValue):
         For sharded tensors, this returns the full tensor shape (not shard shape).
         Use local_shape to get the shape of individual shards.
         """
-        # Prefer global_shape for consistency (always returns global)
+        # Prefer global_shape for consistency (already a Shape!)
         if self._impl.global_shape is not None:
-            return graph.Shape(self._impl.global_shape)
+            return self._impl.global_shape
         # Fallback for unrealized tensors without cached shape
         shape = self._backing_value.shape
         return shape if isinstance(shape, graph.Shape) else graph.Shape(shape)
@@ -274,7 +274,7 @@ class Tensor(DLPackArray, HasTensorValue):
 
     def __tensorvalue__(self) -> graph.TensorValue:
         if self._value is None:
-            GRAPH.add_source(self)
+            GRAPH.add_input(self)
         if isinstance(self._value, graph.BufferValue):
             return self._value[...]
         assert isinstance(self._value, graph.TensorValue)
@@ -283,7 +283,7 @@ class Tensor(DLPackArray, HasTensorValue):
     def __buffervalue__(self) -> graph.BufferValue:
         self.real = False
         if self._value is None:
-            GRAPH.add_source(self)
+            GRAPH.add_input(self)
         if isinstance(self._value, graph.BufferValue):
             return self._value
         assert isinstance(self._value, graph.TensorValue)

@@ -115,7 +115,6 @@ class Operation(ABC):
                     any_has_tangent = True
                 return g.TensorValue(x)
             return x
-        
         def value_to_tensor(x: Any) -> Any:
             """Convert TensorValue -> Tensor, pass through everything else."""
             if pytree.is_tensor_value(x):

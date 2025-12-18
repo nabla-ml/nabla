@@ -179,66 +179,89 @@ def _collect_from_prefix(
 # Batch Size Validation
 # =============================================================================
 
-def _get_batch_size(tensor: Tensor, axis: AxisSpec) -> int | None:
-    """Get batch size for a single tensor/axis pair. Returns None if axis is None."""
+def _get_batch_size(tensor: Tensor, axis: AxisSpec):
+    """Get batch dimension for a single tensor/axis pair.
+    
+    Returns the Dim object (StaticDim or SymbolicDim) at the specified axis.
+    Returns None if axis is None.
+    """
     if axis is None:
         return None
     if not isinstance(axis, int):
         raise TypeError(f"Expected int or None for axis at tensor leaf, got {type(axis).__name__}")
     
-    shape = tuple(tensor.shape)
-    if not shape:
+    shape = tensor.shape  # graph.Shape
+    if shape.rank == 0:
         raise ValueError(
-            f"Cannot batch scalar tensor (shape=()) along axis {axis}. "
+            f"Cannot batch scalar tensor (rank=0) along axis {axis}. "
             "Use in_axes=None to broadcast scalars."
         )
-    normalized = _normalize_axis(axis, len(shape))
-    return shape[normalized]
+    normalized = _normalize_axis(axis, shape.rank)
+    return shape[normalized]  # Returns Dim object
 
 
-def _validate_batch_sizes(args: tuple, in_axes: tuple[AxisSpec, ...], axis_size: int | None) -> int:
-    """Validate batch sizes and return the common batch size."""
-    sizes = []
+def _validate_batch_sizes(args: tuple, in_axes: tuple[AxisSpec, ...], axis_size: int | None):
+    """Validate batch dimensions and return the common batch Dim.
+    
+    Returns:
+        Dim object (StaticDim or SymbolicDim) representing the batch dimension.
+    """
+    from max.graph.dim import StaticDim
+    
+    dims = []
     for arg, ax in zip(args, in_axes):
-        sizes.extend(_collect_from_prefix(_get_batch_size, arg, ax))
+        dims.extend(_collect_from_prefix(_get_batch_size, arg, ax))
     
-    # Filter None values (from in_axes=None)
-    sizes = [s for s in sizes if s is not None]
+    # Filter None values (from in_axes=None) 
+    dims = [d for d in dims if d is not None]
     
-    if not sizes:
+    if not dims:
         # All axes are None - use axis_size or error
         if axis_size is not None:
-            return axis_size
+            return StaticDim(axis_size)
         raise ValueError(
             "All in_axes are None (broadcast). Must specify axis_size "
             "to determine batch dimension size."
         )
     
-    # Check consistency
-    first = sizes[0]
-    if not all(s == first for s in sizes):
-        raise ValueError(f"Inconsistent batch sizes along specified axes: {sizes}")
+    # Check consistency - Dim objects support equality!
+    first = dims[0]
+    if not all(d == first for d in dims):
+        raise ValueError(f"Inconsistent batch dimensions along specified axes: {dims}")
     
     # If axis_size provided, must match
-    if axis_size is not None and axis_size != first:
-        raise ValueError(f"axis_size={axis_size} doesn't match inferred batch size {first}")
+    if axis_size is not None:
+        expected = StaticDim(axis_size)
+        if first != expected:
+            raise ValueError(f"axis_size={axis_size} doesn't match inferred batch dim {first}")
     
-    return first
+    return first  # Return the Dim (static or symbolic)
 
 
 # =============================================================================
 # Batching Primitives
 # =============================================================================
 
-def _batch_tensor(tensor: Tensor, axis: AxisSpec, batch_size: int) -> Tensor:
-    """Prepare tensor for batched execution by moving axis to batch_dims."""
+def _batch_tensor(tensor: Tensor, axis: AxisSpec, batch_dim) -> Tensor:
+    """Prepare tensor for batched execution by moving axis to batch_dims.
+    
+    Args:
+        tensor: Input tensor
+        axis: Axis specification
+        batch_dim: Dim object (StaticDim or SymbolicDim) for the batch dimension
+    """
     from . import view_ops
+    from max.graph.dim import StaticDim
     
     if axis is None:
         # Broadcast: unsqueeze at front, optionally broadcast, mark as batch
         t = view_ops.unsqueeze(tensor, axis=0)
-        if batch_size > 1:
-            t = view_ops.broadcast_to(t, shape=(batch_size,) + tuple(tensor.shape))
+        # Build target shape with Dim object (handles symbolic/static!)
+        target_shape = (batch_dim,) + tuple(tensor.shape)
+        # Check if we need to broadcast (skip if batch_dim is already size 1)
+        needs_broadcast = not (isinstance(batch_dim, StaticDim) and batch_dim.dim == 1)
+        if needs_broadcast:
+            t = view_ops.broadcast_to(t, shape=target_shape)
         return view_ops.incr_batch_dims(t)
     
     # Move specified logical axis to batch_dims
@@ -322,12 +345,12 @@ def vmap(
         # Broadcast in_axes to match positional args
         in_ax = _broadcast_to_args(in_axes, len(args))
         
-        # Validate and get batch size
-        batch_size = _validate_batch_sizes(args, in_ax, axis_size)
+        # Validate and get batch dimension (as Dim object)
+        batch_dim = _validate_batch_sizes(args, in_ax, axis_size)
         
         # Batch all inputs
         batched = tuple(
-            _map_prefix(_batch_tensor, arg, ax, batch_size)
+            _map_prefix(_batch_tensor, arg, ax, batch_dim)
             for arg, ax in zip(args, in_ax)
         )
         

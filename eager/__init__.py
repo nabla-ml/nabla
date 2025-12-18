@@ -97,6 +97,7 @@ from .pytree import (
 
 # Function transforms
 from .vmap_trafo import vmap
+from .compile_trafo import compile, CompiledFunction, CompilationStats
 
 # Reduction operations
 from .reduction_ops import reduce_sum
@@ -152,6 +153,9 @@ __all__ = [
     "move_axis_from_batch_dims",
     # Transforms
     "vmap",
+    "compile",
+    "CompiledFunction",
+    "CompilationStats",
     # Pytree
     "PyTreeDef",
     "tensor_leaves",

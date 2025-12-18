@@ -65,7 +65,7 @@ class TensorImpl:
     output_refs: OutputRefs | None   # Shared OutputRefs instance (set by Operation.__call__)
     output_index: int            # Position among sibling outputs (0-indexed)
     # Cached metadata for sharding (survives graph consumption)
-    cached_shape: tuple[int, ...] | None
+    cached_shape: graph.Shape | None
     cached_dtype: DType | None
     cached_device: Device | None
     
@@ -193,43 +193,46 @@ class TensorImpl:
         """True if this node has no parents (is an input/leaf tensor)."""
         return len(self.parents) == 0
     
-    def physical_local_shape(self, shard_idx: int = 0) -> tuple[int, ...] | None:
+    def physical_local_shape(self, shard_idx: int = 0) -> graph.Shape | None:
         """Actual storage shape for a specific shard (including batch dims at prefix).
         
         Args:
             shard_idx: Index of the shard to get shape for (default: 0).
             
         Returns:
-            Shape tuple or None if not available.
+            Shape object or None if not available.
         """
         if self._storages is not None and shard_idx < len(self._storages):
-            return tuple(self._storages[shard_idx].shape)
+            # Storage shapes are concrete ints - wrap in Shape
+            return graph.Shape(self._storages[shard_idx].shape)
         if self._values and shard_idx < len(self._values):
-            return tuple(self._values[shard_idx].type.shape)
+            # TensorValue.type.shape is already a Shape
+            return self._values[shard_idx].type.shape
         return None
 
-    def logical_local_shape(self, shard_idx: int = 0) -> tuple[int, ...] | None:
+    def logical_local_shape(self, shard_idx: int = 0) -> graph.Shape | None:
         """Logical shape for a specific shard (excluding batch dims prefix).
         
         Args:
             shard_idx: Index of the shard to get shape for (default: 0).
             
         Returns:
-            Shape tuple or None if not available.
+            Shape object or None if not available.
         """
         physical = self.physical_local_shape(shard_idx)
-        if physical is None:
-            return None
-        return physical[self.batch_dims:]
+        if physical is None or self.batch_dims == 0:
+            return physical
+        # Slice Shape and wrap in new Shape
+        return graph.Shape(physical[self.batch_dims:])
     
     # Convenience properties for the common unsharded case
     @property
-    def physical_shape(self) -> tuple[int, ...] | None:
+    def physical_shape(self) -> graph.Shape | None:
         """Actual storage shape of shard 0 (including batch dims at prefix)."""
         return self.physical_local_shape(0)
     
     @property
-    def logical_shape(self) -> tuple[int, ...] | None:
+    def logical_shape(self) -> graph.Shape | None:
         """Logical local shape of shard 0 (excluding batch dims prefix).
         
         For sharded tensors, this returns the LOCAL shard shape.
@@ -238,17 +241,31 @@ class TensorImpl:
         return self.logical_local_shape(0)
     
     @property
-    def global_shape(self) -> tuple[int, ...] | None:
+    def global_shape(self) -> graph.Shape | None:
         """Global logical shape of the tensor (excludes batch dims).
         
         This is the shape of the full tensor before sharding.
         For unsharded tensors, this equals logical_shape.
         """
         if self.cached_shape is not None:
-            # Exclude batch dims from cached shape
-            return tuple(int(d) for d in self.cached_shape[self.batch_dims:])
+            if self.batch_dims == 0:
+                return self.cached_shape
+            # Slice to exclude batch dims
+            return graph.Shape(self.cached_shape[self.batch_dims:])
         # Fallback: unsharded case, use local shape
         return self.logical_shape
+    
+    @property
+    def global_shape_ints(self) -> tuple[int, ...] | None:
+        """Global shape as tuple of ints (raises if symbolic).
+        
+        Backward compatibility property for code expecting int tuples.
+        Raises TypeError if any dimension is symbolic.
+        """
+        shape = self.global_shape
+        if shape is None:
+            return None
+        return tuple(int(d) for d in shape)
     
     @property
     def ndim(self) -> int | None:
@@ -257,12 +274,12 @@ class TensorImpl:
         return len(shape) if shape is not None else None
     
     @property
-    def batch_shape(self) -> tuple[int, ...] | None:
+    def batch_shape(self) -> graph.Shape | None:
         """Shape of batch dimensions (first batch_dims axes of physical shape)."""
         physical = self.physical_shape
-        if physical is None:
+        if physical is None or self.batch_dims == 0:
             return None
-        return physical[:self.batch_dims]
+        return graph.Shape(physical[:self.batch_dims])
     
     def __repr__(self) -> str:
         shards_str = f", shards={self.num_shards}" if self.is_sharded else ""
@@ -278,7 +295,8 @@ class TensorImpl:
             value: The TensorValue or BufferValue to extract metadata from.
         """
         tensor_type = value.type.as_tensor() if hasattr(value.type, 'as_tensor') else value.type
-        self.cached_shape = tuple(tensor_type.shape)
+        # Preserve Shape (with Dims) instead of converting to tuple[int]
+        self.cached_shape = tensor_type.shape  # Already a graph.Shape
         self.cached_dtype = tensor_type.dtype
         device = tensor_type.device
         self.cached_device = device.to_device() if hasattr(device, 'to_device') else device
