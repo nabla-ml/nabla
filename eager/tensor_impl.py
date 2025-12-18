@@ -300,6 +300,80 @@ class TensorImpl:
         self.cached_dtype = tensor_type.dtype
         device = tensor_type.device
         self.cached_device = device.to_device() if hasattr(device, 'to_device') else device
+    
+    def get_unrealized_shape(self) -> graph.Shape:
+        """Get shape for UNREALIZED tensors (asserts _values exists).
+        
+        For unrealized tensors, _values MUST be present.
+        This is used during sharded evaluation preparation.
+        
+        Returns:
+            Shape from _values[0]
+            
+        Raises:
+            RuntimeError: If _values is not available (severe error)
+        """
+        if not self._values or len(self._values) == 0:
+            raise RuntimeError(
+                "Internal error: _values not present for unrealized tensor. "
+                "This should never happen - the tensor may have been prematurely realized."
+            )
+        return self._values[0].type.shape
+    
+    def get_unrealized_dtype(self) -> DType:
+        """Get dtype for UNREALIZED tensors (asserts _values exists).
+        
+        Returns:
+            DType from _values[0]
+            
+        Raises:
+            RuntimeError: If _values is not available (severe error)
+        """
+        if not self._values or len(self._values) == 0:
+            raise RuntimeError(
+                "Internal error: _values not present for unrealized tensor."
+            )
+        return self._values[0].type.dtype
+    
+    def get_realized_shape(self) -> graph.Shape:
+        """Get shape for REALIZED tensors (three-tier fallback).
+        
+        Used for adding realized tensors as graph inputs.
+        Fallback order: _values → cached_shape → storage.shape
+        
+        Returns:
+            Shape from available source
+            
+        Raises:
+            RuntimeError: If no shape source available
+        """
+        if self._values and len(self._values) > 0:
+            return self._values[0].type.shape
+        elif self.cached_shape is not None:
+            return self.cached_shape
+        elif self._storages and len(self._storages) > 0:
+            return graph.Shape(self._storages[0].shape)
+        raise RuntimeError("Cannot determine shape: no available source")
+    
+    def get_realized_dtype(self) -> DType:
+        """Get dtype for REALIZED tensors (three-tier fallback).
+        
+        Fallback order: _values → cached_dtype → storage.dtype
+        
+        Returns:
+            DType from available source
+            
+        Raises:
+            RuntimeError: If no dtype source available
+        """
+        if self._values and len(self._values) > 0:
+            return self._values[0].type.dtype
+        elif self.cached_dtype is not None:
+            return self.cached_dtype
+        elif self._storages and len(self._storages) > 0:
+            return self._storages[0].dtype
+        raise RuntimeError("Cannot determine dtype: no available source")
+
 
 
 def get_topological_order(impl: TensorImpl) -> list[TensorImpl]:

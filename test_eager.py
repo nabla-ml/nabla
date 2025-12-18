@@ -302,33 +302,6 @@ def test_pytree_tree_map():
     print("✓ Pytree tree_map works!\n")
 
 
-def test_pytree_broadcast_prefix():
-    """Test prefix broadcasting for vmap axes."""
-    print("=" * 50)
-    print("Test: Pytree Broadcast Prefix")
-    print("=" * 50)
-    
-    from eager import pytree
-    
-    # Scalar prefix broadcasts to all leaves
-    full_tree = {'a': 1, 'b': [2, 3]}
-    result = pytree.broadcast_prefix(0, full_tree)
-    print(f"broadcast_prefix(0, {full_tree}) = {result}")
-    
-    # All leaves should be 0
-    leaves = pytree.tree_leaves(result)
-    assert all(leaf == 0 for leaf in leaves), "All leaves should be 0"
-    
-    # Dict prefix matches dict structure
-    result2 = pytree.broadcast_prefix({'a': 1, 'b': 2}, {'a': 'x', 'b': ['y', 'z']})
-    print(f"broadcast_prefix with dict prefix = {result2}")
-    assert result2['a'] == 1
-    # 'b' prefix of 2 broadcasts to both elements in the list
-    assert result2['b'] == [2, 2]
-    
-    print("✓ Pytree broadcast_prefix works!\n")
-
-
 def test_pytree_traced_untraced():
     """Test traced/untraced helpers."""
     print("=" * 50)

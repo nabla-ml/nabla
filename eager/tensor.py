@@ -371,6 +371,11 @@ class Tensor(DLPackArray, HasTensorValue):
             raise TypeError("Only single-element tensors can be converted to Python scalars")
         self._sync_realize()
         return self.driver_tensor.to(CPU()).item()
+    
+    def to_numpy(self):
+        """Convert tensor to numpy array."""
+        self._sync_realize()
+        return self.driver_tensor.to(CPU()).to_numpy()
 
     def num_elements(self) -> int:
         elts = 1
