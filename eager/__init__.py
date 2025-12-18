@@ -39,7 +39,7 @@ from .compute_graph import GRAPH, driver_tensor_type, compile_with_sharding
 from .tensor import Tensor
 
 # Operation base classes
-from .ops import Operation, BinaryOperation
+from .ops import Operation, BinaryOperation, ReduceOperation
 
 # View operations (for vmap support)
 from .view_ops import (
@@ -99,7 +99,7 @@ from .vmap_trafo import vmap
 from .compile_trafo import compile, CompiledFunction, CompilationStats
 
 # Reduction operations
-from .reduction_ops import reduce_sum
+from .reduction_ops import reduce_sum, mean, ReduceSumOp, MeanOp
 
 # View operations (shape-aware)
 from .view_ops import reshape
@@ -128,8 +128,11 @@ __all__ = [
     "get_topological_order",
     "print_computation_graph",
     "driver_tensor_type",
-    # Operations
+    # Operations (base classes)
     "Operation",
+    "BinaryOperation",
+    "ReduceOperation",
+    # Binary operations
     "add",
     "mul",
     "sub",
@@ -140,6 +143,11 @@ __all__ = [
     "SubOp",
     "DivOp",
     "MatmulOp",
+    # Reduction operations
+    "reduce_sum",
+    "mean",
+    "ReduceSumOp",
+    "MeanOp",
     # View operations
     "unsqueeze",
     "squeeze",

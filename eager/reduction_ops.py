@@ -16,9 +16,14 @@
 
 """Reduction operations for the eager module.
 
-These operations reduce tensor dimensions. They are batch_dims-aware:
+All reduction ops inherit from ReduceOperation ABC which handles:
+- batch_dims-aware axis translation for vmap support
 - The `axis` parameter is interpreted as a LOGICAL axis (user's view)
 - Batch dimensions are preserved and not reduced
+
+Subclasses only need to implement:
+- name property
+- maxpr(x, *, axis, keepdims) -> TensorValue
 
 Example:
     # Physical shape: (batch=2, rows=3, cols=4), batch_dims=1
@@ -36,7 +41,7 @@ from typing import TYPE_CHECKING
 
 from max.graph import TensorValue, ops
 
-from .ops import Operation
+from .ops import ReduceOperation
 
 if TYPE_CHECKING:
     from .tensor import Tensor
@@ -46,11 +51,10 @@ if TYPE_CHECKING:
 # Sum Reduction
 # =============================================================================
 
-class ReduceSumOp(Operation):
+class ReduceSumOp(ReduceOperation):
     """Sum reduction over a specified axis.
     
-    CRITICAL: axis is a LOGICAL axis (relative to user-visible shape).
-    Batch dimensions are preserved.
+    The axis is interpreted as a LOGICAL axis. Batch dimensions are preserved.
     """
     
     @property
@@ -72,46 +76,6 @@ class ReduceSumOp(Operation):
             # Squeeze if we shouldn't keep dimensions
             result = ops.squeeze(result, axis=axis)
             
-        return result
-    
-    def __call__(
-        self, 
-        x: Tensor, 
-        *, 
-        axis: int,
-        keepdims: bool = False,
-    ) -> Tensor:
-        """Sum over LOGICAL axis, preserving batch dimensions.
-        
-        Args:
-            x: Input tensor
-            axis: Logical axis to reduce (can be negative)
-            keepdims: If True, keep reduced axis as size 1
-            
-        Returns:
-            Tensor with sum over specified axis
-        """
-        batch_dims = x._impl.batch_dims
-        logical_ndim = len(x.shape)
-        
-        # Normalize negative axis (relative to logical shape)
-        if axis < 0:
-            axis = logical_ndim + axis
-        if axis < 0 or axis >= logical_ndim:
-            raise ValueError(
-                f"axis {axis} out of bounds for tensor with "
-                f"logical shape {tuple(x.shape)}"
-            )
-        
-        # Translate to physical axis
-        physical_axis = batch_dims + axis
-        
-        # Call base class with translated axis
-        result = super().__call__(x, axis=physical_axis, keepdims=keepdims)
-        
-        # Preserve batch_dims on output
-        result._impl.batch_dims = batch_dims
-        
         return result
 
 
@@ -142,7 +106,69 @@ def reduce_sum(x: Tensor, *, axis: int, keepdims: bool = False) -> Tensor:
     return _reduce_sum_op(x, axis=axis, keepdims=keepdims)
 
 
+# =============================================================================
+# Mean Reduction
+# =============================================================================
+
+class MeanOp(ReduceOperation):
+    """Mean reduction over a specified axis.
+    
+    The axis is interpreted as a LOGICAL axis. Batch dimensions are preserved.
+    """
+    
+    @property
+    def name(self) -> str:
+        return "mean"
+    
+    def maxpr(
+        self, 
+        x: TensorValue, 
+        *, 
+        axis: int,
+        keepdims: bool = False,
+    ) -> TensorValue:
+        """Reduce by mean over axis (receives PHYSICAL axis)."""
+        # ops.mean ALWAYS keeps dimensions (reduces to size 1)
+        result = ops.mean(x, axis=axis)
+        
+        if not keepdims:
+            # Squeeze if we shouldn't keep dimensions
+            result = ops.squeeze(result, axis=axis)
+            
+        return result
+
+
+_mean_op = MeanOp()
+
+
+def mean(x: Tensor, *, axis: int, keepdims: bool = False) -> Tensor:
+    """Mean over a logical axis.
+    
+    The axis is interpreted relative to the LOGICAL shape (user's view),
+    not the physical shape. Batch dimensions are preserved.
+    
+    Args:
+        x: Input tensor
+        axis: Logical axis to reduce (supports negative indexing)
+        keepdims: If True, keep reduced dimension as size 1
+        
+    Returns:
+        Tensor with mean over specified axis
+        
+    Example:
+        # Inside vmap: physical (batch=5, rows=3, cols=4), batch_dims=1
+        # User sees logical: (rows=3, cols=4)
+        
+        y = mean(x, axis=0)  # Mean over rows
+        # Output: logical (cols=4), physical (batch=5, cols=4)
+    """
+    return _mean_op(x, axis=axis, keepdims=keepdims)
+
+
 __all__ = [
     "ReduceSumOp",
     "reduce_sum",
+    "MeanOp",
+    "mean",
 ]
+

@@ -489,3 +489,71 @@ class BinaryOperation(Operation):
                 )
         return tuple(result)
 
+
+class ReduceOperation(Operation):
+    """Abstract base class for reduction operations.
+    
+    Handles batch_dims-aware axis translation for vmap support:
+    1. The `axis` parameter is interpreted as a LOGICAL axis (user's view)
+    2. Translates logical axis to physical axis (adding batch_dims offset)
+    3. Preserves batch_dims on output
+    
+    Subclasses only need to implement:
+    - name property
+    - maxpr(x, *, axis, keepdims) -> TensorValue (the actual reduction op)
+    - jvp_rule (optional)
+    - vjp_rule (optional)
+    
+    Example:
+        # Physical shape: (batch=2, rows=3, cols=4), batch_dims=1
+        # Logical shape: (rows=3, cols=4)
+        
+        y = reduce_sum(x, axis=0)  # axis=0 reduces ROWS (logical axis)
+        
+        # Physical output: (batch=2, cols=4), batch_dims=1
+        # Logical output: (cols=4)
+    """
+    
+    def __call__(
+        self, 
+        x: Tensor, 
+        *, 
+        axis: int,
+        keepdims: bool = False,
+    ) -> Tensor:
+        """Execute reduction over LOGICAL axis, preserving batch dimensions.
+        
+        Args:
+            x: Input tensor
+            axis: Logical axis to reduce (can be negative)
+            keepdims: If True, keep reduced axis as size 1
+            
+        Returns:
+            Tensor with reduction over specified axis
+        """
+        from .tensor import Tensor
+        
+        batch_dims = x._impl.batch_dims
+        logical_ndim = len(x.shape)
+        
+        # Normalize negative axis (relative to logical shape)
+        if axis < 0:
+            axis = logical_ndim + axis
+        if axis < 0 or axis >= logical_ndim:
+            raise ValueError(
+                f"axis {axis} out of bounds for tensor with "
+                f"logical shape {tuple(x.shape)}"
+            )
+        
+        # Translate to physical axis
+        physical_axis = batch_dims + axis
+        
+        # Call base class with translated axis
+        result = super().__call__(x, axis=physical_axis, keepdims=keepdims)
+        
+        # Preserve batch_dims on output
+        if isinstance(result, Tensor):
+            result._impl.batch_dims = batch_dims
+        
+        return result
+
