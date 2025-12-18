@@ -123,7 +123,7 @@ class CompiledFunction(Generic[T]):
         self.dynamic_dims = dynamic_dims or {}
         self._cache: OrderedDict[_CacheKey, _CachedModel] = OrderedDict()
         self._stats = CompilationStats()
-    
+        
     @property
     def stats(self) -> CompilationStats:
         self._stats.cache_size = len(self._cache)

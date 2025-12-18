@@ -2,6 +2,18 @@
 
 This document explains the architecture of the `eager` module. It implements a **Lazy Eager** framework, targeting the usability of PyTorch with the optimization capabilities of JAX.
 
+IMPORTANT NOTE: In order to run any (test/example) code adn to access the MAX library correctly and all other imports, you need to source activate the virtual environment:
+
+```bash
+source venv/bin/activate
+```
+
+Only then, you can run the Python code via for example:
+
+```bash
+python test_*.py
+```
+
 ## 1. Project Structure
 
 ```text
