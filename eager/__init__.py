@@ -78,7 +78,6 @@ from .creation import (
     uniform,
     gaussian,
     normal,
-    CreationOp,
 )
 
 # Pytree utilities
@@ -176,7 +175,6 @@ __all__ = [
     "uniform",
     "gaussian",
     "normal",
-    "CreationOp",
     # Sharding
     "DeviceMesh",
     "DimSpec",

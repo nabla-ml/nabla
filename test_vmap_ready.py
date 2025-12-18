@@ -133,7 +133,8 @@ def test_move_axis_to_batch_dims():
     print(f"  physical_shape: {y._impl.physical_shape}")
     
     # Physical shape should be (3, 2, 4) - the 3 moved to front
-    assert y._impl.physical_shape == (3, 2, 4), f"Expected physical (3, 2, 4), got {y._impl.physical_shape}"
+    # physical_shape returns a Shape object, so convert to tuple for comparison
+    assert tuple(y._impl.physical_shape) == (3, 2, 4), f"Expected physical (3, 2, 4), got {tuple(y._impl.physical_shape)}"
     # batch_dims should be 1
     assert y.batch_dims == 1, f"Expected batch_dims=1, got {y.batch_dims}"
     # Logical shape should be (2, 4) - physical[batch_dims:]
@@ -170,7 +171,7 @@ def test_move_axis_from_batch_dims():
     expected_batch_dims = 1
     expected_logical = (3, 4, 2)
     
-    assert y._impl.physical_shape == expected_physical, f"Expected physical {expected_physical}, got {y._impl.physical_shape}"
+    assert tuple(y._impl.physical_shape) == expected_physical, f"Expected physical {expected_physical}, got {tuple(y._impl.physical_shape)}"
     assert y.batch_dims == expected_batch_dims, f"Expected batch_dims={expected_batch_dims}, got {y.batch_dims}"
     assert tuple(y.shape) == expected_logical, f"Expected logical {expected_logical}, got {tuple(y.shape)}"
     
@@ -257,7 +258,8 @@ def test_vmap_like_workflow():
     
     # Now logical shape is (3, 4) with batch shape (5,)
     logical_shape = tuple(x_batched.shape)
-    batch_shape = x_batched._impl.physical_shape[:x_batched.batch_dims]
+    # physical_shape returns a Shape object, so convert to tuple for comparison
+    batch_shape = tuple(x_batched._impl.physical_shape[:x_batched.batch_dims])
     print(f"  batch_shape: {batch_shape}, logical_shape: {logical_shape}")
     assert logical_shape == (3, 4)
     assert batch_shape == (5,)
@@ -308,7 +310,7 @@ def test_move_axis_to_batch_dims_with_existing_batch():
     expected_batch_dims = 2
     expected_logical = (3, 4)
     
-    assert y._impl.physical_shape == expected_physical, f"Expected physical {expected_physical}, got {y._impl.physical_shape}"
+    assert tuple(y._impl.physical_shape) == expected_physical, f"Expected physical {expected_physical}, got {tuple(y._impl.physical_shape)}"
     assert y.batch_dims == expected_batch_dims, f"Expected batch_dims={expected_batch_dims}, got {y.batch_dims}"
     assert tuple(y.shape) == expected_logical, f"Expected logical {expected_logical}, got {tuple(y.shape)}"
     
@@ -402,7 +404,7 @@ def test_negative_logical_destination():
     expected_physical = (3, 4, 2)
     expected_logical = (3, 4, 2)
     
-    assert y._impl.physical_shape == expected_physical, f"Expected physical {expected_physical}, got {y._impl.physical_shape}"
+    assert tuple(y._impl.physical_shape) == expected_physical, f"Expected physical {expected_physical}, got {tuple(y._impl.physical_shape)}"
     assert tuple(y.shape) == expected_logical, f"Expected logical {expected_logical}, got {tuple(y.shape)}"
     
     print("✓ Negative logical_destination works!\n")

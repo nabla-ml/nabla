@@ -39,41 +39,19 @@ from .context import defaults
 
 
 # =============================================================================
-# Base class for creation ops
+# Creation operation classes (inherit directly from Operation)
+#
+# Creation ops produce new tensors from non-Tensor arguments (shapes, values,
+# random seeds, etc). Their autodiff rules:
+# - VJP: Returns empty gradients (no Tensor inputs to differentiate)
+# - JVP: Returns zero tangents (output is constant w.r.t. any input)
+#
+# These rules are NOT implemented here - they will be added when needed,
+# potentially with operation-specific semantics (e.g., reparameterization
+# for random ops).
 # =============================================================================
 
-class CreationOp(Operation):
-    """Base class for creation operations (no Tensor inputs).
-    
-    Creation ops produce new tensors from non-Tensor arguments (shapes, values,
-    random seeds, etc). They follow JAX's autodiff semantics:
-    - VJP returns empty gradients (no Tensor inputs to differentiate)
-    - JVP returns zero tangents (output is constant)
-    """
-    
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> tuple:
-        """Creation ops have no Tensor inputs, so return empty gradients."""
-        return ()
-    
-    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
-        """Creation ops produce constants, so output tangent is zero."""
-        from .tensor import Tensor
-        from . import pytree
-        
-        # Create zero tangent matching output structure
-        def make_zero_tangent(t: Any) -> Any:
-            if isinstance(t, Tensor):
-                return zeros(t.shape, dtype=t.dtype, device=t.device)
-            return None
-        
-        return pytree.tree_map(make_zero_tangent, output)
-
-
-# =============================================================================
-# Constant creation ops
-# =============================================================================
-
-class ConstantOp(CreationOp):
+class ConstantOp(Operation):
     """Create a tensor from a constant value (number, array, nested list)."""
     
     @property
@@ -89,7 +67,7 @@ class ConstantOp(CreationOp):
         return ops.constant(value, dtype, device)
 
 
-class FullOp(CreationOp):
+class FullOp(Operation):
     """Create a tensor filled with a constant value."""
     
     @property
@@ -107,7 +85,7 @@ class FullOp(CreationOp):
         return ops.broadcast_to(const, shape)
 
 
-class ZerosOp(CreationOp):
+class ZerosOp(Operation):
     """Create a tensor filled with zeros."""
     
     @property
@@ -124,7 +102,7 @@ class ZerosOp(CreationOp):
         return ops.broadcast_to(const, shape)
 
 
-class OnesOp(CreationOp):
+class OnesOp(Operation):
     """Create a tensor filled with ones."""
     
     @property
@@ -141,7 +119,7 @@ class OnesOp(CreationOp):
         return ops.broadcast_to(const, shape)
 
 
-class ArangeOp(CreationOp):
+class ArangeOp(Operation):
     """Create a tensor with evenly spaced values."""
     
     @property
@@ -163,7 +141,7 @@ class ArangeOp(CreationOp):
 # Random creation ops
 # =============================================================================
 
-class UniformOp(CreationOp):
+class UniformOp(Operation):
     """Create a tensor with uniform random values."""
     
     @property
@@ -182,7 +160,7 @@ class UniformOp(CreationOp):
         return ops.random.uniform(tensor_type, range=(low, high))
 
 
-class GaussianOp(CreationOp):
+class GaussianOp(Operation):
     """Create a tensor with Gaussian (normal) random values."""
     
     @property
@@ -395,7 +373,6 @@ normal = gaussian
 
 __all__ = [
     # Op classes
-    "CreationOp",
     "ConstantOp",
     "FullOp",
     "ZerosOp", 

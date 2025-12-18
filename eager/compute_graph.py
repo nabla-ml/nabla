@@ -207,24 +207,37 @@ class ComputeGraph:
         sys.last_traceback = None
         gc.collect()
 
-        # Gather all targets
-        targets = {tensor, *self.unrealized.values()}
+        # Gather all targets, preserving order of explicitly requested outputs
+        seen: set[int] = set()
+        targets: list[Tensor] = []
+        
+        def add_target(t: Tensor) -> None:
+            if id(t) not in seen:
+                seen.add(id(t))
+                targets.append(t)
+        
+        # Add explicit outputs first (in order)
+        add_target(tensor)
         for out in extra_outputs:
             if isinstance(out, Tensor):
-                targets.add(out)
+                add_target(out)
             else:
-                targets.update(leaf for leaf in tree_leaves(out) if isinstance(leaf, Tensor))
-
-        unrealized_list = list(targets)
+                for leaf in tree_leaves(out):
+                    if isinstance(leaf, Tensor):
+                        add_target(leaf)
+        
+        # Add any other unrealized tensors
+        for t in self.unrealized.values():
+            add_target(t)
         
         # Select Strategy
-        needs_sharding, ops, leaves = _needs_sharded_compilation(unrealized_list)
+        needs_sharding, ops, leaves = _needs_sharded_compilation(targets)
 
         if needs_sharding:
-            await self._evaluate_sharded(unrealized_list, ops, leaves)
+            await self._evaluate_sharded(targets, ops, leaves)
             return None
             
-        return await self._evaluate_normal(unrealized_list, return_model=return_model)
+        return await self._evaluate_normal(targets, return_model=return_model)
 
     # --- Execution Strategies ---
 

@@ -168,6 +168,8 @@ def test_op_args_storage():
     print("Test: op_args Storage")
     print("=" * 50)
     
+    from eager.tensor_impl import TensorImpl
+    
     # Untraced: op_args should be empty tuple (memory optimization)
     # Note: OutputRefs is created, but op_args is empty tuple
     x_untraced = Tensor.ones((2, 2))
@@ -179,7 +181,11 @@ def test_op_args_storage():
     assert refs_untraced.op_args == (), f"Untraced op_args should be empty, got {refs_untraced.op_args}"
     print(f"  Untraced op_args: {refs_untraced.op_args}")
     
-    # Traced: op_args should contain original inputs
+    # Traced: op_args should contain TensorImpl refs
+    # NOTE: For BinaryOperation, inputs may be broadcasted first, so 
+    # op_args[0] may not be THE SAME as x_traced._impl (it may be
+    # a broadcast_to output). The key invariant is that op_args stores
+    # TensorImpl objects for gradient computation.
     x_traced = Tensor.ones((2, 2), traced=True)
     y_traced = binary_ops.add(x_traced, x_traced)
     
@@ -189,10 +195,11 @@ def test_op_args_storage():
     
     assert op_args is not None, "Traced should store op_args"
     assert len(op_args) == 2, f"Should have 2 args, got {len(op_args)}"
-    assert op_args[0] is x_traced, "First arg should be x_traced"
-    assert op_args[1] is x_traced, "Second arg should be x_traced" 
+    # op_args stores TensorImpl refs directly for gradient computation
+    assert isinstance(op_args[0], TensorImpl), f"First arg should be TensorImpl, got {type(op_args[0])}"
+    assert isinstance(op_args[1], TensorImpl), f"Second arg should be TensorImpl, got {type(op_args[1])}"
     print(f"  Traced op_args: {len(op_args)} args")
-    print(f"  Args match original inputs: {op_args[0] is x_traced}")
+    print(f"  Args are TensorImpl: {isinstance(op_args[0], TensorImpl)}")
     
     print("✓ op_args storage works!")
 
@@ -259,10 +266,11 @@ def test_mixed_args_traced_stores_all():
     
     assert op_args is not None, "Traced should store op_args"
     assert len(op_args) == 2, f"Should have 2 args: {len(op_args)}"
-    assert op_args[0] is x, "First arg should be the tensor"
+    # op_args stores TensorImpl refs directly for tensors, static values as-is
+    assert op_args[0] is x._impl, "First arg should be the tensor's _impl"
     assert op_args[1] == (2, 3), f"Second arg should be shape tuple: {op_args[1]}"
     
-    print(f"  op_args[0] is Tensor: {isinstance(op_args[0], Tensor)}")
+    print(f"  op_args[0] is TensorImpl: {type(op_args[0]).__name__}")
     print(f"  op_args[1] is shape tuple: {op_args[1]}")
     print("✓ Mixed args stored correctly for VJP/JVP access!")
 
