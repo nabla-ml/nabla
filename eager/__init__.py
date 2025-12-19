@@ -42,16 +42,26 @@ from .tensor import Tensor
 from .ops import Operation, BinaryOperation, ReduceOperation, UnaryOperation
 
 # View operations (for vmap support)
-from .view_ops import (
+# View operations (for vmap support)
+from .logical_view_ops import (
     unsqueeze,
     squeeze,
     swap_axes,
-    moveaxis,
     broadcast_to,
+    reshape,
+)
+
+from .physical_ops import (
+    moveaxis,
     incr_batch_dims,
     decr_batch_dims,
     move_axis_to_batch_dims,
     move_axis_from_batch_dims,
+    unsqueeze_physical,
+    squeeze_physical,
+    broadcast_to_physical,
+    reduce_sum_physical,
+    mean_physical,
 )
 
 # Binary operations
@@ -115,8 +125,7 @@ from .compile_trafo import compile, CompiledFunction, CompilationStats
 # Reduction operations
 from .reduction_ops import reduce_sum, mean, ReduceSumOp, MeanOp
 
-# View operations (shape-aware)
-from .view_ops import reshape
+
 
 
 # Sharding infrastructure (core definitions)
@@ -184,6 +193,11 @@ __all__ = [
     "decr_batch_dims",
     "move_axis_to_batch_dims",
     "move_axis_from_batch_dims",
+    "unsqueeze_physical",
+    "squeeze_physical",
+    "broadcast_to_physical",
+    "reduce_sum_physical",
+    "mean_physical",
     # Transforms
     "vmap",
     "compile",

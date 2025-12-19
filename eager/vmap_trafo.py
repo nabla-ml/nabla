@@ -245,40 +245,114 @@ def _validate_batch_sizes(args: tuple, in_axes: tuple[AxisSpec, ...], axis_size:
 def _batch_tensor(tensor: Tensor, axis: AxisSpec, batch_dim) -> Tensor:
     """Prepare tensor for batched execution by moving axis to batch_dims.
     
+    Follows the exact same logic as nabla/transforms/vmap.py:_batch_tensor.
+    
+    The key insight: after adding/moving an axis to batch_dims, we need to 
+    ensure it ends up at physical position 0 (the outermost batch position).
+    This is critical for nested vmap to work correctly.
+    
     Args:
         tensor: Input tensor
-        axis: Axis specification
+        axis: Axis specification (None for broadcast, int for batched axis)
         batch_dim: Dim object (StaticDim or SymbolicDim) for the batch dimension
     """
-    from . import view_ops
+    from . import logical_view_ops as l_ops
+    from . import physical_ops as p_ops
     from max.graph.dim import StaticDim
     
+    old_batch_dims = tensor._impl.batch_dims
+    
     if axis is None:
-        # Broadcast: unsqueeze at front, optionally broadcast, mark as batch
-        t = view_ops.unsqueeze_physical(tensor, axis=0)
-        # Build target shape with Dim object (handles symbolic/static!)
+        # Broadcast case: unsqueeze at LOGICAL axis 0, then broadcast
+        # This adds a dimension at physical position old_batch_dims
+        t = l_ops.unsqueeze(tensor, axis=0)  # LOGICAL unsqueeze
+        
+        # Build target LOGICAL shape with Dim object
         target_shape = (batch_dim,) + tuple(tensor.shape)
-        # Check if we need to broadcast (skip if batch_dim is already size 1)
+        
+        # Broadcast if needed
         needs_broadcast = not (isinstance(batch_dim, StaticDim) and batch_dim.dim == 1)
         if needs_broadcast:
-            t = view_ops.broadcast_to(t, shape=target_shape)
-        return view_ops.incr_batch_dims(t)
+            t = l_ops.broadcast_to(t, shape=target_shape)  # LOGICAL broadcast
+        
+        # Now the new dim is at physical position old_batch_dims (front of logical)
+        # Increment batch_dims - the new dim becomes the LAST batch dim
+        t = p_ops.incr_batch_dims(t)
+        
+        # Move the last batch dim (at physical position old_batch_dims) to position 0
+        if old_batch_dims > 0:
+            t = p_ops.moveaxis(t, source=old_batch_dims, destination=0)
+        
+        return t
     
-    # Move specified logical axis to batch_dims
-    return view_ops.move_axis_to_batch_dims(tensor, axis=axis)
+    # Batched axis case: move LOGICAL axis to front of LOGICAL shape
+    if axis != 0:
+        # Normalize negative axis
+        logical_rank = len(tensor.shape)
+        norm_axis = axis if axis >= 0 else logical_rank + axis
+        
+        # Translate to physical axis
+        physical_axis = old_batch_dims + norm_axis
+        
+        # Move to front of logical (= position old_batch_dims in physical)
+        t = p_ops.moveaxis(tensor, source=physical_axis, destination=old_batch_dims)
+    else:
+        t = tensor
+    
+    # Now the batched axis is at physical position old_batch_dims (front of logical)
+    # Increment batch_dims - it becomes the LAST batch dim
+    t = p_ops.incr_batch_dims(t)
+    
+    # Move the last batch dim (at physical position old_batch_dims) to position 0
+    if old_batch_dims > 0:
+        t = p_ops.moveaxis(t, source=old_batch_dims, destination=0)
+    
+    return t
 
 
 def _unbatch_tensor(tensor: Tensor, axis: AxisSpec) -> Tensor:
-    """Restore tensor after batched execution by moving batch_dims to axis."""
-    from . import view_ops
+    """Restore tensor after batched execution by moving batch_dims to axis.
+    
+    Follows the exact same logic as nabla/transforms/vmap.py:_unbatch_tensor.
+    
+    The reverse of _batch_tensor: moves the outermost batch dim (position 0)
+    back to its original logical position.
+    """
+    from . import logical_view_ops as l_ops
+    from . import physical_ops as p_ops
+    
+    current_batch_dims = tensor._impl.batch_dims
+    
+    # First, move the front batch dim (position 0) to the last batch position
+    # This reverses the final step of _batch_tensor
+    if current_batch_dims > 1:
+        # Move position 0 to position current_batch_dims - 1
+        t = p_ops.moveaxis(tensor, source=0, destination=current_batch_dims - 1)
+    else:
+        t = tensor
+    
+    # Now decrement batch_dims - the last batch dim becomes front of logical
+    t = p_ops.decr_batch_dims(t)
     
     if axis is None:
-        # Squeeze out the broadcast dimension
-        t = view_ops.decr_batch_dims(tensor)
-        return view_ops.squeeze_physical(t, axis=0)
+        # Squeeze out the broadcast dimension at LOGICAL axis 0
+        return l_ops.squeeze(t, axis=0)  # LOGICAL squeeze
     
-    # Move outermost batch dim to specified logical position
-    return view_ops.move_axis_from_batch_dims(tensor, batch_axis=0, logical_destination=axis)
+    # Move front of logical to target LOGICAL axis position
+    if axis != 0:
+        new_batch_dims = t._impl.batch_dims
+        logical_rank = len(t.shape)
+        
+        # Normalize negative axis
+        norm_axis = axis if axis >= 0 else logical_rank + axis
+        
+        # The axis is currently at physical position new_batch_dims (front of logical)
+        # Move it to physical position new_batch_dims + norm_axis
+        source = new_batch_dims
+        destination = new_batch_dims + norm_axis
+        t = p_ops.moveaxis(t, source=source, destination=destination)
+    
+    return t
 
 
 # =============================================================================
