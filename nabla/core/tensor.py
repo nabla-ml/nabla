@@ -117,6 +117,10 @@ class Tensor(DLPackArray, HasTensorValue):
     def traced(self) -> bool:
         return self._impl.traced
     
+    @traced.setter
+    def traced(self, value: bool) -> None:
+        self._impl.traced = value
+    
     @property
     def batch_dims(self) -> int:
         """Number of batch dimensions (prefix of physical shape, used by vmap)."""
