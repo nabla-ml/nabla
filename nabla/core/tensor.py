@@ -384,7 +384,7 @@ class Tensor(DLPackArray, HasTensorValue):
 
     def __repr__(self):
         if not self._in_global_compute_graph:
-            return pretty_repr(self)
+            return repr(self)
         self._sync_realize()
         dt = self.driver_tensor.to(CPU())
         values = [dt[idx].item() for idx in dt._iterate_indices()]

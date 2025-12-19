@@ -43,6 +43,9 @@ from .context import _session
 _GRAPH_EPOCH: int = 0
 _SEED: ContextVar[Tensor] = ContextVar("_SEED")
 
+# Debug flag for lazy evaluation - prints graph outputs before compilation
+DEBUG_LAZY_EVAL: bool = False
+
 def seed() -> Tensor:
     """Returns the global random seed tensor, initializing if necessary."""
     from .tensor import Tensor
@@ -243,10 +246,29 @@ class ComputeGraph:
 
     async def _evaluate_normal(self, unrealized: list[Tensor], return_model: bool) -> Any:
         """Standard compilation path for single-device execution."""
+        
+        if DEBUG_LAZY_EVAL:
+            print("=" * 70)
+            print(f"[LAZY EVAL] Epoch {self.epoch} - Setting {len(unrealized)} output(s):")
+            for i, t in enumerate(unrealized):
+                op_name = t._impl.op_name if t._impl.output_refs else "<leaf>"
+                # shape = t._impl.physical_shape
+                print(f"  [{i}] id={id(t)} op={op_name}")
+                import gc
+                refs = gc.get_referrers(t)
+                print(f"    Refs: {[type(r) for r in refs]}")
+            print("-" * 70)
+        
         with self.graph:
             self.graph.output(
                 ops.random._peek_seed(), *map(graph.TensorValue, unrealized)
             )
+        
+        if DEBUG_LAZY_EVAL:
+            print("[LAZY EVAL] MAX Graph MLIR:")
+            print(self.graph._module.operation)
+            print("=" * 70)
+        
         return await self._compile_and_execute(unrealized, return_model)
 
     async def _evaluate_sharded(
@@ -297,7 +319,11 @@ class ComputeGraph:
             seed_val, *results = model(*(inp.driver_tensor for inp in inputs))
         except BaseException as e:
             self.graph._erase_output_if_present()
-            raise RuntimeError("Failed to compile/execute graph") from e
+            if DEBUG_LAZY_EVAL:
+                print("\n[LAZY EVAL ERROR] Failed to compile/execute. Graph state:")
+                print(self.graph._module.operation)
+                print("=" * 70)
+            raise RuntimeError(f"Failed to compile/execute graph: {e}") from e
 
         # 3. Storage & Cleanup
         self._store_results(unrealized, results)
