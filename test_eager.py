@@ -1,9 +1,9 @@
 """Test eager mode execution and autograd tracing infrastructure."""
 
-from eager.tensor import Tensor
-from eager.tensor_impl import TensorImpl, get_topological_order, print_computation_graph
-from eager.compute_graph import GRAPH
-from eager import binary_ops
+from eager.core.tensor import Tensor
+from eager.core.tensor_impl import TensorImpl, get_topological_order, print_computation_graph
+from eager.core.compute_graph import GRAPH
+from eager.ops import binary as binary_ops
 
 
 def test_basic_eager_execution():
@@ -157,7 +157,7 @@ def test_batch_dims():
     print("Test: Batch Dimensions")
     print("=" * 50)
     
-    from eager.tensor import TensorImpl
+    from eager.core.tensor import TensorImpl
     
     # Simulate a batched tensor (would come from vmap)
     impl = TensorImpl(batch_dims=2)
@@ -180,7 +180,7 @@ def test_operation_base_class():
     print("Test: Operation Base Class")
     print("=" * 50)
     
-    from eager.ops import Operation
+    from eager.ops.operation import Operation
     
     class DummyOp(Operation):
         name = "dummy"
@@ -219,7 +219,7 @@ def test_logical_shapes():
     print("Test: Logical vs Physical Shapes")
     print("=" * 50)
     
-    from eager.tensor import TensorImpl
+    from eager.core.tensor import TensorImpl
     from max.graph import ops, TensorValue
     
     # Create a TensorImpl with a known shape (simulating batched data)
@@ -246,7 +246,7 @@ def test_pytree_flatten_unflatten():
     print("Test: Pytree Flatten/Unflatten")
     print("=" * 50)
     
-    from eager import pytree
+    from eager.core import pytree
     
     # Test with nested dict/list structure
     x = Tensor.ones((2, 2))
@@ -276,7 +276,7 @@ def test_pytree_tree_map():
     print("Test: Pytree tree_map")
     print("=" * 50)
     
-    from eager import pytree
+    from eager.core import pytree
     
     x = Tensor.ones((2,))
     y = Tensor.ones((3,))
@@ -308,7 +308,7 @@ def test_pytree_traced_untraced():
     print("Test: Pytree traced/untraced")
     print("=" * 50)
     
-    from eager import pytree
+    from eager.core import pytree
     
     # Create untraced tensors
     x = Tensor.ones((2,))
@@ -475,7 +475,7 @@ def test_multi_output_tuple():
     print("Test: Multi-Output Tuple (Split)")
     print("=" * 50)
     
-    from eager import multi_output_ops
+    from eager.ops import multi_output as multi_output_ops
     
     # Create a tensor and split it
     x = Tensor.arange(0, 12)  # Shape: (12,)
@@ -508,7 +508,7 @@ def test_multi_output_list():
     print("Test: Multi-Output List (Chunk)")
     print("=" * 50)
     
-    from eager import multi_output_ops
+    from eager.ops import multi_output as multi_output_ops
     
     x = Tensor.arange(0, 10)  # Shape: (10,)
     
@@ -537,7 +537,7 @@ def test_multi_output_dict():
     print("Test: Multi-Output Dict (MinMax)")
     print("=" * 50)
     
-    from eager import multi_output_ops
+    from eager.ops import multi_output as multi_output_ops
     
     x = Tensor.arange(0, 10)  # 0 to 9
     
@@ -565,7 +565,7 @@ def test_multi_output_shared_op():
     print("Test: Multi-Output Shared Op")
     print("=" * 50)
     
-    from eager import multi_output_ops
+    from eager.ops import multi_output as multi_output_ops
     
     x = Tensor.arange(0, 6)
     a, b = multi_output_ops.split(x, num_splits=2, axis=0)
@@ -590,7 +590,7 @@ def test_multi_output_traced():
     print("Test: Multi-Output Tracing")
     print("=" * 50)
     
-    from eager import multi_output_ops
+    from eager.ops import multi_output as multi_output_ops
     
     # Create traced input
     x = Tensor.arange(0, 6)
@@ -623,7 +623,7 @@ def test_multi_output_pytree_helpers():
     print("Test: Multi-Output Pytree Helpers")
     print("=" * 50)
     
-    from eager import pytree
+    from eager.core import pytree
     from max import graph
     
     # Test is_tensor_value

@@ -26,7 +26,7 @@ from typing import Any
 
 from max.graph import TensorValue, ops
 
-from .ops import Operation
+from .operation import Operation
 
 
 class SplitOp(Operation):

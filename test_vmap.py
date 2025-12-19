@@ -1,8 +1,8 @@
 """Test vmap transform for the eager module."""
 
-from eager.tensor import Tensor
-from eager.vmap_trafo import vmap
-from eager import binary_ops
+from eager.core.tensor import Tensor
+from eager.transforms.vmap import vmap
+from eager.ops import binary as binary_ops
 
 
 def test_vmap_basic_square():

@@ -30,10 +30,10 @@ from typing import Any, TYPE_CHECKING
 
 from max.graph import TensorValue, ops
 
-from .ops import UnaryOperation
+from .operation import UnaryOperation
 
 if TYPE_CHECKING:
-    from .tensor import Tensor
+    from ..core.tensor import Tensor
 
 
 class ReluOp(UnaryOperation):

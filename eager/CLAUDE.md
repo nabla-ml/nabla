@@ -1,451 +1,344 @@
-# Eager Module Architecture
+# Eager Module: Lazy Eager Execution for MAX
 
-This document explains the architecture of the `eager` module. It implements a **Lazy Eager** framework, targeting the usability of PyTorch with the optimization capabilities of JAX.
+## Overview
 
-IMPORTANT NOTE: In order to run any (test/example) code adn to access the MAX library correctly and all other imports, you need to source activate the virtual environment:
+The `eager` module implements a **Lazy Eager** execution framework that combines PyTorch's imperative API with JAX's compilation and transformation capabilities, targeting the MAX platform.
 
-```bash
-source venv/bin/activate
+**Tagline**: Look imperative, act functional, compile automatically.
+
+---
+
+## Philosophy
+
+**User writes**: Imperative PyTorch-style code
+```python
+x = Tensor.ones((3, 4))
+y = x + x
+z = y.sum()
 ```
 
-Only then, you can run the Python code via for example:
+**System builds**: Symbolic MAX graph transparently
 
-```bash
-python test_*.py
-```
+**System compiles**: On first data access (`.numpy()`, `await`, etc.)
 
-## 1. Project Structure
+**Result**: No `@jit` decorators needed, but you get compilation benefits.
 
-```text
-eager/
-├── tensor.py          # Public API: User-facing Tensor class
-├── tensor_impl.py     # Internal: TensorImpl state container
-├── tracing.py         # Internal: OutputRefs for operation tracing
-├── ops.py             # Base Operation class & autodiff dispatch
-├── binary_ops.py      # Binary ops (Add, Mul...)
-├── creation.py        # Creation ops (Zeros, Ones, Arange...)
-├── multi_output_ops.py # Multi-output ops (Split, Unbind...)
-├── graph_utils.py     # Graph traversal utilities
-├── compute_graph.py   # Graph compilation & execution (with epoch tracking)
-├── context.py         # Thread-local settings (device, dtype)
-├── pytree.py          # JAX-compatible tree utilities
-├── vmap_trafo.py      # vmap transform for vectorization
-├── compile_trafo.py   # compile transform for model caching
-├── sharding.py        # DeviceMesh, ShardingSpec definitions
-└── sharding_propagation.py # Sharding inference logic
-```
+---
 
-## 2. Core Philosophy
+## Module Structure
 
-The module separates the **API (User View)** from the **Execution (System View)**.
+This module is organized into four logical subdirectories:
 
--   **User View**: "I am creating arrays and adding them immediately."
--   **System View**: "I am recording a symbolic MAX graph. I compile and run on data access."
+### 📁 `core/` - Runtime & State Management
+**Contains**: tensor.py, tensor_impl.py, tracing.py, context.py, pytree.py, compute_graph.py, graph_utils.py
 
-This **Lazy Eager** approach allows:
-1.  **Capture the full graph** without explicit `jit` decorators.
-2.  **Optimize globally** using the MAX compiler.
-3.  **Retain imperative debugging**: `print()` or breakpoints pause graph construction.
+**Purpose**: The execution engine and state containers that power lazy eager execution.
 
-## 3. Architecture Deep Dive
+**Key mechanisms**:
+- Dual-state tensors (unrealized ↔ realized)
+- Weakref-based autodiff graph (OutputRefs)
+- Global ComputeGraph singleton with epoch tracking
+- Shape caching for dynamic batch compilation
 
-### 3.1 The Core Components
+**[📖 Read detailed architecture → core/CLAUDE.md](core/CLAUDE.md)**
 
-#### `Tensor` (The Facade)
-- **Role**: User-facing object mimicking `torch.Tensor`.
-- **Behavior**: Stateless wrapper referencing `_impl`. Delegates math to ops.
+---
 
-#### `TensorImpl` (The Brain)
-- **Role**: Internal state container for each tensor.
-- **State Machine**:
-  - **Unrealized**: Holds `_values` (Symbolic MAX `TensorValue` nodes).
-  - **Realized**: Holds `_storages` (Concrete `driver.Tensor` data).
-- **Tracking**: `traced`, `batch_dims`, `cached_shape`, `op`, `op_args`, `op_kwargs`.
+### 📁 `ops/` - Operations Library
+**Contains**: operation.py, binary.py, unary.py, creation.py, reduction.py, view.py, multi_output.py, _physical.py
 
-**Key Invariant**: After `GRAPH.evaluate()` runs:
-- `_values` is cleared (freed).
-- `cached_shape`, `cached_dtype`, `cached_device` persist the metadata.
+**Purpose**: All tensor operations following a consistent ABC pattern.
 
-#### `OutputRefs` (The Trace Node)
-- **Role**: Links a tensor to its producing operation for VJP graph construction.
-- **Created When**: `Operation` is called with `traced=True`.
-- **Fields**:
-  - `op`: Reference to the `Operation` singleton.
-  - `op_args`: Positional arguments (as `TensorImpl` references).
-  - `op_kwargs`: Keyword arguments (as `TensorImpl` references).
-  - `output_idx`: Index if the op returns multiple outputs (pytree).
+**Key mechanisms**:
+- Singleton operations with identity-based dispatch
+- Automatic metadata propagation (batch_dims, traced, etc.)
+- Physical vs logical operation split for vmap
+- Multi-output pytree handling
 
-**Why Weak References?** `op_args` uses `weakref.ref` to prevent circular references and allow garbage collection of unused intermediates.
+**[📖 Read operation design → ops/CLAUDE.md](ops/CLAUDE.md)**
 
-**Memory Note**: While `TensorImpl` is unrealized (`_values` exists), we use weak references. Once realized (after `evaluate()`), `_values` is cleared and `OutputRefs` can use strong references if needed for VJP, but currently this is not stored persistently.
+---
 
-**Status**: Fully implemented for tracing. VJP uses this to walk the graph backwards.
+### 📁 `transforms/` - Function Transformations
+**Contains**: vmap.py, compile.py
 
-#### `Operation` (The Dispatcher)
-- **Role**: Base class for all ops. Defines computation + autodiff rules.
-- **Singleton Pattern**: Each op type (e.g., `AddOp`, `MulOp`) has exactly one instance globally.
-- **Key Methods**:
-  - `maxpr(...)`: MAX graph lowering.
-  - `vjp_rule(...)`: Reverse-mode gradient.
-  - `jvp_rule(...)`: Forward-mode tangent.
+**Purpose**: Higher-order functions that transform user functions.
 
-### 3.2 Tracing Architecture
+**Implemented**:
+- **vmap**: Automatic vectorization with prefix batch semantics
+- **compile**: Computation caching with dynamic dimension support
 
-When an operation is called:
-1. `Operation.__call__` converts `Tensor` → `TensorValue`.
-2. Calls `maxpr(...)` to get result `TensorValue`.
-3. If `traced=True` or JVP mode, creates `OutputRefs` linking result to inputs.
-4. Returns result as new `Tensor`.
+**Future**: grad, jvp, vjp, scan transforms
 
-### 3.3 Traced vs Untraced Mode
+**[📖 Read transform internals → transforms/CLAUDE.md](transforms/CLAUDE.md)**
 
-| Mode | Purpose | Behavior |
-|------|---------|----------|
-| **Untraced** (default) | Fast forward pass | No `OutputRefs`. No VJP graph. Memory efficient. |
-| **Traced** | Enable VJP/gradients | Creates `OutputRefs` for each op. VJP graph buildable. |
+---
 
-### 3.4 Symbolic Graph via MAX
+### 📁 `sharding/` - Distributed Partitioning
+**Contains**: spec.py, propagation.py
 
-The symbolic graph is built using MAX's `max.graph.Graph` API. Operations are lazily added, and the graph is compiled on first data access (via `await tensor` or `tensor.numpy()`).
+**Purpose**: Specify and propagate tensor sharding across device meshes.
 
-### 3.5 Pytree System (`eager/pytree.py`)
+**Status**: Infrastructure complete, execution pending MAX multi-device support.
 
-Pytrees allow operations to return arbitrary nested structures (tuples, lists, dicts) of tensors. This is JAX-compatible and used for multi-output ops like `split`, `unbind`.
+**Key mechanisms**:
+- Factor-based sharding propagation (inspired by Shardy/GSPMD)
+- Einsum-style operation sharding rules
+- Conflict resolution strategies (BASIC vs AGGRESSIVE)
 
-## 4. Key Mechanisms
+**[📖 Read sharding design → sharding/CLAUDE.md](sharding/CLAUDE.md)**
 
-### A. JVP Auto-Detection (Forward-Mode AD)
+---
 
-If any input has a `tangent`, the operation automatically enters JVP mode and calls `jvp_rule`:
-- Computes both primal and tangent outputs.
-- Tangent is stored in `output._impl.tangent`.
+## Key Concepts
 
-### B. VJP (Reverse-Mode AD) - Ready for Implementation
+### Lazy Eager Execution
 
-The `OutputRefs` tracing infrastructure is in place. To implement `.backward()`:
-1. Walk the `OutputRefs` graph backwards from loss.
-2. For each op, call `vjp_rule(primals, cotangent, output)`.
-3. Accumulate gradients in `._impl.grad`.
+**Not JIT**: We build graphs eagerly (no tracing decorators), compile lazily (on data access).
 
-### C. Logical vs Physical Shapes
+**Benefits**:
+- No graph breaks from print/debug statements
+- Full graph optimization across operations
+- Dynamic shapes via symbolic dimensions
+- Deferred compilation until absolutely needed
 
-- **Logical Shape**: What the user sees (e.g., `(batch, features)`).
-- **Physical Shape**: Internal representation with batching prefix (e.g., `(vmap_axis, batch, features)`).
-- **`batch_dims`**: Number of leading vmap dimensions in physical shape.
+### Dual-State Tensors
 
-## 5. Comparison
+Every tensor can be:
+- **Unrealized**: Symbolic MAX graph nodes, no data
+- **Realized**: Concrete data in storage, symbolic graph cleared
+
+Shape metadata persists across state transitions, enabling recompilation with different batch sizes.
+
+### The Weakref Trick
+
+Autodiff graph uses weak references to prevent memory leaks while preserving operation provenance. VJP must happen promptly (before GC), which is fine since we walk backwards from loss immediately.
+
+### Batch Dims: Physical vs Logical
+
+For vmap support:
+- Physical shape: `(B1, B2, H, W)` - actual tensor shape
+- Logical shape: `(H, W)` - what user sees when `batch_dims=2`
+
+Operations automatically preserve batch dimensions, enabling transparent nested vmap.
+
+---
+
+## Design Principles
+
+1. **Separation of Concerns**
+   - Tensor: Public API facade
+   - TensorImpl: Mutable state container  
+   - Operation: Graph construction logic
+   - ComputeGraph: Compilation & execution
+
+2. **Immutable Semantics**
+   - Operations return NEW tensors with NEW impls
+   - Enables functional transformations (vmap, grad)
+   - Clean autodiff graph construction
+
+3. **Metadata is First-Class**
+   - batch_dims, traced, sharding_spec tracked per tensor
+   - Auto-propagates through operations
+   - Enables transformation composition
+
+4. **Pytree Everywhere**
+   - Multi-output ops return any nested structure
+   - Transforms handle dict/list/tuple inputs
+   - JAX compatibility
+
+5. **Singletons for Stateless**
+   - One operation instance per type globally
+   - Fast identity checks
+   - Memory efficient
+
+---
+
+## Comparison with Existing Frameworks
 
 | Feature | PyTorch | JAX | Eager Module |
 |---------|---------|-----|--------------|
-| Execution | Eager | JIT-required | Lazy Eager |
-| `.backward()` | ✅ | ❌ (use `vjp`) | 🚧 (ready) |
-| `vmap` | ❌ | ✅ | ✅ |
-| `jvp` | ❌ | ✅ | ✅ (auto) |
-| `jit` | `torch.compile` | `@jax.jit` | `@compile` |
+| **Execution** | Eager | Jit-required for perf | Lazy Eager |
+| **API Style** | Imperative | Functional | Imperative facade |
+| **Compilation** | TorchScript | Always-on | On data access |
+| **Transformations** | Limited | Rich (`vmap`, `jvp`, `grad`) | Growing (vmap, compile) |
+| **Autodiff** | `.backward()` | `grad()` transform | OutputRefs (VJP planned) |
+| **Sharding** | DDP, FSDP | GSPMD (integrated) | Shardy-inspired (infra ready) |
+| **Dynamic Shapes** | Via scripting | Limited | First-class (SymbolicDim) |
+| **Backend** | PyTorch | XLA | MAX |
 
-## 6. Guide to Extending
+---
 
-### Adding an Operation
+## Current Status
 
-1. Create class inheriting `Operation`:
+### ✅ Implemented
+- Core lazy eager execution model
+- Complete operations library (binary, unary, creation, reduction, view, multi-output)
+- vmap transform with nested vmap support
+- compile transform with dynamic dimensions
+- Sharding specification & propagation (no execution yet)
+- Pytree system for nested structures
+- OutputRefs autodiff graph infrastructure
+
+### 🚧 In Progress
+- Full VJP/backward pass implementation
+- Sharded execution (waiting on MAX multi-device)
+
+### 📋 Planned
+- grad/vjp/jvp transforms
+- Operation fusion optimization
+- Graph-level optimizations (CSE, DCE)
+- pmap for parallel execution
+- scan for stateful loops
+
+---
+
+## Getting Started
+
+### Environment Setup
+
+**Required**: Activate the virtual environment before running any code:
+
+```bash
+source venv/bin/activate
+python test_*.py
+```
+
+### Quick Examples
+
+**Basic Usage**:
 ```python
-class SquareOp(Operation):
-    @property
-    def name(self) -> str:
-        return "square"
-    
-    def maxpr(self, x: TensorValue) -> TensorValue:
-        return ops.mul(x, x)
-    
-    def jvp_rule(self, primals: tuple, tangents: tuple, output: Any) -> Any:
-        (x,), (x_dot,) = primals, tangents
-        return 2.0 * x * x_dot  # d/dx(x²) = 2x
-    
-    def vjp_rule(self, primals: tuple, cotangent: Any, output: Any) -> tuple:
-        (x,) = primals
-        return (2.0 * x * cotangent,)
+import eager
+
+x = eager.Tensor.ones((3, 4))
+y = eager.Tensor.arange(12).reshape((3, 4))
+z = x + y  # Still symbolic!
+result = await z  # Compiles and executes here
 ```
 
-2. Create singleton and public function:
+**Vmap**:
 ```python
-_square_op = SquareOp()
+from eager import vmap
 
-def square(x: Tensor) -> Tensor:
-    return _square_op(x)
+def process(x):
+    return x * x + 1
+
+batched = vmap(process)
+result = batched(eager.Tensor.ones((10, 5)))  # Vectorized!
 ```
 
-### Adding Multi-Output Operations
-
-Use pytrees for multiple outputs:
-
+**Compile**:
 ```python
-class SplitOp(Operation):
-    def maxpr(self, x: TensorValue, num_splits: int) -> tuple[TensorValue, ...]:
-        return tuple(ops.split(x, num_splits))
-    
-    # jvp_rule and vjp_rule handle tuples via pytree
+from eager import compile
+
+@compile(dynamic_dims={0: {0: "batch"}})
+def model(x, W, b):
+    return (x @ W + b).relu()
+
+# Compiles once, works for any batch size
+y1 = model(x_5, W, b)   # Batch size 5
+y2 = model(x_10, W, b)  # Batch size 10 (cache hit!)
 ```
 
-### Accessing Operation Metadata in VJP
+---
 
-The `op_args` and `op_kwargs` stored in `OutputRefs` are accessible via `output._impl`:
+## Testing
 
-```python
-def vjp_rule(self, primals, cotangent, output):
-    # Access kwargs from forward pass
-    axis = output._impl.op_kwargs.get('axis', 0)
-    # Use axis for gradient computation
-    ...
+Run all tests:
+```bash
+# Vmap tests
+python test_vmap.py
+python test_vmap_ready.py
+python test_vmap_matmul.py
+
+# Compile tests
+python test_compile_dynamic.py
+
+# Core tests
+python test_eager.py
+python test_operation_abc.py
+
+# All others
+python test_*.py
 ```
 
-## 7. Vmap Transform Implementation
+**Test Coverage**: Comprehensive tests in `test_*.py` cover vmap, compile, operations, and core functionality.
 
-### 7.1 Project Structure (Updated)
+---
 
-```text
-eager/
-└── vmap_trafo.py      # vmap transform + view operations
-    ├── vmap()         # Main transform
-    ├── MoveAxisToBatchDimsOp
-    ├── MoveAxisFromBatchDimsOp
-    ├── ExpandBatchDimsOp
-    └── CollapseBatchDimsOp
-```
+## Contributing
 
-**Key Classes:**
-- `VmapContext`: Manages batched execution scope.
-- View Ops: Manipulate `batch_dims` counter for dimension tracking.
+### Adding a New Operation
 
-### 7.2 Vmap Usage
+1. Create class inheriting from appropriate ABC in `ops/`
+2. Implement `name` property and `maxpr()` method
+3. Optionally: `jvp_rule()`, `vjp_rule()`, `sharding_rule()`
+4. Create singleton instance and public function
+5. Base class handles all metadata propagation automatically
 
-```python
-# Vectorize over leading dimension
-batched_fn = vmap(fn)
-result = batched_fn(batched_input)
+### Adding a New Transform
 
-# Specify input/output axes
-batched_fn = vmap(fn, in_axes=(0, 1), out_axes=2)
-```
+1. Create file in `transforms/`
+2. Define transform function that wraps user function
+3. Use pytrees for input/output handling
+4. Integrate with GRAPH for compilation if needed
+5. Add tests demonstrating composition with other transforms
 
-### 7.3 Key Design: Prefix Pytree Semantics
+---
 
-Unlike JAX's arbitrary pytree `in_axes`, this implementation uses **prefix semantics**:
-- `in_axes` is a single structure (tuple/dict) of axis specs.
-- Only the **prefix** of the input pytree is matched.
+## Architecture FAQs
 
-### 7.4 Core Components
+**Q: Why "Lazy Eager" instead of pure JIT?**  
+A: Best of both worlds—imperative debugging + automatic optimization. No decorator soup.
 
-- **batch_dims tracking**: Each `TensorImpl` has a `batch_dims` counter.
-- **Logical vs Physical**: User sees logical shape; operations use physical shape with batch prefix.
-- **BinaryOperation**: Automatically handles broadcasting between batched/unbatched tensors.
+**Q: Why separate Tensor and TensorImpl?**  
+A: Enables multi-output ops where multiple Tensors share implementation. Clean state management.
 
-### 7.5 How It Works
+**Q: Why weakrefs in OutputRefs?**  
+A: Prevents circular reference memory leaks. VJP happens promptly so intermediates stay alive.
 
-1. Map inputs → add batch dimension via `MoveAxisToBatchDimsOp`.
-2. Run function in `VmapContext`.
-3. Operations use physical shape internally.
-4. Map outputs → move batch dimension to output axis.
+**Q: Why batch_dims instead of JAX's arbitrary axis tracking?**  
+A: Prefix semantics are simpler. Batch always at front, operations auto-propagate via max().
 
-### 7.6 Next Steps
+**Q: Why separate physical ops from logical ops?**  
+A: Users think in logical space, vmap operates in physical space. Clean abstraction boundary.
 
-- **Nested vmap**: Stack multiple `VmapContext` layers.
-- **Advanced in_axes**: Support `-1` for rightmost axis, `None` for broadcast.
+**Q: Is this production-ready?**  
+A: Core execution: yes. Autodiff: infrastructure ready. Sharding: spec done, execution pending.
 
-## 8. Compile Transform Implementation
+---
 
-### 8.1 Project Structure (Updated)
+## Future Vision
 
-```text
-eager/
-└── compile_trafo.py
-    ├── compile()           # Main decorator
-    ├── CompiledFunction    # Wrapper class
-    └── CompilationStats    # Performance metrics
-```
+**Near term** (next 3-6 months):
+- Complete VJP/backward implementation
+- grad transform for derivatives
+- Operation fusion pass
+- Sharded execution when MAX multi-device ready
 
-### 8.2 Compile Usage
+**Medium term** (6-12 months):
+- Full autodiff (forward + reverse)
+- Advanced transforms (scan, pmap)
+- Graph-level optimizations
+- Memory planning for large models
 
-```python
-@compile
-def compute(x, y):
-    return x @ y + x
+**Long term** (1+ years):
+- Auto-sharding (no manual annotations)
+- Checkpointing for very large models
+- Integration with MAX compiler optimizations
+- Production deployment tooling
 
-# First call compiles
-result1 = compute(a, b)  # Compilation happens
+---
 
-# Subsequent calls reuse compiled model
-result2 = compute(c, d)  # Cache hit
-```
+## Further Reading
 
-Advanced options:
+- **[Core Architecture](core/CLAUDE.md)** - Lazy execution, weakrefs, dual state, epoch tracking
+- **[Operations Design](ops/CLAUDE.md)** - Singleton pattern, ABC hierarchy, batch propagation
+- **[Transforms Guide](transforms/CLAUDE.md)** - Vmap internals, compile caching, dynamic dims
+- **[Sharding System](sharding/CLAUDE.md)** - Factor propagation, conflict resolution, future execution
 
-```python
-@compile(fullgraph=True, max_cache_size=10)
-def strict_compute(x):
-    return x * 2
-```
+---
 
-### 8.3 Options
+## License
 
-- **`fullgraph`**: If `True`, errors on side effects. If `False` (default), allows print/side effects.
-- **`max_cache_size`**: LRU cache limit (default: 128).
-
-### 8.4 CompilationStats
-
-Access via `.stats`:
-
-```python
-fn = compile(my_function)
-fn(x)
-print(fn.stats.cache_hits, fn.stats.cache_misses)
-```
-
-### 8.5 How It Works
-
-1. Intercept function call.
-2. Build cache key from tensor shapes/dtypes/devices.
-3. If cache miss: run function, compile graph, store model.
-4. Execute cached model with current inputs.
-
-### 8.6 Cache Key Components
-
-Hash of:
-- Python function object
-- Input shapes, dtypes, devices
-- Static argument values
-
-### 8.7 Mixed Outputs
-
-Supports returning both Tensors and non-Tensors:
-
-```python
-@compile
-def compute_with_metadata(x):
-    return x * 2, 42, {"info": "metadata"}
-
-a, count, meta = compute_with_metadata(x)
-# count=42, meta={"info": "metadata"} preserved correctly
-```
-
-## 9. Dynamic (Symbolic) Dimensions
-
-### 9.1 Overview
-
-The eager module fully supports **symbolic dimensions** via MAX Graph's native `SymbolicDim` and `StaticDim`. This enables batch-flexible models that can be compiled once and executed with varying batch sizes.
-
-### 9.2 Clean API: Strings and Ints
-
-MAX's `Shape` constructor automatically converts:
-- `str` → `SymbolicDim`
-- `int` → `StaticDim`
-
-This allows a clean, intuitive API:
-
-```python
-# Symbolic batch dimension
-x = Tensor.ones(("batch", 128))  # Shape: [Dim('batch'), Dim(128)]
-
-# Multiple symbolic dimensions
-A = Tensor.zeros(("batch", "seq_len", 768))
-
-# Mixed: symbolic + static
-W = Tensor.ones(("hidden", 512))
-```
-
-**All creation ops support this:**
-- `Tensor.zeros(("batch", 64))`
-- `Tensor.ones((128, "hidden"))`
-- `Tensor.full(("N", "M"), 5.0)`
-- `Tensor.uniform(("batch", 10))`
-- `Tensor.gaussian(("batch", "features"))`
-
-### 9.3 Shape Propagation
-
-**Symbolic dimensions are preserved through all operations:**
-
-```python
-x = Tensor.ones(("batch", 128))
-W = Tensor.ones((128, "hidden"))
-
-# Matrix multiplication
-y = x @ W  # Shape: [Dim('batch'), Dim('hidden')]
-
-# Binary operations
-z = y + y  # Shape: [Dim('batch'), Dim('hidden')]
-
-# Broadcasting
-bias = Tensor.ones(("hidden",))
-out = y + bias  # Shape: [Dim('batch'), Dim('hidden')]
-```
-
-**Tested operations:**
-- Binary ops: `add`, `mul`, `sub`, `div`
-- Matrix multiplication: `matmul`
-- Broadcasting
-- Operation chains
-
-### 9.4 Implementation Details
-
-**`TensorImpl.cached_shape`:**
-- Stores the `max.graph.Shape` including `SymbolicDim`s.
-- Persists after `_values` is cleared post-evaluation.
-- Used by `add_input()` to construct graph inputs with symbolic signatures.
-
-**`ComputeGraph.add_input()` three-tier fallback:**
-```python
-if tensor._impl._values:
-    # Unrealized: use TensorValue's shape
-    shape = tensor._impl._values[0].type.shape
-elif tensor._impl.cached_shape:
-    # Realized: use persisted symbolic shape
-    shape = tensor._impl.cached_shape
-else:
-    # Fallback: concrete storage shape
-    shape = tensor.storage.shape
-```
-
-**Why this matters:** After `GRAPH.evaluate()`, `_values` is cleared to free memory. `cached_shape` preserves the symbolic signature, allowing realized tensors to be reused as inputs to new compilations with their symbolic shapes intact.
-
-### 9.5 Unique Dimension Names
-
-**Important:** When building a single graph with multiple symbolic dimensions, use **unique names** to avoid cyclic parameter references:
-
-```python
-# ❌ BAD - reusing "batch" creates cycles
-x1 = Tensor.ones(("batch", 64))
-x2 = Tensor.ones(("batch", 128))  # Same "batch" symbol
-
-# ✅ GOOD - unique names
-x1 = Tensor.ones(("b1", 64))
-x2 = Tensor.ones(("b2", 128))
-```
-
-This is only an issue when accumulating operations in a single graph context. For separate compilations or isolated tests, dimension names can be reused.
-
-### 9.6 Testing
-
-Comprehensive tests in `test_ops_symbolic.py` verify:
-- Creation ops preserve symbolic shapes
-- Binary ops propagate symbolic dims
-- Matrix multiplication handles symbolic batch/output dims
-- Broadcasting works with symbolic dimensions
-- Operation chains maintain symbolic signatures
-
-**Example test pattern:**
-```python
-x = Tensor.ones(("b1", 128))
-W = Tensor.ones((128, 64))
-y = x @ W
-assert y._value.type.shape == Shape([SymbolicDim("b1"), StaticDim(64)])
-```
-
-### 9.7 Migration Note
-
-**Before:** Shapes were tuples of ints: `(32, 128)`.
-
-**Now:** Use `max.graph.Shape` directly:
-- Tuples still work for static shapes: `(32, 128)` → `Shape([StaticDim(32), StaticDim(128)])`
-- For symbolic: use strings in tuple: `("batch", 128)` → `Shape([SymbolicDim("batch"), StaticDim(128)])`
-
-All internal operations now work with `max.graph.Shape` objects, enabling full symbolic dimension support throughout the eager module.
-
+Apache 2.0 - See LICENSE file for details.

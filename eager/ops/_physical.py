@@ -17,10 +17,10 @@ from typing import TYPE_CHECKING
 
 from max.graph import TensorValue, ops
 
-from .ops import Operation
+from .operation import Operation
 
 if TYPE_CHECKING:
-    from .tensor import Tensor
+    from ..core.tensor import Tensor
 
 
 # =============================================================================
@@ -105,8 +105,8 @@ class MeanPhysicalOp(Operation):
 # =============================================================================
 
 def _copy_impl_with_batch_dims(x: "Tensor", new_batch_dims: int) -> "Tensor":
-    from .tensor import Tensor
-    from .tensor_impl import TensorImpl
+    from ..core.tensor import Tensor
+    from ..core.tensor_impl import TensorImpl
     
     new_impl = TensorImpl(
         storages=x._impl._storages,

@@ -1,7 +1,7 @@
 """Demo script showing tracing with multi-output ops and graph printing."""
 
-from eager.tensor import Tensor
-from eager.graph_utils import print_trace_graph, get_all_impls_topological
+from eager.core.tensor import Tensor
+from eager.core.graph_utils import print_trace_graph, get_all_impls_topological
 from eager import multi_output_ops
 
 

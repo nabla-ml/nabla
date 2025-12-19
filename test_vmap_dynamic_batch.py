@@ -14,10 +14,10 @@ Their solution requires jax.export with symbolic_shape, which is for
 export-time only. Our compile(dynamic_dims=...) works at runtime!
 """
 
-from eager.tensor import Tensor
-from eager.vmap_trafo import vmap
-from eager.compile_trafo import compile
-from eager.compute_graph import GRAPH
+from eager.core.tensor import Tensor
+from eager.transforms.vmap import vmap
+from eager.transforms.compile import compile
+from eager.core.compute_graph import GRAPH
 
 
 def reset_graph():

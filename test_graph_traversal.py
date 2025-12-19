@@ -3,9 +3,9 @@
 import sys
 sys.path.insert(0, '/Users/tillife/Documents/CodingProjects/nabla')
 
-from eager.tensor import Tensor
-from eager import multi_output_ops
-from eager.graph_utils import (
+from eager.core.tensor import Tensor
+from eager.ops import multi_output as multi_output_ops
+from eager.core.graph_utils import (
     get_operations_topological,
     get_all_impls_topological,
     print_trace_graph

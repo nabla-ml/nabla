@@ -10,10 +10,10 @@ from typing import TYPE_CHECKING
 
 from max.graph import TensorValue, ops
 
-from .ops import ReduceOperation
+from .operation import ReduceOperation
 
 if TYPE_CHECKING:
-    from .tensor import Tensor
+    from ..core.tensor import Tensor
 
 
 class ReduceSumOp(ReduceOperation):

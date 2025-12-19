@@ -11,9 +11,9 @@ DLPack interface that triggers lazy graph compilation and execution.
 """
 
 import numpy as np
-from eager.tensor import Tensor
+from eager.core.tensor import Tensor
 from eager.ops import Operation
-from eager import binary_ops
+from eager.ops import binary as binary_ops
 from max.graph import TensorValue, ops
 
 
@@ -168,7 +168,7 @@ def test_op_args_storage():
     print("Test: op_args Storage")
     print("=" * 50)
     
-    from eager.tensor_impl import TensorImpl
+    from eager.core.tensor_impl import TensorImpl
     
     # Untraced: op_args should be empty tuple (memory optimization)
     # Note: OutputRefs is created, but op_args is empty tuple
@@ -285,7 +285,7 @@ def test_creation_ops_have_op_attribute():
     print("Test: Creation Ops Have Op Attribute")
     print("=" * 50)
     
-    from eager import creation
+    from eager.ops import creation
     
     z = creation.zeros((2, 2))
     o = creation.ones((2, 2))
@@ -317,7 +317,7 @@ def test_creation_ops_correct_values():
     print("Test: Creation Ops Correct Values")
     print("=" * 50)
     
-    from eager import creation
+    from eager.ops import creation
     
     z = creation.zeros((3,))
     o = creation.ones((3,))

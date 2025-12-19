@@ -34,8 +34,8 @@ The tests build up from simple primitives to complex batched operations:
 
 import numpy as np
 
-from eager.tensor import Tensor
-from eager.vmap_trafo import vmap
+from eager.core.tensor import Tensor
+from eager.transforms.vmap import vmap
 from eager import reduce_sum, reshape
 
 

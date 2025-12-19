@@ -36,7 +36,7 @@ from dataclasses import dataclass
 from typing import Any, TypeVar, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .tensor import Tensor
+    from ..core.tensor import Tensor
 
 # =============================================================================
 # Type Definitions
@@ -110,7 +110,7 @@ def _map_prefix(
     - If prefix is a leaf (int/None), it broadcasts to all tensor leaves
     - If prefix is a container, it must structurally match tree
     """
-    from .tensor import Tensor
+    from ..core.tensor import Tensor
     
     if isinstance(tree, Tensor):
         return fn(tree, prefix, *extra_args)
@@ -148,7 +148,7 @@ def _collect_from_prefix(
     prefix: AxisSpec,
 ) -> list[T]:
     """Collect non-None results from fn applied to all (tensor, axis) pairs."""
-    from .tensor import Tensor
+    from ..core.tensor import Tensor
     results: list[T] = []
     
     def _collect(tree_part: Any, prefix_part: AxisSpec) -> None:
@@ -256,8 +256,8 @@ def _batch_tensor(tensor: Tensor, axis: AxisSpec, batch_dim) -> Tensor:
         axis: Axis specification (None for broadcast, int for batched axis)
         batch_dim: Dim object (StaticDim or SymbolicDim) for the batch dimension
     """
-    from . import logical_view_ops as l_ops
-    from . import physical_ops as p_ops
+    from ..ops import view as l_ops
+    from ..ops import _physical as p_ops
     from max.graph.dim import StaticDim
     
     old_batch_dims = tensor._impl.batch_dims
@@ -318,8 +318,8 @@ def _unbatch_tensor(tensor: Tensor, axis: AxisSpec) -> Tensor:
     The reverse of _batch_tensor: moves the outermost batch dim (position 0)
     back to its original logical position.
     """
-    from . import logical_view_ops as l_ops
-    from . import physical_ops as p_ops
+    from ..ops import view as l_ops
+    from ..ops import _physical as p_ops
     
     current_batch_dims = tensor._impl.batch_dims
     

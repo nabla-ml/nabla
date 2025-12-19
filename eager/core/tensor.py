@@ -44,8 +44,8 @@ from .tensor_impl import TensorImpl, get_topological_order, print_computation_gr
 from .compute_graph import GRAPH, driver_tensor_type
 
 # Import ops modules
-from . import binary_ops
-from . import creation
+from ..ops import binary as binary_ops
+from ..ops import creation
 
 
 class Tensor(DLPackArray, HasTensorValue):

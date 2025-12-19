@@ -10,10 +10,10 @@ from typing import Any, TYPE_CHECKING
 
 from max.graph import TensorValue, ops
 
-from .ops import BinaryOperation, Operation
+from .operation import BinaryOperation, Operation
 
 if TYPE_CHECKING:
-    from .tensor import Tensor
+    from ..core.tensor import Tensor
 
 
 class AddOp(BinaryOperation):
@@ -63,8 +63,8 @@ class MatmulOp(Operation):
         return ops.matmul(args[0], args[1])
     
     def __call__(self, x: Tensor, y: Tensor) -> Tensor:
-        from .tensor import Tensor
-        from . import logical_view_ops as view_ops
+        from ..core.tensor import Tensor
+        from . import view as view_ops
         
         x_was_1d = len(x.shape) == 1
         y_was_1d = len(y.shape) == 1

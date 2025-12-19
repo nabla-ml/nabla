@@ -16,7 +16,7 @@ from eager import (
     compile_with_sharding,
     get_topological_order,
 )
-from eager.multi_output_ops import split
+from eager.ops.multi_output import split
 
 
 def test_metadata_caching_single_output():
@@ -143,7 +143,7 @@ def test_shardy_propagation_standalone():
     from eager.sharding import (
         DeviceMesh, DimSpec, ShardingSpec,
     )
-    from eager.sharding_propagation import (
+    from eager.sharding.propagation import (
         OpShardingRule, propagate_sharding,
     )
     

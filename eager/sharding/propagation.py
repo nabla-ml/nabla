@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Dict, List, Optional, Set, Tuple, Union
 
-from .sharding import DeviceMesh, DimSpec, ShardingSpec
+from .spec import DeviceMesh, DimSpec, ShardingSpec
 
 # --- Enums ---
 

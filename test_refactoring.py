@@ -3,9 +3,9 @@
 import sys
 sys.path.insert(0, '/Users/tillife/Documents/CodingProjects/nabla')
 
-from eager.tensor import Tensor
-from eager import multi_output_ops
-from eager.tracing import OutputRefs
+from eager.core.tensor import Tensor
+from eager.ops import multi_output as multi_output_ops
+from eager.core.tracing import OutputRefs
 
 print("=" * 60)
 print("Test: OutputRefs Op Metadata Refactoring")
@@ -28,7 +28,7 @@ assert refs.op is not None, "OutputRefs should have op"
 assert len(refs.op_args) == 2, "Should have 2 args (x, 5)"
 # For BinaryOperation, op_args stores the BROADCASTED TensorImpl refs,
 # not the original x._impl. The first arg will be a broadcast_to output.
-from eager.tensor_impl import TensorImpl
+from eager.core.tensor_impl import TensorImpl
 assert isinstance(refs.op_args[0], TensorImpl), f"First arg should be TensorImpl, got {type(refs.op_args[0])}"
 
 # Verify TensorImpl properties delegate correctly

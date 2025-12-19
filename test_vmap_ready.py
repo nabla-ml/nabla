@@ -1,7 +1,8 @@
 """Test new batch_dims propagation and view operations for vmap support."""
 
-from eager.tensor import Tensor
-from eager import view_ops
+from eager.core.tensor import Tensor
+from eager.ops import view as view_ops
+from eager.ops import _physical as physical_ops
 
 
 def test_unsqueeze():
@@ -68,7 +69,7 @@ def test_moveaxis():
     print(f"x.shape: {tuple(x.shape)}")
     
     # Move axis 0 to position 2
-    y = view_ops.moveaxis(x, source=0, destination=2)
+    y = physical_ops.moveaxis(x, source=0, destination=2)
     print(f"moveaxis(x, source=0, destination=2).shape: {tuple(y.shape)}")
     assert tuple(y.shape) == (3, 4, 2), f"Expected (3, 4, 2), got {tuple(y.shape)}"
     
@@ -101,15 +102,15 @@ def test_incr_decr_batch_dims():
     print(f"x.batch_dims: {x.batch_dims}")
     assert x.batch_dims == 0
     
-    y = view_ops.incr_batch_dims(x)
+    y = physical_ops.incr_batch_dims(x)
     print(f"incr_batch_dims(x).batch_dims: {y.batch_dims}")
     assert y.batch_dims == 1, f"Expected 1, got {y.batch_dims}"
     
-    z = view_ops.incr_batch_dims(y)
+    z = physical_ops.incr_batch_dims(y)
     print(f"incr_batch_dims(y).batch_dims: {z.batch_dims}")
     assert z.batch_dims == 2, f"Expected 2, got {z.batch_dims}"
     
-    w = view_ops.decr_batch_dims(z)
+    w = physical_ops.decr_batch_dims(z)
     print(f"decr_batch_dims(z).batch_dims: {w.batch_dims}")
     assert w.batch_dims == 1, f"Expected 1, got {w.batch_dims}"
     
@@ -127,7 +128,7 @@ def test_move_axis_to_batch_dims():
     print(f"x.shape (logical): {tuple(x.shape)}, x.batch_dims: {x.batch_dims}")
     
     # Move axis 1 (value 3) to batch dims - should move to front and incr batch_dims
-    y = view_ops.move_axis_to_batch_dims(x, axis=1)
+    y = physical_ops.move_axis_to_batch_dims(x, axis=1)
     print(f"move_axis_to_batch_dims(x, axis=1):")
     print(f"  logical_shape: {tuple(y.shape)}, batch_dims: {y.batch_dims}")
     print(f"  physical_shape: {y._impl.physical_shape}")
@@ -158,7 +159,7 @@ def test_move_axis_from_batch_dims():
     print(f"  (logical shape: {tuple(x.shape)})")
     
     # Move batch axis 0 (the C=2 dim) to logical position 2 (end of logical)
-    y = view_ops.move_axis_from_batch_dims(x, batch_axis=0, logical_destination=2)
+    y = physical_ops.move_axis_from_batch_dims(x, batch_axis=0, logical_destination=2)
     print(f"move_axis_from_batch_dims(x, batch_axis=0, logical_destination=2):")
     print(f"  physical_shape: {y._impl.physical_shape}, batch_dims: {y.batch_dims}")
     print(f"  logical_shape: {tuple(y.shape)}")
@@ -184,7 +185,7 @@ def test_binary_op_batch_dims_propagation():
     print("Test: Binary op batch_dims propagation")
     print("=" * 50)
     
-    from eager import binary_ops
+    from eager.ops import binary as binary_ops
     
     # x has batch_dims=1, y has batch_dims=0
     x = Tensor.ones((2, 3, 4))  # physical shape, logically (3, 4) with 1 batch dim
@@ -213,7 +214,7 @@ def test_binary_op_traced_broadcasting():
     print("Test: Traced binary op broadcasting")
     print("=" * 50)
     
-    from eager import binary_ops
+    from eager.ops import binary as binary_ops
     
     # Different logical shapes that need broadcasting
     x = Tensor.ones((2, 3, 1), traced=True)
@@ -239,7 +240,7 @@ def test_vmap_like_workflow():
     print("Test: vmap-like workflow")
     print("=" * 50)
     
-    from eager import binary_ops
+    from eager.ops import binary as binary_ops
     
     # Simulate vmap transforming inputs:
     # 1. Take axis and move to front
@@ -250,7 +251,7 @@ def test_vmap_like_workflow():
     print(f"Original x physical_shape: {x._impl.physical_shape}, batch_dims: {x.batch_dims}")
     
     # Step 1: Move axis 0 to front (already there, so just incr batch_dims)
-    x_batched = view_ops.incr_batch_dims(x)
+    x_batched = physical_ops.incr_batch_dims(x)
     print(f"After incr_batch_dims:")
     print(f"  physical: {x_batched._impl.physical_shape}, batch_dims={x_batched.batch_dims}")
     print(f"  logical: {tuple(x_batched.shape)}")
@@ -274,7 +275,7 @@ def test_vmap_like_workflow():
     assert z.batch_dims == 1, f"Expected batch_dims=1, got {z.batch_dims}"
     
     # Un-vmap: decrement batch_dims
-    z_unbatched = view_ops.decr_batch_dims(z)
+    z_unbatched = physical_ops.decr_batch_dims(z)
     print(f"After decr_batch_dims:")
     print(f"  physical: {z_unbatched._impl.physical_shape}, batch_dims={z_unbatched.batch_dims}")
     assert z_unbatched.batch_dims == 0
@@ -296,7 +297,7 @@ def test_move_axis_to_batch_dims_with_existing_batch():
     print(f"  logical shape: {tuple(x.shape)}")
     
     # Move logical axis 2 (C=5) to batch dims
-    y = view_ops.move_axis_to_batch_dims(x, axis=2)
+    y = physical_ops.move_axis_to_batch_dims(x, axis=2)
     print(f"move_axis_to_batch_dims(x, axis=2):  # axis=2 is C in logical")
     print(f"  physical_shape: {y._impl.physical_shape}, batch_dims: {y.batch_dims}")
     print(f"  logical_shape: {tuple(y.shape)}")
@@ -323,7 +324,7 @@ def test_nested_vmap_simulation():
     print("Test: Nested vmap simulation (batch_dims=2)")
     print("=" * 50)
     
-    from eager import binary_ops
+    from eager.ops import binary as binary_ops
     
     # Simulate doubly-vmapped tensor: physical=(B1, B2, H, W) = (2, 3, 4, 5)
     x = Tensor.ones((2, 3, 4, 5))
@@ -351,7 +352,7 @@ def test_vmap_round_trip():
     print("Test: vmap round-trip (to_batch → compute → from_batch)")
     print("=" * 50)
     
-    from eager import binary_ops
+    from eager.ops import binary as binary_ops
     
     # Original tensor: (3, 4)
     x = Tensor.ones((3, 4))
@@ -359,7 +360,7 @@ def test_vmap_round_trip():
     print(f"Original: shape={original_shape}, batch_dims={x.batch_dims}")
     
     # Move axis 0 to batch (vmap entry)
-    x_batched = view_ops.move_axis_to_batch_dims(x, axis=0)
+    x_batched = physical_ops.move_axis_to_batch_dims(x, axis=0)
     print(f"After move_axis_to_batch_dims(axis=0):")
     print(f"  physical: {x_batched._impl.physical_shape}, batch_dims={x_batched.batch_dims}")
     print(f"  logical: {tuple(x_batched.shape)}")  # (4,)
@@ -372,7 +373,7 @@ def test_vmap_round_trip():
     print(f"After mul: batch_dims={y.batch_dims}")
     
     # Move back from batch (vmap exit) - put axis back at position 0 in logical
-    y_unbatched = view_ops.move_axis_from_batch_dims(y, batch_axis=0, logical_destination=0)
+    y_unbatched = physical_ops.move_axis_from_batch_dims(y, batch_axis=0, logical_destination=0)
     print(f"After move_axis_from_batch_dims(batch_axis=0, logical_destination=0):")
     print(f"  shape: {tuple(y_unbatched.shape)}, batch_dims={y_unbatched.batch_dims}")
     
@@ -395,7 +396,7 @@ def test_negative_logical_destination():
     print(f"  logical: {tuple(x.shape)}")  # (3, 4)
     
     # Move batch axis to end of logical using -1
-    y = view_ops.move_axis_from_batch_dims(x, batch_axis=0, logical_destination=-1)
+    y = physical_ops.move_axis_from_batch_dims(x, batch_axis=0, logical_destination=-1)
     print(f"move_axis_from_batch_dims(x, batch_axis=0, logical_destination=-1):")
     print(f"  physical: {y._impl.physical_shape}, batch_dims: {y.batch_dims}")
     print(f"  logical: {tuple(y.shape)}")  # should be (3, 4, 2)
@@ -420,7 +421,7 @@ def test_decr_batch_dims_error():
     assert x.batch_dims == 0
     
     try:
-        view_ops.decr_batch_dims(x)
+        physical_ops.decr_batch_dims(x)
         assert False, "Should have raised ValueError"
     except ValueError as e:
         print(f"Correctly raised ValueError: {e}")

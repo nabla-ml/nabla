@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from max import graph
-    from .tensor import Tensor
+    from ..core.tensor import Tensor
 
 
 class Operation(ABC):
@@ -31,10 +31,10 @@ class Operation(ABC):
         ...
     
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        from .tensor import Tensor
-        from .tensor_impl import TensorImpl
-        from .compute_graph import GRAPH
-        from . import pytree
+        from ..core.tensor import Tensor
+        from ..core.tensor_impl import TensorImpl
+        from ..core.compute_graph import GRAPH
+        from ..core import pytree
         from max import graph as g
         
         any_traced = False
@@ -70,7 +70,7 @@ class Operation(ABC):
         
         if output_impls:
             import weakref
-            from .tracing import OutputRefs
+            from ..core.tracing import OutputRefs
             
             _, output_tree_def = pytree.tree_flatten(output, is_leaf=pytree.is_tensor)
             weak_refs = tuple(weakref.ref(impl) for impl in output_impls)
@@ -128,7 +128,7 @@ class BinaryOperation(Operation):
     """Base for binary element-wise ops with batch_dims-aware broadcasting."""
     
     def __call__(self, x: Tensor, y: Tensor) -> Tensor:
-        from .tensor import Tensor
+        from ..core.tensor import Tensor
         
         x_batch = x._impl.batch_dims
         y_batch = y._impl.batch_dims
@@ -142,7 +142,7 @@ class BinaryOperation(Operation):
         return result
     
     def _prepare_for_broadcast(self, x: Tensor, y: Tensor, out_batch_dims: int) -> tuple[Tensor, Tensor]:
-        from . import logical_view_ops as view_ops
+        from . import view as view_ops
         
         # Get PHYSICAL shapes
         x_physical = tuple(x._impl.physical_shape)
@@ -178,7 +178,7 @@ class BinaryOperation(Operation):
         return x, y
     
     def _unsqueeze_to_rank(self, t: Tensor, target_rank: int, current_batch_dims: int, target_batch_dims: int) -> Tensor:
-        from . import logical_view_ops as view_ops
+        from . import view as view_ops
         
         current_rank = len(t._impl.physical_shape)
         batch_dims_to_add = target_batch_dims - current_batch_dims

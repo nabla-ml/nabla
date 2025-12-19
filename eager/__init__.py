@@ -18,7 +18,7 @@
 """Experimental eager execution APIs for the MAX platform."""
 
 # Context managers and defaults
-from .context import (
+from .core.context import (
     defaults,
     default_device,
     default_dtype,
@@ -26,24 +26,23 @@ from .context import (
 )
 
 # Core tensor infrastructure
-from .tensor_impl import (
+from .core.tensor_impl import (
     TensorImpl,
     get_topological_order,
     print_computation_graph,
 )
 
 # Compute graph
-from .compute_graph import GRAPH, driver_tensor_type, compile_with_sharding
+from .core.compute_graph import GRAPH, driver_tensor_type, compile_with_sharding
 
 # Main Tensor class
-from .tensor import Tensor
+from .core.tensor import Tensor
 
 # Operation base classes
-from .ops import Operation, BinaryOperation, ReduceOperation, UnaryOperation
+from .ops.operation import Operation, BinaryOperation, ReduceOperation, UnaryOperation
 
 # View operations (for vmap support)
-# View operations (for vmap support)
-from .logical_view_ops import (
+from .ops.view import (
     unsqueeze,
     squeeze,
     swap_axes,
@@ -51,7 +50,7 @@ from .logical_view_ops import (
     reshape,
 )
 
-from .physical_ops import (
+from .ops._physical import (
     moveaxis,
     incr_batch_dims,
     decr_batch_dims,
@@ -65,7 +64,7 @@ from .physical_ops import (
 )
 
 # Binary operations
-from .binary_ops import (
+from .ops.binary import (
     add,
     mul,
     sub, 
@@ -79,7 +78,7 @@ from .binary_ops import (
 )
 
 # Unary operations
-from .unary_ops import (
+from .ops.unary import (
     relu,
     sigmoid,
     tanh,
@@ -93,7 +92,7 @@ from .unary_ops import (
 )
 
 # Creation operations (including random)
-from .creation import (
+from .ops.creation import (
     constant,
     full,
     zeros,
@@ -105,7 +104,7 @@ from .creation import (
 )
 
 # Pytree utilities
-from .pytree import (
+from .core.pytree import (
     PyTreeDef,
     tensor_leaves,
     traced,
@@ -119,24 +118,20 @@ from .pytree import (
 )
 
 # Function transforms
-from .vmap_trafo import vmap
-from .compile_trafo import compile, CompiledFunction, CompilationStats
+from .transforms.vmap import vmap
+from .transforms.compile import compile, CompiledFunction, CompilationStats
 
 # Reduction operations
-from .reduction_ops import reduce_sum, mean, ReduceSumOp, MeanOp
-
-
-
+from .ops.reduction import reduce_sum, mean, ReduceSumOp, MeanOp
 
 # Sharding infrastructure (core definitions)
-from .sharding import (
+from .sharding.spec import (
     DeviceMesh,
     DimSpec,
     ShardingSpec,
     compute_local_shape,
     get_num_shards,
 )
-from .compute_graph import GRAPH, driver_tensor_type, compile_with_sharding
 
 __all__ = [
     # Context

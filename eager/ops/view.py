@@ -14,10 +14,10 @@ from typing import TYPE_CHECKING
 
 from max.graph import TensorValue, ops
 
-from .ops import LogicalAxisOperation, LogicalShapeOperation
+from .operation import LogicalAxisOperation, LogicalShapeOperation
 
 if TYPE_CHECKING:
-    from .tensor import Tensor
+    from ..core.tensor import Tensor
 
 
 class UnsqueezeOp(LogicalAxisOperation):

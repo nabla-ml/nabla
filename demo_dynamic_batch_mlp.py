@@ -4,9 +4,9 @@ Demonstrates: Compile Once, Run With Any Batch Size!
 """
 
 from eager import Tensor
-from eager.vmap_trafo import vmap
-from eager.compile_trafo import compile
-from eager.compute_graph import GRAPH
+from eager.transforms.vmap import vmap
+from eager.transforms.compile import compile
+from eager.core.compute_graph import GRAPH
 from eager import relu
 
 
