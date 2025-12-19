@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Nabla 2026
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,147 +14,215 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-"""
-Nabla: Dynamic Neural Networks and Function Transformations in Python 🐍 + Mojo 🔥
-"""
 
-# Imports used within this file
-import sys
-from typing import Any
+"""Experimental eager execution APIs for the MAX platform."""
 
-# Re-exports: imported here to make them available when importing from nabla
-from max.dtype import DType
+# Context managers and defaults
+from .core.context import (
+    defaults,
+    default_device,
+    default_dtype,
+    defaults_like,
+)
 
+# Core tensor infrastructure
+from .core.tensor_impl import (
+    TensorImpl,
+    get_topological_order,
+    print_computation_graph,
+)
+
+# Compute graph
+from .core.compute_graph import GRAPH, driver_tensor_type, compile_with_sharding
+
+# Main Tensor class
 from .core.tensor import Tensor
-from .ops.operation import (
-    BinaryOperation,
-    Operation,
-    ReductionOperation,
-    UnaryOperation,
-    ViewOperation,
+
+# Operation base classes
+from .ops.operation import Operation, BinaryOperation, ReduceOperation, UnaryOperation
+
+# View operations (for vmap support)
+from .ops.view import (
+    unsqueeze,
+    squeeze,
+    swap_axes,
+    broadcast_to,
+    reshape,
 )
-from .transforms import (
-    backward,
-    djit,
-    grad,
-    autograd,
-    jacfwd,
-    jacrev,
-    jit,
-    compile,
-    jvp,
-    value_and_grad,
-    vjp,
-    vmap,
-    xpr,
+
+from .ops._physical import (
+    moveaxis,
+    incr_batch_dims,
+    decr_batch_dims,
+    move_axis_to_batch_dims,
+    move_axis_from_batch_dims,
+    unsqueeze_physical,
+    squeeze_physical,
+    broadcast_to_physical,
+    reduce_sum_physical,
+    mean_physical,
 )
-from .utils.max_interop import accelerator, accelerator_count, cpu, device, device_ref
-from .utils.testing import allclose
 
-from . import nn
-from . import optim
+# Binary operations
+from .ops.binary import (
+    add,
+    mul,
+    sub, 
+    div,
+    matmul,
+    AddOp,
+    MulOp,
+    SubOp,
+    DivOp,
+    MatmulOp,
+)
 
+# Unary operations
+from .ops.unary import (
+    relu,
+    sigmoid,
+    tanh,
+    exp,
+    neg,
+    ReluOp,
+    SigmoidOp,
+    TanhOp,
+    ExpOp,
+    NegOp,
+)
 
-# Lazy loading for operations (imported on first access)
-def _build_ops_registry():
-    """Build the operations registry from __all__ definitions in modules."""
-    import importlib  # Import locally where it's used
+# Creation operations (including random)
+from .ops.creation import (
+    constant,
+    full,
+    zeros,
+    ones,
+    arange,
+    uniform,
+    gaussian,
+    normal,
+)
 
-    registry = {}
+# Pytree utilities
+from .core.pytree import (
+    PyTreeDef,
+    tensor_leaves,
+    traced,
+    tree_flatten,
+    tree_leaves,
+    tree_map,
+    tree_structure,
+    tree_unflatten,
+    untraced,
+    with_batch_dims,
+)
 
-    # Define the ops modules to scan
-    ops_modules = [
-        "nabla.ops.binary",
-        "nabla.ops.unary",
-        "nabla.ops.creation",
-        "nabla.ops.view",
-        "nabla.ops.linalg",
-        "nabla.ops.reduce",
-        "nabla.ops.special",
-        "nabla.ops.indexing",
-    ]
+# Function transforms
+from .transforms.vmap import vmap
+from .transforms.compile import compile, CompiledFunction, CompilationStats
 
-    for module_name in ops_modules:
-        try:
-            module = importlib.import_module(module_name)
-            if hasattr(module, "__all__"):
-                for func_name in module.__all__:
-                    registry[func_name] = (module_name, func_name)
-        except ImportError:
-            # Skip modules that can't be imported
-            continue
+# Reduction operations
+from .ops.reduction import reduce_sum, mean, ReduceSumOp, MeanOp
 
-    return registry
+# Sharding infrastructure (core definitions)
+from .sharding.spec import (
+    DeviceMesh,
+    DimSpec,
+    ShardingSpec,
+    compute_local_shape,
+    get_num_shards,
+)
 
-
-_ops_registry = _build_ops_registry()
-
-# Cache for lazily loaded operations
-_ops_cache = {}
-
-
-def __getattr__(name: str) -> Any:
-    """
-    Lazy loading of operations using __getattr__.
-
-    This is called when an attribute is not found in the module.
-    It allows us to import operations only when they're first accessed.
-    """
-    if name in _ops_registry:
-        if name not in _ops_cache:
-            module_name, attr_name = _ops_registry[name]
-            try:
-                import importlib  # Import locally where it's used
-
-                module = importlib.import_module(module_name)
-                _ops_cache[name] = getattr(module, attr_name)
-            except (ImportError, AttributeError) as e:
-                raise AttributeError(
-                    f"Cannot import {name} from {module_name}: {e}"
-                ) from e
-        return _ops_cache[name]
-
-    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-
-
-# Build the __all__ list
 __all__ = [
-    # Core framework
+    # Context
+    "defaults",
+    "default_device", 
+    "default_dtype",
+    "defaults_like",
+    # Core
     "Tensor",
-    # Operations
+    "TensorImpl",
+    "GRAPH",
+    "get_topological_order",
+    "print_computation_graph",
+    "driver_tensor_type",
+    # Operations (base classes)
     "Operation",
-    "UnaryOperation",
     "BinaryOperation",
-    "ReductionOperation",
-    "ViewOperation",
-    # Transformations
-    "xpr",
-    "vjp",
-    "jvp",
+    "ReduceOperation",
+    "UnaryOperation",
+    # Binary operations
+    "add",
+    "mul",
+    "sub",
+    "div",
+    "matmul",
+    "AddOp",
+    "MulOp",
+    "SubOp",
+    "DivOp",
+    "MatmulOp",
+    # Reduction operations
+    "reduce_sum",
+    "mean",
+    "ReduceSumOp",
+    "MeanOp",
+    # Unary operations
+    "relu",
+    "sigmoid",
+    "tanh",
+    "exp",
+    "neg",
+    "ReluOp",
+    "SigmoidOp",
+    "TanhOp",
+    "ExpOp",
+    "NegOp",
+    # View operations
+    "unsqueeze",
+    "squeeze",
+    "swap_axes",
+    "moveaxis",
+    "broadcast_to",
+    "incr_batch_dims",
+    "decr_batch_dims",
+    "move_axis_to_batch_dims",
+    "move_axis_from_batch_dims",
+    "unsqueeze_physical",
+    "squeeze_physical",
+    "broadcast_to_physical",
+    "reduce_sum_physical",
+    "mean_physical",
+    # Transforms
     "vmap",
-    "jit",
-    "djit",
     "compile",
-    "jacrev",
-    "jacfwd",
-    "grad",
-    "autograd"
-    "backward",
-    "value_and_grad",
-    # Utilities
-    "device",
-    "cpu",
-    "accelerator",
-    "device_ref",
-    "allclose",
-    "accelerator_count",
-    # Types
-    "DType",
-    # Modules
-    "nn",
-    "optim",
-] + list(_ops_registry.keys())  # Add all operation names
-
-
-# For test compatibility - provide a reference to this module
-graph_improved = sys.modules[__name__]
+    "CompiledFunction",
+    "CompilationStats",
+    # Pytree
+    "PyTreeDef",
+    "tensor_leaves",
+    "traced",
+    "tree_flatten",
+    "tree_leaves",
+    "tree_map",
+    "tree_structure",
+    "tree_unflatten",
+    "untraced",
+    "with_batch_dims",
+    # Creation (including random)
+    "constant",
+    "full",
+    "zeros",
+    "ones",
+    "arange",
+    "uniform",
+    "gaussian",
+    "normal",
+    # Sharding
+    "DeviceMesh",
+    "DimSpec",
+    "ShardingSpec",
+    "compute_local_shape",
+    "get_num_shards",
+    "compile_with_sharding",
+]

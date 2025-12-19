@@ -1,25 +1,44 @@
-# ===----------------------------------------------------------------------=== #
-# Nabla 2025
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ===----------------------------------------------------------------------=== #
-
-
-"""Core components of the Nabla framework.
-
-All exports are auto-discovered by the main package.
-"""
+"""Core abstractions and runtime for the nabla module."""
 
 from .tensor import Tensor
+from .tensor_impl import TensorImpl, get_topological_order, print_computation_graph
+from .tracing import OutputRefs
+from .context import defaults, default_device, default_dtype, defaults_like, _in_running_loop
+from .pytree import tree_map, tree_flatten, tree_unflatten, tree_leaves, tree_structure, PyTreeDef, tensor_leaves, traced, untraced, with_batch_dims
+from .compute_graph import ComputeGraph, GRAPH, driver_tensor_type, compile_with_sharding
+from .graph_utils import get_operations_topological, get_all_impls_topological, print_trace_graph, apply_to_operations
 
-__all__ = ["Tensor"]
+__all__ = [
+    # Tensor
+    "Tensor",
+    "TensorImpl",
+    "OutputRefs",
+    # Context
+    "defaults",
+    "default_device",
+    "default_dtype",
+    "defaults_like",
+    # Pytree
+    "tree_map",
+    "tree_flatten",
+    "tree_unflatten",
+    "tree_leaves",
+    "tree_structure",
+    "PyTreeDef",
+    "tensor_leaves",
+    "traced",
+    "untraced",
+    "with_batch_dims",
+    # Compute graph
+    "ComputeGraph",
+    "GRAPH",
+    "driver_tensor_type",
+    "compile_with_sharding",
+    "get_operations_topological",
+    "get_all_impls_topological",
+    "print_trace_graph",
+    "apply_to_operations",
+    # TensorImpl utilities
+    "get_topological_order",
+    "print_computation_graph",
+]

@@ -1,0 +1,84 @@
+/* Minimal Custom CSS for Nabla Documentation */
+/* Using default Sphinx Book Theme styling for everything */
+/* DARK MODE ONLY - Force dark theme */
+
+/* Force dark mode on the root element */
+:root {
+    --color-mode: dark;
+}
+
+html[data-theme="dark"], 
+html[data-theme="light"], 
+html {
+    --color-mode: dark;
+}
+
+/* Hide ALL theme switcher elements */
+html .theme-switch-button,
+html .bd-theme-switch,
+html .theme-switcher,
+html button[title*="theme"],
+html button[title*="Theme"],
+html .btn-theme,
+html .theme-toggle {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+/* Only essential notebook styling for Google Colab and download buttons */
+.notebook-buttons {
+    margin: 1rem 0;
+    text-align: left;
+}
+
+.colab-button {
+    display: inline-block;
+    background-color: #404040;
+    color: #e0e0e0;
+    border: 1px solid #606060;
+    padding: 8px 16px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-weight: 400;
+    margin: 0.5rem 0.5rem 0.5rem 0;
+    transition: all 0.2s;
+    font-size: 0.9rem;
+}
+
+.colab-button:hover {
+    background-color: #505050;
+    border-color: #707070;
+    text-decoration: none;
+    color: #f0f0f0;
+}
+
+.colab-button:before {
+    content: "🚀 ";
+}
+
+.notebook-download {
+    display: inline-block;
+    background-color: #404040;
+    color: #e0e0e0;
+    border: 1px solid #606060;
+    padding: 8px 16px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-weight: 400;
+    margin: 0.5rem 0.5rem 0.5rem 0;
+    transition: all 0.2s;
+    font-size: 0.9rem;
+}
+
+.notebook-download:hover {
+    background-color: #505050;
+    border-color: #707070;
+    text-decoration: none;
+    color: #f0f0f0;
+}
+
+.notebook-download:before {
+    content: "↓ ";
+}
+
+

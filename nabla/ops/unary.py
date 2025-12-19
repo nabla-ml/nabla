@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Nabla 2026
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,1019 +14,121 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-"""Unary operations for the Nabla framework."""
+"""Unary operations for the nabla module.
 
-import numpy as np
-from max.driver import Device
-from max.dtype import DType
-from max.graph import DeviceRef, TensorValue, ops
+All unary ops inherit from UnaryOperation ABC which handles:
+- Preserving batch_dims on output for vmap support
+- JVP mode propagation
 
-from ..core.tensor import Tensor
+Autodiff rules (vjp_rule, jvp_rule) are not yet implemented - they will
+be added when the autodiff infrastructure is tested and ready.
+"""
+
+from __future__ import annotations
+
+from typing import Any, TYPE_CHECKING
+
+from max.graph import TensorValue, ops
+
 from .operation import UnaryOperation
 
-# Public API
-__all__ = [
-    "negate",
-    "cast",
-    "sin",
-    "cos",
-    "tanh",
-    "sigmoid",
-    "abs",
-    "floor",
-    "logical_not",
-    "incr_batch_dim_ctr",
-    "decr_batch_dim_ctr",
-    "relu",
-    "log",
-    "exp",
-    "sqrt",
-    "transfer_to",
-]
+if TYPE_CHECKING:
+    from ..core.tensor import Tensor
 
 
-class NegateOp(UnaryOperation):
-    """Element-wise negation operation."""
-
-    def __init__(self):
-        super().__init__("neg")
-
-    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
-        output.tensor_value = ops.negate(args[0])
-
-    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
-        np_result = -args[0].to_numpy()
-        # Ensure result is an tensor, not a scalar
-        if np.isscalar(np_result):
-            np_result = np.array(np_result)
-        output.impl_(np_result)
-
-    def vjp_rule(
-        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
-    ) -> list[Tensor]:
-        return [negate(cotangent)]
-
-    def jvp_rule(
-        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
-    ) -> Tensor:
-        return negate(tangents[0])
-
-
-def negate(arg: Tensor) -> Tensor:
-    """Computes the element-wise numerical negative of an tensor.
-
-    This function returns a new tensor with each element being the negation
-    of the corresponding element in the input tensor. It also provides the
-    implementation for the unary `-` operator on Nabla tensors.
-
-    Parameters
-    ----------
-    arg : Tensor
-        The input tensor.
-
-    Returns
-    -------
-    Tensor
-        An tensor containing the negated elements.
-
-    Examples
-    --------
-    >>> import nabla as nb
-    >>> x = nb.tensor([1, -2, 3.5])
-    >>> nb.negate(x)
-    Tensor([-1.,  2., -3.5], dtype=float32)
-
-    Using the `-` operator:
-    >>> -x
-    Tensor([-1.,  2., -3.5], dtype=float32)
+class ReluOp(UnaryOperation):
+    """Rectified Linear Unit (ReLU) activation.
+    
+    relu(x) = max(0, x)
     """
-    return _negate_op.forward(arg)
-
-
-class CastOp(UnaryOperation):
-    """Type casting operation."""
-
-    def __init__(self, dtype: DType):
-        super().__init__(f"convert_element_type[new_dtype={dtype}]")
-        self.target_dtype = dtype
-
-    def compute_output_dtype(self, arg: Tensor) -> DType:
-        return self.target_dtype
-
-    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
-        output.tensor_value = ops.cast(args[0], output.dtype)
-
-    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
-        np_result = args[0].to_numpy().astype(DType.to_numpy(output.dtype))
-        # Ensure result is an tensor, not a scalar
-        if np.isscalar(np_result):
-            np_result = np.array(np_result)
-        output.impl_(np_result)
-
-    def vjp_rule(
-        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
-    ) -> list[Tensor]:
-        return [cast(cotangent, primals[0].dtype)]
-
-    def jvp_rule(
-        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
-    ) -> Tensor:
-        return cast(tangents[0], output.dtype)
-
-
-def cast(arg: Tensor, dtype: DType) -> Tensor:
-    """Casts an tensor to a specified data type.
-
-    This function creates a new tensor with the same shape as the input but
-    with the specified data type (`dtype`).
-
-    Parameters
-    ----------
-    arg : Tensor
-        The input tensor to be cast.
-    dtype : DType
-        The target Nabla data type (e.g., `nb.float32`, `nb.int32`).
-
-    Returns
-    -------
-    Tensor
-        A new tensor with the elements cast to the specified `dtype`.
-
-    Examples
-    --------
-    >>> import nabla as nb
-    >>> x = nb.tensor([1, 2, 3])
-    >>> x.dtype
-    int32
-    >>> y = nb.cast(x, nb.float32)
-    >>> y
-    Tensor([1., 2., 3.], dtype=float32)
-    """
-    if not isinstance(dtype, DType):
-        raise TypeError(f"Dtype must be an instance of DType, got {type(dtype)}")
-
-    op = CastOp(dtype)
-    return op.forward(arg)
-
-
-class SinOp(UnaryOperation):
-    """Element-wise sine operation."""
-
-    def __init__(self):
-        super().__init__("sin")
-
-    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
-        output.tensor_value = ops.sin(args[0])
-
-    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
-        np_result = np.sin(args[0].to_numpy())
-        # Ensure result is an tensor, not a scalar
-        if np.isscalar(np_result):
-            np_result = np.array(np_result)
-        output.impl_(np_result)
-
-    def vjp_rule(
-        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
-    ) -> list[Tensor]:
-        from .binary import mul
-
-        return [mul(cotangent, cos(primals[0]))]
-
-    def jvp_rule(
-        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
-    ) -> Tensor:
-        from .binary import mul
-
-        return mul(tangents[0], cos(primals[0]))
-
-
-def sin(arg: Tensor, dtype: DType | None = None) -> Tensor:
-    """Computes the element-wise sine of an tensor.
-
-    Parameters
-    ----------
-    arg : Tensor
-        The input tensor. Input is expected to be in radians.
-    dtype : DType | None, optional
-        If provided, the output tensor will be cast to this data type.
-
-    Returns
-    -------
-    Tensor
-        An tensor containing the sine of each element in the input.
-
-    Examples
-    --------
-    >>> import nabla as nb
-    >>> x = nb.tensor([0, 1.5707963, 3.1415926])
-    >>> nb.sin(x)
-    Tensor([0.0000000e+00, 1.0000000e+00, -8.7422780e-08], dtype=float32)
-    """
-    res = _sin_op.forward(arg)
-    if dtype:
-        return cast(res, dtype)
-    return res
-
-
-class CosOp(UnaryOperation):
-    """Element-wise cosine operation."""
-
-    def __init__(self):
-        super().__init__("cos")
-
-    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
-        output.tensor_value = ops.cos(args[0])
-
-    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
-        np_result = np.cos(args[0].to_numpy())
-        # Ensure result is an tensor, not a scalar
-        if np.isscalar(np_result):
-            np_result = np.array(np_result)
-        output.impl_(np_result)
-
-    def vjp_rule(
-        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
-    ) -> list[Tensor]:
-        from .binary import mul
-
-        return [negate(mul(cotangent, sin(primals[0])))]
-
-    def jvp_rule(
-        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
-    ) -> Tensor:
-        from .binary import mul
-
-        return negate(mul(tangents[0], sin(primals[0])))
-
-
-def cos(arg: Tensor) -> Tensor:
-    """Computes the element-wise cosine of an tensor.
-
-    Parameters
-    ----------
-    arg : Tensor
-        The input tensor. Input is expected to be in radians.
-
-    Returns
-    -------
-    Tensor
-        An tensor containing the cosine of each element in the input.
-
-    Examples
-    --------
-    >>> import nabla as nb
-    >>> x = nb.tensor([0, 1.5707963, 3.1415926])
-    >>> nb.cos(x)
-    Tensor([ 1.000000e+00, -4.371139e-08, -1.000000e+00], dtype=float32)
-    """
-    return _cos_op.forward(arg)
-
-
-class TanhOp(UnaryOperation):
-    """Element-wise hyperbolic tangent operation."""
-
-    def __init__(self):
-        super().__init__("tanh")
-
-    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
-        output.tensor_value = ops.tanh(args[0])
-
-    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
-        np_result = np.tanh(args[0].to_numpy())
-        # Ensure result is an tensor, not a scalar
-        if np.isscalar(np_result):
-            np_result = np.array(np_result)
-        output.impl_(np_result)
-
-    def vjp_rule(
-        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
-    ) -> list[Tensor]:
-        from .binary import mul, sub
-        from .creation import ones_like
-
-        # d/dx tanh(x) = 1 - tanh²(x) = 1 - output²
-        ones_like_output = ones_like(output)
-        tanh_squared = mul(output, output)
-        derivative = sub(ones_like_output, tanh_squared)
-        return [mul(cotangent, derivative)]
-
-    def jvp_rule(
-        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
-    ) -> Tensor:
-        from .binary import mul, sub
-        from .creation import ones_like
-
-        # d/dx tanh(x) = 1 - tanh²(x)
-        ones_like_output = ones_like(output)
-        tanh_squared = mul(output, output)
-        derivative = sub(ones_like_output, tanh_squared)
-        return mul(tangents[0], derivative)
-
-
-def tanh(arg: Tensor) -> Tensor:
-    """Computes the element-wise hyperbolic tangent of an tensor.
-
-    The tanh function is a common activation function in neural networks,
-    squashing values to the range `[-1, 1]`.
-
-    Parameters
-    ----------
-    arg : Tensor
-        The input tensor.
-
-    Returns
-    -------
-    Tensor
-        An tensor containing the hyperbolic tangent of each element.
-
-    Examples
-    --------
-    >>> import nabla as nb
-    >>> x = nb.tensor([-1.0, 0.0, 1.0, 20.0])
-    >>> nb.tanh(x)
-    Tensor([-0.7615942,  0.       ,  0.7615942,  1.       ], dtype=float32)
-    """
-    return _tanh_op.forward(arg)
-
-
-class AbsOp(UnaryOperation):
-    """Element-wise absolute value operation."""
-
-    def __init__(self):
-        super().__init__("abs")
-
-    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
-        output.tensor_value = ops.abs(args[0])
-
-    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
-        np_result = np.abs(args[0].to_numpy())
-        # Ensure result is an tensor, not a scalar
-        if np.isscalar(np_result):
-            np_result = np.array(np_result)
-        output.impl_(np_result)
-
-    def vjp_rule(
-        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
-    ) -> list[Tensor]:
-        from .binary import mul
-
-        x = primals[0]
-        abs_x = output
-        eps = 1e-12
-        abs_x_safe = abs_x + eps
-        from .binary import div
-
-        sign = div(x, abs_x_safe)
-
-        return [mul(cotangent, sign)]
-
-    def jvp_rule(
-        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
-    ) -> Tensor:
-        from .binary import div, mul
-        x = primals[0]
-        abs_x = output
-        eps = 1e-12
-        abs_x_safe = abs_x + eps
-        sign = div(x, abs_x_safe)
-        return mul(tangents[0], sign)
-
-
-def abs(arg: Tensor) -> Tensor:
-    """Computes the element-wise absolute value of an tensor.
-
-    Parameters
-    ----------
-    arg : Tensor
-        The input tensor.
-
-    Returns
-    -------
-    Tensor
-        An tensor containing the absolute value of each element.
-
-    Examples
-    --------
-    >>> import nabla as nb
-    >>> x = nb.tensor([-1.5, 0.0, 2.5])
-    >>> nb.abs(x)
-    Tensor([1.5, 0. , 2.5], dtype=float32)
-    """
-    return _abs_op.forward(arg)
-
-
-class FloorOp(UnaryOperation):
-    """Element-wise floor operation."""
-
-    def __init__(self):
-        super().__init__("floor")
-
-    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
-        output.tensor_value = ops.floor(args[0])
-
-    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
-        np_result = np.floor(args[0].to_numpy())
-        # Ensure result is an tensor, not a scalar
-        if np.isscalar(np_result):
-            np_result = np.array(np_result)
-        output.impl_(np_result)
-
-    def vjp_rule(
-        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
-    ) -> list[Tensor]:
-        from .creation import zeros_like
-
-        return [zeros_like(cotangent)]
-
-    def jvp_rule(
-        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
-    ) -> Tensor:
-        from .creation import zeros_like
-
-        return zeros_like(tangents[0])
-
-
-def floor(arg: Tensor) -> Tensor:
-    """Computes the element-wise floor of an tensor.
-
-    The floor of a scalar `x` is the largest integer `i` such that `i <= x`.
-    This function is not differentiable and its gradient is zero everywhere.
-
-    Parameters
-    ----------
-    arg : Tensor
-        The input tensor.
-
-    Returns
-    -------
-    Tensor
-        An tensor containing the floor of each element.
-
-    Examples
-    --------
-    >>> import nabla as nb
-    >>> x = nb.tensor([-1.7, -0.2, 0.2, 1.7])
-    >>> nb.floor(x)
-    Tensor([-2., -1.,  0.,  1.], dtype=float32)
-    """
-    return _floor_op.forward(arg)
-
-
-class LogicalNotOp(UnaryOperation):
-    """Element-wise logical NOT operation for boolean tensors."""
-
-    def __init__(self):
-        super().__init__("logical_not")
-
-    def compute_output_dtype(self, arg: Tensor) -> DType:
-        return DType.bool
-
-    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
-        input_tensor = args[0]
-        if input_tensor.dtype != DType.bool:
-            input_tensor = ops.cast(input_tensor, DType.bool)
-        output.tensor_value = ops.logical_not(input_tensor)
-
-    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
-        import numpy as np
-
-        np_result = np.logical_not(args[0].to_numpy())
-        if np.isscalar(np_result):
-            np_result = np.array(np_result)
-        if np_result.shape == () and np_result.dtype == bool:
-            np_result_1d = np.array([np_result.item()], dtype=bool)
-            output.impl_(np_result_1d)
-            output.shape = ()
-        else:
-            output.impl_(np_result)
-
-    def vjp_rule(
-        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
-    ) -> list[Tensor]:
-        from .creation import zeros_like
-
-        return [zeros_like(cotangent)]
-
-    def jvp_rule(
-        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
-    ) -> Tensor:
-        from .creation import zeros_like
-
-        return zeros_like(tangents[0])
-
-
-def logical_not(arg: Tensor) -> Tensor:
-    """Computes the element-wise logical NOT of a boolean tensor.
-
-    This function inverts the boolean value of each element in the input tensor.
-    Input tensors of non-boolean types will be cast to boolean first.
-
-    Parameters
-    ----------
-    arg : Tensor
-        The input boolean tensor.
-
-    Returns
-    -------
-    Tensor
-        A boolean tensor containing the inverted values.
-
-    Examples
-    --------
-    >>> import nabla as nb
-    >>> x = nb.tensor([True, False, True])
-    >>> nb.logical_not(x)
-    Tensor([False,  True, False], dtype=bool)
-    """
-    return _logical_not_op.forward(arg)
+    
+    @property
+    def name(self) -> str:
+        return "relu"
+    
+    def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+        """Apply ReLU element-wise."""
+        return ops.relu(x)
 
 
 class SigmoidOp(UnaryOperation):
-    """Element-wise sigmoid operation."""
-
-    def __init__(self):
-        super().__init__("sigmoid")
-
-    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
-        output.tensor_value = ops.sigmoid(args[0])
-
-    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
-        x = args[0].to_numpy()
-        np_result = np.where(
-            x >= 0, 1.0 / (1.0 + np.exp(-x)), np.exp(x) / (1.0 + np.exp(x))
-        )
-        if np.isscalar(np_result):
-            np_result = np.array(np_result)
-        output.impl_(np_result)
-
-    def vjp_rule(
-        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
-    ) -> list[Tensor]:
-        from .binary import mul, sub
-        from .creation import ones_like
-
-        ones_like_output = ones_like(output)
-        one_minus_output = sub(ones_like_output, output)
-        derivative = mul(output, one_minus_output)
-        return [mul(cotangent, derivative)]
-
-    def jvp_rule(
-        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
-    ) -> Tensor:
-        from .binary import mul, sub
-        from .creation import ones_like
-
-        ones_like_output = ones_like(output)
-        one_minus_output = sub(ones_like_output, output)
-        derivative = mul(output, one_minus_output)
-        return mul(tangents[0], derivative)
-
-
-def sigmoid(arg: Tensor) -> Tensor:
-    """Computes the element-wise sigmoid function.
-
-    The sigmoid function, defined as `1 / (1 + exp(-x))`, is a common
-    activation function that squashes values to the range `(0, 1)`.
-
-    Parameters
-    ----------
-    arg : Tensor
-        The input tensor.
-
-    Returns
-    -------
-    Tensor
-        An tensor containing the sigmoid of each element.
-
-    Examples
-    --------
-    >>> import nabla as nb
-    >>> x = nb.tensor([-1.0, 0.0, 1.0, 20.0])
-    >>> nb.sigmoid(x)
-    Tensor([0.26894143, 0.5       , 0.7310586 , 1.        ], dtype=float32)
+    """Sigmoid activation function.
+    
+    sigmoid(x) = 1 / (1 + exp(-x))
     """
-    return _sigmoid_op.forward(arg)
+    
+    @property
+    def name(self) -> str:
+        return "sigmoid"
+    
+    def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+        """Apply sigmoid element-wise."""
+        return ops.sigmoid(x)
 
 
-class IncrBatchDimCtr(UnaryOperation):
-    """Increment batch dimension counter for debugging."""
-
-    def __init__(self, arg_batch_dims: tuple[int, ...], arg_shape: tuple[int, ...]):
-        super().__init__("incr_batch_dim_ctr")
-        self.arg_batch_dims = arg_batch_dims
-        self.arg_shape = arg_shape
-
-    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
-        if not self.arg_shape:
-            raise ValueError(
-                f"IncrBatchDimCtr requires a non-empty arg_shape, got {self.arg_shape}"
-            )
-        return self.arg_shape[1:]
-
-    def compute_output_batch_dims(self, *input_batch_dims):
-        if not self.arg_shape:
-            raise ValueError(
-                f"IncrBatchDimCtr requires a non-empty arg_shape, got {self.arg_shape}"
-            )
-        return self.arg_batch_dims + (self.arg_shape[0],)
-
-    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
-        output.tensor_value = args[0]
-
-    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
-        output.impl_(args[0]._impl)
-
-    def vjp_rule(
-        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
-    ) -> list[Tensor]:
-        return [decr_batch_dim_ctr(cotangent)]
-
-    def jvp_rule(
-        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
-    ) -> Tensor:
-        return incr_batch_dim_ctr(tangents[0])
-
-
-def incr_batch_dim_ctr(arg: Tensor) -> Tensor:
-    """Moves the leading axis from `shape` to `batch_dims`. (Internal use)
-
-    This is an internal-use function primarily for developing function
-    transformations like `vmap`. It re-interprets the first dimension of the
-    tensor's logical shape as a new batch dimension.
-
-    Parameters
-    ----------
-    arg : Tensor
-        The input tensor.
-
-    Returns
-    -------
-    Tensor
-        A new tensor with an additional batch dimension.
+class TanhOp(UnaryOperation):
+    """Hyperbolic tangent activation.
+    
+    tanh(x) = (exp(x) - exp(-x)) / (exp(x) + exp(-x))
     """
-    return IncrBatchDimCtr(arg.batch_dims, arg.shape).forward(arg)
-
-
-class DecrBatchDimCtr(UnaryOperation):
-    """Decrement batch dimension counter for debugging."""
-
-    def __init__(self, arg_batch_dims: tuple[int, ...], arg_shape: tuple[int, ...]):
-        super().__init__("decr_batch_dim_ctr")
-        self.arg_batch_dims = arg_batch_dims
-        self.arg_shape = arg_shape
-
-    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
-        if not self.arg_batch_dims:
-            raise ValueError(
-                f"DecrBatchDimCtr requires a non-empty arg_batch_dims, got {self.arg_batch_dims}"
-            )
-        return (self.arg_batch_dims[-1],) + self.arg_shape
-
-    def compute_output_batch_dims(self, *input_batch_dims):
-        if not self.arg_batch_dims:
-            raise ValueError(
-                f"DecrBatchDimCtr requires a non-empty arg_batch_dims, got {self.arg_batch_dims}"
-            )
-        return self.arg_batch_dims[:-1]
-
-    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
-        output.tensor_value = args[0]
-
-    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
-        output.impl_(args[0]._impl)
-
-    def vjp_rule(
-        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
-    ) -> list[Tensor]:
-        return [incr_batch_dim_ctr(cotangent)]
-
-    def jvp_rule(
-        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
-    ) -> Tensor:
-        return decr_batch_dim_ctr(tangents[0])
-
-
-def decr_batch_dim_ctr(arg: Tensor) -> Tensor:
-    """Moves the last `batch_dim` to be the leading axis of `shape`. (Internal use)
-
-    This is an internal-use function primarily for developing function
-    transformations like `vmap`. It re-interprets the last batch dimension
-    as the new first dimension of the tensor's logical shape.
-
-    Parameters
-    ----------
-    arg : Tensor
-        The input tensor.
-
-    Returns
-    -------
-    Tensor
-        A new tensor with one fewer batch dimension.
-    """
-    return DecrBatchDimCtr(arg.batch_dims, arg.shape).forward(arg)
-
-
-class ReLUOp(UnaryOperation):
-    """Element-wise ReLU operation."""
-
-    def __init__(self):
-        super().__init__("relu")
-
-    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
-        output.tensor_value = ops.relu(args[0])
-
-    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
-        np_result = np.maximum(0, args[0].to_numpy())
-        if np.isscalar(np_result):
-            np_result = np.array(np_result)
-        output.impl_(np_result)
-
-    def vjp_rule(
-        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
-    ) -> list[Tensor]:
-        from .binary import div, mul
-        x = primals[0]
-        eps = 1e-12
-        x_abs = abs(x)
-        x_safe = x_abs + eps
-        derivative = div(output, x_safe)
-        return [mul(cotangent, derivative)]
-
-    def jvp_rule(
-        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
-    ) -> Tensor:
-        from .binary import div, mul
-        x = primals[0]
-        eps = 1e-12
-        x_abs = abs(x)
-        x_safe = x_abs + eps
-        derivative = div(output, x_safe)
-        return mul(tangents[0], derivative)
-
-
-def relu(arg: Tensor) -> Tensor:
-    """Computes the element-wise Rectified Linear Unit (ReLU) function.
-
-    The ReLU function is defined as `max(0, x)`. It is a widely used
-    activation function in neural networks.
-
-    Parameters
-    ----------
-    arg : Tensor
-        The input tensor.
-
-    Returns
-    -------
-    Tensor
-        An tensor containing the result of the ReLU operation.
-
-    Examples
-    --------
-    >>> import nabla as nb
-    >>> x = nb.tensor([-2.0, -0.5, 0.0, 1.0, 2.0])
-    >>> nb.relu(x)
-    Tensor([0., 0., 0., 1., 2.], dtype=float32)
-    """
-    return _relu_op.forward(arg)
-
-
-class LogOp(UnaryOperation):
-    """Element-wise natural logarithm operation."""
-
-    def __init__(self):
-        super().__init__("log")
-
-    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
-        output.tensor_value = ops.log(args[0])
-
-    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
-        input_tensor = args[0].to_numpy()
-        epsilon = 1e-15
-        safe_input = np.maximum(input_tensor, epsilon)
-        np_result = np.log(safe_input)
-        if np.isscalar(np_result):
-            np_result = np.array(np_result)
-        output.impl_(np_result)
-
-    def vjp_rule(
-        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
-    ) -> list[Tensor]:
-        from .binary import div
-
-        return [div(cotangent, primals[0])]
-
-    def jvp_rule(
-        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
-    ) -> Tensor:
-        from .binary import div
-
-        return div(tangents[0], primals[0])
-
-
-def log(arg: Tensor) -> Tensor:
-    """Computes the element-wise natural logarithm (base e).
-
-    This function calculates `log(x)` for each element `x` in the input tensor.
-    For numerical stability with non-positive inputs, a small epsilon is
-    added to ensure the input to the logarithm is positive.
-
-    Parameters
-    ----------
-    arg : Tensor
-        The input tensor. Values should be positive.
-
-    Returns
-    -------
-    Tensor
-        An tensor containing the natural logarithm of each element.
-
-    Examples
-    --------
-    >>> import nabla as nb
-    >>> x = nb.tensor([1.0, 2.71828, 10.0])
-    >>> nb.log(x)
-    Tensor([0.       , 0.9999993, 2.3025851], dtype=float32)
-    """
-    return _log_op.forward(arg)
+    
+    @property
+    def name(self) -> str:
+        return "tanh"
+    
+    def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+        """Apply tanh element-wise."""
+        return ops.tanh(x)
 
 
 class ExpOp(UnaryOperation):
-    """Element-wise exponential operation."""
-
-    def __init__(self):
-        super().__init__("exp")
-
-    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
-        output.tensor_value = ops.exp(args[0])
-
-    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
-        np_result = np.exp(args[0].to_numpy())
-        if np.isscalar(np_result):
-            np_result = np.array(np_result)
-        output.impl_(np_result)
-
-    def vjp_rule(
-        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
-    ) -> list[Tensor]:
-        from .binary import mul
-
-        return [mul(cotangent, output)]
-
-    def jvp_rule(
-        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
-    ) -> Tensor:
-        from .binary import mul
-        return mul(output, tangents[0])
-
-
-def exp(arg: Tensor) -> Tensor:
-    """Computes the element-wise exponential function (e^x).
-
-    This function calculates the base-e exponential of each element in the
-    input tensor.
-
-    Parameters
-    ----------
-    arg : Tensor
-        The input tensor.
-
-    Returns
-    -------
-    Tensor
-        An tensor containing the exponential of each element.
-
-    Examples
-    --------
-    >>> import nabla as nb
-    >>> x = nb.tensor([0.0, 1.0, 2.0])
-    >>> nb.exp(x)
-    Tensor([1.       , 2.7182817, 7.389056 ], dtype=float32)
+    """Exponential function.
+    
+    exp(x) = e^x
     """
-    return _exp_op.forward(arg)
+    
+    @property
+    def name(self) -> str:
+        return "exp"
+    
+    def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+        """Apply exp element-wise."""
+        return ops.exp(x)
 
 
-def sqrt(arg: Tensor) -> Tensor:
-    """Computes the element-wise non-negative square root of an tensor.
-
-    This function is implemented as `nabla.pow(arg, 0.5)` to ensure it is
-    compatible with the automatic differentiation system.
-
-    Parameters
-    ----------
-    arg : Tensor
-        The input tensor. All elements must be non-negative.
-
-    Returns
-    -------
-    Tensor
-        An tensor containing the square root of each element.
-
-    Examples
-    --------
-    >>> import nabla as nb
-    >>> x = nb.tensor([0.0, 4.0, 9.0])
-    >>> nb.sqrt(x)
-    Tensor([0., 2., 3.], dtype=float32)
+class NegOp(UnaryOperation):
+    """Negation.
+    
+    neg(x) = -x
     """
-    from .binary import pow as binary_pow
-    from .creation import tensor
-
-    half = tensor(0.5, dtype=arg.dtype)
-    return binary_pow(arg, half)
-
-
-class TransferToOp(UnaryOperation):
-    """Transfer operation to a different device."""
-
-    def __init__(self, arg_device: Device, target_device: Device):
-        super().__init__(f"transfer_to[{target_device}]")
-        self.arg_device = arg_device
-        self.target_device = target_device
-
-    def forward(self, *args: Tensor) -> Tensor:
-        if len(args) != 1:
-            raise ValueError(f"Unary operation requires 1 argument, got {len(args)}")
-        arg = args[0]
-
-        output_shape = self.compute_output_shape(arg.shape)
-        output_batch_dims = self.compute_output_batch_dims(arg.batch_dims)
-        output_dtype = self.compute_output_dtype(arg)
-
-        res = Tensor(
-            shape=output_shape,
-            dtype=output_dtype,
-            device=self.target_device,
-            materialize=False,
-            name=self.name,
-            batch_dims=output_batch_dims,
-        )
-
-        res.set_maxpr(self.maxpr)
-        res.add_arguments(arg)
-        res.vjp_rule = self.vjp_rule
-        res.jvp_rule = self.jvp_rule
-        res.custom_kernel_path = self.custom_kernel_path()
-
-        if not res.stage_realization:
-            self.eagerxpr([arg], res)
-
-        res.creator_op = self
-        return res
-
-    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
-        output.tensor_value = ops.transfer_to(
-            args[0], DeviceRef.from_device(self.target_device)
-        )
-
-    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
-        output.impl_(args[0].impl.to(self.target_device))
-
-    def vjp_rule(
-        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
-    ) -> list[Tensor]:
-        return [transfer_to(cotangent, self.arg_device)]
-
-    def jvp_rule(
-        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
-    ) -> Tensor:
-        return transfer_to(tangents[0], self.target_device)
+    
+    @property
+    def name(self) -> str:
+        return "neg"
+    
+    def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+        """Apply negation element-wise."""
+        return ops.neg(x)
 
 
-def transfer_to(arg: Tensor, device: Device) -> Tensor:
-    """Transfers an tensor to a different compute device.
+# ===== Singleton instances exposed as functions =====
 
-    This function moves the data of a Nabla tensor to the specified device
-    (e.g., from CPU to GPU). If the tensor is already on the target device,
-    it is returned unchanged.
-
-    Parameters
-    ----------
-    arg : Tensor
-        The input tensor to transfer.
-    device : Device
-        The target device instance (e.g., `nb.Device.cpu()`, `nb.Device.gpu()`).
-
-    Returns
-    -------
-    Tensor
-        A new tensor residing on the target device.
-    """
-    if not isinstance(device, Device):
-        raise TypeError(f"Device must be an instance of Device, got {type(device)}")
-    if arg.logical_device == device:
-        return arg
-    return TransferToOp(arg.logical_device, device).forward(arg)
+relu = ReluOp()
+sigmoid = SigmoidOp()
+tanh = TanhOp()
+exp = ExpOp()
+neg = NegOp()
 
 
-# Add global instances
-_negate_op = NegateOp()
-_sin_op = SinOp()
-_cos_op = CosOp()
-_tanh_op = TanhOp()
-_abs_op = AbsOp()
-_floor_op = FloorOp()
-_logical_not_op = LogicalNotOp()
-_sigmoid_op = SigmoidOp()
-_log_op = LogOp()
-_exp_op = ExpOp()
-_relu_op = ReLUOp()
+__all__ = [
+    "ReluOp",
+    "SigmoidOp",
+    "TanhOp",
+    "ExpOp",
+    "NegOp",
+    "relu",
+    "sigmoid",
+    "tanh",
+    "exp",
+    "neg",
+]

@@ -1,0 +1,395 @@
+/* =================================================================
+   NABLA DOCUMENTATION - ADVANCED SEO & PERFORMANCE OPTIMIZATIONS
+   ================================================================= */
+
+/* Core Web Vitals Optimizations */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Optimize font loading for performance */
+@font-face {
+  font-family: 'system-ui';
+  font-display: swap; /* Improves FCP and LCP */
+}
+
+/* Critical rendering path optimization */
+.bd-content img {
+  max-width: 100%;
+  height: auto;
+  loading: lazy; /* Native lazy loading */
+  decoding: async;
+}
+
+/* Optimize CLS (Cumulative Layout Shift) */
+.bd-content iframe,
+.bd-content video {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9; /* Prevent layout shift */
+}
+
+/* Performance: Reduce paint complexity */
+.bd-sidebar {
+  contain: layout style paint;
+  will-change: transform;
+}
+
+/* Optimize search performance */
+.bd-search-container {
+  contain: layout;
+}
+
+/* Schema.org structured data styling */
+.schema-faq {
+  margin: 2rem 0;
+}
+
+.schema-faq-item {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  border-left: 4px solid #007acc;
+  background-color: #f8f9fa;
+}
+
+[data-theme="dark"] .schema-faq-item {
+  background-color: #1a1a1a;
+  border-left-color: #4dabf7;
+}
+
+.schema-faq-question {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #333;
+}
+
+[data-theme="dark"] .schema-faq-question {
+  color: #fff;
+}
+
+.schema-faq-answer {
+  color: #666;
+  line-height: 1.6;
+}
+
+[data-theme="dark"] .schema-faq-answer {
+  color: #ccc;
+}
+
+/* Code snippet optimization for SEO */
+.highlight {
+  position: relative;
+  margin: 1rem 0;
+}
+
+.highlight::before {
+  content: attr(data-language);
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  font-size: 0.75rem;
+  color: #666;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 2px 6px;
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+[data-theme="dark"] .highlight::before {
+  background: rgba(0, 0, 0, 0.9);
+  color: #ccc;
+}
+
+/* Breadcrumb navigation styling */
+.breadcrumb-nav {
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #eee;
+}
+
+[data-theme="dark"] .breadcrumb-nav {
+  border-bottom-color: #333;
+}
+
+.breadcrumb-nav a {
+  color: #007acc;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.breadcrumb-nav a:hover {
+  color: #005a8e;
+  text-decoration: underline;
+}
+
+[data-theme="dark"] .breadcrumb-nav a {
+  color: #4dabf7;
+}
+
+[data-theme="dark"] .breadcrumb-nav a:hover {
+  color: #74c0fc;
+}
+
+/* Performance tables styling */
+.performance-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  font-size: 0.9rem;
+}
+
+.performance-table th,
+.performance-table td {
+  padding: 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.performance-table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  color: #333;
+}
+
+.performance-table .speedup {
+  font-weight: 600;
+  color: #28a745;
+}
+
+[data-theme="dark"] .performance-table th {
+  background-color: #2a2a2a;
+  color: #fff;
+  border-bottom-color: #444;
+}
+
+[data-theme="dark"] .performance-table td {
+  border-bottom-color: #444;
+}
+
+[data-theme="dark"] .performance-table .speedup {
+  color: #40c463;
+}
+
+/* Installation code blocks */
+.installation-block {
+  position: relative;
+  margin: 1rem 0;
+}
+
+.installation-block .copy-button {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: #007acc;
+  color: white;
+  border: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.installation-block:hover .copy-button {
+  opacity: 1;
+}
+
+.installation-block .copy-button:hover {
+  background: #005a8e;
+}
+
+/* Use case cards */
+.use-case-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin: 2rem 0;
+}
+
+.use-case-card {
+  padding: 1.5rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fff;
+  transition: box-shadow 0.2s ease;
+}
+
+.use-case-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .use-case-card {
+  background: #1a1a1a;
+  border-color: #333;
+}
+
+[data-theme="dark"] .use-case-card:hover {
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.1);
+}
+
+.use-case-icon {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  display: block;
+}
+
+.use-case-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: #333;
+}
+
+[data-theme="dark"] .use-case-title {
+  color: #fff;
+}
+
+.use-case-description {
+  color: #666;
+  line-height: 1.6;
+}
+
+[data-theme="dark"] .use-case-description {
+  color: #ccc;
+}
+
+/* Feature comparison table */
+.feature-comparison {
+  overflow-x: auto;
+  margin: 2rem 0;
+}
+
+.feature-comparison table {
+  width: 100%;
+  min-width: 600px;
+  border-collapse: collapse;
+}
+
+.feature-comparison th,
+.feature-comparison td {
+  padding: 0.75rem;
+  text-align: center;
+  border: 1px solid #ddd;
+}
+
+.feature-comparison th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+}
+
+.feature-comparison .check {
+  color: #28a745;
+  font-weight: 600;
+}
+
+.feature-comparison .cross {
+  color: #dc3545;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .feature-comparison th {
+  background-color: #2a2a2a;
+  border-color: #444;
+}
+
+[data-theme="dark"] .feature-comparison td {
+  border-color: #444;
+}
+
+[data-theme="dark"] .feature-comparison .check {
+  color: #40c463;
+}
+
+[data-theme="dark"] .feature-comparison .cross {
+  color: #f85149;
+}
+
+/* Mobile optimization */
+@media (max-width: 768px) {
+  .use-case-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .performance-table {
+    font-size: 0.8rem;
+  }
+  
+  .performance-table th,
+  .performance-table td {
+    padding: 0.5rem;
+  }
+  
+  .breadcrumb-nav {
+    font-size: 0.8rem;
+  }
+}
+
+/* Print styles for documentation */
+@media print {
+  .bd-sidebar-primary,
+  .bd-sidebar-secondary,
+  .bd-navbar,
+  .bd-footer {
+    display: none !important;
+  }
+  
+  .bd-main {
+    margin: 0 !important;
+    max-width: none !important;
+  }
+  
+  .bd-content {
+    padding: 0 !important;
+  }
+  
+  .highlight {
+    border: 1px solid #ddd;
+    page-break-inside: avoid;
+  }
+  
+  h1, h2, h3 {
+    page-break-after: avoid;
+  }
+}
+
+/* Accessibility improvements */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  z-index: 999;
+  padding: 0.5rem 1rem;
+  background: #000;
+  color: #fff;
+  text-decoration: none;
+}
+
+.skip-link:focus {
+  left: 0;
+  top: 0;
+}
+
+/* Focus indicators for better accessibility */
+.bd-content a:focus,
+.bd-toc a:focus,
+.bd-search input:focus {
+  outline: 2px solid #007acc;
+  outline-offset: 2px;
+}
+
+/* Reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Nabla 2026
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,193 +14,438 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
+"""Function transforms for the nabla module.
+
+This module provides JAX-like function transforms, starting with vmap
+for automatic vectorization over batch dimensions.
+
+vmap uses the nabla module's batch_dims mechanism:
+1. Prepares inputs by moving specified axes into batch_dims
+2. Calls the user function (ops work transparently with batch_dims)
+3. Restores outputs by moving batch_dims back to specified positions
+
+The axis specification supports JAX's "prefix pytree" semantics:
+- Scalar (int/None) broadcasts to all tensor leaves
+- Container must structurally match the corresponding input
+"""
+
+from __future__ import annotations
+
 from collections.abc import Callable
-from typing import Any, Union
+from dataclasses import dataclass
+from typing import Any, TypeVar, Union, TYPE_CHECKING
 
-from ..core.tensor import Tensor
-from .utils import (
-    _handle_args_consistently,
-    _map_pytree_with_axes,
-)
+if TYPE_CHECKING:
+    from ..core.tensor import Tensor
+
+# =============================================================================
+# Type Definitions
+# =============================================================================
+
+# Recursive type for axis specifications (JAX-style prefix pytrees)
+# - int: batch along this axis
+# - None: broadcast (don't batch)
+# - dict/list/tuple: per-element specification (must match input structure)
+AxisSpec = Union[int, None, dict[str, "AxisSpec"], list["AxisSpec"], tuple["AxisSpec", ...]]
+
+T = TypeVar("T")
 
 
-def _check_in_axes_size(tree: Any, axes: Any) -> int:
-    """Check that all non-None axes have the same size and return that size."""
-    batch_sizes = []
+# =============================================================================
+# Axis Specification Utilities
+# =============================================================================
 
-    def _collect_sizes(tree_part: Any, axes_part: Any) -> None:
-        if isinstance(tree_part, Tensor):
-            if axes_part is not None:
-                if len(tree_part.shape) == 0:
-                    raise ValueError(
-                        f"Cannot apply axis {axes_part} to scalar tensor with shape {tree_part.shape}. "
-                        f"Scalar tensors cannot be batched along a specific axis."
-                    )
-                axis = len(tree_part.shape) + axes_part if axes_part < 0 else axes_part
-                if axis >= len(tree_part.shape):
-                    raise ValueError(
-                        f"Axis {axes_part} out of bounds for tensor with shape {tree_part.shape}"
-                    )
-                batch_sizes.append(tree_part.shape[axis])
-        elif isinstance(tree_part, dict):
-            axes_map = axes_part if isinstance(axes_part, dict) else {k: axes_part for k in tree_part}
-            for k, v in tree_part.items():
-                _collect_sizes(v, axes_map.get(k))
-        elif isinstance(tree_part, (list, tuple)):
-            axes_list = axes_part if isinstance(axes_part, (list, tuple)) else [axes_part] * len(tree_part)
-            for t, a in zip(tree_part, axes_list):
-                _collect_sizes(t, a)
+def _is_leaf(obj: Any) -> bool:
+    """Check if obj is a leaf (non-container) in axis specification context."""
+    return not isinstance(obj, (dict, list, tuple))
 
-    _collect_sizes(tree, axes)
 
-    if not batch_sizes:
-        return 1
+def _normalize_axis(axis: int, ndim: int) -> int:
+    """Normalize negative axis and validate bounds."""
+    if axis >= 0:
+        if axis >= ndim:
+            raise ValueError(f"Axis {axis} out of bounds for {ndim}-dimensional tensor")
+        return axis
+    normalized = ndim + axis
+    if normalized < 0:
+        raise ValueError(f"Axis {axis} out of bounds for {ndim}-dimensional tensor")
+    return normalized
 
-    first_size = batch_sizes[0]
-    if not all(size == first_size for size in batch_sizes[1:]):
-        raise ValueError(
-            f"Inconsistent batch sizes along specified axes: got sizes {batch_sizes}. "
-            f"All non-None axes must have the same size."
-        )
-    return first_size
 
-def _batch_tensor(tensor: Tensor, axis: int | None, batch_size: int) -> Tensor:
-    """Process a single tensor for batching in vmap."""
-    from nabla.ops.unary import incr_batch_dim_ctr
-    from nabla.ops.view import (
-        broadcast_to,
-        move_axis_to_front,
-        move_axis_to_front_of_batch_dims,
-        unsqueeze,
-    )
-    if axis is None:
-        batched = unsqueeze(tensor, [0])
-        if batch_size > 1:
-            new_shape = (batch_size,) + tensor.shape
-            batched = broadcast_to(batched, new_shape)
-    else:
-        batched = move_axis_to_front(tensor, axis) if axis != 0 else tensor
-    
-    res = incr_batch_dim_ctr(batched)
-    return move_axis_to_front_of_batch_dims(res, -1)
-
-def _unbatch_tensor(tensor: Tensor, axis: int | None) -> Tensor:
-    """Process a single tensor for unbatching in vmap."""
-    from nabla.ops.unary import decr_batch_dim_ctr
-    from nabla.ops.view import (
-        move_axis_from_front,
-        move_axis_from_front_of_batch_dims,
-        squeeze,
-    )
-    tensor = move_axis_from_front_of_batch_dims(tensor, -1)
-    unbatched = decr_batch_dim_ctr(tensor)
-
-    if axis is None:
-        return squeeze(unbatched, [0])
-    return move_axis_from_front(unbatched, axis) if axis != 0 else unbatched
-
-def _batch_input_pytree(tree: Any, axes: Any, batch_size: int) -> Any:
-    """Prepare a pytree of inputs for batched execution using the generic mapper."""
-    return _map_pytree_with_axes(_batch_tensor, tree, axes, batch_size)
-
-def _unbatch_output_pytree(tree: Any, axes: Any) -> Any:
-    """Restore the original dimensions of a batched output pytree using the generic mapper."""
-    return _map_pytree_with_axes(_unbatch_tensor, tree, axes)
-
-def _broadcast_axis_spec(axis_spec: Any, num_items: int) -> tuple[Any, ...]:
-    """Broadcast axis specification to match the number of pytree items."""
-    if isinstance(axis_spec, (int, type(None))):
-        return (axis_spec,) * num_items
-    if isinstance(axis_spec, (list, tuple)):
-        if len(axis_spec) != num_items:
+def _broadcast_to_args(spec: AxisSpec, n: int) -> tuple[AxisSpec, ...]:
+    """Broadcast axis spec to match n function arguments."""
+    if isinstance(spec, (int, type(None))):
+        return (spec,) * n
+    if isinstance(spec, (list, tuple)):
+        if len(spec) != n:
             raise ValueError(
-                f"Axis specification length {len(axis_spec)} does not match "
-                f"number of items {num_items}"
+                f"in_axes/out_axes length ({len(spec)}) doesn't match "
+                f"number of arguments ({n})"
             )
-        return tuple(axis_spec)
-    raise TypeError(f"Invalid axis specification type: {type(axis_spec)}")
+        return tuple(spec)
+    if isinstance(spec, dict):
+        # Dict at top level applies to a single dict argument
+        if n == 1:
+            return (spec,)
+        raise TypeError(
+            f"Dict axis spec with {n} args - use tuple/list for multiple args, "
+            f"or pass a single dict argument"
+        )
+    raise TypeError(f"Invalid axis specification type: {type(spec).__name__}")
 
+
+# =============================================================================
+# Prefix Pytree Operations
+# =============================================================================
+
+def _map_prefix(
+    fn: Callable[..., T],
+    tree: Any,
+    prefix: AxisSpec,
+    *extra_args: Any,
+) -> Any:
+    """Map fn over tree's Tensor leaves with corresponding axis from prefix.
+    
+    Implements JAX's prefix pytree semantics:
+    - If prefix is a leaf (int/None), it broadcasts to all tensor leaves
+    - If prefix is a container, it must structurally match tree
+    """
+    from ..core.tensor import Tensor
+    
+    if isinstance(tree, Tensor):
+        return fn(tree, prefix, *extra_args)
+    
+    # If prefix is a leaf, broadcast to all tensor leaves in tree
+    if _is_leaf(prefix):
+        if isinstance(tree, dict):
+            return {k: _map_prefix(fn, v, prefix, *extra_args) for k, v in tree.items()}
+        if isinstance(tree, (list, tuple)):
+            return type(tree)([_map_prefix(fn, t, prefix, *extra_args) for t in tree])
+        return tree  # Non-tensor leaf passes through
+    
+    # Both are containers - recurse with matching structure
+    if isinstance(tree, dict) and isinstance(prefix, dict):
+        # Validate keys match
+        missing = set(tree.keys()) - set(prefix.keys())
+        if missing:
+            raise ValueError(f"Axis spec missing keys: {missing}")
+        return {k: _map_prefix(fn, v, prefix[k], *extra_args) for k, v in tree.items()}
+    
+    if isinstance(tree, (list, tuple)) and isinstance(prefix, (list, tuple)):
+        if len(tree) != len(prefix):
+            raise ValueError(
+                f"Axis spec length ({len(prefix)}) doesn't match "
+                f"tree length ({len(tree)})"
+            )
+        return type(tree)([_map_prefix(fn, t, a, *extra_args) for t, a in zip(tree, prefix)])
+    
+    return tree  # Non-tensor leaf
+
+
+def _collect_from_prefix(
+    fn: Callable[[Any, AxisSpec], T | None],
+    tree: Any,
+    prefix: AxisSpec,
+) -> list[T]:
+    """Collect non-None results from fn applied to all (tensor, axis) pairs."""
+    from ..core.tensor import Tensor
+    results: list[T] = []
+    
+    def _collect(tree_part: Any, prefix_part: AxisSpec) -> None:
+        if isinstance(tree_part, Tensor):
+            result = fn(tree_part, prefix_part)
+            if result is not None:
+                results.append(result)
+        elif _is_leaf(prefix_part):
+            if isinstance(tree_part, dict):
+                for v in tree_part.values():
+                    _collect(v, prefix_part)
+            elif isinstance(tree_part, (list, tuple)):
+                for t in tree_part:
+                    _collect(t, prefix_part)
+        elif isinstance(tree_part, dict) and isinstance(prefix_part, dict):
+            for k, v in tree_part.items():
+                if k in prefix_part:
+                    _collect(v, prefix_part[k])
+        elif isinstance(tree_part, (list, tuple)) and isinstance(prefix_part, (list, tuple)):
+            for t, a in zip(tree_part, prefix_part):
+                _collect(t, a)
+    
+    _collect(tree, prefix)
+    return results
+
+
+# =============================================================================
+# Batch Size Validation
+# =============================================================================
+
+def _get_batch_size(tensor: Tensor, axis: AxisSpec):
+    """Get batch dimension for a single tensor/axis pair.
+    
+    Returns the Dim object (StaticDim or SymbolicDim) at the specified axis.
+    Returns None if axis is None.
+    """
+    if axis is None:
+        return None
+    if not isinstance(axis, int):
+        raise TypeError(f"Expected int or None for axis at tensor leaf, got {type(axis).__name__}")
+    
+    shape = tensor.shape  # graph.Shape
+    if shape.rank == 0:
+        raise ValueError(
+            f"Cannot batch scalar tensor (rank=0) along axis {axis}. "
+            "Use in_axes=None to broadcast scalars."
+        )
+    normalized = _normalize_axis(axis, shape.rank)
+    return shape[normalized]  # Returns Dim object
+
+
+def _validate_batch_sizes(args: tuple, in_axes: tuple[AxisSpec, ...], axis_size: int | None):
+    """Validate batch dimensions and return the common batch Dim.
+    
+    Returns:
+        Dim object (StaticDim or SymbolicDim) representing the batch dimension.
+    """
+    from max.graph.dim import StaticDim
+    
+    dims = []
+    for arg, ax in zip(args, in_axes):
+        dims.extend(_collect_from_prefix(_get_batch_size, arg, ax))
+    
+    # Filter None values (from in_axes=None) 
+    dims = [d for d in dims if d is not None]
+    
+    if not dims:
+        # All axes are None - use axis_size or error
+        if axis_size is not None:
+            return StaticDim(axis_size)
+        raise ValueError(
+            "All in_axes are None (broadcast). Must specify axis_size "
+            "to determine batch dimension size."
+        )
+    
+    # Check consistency - Dim objects support equality!
+    first = dims[0]
+    if not all(d == first for d in dims):
+        raise ValueError(f"Inconsistent batch dimensions along specified axes: {dims}")
+    
+    # If axis_size provided, must match
+    if axis_size is not None:
+        expected = StaticDim(axis_size)
+        if first != expected:
+            raise ValueError(f"axis_size={axis_size} doesn't match inferred batch dim {first}")
+    
+    return first  # Return the Dim (static or symbolic)
+
+
+# =============================================================================
+# Batching Primitives
+# =============================================================================
+
+def _batch_tensor(tensor: Tensor, axis: AxisSpec, batch_dim) -> Tensor:
+    """Prepare tensor for batched execution by moving axis to batch_dims.
+    
+    Follows the exact same logic as nabla/transforms/vmap.py:_batch_tensor.
+    
+    The key insight: after adding/moving an axis to batch_dims, we need to 
+    ensure it ends up at physical position 0 (the outermost batch position).
+    This is critical for nested vmap to work correctly.
+    
+    Args:
+        tensor: Input tensor
+        axis: Axis specification (None for broadcast, int for batched axis)
+        batch_dim: Dim object (StaticDim or SymbolicDim) for the batch dimension
+    """
+    from ..ops import view as l_ops
+    from ..ops import _physical as p_ops
+    from max.graph.dim import StaticDim
+    
+    old_batch_dims = tensor._impl.batch_dims
+    
+    if axis is None:
+        # Broadcast case: unsqueeze at LOGICAL axis 0, then broadcast
+        # This adds a dimension at physical position old_batch_dims
+        t = l_ops.unsqueeze(tensor, axis=0)  # LOGICAL unsqueeze
+        
+        # Build target LOGICAL shape with Dim object
+        target_shape = (batch_dim,) + tuple(tensor.shape)
+        
+        # Broadcast if needed
+        needs_broadcast = not (isinstance(batch_dim, StaticDim) and batch_dim.dim == 1)
+        if needs_broadcast:
+            t = l_ops.broadcast_to(t, shape=target_shape)  # LOGICAL broadcast
+        
+        # Now the new dim is at physical position old_batch_dims (front of logical)
+        # Increment batch_dims - the new dim becomes the LAST batch dim
+        t = p_ops.incr_batch_dims(t)
+        
+        # Move the last batch dim (at physical position old_batch_dims) to position 0
+        if old_batch_dims > 0:
+            t = p_ops.moveaxis(t, source=old_batch_dims, destination=0)
+        
+        return t
+    
+    # Batched axis case: move LOGICAL axis to front of LOGICAL shape
+    if axis != 0:
+        # Normalize negative axis
+        logical_rank = len(tensor.shape)
+        norm_axis = axis if axis >= 0 else logical_rank + axis
+        
+        # Translate to physical axis
+        physical_axis = old_batch_dims + norm_axis
+        
+        # Move to front of logical (= position old_batch_dims in physical)
+        t = p_ops.moveaxis(tensor, source=physical_axis, destination=old_batch_dims)
+    else:
+        t = tensor
+    
+    # Now the batched axis is at physical position old_batch_dims (front of logical)
+    # Increment batch_dims - it becomes the LAST batch dim
+    t = p_ops.incr_batch_dims(t)
+    
+    # Move the last batch dim (at physical position old_batch_dims) to position 0
+    if old_batch_dims > 0:
+        t = p_ops.moveaxis(t, source=old_batch_dims, destination=0)
+    
+    return t
+
+
+def _unbatch_tensor(tensor: Tensor, axis: AxisSpec) -> Tensor:
+    """Restore tensor after batched execution by moving batch_dims to axis.
+    
+    Follows the exact same logic as nabla/transforms/vmap.py:_unbatch_tensor.
+    
+    The reverse of _batch_tensor: moves the outermost batch dim (position 0)
+    back to its original logical position.
+    """
+    from ..ops import view as l_ops
+    from ..ops import _physical as p_ops
+    
+    current_batch_dims = tensor._impl.batch_dims
+    
+    # First, move the front batch dim (position 0) to the last batch position
+    # This reverses the final step of _batch_tensor
+    if current_batch_dims > 1:
+        # Move position 0 to position current_batch_dims - 1
+        t = p_ops.moveaxis(tensor, source=0, destination=current_batch_dims - 1)
+    else:
+        t = tensor
+    
+    # Now decrement batch_dims - the last batch dim becomes front of logical
+    t = p_ops.decr_batch_dims(t)
+    
+    if axis is None:
+        # Squeeze out the broadcast dimension at LOGICAL axis 0
+        return l_ops.squeeze(t, axis=0)  # LOGICAL squeeze
+    
+    # Move front of logical to target LOGICAL axis position
+    if axis != 0:
+        new_batch_dims = t._impl.batch_dims
+        logical_rank = len(t.shape)
+        
+        # Normalize negative axis
+        norm_axis = axis if axis >= 0 else logical_rank + axis
+        
+        # The axis is currently at physical position new_batch_dims (front of logical)
+        # Move it to physical position new_batch_dims + norm_axis
+        source = new_batch_dims
+        destination = new_batch_dims + norm_axis
+        t = p_ops.moveaxis(t, source=source, destination=destination)
+    
+    return t
+
+
+# =============================================================================
+# Main Transform: vmap
+# =============================================================================
 
 def vmap(
-    func: Callable | None = None,
-    in_axes: Union[int, None, list, tuple] = 0,
-    out_axes: Union[int, None, list, tuple] = 0,
-) -> Callable[..., Any]:
-    """Creates a function that maps a function over axes of pytrees.
-
-    Parameters
-    ----------
-    func : Callable or None
-        Function to vectorize
-    in_axes : int or None or list or tuple, optional
-        Specifies which axes to map over for inputs. Can be:
-        - int: axis to map over (default 0)
-        - None: broadcast (don't map)
-        - list/tuple: per-input axis specification
-    out_axes : int or None or list or tuple, optional
-        Specifies which axes to map over for outputs (default 0)
-
-    Returns
-    -------
-    Callable
-        Vectorized function that maps func over the specified axes
-
-    Examples
-    --------
-    >>> import nabla as nb
-    >>> def square(x):
-    ...     return x ** 2
-    >>> x = nb.tensor([[1.0, 2.0], [3.0, 4.0]])
-    >>> vmap_square = nb.vmap(square)
-    >>> result = vmap_square(x)
+    func: Callable[..., T] | None = None,
+    in_axes: AxisSpec = 0,
+    out_axes: AxisSpec = 0,
+    axis_size: int | None = None,
+) -> Callable[..., T]:
+    """Vectorize a function over batch dimensions.
     
-    Multiple inputs with different axes:
+    Creates a function that maps `func` over axes of its inputs, similar to
+    JAX's vmap. Uses the nabla module's batch_dims mechanism for transparent
+    vectorization without explicit loops.
     
-    >>> def multiply(x, y):
-    ...     return x * y
-    >>> x = nb.tensor([[1.0, 2.0], [3.0, 4.0]])
-    >>> y = nb.tensor([10.0, 20.0])
-    >>> result = nb.vmap(multiply, in_axes=(0, None))(x, y)
+    Args:
+        func: Function to vectorize. If None, returns a decorator.
+        in_axes: Axis specification for inputs:
+            - int: Same axis for all inputs (default 0)
+            - None: Broadcast all inputs (don't map)
+            - tuple/list: Per-argument specification
+            Each element can be a scalar (broadcasts to tensor leaves) or
+            a pytree matching the argument's structure.
+        out_axes: Axis specification for outputs (same format as in_axes).
+        axis_size: Optional explicit batch size. Required when all in_axes
+            are None (pure broadcast). If provided with batched inputs,
+            must match the inferred batch size.
     
-    As a decorator:
+    Returns:
+        Vectorized function.
     
-    >>> @nb.vmap
-    ... def process_batch(x):
-    ...     return x ** 2 + 1
-    >>> batch = nb.tensor([1.0, 2.0, 3.0, 4.0])
-    >>> result = process_batch(batch)
+    Examples:
+        >>> # Basic usage - maps over axis 0
+        >>> @vmap
+        ... def square(x): return x * x
+        >>> square(Tensor.arange(0, 5))
+        
+        >>> # Batched + broadcast inputs
+        >>> vmap(add, in_axes=(0, None))(batched_x, scalar_y)
+        
+        >>> # Different input/output axes
+        >>> vmap(fn, in_axes=1, out_axes=2)(x)
+        
+        >>> # Pytree inputs with per-leaf axes
+        >>> vmap(process, in_axes={'w': 0, 'b': None})(params)
+        
+        >>> # Pure broadcast with explicit axis_size
+        >>> vmap(fn, in_axes=None, axis_size=10)(scalar)
+        
+        >>> # Nested vmap
+        >>> vmap(vmap(fn))(x_with_two_batch_dims)
     """
+    # Support decorator usage: @vmap or @vmap(in_axes=...)
     if func is None:
-        return lambda f: vmap(f, in_axes=in_axes, out_axes=out_axes)
-
-    def vectorized_func(*args: Any) -> Any:
-        actual_args, is_list_style = _handle_args_consistently(args)
-        if not actual_args:
+        return lambda f: vmap(f, in_axes=in_axes, out_axes=out_axes, axis_size=axis_size)
+    
+    def vectorized(*args: Any) -> Any:
+        if not args:
             raise ValueError("vmap requires at least one input argument.")
-
-        structured_in_axes = _broadcast_axis_spec(in_axes, len(actual_args))
-        batch_size = _check_in_axes_size(actual_args, structured_in_axes)
-
-        batched_args = _batch_input_pytree(actual_args, structured_in_axes, batch_size)
-
-        outputs = func(batched_args) if is_list_style else func(*batched_args)
-
-        outputs_list, is_single_output = (
-            ([outputs], True)
-            if not isinstance(outputs, (list, tuple))
-            else (list(outputs), False)
+        
+        # Broadcast in_axes to match positional args
+        in_ax = _broadcast_to_args(in_axes, len(args))
+        
+        # Validate and get batch dimension (as Dim object)
+        batch_dim = _validate_batch_sizes(args, in_ax, axis_size)
+        
+        # Batch all inputs
+        batched = tuple(
+            _map_prefix(_batch_tensor, arg, ax, batch_dim)
+            for arg, ax in zip(args, in_ax)
         )
-        structured_out_axes = _broadcast_axis_spec(out_axes, len(outputs_list))
-        unbatched_outputs = _unbatch_output_pytree(outputs_list, structured_out_axes)
+        
+        # Execute function with batched inputs
+        outputs = func(*batched)
+        
+        # Normalize outputs for uniform processing
+        is_single = not isinstance(outputs, (list, tuple))
+        out_list = [outputs] if is_single else list(outputs)
+        out_ax = _broadcast_to_args(out_axes, len(out_list))
+        
+        # Unbatch all outputs
+        unbatched = [
+            _map_prefix(_unbatch_tensor, out, ax)
+            for out, ax in zip(out_list, out_ax)
+        ]
+        
+        # Return in original format
+        return unbatched[0] if is_single else type(outputs)(unbatched)
+    
+    return vectorized
 
-        return unbatched_outputs[0] if is_single_output else tuple(unbatched_outputs)
 
-    return vectorized_func
-
-
-def xmap(
-    func: Callable | None = None,
-    in_axes: Union[int, None, list, tuple] = 0,
-    out_axes: Union[int, None, list, tuple] = 0,
-) -> Callable[..., Any]:
-    pass
+__all__ = ["vmap", "AxisSpec"]

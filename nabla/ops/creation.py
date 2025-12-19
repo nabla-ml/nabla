@@ -1,1340 +1,392 @@
-# ===----------------------------------------------------------------------===
-# Nabla 2025
+# ===----------------------------------------------------------------------=== #
+# Nabla 2026
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# http://www.apache.org/licenses/LICENSE-2.0
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# ===----------------------------------------------------------------------===
+# ===----------------------------------------------------------------------=== #
 
-"""Tensor creation and initialization operations."""
+"""Creation operations for tensors.
+
+All creation ops follow the Operation ABC pattern. Since creation ops have no
+Tensor inputs, their autodiff rules follow JAX semantics:
+- VJP: Returns empty tuple (no inputs to differentiate)
+- JVP: Returns zero tangents (output is constant w.r.t. any input)
+
+This allows creation ops to appear in traced computations without breaking
+autodiff - they are simply treated as constants.
+"""
 
 from __future__ import annotations
 
-import numpy as np
-from max.driver import CPU, Device
-from max.driver import Tensor as MAXTensor
+from typing import Any
+
+from max.driver import Device
 from max.dtype import DType
-from max.graph import DeviceRef, TensorType, TensorValue, ops
+from max.graph import DeviceRef, ShapeLike, TensorType, TensorValue, ops
+from max.graph.ops.constant import NestedArray, Number
 
-from ..core.tensor import Tensor, Shape
 from .operation import Operation
-from .view import broadcast_batch_dims, broadcast_to
-
-# Public API
-__all__ = [
-    "tensor",
-    "arange",
-    "ndarange",
-    "ndarange_like",
-    "randn",
-    "randn_like",
-    "rand",
-    "rand_like",
-    "zeros",
-    "ones",
-    "zeros_like",
-    "ones_like",
-    "full_like",
-    "xavier_uniform",
-    "xavier_normal",
-    "he_uniform",
-    "he_normal",
-    "lecun_uniform",
-    "lecun_normal",
-    "glorot_uniform",
-    "triu",
-]
-
-# Constants
-_DEFAULT_CPU = CPU()
-_DEFAULT_SEED = 0
-_DEFAULT_DTYPE = DType.float32
+from ..core.context import defaults
 
 
-def _validate_shape(shape: Shape) -> None:
-    """Validate shape parameter."""
-    if not isinstance(shape, tuple):
-        raise TypeError(f"Shape must be a tuple, got {type(shape)}")
+# =============================================================================
+# Creation operation classes (inherit directly from Operation)
+#
+# Creation ops produce new tensors from non-Tensor arguments (shapes, values,
+# random seeds, etc). Their autodiff rules:
+# - VJP: Returns empty gradients (no Tensor inputs to differentiate)
+# - JVP: Returns zero tangents (output is constant w.r.t. any input)
+#
+# These rules are NOT implemented here - they will be added when needed,
+# potentially with operation-specific semantics (e.g., reparameterization
+# for random ops).
+# =============================================================================
 
-
-def _validate_numeric(value: float | int, name: str) -> None:
-    """Validate numeric parameter."""
-    if not isinstance(value, int | float):
-        raise TypeError(f"{name} must be numeric, got {type(value)}")
-
-
-def _create_filled_tensor(
-    shape: Shape,
-    fill_value: float,
-    dtype: DType = _DEFAULT_DTYPE,
-    device: Device = _DEFAULT_CPU,
-    batch_dims: Shape = (),
-    traced: bool = False,
-    stage_realization: bool = False,
-) -> Tensor:
-    """Create tensor filled with constant value using broadcasting."""
-    _validate_shape(shape)
-    _validate_shape(batch_dims)
-    # WORKAROUND: Handle scalar boolean tensors (MAX tensor bug)
-    # Workaround for MAX boolean tensor bug: ANY boolean tensor creation fails in MAX
-    # when creating the scalar seed value, so we need special handling for all boolean cases
-    if dtype == DType.bool:
-        # Create boolean tensor by starting with float and converting
-        try:
-            # Try creating (1,) boolean tensor first
-            scalar_1d = Tensor.from_numpy(
-                np.array([fill_value], dtype=DType.to_numpy(dtype))
-            ).to(device)
-            scalar_1d.traced = traced
-            scalar_1d.stage_realization = stage_realization
-
-            if not shape:
-                # For scalar boolean, reshape (1,) to ()
-                from .view import reshape
-
-                tensor = reshape(scalar_1d, ())
-            else:
-                # For non-scalar boolean, broadcast (1,) to target shape
-                tensor = broadcast_to(scalar_1d, shape)
-        except Exception:
-            # Fallback: create as float and convert to bool
-            scalar_float = Tensor.from_numpy(
-                np.array([fill_value], dtype=np.float32)
-            ).to(device)
-            scalar_float.traced = traced
-            scalar_float.stage_realization = stage_realization
-
-            if not shape:
-                # Convert scalar float to scalar bool
-                tensor = scalar_float.astype(dtype)
-            else:
-                # Broadcast float to shape, then convert to bool
-                float_tensor = broadcast_to(scalar_float, shape)
-                tensor = float_tensor.astype(dtype)
-    else:
-        # Original implementation for non-boolean types
-        scalar = Tensor.from_numpy(np.array(fill_value, dtype=DType.to_numpy(dtype))).to(
-            device
-        )
-        scalar.traced = traced
-        scalar.stage_realization = stage_realization
-
-        if not shape:
-            tensor = scalar
-        else:
-            tensor = broadcast_to(scalar, shape)
-
-    if batch_dims:
-        tensor = broadcast_batch_dims(tensor, batch_dims)
-
-    return tensor
-
-
-class RandomOp(Operation):
-    """Base class for random number generators."""
-
-    def __init__(
-        self, shape: Shape, dtype: DType, device: Device, seed: int, op_name: str
-    ):
-        super().__init__(f"rng_{op_name}[shape={shape}]")
-        self.shape = shape
-        self.dtype = dtype
-        self.logical_device = device
-        self.seed = seed
-
-        # Validate common parameters
-        _validate_shape(shape)
-        if not isinstance(seed, int):
-            raise TypeError(f"Seed must be int, got {type(seed)}")
-
-    def forward(self, *args: Tensor) -> Tensor:
-        """Forward pass for creation operations."""
-        if args:
-            raise ValueError(
-                f"Creation operation requires 0 arguments, got {len(args)}"
-            )
-
-        res = Tensor(
-            shape=self.shape,
-            dtype=self.dtype,
-            device=self.logical_device,
-            materialize=False,
-            name=self.name,
-        )
-
-        res.set_maxpr(self.maxpr)
-        res.vjp_rule = self.vjp_rule
-        res.jvp_rule = self.jvp_rule
-        res.custom_kernel_path = self.custom_kernel_path()
-
-        if not res.stage_realization:
-            self.eagerxpr([], res)
-
-        res.creator_op = self
-        return res
-
-    def compute_output_shape(self, *input_shapes) -> tuple:
-        return self.shape
-
-    def vjp_rule(
-        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
-    ) -> list[Tensor]:
-        raise NotImplementedError("VJP for random creation operations is not defined.")
-
-    def jvp_rule(
-        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
-    ) -> Tensor:
-        raise NotImplementedError("JVP for random creation operations is not defined.")
-
-
-class RandNOp(RandomOp):
-    """Normal distribution random number generator."""
-
-    def __init__(
+class ConstantOp(Operation):
+    """Create a tensor from a constant value (number, array, nested list)."""
+    
+    @property
+    def name(self) -> str:
+        return "constant"
+    
+    def maxpr(
         self,
-        shape: Shape,
-        dtype: DType = _DEFAULT_DTYPE,
-        mean: float = 0.0,
-        std: float = 1.0,
-        device: Device = _DEFAULT_CPU,
-        seed: int = _DEFAULT_SEED,
-    ):
-        super().__init__(shape, dtype, device, seed, "normal")
-        self.mean = mean
-        self.std = std
-
-        _validate_numeric(mean, "Mean")
-        _validate_numeric(std, "Std")
-        if std <= 0:
-            raise ValueError(f"Std must be positive, got {std}")
-
-    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
-        ops.random.set_seed(self.seed)
-        output.tensor_value = ops.random.normal(
-            TensorType(
-                output.dtype, output.shape, DeviceRef.from_device(output.logical_device)
-            ),
-            mean=self.mean,
-            std=self.std,
-        )
-
-    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
-        np.random.seed(self.seed)
-        np_result = np.random.normal(
-            loc=self.mean, scale=self.std, size=output.shape
-        ).astype(DType.to_numpy(output.dtype))
-        output.impl_(MAXTensor.from_numpy(np_result).to(output.logical_device))
+        value: NestedArray | Number,
+        dtype: DType,
+        device: Device,
+    ) -> TensorValue:
+        return ops.constant(value, dtype, device)
 
 
-class RandUniformOp(RandomOp):
-    """Uniform distribution random number generator."""
-
-    def __init__(
+class FullOp(Operation):
+    """Create a tensor filled with a constant value."""
+    
+    @property
+    def name(self) -> str:
+        return "full"
+    
+    def maxpr(
         self,
-        shape: Shape,
-        dtype: DType = _DEFAULT_DTYPE,
-        lower: float = 0.0,
-        upper: float = 1.0,
-        device: Device = _DEFAULT_CPU,
-        seed: int = _DEFAULT_SEED,
-    ):
-        super().__init__(shape, dtype, device, seed, "uniform")
-        self.lower = lower
-        self.upper = upper
-
-        _validate_numeric(lower, "Lower bound")
-        _validate_numeric(upper, "Upper bound")
-        if upper <= lower:
-            raise ValueError(
-                f"Upper bound must be greater than lower bound, got {lower} and {upper}"
-            )
-
-    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
-        ops.random.set_seed(self.seed)
-        output.tensor_value = ops.random.uniform(
-            TensorType(
-                output.dtype, output.shape, DeviceRef.from_device(output.logical_device)
-            ),
-            range=(self.lower, self.upper),
-        )
-
-    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
-        np.random.seed(self.seed)
-        np_result = np.random.uniform(
-            low=self.lower, high=self.upper, size=output.shape
-        ).astype(DType.to_numpy(output.dtype))
-        output.impl_(MAXTensor.from_numpy(np_result).to(output.logical_device))
+        shape: ShapeLike,
+        value: Number,
+        dtype: DType,
+        device: Device,
+    ) -> TensorValue:
+        const = ops.constant(value, dtype, device)
+        return ops.broadcast_to(const, shape)
 
 
-def tensor(
-    data: list | np.ndarray | float | int,
-    dtype: DType = _DEFAULT_DTYPE,
-    device: Device = _DEFAULT_CPU,
-    batch_dims: Shape = (),
-    traced: bool = False,
-) -> Tensor:
-    """Creates an tensor from a Python list, NumPy tensor, or scalar.
+class ZerosOp(Operation):
+    """Create a tensor filled with zeros."""
+    
+    @property
+    def name(self) -> str:
+        return "zeros"
+    
+    def maxpr(
+        self,
+        shape: ShapeLike,
+        dtype: DType,
+        device: Device,
+    ) -> TensorValue:
+        const = ops.constant(0, dtype, device)
+        return ops.broadcast_to(const, shape)
 
-    This function is the primary way to create a Nabla tensor from existing
-    data. It converts the input data into a Nabla tensor on the specified
-    device and with the given data type.
 
-    Parameters
-    ----------
-    data : list | np.ndarray | float | int
-        The input data to convert to an tensor.
-    dtype : DType, optional
-        The desired data type for the tensor. Defaults to DType.float32.
-    device : Device, optional
-        The computational device where the tensor will be stored. Defaults
-        to the CPU.
-    batch_dims : Shape, optional
-        Specifies leading dimensions to be treated as batch dimensions.
-        Defaults to an empty tuple.
-    traced : bool, optional
-        Whether the operation should be traced in the graph. Defaults to False.
-
-    Returns
-    -------
-    Tensor
-        A new Nabla tensor containing the provided data.
-
-    Examples
-    --------
-    >>> import nabla as nb
-    >>> import numpy as np
-    >>> # Create from a Python list
-    >>> nb.tensor([1, 2, 3])
-    Tensor([1, 2, 3], dtype=int32)
-    <BLANKLINE>
-    >>> # Create from a NumPy tensor
-    >>> np_arr = np.array([[4.0, 5.0], [6.0, 7.0]])
-    >>> nb.tensor(np_arr)
-    Tensor([[4., 5.],
-           [6., 7.]], dtype=float32)
-    <BLANKLINE>
-    >>> # Create a scalar tensor
-    >>> nb.tensor(100, dtype=nb.DType.int64)
-    Tensor(100, dtype=int64)
-    """
-    if isinstance(data, list):
-        np_data = np.array(data, dtype=DType.to_numpy(dtype))
-    elif isinstance(data, np.ndarray):
-        np_data = data.astype(DType.to_numpy(dtype))
-    elif isinstance(data, int | float):
-        # Handle scalar values
-        np_data = np.array(data, dtype=DType.to_numpy(dtype))
-    elif isinstance(data, (np.bool_, bool)):
-        # Handle numpy boolean and Python boolean scalars
-        np_data = np.array(data, dtype=DType.to_numpy(dtype))
-    else:
-        raise TypeError(
-            f"Data must be a list, numpy tensor, or scalar, got {type(data)}"
-        )
-    # Special handling for boolean scalar tensors (MAX bug workaround)
-    if np_data.shape == () and dtype == DType.bool:
-        # For scalar boolean, create as float and convert
-        float_tensor = Tensor.from_numpy(np_data.astype(np.float32)).to(device)
-        float_tensor.traced = traced
-        arr = float_tensor.astype(DType.bool)
-
-    else:
-        arr = Tensor.from_numpy(np_data).to(device)
-        arr.traced = traced
-
-    return broadcast_batch_dims(arr, batch_dims) if batch_dims else arr
+class OnesOp(Operation):
+    """Create a tensor filled with ones."""
+    
+    @property
+    def name(self) -> str:
+        return "ones"
+    
+    def maxpr(
+        self,
+        shape: ShapeLike,
+        dtype: DType,
+        device: Device,
+    ) -> TensorValue:
+        const = ops.constant(1, dtype, device)
+        return ops.broadcast_to(const, shape)
 
 
 class ArangeOp(Operation):
-    """Operation to create a 1D tensor with evenly spaced values."""
-
-    def __init__(
+    """Create a tensor with evenly spaced values."""
+    
+    @property
+    def name(self) -> str:
+        return "arange"
+    
+    def maxpr(
         self,
-        start: float | int,
-        stop: float | int,
-        step: float | int,
+        start: int,
+        stop: int,
+        step: int,
         dtype: DType,
         device: Device,
-    ):
-        super().__init__(f"arange[start={start},stop={stop},step={step}]")
-        self.start = start
-        self.stop = stop
-        self.step = step
-        self.dtype = dtype
-        self.logical_device = device
-
-        # Pre-compute the output shape using numpy's robust implementation
-        # This handles all edge cases like float steps, negative steps, etc.
-        self._np_arange_for_shape = np.arange(
-            start, stop, step, dtype=DType.to_numpy(dtype)
-        )
-        self.shape = self._np_arange_for_shape.shape
-
-    def forward(self, *args: Tensor) -> Tensor:
-        """Forward pass for the arange creation operation."""
-        if args:
-            raise ValueError(
-                f"Creation operation 'arange' requires 0 arguments, got {len(args)}"
-            )
-
-        res = Tensor(
-            shape=self.shape,
-            dtype=self.dtype,
-            device=self.logical_device,
-            materialize=False,
-            name=self.name,
-        )
-
-        res.set_maxpr(self.maxpr)
-        res.vjp_rule = self.vjp_rule
-        res.jvp_rule = self.jvp_rule
-
-        if not res.stage_realization:
-            self.eagerxpr([], res)
-
-        res.creator_op = self
-        return res
-
-    def compute_output_shape(self, *input_shapes) -> tuple:
-        return self.shape
-
-    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
-        """Graph-mode execution using max.ops.arange."""
-        # This assumes an equivalent ops.arange exists in the MAX graph library.
-        # This is a common and expected operation for a backend.
-        output.tensor_value = ops.range(
-            start=self.start,
-            stop=self.stop,
-            step=self.step,
-            dtype=output.dtype,
-            device=DeviceRef.from_device(output.logical_device),
-        )
-
-    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
-        """Eager-mode execution using numpy."""
-        # We can reuse the numpy tensor we created for the shape calculation
-        output.impl_(
-            MAXTensor.from_numpy(self._np_arange_for_shape).to(output.logical_device)
-        )
-
-    def vjp_rule(
-        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
-    ) -> list[Tensor]:
-        # The arange operation does not depend on any Tensor inputs,
-        # so its gradient is not defined in this context.
-        raise NotImplementedError("VJP for 'arange' creation operation is not defined.")
-
-    def jvp_rule(
-        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
-    ) -> Tensor:
-        # The arange operation does not depend on any Tensor inputs,
-        # so its gradient is not defined in this context.
-        raise NotImplementedError("JVP for 'arange' creation operation is not defined.")
+    ) -> TensorValue:
+        return ops.range(start, stop, step, dtype=dtype, device=device)
 
 
-def arange(
-    start: int | float,
-    stop: int | float | None = None,
-    step: int | float | None = None,
-    dtype: DType = _DEFAULT_DTYPE,
-    device: Device = _DEFAULT_CPU,
+# =============================================================================
+# Random creation ops
+# =============================================================================
+
+class UniformOp(Operation):
+    """Create a tensor with uniform random values."""
+    
+    @property
+    def name(self) -> str:
+        return "uniform"
+    
+    def maxpr(
+        self,
+        shape: ShapeLike,
+        low: float,
+        high: float,
+        dtype: DType,
+        device: Device,
+    ) -> TensorValue:
+        tensor_type = TensorType(dtype, shape, device=DeviceRef.from_device(device))
+        return ops.random.uniform(tensor_type, range=(low, high))
+
+
+class GaussianOp(Operation):
+    """Create a tensor with Gaussian (normal) random values."""
+    
+    @property
+    def name(self) -> str:
+        return "gaussian"
+    
+    def maxpr(
+        self,
+        shape: ShapeLike,
+        mean: float,
+        std: float,
+        dtype: DType,
+        device: Device,
+    ) -> TensorValue:
+        tensor_type = TensorType(dtype, shape, device=DeviceRef.from_device(device))
+        return ops.random.gaussian(tensor_type, mean=mean, std=std)
+
+
+# =============================================================================
+# Singleton instances
+# =============================================================================
+
+_constant_op = ConstantOp()
+_full_op = FullOp()
+_zeros_op = ZerosOp()
+_ones_op = OnesOp()
+_arange_op = ArangeOp()
+_uniform_op = UniformOp()
+_gaussian_op = GaussianOp()
+
+
+# =============================================================================
+# Public API functions
+# =============================================================================
+
+def constant(
+    value: NestedArray | Number,
+    *,
+    dtype: DType | None = None,
+    device: Device | None = None,
+):
+    """Create a tensor from a constant value.
+    
+    Args:
+        value: A number, numpy array, or nested list/tuple of numbers.
+        dtype: Data type (default: float32).
+        device: Device to create tensor on (default: CPU).
+        
+    Returns:
+        A Tensor containing the constant value.
+    """
+    dtype, device = defaults(dtype, device)
+    return _constant_op(value, dtype, device)
+
+
+def full(
+    shape: ShapeLike,
+    value: Number,
+    *,
+    dtype: DType | None = None,
+    device: Device | None = None,
     traced: bool = False,
-    batch_dims: Shape = (),
-    stage_realization: bool = False,
-) -> Tensor:
-    """Returns evenly spaced values within a given interval.
-
-    Values are generated within the half-open interval `[start, stop)`.
-    In other words, the interval includes `start` but excludes `stop`.
-    This function follows the JAX/NumPy `arange` API.
-
-    Parameters
-    ----------
-    start : int | float
-        Start of interval. If `stop` is None, `start` is treated as `stop`
-        and the starting value is 0.
-    stop : int | float, optional
-        End of interval. The interval does not include this value.
-        Defaults to None.
-    step : int | float, optional
-        Spacing between values. The default step size is 1.
-    dtype : DType, optional
-        The data type of the output tensor. Defaults to DType.float32.
-    device : Device, optional
-        The device to place the tensor on. Defaults to the CPU.
-    traced : bool, optional
-        Whether the operation should be traced in the graph. Defaults to False.
-    batch_dims : Shape, optional
-        Specifies leading dimensions to be treated as batch dimensions.
-        Defaults to an empty tuple.
-    stage_realization : bool, optional
-        Whether to stage realization during JIT compilation. Defaults to False.
-
-    Returns
-    -------
-    Tensor
-        A 1D tensor of evenly spaced values.
-
-    Examples
-    --------
-    >>> import nabla as nb
-    >>> # nb.arange(stop)
-    >>> nb.arange(5)
-    Tensor([0., 1., 2., 3., 4.], dtype=float32)
-    <BLANKLINE>
-    >>> # nb.arange(start, stop)
-    >>> nb.arange(5, 10)
-    Tensor([5., 6., 7., 8., 9.], dtype=float32)
-    <BLANKLINE>
-    >>> # nb.arange(start, stop, step)
-    >>> nb.arange(10, 20, 2, dtype=nb.DType.int32)
-    Tensor([10, 12, 14, 16, 18], dtype=int32)
+):
+    """Create a tensor filled with a constant value.
+    
+    Args:
+        shape: Shape of the tensor.
+        value: Value to fill the tensor with.
+        dtype: Data type (default: float32).
+        device: Device to create tensor on (default: CPU).
+        traced: Whether to enable tracing for autograd.
+        
+    Returns:
+        A Tensor filled with the specified value.
     """
-    # Handle the case where only one positional argument is provided, e.g., arange(5)
-    if stop is None:
-        stop = start
-        start = 0
-
-    if step is None:
-        step = 1
-
-    _validate_numeric(start, "start")
-    _validate_numeric(stop, "stop")
-    _validate_numeric(step, "step")
-
-    if step == 0:
-        raise ValueError("arange: step cannot be zero.")
-
-    op = ArangeOp(start=start, stop=stop, step=step, dtype=dtype, device=device)
-    arr = op.forward()
-    arr.traced = traced
-    arr.stage_realization = stage_realization
-    if batch_dims:
-        arr = broadcast_batch_dims(arr, batch_dims)
-    return arr
-
-
-def ndarange(
-    shape: Shape,
-    dtype: DType = _DEFAULT_DTYPE,
-    device: Device = _DEFAULT_CPU,
-    batch_dims: Shape = (),
-    traced: bool = False,
-    stage_realization: bool = False,
-) -> Tensor:
-    """Creates an tensor of a given shape with sequential values.
-
-    The tensor is filled with values from 0 to N-1, where N is the total
-    number of elements (the product of the shape dimensions).
-
-    Parameters
-    ----------
-    shape : Shape
-        The shape of the output tensor.
-    dtype : DType, optional
-        The desired data type for the tensor. Defaults to DType.float32.
-    device : Device, optional
-        The device to place the tensor on. Defaults to the CPU.
-    batch_dims : Shape, optional
-        Specifies leading dimensions to be treated as batch dimensions.
-        Defaults to an empty tuple.
-    traced : bool, optional
-        Whether the operation should be traced in the graph. Defaults to False.
-    stage_realization : bool, optional
-        Whether to stage realization for JIT compilation. Defaults to False.
-
-    Returns
-    -------
-    Tensor
-        An tensor of the specified shape containing values from 0 to N-1.
-
-    Examples
-    --------
-    >>> import nabla as nb
-    >>> nb.ndarange((2, 3), dtype=nb.DType.int32)
-    Tensor([[0, 1, 2],
-           [3, 4, 5]], dtype=int32)
-    """
-    res = arange(
-        0, int(np.prod(shape)), 1, dtype=dtype, device=device, traced=traced, stage_realization=stage_realization
-    ).reshape(shape)
-    return res
-
-
-def ndarange_like(template: Tensor) -> Tensor:
-    """Creates an tensor with sequential values like a template tensor.
-
-    The new tensor will have the same shape, dtype, device, and batch
-    dimensions as the template tensor. It is filled with values from 0 to
-    N-1, where N is the total number of elements.
-
-    Parameters
-    ----------
-    template : Tensor
-        The template tensor to match properties from.
-
-    Returns
-    -------
-    Tensor
-        A new tensor with the same properties as the template, filled with
-        sequential values.
-
-    Examples
-    --------
-    >>> import nabla as nb
-    >>> template = nb.zeros((2, 2), dtype=nb.DType.int32)
-    >>> nb.ndarange_like(template)
-    Tensor([[0, 1],
-           [2, 3]], dtype=int32)
-    """
-    return ndarange(
-        template.shape,
-        template.dtype,
-        template.logical_device,
-        template.batch_dims,
-        traced=template.traced,
-        stage_realization=template.stage_realization,
-    )
-
-
-def randn(
-    shape: Shape,
-    dtype: DType = _DEFAULT_DTYPE,
-    mean: float = 0.0,
-    std: float = 1.0,
-    device: Device = _DEFAULT_CPU,
-    seed: int = _DEFAULT_SEED,
-    batch_dims: Shape = (),
-    traced: bool = False,
-    stage_realization: bool = False,
-) -> Tensor:
-    """Creates an tensor with normally distributed random values.
-
-    The values are drawn from a normal (Gaussian) distribution with the
-    specified mean and standard deviation.
-
-    Parameters
-    ----------
-    shape : Shape
-        The shape of the output tensor.
-    dtype : DType, optional
-        The desired data type for the tensor. Defaults to DType.float32.
-    mean : float, optional
-        The mean of the normal distribution. Defaults to 0.0.
-    std : float, optional
-        The standard deviation of the normal distribution. Defaults to 1.0.
-    device : Device, optional
-        The device to place the tensor on. Defaults to the CPU.
-    seed : int, optional
-        The seed for the random number generator for reproducibility.
-        Defaults to 0.
-    batch_dims : Shape, optional
-        Specifies leading dimensions to be treated as batch dimensions.
-        Defaults to an empty tuple.
-    traced : bool, optional
-        Whether the operation should be traced in the graph. Defaults to False.
-    stage_realization : bool, optional
-        Whether to stage realization for JIT compilation. Defaults to False.
-
-    Returns
-    -------
-    Tensor
-        An tensor of the specified shape filled with random values.
-    """
-    arr = RandNOp(shape, dtype, mean, std, device, seed).forward()
-    arr.traced = traced
-    arr.stage_realization = stage_realization
-    return broadcast_batch_dims(arr, batch_dims) if batch_dims else arr
-
-
-def randn_like(
-    template: Tensor, mean: float = 0.0, std: float = 1.0, seed: int = _DEFAULT_SEED
-) -> Tensor:
-    """Creates an tensor with normally distributed random values like a template.
-
-    The new tensor will have the same shape, dtype, device, and batch
-    dimensions as the template tensor.
-
-    Parameters
-    ----------
-    template : Tensor
-        The template tensor to match properties from.
-    mean : float, optional
-        The mean of the normal distribution. Defaults to 0.0.
-    std : float, optional
-        The standard deviation of the normal distribution. Defaults to 1.0.
-    seed : int, optional
-        The seed for the random number generator. Defaults to 0.
-
-    Returns
-    -------
-    Tensor
-        A new tensor with the same properties as the template, filled with
-        normally distributed random values.
-    """
-    res = randn(
-        template.shape,
-        template.dtype,
-        mean,
-        std,
-        template.logical_device,
-        seed,
-        template.batch_dims,
-        traced=template.traced,
-        stage_realization=template.stage_realization,
-    )
-    return res
-
-
-def rand(
-    shape: Shape,
-    dtype: DType = _DEFAULT_DTYPE,
-    lower: float = 0.0,
-    upper: float = 1.0,
-    device: Device = _DEFAULT_CPU,
-    seed: int = _DEFAULT_SEED,
-    batch_dims: Shape = (),
-    traced: bool = False,
-    stage_realization: bool = False,
-) -> Tensor:
-    """Creates an tensor with uniformly distributed random values.
-
-    The values are drawn from a continuous uniform distribution over the
-    interval `[lower, upper)`.
-
-    Parameters
-    ----------
-    shape : Shape
-        The shape of the output tensor.
-    dtype : DType, optional
-        The desired data type for the tensor. Defaults to DType.float32.
-    lower : float, optional
-        The lower boundary of the output interval. Defaults to 0.0.
-    upper : float, optional
-        The upper boundary of the output interval. Defaults to 1.0.
-    device : Device, optional
-        The device to place the tensor on. Defaults to the CPU.
-    seed : int, optional
-        The seed for the random number generator. Defaults to 0.
-    batch_dims : Shape, optional
-        Specifies leading dimensions to be treated as batch dimensions.
-        Defaults to an empty tuple.
-    traced : bool, optional
-        Whether the operation should be traced in the graph. Defaults to False.
-    stage_realization : bool, optional
-        Whether to stage realization for JIT compilation. Defaults to False.
-
-    Returns
-    -------
-    Tensor
-        An tensor of the specified shape filled with random values.
-    """
-    arr = RandUniformOp(shape, dtype, lower, upper, device, seed).forward()
-    arr.traced = traced
-    arr.stage_realization = stage_realization
-    return broadcast_batch_dims(arr, batch_dims) if batch_dims else arr
-
-
-def rand_like(
-    template: Tensor, lower: float = 0.0, upper: float = 1.0, seed: int = _DEFAULT_SEED
-) -> Tensor:
-    """Creates an tensor with uniformly distributed random values like a template.
-
-    The new tensor will have the same shape, dtype, device, and batch
-    dimensions as the template tensor.
-
-    Parameters
-    ----------
-    template : Tensor
-        The template tensor to match properties from.
-    lower : float, optional
-        The lower boundary of the output interval. Defaults to 0.0.
-    upper : float, optional
-        The upper boundary of the output interval. Defaults to 1.0.
-    seed : int, optional
-        The seed for the random number generator. Defaults to 0.
-
-    Returns
-    -------
-    Tensor
-        A new tensor with the same properties as the template, filled with
-        uniformly distributed random values.
-    """
-    res = rand(
-        template.shape,
-        template.dtype,
-        lower,
-        upper,
-        template.logical_device,
-        seed,
-        template.batch_dims,
-        traced=template.traced,
-        stage_realization=template.stage_realization,
-    )
-    return res
+    dtype, device = defaults(dtype, device)
+    t = _full_op(shape, value, dtype, device)
+    if traced:
+        t._impl.traced = True
+    return t
 
 
 def zeros(
-    shape: Shape,
-    dtype: DType = _DEFAULT_DTYPE,
-    device: Device = _DEFAULT_CPU,
-    batch_dims: Shape = (),
+    shape: ShapeLike,
+    *,
+    dtype: DType | None = None,
+    device: Device | None = None,
     traced: bool = False,
-    stage_realization: bool = False,
-) -> Tensor:
-    """Creates an tensor of a given shape filled with zeros.
-
-    Parameters
-    ----------
-    shape : Shape
-        The shape of the new tensor, e.g., `(2, 3)` or `(5,)`.
-    dtype : DType, optional
-        The desired data type for the tensor. Defaults to DType.float32.
-    device : Device, optional
-        The device to place the tensor on. Defaults to the CPU.
-    batch_dims : Shape, optional
-        Specifies leading dimensions to be treated as batch dimensions.
-        Defaults to an empty tuple.
-    traced : bool, optional
-        Whether the operation should be traced in the graph. Defaults to False.
-    stage_realization : bool, optional
-        Whether to stage realization for JIT compilation. Defaults to False.
-
-    Returns
-    -------
-    Tensor
-        An tensor of the specified shape and dtype, filled with zeros.
-
-    Examples
-    --------
-    >>> import nabla as nb
-    >>> # Create a 2x3 matrix of zeros
-    >>> nb.zeros((2, 3), dtype=nb.DType.int32)
-    Tensor([[0, 0, 0],
-           [0, 0, 0]], dtype=int32)
+):
+    """Create a tensor filled with zeros.
+    
+    Args:
+        shape: Shape of the tensor.
+        dtype: Data type (default: float32).
+        device: Device to create tensor on (default: CPU).
+        traced: Whether to enable tracing for autograd.
+        
+    Returns:
+        A Tensor filled with zeros.
     """
-    return _create_filled_tensor(shape, 0.0, dtype, device, batch_dims, traced=traced, stage_realization=stage_realization)
+    dtype, device = defaults(dtype, device)
+    t = _zeros_op(shape, dtype, device)
+    if traced:
+        t._impl.traced = True
+    return t
 
 
 def ones(
-    shape: Shape,
-    dtype: DType = _DEFAULT_DTYPE,
-    device: Device = _DEFAULT_CPU,
-    batch_dims: Shape = (),
+    shape: ShapeLike,
+    *,
+    dtype: DType | None = None,
+    device: Device | None = None,
     traced: bool = False,
-    stage_realization: bool = False,
-) -> Tensor:
-    """Creates an tensor of a given shape filled with ones.
-
-    Parameters
-    ----------
-    shape : Shape
-        The shape of the new tensor, e.g., `(2, 3)` or `(5,)`.
-    dtype : DType, optional
-        The desired data type for the tensor. Defaults to DType.float32.
-    device : Device, optional
-        The device to place the tensor on. Defaults to the CPU.
-    batch_dims : Shape, optional
-        Specifies leading dimensions to be treated as batch dimensions.
-        Defaults to an empty tuple.
-    traced : bool, optional
-        Whether the operation should be traced in the graph. Defaults to False.
-    stage_realization : bool, optional
-        Whether to stage realization for JIT compilation. Defaults to False.
-
-    Returns
-    -------
-    Tensor
-        An tensor of the specified shape and dtype, filled with ones.
-
-    Examples
-    --------
-    >>> import nabla as nb
-    >>> # Create a vector of ones
-    >>> nb.ones((4,), dtype=nb.DType.float32)
-    Tensor([1., 1., 1., 1.], dtype=float32)
+):
+    """Create a tensor filled with ones.
+    
+    Args:
+        shape: Shape of the tensor.
+        dtype: Data type (default: float32).
+        device: Device to create tensor on (default: CPU).
+        traced: Whether to enable tracing for autograd.
+        
+    Returns:
+        A Tensor filled with ones.
     """
-    return _create_filled_tensor(shape, 1.0, dtype, device, batch_dims, traced=traced, stage_realization=stage_realization)
+    dtype, device = defaults(dtype, device)
+    t = _ones_op(shape, dtype, device)
+    if traced:
+        t._impl.traced = True
+    return t
 
 
-def zeros_like(template: Tensor) -> Tensor:
-    """Creates an tensor of zeros with the same properties as a template tensor.
-
-    The new tensor will have the same shape, dtype, device, and batch
-    dimensions as the template tensor.
-
-    Parameters
-    ----------
-    template : Tensor
-        The template tensor to match properties from.
-
-    Returns
-    -------
-    Tensor
-        A new tensor of zeros with the same properties as the template.
-
-    Examples
-    --------
-    >>> import nabla as nb
-    >>> x = nb.tensor([[1, 2], [3, 4]], dtype=nb.DType.int32)
-    >>> nb.zeros_like(x)
-    Tensor([[0, 0],
-           [0, 0]], dtype=int32)
+def arange(
+    start: int = 0,
+    stop: int | None = None,
+    step: int = 1,
+    *,
+    dtype: DType | None = None,
+    device: Device | None = None,
+):
+    """Create a tensor with evenly spaced values.
+    
+    Args:
+        start: Start of interval (or stop if stop is None).
+        stop: End of interval.
+        step: Spacing between values.
+        dtype: Data type (default: float32).
+        device: Device to create tensor on (default: CPU).
+        
+    Returns:
+        A 1-D Tensor with evenly spaced values.
     """
-    return zeros(
-        template.shape,
-        template.dtype,
-        template.logical_device,
-        template.batch_dims,
-        traced=template.traced,
-        stage_realization=template.stage_realization,
-    )
+    dtype, device = defaults(dtype, device)
+    if stop is None:
+        start, stop = 0, start
+    return _arange_op(start, stop, step, dtype, device)
 
 
-def ones_like(template: Tensor) -> Tensor:
-    """Creates an tensor of ones with the same properties as a template tensor.
-
-    The new tensor will have the same shape, dtype, device, and batch
-    dimensions as the template tensor.
-
-    Parameters
-    ----------
-    template : Tensor
-        The template tensor to match properties from.
-
-    Returns
-    -------
-    Tensor
-        A new tensor of ones with the same properties as the template.
-
-    Examples
-    --------
-    >>> import nabla as nb
-    >>> x = nb.tensor([[1., 2.], [3., 4.]])
-    >>> nb.ones_like(x)
-    Tensor([[1., 1.],
-           [1., 1.]], dtype=float32)
+def uniform(
+    shape: ShapeLike = (),
+    low: float = 0.0,
+    high: float = 1.0,
+    *,
+    dtype: DType | None = None,
+    device: Device | None = None,
+):
+    """Create a tensor with uniform random values.
+    
+    Args:
+        shape: Shape of the tensor.
+        low: Lower bound of the uniform distribution.
+        high: Upper bound of the uniform distribution.
+        dtype: Data type (default: float32).
+        device: Device to create tensor on (default: CPU).
+        
+    Returns:
+        A Tensor with values uniformly distributed in [low, high).
     """
-    return ones(
-        template.shape,
-        template.dtype,
-        template.logical_device,
-        template.batch_dims,
-        traced=template.traced,
-        stage_realization=template.stage_realization,
-    )
+    dtype, device = defaults(dtype, device)
+    return _uniform_op(shape, low, high, dtype, device)
 
 
-def full_like(template: Tensor, fill_value: float) -> Tensor:
-    """Creates a filled tensor with the same properties as a template tensor.
-
-    The new tensor will have the same shape, dtype, device, and batch
-    dimensions as the template tensor, filled with `fill_value`.
-
-    Parameters
-    ----------
-    template : Tensor
-        The template tensor to match properties from.
-    fill_value : float
-        The value to fill the new tensor with.
-
-    Returns
-    -------
-    Tensor
-        A new tensor filled with `fill_value` and with the same properties
-        as the template.
-
-    Examples
-    --------
-    >>> import nabla as nb
-    >>> x = nb.zeros((2, 2))
-    >>> nb.full_like(x, 7.0)
-    Tensor([[7., 7.],
-           [7., 7.]], dtype=float32)
+def gaussian(
+    shape: ShapeLike = (),
+    mean: float = 0.0,
+    std: float = 1.0,
+    *,
+    dtype: DType | None = None,
+    device: Device | None = None,
+):
+    """Create a tensor with Gaussian (normal) random values.
+    
+    Args:
+        shape: Shape of the tensor.
+        mean: Mean of the Gaussian distribution.
+        std: Standard deviation of the Gaussian distribution.
+        dtype: Data type (default: float32).
+        device: Device to create tensor on (default: CPU).
+        
+    Returns:
+        A Tensor with values from a Gaussian distribution.
     """
-    return _create_filled_tensor(
-        template.shape,
-        fill_value,
-        template.dtype,
-        template.logical_device,
-        template.batch_dims,
-        traced=template.traced,
-        stage_realization=template.stage_realization,
-    )
+    dtype, device = defaults(dtype, device)
+    return _gaussian_op(shape, mean, std, dtype, device)
 
 
-# Neural Network Initialization Methods
+# Alias for gaussian
+normal = gaussian
 
 
-def xavier_uniform(
-    shape: Shape,
-    dtype: DType = _DEFAULT_DTYPE,
-    gain: float = 1.0,
-    device: Device = _DEFAULT_CPU,
-    seed: int = _DEFAULT_SEED,
-    batch_dims: Shape = (),
-    traced: bool = False,
-) -> Tensor:
-    """Fills an tensor with values according to the Xavier uniform initializer.
-
-    Also known as Glorot uniform initialization, this method is designed to
-    keep the variance of activations the same across every layer in a network.
-    It samples from a uniform distribution U(-a, a) where
-    a = gain * sqrt(6 / (fan_in + fan_out)).
-
-    Parameters
-    ----------
-    shape : Shape
-        The shape of the output tensor. Must be at least 2D.
-    dtype : DType, optional
-        The desired data type for the tensor. Defaults to DType.float32.
-    gain : float, optional
-        An optional scaling factor. Defaults to 1.0.
-    device : Device, optional
-        The device to place the tensor on. Defaults to the CPU.
-    seed : int, optional
-        The seed for the random number generator. Defaults to 0.
-    batch_dims : Shape, optional
-        Specifies leading dimensions to be treated as batch dimensions.
-        Defaults to an empty tuple.
-    traced : bool, optional
-        Whether the operation should be traced in the graph. Defaults to False.
-
-    Returns
-    -------
-    Tensor
-        An tensor initialized with the Xavier uniform distribution.
-    """
-    _validate_shape(shape)
-    if len(shape) < 2:
-        raise ValueError(
-            f"Xavier initialization requires at least 2D shape, got {shape}"
-        )
-
-    fan_in, fan_out = shape[-2], shape[-1]
-    std = gain * np.sqrt(6.0 / (fan_in + fan_out))
-    return rand(shape, dtype, -std, std, device, seed, batch_dims, traced=traced)
-
-
-def xavier_normal(
-    shape: Shape,
-    dtype: DType = _DEFAULT_DTYPE,
-    gain: float = 1.0,
-    device: Device = _DEFAULT_CPU,
-    seed: int = _DEFAULT_SEED,
-    batch_dims: Shape = (),
-    traced: bool = False,
-) -> Tensor:
-    """Fills an tensor with values according to the Xavier normal initializer.
-
-    Also known as Glorot normal initialization. It samples from a normal
-    distribution N(0, std^2) where std = gain * sqrt(2 / (fan_in + fan_out)).
-
-    Parameters
-    ----------
-    shape : Shape
-        The shape of the output tensor. Must be at least 2D.
-    dtype : DType, optional
-        The desired data type for the tensor. Defaults to DType.float32.
-    gain : float, optional
-        An optional scaling factor. Defaults to 1.0.
-    device : Device, optional
-        The device to place the tensor on. Defaults to the CPU.
-    seed : int, optional
-        The seed for the random number generator. Defaults to 0.
-    batch_dims : Shape, optional
-        Specifies leading dimensions to be treated as batch dimensions.
-        Defaults to an empty tuple.
-    traced : bool, optional
-        Whether the operation should be traced in the graph. Defaults to False.
-
-    Returns
-    -------
-    Tensor
-        An tensor initialized with the Xavier normal distribution.
-    """
-    _validate_shape(shape)
-    if len(shape) < 2:
-        raise ValueError(
-            f"Xavier initialization requires at least 2D shape, got {shape}"
-        )
-
-    fan_in, fan_out = shape[-2], shape[-1]
-    std = gain * np.sqrt(2.0 / (fan_in + fan_out))
-    return randn(shape, dtype, 0.0, std, device, seed, batch_dims, traced=traced)
-
-
-def he_uniform(
-    shape: Shape,
-    dtype: DType = _DEFAULT_DTYPE,
-    device: Device = _DEFAULT_CPU,
-    seed: int = _DEFAULT_SEED,
-    batch_dims: Shape = (),
-    traced: bool = False,
-) -> Tensor:
-    """Fills an tensor with values according to the He uniform initializer.
-
-    This method is designed for layers with ReLU activations. It samples from
-    a uniform distribution U(-a, a) where a = sqrt(6 / fan_in).
-
-    Parameters
-    ----------
-    shape : Shape
-        The shape of the output tensor. Must be at least 2D.
-    dtype : DType, optional
-        The desired data type for the tensor. Defaults to DType.float32.
-    device : Device, optional
-        The device to place the tensor on. Defaults to the CPU.
-    seed : int, optional
-        The seed for the random number generator. Defaults to 0.
-    batch_dims : Shape, optional
-        Specifies leading dimensions to be treated as batch dimensions.
-        Defaults to an empty tuple.
-    traced : bool, optional
-        Whether the operation should be traced in the graph. Defaults to False.
-
-    Returns
-    -------
-    Tensor
-        An tensor initialized with the He uniform distribution.
-    """
-    _validate_shape(shape)
-    if len(shape) < 2:
-        raise ValueError(f"He initialization requires at least 2D shape, got {shape}")
-
-    fan_in = shape[-2]
-    bound = np.sqrt(6.0 / fan_in)
-    return rand(shape, dtype, -bound, bound, device, seed, batch_dims, traced=traced)
-
-
-def he_normal(
-    shape: Shape,
-    dtype: DType = _DEFAULT_DTYPE,
-    device: Device = _DEFAULT_CPU,
-    seed: int = _DEFAULT_SEED,
-    batch_dims: Shape = (),
-    traced: bool = False,
-) -> Tensor:
-    """Fills an tensor with values according to the He normal initializer.
-
-    This method is designed for layers with ReLU activations. It samples from
-    a normal distribution N(0, std^2) where std = sqrt(2 / fan_in).
-
-    Parameters
-    ----------
-    shape : Shape
-        The shape of the output tensor. Must be at least 2D.
-    dtype : DType, optional
-        The desired data type for the tensor. Defaults to DType.float32.
-    device : Device, optional
-        The device to place the tensor on. Defaults to the CPU.
-    seed : int, optional
-        The seed for the random number generator. Defaults to 0.
-    batch_dims : Shape, optional
-        Specifies leading dimensions to be treated as batch dimensions.
-        Defaults to an empty tuple.
-    traced : bool, optional
-        Whether the operation should be traced in the graph. Defaults to False.
-
-    Returns
-    -------
-    Tensor
-        An tensor initialized with the He normal distribution.
-    """
-    _validate_shape(shape)
-    if len(shape) < 2:
-        raise ValueError(f"He initialization requires at least 2D shape, got {shape}")
-
-    fan_in = shape[-2]
-    std = np.sqrt(2.0 / fan_in)
-    return randn(shape, dtype, 0.0, std, device, seed, batch_dims, traced=traced)
-
-
-def lecun_uniform(
-    shape: Shape,
-    dtype: DType = _DEFAULT_DTYPE,
-    device: Device = _DEFAULT_CPU,
-    seed: int = _DEFAULT_SEED,
-    batch_dims: Shape = (),
-    traced: bool = False,
-) -> Tensor:
-    """Fills an tensor with values according to the LeCun uniform initializer.
-
-    This method is often used for layers with SELU activations. It samples from
-    a uniform distribution U(-a, a) where a = sqrt(3 / fan_in).
-
-    Parameters
-    ----------
-    shape : Shape
-        The shape of the output tensor. Must be at least 2D.
-    dtype : DType, optional
-        The desired data type for the tensor. Defaults to DType.float32.
-    device : Device, optional
-        The device to place the tensor on. Defaults to the CPU.
-    seed : int, optional
-        The seed for the random number generator. Defaults to 0.
-    batch_dims : Shape, optional
-        Specifies leading dimensions to be treated as batch dimensions.
-        Defaults to an empty tuple.
-    traced : bool, optional
-        Whether the operation should be traced in the graph. Defaults to False.
-
-    Returns
-    -------
-    Tensor
-        An tensor initialized with the LeCun uniform distribution.
-    """
-    _validate_shape(shape)
-    if len(shape) < 2:
-        raise ValueError(
-            f"LeCun initialization requires at least 2D shape, got {shape}"
-        )
-
-    fan_in = shape[-2]
-    bound = np.sqrt(3.0 / fan_in)
-    return rand(shape, dtype, -bound, bound, device, seed, batch_dims, traced=traced)
-
-
-def lecun_normal(
-    shape: Shape,
-    dtype: DType = _DEFAULT_DTYPE,
-    device: Device = _DEFAULT_CPU,
-    seed: int = _DEFAULT_SEED,
-    batch_dims: Shape = (),
-    traced: bool = False,
-) -> Tensor:
-    """Fills an tensor with values according to the LeCun normal initializer.
-
-    This method is often used for layers with SELU activations. It samples from
-    a normal distribution N(0, std^2) where std = sqrt(1 / fan_in).
-
-    Parameters
-    ----------
-    shape : Shape
-        The shape of the output tensor. Must be at least 2D.
-    dtype : DType, optional
-        The desired data type for the tensor. Defaults to DType.float32.
-    device : Device, optional
-        The device to place the tensor on. Defaults to the CPU.
-    seed : int, optional
-        The seed for the random number generator. Defaults to 0.
-    batch_dims : Shape, optional
-        Specifies leading dimensions to be treated as batch dimensions.
-        Defaults to an empty tuple.
-    traced : bool, optional
-        Whether the operation should be traced in the graph. Defaults to False.
-
-    Returns
-    -------
-    Tensor
-        An tensor initialized with the LeCun normal distribution.
-    """
-    _validate_shape(shape)
-    if len(shape) < 2:
-        raise ValueError(
-            f"LeCun initialization requires at least 2D shape, got {shape}"
-        )
-
-    fan_in = shape[-2]
-    std = np.sqrt(1.0 / fan_in)
-    return randn(shape, dtype, 0.0, std, device, seed, batch_dims, traced=traced)
-
-
-def glorot_uniform(
-    shape: Shape,
-    dtype: DType = _DEFAULT_DTYPE,
-    gain: float = 1.0,
-    device: Device = _DEFAULT_CPU,
-    seed: int = _DEFAULT_SEED,
-    batch_dims: Shape = (),
-    traced: bool = False,
-) -> Tensor:
-    """Fills an tensor with values according to the Glorot uniform initializer.
-
-    This is an alias for `xavier_uniform`. It samples from a uniform
-    distribution U(-a, a) where a = sqrt(6 / (fan_in + fan_out)).
-
-    Parameters
-    ----------
-    shape : Shape
-        The shape of the output tensor. Must be at least 2D.
-    dtype : DType, optional
-        The desired data type for the tensor. Defaults to DType.float32.
-    gain : float, optional
-        An optional scaling factor. Defaults to 1.0.
-    device : Device, optional
-        The device to place the tensor on. Defaults to the CPU.
-    seed : int, optional
-        The seed for the random number generator. Defaults to 0.
-    batch_dims : Shape, optional
-        Specifies leading dimensions to be treated as batch dimensions.
-        Defaults to an empty tuple.
-    traced : bool, optional
-        Whether the operation should be traced in the graph. Defaults to False.
-
-    Returns
-    -------
-    Tensor
-        An tensor initialized with the Glorot uniform distribution.
-    """
-    _validate_shape(shape)
-    if len(shape) < 2:
-        raise ValueError(
-            f"Glorot initialization requires at least 2D shape, got {shape}"
-        )
-
-    fan_in, fan_out = shape[-2], shape[-1]
-    bound = gain * np.sqrt(6.0 / (fan_in + fan_out))
-    return rand(shape, dtype, -bound, bound, device, seed, batch_dims, traced=traced)
-
-
-def triu(x: Tensor, k: int = 0) -> Tensor:
-    """Returns the upper triangular part of a matrix or batch of matrices.
-
-    The elements below the k-th diagonal are zeroed out. The input is
-    expected to be at least 2-dimensional.
-
-    Parameters
-    ----------
-    x : Tensor
-        Input tensor with shape (..., M, N).
-    k : int, optional
-        Diagonal offset. `k = 0` is the main diagonal. `k > 0` is above the
-        main diagonal, and `k < 0` is below the main diagonal. Defaults to 0.
-
-    Returns
-    -------
-    Tensor
-        An tensor with the lower triangular part zeroed out, with the same
-        shape and dtype as `x`.
-
-    Examples
-    --------
-    >>> import nabla as nb
-    >>> x = nb.ndarange((3, 3), dtype=nb.DType.int32)
-    >>> x
-    Tensor([[0, 1, 2],
-           [3, 4, 5],
-           [6, 7, 8]], dtype=int32)
-    <BLANKLINE>
-    >>> # Upper triangle with the main diagonal
-    >>> nb.triu(x, k=0)
-    Tensor([[0, 1, 2],
-           [0, 4, 5],
-           [0, 0, 8]], dtype=int32)
-    <BLANKLINE>
-    >>> # Upper triangle above the main diagonal
-    >>> nb.triu(x, k=1)
-    Tensor([[0, 1, 2],
-           [0, 0, 5],
-           [0, 0, 0]], dtype=int32)
-    """
-    from .special import where
-
-    mask = ndarange((x.shape[-1],)) < ndarange((x.shape[-1],))[:, None] + k
-    return where(mask, x, tensor(0, dtype=x.dtype, device=x.logical_device))
+__all__ = [
+    # Op classes
+    "ConstantOp",
+    "FullOp",
+    "ZerosOp", 
+    "OnesOp",
+    "ArangeOp",
+    "UniformOp",
+    "GaussianOp",
+    # Public functions
+    "constant",
+    "full",
+    "zeros",
+    "ones",
+    "arange",
+    "uniform",
+    "gaussian",
+    "normal",
+]

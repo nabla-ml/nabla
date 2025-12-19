@@ -1,0 +1,536 @@
+
+<!DOCTYPE html>
+
+<html data-content_root="../../" data-theme="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Tensor API - Nabla</title>
+<script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "dark";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "dark";
+  </script>
+<!-- Loaded before other Sphinx assets -->
+<link href="../../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet"/>
+<link href="../../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet"/>
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet"/>
+<link href="../../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet"/>
+<link as="font" crossorigin="" href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" rel="preload" type="font/woff2"/>
+<link as="font" crossorigin="" href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" rel="preload" type="font/woff2"/>
+<link as="font" crossorigin="" href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" rel="preload" type="font/woff2"/>
+<link href="../../_static/pygments.css?v=03e43079" rel="stylesheet" type="text/css"/>
+<link href="../../_static/styles/sphinx-book-theme.css?v=eba8b062" rel="stylesheet" type="text/css"/>
+<link href="../../_static/sphinx-design.min.css?v=95c83b7e" rel="stylesheet" type="text/css"/>
+<link href="../../_static/custom_minimal.css?v=57165526" rel="stylesheet" type="text/css"/>
+<link href="../../_static/seo-advanced.css?v=5bfd764e" rel="stylesheet" type="text/css"/>
+<!-- Pre-loaded scripts that we'll load fully later -->
+<link as="script" href="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" rel="preload"/>
+<link as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" rel="preload"/>
+<script src="../../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../../_static/documentation_options.js?v=a2693998"></script>
+<script src="../../_static/doctools.js?v=9bcbadda"></script>
+<script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+<script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+<script src="../../_static/design-tabs.js?v=f930bc37"></script>
+<script>DOCUMENTATION_OPTIONS.pagename = 'api/core/tensor';</script>
+<script src="../../_static/performance.js?v=b7819737"></script>
+<script src="../../_static/custom.js?v=792f2eae"></script>
+<link href="https://nablaml.com/api/core/tensor.html" rel="canonical"/>
+<link href="../../_static/nabla-logo.svg" rel="icon"/>
+<link href="../../genindex.html" rel="index" title="Index"/>
+<link href="../../search.html" rel="search" title="Search"/>
+<!-- SEO Meta Tags -->
+<meta content="API reference documentation for Tensor in the Nabla ML framework. Comprehensive function and class documentation with examples." name="description"/>
+<meta content="machine learning, automatic differentiation, JIT compilation, GPU computing, deep learning framework, high performance computing, Mojo, JAX alternative, tensor" name="keywords"/>
+<meta content="Nabla ML" name="author"/>
+<meta content="index, follow" name="robots"/>
+<!-- Open Graph Meta Tags -->
+<meta content="Tensor API - Nabla" property="og:title"/>
+<meta content="website" property="og:type"/>
+<meta content="https://nablaml.com/api/core/tensor.html" property="og:url"/>
+<meta content="https://nablaml.com/_static/default-image.png" property="og:image"/>
+<meta content="API reference documentation for Tensor in the Nabla ML framework. Comprehensive function and class documentation with examples." property="og:description"/>
+<meta content="Nabla" property="og:site_name"/>
+<!-- Twitter Card Meta Tags -->
+<meta content="summary_large_image" name="twitter:card"/>
+<meta content="Tensor API - Nabla" name="twitter:title"/>
+<meta content="API reference documentation for Tensor in the Nabla ML framework. Comprehensive function and class documentation with examples." name="twitter:description"/>
+<meta content="https://nablaml.com/_static/default-image.png" name="twitter:image"/>
+<meta content="@nablaml" name="twitter:site"/>
+<!-- Structured Data (JSON-LD) -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Tensor API - Nabla",
+  "applicationCategory": "DeveloperApplication", 
+  "operatingSystem": "Cross-platform",
+  "url": "https://nablaml.com/api/core/tensor.html",
+  "description": "API reference documentation for Tensor in the Nabla ML framework. Comprehensive function and class documentation with examples.",
+  "author": {
+    "@type": "Organization",
+    "name": "Nabla ML",
+    "url": "https://github.com/nabla-ml"
+  },
+  "softwareVersion": "0.1.0",
+  "dateModified": "2025-07-22",
+  "license": "https://github.com/nabla-ml/nabla/blob/main/LICENSE",
+  "codeRepository": "https://github.com/nabla-ml/nabla",
+  "programmingLanguage": ["Python", "Mojo"],
+  "keywords": "machine learning, automatic differentiation, JIT compilation, GPU computing"
+}
+</script>
+<!-- Canonical URL -->
+<link href="https://nablaml.com/api/core/tensor.html" rel="canonical"/>
+</head>
+<body data-bs-root-margin="0px 0px -60%" data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-default-mode="dark" data-offset="180">
+<div class="skip-link d-print-none" id="pst-skip-link"><a href="#main-content">Skip to main content</a></div>
+<div id="pst-scroll-pixel-helper"></div>
+<button class="btn rounded-pill" id="pst-back-to-top" type="button">
+<i class="fa-solid fa-arrow-up"></i>Back to top</button>
+<input class="sidebar-toggle" id="pst-primary-sidebar-checkbox" type="checkbox"/>
+<label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+<input class="sidebar-toggle" id="pst-secondary-sidebar-checkbox" type="checkbox"/>
+<label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+<div class="search-button__wrapper">
+<div class="search-button__overlay"></div>
+<div class="search-button__search-container">
+<form action="../../search.html" class="bd-search d-flex align-items-center" method="get">
+<i class="fa-solid fa-magnifying-glass"></i>
+<input aria-label="Search..." autocapitalize="off" autocomplete="off" autocorrect="off" class="form-control" id="search-input" name="q" placeholder="Search..." spellcheck="false" type="search"/>
+<span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+</div>
+<div class="pst-async-banner-revealer d-none">
+<aside aria-label="Version warning" class="d-none d-print-none" id="bd-header-version-warning"></aside>
+</div>
+<header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+</header>
+<div class="bd-container">
+<div class="bd-container__inner bd-page-width">
+<div class="bd-sidebar-primary bd-sidebar">
+<div class="sidebar-header-items sidebar-primary__section">
+</div>
+<div class="sidebar-primary-items__start sidebar-primary__section">
+<div class="sidebar-primary-item">
+<a class="navbar-brand logo" href="../../index.html">
+<img alt="Nabla - High-Performance ML Computing - Home" class="logo__image only-dark" src="../../_static/nabla-logo.png"/>
+<script>document.write(`<img src="../../_static/nabla-logo.png" class="logo__image only-light" alt="Nabla - High-Performance ML Computing - Home"/>`);</script>
+</a></div>
+<div class="sidebar-primary-item">
+<script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+<div class="sidebar-primary-item"><nav aria-label="Main" class="bd-links bd-docs-nav">
+<div class="bd-toc-item navbar-nav active">
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../index.html">API Reference</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../tutorials/index.html">Tutorials</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="simple">
+</ul>
+</details></li>
+</ul>
+</div>
+</nav></div>
+</div>
+<div class="sidebar-primary-items__end sidebar-primary__section">
+</div>
+<div id="rtd-footer-container"></div>
+</div>
+<main class="bd-main" id="main-content" role="main">
+<div class="sbt-scroll-pixel-helper"></div>
+<div class="bd-content">
+<div class="bd-article-container">
+<div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+<div class="header-article-items__start">
+<div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" data-bs-placement="bottom" data-bs-toggle="tooltip" title="Toggle primary sidebar">
+<span class="fa-solid fa-bars"></span>
+</button></div>
+</div>
+<div class="header-article-items__end">
+<div class="header-article-item">
+<div class="article-header-buttons">
+<div class="dropdown dropdown-source-buttons">
+<button aria-expanded="false" aria-label="Source repositories" class="btn dropdown-toggle" data-bs-toggle="dropdown" type="button">
+<i class="fab fa-github"></i>
+</button>
+<ul class="dropdown-menu">
+<li><a class="btn btn-sm btn-source-repository-button dropdown-item" data-bs-placement="left" data-bs-toggle="tooltip" href="https://github.com/nabla-ml/nabla" target="_blank" title="Source repository">
+<span class="btn__icon-container">
+<i class="fab fa-github"></i>
+</span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+<li><a class="btn btn-sm btn-source-edit-button dropdown-item" data-bs-placement="left" data-bs-toggle="tooltip" href="https://github.com/nabla-ml/nabla/edit/main/docs/api/core/tensor.md" target="_blank" title="Suggest edit">
+<span class="btn__icon-container">
+<i class="fas fa-pencil-alt"></i>
+</span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+<li><a class="btn btn-sm btn-source-issues-button dropdown-item" data-bs-placement="left" data-bs-toggle="tooltip" href="https://github.com/nabla-ml/nabla/issues/new?title=Issue%20on%20page%20%2Fapi/core/tensor.html&amp;body=Your%20issue%20content%20here." target="_blank" title="Open an issue">
+<span class="btn__icon-container">
+<i class="fas fa-lightbulb"></i>
+</span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+</ul>
+</div>
+<div class="dropdown dropdown-download-buttons">
+<button aria-expanded="false" aria-label="Download this page" class="btn dropdown-toggle" data-bs-toggle="dropdown" type="button">
+<i class="fas fa-download"></i>
+</button>
+<ul class="dropdown-menu">
+<li><a class="btn btn-sm btn-download-source-button dropdown-item" data-bs-placement="left" data-bs-toggle="tooltip" href="../../_sources/api/core/tensor.md" target="_blank" title="Download source file">
+<span class="btn__icon-container">
+<i class="fas fa-file"></i>
+</span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+<li>
+<button class="btn btn-sm btn-download-pdf-button dropdown-item" data-bs-placement="left" data-bs-toggle="tooltip" onclick="window.print()" title="Print to PDF">
+<span class="btn__icon-container">
+<i class="fas fa-file-pdf"></i>
+</span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+</ul>
+</div>
+<button class="btn btn-sm btn-fullscreen-button" data-bs-placement="bottom" data-bs-toggle="tooltip" onclick="toggleFullScreen()" title="Fullscreen mode">
+<span class="btn__icon-container">
+<i class="fas fa-expand"></i>
+</span>
+</button>
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" data-bs-placement="bottom" data-bs-toggle="tooltip" title="Toggle secondary sidebar">
+<span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+</div>
+</div>
+</div>
+<div class="onlyprint" id="jb-print-docs-body">
+<h1>Tensor</h1>
+<!-- Table of contents -->
+<div id="print-main-content">
+<div id="jb-print-toc">
+<div>
+<h2> Contents </h2>
+</div>
+<nav aria-label="Page">
+<ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1"><code class="docutils literal notranslate"><span class="pre">Tensor</span></code></a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#methods">Methods</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#add-arguments"><code class="docutils literal notranslate"><span class="pre">add_arguments</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#astype"><code class="docutils literal notranslate"><span class="pre">astype</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#at"><code class="docutils literal notranslate"><span class="pre">at</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#backward"><code class="docutils literal notranslate"><span class="pre">backward</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#copy-from"><code class="docutils literal notranslate"><span class="pre">copy_from</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#get-arguments"><code class="docutils literal notranslate"><span class="pre">get_arguments</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#impl"><code class="docutils literal notranslate"><span class="pre">impl_</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#permute"><code class="docutils literal notranslate"><span class="pre">permute</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#realize"><code class="docutils literal notranslate"><span class="pre">realize</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#requires-grad"><code class="docutils literal notranslate"><span class="pre">requires_grad_</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#reshape"><code class="docutils literal notranslate"><span class="pre">reshape</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#set"><code class="docutils literal notranslate"><span class="pre">set</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#set-maxpr"><code class="docutils literal notranslate"><span class="pre">set_maxpr</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#sum"><code class="docutils literal notranslate"><span class="pre">sum</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#to"><code class="docutils literal notranslate"><span class="pre">to</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#to-numpy"><code class="docutils literal notranslate"><span class="pre">to_numpy</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#transpose"><code class="docutils literal notranslate"><span class="pre">transpose</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</nav>
+</div>
+</div>
+</div>
+<div id="searchbox"></div>
+<article class="bd-article">
+<section class="tex2jax_ignore mathjax_ignore" id="tensor">
+<h1>Tensor<a class="headerlink" href="#tensor" title="Link to this heading">#</a></h1>
+<section id="id1">
+<h2><code class="docutils literal notranslate"><span class="pre">Tensor</span></code><a class="headerlink" href="#id1" title="Link to this heading">#</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">Tensor</span><span class="p">(</span><span class="n">shape</span><span class="p">:</span> <span class="s1">'Shape'</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="s1">'DType'</span> <span class="o">=</span> <span class="n">float32</span><span class="p">,</span> <span class="n">device</span><span class="p">:</span> <span class="s1">'Device'</span> <span class="o">=</span> <span class="n">Device</span><span class="p">(</span><span class="nb">type</span><span class="o">=</span><span class="n">cpu</span><span class="p">,</span><span class="nb">id</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span> <span class="n">materialize</span><span class="p">:</span> <span class="s1">'bool'</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="s1">'str'</span> <span class="o">=</span> <span class="s1">''</span><span class="p">,</span> <span class="n">batch_dims</span><span class="p">:</span> <span class="s1">'Shape'</span> <span class="o">=</span> <span class="p">())</span> <span class="o">-&gt;</span> <span class="s1">'None'</span><span class="p">:</span>
+</pre></div>
+</div>
+<p>Core tensor-like tensor class with automatic differentiation support.</p>
+<section id="methods">
+<h3>Methods<a class="headerlink" href="#methods" title="Link to this heading">#</a></h3>
+<section id="add-arguments">
+<h4><code class="docutils literal notranslate"><span class="pre">add_arguments</span></code><a class="headerlink" href="#add-arguments" title="Link to this heading">#</a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">add_arguments</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">arg_nodes</span><span class="p">:</span> <span class="s1">'Tensor'</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">'None'</span><span class="p">:</span>
+</pre></div>
+</div>
+<p>Add an arguments to this Tensor’s computation graph if traced.</p>
+</section>
+<section id="astype">
+<h4><code class="docutils literal notranslate"><span class="pre">astype</span></code><a class="headerlink" href="#astype" title="Link to this heading">#</a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">astype</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="s1">'DType'</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">'Tensor'</span><span class="p">:</span>
+</pre></div>
+</div>
+<p>Convert tensor to a different data type.</p>
+<p>Args:
+dtype: Target data type</p>
+<p>Returns:
+New Tensor with the specified data type</p>
+</section>
+<section id="at">
+<h4><code class="docutils literal notranslate"><span class="pre">at</span></code><a class="headerlink" href="#at" title="Link to this heading">#</a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">at</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+</pre></div>
+</div>
+<p>Update tensor at specified indices/slices, returning new tensor.</p>
+</section>
+<section id="backward">
+<h4><code class="docutils literal notranslate"><span class="pre">backward</span></code><a class="headerlink" href="#backward" title="Link to this heading">#</a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">backward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">grad</span><span class="p">:</span> <span class="s1">'Tensor | None'</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">retain_graph</span><span class="p">:</span> <span class="s1">'bool'</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">'None'</span><span class="p">:</span>
+</pre></div>
+</div>
+<p>Compute gradients flowing into traced leaf inputs that influence this Tensor.</p>
+<p>Args:
+grad: Optional cotangent tensor; defaults to ones for scalar outputs
+retain_graph: If False (default), frees the computation graph after backward pass</p>
+</section>
+<section id="copy-from">
+<h4><code class="docutils literal notranslate"><span class="pre">copy_from</span></code><a class="headerlink" href="#copy-from" title="Link to this heading">#</a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">copy_from</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="s1">'Tensor'</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">'None'</span><span class="p">:</span>
+</pre></div>
+</div>
+<p>Copy data from another Tensor.</p>
+</section>
+<section id="get-arguments">
+<h4><code class="docutils literal notranslate"><span class="pre">get_arguments</span></code><a class="headerlink" href="#get-arguments" title="Link to this heading">#</a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">get_arguments</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">'list[Tensor]'</span><span class="p">:</span>
+</pre></div>
+</div>
+<p>Get list of argument Tensors.</p>
+</section>
+<section id="impl">
+<h4><code class="docutils literal notranslate"><span class="pre">impl_</span></code><a class="headerlink" href="#impl" title="Link to this heading">#</a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">impl_</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="s1">'Union[np.ndarray, MAXTensor] | None'</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">'None'</span><span class="p">:</span>
+</pre></div>
+</div>
+<p>Set the implementation of this Tensor to a Numpy tensor or Tensor.</p>
+</section>
+<section id="permute">
+<h4><code class="docutils literal notranslate"><span class="pre">permute</span></code><a class="headerlink" href="#permute" title="Link to this heading">#</a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">permute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axes</span><span class="p">:</span> <span class="s1">'tuple[int, ...]'</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">'Tensor'</span><span class="p">:</span>
+</pre></div>
+</div>
+<p>Permute the dimensions of the tensor.</p>
+<p>Args:
+axes: List of integers specifying the new order of dimensions</p>
+<p>Returns:
+Tensor with dimensions permuted according to the specified axes</p>
+<p>Examples::</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>arr.permute([1, 0]) # If arr.shape is (2, 3), this will return an tensor with shape (3, 2)
+</pre></div>
+</div>
+</section>
+<section id="realize">
+<h4><code class="docutils literal notranslate"><span class="pre">realize</span></code><a class="headerlink" href="#realize" title="Link to this heading">#</a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">realize</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">'None'</span><span class="p">:</span>
+</pre></div>
+</div>
+<p>Force computation of this Tensor.</p>
+</section>
+<section id="requires-grad">
+<h4><code class="docutils literal notranslate"><span class="pre">requires_grad_</span></code><a class="headerlink" href="#requires-grad" title="Link to this heading">#</a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">requires_grad_</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">val</span><span class="p">:</span> <span class="s1">'bool'</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">'Tensor'</span><span class="p">:</span>
+</pre></div>
+</div>
+<p>Opt into or out of gradient tracking for imperative workflows.</p>
+<p>This is an in-place operation that returns self for method chaining.
+Similar to PyTorch’s requires_grad_() method.</p>
+</section>
+<section id="reshape">
+<h4><code class="docutils literal notranslate"><span class="pre">reshape</span></code><a class="headerlink" href="#reshape" title="Link to this heading">#</a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">reshape</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">shape</span><span class="p">:</span> <span class="s1">'Shape'</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">'Tensor'</span><span class="p">:</span>
+</pre></div>
+</div>
+<p>Change the shape of an tensor without changing its data.</p>
+<p>Args:
+shape: New shape for the tensor</p>
+<p>Returns:
+Tensor with the new shape</p>
+<p>Examples::</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>arr.reshape((2, 3))     # Reshape to 2x3
+arr.reshape((-1,))      # Flatten to 1D (note: -1 not yet supported)
+</pre></div>
+</div>
+</section>
+<section id="set">
+<h4><code class="docutils literal notranslate"><span class="pre">set</span></code><a class="headerlink" href="#set" title="Link to this heading">#</a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">'Tensor'</span><span class="p">:</span>
+</pre></div>
+</div>
+<p>Set values at specified indices/slices, returning a new tensor.</p>
+<p>This is a functional operation that returns a new Tensor with the specified
+values updated, leaving the original Tensor unchanged.</p>
+<p>Args:
+key: Index specification (int, slice, tuple of indices/slices, ellipsis)
+value: Value(s) to set at the specified location</p>
+<p>Returns:
+New Tensor with updated values</p>
+<p>Examples:
+new_arr = arr.set(1, 99.0)              # Set single element
+new_arr = arr.set((1, 2), 99.0)         # Set element at (1,2)
+new_arr = arr.set(slice(1, 3), 99.0)    # Set slice
+new_arr = arr.set(…, 99.0)            # Set with ellipsis</p>
+</section>
+<section id="set-maxpr">
+<h4><code class="docutils literal notranslate"><span class="pre">set_maxpr</span></code><a class="headerlink" href="#set-maxpr" title="Link to this heading">#</a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">set_maxpr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn</span><span class="p">:</span> <span class="s1">'MaxprCallable'</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">'None'</span><span class="p">:</span>
+</pre></div>
+</div>
+<p>Set the MAX PR function for this operation.</p>
+</section>
+<section id="sum">
+<h4><code class="docutils literal notranslate"><span class="pre">sum</span></code><a class="headerlink" href="#sum" title="Link to this heading">#</a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">sum</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">keep_dims</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">'Tensor'</span><span class="p">:</span>
+</pre></div>
+</div>
+<p>Sum tensor elements over given axes.</p>
+<p>Args:
+axes: Axis or axes along which to sum. Can be int, list of ints, or None (sum all)
+keep_dims: If True, reduced axes are left as dimensions with size 1</p>
+<p>Returns:
+Tensor with the sum along the specified axes</p>
+<p>Examples::</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>arr.sum()           # Sum all elements
+arr.sum(axis=0)     # Sum along first axis
+arr.sum(axis=[0,1]) # Sum along first two axes
+</pre></div>
+</div>
+</section>
+<section id="to">
+<h4><code class="docutils literal notranslate"><span class="pre">to</span></code><a class="headerlink" href="#to" title="Link to this heading">#</a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">to</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">:</span> <span class="s1">'Device'</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">'Tensor'</span><span class="p">:</span>
+</pre></div>
+</div>
+<p>Move Tensor to specified device.</p>
+</section>
+<section id="to-numpy">
+<h4><code class="docutils literal notranslate"><span class="pre">to_numpy</span></code><a class="headerlink" href="#to-numpy" title="Link to this heading">#</a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">'np.ndarray'</span><span class="p">:</span>
+</pre></div>
+</div>
+<p>Get NumPy representation.</p>
+</section>
+<section id="transpose">
+<h4><code class="docutils literal notranslate"><span class="pre">transpose</span></code><a class="headerlink" href="#transpose" title="Link to this heading">#</a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">transpose</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axes</span><span class="p">:</span> <span class="s1">'tuple[int, ...]'</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">'Tensor'</span><span class="p">:</span>
+</pre></div>
+</div>
+<p>Permute the dimensions of the tensor.</p>
+<p>Args:
+axes: List of integers specifying the new order of dimensions</p>
+<p>Returns:
+Tensor with dimensions permuted according to the specified axes</p>
+<p>Examples::</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>arr.permute([1, 0]) # If arr.shape is (2, 3), this will return an tensor with shape (3, 2)
+</pre></div>
+</div>
+<hr class="docutils"/>
+</section>
+</section>
+</section>
+</section>
+</article>
+<footer class="prev-next-footer d-print-none">
+<div class="prev-next-area">
+</div>
+</footer>
+</div>
+<div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+<div class="sidebar-secondary-item">
+<div class="page-toc tocsection onthispage">
+<i class="fa-solid fa-list"></i> Contents
+  </div>
+<nav class="bd-toc-nav page-toc">
+<ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#id1"><code class="docutils literal notranslate"><span class="pre">Tensor</span></code></a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#methods">Methods</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#add-arguments"><code class="docutils literal notranslate"><span class="pre">add_arguments</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#astype"><code class="docutils literal notranslate"><span class="pre">astype</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#at"><code class="docutils literal notranslate"><span class="pre">at</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#backward"><code class="docutils literal notranslate"><span class="pre">backward</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#copy-from"><code class="docutils literal notranslate"><span class="pre">copy_from</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#get-arguments"><code class="docutils literal notranslate"><span class="pre">get_arguments</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#impl"><code class="docutils literal notranslate"><span class="pre">impl_</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#permute"><code class="docutils literal notranslate"><span class="pre">permute</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#realize"><code class="docutils literal notranslate"><span class="pre">realize</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#requires-grad"><code class="docutils literal notranslate"><span class="pre">requires_grad_</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#reshape"><code class="docutils literal notranslate"><span class="pre">reshape</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#set"><code class="docutils literal notranslate"><span class="pre">set</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#set-maxpr"><code class="docutils literal notranslate"><span class="pre">set_maxpr</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#sum"><code class="docutils literal notranslate"><span class="pre">sum</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#to"><code class="docutils literal notranslate"><span class="pre">to</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#to-numpy"><code class="docutils literal notranslate"><span class="pre">to_numpy</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#transpose"><code class="docutils literal notranslate"><span class="pre">transpose</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</nav></div>
+</div></div>
+</div>
+<footer class="bd-footer-content">
+<div class="bd-footer-content__inner container">
+<div class="footer-item">
+<p class="component-author">
+By Nabla ML
+</p>
+</div>
+<div class="footer-item">
+<p class="copyright">
+    
+      © Copyright 2025, Nabla ML.
+      <br/>
+</p>
+</div>
+<div class="footer-item">
+</div>
+<div class="footer-item">
+</div>
+</div>
+</footer>
+</main>
+</div>
+</div>
+<!-- Scripts loaded after <body> so the DOM is not blocked -->
+<script src="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+<footer class="bd-footer">
+</footer>
+</body>
+</html>

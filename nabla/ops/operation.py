@@ -1,375 +1,269 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Nabla 2025 - Updated Operations Base Classes
 # ===----------------------------------------------------------------------=== #
 
-"""Base operation classes for a clean OOP design."""
+"""Base classes for all operations with automatic batch_dims propagation."""
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
-from max.dtype import DType
-from max.graph import TensorValue
-
-from ..core.tensor import Tensor
+if TYPE_CHECKING:
+    from max import graph
+    from ..core.tensor import Tensor
 
 
 class Operation(ABC):
-    """Abstract base class for all operations."""
-
-    def __init__(self, name: str):
-        self.name = name
-
-    @abstractmethod
-    def forward(self, *args: Tensor) -> Tensor:
-        """Forward pass - creates the result Tensor."""
-        pass
-
-    @abstractmethod
-    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
-        """Compute the output shape given input shapes."""
-        pass
-
-    @abstractmethod
-    def maxpr(self, args: list[TensorValue], output: Tensor) -> None:
-        """MAX graph computation."""
-        pass
-
-    @abstractmethod
-    def eagerxpr(self, args: list[Tensor], output: Tensor) -> None:
-        """Eager computation using NumPy."""
-        pass
-
-    @abstractmethod
-    def vjp_rule(
-        self, primals: list[Tensor], cotangent: Tensor, output: Tensor
-    ) -> list[Tensor]:
-        """Vector-Jacobian product rule for reverse-mode autodiff."""
-        pass
-
-    @abstractmethod
-    def jvp_rule(
-        self, primals: list[Tensor], tangents: list[Tensor], output: Tensor
-    ) -> Tensor:
-        """Jacobian-vector product rule for forward-mode autodiff."""
-        pass
+    """Base class for all operations.
     
-    def custom_kernel_path(self) -> Path | None:
-        """Optional: path to custom kernel implementation."""
-        return None
-
-
-class UnaryOperation(Operation):
-    """Base class for unary operations."""
-
-    def forward(self, *args: Tensor) -> Tensor:
-        """Forward pass for unary operations."""
-        if len(args) != 1:
-            raise ValueError(f"Unary operation requires 1 argument, got {len(args)}")
-        arg = args[0]
-
-        output_shape = self.compute_output_shape(arg.shape)
-        output_batch_dims = self.compute_output_batch_dims(arg.batch_dims)
-        output_dtype = self.compute_output_dtype(arg)
-
-        res = Tensor(
-            shape=output_shape,
-            dtype=output_dtype,
-            device=arg.logical_device,
-            materialize=False,
-            name=self.name,
-            batch_dims=output_batch_dims,
-        )
-
-        res.set_maxpr(self.maxpr)
-        res.add_arguments(arg)
-        res.vjp_rule = self.vjp_rule
-        res.jvp_rule = self.jvp_rule
-        res.custom_kernel_path = self.custom_kernel_path()
-
-        if not res.stage_realization:
-            self.eagerxpr([arg], res)
-
-        res.creator_op = self
-        return res
-
-    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
-        """Default: output shape same as input shape."""
-        if len(input_shapes) != 1:
-            raise ValueError(
-                f"Unary operation requires 1 input shape, got {len(input_shapes)}"
+    Auto-propagates batch_dims = max(all input batch_dims) to all outputs.
+    """
+    
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        ...
+    
+    @abstractmethod
+    def maxpr(self, *args: graph.TensorValue, **kwargs: Any) -> Any:
+        """Returns TensorValue or pytree of TensorValues."""
+        ...
+    
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        from ..core.tensor import Tensor
+        from ..core.tensor_impl import TensorImpl
+        from ..core.compute_graph import GRAPH
+        from ..core import pytree
+        from max import graph as g
+        
+        any_traced = False
+        any_has_tangent = False
+        max_batch_dims = 0
+        
+        def tensor_to_value(x: Any) -> Any:
+            nonlocal any_traced, any_has_tangent, max_batch_dims
+            if isinstance(x, Tensor):
+                if x._impl.traced:
+                    any_traced = True
+                if x._impl.tangent is not None:
+                    any_has_tangent = True
+                max_batch_dims = max(max_batch_dims, x._impl.batch_dims)
+                return g.TensorValue(x)
+            return x
+        
+        def value_to_tensor(x: Any) -> Any:
+            if pytree.is_tensor_value(x):
+                impl = TensorImpl(values=x, traced=any_traced, batch_dims=max_batch_dims)
+                impl.cache_metadata(x)
+                return Tensor(impl=impl)
+            return x
+        
+        with GRAPH.graph:
+            converted_args = pytree.tree_map(tensor_to_value, args)
+            result_tree = self.maxpr(*converted_args, **kwargs)
+        
+        output = pytree.tree_map(value_to_tensor, result_tree)
+        
+        # OutputRefs for tracing
+        output_impls = [x._impl for x in pytree.tree_leaves(output) if isinstance(x, Tensor)]
+        
+        if output_impls:
+            import weakref
+            from ..core.tracing import OutputRefs
+            
+            _, output_tree_def = pytree.tree_flatten(output, is_leaf=pytree.is_tensor)
+            weak_refs = tuple(weakref.ref(impl) for impl in output_impls)
+            
+            def to_impl(x: Any) -> Any:
+                return x._impl if isinstance(x, Tensor) else x
+            
+            stored_args = pytree.tree_map(to_impl, args) if any_traced else ()
+            stored_kwargs = pytree.tree_map(to_impl, kwargs) if any_traced and kwargs else None
+            
+            output_refs = OutputRefs(
+                _refs=weak_refs,
+                tree_def=output_tree_def,
+                op=self,
+                op_args=stored_args,
+                op_kwargs=stored_kwargs
             )
-        return input_shapes[0]
-
-    def compute_output_dtype(self, arg: Tensor) -> DType:
-        """Default: output dtype same as input dtype."""
-        return arg.dtype
-
-    def compute_output_batch_dims(
-        self, input_batch_dims: tuple[int, ...]
-    ) -> tuple[int, ...]:
-        """Default: output batch dims same as input batch dims."""
-        return input_batch_dims
-
-
-def move_to_best_device(*args: Tensor) -> tuple[Tensor, ...]:
-    """Move all tensors to the best available device."""
-    if len(args) <= 1:
-        return args
-
-    import numpy as np
-
-    # Track devices and data amounts
-    device_data = {}
-    accelerator_devices = set()
-
-    for arg in args:
-        device = arg.logical_device
-        data_size = np.prod(arg.shape)
-        device_data[device] = device_data.get(device, 0) + data_size
-
-        # Check if this device is an accelerator (non-host device)
-        if not device.is_host:
-            accelerator_devices.add(device)
-
-    # Determine best device according to the rules:
-    # 1. If any accelerator has data, choose the best accelerator considering peer access
-    # 2. Otherwise, choose the device (CPU) with most data
-    if accelerator_devices:
-        # For multi-accelerator scenarios, consider peer access costs
-        if len(accelerator_devices) > 1:
-            # Calculate effective data amount considering peer access
-            accelerator_scores = {}
-            for candidate_device in accelerator_devices:
-                # Base score is the data already on this device
-                base_score = device_data[candidate_device]
-
-                # Add bonus for data that can be directly accessed from other accelerators
-                peer_accessible_data = 0
-                for other_device in accelerator_devices:
-                    if other_device != candidate_device and candidate_device.can_access(
-                        other_device
-                    ):
-                        peer_accessible_data += device_data[other_device]
-
-                # Weight peer-accessible data less than local data (avoid unnecessary moves)
-                accelerator_scores[candidate_device] = base_score + (
-                    peer_accessible_data * 0.1
+            
+            for idx, impl in enumerate(output_impls):
+                impl.output_refs = output_refs
+                impl.output_index = idx
+        
+        # JVP mode
+        if any_has_tangent:
+            tangents = pytree.tree_map(
+                lambda x: Tensor(impl=x._impl.tangent) if isinstance(x, Tensor) and x._impl.tangent else None,
+                args
+            )
+            output_tangent = self.jvp_rule(args, tangents, output)
+            if output_tangent is not None:
+                pytree.tree_map(
+                    lambda o, t: setattr(o._impl, 'tangent', t._impl) if isinstance(o, Tensor) and isinstance(t, Tensor) else None,
+                    output, output_tangent
                 )
-
-            best_device = max(accelerator_scores, key=lambda d: accelerator_scores[d])
-        else:
-            # Single accelerator case - simple selection
-            best_device = max(accelerator_devices, key=lambda d: device_data[d])
-    else:
-        # Find device with most data (will be CPU in this case)
-        best_device = max(device_data, key=lambda d: device_data[d])
-
-    # Move all tensors to the best device
-    result_args = []
-    for arg in args:
-        if arg.logical_device != best_device:
-            result_args.append(arg.to(best_device))
-        else:
-            result_args.append(arg)
-
-    return tuple(result_args)
+        
+        return output
+    
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        raise NotImplementedError(f"'{self.name}' does not implement vjp_rule")
+    
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        raise NotImplementedError(f"'{self.name}' does not implement jvp_rule")
+    
+    def sharding_rule(self, inputs: Any, output: Any) -> Any:
+        raise NotImplementedError(f"'{self.name}' does not implement sharding_rule")
+    
+    def get_sharding_rule_template(self) -> Any:
+        return None
+    
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(name={self.name!r})"
 
 
 class BinaryOperation(Operation):
-    """Base class for binary operations."""
-
-    def forward(self, *args: Tensor) -> Tensor:
-        """Forward pass for binary operations."""
-        if len(args) != 2:
-            raise ValueError(f"Binary operation requires 2 arguments, got {len(args)}")
-
-        # Move tensors to best device
-        args = move_to_best_device(*args)
-        arg1, arg2 = args[0], args[1]
-
-        from ..ops.view import broadcast_batch_dims, broadcast_to, unsqueeze
-
-        self._validate_inputs(arg1, arg2)
-
-        output_shape = self.compute_output_shape(arg1.shape, arg2.shape)
-        output_batch_dims = self.compute_output_batch_dims(
-            arg1.batch_dims, arg2.batch_dims
-        )
-        output_dtype = self.compute_output_dtype(arg1, arg2)
-
-        # TODO: The following makes everything a tiny bit slower, can we optiize this unsqueezing approach to make shapes of equal length?
-        if len(arg1.shape) < len(output_shape):
-            for _ in range(len(output_shape) - len(arg1.shape)):
-                arg1 = unsqueeze(arg1, [-len(arg1.shape) - 1])
-
-        if len(arg2.shape) < len(output_shape):
-            for _ in range(len(output_shape) - len(arg2.shape)):
-                arg2 = unsqueeze(arg2, [-len(arg2.shape) - 1])
-
-        if arg1.traced or arg1.requires_grad:
-            arg1 = broadcast_to(arg1, output_shape)
-            arg1 = broadcast_batch_dims(arg1, output_batch_dims)
-        if arg2.traced or arg2.requires_grad:
-            arg2 = broadcast_to(arg2, output_shape)
-            arg2 = broadcast_batch_dims(arg2, output_batch_dims)
-
-        res = Tensor(
-            shape=output_shape,
-            dtype=output_dtype,
-            device=arg1.logical_device,
-            materialize=False,
-            name=self.name,
-            batch_dims=output_batch_dims,
-        )
-
-        res.set_maxpr(self.maxpr)
-        res.add_arguments(arg1, arg2)
-        res.vjp_rule = self.vjp_rule
-        res.jvp_rule = self.jvp_rule
-        res.custom_kernel_path = self.custom_kernel_path()
-
-        if not res.stage_realization:
-            self.eagerxpr([arg1, arg2], res)
-
-        res.creator_op = self
-        return res
-
-    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
-        """Compute broadcasted output shape."""
-        if len(input_shapes) != 2:
-            raise ValueError(
-                f"Binary operation requires 2 input shapes, got {len(input_shapes)}"
-            )
-        shape1, shape2 = input_shapes[0], input_shapes[1]
-
-        from ..utils.shape_utils import get_broadcasted_shape
-
-        return get_broadcasted_shape(shape1, shape2)
-
-    def compute_output_dtype(self, arg1: Tensor, arg2: Tensor) -> DType:
-        """Default: output dtype same as first input dtype."""
-        return arg1.dtype
-
-    def _validate_inputs(self, arg1: Tensor, arg2: Tensor) -> None:
-        """Validate binary operation inputs."""
-        if not isinstance(arg1, Tensor) or not isinstance(arg2, Tensor):
-            raise TypeError("Both arguments must be Tensor instances")
-        if arg1.dtype != arg2.dtype:
-            raise ValueError(f"Dtypes {arg1.dtype} and {arg2.dtype} are incompatible")
-        if arg1.logical_device != arg2.logical_device:
-            raise ValueError(
-                f"Devices {arg1.logical_device} and {arg2.logical_device} are incompatible"
-            )
-
-    def compute_output_batch_dims(self, *input_batch_dims: tuple) -> tuple:
-        """Default: output batch dims same as input batch dims."""
-        if len(input_batch_dims) != 2:
-            raise ValueError(
-                f"Binary operation requires 2 input batch dims, got {len(input_batch_dims)}"
-            )
-        shape1, shape2 = input_batch_dims[0], input_batch_dims[1]
-
-        from ..utils.shape_utils import get_broadcasted_shape
-
-        return get_broadcasted_shape(shape1, shape2)
-
-
-class ReductionOperation(UnaryOperation):
-    """Base class for reduction operations."""
-
-    def __init__(
-        self,
-        name: str,
-        axes: int | list[int] | tuple[int, ...] | None = None,
-        keep_dims: bool = False,
-    ):
-        super().__init__(name)
-        self.axes = axes
-        self.keep_dims = keep_dims
-
-    def compute_output_shape(self, *input_shapes: tuple) -> tuple:
-        """Compute output shape for reduction."""
-        if len(input_shapes) != 1:
-            raise ValueError(
-                f"Reduction operation requires 1 input shape, got {len(input_shapes)}"
-            )
-        input_shape = input_shapes[0]
-        return self._compute_reduction_shape(input_shape, self.axes)
-
-    def compute_output_batch_dims(self, *input_batch_dims: tuple) -> tuple:
-        """Compute output batch dims for reduction."""
-        if len(input_batch_dims) != 1:
-            raise ValueError(
-                f"Reduction operation requires 1 input batch dims, got {len(input_batch_dims)}"
-            )
-        # For regular reductions, batch_dims are not affected - they pass through unchanged
-        # Only SumBatchDimsOp overrides this to actually reduce batch dimensions
-        return input_batch_dims[0]
-
+    """Base for binary element-wise ops with batch_dims-aware broadcasting."""
+    
+    def __call__(self, x: Tensor, y: Tensor) -> Tensor:
+        from ..core.tensor import Tensor
+        
+        x_batch = x._impl.batch_dims
+        y_batch = y._impl.batch_dims
+        out_batch_dims = max(x_batch, y_batch)
+        
+        # Explicit broadcasting for traced tensors (needed for correct gradients)
+        if x._impl.traced or y._impl.traced:
+            x, y = self._prepare_for_broadcast(x, y, out_batch_dims)
+        
+        result = super().__call__(x, y)
+        return result
+    
+    def _prepare_for_broadcast(self, x: Tensor, y: Tensor, out_batch_dims: int) -> tuple[Tensor, Tensor]:
+        from . import view as view_ops
+        
+        # Get PHYSICAL shapes
+        x_physical = tuple(x._impl.physical_shape)
+        y_physical = tuple(y._impl.physical_shape)
+        x_batch = x._impl.batch_dims
+        y_batch = y._impl.batch_dims
+        
+        # Split into batch and logical
+        x_batch_shape = x_physical[:x_batch]
+        x_logical_shape = x_physical[x_batch:]
+        y_batch_shape = y_physical[:y_batch]
+        y_logical_shape = y_physical[y_batch:]
+        
+        # Compute broadcasted shapes
+        out_batch_shape = self._broadcast_shapes(x_batch_shape, y_batch_shape)
+        out_logical_shape = self._broadcast_shapes(x_logical_shape, y_logical_shape)
+        out_physical_shape = out_batch_shape + out_logical_shape
+        
+        # Prepare x
+        if x._impl.traced:
+            x = self._unsqueeze_to_rank(x, len(out_physical_shape), x_batch, out_batch_dims)
+            current = tuple(x._impl.physical_shape)
+            if current != out_physical_shape:
+                x = view_ops.broadcast_to(x, out_logical_shape)
+        
+        # Prepare y
+        if y._impl.traced:
+            y = self._unsqueeze_to_rank(y, len(out_physical_shape), y_batch, out_batch_dims)
+            current = tuple(y._impl.physical_shape)
+            if current != out_physical_shape:
+                y = view_ops.broadcast_to(y, out_logical_shape)
+        
+        return x, y
+    
+    def _unsqueeze_to_rank(self, t: Tensor, target_rank: int, current_batch_dims: int, target_batch_dims: int) -> Tensor:
+        from . import view as view_ops
+        
+        current_rank = len(t._impl.physical_shape)
+        batch_dims_to_add = target_batch_dims - current_batch_dims
+        current_logical_rank = current_rank - current_batch_dims
+        target_logical_rank = target_rank - target_batch_dims
+        logical_dims_to_add = target_logical_rank - current_logical_rank
+        
+        # Add batch dims at front (logical axis 0 repeatedly)
+        for _ in range(batch_dims_to_add):
+            t = view_ops.unsqueeze(t, axis=0)
+        # Add logical dims (at position = target_batch_dims, which is logical 0 after batch adds)
+        for _ in range(logical_dims_to_add):
+            t = view_ops.unsqueeze(t, axis=0)
+        
+        return t
+    
     @staticmethod
-    def _compute_reduction_shape(
-        input_shape: tuple,
-        axes: int | list[int] | tuple[int, ...] | None,
-    ) -> tuple:
-        """Compute the output shape for a reduction operation.
-
-        Always preserves dimensions (sets reduced axes to size 1).
-        Dimension removal should be handled separately by squeeze operations.
-        """
-        if axes is None:
-            # Reduce all axes - return shape with all dimensions set to 1
-            return (1,) * len(input_shape)
-
-        if isinstance(axes, int):
-            axes = [axes]
-        elif isinstance(axes, tuple):
-            axes = list(axes)
-
-        normalized_axes = []
-        for axis in axes:
-            if axis < 0:
-                axis += len(input_shape)
-            if axis < 0 or axis >= len(input_shape):
-                raise ValueError(
-                    f"Axis {axis} is out of bounds for shape {input_shape}"
-                )
-            normalized_axes.append(axis)
-
-        output_shape = []
-        for i, dim in enumerate(input_shape):
-            if i in normalized_axes:
-                # Always preserve dimensions - set reduced axes to size 1
-                output_shape.append(1)
+    def _broadcast_shapes(shape1: tuple, shape2: tuple) -> tuple:
+        max_len = max(len(shape1), len(shape2))
+        s1 = (1,) * (max_len - len(shape1)) + tuple(shape1)
+        s2 = (1,) * (max_len - len(shape2)) + tuple(shape2)
+        
+        result = []
+        for d1, d2 in zip(s1, s2):
+            if d1 == d2:
+                result.append(d1)
+            elif d1 == 1:
+                result.append(d2)
+            elif d2 == 1:
+                result.append(d1)
             else:
-                output_shape.append(dim)
+                raise ValueError(f"Cannot broadcast shapes {shape1} and {shape2}")
+        return tuple(result)
 
-        return tuple(output_shape)
+
+class LogicalAxisOperation(Operation):
+    """Base for ops that take LOGICAL axis/axes kwargs.
+    
+    Translates ALL integer kwargs by batch_dims offset.
+    Works for: unsqueeze, squeeze, transpose, reduce_sum, etc.
+    """
+    
+    # True for unsqueeze (uses ndim+1 for negative axis normalization)
+    axis_offset_for_insert: bool = False
+    
+    def __call__(self, x: Tensor, **kwargs: Any) -> Tensor:
+        batch_dims = x._impl.batch_dims
+        logical_ndim = len(x.shape)
+        
+        translated = {}
+        for key, value in kwargs.items():
+            if isinstance(value, int) and not isinstance(value, bool):
+                if value < 0:
+                    offset = 1 if self.axis_offset_for_insert else 0
+                    value = logical_ndim + offset + value
+                translated[key] = batch_dims + value
+            else:
+                translated[key] = value
+        
+        return super().__call__(x, **translated)
 
 
-class ViewOperation(UnaryOperation):
-    """Base class for view operations (reshape, transpose, etc.)."""
+# Alias for backward compatibility and semantic clarity
+ReduceOperation = LogicalAxisOperation
+UnaryOperation = Operation
 
-    def __init__(self, name: str):
-        super().__init__(name)
 
-    def compute_output_batch_dims(self, *input_batch_dims: tuple) -> tuple:
-        """Default: output batch dims same as input batch dims."""
-        if len(input_batch_dims) != 1:
-            raise ValueError(
-                f"View operation requires 1 input batch dims, got {len(input_batch_dims)}"
-            )
-        return input_batch_dims[0]
+class LogicalShapeOperation(Operation):
+    """Base for ops that take LOGICAL shape kwargs.
+    
+    Prepends batch_shape to the shape kwarg.
+    Works for: reshape, broadcast_to, etc.
+    """
+    
+    def __call__(self, x: Tensor, *, shape: tuple[int, ...]) -> Tensor:
+        batch_shape = x._impl.batch_shape
+        physical_shape = tuple(batch_shape) + tuple(shape) if batch_shape else tuple(shape)
+        return super().__call__(x, shape=physical_shape)
+
+
+__all__ = [
+    "Operation",
+    "BinaryOperation",
+    "LogicalAxisOperation",
+    "LogicalShapeOperation",
+    "ReduceOperation",
+    "UnaryOperation",
+]
