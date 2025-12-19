@@ -59,10 +59,33 @@ def _default_dtype(device: Device) -> DType:
     return DType.float32 if isinstance(device, CPU) else DType.bfloat16
 
 
+_DEVICE_SPECS_CACHE: list[driver.DeviceSpec] | None = None
+_HAS_ACCELERATOR_CACHE: bool | None = None
+
+
+def _get_device_specs() -> list[driver.DeviceSpec]:
+    """Cached wrapper around driver.scan_available_devices."""
+    global _DEVICE_SPECS_CACHE
+    if _DEVICE_SPECS_CACHE is None:
+        _DEVICE_SPECS_CACHE = driver.scan_available_devices()
+        # Ensure CPU is always available
+        if (cpu := driver.DeviceSpec.cpu()) not in _DEVICE_SPECS_CACHE:
+            _DEVICE_SPECS_CACHE.append(cpu)
+    return _DEVICE_SPECS_CACHE
+
+
+def _has_accelerator() -> bool:
+    """Cached wrapper around accelerator_count."""
+    global _HAS_ACCELERATOR_CACHE
+    if _HAS_ACCELERATOR_CACHE is None:
+        _HAS_ACCELERATOR_CACHE = accelerator_count() > 0
+    return _HAS_ACCELERATOR_CACHE
+
+
 def _default_device() -> Device:
     if device := _DEFAULT_DEVICE.get(None):
         return device
-    return Accelerator() if accelerator_count() else CPU()
+    return Accelerator() if _has_accelerator() else CPU()
 
 
 def defaults(
@@ -92,14 +115,24 @@ def defaults_like(like: Tensor | TensorType) -> Generator[None]:
         yield
 
 
+_GLOBAL_SESSION: engine.api.InferenceSession | None = None
+
 def _session() -> engine.api.InferenceSession:
     """A single global inference session for compiling and running kernels."""
-    device_specs = driver.scan_available_devices()
-    if (cpu := driver.DeviceSpec.cpu()) not in device_specs:
-        device_specs.append(cpu)
+    if session := _SESSION.get(None):
+        return session
+
+    global _GLOBAL_SESSION
+    if _GLOBAL_SESSION is not None:
+        _SESSION.set(_GLOBAL_SESSION)
+        return _GLOBAL_SESSION
+
+    device_specs = _get_device_specs()
     devices = driver.load_devices(device_specs)
-    if not (session := _SESSION.get(None)):
-        _SESSION.set(session := engine.api.InferenceSession(devices=devices))
+    
+    session = engine.api.InferenceSession(devices=devices)
+    _GLOBAL_SESSION = session
+    _SESSION.set(session)
     return session
 
 
