@@ -1,4 +1,4 @@
-![alt text](docs/_static/nabla-logo2.png)
+# Nabla
 
 Nabla is a Machine Learning library for the emerging Mojo/Python ecosystem, featuring:
 
