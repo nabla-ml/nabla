@@ -138,6 +138,64 @@ class Tensor(DLPackArray, HasTensorValue):
         """Enable tracing on this tensor for autograd."""
         self._impl.traced = True
         return self
+    
+    def shard(
+        self,
+        mesh: Any,
+        dim_specs: list[Any],
+        replicated_axes: set[str] | None = None,
+    ) -> Tensor:
+        """Annotate tensor with sharding constraint.
+        
+        Args:
+            mesh: DeviceMesh to shard across
+            dim_specs: List of DimSpec for each dimension
+            replicated_axes: Axes to explicitly replicate (optional)
+        
+        Returns:
+            self (for chaining with .trace())
+        """
+        from ..sharding import ShardingSpec
+        self._impl.sharding = ShardingSpec(
+            mesh, dim_specs, replicated_axes=replicated_axes or set()
+        )
+        return self
+    
+    def with_sharding(
+        self,
+        mesh: Any,
+        dim_specs: list[Any],
+        replicated_axes: set[str] | None = None,
+    ) -> Tensor:
+        """Apply sharding constraint, resharding if needed.
+        
+        This is the explicit way to set output sharding. If the tensor's current
+        sharding differs from the target, it will be resharded automatically.
+        
+        Args:
+            mesh: DeviceMesh to shard across
+            dim_specs: List of DimSpec for each dimension
+            replicated_axes: Axes to explicitly replicate (optional)
+            
+        Returns:
+            New tensor with target sharding (resharded if necessary)
+        
+        Example:
+            # Force output to be replicated, even if operation infers sharding
+            C = (A @ B).with_sharding(mesh, [DimSpec([]), DimSpec([])])
+        """
+        from ..sharding import ShardingSpec
+        from ..sharding.spmd import needs_reshard, reshard_tensor
+        
+        target = ShardingSpec(mesh, dim_specs, replicated_axes=replicated_axes or set())
+        
+        # If already has sharding and it differs, reshard
+        if self._impl.sharding and needs_reshard(self._impl.sharding, target):
+            return reshard_tensor(self, self._impl.sharding, target, mesh)
+        
+        # Otherwise just annotate
+        self._impl.sharding = target
+        return self
 
     # ===== Factory methods =====
 

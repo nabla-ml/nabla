@@ -2,6 +2,7 @@
 
 from .spec import DeviceMesh, ShardingSpec, DimSpec, compute_local_shape, get_num_shards
 from .propagation import OpShardingRule, OpShardingRuleTemplate, PropagationStrategy, OpPriority, FactorSharding
+from . import spmd
 
 __all__ = [
     "DeviceMesh",
@@ -14,4 +15,6 @@ __all__ = [
     "PropagationStrategy",
     "OpPriority",
     "FactorSharding",
+    "spmd",
 ]
+

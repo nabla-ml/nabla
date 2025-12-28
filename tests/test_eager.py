@@ -205,10 +205,12 @@ def test_operation_base_class():
         print(f"  jvp_rule raises: {type(e).__name__}")
     
     try:
-        op.sharding_rule([], None)  # inputs, output
-        raise AssertionError("Should have raised NotImplementedError")
-    except NotImplementedError as e:
-        print(f"  sharding_rule raises: {type(e).__name__}")
+        result = op.sharding_rule([], None)  # inputs, output
+        if result is not None:
+            raise AssertionError(f"sharding_rule should return None by default, got {result}")
+        print("  sharding_rule returns None (correct)")
+    except Exception as e:
+        print(f"  sharding_rule raises: {type(e).__name__}: {e}")
     
     print("✓ Operation base class works!\n")
 

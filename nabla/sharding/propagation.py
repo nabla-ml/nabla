@@ -246,6 +246,25 @@ class OpShardingRule:
                     results.append(("output", t_idx, dim_idx))
         return results
     
+    def get_contracting_factors(self) -> Set[str]:
+        """Return factors that appear only in inputs (not in outputs).
+        
+        These are "contracting" factors (like k in matmul A[m,k] @ B[k,n] -> C[m,n]).
+        When sharded, operations on contracting factors produce partial results
+        that require AllReduce to combine.
+        """
+        input_factors = set()
+        for mapping in self.input_mappings:
+            for factors in mapping.values():
+                input_factors.update(factors)
+        
+        output_factors = set()
+        for mapping in self.output_mappings:
+            for factors in mapping.values():
+                output_factors.update(factors)
+        
+        return input_factors - output_factors
+    
     def to_einsum_notation(self) -> str:
         def mapping_to_str(mapping: Dict[int, List[str]]) -> str:
             if not mapping:
@@ -448,23 +467,45 @@ def _should_update_dim(
     proposed_axes: List[str],
     proposed_priority: int,
 ) -> bool:
-    """Determine if a dimension should be updated based on Shardy semantics."""
+    """Determine if a dimension should be updated based on Shardy semantics.
+    
+    Key cases:
+    - Stronger priority always wins
+    - Equal priority: 
+      - If current is open, can receive new sharding
+      - If proposed is the "common prefix" from conflict resolution,
+        we MUST update to enforce consistency (even for closed dims)
+    """
+    # Case 1: Stronger priority always wins
     if proposed_priority < current.priority:
         return True
     
+    # Case 2: Equal priority
     if proposed_priority == current.priority:
+        # Open dims can receive/extend sharding
         if current.is_open:
             if not current.axes and proposed_axes:
                 return True
             if len(proposed_axes) > len(current.axes):
                 if proposed_axes[:len(current.axes)] == current.axes:
                     return True
+        
+        # CRITICAL: If current has axes but proposed is empty or shorter,
+        # this means factor resolution resulted in "common prefix" (conflict).
+        # We MUST update to enforce compatibility across all tensors.
+        if current.axes and (not proposed_axes or len(proposed_axes) < len(current.axes)):
+            # Only enforce if proposed_axes is a prefix of current.axes
+            if not proposed_axes or current.axes[:len(proposed_axes)] == proposed_axes:
+                return True
     
+    # Case 3: Weaker priority - only update empty open dims
     if proposed_priority > current.priority:
         if current.is_open and not current.axes and proposed_axes:
             return True
     
     return False
+
+
 
 
 def _update_from_factors(
@@ -590,11 +631,172 @@ def unary_template(rank: int, prefix: str = "d") -> OpShardingRuleTemplate:
     mapping = {i: [factors[i]] for i in range(rank)}
     return OpShardingRuleTemplate([mapping], [mapping])
 
+def broadcast_template(in_rank: int, out_rank: int) -> OpShardingRuleTemplate:
+    """Template for broadcast operation: input dims align to output SUFFIX.
+    
+    For broadcast (4,) -> (4,4) with numpy semantics:
+    - Input dim0 maps to output dim1 (last dim)
+    - Output dim0 is NEW (gets a new factor, replicated)
+    
+    Rule: (j) -> (i, j) where i is new, j preserves sharding from input.
+    
+    Also handles dimension expansion where input dim has size 1 but output has larger size.
+    In that case, the expanded dimension gets a NEW factor since it's being replicated.
+    """
+    # New dimensions get new factors (will be replicated since input doesn't have them)
+    new_dims = out_rank - in_rank
+    
+    # For same-rank broadcast, we need to mark size-1 dimensions as NEW factors
+    # since their values are being replicated
+    out_factors = []
+    in_factors = [f"d{i}" for i in range(in_rank)]
+    
+    # Output factors: first new_dims are brand new, rest align with input suffix
+    for i in range(new_dims):
+        out_factors.append(f"new{i}")  # New dimensions from rank expansion
+    for i in range(in_rank):
+        out_factors.append(f"d{i}")  # Align with input dimensions
+    
+    in_mapping = {i: [in_factors[i]] for i in range(in_rank)}
+    out_mapping = {i: [out_factors[i]] for i in range(out_rank)}
+    
+    return OpShardingRuleTemplate([in_mapping], [out_mapping])
+
+
+def broadcast_with_shapes_template(in_shape: tuple, out_shape: tuple) -> OpShardingRuleTemplate:
+    """Template for broadcast with known shapes.
+    
+    This handles both rank expansion and dimension expansion (size 1 -> N).
+    Dimensions that are replicated (1 -> N) get new factors.
+    Dimensions that match get shared factors.
+    """
+    in_rank = len(in_shape)
+    out_rank = len(out_shape)
+    new_dims = out_rank - in_rank
+    
+    # Align input to output suffix
+    in_factors = []
+    out_factors = []
+    factor_idx = 0
+    
+    # First new_dims of output are new factors
+    for i in range(new_dims):
+        out_factors.append(f"new{i}")
+    
+    # Remaining output dims align with input
+    for i in range(in_rank):
+        in_size = in_shape[i]
+        out_idx = new_dims + i
+        out_size = out_shape[out_idx] if out_idx < len(out_shape) else 0
+        
+        if in_size == 1 and out_size > 1:
+            # Dimension expansion: size 1 -> N means replication
+            # Input dim gets its own factor, output gets a NEW factor
+            in_factors.append(f"in{i}")
+            out_factors.append(f"expand{i}")
+        else:
+            # Same size: shared factor
+            in_factors.append(f"d{i}")
+            out_factors.append(f"d{i}")
+    
+    in_mapping = {i: [in_factors[i]] for i in range(in_rank)}
+    out_mapping = {i: [out_factors[i]] for i in range(out_rank)}
+    
+    return OpShardingRuleTemplate([in_mapping], [out_mapping])
+
+
+
+def unsqueeze_template(in_rank: int, axis: int) -> OpShardingRuleTemplate:
+    """Template for unsqueeze: insert a new dimension at axis.
+    
+    For unsqueeze (4,) axis=0 -> (1,4):
+    - New dim at axis=0 gets new factor (replicated)
+    - Input dim0 -> output dim1 (shifted by 1)
+    
+    Rule: (d0) -> (new, d0)
+    """
+    out_rank = in_rank + 1
+    # Normalize axis
+    if axis < 0:
+        axis = out_rank + axis
+    
+    # Input factors
+    in_factors = [f"d{i}" for i in range(in_rank)]
+    
+    # Output factors: insert "new" at axis position
+    out_factors = in_factors[:axis] + [] + in_factors[axis:]  # Copy input factors
+    
+    # Build output by inserting new factor at axis
+    out_factors_with_new = []
+    in_idx = 0
+    for i in range(out_rank):
+        if i == axis:
+            out_factors_with_new.append("new")  # New dimension
+        else:
+            out_factors_with_new.append(in_factors[in_idx])
+            in_idx += 1
+    
+    in_mapping = {i: [in_factors[i]] for i in range(in_rank)}
+    out_mapping = {i: [out_factors_with_new[i]] for i in range(out_rank)}
+    
+    return OpShardingRuleTemplate([in_mapping], [out_mapping])
+
+
+
 def transpose_template(rank: int, perm: List[int]) -> OpShardingRuleTemplate:
     factors = [f"d{i}" for i in range(rank)]
     in_mapping = {i: [factors[i]] for i in range(rank)}
     out_mapping = {i: [factors[perm[i]]] for i in range(rank)}
     return OpShardingRuleTemplate([in_mapping], [out_mapping])
+
+def squeeze_template(in_rank: int, axis: int) -> OpShardingRuleTemplate:
+    """Template for squeeze: remove dimension at axis (must be size 1).
+    
+    For squeeze (1,4) axis=0 -> (4,):
+    - Dim at axis=0 is removed (was size 1, no sharding)
+    - Input dim1 -> output dim0 (shifted down)
+    
+    Rule: (removed, d0) -> (d0)
+    """
+    out_rank = in_rank - 1
+    # Normalize axis
+    if axis < 0:
+        axis = in_rank + axis
+    
+    # Input factors: the squeezed dimension gets a dummy factor
+    in_factors = []
+    out_idx = 0
+    for i in range(in_rank):
+        if i == axis:
+            in_factors.append("squeezed")  # Will be removed
+        else:
+            in_factors.append(f"d{out_idx}")
+            out_idx += 1
+    
+    # Output factors: all dims except the squeezed one
+    out_factors = [f"d{i}" for i in range(out_rank)]
+    
+    in_mapping = {i: [in_factors[i]] for i in range(in_rank)}
+    out_mapping = {i: [out_factors[i]] for i in range(out_rank)}
+    
+    return OpShardingRuleTemplate([in_mapping], [out_mapping])
+
+def swap_axes_template(rank: int, axis1: int, axis2: int) -> OpShardingRuleTemplate:
+    """Template for swap_axes: swap two dimensions.
+    
+    This is equivalent to transpose with a permutation that swaps axis1 and axis2.
+    """
+    # Normalize axes
+    if axis1 < 0:
+        axis1 = rank + axis1
+    if axis2 < 0:
+        axis2 = rank + axis2
+    
+    # Create permutation that swaps axis1 and axis2
+    perm = list(range(rank))
+    perm[axis1], perm[axis2] = perm[axis2], perm[axis1]
+    
+    return transpose_template(rank, perm)
 
 def reduce_template(rank: int, reduce_dims: List[int], keepdims: bool = False) -> OpShardingRuleTemplate:
     factors = [f"d{i}" for i in range(rank)]
@@ -610,6 +812,65 @@ def reduce_template(rank: int, reduce_dims: List[int], keepdims: bool = False) -
         else:
             out_mapping[out_idx] = [factors[i]]
             out_idx += 1
+    return OpShardingRuleTemplate([in_mapping], [out_mapping])
+
+def reshape_template(in_shape: Tuple[int, ...], out_shape: Tuple[int, ...]) -> OpShardingRuleTemplate:
+    """Create sharding rule template for reshape with compound factors.
+    
+    This automatically determines factor mappings for arbitrary reshapes by:
+    1. Finding which dimensions merge/split
+    2. Creating compound factors for merged dims
+    3. Splitting compound factors for split dims
+    
+    Examples:
+        reshape_template((2, 4), (8,))     -> {0: ["d0"], 1: ["d1"]} -> {0: ["d0", "d1"]}
+        reshape_template((8,), (2, 4))     -> {0: ["d0", "d1"]} -> {0: ["d0"], 1: ["d1"]}
+        reshape_template((8, 32), (2, 4, 32)) -> {0: ["d0", "d1"], 1: ["k"]} -> {0: ["d0"], 1: ["d1"], 2: ["k"]}
+    """
+    import math
+    
+    # Simplest implementation: assign unique factors to each output dimension
+    # and determine input mapping by factorizing
+    
+    # For general reshape, we need to factor the shapes
+    # This is a simplified version that handles common cases
+    
+    in_size = math.prod(in_shape)
+    out_size = math.prod(out_shape)
+    
+    if in_size != out_size:
+        raise ValueError(f"Reshape size mismatch: {in_size} != {out_size}")
+    
+    # Simple strategy: create factors for output dims, compound them for input
+    out_factors = [f"d{i}" for i in range(len(out_shape))]
+    out_mapping = {i: [out_factors[i]] for i in range(len(out_shape))}
+    
+    # Compound all factors for input if it's a single dimension
+    if len(in_shape) == 1:
+        in_mapping = {0: out_factors}
+    # Distribute factors across input dimensions
+    else:
+        # This is simplified - proper implementation would analyze actual factorization
+        # For now, handle common cases:
+        if len(in_shape) < len(out_shape):
+            # Split case: fewer input dims -> more output dims
+            # Example: (8,) -> (2, 4): input gets compound factor
+            in_mapping = {0: out_factors[:len(out_factors)]}
+            if len(in_shape) > 1:
+                # Distribute remaining
+                for i in range(1, len(in_shape)):
+                    in_mapping[i] = [out_factors[i]] if i < len(out_factors) else []
+        else:
+            # Merge or same: assign factors sequentially
+            in_mapping = {}
+            out_idx = 0
+            for i in range(len(in_shape)):
+                if out_idx < len(out_factors):
+                    in_mapping[i] = [out_factors[out_idx]]
+                    out_idx += 1
+                else:
+                    in_mapping[i] = []
+    
     return OpShardingRuleTemplate([in_mapping], [out_mapping])
 
 def gather_template(data_rank: int, indices_rank: int, axis: int) -> OpShardingRuleTemplate:
@@ -666,3 +927,89 @@ def embedding_template(vocab_sharded: bool = False) -> OpShardingRuleTemplate:
     indices_mapping = {0: ["b"], 1: ["s"]}
     output_mapping = {0: ["b"], 1: ["s"], 2: ["e"]}
     return OpShardingRuleTemplate([embed_mapping, indices_mapping], [output_mapping])
+
+
+# ============================================================================
+# Hierarchical Propagation Pass (XLA Shardy-style)
+# ============================================================================
+
+def run_hierarchical_propagation_pass(
+    operations_with_rules,
+    max_user_priority: int = 10,
+    max_iterations: int = 100,
+) -> int:
+    """Run hierarchical sharding propagation following XLA Shardy's nested loop structure.
+    
+    This implements the complete propagation hierarchy:
+    1. User priorities (p0, p1, p2, ...)
+    2. Operation priorities (PASSTHROUGH, CONTRACTION, REDUCTION, COMMUNICATION)
+    3. Propagation strategies (AGGRESSIVE, BASIC)
+    
+    Args:
+        operations_with_rules: List of (op, rule, input_specs, output_specs) tuples
+        max_user_priority: Maximum user priority to propagate (default: 10)
+        max_iterations: Max iterations per nested loop to prevent infinite loops
+        
+    Returns:
+        Total number of changes made across all iterations
+    
+    Example:
+        # operations_with_rules = [
+        #     (matmul_op, matmul_rule, [a_spec, b_spec], [c_spec]),
+        #     (add_op, add_rule, [c_spec, d_spec], [e_spec]),
+        # ]
+        # changes = run_hierarchical_propagation_pass(operations_with_rules)
+    """
+    total_changes = 0
+    
+    # Outer loop: User priorities (p0, p1, p2, ...)
+    for user_priority in range(max_user_priority + 1):
+        
+        # Middle loop: Operation priorities (PASSTHROUGH → TRANSFORM)
+        for op_priority in [OpPriority.PASSTHROUGH, OpPriority.CONTRACTION, 
+                            OpPriority.REDUCTION, OpPriority.COMMUNICATION]:
+            
+            # Inner loop: Propagation strategies (AGGRESSIVE → BASIC)
+            for strategy in [PropagationStrategy.AGGRESSIVE, PropagationStrategy.BASIC]:
+                
+                # Fixed-point iteration until no changes
+                iteration = 0
+                while iteration < max_iterations:
+                    changed_this_iter = False
+                    
+                    # Propagate through all operations
+                    for op, rule, input_specs, output_specs in operations_with_rules:
+                        # Filter by operation priority
+                        # (Note: operations should have op_priority attribute)
+                        op_prio = getattr(op, 'op_priority', OpPriority.CONTRACTION)
+                        if op_prio != op_priority:
+                            continue
+                        
+                        # Propagate with current user priority and strategy
+                        changed = propagate_sharding(
+                            rule, input_specs, output_specs,
+                            strategy=strategy,
+                            max_priority=user_priority
+                        )
+                        
+                        if changed:
+                            changed_this_iter = True
+                            total_changes += 1
+                    
+                    # Fixed point reached?
+                    if not changed_this_iter:
+                        break
+                    
+                    iteration += 1
+                    
+                    if iteration >= max_iterations:
+                        import warnings
+                        warnings.warn(
+                            f"Propagation did not converge after {max_iterations} iterations "
+                            f"at user_priority={user_priority}, op_priority={op_priority}, "
+                            f"strategy={strategy}"
+                        )
+                        break
+    
+    return total_changes
+

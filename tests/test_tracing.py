@@ -2,7 +2,7 @@
 
 from nabla.core.tensor import Tensor
 from nabla.core.graph_utils import print_trace_graph, get_all_impls_topological
-from nabla import multi_output_ops
+from nabla.ops import multi_output as multi_output_ops
 
 
 def main():

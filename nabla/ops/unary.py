@@ -108,7 +108,7 @@ class NegOp(UnaryOperation):
     
     def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
         """Apply negation element-wise."""
-        return ops.neg(x)
+        return ops.negate(x)
 
 
 # ===== Singleton instances exposed as functions =====

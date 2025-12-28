@@ -44,7 +44,7 @@ _GRAPH_EPOCH: int = 0
 _SEED: ContextVar[Tensor] = ContextVar("_SEED")
 
 # Debug flag for lazy evaluation - prints graph outputs before compilation
-DEBUG_LAZY_EVAL: bool = False
+DEBUG_LAZY_EVAL: bool = True
 
 def seed() -> Tensor:
     """Returns the global random seed tensor, initializing if necessary."""
@@ -245,31 +245,46 @@ class ComputeGraph:
     # --- Execution Strategies ---
 
     async def _evaluate_normal(self, unrealized: list[Tensor], return_model: bool) -> Any:
-        """Standard compilation path for single-device execution."""
+        """Standard compilation path for single-device execution.
+        
+        Handles both regular tensors (single value) and sharded tensors (multiple values).
+        """
         
         if DEBUG_LAZY_EVAL:
             print("=" * 70)
             print(f"[LAZY EVAL] Epoch {self.epoch} - Setting {len(unrealized)} output(s):")
             for i, t in enumerate(unrealized):
                 op_name = t._impl.op_name if t._impl.output_refs else "<leaf>"
-                # shape = t._impl.physical_shape
-                print(f"  [{i}] id={id(t)} op={op_name}")
-                import gc
-                refs = gc.get_referrers(t)
-                print(f"    Refs: {[type(r) for r in refs]}")
+                num_shards = len(t._impl._values) if t._impl._values else 1
+                print(f"  [{i}] id={id(t)} op={op_name} shards={num_shards}")
             print("-" * 70)
         
+        # Collect all output values - for sharded tensors, collect ALL shard values
+        # Also build index mapping for result storage
+        all_values = []
+        value_map = []  # List of (tensor, shard_idx) or (tensor, None) for single-value
+        
+        for t in unrealized:
+            values = t._impl._values
+            if values and len(values) > 1:
+                # Sharded tensor: output all shards
+                for shard_idx, val in enumerate(values):
+                    all_values.append(val)
+                    value_map.append((t, shard_idx))
+            else:
+                # Single-value tensor
+                all_values.append(graph.TensorValue(t))
+                value_map.append((t, None))
+        
         with self.graph:
-            self.graph.output(
-                ops.random._peek_seed(), *map(graph.TensorValue, unrealized)
-            )
+            self.graph.output(ops.random._peek_seed(), *all_values)
         
         if DEBUG_LAZY_EVAL:
             print("[LAZY EVAL] MAX Graph MLIR:")
             print(self.graph._module.operation)
             print("=" * 70)
         
-        return await self._compile_and_execute(unrealized, return_model)
+        return await self._compile_and_execute_with_map(unrealized, value_map, return_model)
 
     async def _evaluate_sharded(
         self, 
@@ -277,31 +292,82 @@ class ComputeGraph:
         op_impls: list[TensorImpl], 
         leaf_impls: list[TensorImpl]
     ) -> None:
-        """Sharded compilation path (currently dummy implementation)."""
-        from .sharding import ShardingSpec, compute_local_shape, get_num_shards
-        import numpy as np
-
-        self.graph._erase_output_if_present()
-
-        # Dummy result generation
-        results = []
-        for t in unrealized:
-            impl = t._impl
-            global_shape = tuple(int(d) for d in impl.get_unrealized_shape())
-            
+        """Sharded compilation path with graph transformation.
+        
+        1. Runs sharding propagation (annotates all tensors)
+        2. Builds sharded TensorValues by calling maxpr for each shard (same graph)
+        3. Compiles and executes normally
+        """
+        from ..sharding.transform import transform_trace_for_sharding
+        from ..sharding.spec import ShardingSpec
+        
+        # Find mesh from any sharded tensor
+        mesh = None
+        all_impls = op_impls + leaf_impls
+        for impl in all_impls:
             if isinstance(impl.sharding, ShardingSpec):
-                num_devices = get_num_shards(impl.sharding)
-                results.append([
-                    driver.Tensor.from_numpy(np.zeros(
-                        compute_local_shape(global_shape, impl.sharding, i),
-                        dtype=np.float32
-                    )) for i in range(num_devices)
-                ])
-            else:
-                results.append([driver.Tensor.from_numpy(np.zeros(global_shape, dtype=np.float32))])
+                mesh = impl.sharding.mesh
+                break
+        
+        if mesh is None:
+            raise ValueError("No mesh found in sharded tensors")
+        
+        # Create a FRESH graph for sharded execution.
+        # We do not want to mix the Logical Graph (which has dead ops) with the Sharded Graph.
+        # Since the Partitioner "replays" the trace (executes maxpr), it will populate this new graph.
+        sharded_graph = graph.Graph("sharded_main", input_types=[], context=self.context)
+        
+        # Transform: propagate + build sharded values in the NEW graph
+        root_impls = [t._impl for t in unrealized]
+        
+        with sharded_graph:
+             ops.random.set_seed(0) # TODO: Propagate actual seed
+             # This populates sharded_graph with the detailed SPMD ops
+             transform_trace_for_sharding(root_impls, mesh)
+             
+             # Set Outputs
+             # Collect all shard outputs (which are now in sharded_graph)
+             all_outputs: list = []
+             for t in unrealized:
+                 all_outputs.extend(t._impl._values)
+             sharded_graph.output(ops.random._peek_seed(), *all_outputs)
+        
+        if DEBUG_LAZY_EVAL:
+             print("[LAZY EVAL] Sharding: Graph Built. Inputs:", len(sharded_graph.inputs))
+             # op = _core.Operation._from_cmlir(sharded_graph._mlir_op)
+             # print(op)
 
-        self._store_results(unrealized, results)
-        self._finalize_evaluation(seed_value=0)
+        # Compile and execute
+        # sharded_graph should have NO inputs (everything constant folded or replayed)
+        # Verify?
+        if len(sharded_graph.inputs) > 0:
+             # Are these real inputs? 
+             # partitioner currently doesn't create inputs, only constants.
+             # If we support logical inputs later, we'd need to bind them here.
+             pass
+
+        try:
+             model = _session().load(sharded_graph)
+             seed_val, *results = model()
+        except BaseException as e:
+             if DEBUG_LAZY_EVAL:
+                 print("[LAZY EVAL ERROR] Sharded Compilation Failed:")
+                 print(sharded_graph._module.operation)
+             raise RuntimeError(f"Sharded compilation failed: {e}") from e
+        
+        # Store results back into TensorImpls
+        result_idx = 0
+        for t in unrealized:
+            num_shards = len(t._impl._values)
+            shard_results = []
+            for _ in range(num_shards):
+                shard_results.append(results[result_idx])
+                result_idx += 1
+            t._impl._storages = shard_results
+            t._impl._values = []
+            t.real = True
+        
+        self._finalize_evaluation(seed_value=seed_val.item())
 
     # --- Low-Level Execution Mechanics ---
 
@@ -330,6 +396,65 @@ class ComputeGraph:
         result = (model, inputs) if return_model else None
         self._finalize_evaluation(seed_value=seed_val.item())
         return result
+
+    async def _compile_and_execute_with_map(
+        self, 
+        unrealized: list[Tensor], 
+        value_map: list[tuple[Tensor, int | None]], 
+        return_model: bool
+    ) -> Any:
+        """Compiles and executes with sharded tensor support.
+        
+        Uses value_map to correctly store results back into tensors,
+        handling both single-value and multi-shard tensors.
+        """
+        # 1. Optimizations
+        module = _core.Operation._from_cmlir(self.graph._module.operation)
+        _core.lower(module, [builtin.passes.RemoveDeadValues()])
+        _remove_unused_arguments(self.graph)
+        
+        # 2. Execution
+        inputs = [self.sources[inp._mlir_value] for inp in self.graph.inputs]
+        try:
+            model = _session().load(self.graph)
+            seed_val, *results = model(*(inp.driver_tensor for inp in inputs))
+        except BaseException as e:
+            self.graph._erase_output_if_present()
+            if DEBUG_LAZY_EVAL:
+                print("\n[LAZY EVAL ERROR] Failed to compile/execute. Graph state:")
+                print(self.graph._module.operation)
+                print("=" * 70)
+            raise RuntimeError(f"Failed to compile/execute graph: {e}") from e
+
+        # 3. Storage using value_map - group results by tensor
+        tensor_results: dict[int, list] = {}  # id(tensor) -> list of results
+        for (tensor, shard_idx), result in zip(value_map, results, strict=True):
+            tid = id(tensor)
+            if tid not in tensor_results:
+                tensor_results[tid] = []
+            tensor_results[tid].append((shard_idx, result))
+        
+        # Store results into tensors
+        for t in unrealized:
+            tid = id(t)
+            if tid in tensor_results:
+                shard_results = tensor_results[tid]
+                if len(shard_results) > 1:
+                    # Multiple shards - sort by shard_idx and store all
+                    shard_results.sort(key=lambda x: x[0] if x[0] is not None else 0)
+                    t._impl._storages = [r for _, r in shard_results]
+                    t._impl._values = []
+                else:
+                    # Single result
+                    _, storage = shard_results[0]
+                    t.storage = storage
+                    t._value = None
+                t.real = True
+        
+        result = (model, inputs) if return_model else None
+        self._finalize_evaluation(seed_value=seed_val.item())
+        return result
+
 
     def _store_results(self, unrealized: list[Tensor], results: list) -> None:
         """Populates tensors with execution results."""

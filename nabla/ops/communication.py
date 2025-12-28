@@ -1,0 +1,426 @@
+# ===----------------------------------------------------------------------=== #
+# Nabla 2026 - Communication Operations for Sharding
+# ===----------------------------------------------------------------------=== #
+
+"""Communication operations for distributed/sharded tensor execution.
+
+These operations handle data movement between shards:
+- ShardOp: Split a replicated tensor into shards
+- AllGatherOp: Gather all shards to produce replicated tensors  
+- AllReduceOp: Reduce across shards (sum, mean, etc.)
+- ReduceScatterOp: Reduce then scatter result across shards
+- ReshardOp: Generic resharding between different sharding specs
+"""
+
+from __future__ import annotations
+
+import math
+from typing import TYPE_CHECKING, Any, List
+
+from max.graph import TensorValue, ops
+
+from .operation import Operation
+
+if TYPE_CHECKING:
+    from ..sharding.spec import DeviceMesh, DimSpec, ShardingSpec
+
+
+class ShardOp(Operation):
+    """Split a replicated tensor into multiple sharded TensorValues.
+    
+    This operation takes a single TensorValue and produces a list of TensorValues,
+    one per shard. Each shard contains a slice of the original tensor according
+    to the sharding specification.
+    
+    Example:
+        x: TensorValue shape (4, 8)
+        spec: shard dim 0 on mesh axis "x" with 2 devices
+        result: [TensorValue (2, 8), TensorValue (2, 8)]
+    """
+    
+    @property
+    def name(self) -> str:
+        return "shard"
+    
+    def maxpr(
+        self,
+        x: TensorValue,
+        mesh: DeviceMesh,
+        dim_specs: List[DimSpec],
+    ) -> List[TensorValue]:
+        """Create sharded TensorValues by slicing the input.
+        
+        Args:
+            x: Single TensorValue to shard
+            mesh: Device mesh defining the shard topology
+            dim_specs: Per-dimension sharding specification
+            
+        Returns:
+            List of TensorValues, one per shard
+        """
+        from ..sharding.spec import ShardingSpec
+        
+        num_shards = len(mesh.devices)
+        global_shape = tuple(int(d) for d in x.type.shape)
+        spec = ShardingSpec(mesh, dim_specs)
+        
+        shard_values = []
+        for shard_idx in range(num_shards):
+            # Compute slice for this shard
+            slices = self._compute_shard_slice(global_shape, spec, shard_idx)
+            shard_val = x[slices]
+            shard_values.append(shard_val)
+        
+        return shard_values
+    
+    def _compute_shard_slice(
+        self,
+        global_shape: tuple,
+        spec: ShardingSpec,
+        shard_idx: int,
+    ) -> tuple:
+        """Compute slice indices for a specific shard."""
+        slices = []
+        
+        for dim_idx, dim_len in enumerate(global_shape):
+            if dim_idx >= len(spec.dim_specs):
+                slices.append(slice(None))
+                continue
+            
+            dim_spec = spec.dim_specs[dim_idx]
+            
+            if not dim_spec.axes:
+                # Replicated - full slice
+                slices.append(slice(None))
+                continue
+            
+            # Compute shard position and size
+            total_shards = 1
+            my_shard_pos = 0
+            
+            for axis_name in dim_spec.axes:
+                size = spec.mesh.get_axis_size(axis_name)
+                coord = spec.mesh.get_coordinate(shard_idx, axis_name)
+                my_shard_pos = (my_shard_pos * size) + coord
+                total_shards *= size
+            
+            chunk_size = math.ceil(dim_len / total_shards)
+            start = my_shard_pos * chunk_size
+            end = min(start + chunk_size, dim_len)
+            slices.append(slice(start, end))
+        
+        return tuple(slices)
+    
+    def __call__(self, x, mesh: DeviceMesh, dim_specs: List[DimSpec]):
+        """Shard a tensor according to the given specification.
+        
+        This overrides the base __call__ to handle multi-value output specially.
+        """
+        from ..core.tensor import Tensor
+        from ..core.tensor_impl import TensorImpl
+        from ..core.compute_graph import GRAPH
+        from ..sharding.spec import ShardingSpec
+        from max import graph as g
+        
+        # Store global shape BEFORE sharding (from input tensor)
+        global_shape = None
+        if isinstance(x, Tensor):
+            # Get the global shape from input (which is still unsharded)
+            global_shape = x._impl.cached_shape or (
+                x._impl.physical_shape if x._impl.physical_shape else None
+            )
+        
+        with GRAPH.graph:
+            # Convert input to TensorValue
+            x_val = g.TensorValue(x) if isinstance(x, Tensor) else x
+            
+            # Execute shard operation
+            shard_values = self.maxpr(x_val, mesh, dim_specs)
+        
+        # Create output tensor with multiple values
+        spec = ShardingSpec(mesh, dim_specs)
+        impl = TensorImpl(
+            values=shard_values,
+            traced=x._impl.traced if isinstance(x, Tensor) else False,
+            batch_dims=x._impl.batch_dims if isinstance(x, Tensor) else 0,
+            sharding=spec,
+        )
+        
+        # Cache GLOBAL shape from input, not local shard shape
+        # This is critical for sharding propagation to work correctly
+        if global_shape is not None:
+            impl.cached_shape = global_shape
+        elif shard_values:
+            # Fallback: compute global from local shard shape
+            local_shape = shard_values[0].type.shape
+            impl.cached_shape = self._compute_global_from_local(local_shape, spec)
+        
+        # Cache dtype/device from first shard
+        if shard_values:
+            tensor_type = shard_values[0].type.as_tensor() if hasattr(shard_values[0].type, 'as_tensor') else shard_values[0].type
+            impl.cached_dtype = tensor_type.dtype
+            device = tensor_type.device
+            impl.cached_device = device.to_device() if hasattr(device, 'to_device') else device
+        
+        return Tensor(impl=impl)
+    
+    def _compute_global_from_local(self, local_shape, sharding):
+        """Compute global shape from local shard shape and sharding spec."""
+        from max import graph
+        
+        global_dims = []
+        for dim_idx, dim in enumerate(local_shape):
+            dim_val = int(dim)
+            if dim_idx < len(sharding.dim_specs):
+                dim_spec = sharding.dim_specs[dim_idx]
+                if dim_spec.axes:
+                    shard_count = dim_spec.get_total_shards(sharding.mesh)
+                    dim_val = dim_val * shard_count
+            global_dims.append(dim_val)
+        
+        return graph.Shape(global_dims)
+
+
+class AllGatherOp(Operation):
+    """Gather shards along an axis to produce replicated full tensors.
+    
+    Takes N sharded TensorValues and produces N replicated TensorValues,
+    each containing the full concatenated tensor.
+    """
+    
+    @property
+    def name(self) -> str:
+        return "all_gather"
+    
+    def maxpr(
+        self,
+        shard_values: List[TensorValue],
+        axis: int,
+    ) -> List[TensorValue]:
+        """Gather all shards along the specified axis.
+        
+        Args:
+            shard_values: List of shard TensorValues
+            axis: Axis along which shards are split
+            
+        Returns:
+            List of replicated TensorValues (all identical)
+        """
+        # Concatenate all shards to get full tensor
+        full_tensor = ops.concat(shard_values, axis=axis)
+        
+        # Return N copies (one per original shard location)
+        return [full_tensor] * len(shard_values)
+
+
+class AllReduceOp(Operation):
+    """Reduce values across all shards using the specified reduction.
+    
+    Takes N TensorValues with partial results and produces N TensorValues
+    with the fully reduced result (all identical after reduction).
+    """
+    
+    @property
+    def name(self) -> str:
+        return "all_reduce"
+    
+    def maxpr(
+        self,
+        shard_values: List[TensorValue],
+        reduction: str = "sum",
+    ) -> List[TensorValue]:
+        """Reduce across all shards.
+        
+        Args:
+            shard_values: List of shard TensorValues to reduce
+            reduction: Reduction operation ("sum", "mean", "max", "min")
+            
+        Returns:
+            List of reduced TensorValues (all identical)
+        """
+        if not shard_values:
+            return []
+        
+        if reduction == "sum":
+            # Stack and reduce
+            # Alternative: iterative add for memory efficiency
+            result = shard_values[0]
+            for sv in shard_values[1:]:
+                result = ops.add(result, sv)
+        elif reduction == "mean":
+            result = shard_values[0]
+            for sv in shard_values[1:]:
+                result = ops.add(result, sv)
+            n = len(shard_values)
+            result = ops.div(result, ops.constant(float(n), result.type.dtype))
+        elif reduction == "max":
+            result = shard_values[0]
+            for sv in shard_values[1:]:
+                result = ops.maximum(result, sv)
+        elif reduction == "min":
+            result = shard_values[0]
+            for sv in shard_values[1:]:
+                result = ops.minimum(result, sv)
+        else:
+            raise ValueError(f"Unknown reduction: {reduction}")
+        
+        # All shards get the same reduced value
+        return [result] * len(shard_values)
+
+
+class ReduceScatterOp(Operation):
+    """Reduce then scatter the result across shards.
+    
+    Each shard receives a different portion of the reduced result.
+    """
+    
+    @property
+    def name(self) -> str:
+        return "reduce_scatter"
+    
+    def maxpr(
+        self,
+        shard_values: List[TensorValue],
+        axis: int,
+        reduction: str = "sum",
+    ) -> List[TensorValue]:
+        """Reduce across shards then scatter the result.
+        
+        Args:
+            shard_values: List of shard TensorValues
+            axis: Axis along which to scatter the reduced result
+            reduction: Reduction operation
+            
+        Returns:
+            List of scattered TensorValues
+        """
+        # First reduce all values
+        if reduction == "sum":
+            full_result = shard_values[0]
+            for sv in shard_values[1:]:
+                full_result = ops.add(full_result, sv)
+        else:
+            raise NotImplementedError(f"Reduction {reduction} not yet implemented")
+        
+        # Then scatter (split) along the axis
+        num_shards = len(shard_values)
+        shape = full_result.type.shape
+        axis_size = int(shape[axis])
+        chunk_size = axis_size // num_shards
+        
+        scattered = []
+        for i in range(num_shards):
+            # Create slice for this shard
+            slices = [slice(None)] * len(shape)
+            slices[axis] = slice(i * chunk_size, (i + 1) * chunk_size)
+            scattered.append(full_result[tuple(slices)])
+        
+        return scattered
+
+
+# Singleton instances
+shard_op = ShardOp()
+all_gather_op = AllGatherOp()
+all_reduce_op = AllReduceOp()
+reduce_scatter_op = ReduceScatterOp()
+
+
+# Public API functions
+def shard(x, mesh: DeviceMesh, dim_specs: List[DimSpec]):
+    """Shard a tensor according to the given mesh and dimension specs.
+    
+    Args:
+        x: Input tensor (replicated/unsharded)
+        mesh: Device mesh defining shard topology
+        dim_specs: List of DimSpec for each dimension
+        
+    Returns:
+        Sharded tensor with multiple internal TensorValues
+    """
+    return shard_op(x, mesh, dim_specs)
+
+
+def all_gather(sharded_tensor, axis: int):
+    """Gather all shards to produce a replicated tensor.
+    
+    Args:
+        sharded_tensor: Tensor with multiple shards
+        axis: Axis along which shards are split
+        
+    Returns:
+        Replicated tensor with gathered values
+    """
+    from ..core.tensor import Tensor
+    from ..core.tensor_impl import TensorImpl
+    from ..core.compute_graph import GRAPH
+    from ..sharding.spec import ShardingSpec, DimSpec
+    
+    if not sharded_tensor._impl._values or len(sharded_tensor._impl._values) <= 1:
+        return sharded_tensor  # Already replicated
+    
+    # Get mesh from input sharding
+    mesh = sharded_tensor._impl.sharding.mesh if sharded_tensor._impl.sharding else None
+    
+    with GRAPH.graph:
+        gathered = all_gather_op.maxpr(sharded_tensor._impl._values, axis)
+    
+    # Create replicated sharding spec (all dims have empty axes)
+    # Infer rank from first gathered value
+    rank = len(gathered[0].type.shape) if gathered else 0
+    replicated_spec = ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)]) if mesh else None
+    
+    # Create replicated output tensor
+    impl = TensorImpl(
+        values=gathered,
+        traced=sharded_tensor._impl.traced,
+        batch_dims=sharded_tensor._impl.batch_dims,
+        sharding=replicated_spec,
+    )
+    return Tensor(impl=impl)
+
+
+def all_reduce(sharded_tensor, reduction: str = "sum"):
+    """Reduce across all shards.
+    
+    Args:
+        sharded_tensor: Tensor with partial values per shard
+        reduction: Reduction type ("sum", "mean", "max", "min")
+        
+    Returns:
+        Tensor with reduced values (replicated across shards)
+    """
+    from ..core.tensor import Tensor
+    from ..core.tensor_impl import TensorImpl
+    from ..core.compute_graph import GRAPH
+    
+    if not sharded_tensor._impl._values or len(sharded_tensor._impl._values) <= 1:
+        return sharded_tensor  # Nothing to reduce
+    
+    with GRAPH.graph:
+        reduced = all_reduce_op.maxpr(sharded_tensor._impl._values, reduction)
+    
+    impl = TensorImpl(
+        values=reduced,
+        traced=sharded_tensor._impl.traced,
+        batch_dims=sharded_tensor._impl.batch_dims,
+        sharding=None,  # Replicated after reduction
+    )
+    return Tensor(impl=impl)
+
+
+__all__ = [
+    # Op classes
+    "ShardOp",
+    "AllGatherOp", 
+    "AllReduceOp",
+    "ReduceScatterOp",
+    # Singletons
+    "shard_op",
+    "all_gather_op",
+    "all_reduce_op", 
+    "reduce_scatter_op",
+    # Public functions
+    "shard",
+    "all_gather",
+    "all_reduce",
+]

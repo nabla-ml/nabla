@@ -24,6 +24,10 @@ from .view import UnsqueezeOp, SqueezeOp, SwapAxesOp, BroadcastToOp, ReshapeOp
 from .multi_output import split, chunk, unbind, minmax
 from .multi_output import SplitOp, ChunkOp, UnbindOp, MinMaxOp
 
+# Communication operations (sharding)
+from .communication import shard, all_gather, all_reduce
+from .communication import ShardOp, AllGatherOp, AllReduceOp, ReduceScatterOp
+
 # Note: _physical is internal only, not exported
 # Physical operations can be imported via: from nabla.ops._physical import ...
 
@@ -53,4 +57,8 @@ __all__ = [
     # Multi-output
     "split", "chunk", "unbind", "minmax",
     "SplitOp", "ChunkOp", "UnbindOp", "MinMaxOp",
+    # Communication (sharding)
+    "shard", "all_gather", "all_reduce",
+    "ShardOp", "AllGatherOp", "AllReduceOp", "ReduceScatterOp",
 ]
+

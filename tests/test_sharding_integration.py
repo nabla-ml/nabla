@@ -170,6 +170,112 @@ def test_shardy_propagation_standalone():
     print("  ✓ Shardy propagation works!")
 
 
+def test_tensor_shard_method():
+    """Test the new Tensor.shard() method."""
+    print("\n=== Test: Tensor.shard() Method ===")
+    
+    mesh = DeviceMesh("test", (2,), ("x",))
+    
+    # Create tensor and shard it
+    A = Tensor.ones((4, 8)).trace()
+    result = A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
+    
+    # Should return self for chaining
+    assert result is A, "shard() should return self"
+    
+    # Should have sharding attached
+    assert A._impl.sharding is not None, "sharding should be set"
+    assert isinstance(A._impl.sharding, ShardingSpec), "sharding should be ShardingSpec"
+    assert A._impl.sharding.mesh.name == "test", "mesh name should match"
+    assert A._impl.sharding.dim_specs[0].axes == ["x"], "first dim should be sharded on x"
+    assert A._impl.sharding.dim_specs[1].axes == [], "second dim should be unsharded"
+    
+    print("  ✓ Tensor.shard() works!")
+
+
+def test_run_propagation_matmul():
+    """Test that run_propagation works with matmul sharding rule."""
+    print("\n=== Test: run_propagation with Matmul ===")
+    
+    from nabla.sharding.transform import run_propagation, get_topological_order
+    
+    mesh = DeviceMesh("test", (2,), ("x",))
+    
+    # A sharded on first dim (4, 8) -> [x, -]
+    A = Tensor.ones((4, 8)).trace()
+    A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
+    
+    # B unsharded
+    B = Tensor.ones((8, 4)).trace()
+    
+    # C = A @ B
+    C = A @ B
+    
+    # Run propagation
+    all_impls = get_topological_order(C._impl)
+    op_impls = [impl for impl in all_impls if impl.op is not None]
+    run_propagation(op_impls, mesh)
+    
+    # C should now have sharding propagated
+    assert C._impl.sharding is not None, "C should have sharding after propagation"
+    assert isinstance(C._impl.sharding, ShardingSpec), "C.sharding should be ShardingSpec"
+    
+    # C's first dim should be sharded on "x" (propagated from A's i dimension)
+    # Matmul: (i, k) @ (k, j) -> (i, j), so i maps to x
+    c_first_dim_axes = C._impl.sharding.dim_specs[0].axes
+    print(f"  A sharding: {A._impl.sharding}")
+    print(f"  C sharding: {C._impl.sharding}")
+    print(f"  C first dim axes: {c_first_dim_axes}")
+    
+    assert "x" in c_first_dim_axes, "C's first dim should have 'x' sharding from A"
+    
+    print("  ✓ run_propagation with matmul works!")
+
+
+def test_collectives_interface():
+    """Test that collective ops have correct interface."""
+    print("\n=== Test: Collectives Interface ===")
+    
+    from nabla.sharding.collectives import AllGatherOp, ReduceScatterOp, AllReduceOp
+    
+    # Check names
+    assert AllGatherOp().name == "all_gather"
+    assert ReduceScatterOp().name == "reduce_scatter"
+    assert AllReduceOp().name == "all_reduce"
+    
+    print("  ✓ Collective ops have correct names!")
+
+
+def test_end_to_end_sharded_execution():
+    """Test actual sharded compilation and execution path."""
+    print("\n=== Test: End-to-End Sharded Execution ===")
+    import asyncio
+    
+    mesh = DeviceMesh("test", (2,), ("x",))
+    
+    # A sharded on first dim
+    A = Tensor.ones((4, 8)).trace()
+    A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
+    
+    # B unsharded
+    B = Tensor.ones((8, 4)).trace()
+    
+    # C = A @ B
+    C = A @ B
+    
+    print(f"  Before await: C._impl.sharding = {C._impl.sharding}")
+    print(f"  Before await: C._impl._values count = {len(C._impl._values)}")
+    
+    # This should trigger _evaluate_sharded -> transform_to_sharded
+    try:
+        asyncio.run(C.realize)
+        print(f"  After await: C._impl._storages count = {len(C._impl._storages) if C._impl._storages else 0}")
+        print("  ✓ End-to-end sharded execution works!")
+    except Exception as e:
+        print(f"  ✗ Failed: {e}")
+        raise
+
+
 def main():
     print("=" * 60)
     print(" SHARDING INTEGRATION TESTS")
@@ -181,6 +287,14 @@ def main():
     test_graph_walking_with_sharding()
     test_compile_with_sharding_validation()
     test_shardy_propagation_standalone()
+    
+    # New tests for transform.py
+    test_tensor_shard_method()
+    test_run_propagation_matmul()
+    test_collectives_interface()
+    
+    # End-to-end test
+    test_end_to_end_sharded_execution()
     
     print("\n" + "=" * 60)
     print(" ALL SHARDING INTEGRATION TESTS PASSED!")

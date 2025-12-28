@@ -85,6 +85,20 @@ class MatmulOp(Operation):
             result = view_ops.squeeze(result, axis=-1)
         
         return result
+    
+    def sharding_rule(
+        self,
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+    ) -> Any:
+        """Matmul: (batch, m, k) @ (batch, k, n) -> (batch, m, n)."""
+        from ..sharding.propagation import matmul_template
+        batch_dims = len(input_shapes[0]) - 2
+        return matmul_template(batch_dims).instantiate(input_shapes, output_shapes)
+    
+    # NOTE: No custom _infer_output_sharding needed - the generic factor-based
+    # propagation handles matmul correctly via sharding_rule() above.
+
 
 
 add = AddOp()
