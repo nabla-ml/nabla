@@ -91,9 +91,25 @@ class MatmulOp(Operation):
         input_shapes: list[tuple[int, ...]],
         output_shapes: list[tuple[int, ...]],
     ) -> Any:
-        """Matmul: (batch, m, k) @ (batch, k, n) -> (batch, m, n)."""
-        from ..sharding.propagation import matmul_template
-        batch_dims = len(input_shapes[0]) - 2
+        """Matmul: supports both batched and broadcast cases.
+        
+        Standard: (batch, m, k) @ (batch, k, n) -> (batch, m, n)
+        Broadcast: (batch, m, k) @ (k, n) -> (batch, m, n)  # weights no batch
+        """
+        from ..sharding.propagation import matmul_template, broadcast_matmul_template
+        
+        a_rank = len(input_shapes[0])
+        b_rank = len(input_shapes[1])
+        out_rank = len(output_shapes[0])
+        
+        # If ranks differ, use broadcast template
+        if a_rank != b_rank:
+            return broadcast_matmul_template(a_rank, b_rank, out_rank).instantiate(
+                input_shapes, output_shapes
+            )
+        
+        # Same rank: use standard template
+        batch_dims = a_rank - 2
         return matmul_template(batch_dims).instantiate(input_shapes, output_shapes)
     
     # NOTE: No custom _infer_output_sharding needed - the generic factor-based

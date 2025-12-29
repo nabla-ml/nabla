@@ -112,21 +112,26 @@ def infer_output_sharding(
     # Check if any contracting factors are sharded (need AllReduce for partial results)
     needs_allreduce = _check_contracting_factors_sharded(rule, input_specs)
     
+    # print(f"DEBUG: infer_output_sharding returning spec len={len(output_spec.dim_specs)}")
     return output_spec, input_specs, needs_allreduce
 
 
 def _check_contracting_factors_sharded(
     rule: "OpShardingRule",
     input_specs: "List[ShardingSpec]",
-) -> bool:
+) -> "Set[str]":
     """Check if any contracting factor has sharding (requires AllReduce).
     
     A contracting factor appears in inputs but not outputs (e.g., k in matmul).
     If such a factor is sharded, the operation produces partial results.
+    
+    Returns:
+        Set of mesh axis names that require AllReduce.
     """
+    reduce_axes = set()
     contracting_factors = rule.get_contracting_factors()
     if not contracting_factors:
-        return False
+        return reduce_axes
     
     # For each contracting factor, check if it's sharded in any input
     for factor in contracting_factors:
@@ -134,9 +139,10 @@ def _check_contracting_factors_sharded(
             for dim_idx, factors in mapping.items():
                 if factor in factors and t_idx < len(input_specs):
                     spec = input_specs[t_idx]
-                    if dim_idx < len(spec.dim_specs) and spec.dim_specs[dim_idx].axes:
-                        return True
-    return False
+                    if dim_idx < len(spec.dim_specs):
+                        # Add all axes used for this contracting dimension
+                        reduce_axes.update(spec.dim_specs[dim_idx].axes)
+    return reduce_axes
 
 
 
@@ -197,48 +203,55 @@ def detect_sharding_conflict(
     output_sharding: Optional["ShardingSpec"],
     input_shardings: "List[Optional[ShardingSpec]]",
 ) -> bool:
-    """Detect if inputs have conflicting shardings that require replicated fallback.
+    """Detect if inputs have conflicting shardings that require resharding.
     
     A conflict exists when:
-    - Output is replicated (or None or all dims open)
-    - But multiple inputs have sharding on different dimensions
-    
-    This happens when user annotations conflict (e.g., A sharded on dim0, B on dim1)
-    and propagation couldn't unify them.
+    1. Same mesh axis is used for DIFFERENT tensor dimensions across inputs
+       (e.g., input A uses "x" for dim0, input B uses "x" for dim1)
+    2. Output is replicated but inputs have different sharded dimensions
     
     Returns:
-        True if conflict detected (should use replicated execution)
+        True if conflict detected (should reshard to replicated)
     """
-    if len(input_shardings) < 2:
+    # Collect non-None specs
+    valid_specs = [(i, s) for i, s in enumerate(input_shardings) if s is not None]
+    if len(valid_specs) < 2:
         return False
     
-    # Check if output is effectively replicated (no sharding or all dims empty/open)
+    # Check 1: Mesh axis conflict - same axis for different dimensions
+    # Build mapping: axis_name -> set of dim indices it's used for
+    axis_to_dims: dict = {}
+    for _, spec in valid_specs:
+        for dim_idx, dim_spec in enumerate(spec.dim_specs):
+            for axis_name in dim_spec.axes:
+                if axis_name not in axis_to_dims:
+                    axis_to_dims[axis_name] = set()
+                axis_to_dims[axis_name].add(dim_idx)
+    
+    # If any axis is used for different dim indices, that's a conflict
+    for axis_name, dims_used in axis_to_dims.items():
+        if len(dims_used) > 1:
+            # Same mesh axis used for different tensor dimensions!
+            return True
+    
+    # Check 2: Original conflict - different dimensions sharded
     output_is_replicated = (
         output_sharding is None or
         all(not d.axes for d in output_sharding.dim_specs)
     )
     
-    if not output_is_replicated:
-        return False
-    
-    # Check if inputs have sharding on different dimensions (conflict)
-    # Gather which dimensions are sharded across all inputs
-    sharded_dims_per_input = []
-    for spec in input_shardings:
-        if spec is None:
-            continue
-        dims_with_axes = {i for i, d in enumerate(spec.dim_specs) if d.axes}
-        if dims_with_axes:
-            sharded_dims_per_input.append(dims_with_axes)
-    
-    if len(sharded_dims_per_input) < 2:
-        return False
-    
-    # Conflict: inputs shard different dimensions
-    first = sharded_dims_per_input[0]
-    for other in sharded_dims_per_input[1:]:
-        if first != other:
-            return True
+    if output_is_replicated:
+        sharded_dims_per_input = []
+        for _, spec in valid_specs:
+            dims_with_axes = {i for i, d in enumerate(spec.dim_specs) if d.axes}
+            if dims_with_axes:
+                sharded_dims_per_input.append(dims_with_axes)
+        
+        if len(sharded_dims_per_input) >= 2:
+            first = sharded_dims_per_input[0]
+            for other in sharded_dims_per_input[1:]:
+                if first != other:
+                    return True
     
     return False
 
@@ -303,15 +316,24 @@ def get_shard_args(args: tuple, shard_idx: int,
         input_idx[0] += 1
         
         vals = x._impl._values or []
-        if len(vals) > 1 and shard_idx < len(vals):
-            # Already sharded: use corresponding shard
-            return vals[shard_idx]
+        candidate = None
         
-        # Replicated: slice according to THIS input's sharding
-        tv = g.TensorValue(x)
+        if len(vals) > 1 and shard_idx < len(vals):
+            # We have specific value for this shard (could be replicated or sharded)
+            candidate = vals[shard_idx]
+        else:
+            # Fallback to global value (or lazy load)
+            candidate = g.TensorValue(x)
+        
+        # If we need sharding, check if we need to slice
         if this_sharding and not this_sharding.is_fully_replicated():
-            return slice_for_shard(tv, x.shape, this_sharding, shard_idx)
-        return tv  # No slicing for fully replicated inputs
+            # If candidate shape matches global shape, we imply it's full data (replicated)
+            # and needs to be sliced to match the target sharding.
+            # NOTE: We use strict equality check on known dimensions.
+            if tuple(candidate.type.shape) == tuple(x.shape):
+                 return slice_for_shard(candidate, x.shape, this_sharding, shard_idx)
+        
+        return candidate
     
     return pytree.tree_map(extract, args)
 
@@ -427,7 +449,8 @@ def align_input_shardings(args: tuple, target: Optional["ShardingSpec"], mesh: "
 # ============================================================================
 
 def create_sharded_output(results: List[Any], sharding: Optional["ShardingSpec"],
-                          traced: bool, batch_dims: int) -> "Tensor":
+                          traced: bool, batch_dims: int,
+                          mesh: Optional["DeviceMesh"] = None) -> "Tensor":
     """Build sharded Tensor from per-shard TensorValues."""
     from ..core.tensor import Tensor
     from ..core.tensor_impl import TensorImpl
@@ -439,6 +462,14 @@ def create_sharded_output(results: List[Any], sharding: Optional["ShardingSpec"]
     first = results[0]
     if not isinstance(first, (g.TensorValue, g.BufferValue)):
         return first
+    
+    # Ensure we have a sharding spec when we have multiple values
+    # (replicated tensors still need a spec with empty axes for each dim)
+    if sharding is None and len(results) > 1 and mesh is not None:
+        from .spec import ShardingSpec, DimSpec
+        rank = len(first.type.shape)
+        # Implicitly replicated tensors should be Open to allow modification during propagation
+        sharding = ShardingSpec(mesh, [DimSpec([], is_open=True) for _ in range(rank)])
     
     impl = TensorImpl(values=results, traced=traced, batch_dims=batch_dims, sharding=sharding)
     

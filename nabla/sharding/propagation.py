@@ -621,6 +621,47 @@ def matmul_template(batch_dims: int = 0) -> OpShardingRuleTemplate:
     
     return OpShardingRuleTemplate([a_mapping, b_mapping], [c_mapping])
 
+
+def broadcast_matmul_template(
+    a_rank: int, b_rank: int, out_rank: int
+) -> OpShardingRuleTemplate:
+    """Template for broadcast matmul with different input ranks.
+    
+    Handles cases like:
+    - (batch, m, k) @ (k, n) -> (batch, m, n)  # weights don't have batch
+    - (m, k) @ (batch, k, n) -> (batch, m, n)  # activations don't have batch
+    
+    The batch dims come from whichever input has them (broadcast semantics).
+    """
+    out_batch_dims = out_rank - 2
+    a_batch_dims = a_rank - 2
+    b_batch_dims = b_rank - 2
+    
+    batch_factors = [f"b{i}" for i in range(out_batch_dims)]
+    
+    # Input A mapping: only include batch factors if it has batch dims
+    a_mapping = {}
+    if a_batch_dims > 0:
+        for i in range(a_batch_dims):
+            a_mapping[i] = [batch_factors[i]]
+    a_mapping[a_rank - 2] = ["m"]  # second-to-last = m
+    a_mapping[a_rank - 1] = ["k"]  # last = k
+    
+    # Input B mapping: only include batch factors if it has batch dims
+    b_mapping = {}
+    if b_batch_dims > 0:
+        for i in range(b_batch_dims):
+            b_mapping[i] = [batch_factors[i]]
+    b_mapping[b_rank - 2] = ["k"]  # second-to-last = k
+    b_mapping[b_rank - 1] = ["n"]  # last = n
+    
+    # Output mapping: always has full batch dims
+    c_mapping = {i: [batch_factors[i]] for i in range(out_batch_dims)}
+    c_mapping[out_batch_dims] = ["m"]
+    c_mapping[out_batch_dims + 1] = ["n"]
+    
+    return OpShardingRuleTemplate([a_mapping, b_mapping], [c_mapping])
+
 def elementwise_template(rank: int, prefix: str = "d") -> OpShardingRuleTemplate:
     factors = [f"{prefix}{i}" for i in range(rank)]
     mapping = {i: [factors[i]] for i in range(rank)}
@@ -819,21 +860,14 @@ def reshape_template(in_shape: Tuple[int, ...], out_shape: Tuple[int, ...]) -> O
     
     This automatically determines factor mappings for arbitrary reshapes by:
     1. Finding which dimensions merge/split
-    2. Creating compound factors for merged dims
-    3. Splitting compound factors for split dims
+    2. Creating atomic factors from the shape with HIGHER rank (more granular)
+    3. Mapping compound factors for the shape with LOWER rank (less granular)
     
     Examples:
         reshape_template((2, 4), (8,))     -> {0: ["d0"], 1: ["d1"]} -> {0: ["d0", "d1"]}
         reshape_template((8,), (2, 4))     -> {0: ["d0", "d1"]} -> {0: ["d0"], 1: ["d1"]}
-        reshape_template((8, 32), (2, 4, 32)) -> {0: ["d0", "d1"], 1: ["k"]} -> {0: ["d0"], 1: ["d1"], 2: ["k"]}
     """
     import math
-    
-    # Simplest implementation: assign unique factors to each output dimension
-    # and determine input mapping by factorizing
-    
-    # For general reshape, we need to factor the shapes
-    # This is a simplified version that handles common cases
     
     in_size = math.prod(in_shape)
     out_size = math.prod(out_shape)
@@ -841,35 +875,93 @@ def reshape_template(in_shape: Tuple[int, ...], out_shape: Tuple[int, ...]) -> O
     if in_size != out_size:
         raise ValueError(f"Reshape size mismatch: {in_size} != {out_size}")
     
-    # Simple strategy: create factors for output dims, compound them for input
-    out_factors = [f"d{i}" for i in range(len(out_shape))]
-    out_mapping = {i: [out_factors[i]] for i in range(len(out_shape))}
+    in_rank = len(in_shape)
+    out_rank = len(out_shape)
     
-    # Compound all factors for input if it's a single dimension
-    if len(in_shape) == 1:
-        in_mapping = {0: out_factors}
-    # Distribute factors across input dimensions
+    # Strategy: Use the shape with more dimensions as the source of atomic factors
+    # This assumes that the higher-rank shape creates the granularity boundary
+    
+    if in_rank >= out_rank:
+        # Input has more/equal dims: Input dims are ATOMIC factors
+        # Output dims are COMPOUND of input factors
+        factors = [f"d{i}" for i in range(in_rank)]
+        in_mapping = {i: [factors[i]] for i in range(in_rank)}
+        
+        out_mapping = {}
+        factor_idx = 0
+        current_prod = 1
+        current_factors = []
+        
+        # Iterate over output dims and try to form them from input factors
+        for out_dim_idx in range(out_rank):
+            target_size = out_shape[out_dim_idx]
+            
+            # Consume input factors until we match target size
+            while factor_idx < in_rank:
+                f_size = in_shape[factor_idx]
+                current_factors.append(factors[factor_idx])
+                current_prod *= f_size
+                factor_idx += 1
+                
+                if current_prod == target_size:
+                    # Match found!
+                    out_mapping[out_dim_idx] = list(current_factors)
+                    current_factors = []
+                    current_prod = 1
+                    break
+                elif current_prod > target_size:
+                    # Input granularity is coarser than output required
+                    # This happens if input dim splits into multiple output dims
+                    # BUT we assumed in_rank >= out_rank, so this usually implies simple merge
+                    # OR mixed split/merge.
+                    # Fallback for now: Assign remaining factors to this output dim?
+                    # Strict mapping requires splitting factors, which this template doesn't do yet.
+                    # We'll assign current factors and move on, relying on runtime checks.
+                    out_mapping[out_dim_idx] = list(current_factors)
+                    current_factors = []
+                    current_prod = 1
+                    break
+            
+            if out_dim_idx not in out_mapping and current_factors:
+                 # Flush remaining if we exhausted factors but didn't exact match (shouldn't happen if shapes align)
+                 out_mapping[out_dim_idx] = list(current_factors)
+
     else:
-        # This is simplified - proper implementation would analyze actual factorization
-        # For now, handle common cases:
-        if len(in_shape) < len(out_shape):
-            # Split case: fewer input dims -> more output dims
-            # Example: (8,) -> (2, 4): input gets compound factor
-            in_mapping = {0: out_factors[:len(out_factors)]}
-            if len(in_shape) > 1:
-                # Distribute remaining
-                for i in range(1, len(in_shape)):
-                    in_mapping[i] = [out_factors[i]] if i < len(out_factors) else []
-        else:
-            # Merge or same: assign factors sequentially
-            in_mapping = {}
-            out_idx = 0
-            for i in range(len(in_shape)):
-                if out_idx < len(out_factors):
-                    in_mapping[i] = [out_factors[out_idx]]
-                    out_idx += 1
-                else:
-                    in_mapping[i] = []
+        # Output has more dims: Output dims are ATOMIC factors
+        # Input dims are COMPOUND of output factors
+        factors = [f"d{i}" for i in range(out_rank)]
+        out_mapping = {i: [factors[i]] for i in range(out_rank)}
+        
+        in_mapping = {}
+        factor_idx = 0
+        current_prod = 1
+        current_factors = []
+        
+        # Iterate over input dims and try to form them from output factors
+        for in_dim_idx in range(in_rank):
+            target_size = in_shape[in_dim_idx]
+            
+            # Consume output factors until we match target size
+            while factor_idx < out_rank:
+                f_size = out_shape[factor_idx]
+                current_factors.append(factors[factor_idx])
+                current_prod *= f_size
+                factor_idx += 1
+                
+                if current_prod == target_size:
+                    # Match found!
+                    in_mapping[in_dim_idx] = list(current_factors)
+                    current_factors = []
+                    current_prod = 1
+                    break
+                elif current_prod > target_size:
+                    in_mapping[in_dim_idx] = list(current_factors)
+                    current_factors = []
+                    current_prod = 1
+                    break
+
+            if in_dim_idx not in in_mapping and current_factors:
+                 in_mapping[in_dim_idx] = list(current_factors)
     
     return OpShardingRuleTemplate([in_mapping], [out_mapping])
 

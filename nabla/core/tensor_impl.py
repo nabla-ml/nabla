@@ -208,6 +208,10 @@ class TensorImpl:
         if self._values and shard_idx < len(self._values):
             # TensorValue.type.shape is already a Shape
             return self._values[shard_idx].type.shape
+        if self.cached_shape is not None:
+             # Fallback for abstract tensors (assuming fully replicated/unsharded if accessing shard 0)
+             # Note: cached_shape includes batch dims
+             return self.cached_shape
         return None
 
     def logical_local_shape(self, shard_idx: int = 0) -> graph.Shape | None:

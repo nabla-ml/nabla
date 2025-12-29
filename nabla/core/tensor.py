@@ -462,9 +462,70 @@ class Tensor(DLPackArray, HasTensorValue):
         return self.driver_tensor.to(CPU()).item()
     
     def to_numpy(self):
-        """Convert tensor to numpy array."""
+        """Convert tensor to numpy array, gathering shards if needed."""
+        import numpy as np
         self._sync_realize()
+        
+        # Multi-shard: gather along sharded dimension(s)
+        if self._impl._storages and len(self._impl._storages) > 1:
+            return self._gather_shards_to_numpy()
+        
         return self.driver_tensor.to(CPU()).to_numpy()
+    
+    def _gather_shards_to_numpy(self):
+        """Gather all shards into a single numpy array.
+        
+        For 2D meshes with partial sharding (e.g., only one axis sharded),
+        we have duplicate shards and must select only unique ones.
+        """
+        import numpy as np
+        
+        storages = self._impl._storages
+        sharding = self._impl.sharding
+        mesh = sharding.mesh if sharding else None
+        
+        if not storages or len(storages) <= 1:
+            return storages[0].to(CPU()).to_numpy() if storages else None
+        
+        # If tensor is replicated (no sharded dimensions), all shards are identical
+        # Just return the first one
+        if sharding is None or sharding.is_fully_replicated():
+            return storages[0].to(CPU()).to_numpy()
+        
+        # Find which dimension is sharded and on which mesh axis
+        sharded_dim = None
+        sharded_axis = None
+        for dim_idx, dim_spec in enumerate(sharding.dim_specs):
+            if dim_spec.axes:
+                sharded_dim = dim_idx
+                sharded_axis = dim_spec.axes[0]  # Use first axis
+                break
+        
+        if sharded_dim is None or sharded_axis is None or mesh is None:
+            return storages[0].to(CPU()).to_numpy()
+        
+        # Get the size of the sharded mesh axis
+        sharded_axis_size = mesh.get_axis_size(sharded_axis)
+        
+        # Select unique shards: one per coordinate along the sharded axis
+        # For 2x2 mesh with "model" sharding: shards 0,1 correspond to model=0,1
+        # Shards 2,3 are duplicates (same computation, different data slice)
+        unique_shards = []
+        seen_coords = set()
+        
+        for shard_idx, storage in enumerate(storages):
+            # Get the coordinate on the sharded axis
+            coord = mesh.get_coordinate(shard_idx, sharded_axis)
+            
+            if coord not in seen_coords:
+                seen_coords.add(coord)
+                unique_shards.append((coord, storage.to(CPU()).to_numpy()))
+        
+        # Sort by coordinate and concatenate
+        unique_shards.sort(key=lambda x: x[0])
+        shard_arrays = [arr for _, arr in unique_shards]
+        
+        return np.concatenate(shard_arrays, axis=sharded_dim)
 
     def num_elements(self) -> int:
         elts = 1

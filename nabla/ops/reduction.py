@@ -101,7 +101,19 @@ def reduce_sum(x: Tensor, *, axis: int, keepdims: bool = False) -> Tensor:
 
 
 def mean(x: Tensor, *, axis: int, keepdims: bool = False) -> Tensor:
-    return _mean_op(x, axis=axis, keepdims=keepdims)
+    """Compute arithmetic mean along specified axis.
+    
+    Implemented as sum(x) / shape[axis] to correctly handle distributed sharding.
+    """
+    s = reduce_sum(x, axis=axis, keepdims=keepdims)
+    
+    # Get dimension size from global shape
+    shape = x.shape
+    if axis < 0:
+        axis = len(shape) + axis
+    
+    count = int(shape[axis])
+    return s / count
 
 
 __all__ = ["ReduceSumOp", "reduce_sum", "MeanOp", "mean"]

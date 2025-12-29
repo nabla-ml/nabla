@@ -193,11 +193,15 @@ def test_tensor_shard_method():
     print("  ✓ Tensor.shard() works!")
 
 
-def test_run_propagation_matmul():
-    """Test that run_propagation works with matmul sharding rule."""
-    print("\n=== Test: run_propagation with Matmul ===")
+def test_eager_sharding_propagation_matmul():
+    """Test that sharding propagates automatically through matmul operations.
     
-    from nabla.sharding.transform import run_propagation, get_topological_order
+    In the eager sharding architecture, propagation happens automatically
+    in Operation.__call__ when sharded inputs are detected.
+    """
+    print("\n=== Test: Eager Sharding Propagation (Matmul) ===")
+    
+    from nabla.core.tensor_impl import get_topological_order
     
     mesh = DeviceMesh("test", (2,), ("x",))
     
@@ -208,20 +212,15 @@ def test_run_propagation_matmul():
     # B unsharded
     B = Tensor.ones((8, 4)).trace()
     
-    # C = A @ B
+    # C = A @ B - sharding propagates automatically!
     C = A @ B
     
-    # Run propagation
-    all_impls = get_topological_order(C._impl)
-    op_impls = [impl for impl in all_impls if impl.op is not None]
-    run_propagation(op_impls, mesh)
-    
-    # C should now have sharding propagated
-    assert C._impl.sharding is not None, "C should have sharding after propagation"
+    # Verify sharding was propagated eagerly
+    assert C._impl.sharding is not None, "C should have sharding after op"
     assert isinstance(C._impl.sharding, ShardingSpec), "C.sharding should be ShardingSpec"
     
-    # C's first dim should be sharded on "x" (propagated from A's i dimension)
-    # Matmul: (i, k) @ (k, j) -> (i, j), so i maps to x
+    # C's first dim should be sharded on "x" (propagated from A's m dimension)
+    # Matmul: (m, k) @ (k, n) -> (m, n), so m maps to x
     c_first_dim_axes = C._impl.sharding.dim_specs[0].axes
     print(f"  A sharding: {A._impl.sharding}")
     print(f"  C sharding: {C._impl.sharding}")
@@ -229,7 +228,7 @@ def test_run_propagation_matmul():
     
     assert "x" in c_first_dim_axes, "C's first dim should have 'x' sharding from A"
     
-    print("  ✓ run_propagation with matmul works!")
+    print("  ✓ Eager sharding propagation works!")
 
 
 def test_collectives_interface():
@@ -288,9 +287,9 @@ def main():
     test_compile_with_sharding_validation()
     test_shardy_propagation_standalone()
     
-    # New tests for transform.py
+    # Eager sharding tests
     test_tensor_shard_method()
-    test_run_propagation_matmul()
+    test_eager_sharding_propagation_matmul()
     test_collectives_interface()
     
     # End-to-end test

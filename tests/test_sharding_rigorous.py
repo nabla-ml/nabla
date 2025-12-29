@@ -263,18 +263,6 @@ def test_reshard_mismatch_axes():
     print("    ✓ Mismatched sharding handled correctly.")
 
 
-@pytest.mark.skip(reason="""
-Known limitation: Broadcasting between differently-sharded tensors.
-
-This test demonstrates a case that requires actual resharding (all-gather):
-- relu is (4,4) sharded on dim0 (rows) with axis "x"  
-- c_sum is (4,) sharded on dim0 with axis "x"
-- After broadcast, c_sum becomes (4,4) sharded on dim1 (columns)
-- The add has CONFLICTING shardings: both use "x" but for different dimensions
-
-Fix requires: Detect conflict, reshard c_sum to replicated via all-gather, then broadcast.
-This is complex infrastructure work (merge shards) that we defer for future implementation.
-""")
 def test_chain_complex():
     """Test (A @ B).relu() + C.sum(0)
     

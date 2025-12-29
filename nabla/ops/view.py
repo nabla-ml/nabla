@@ -179,7 +179,11 @@ class BroadcastToOp(LogicalShapeOperation):
         output_sharding, input_shardings, needs_allreduce = self._infer_output_sharding(args, mesh, kwargs)
         
         # Compute LOCAL target shape based on output sharding
-        local_target_shape = compute_local_shape(global_target_shape, output_sharding, device_id=0)
+        # If output is replicated (None sharding), local shape = global shape
+        if output_sharding is None:
+            local_target_shape = global_target_shape
+        else:
+            local_target_shape = compute_local_shape(global_target_shape, output_sharding, device_id=0)
         
         # Execute per-shard with LOCAL target shape
         with GRAPH.graph:
@@ -199,7 +203,7 @@ class BroadcastToOp(LogicalShapeOperation):
         
         # Create output
         output = spmd.create_sharded_output(
-            shard_results, output_sharding, traced, batch_dims
+            shard_results, output_sharding, traced, batch_dims, mesh=mesh
         )
         
         return self._check_and_reshard_output(output, output_sharding, kwargs)
@@ -213,29 +217,19 @@ class ReshapeOp(LogicalShapeOperation):
     def maxpr(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
         return ops.reshape(x, shape)
     
-    def sharding_rule(self, *args, **kwargs):
+    def infer_output_shape(self, input_shapes: list[tuple[int, ...]], **kwargs) -> tuple[int, ...]:
+        """Output shape is the target shape."""
+        return kwargs.get("shape")
+
+    def sharding_rule(self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]], **kwargs):
         """Create sharding rule for reshape using compound factors."""
         from ..sharding.propagation import reshape_template
         
-        # Get input shape from first arg
-        if not args:
-            return None
-        
-        x = args[0]
         target_shape = kwargs.get('shape')
         if target_shape is None:
             return None
-        
-        # Get input shape
-        from ..core.tensor import Tensor
-        if isinstance(x, Tensor):
-            input_shape = tuple(int(d) for d in x.shape)
-        else:
-            # TensorValue or other
-            input_shape = tuple(int(d) for d in x.type.shape)
-        
-        # Create template with compound factors
-        return reshape_template(input_shape, target_shape)
+            
+        return reshape_template(input_shapes[0], target_shape).instantiate(input_shapes, output_shapes)
     
     def _call_spmd(self, *args, **kwargs):
         """SPMD execution for reshape: compute local target shape per shard.
@@ -281,7 +275,11 @@ class ReshapeOp(LogicalShapeOperation):
         output_sharding, input_shardings, needs_allreduce = self._infer_output_sharding(args, mesh, kwargs)
         
         # Compute LOCAL target shape based on output sharding
-        local_target_shape = compute_local_shape(global_target_shape, output_sharding, device_id=0)
+        # If output is replicated (None sharding), local shape = global shape
+        if output_sharding is None:
+            local_target_shape = global_target_shape
+        else:
+            local_target_shape = compute_local_shape(global_target_shape, output_sharding, device_id=0)
         
         # Execute per-shard with LOCAL target shape
         with GRAPH.graph:
@@ -302,7 +300,7 @@ class ReshapeOp(LogicalShapeOperation):
         
         # Create output
         output = spmd.create_sharded_output(
-            shard_results, output_sharding, traced, batch_dims
+            shard_results, output_sharding, traced, batch_dims, mesh=mesh
         )
         
         return self._check_and_reshard_output(output, output_sharding, kwargs)

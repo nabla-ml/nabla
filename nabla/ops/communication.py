@@ -211,6 +211,65 @@ class AllGatherOp(Operation):
         
         # Return N copies (one per original shard location)
         return [full_tensor] * len(shard_values)
+    
+    def __call__(self, sharded_tensor, axis: int):
+        """Gather all shards to produce a replicated tensor.
+        
+        Args:
+            sharded_tensor: Tensor with multiple shards
+            axis: Axis along which shards are split
+            
+        Returns:
+            Replicated tensor with gathered values
+        """
+        from ..core.tensor import Tensor
+        from ..core.tensor_impl import TensorImpl
+        from ..core.compute_graph import GRAPH
+        from ..sharding.spec import ShardingSpec, DimSpec
+        
+        if (not sharded_tensor._impl._values or len(sharded_tensor._impl._values) <= 1) and \
+           (not sharded_tensor._impl.sharding or sharded_tensor._impl.sharding.is_fully_replicated()):
+            return sharded_tensor  # Already logically replicated
+            
+        # Get mesh from input sharding
+        mesh = sharded_tensor._impl.sharding.mesh if sharded_tensor._impl.sharding else None
+        
+        if not sharded_tensor._impl._values or len(sharded_tensor._impl._values) <= 1:
+            # Physically gathered (single value) but logically sharded.
+            # We just need to update the metadata to be replicated.
+            rank = len(sharded_tensor.shape)
+            replicated_spec = ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)]) if mesh else None
+            
+            impl = TensorImpl(
+                storages=sharded_tensor._impl._storages,  # Copy storages!
+                values=sharded_tensor._impl._values,
+                traced=sharded_tensor._impl.traced,
+                batch_dims=sharded_tensor._impl.batch_dims,
+                sharding=replicated_spec,
+            )
+            # Ensure shape is propagated (force resolution if needed)
+            # This handles cases where _values is empty (abstract tensor) and we need cached_shape
+            impl.cached_shape = sharded_tensor.shape
+            impl.cached_dtype = sharded_tensor.dtype
+            impl.cached_device = sharded_tensor.device
+            
+            return Tensor(impl=impl)
+        
+        with GRAPH.graph:
+            gathered = self.maxpr(sharded_tensor._impl._values, axis)
+        
+        # Create replicated sharding spec (all dims have empty axes)
+        rank = len(gathered[0].type.shape) if gathered else 0
+        replicated_spec = ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)]) if mesh else None
+        
+        # Create replicated output tensor
+        impl = TensorImpl(
+            values=gathered,
+            traced=sharded_tensor._impl.traced,
+            batch_dims=sharded_tensor._impl.batch_dims,
+            sharding=replicated_spec,
+        )
+        return Tensor(impl=impl)
 
 
 class AllReduceOp(Operation):
@@ -242,8 +301,6 @@ class AllReduceOp(Operation):
             return []
         
         if reduction == "sum":
-            # Stack and reduce
-            # Alternative: iterative add for memory efficiency
             result = shard_values[0]
             for sv in shard_values[1:]:
                 result = ops.add(result, sv)
@@ -266,6 +323,34 @@ class AllReduceOp(Operation):
         
         # All shards get the same reduced value
         return [result] * len(shard_values)
+    
+    def __call__(self, sharded_tensor, reduction: str = "sum"):
+        """Reduce across all shards.
+        
+        Args:
+            sharded_tensor: Tensor with partial values per shard
+            reduction: Reduction type ("sum", "mean", "max", "min")
+            
+        Returns:
+            Tensor with reduced values (replicated across shards)
+        """
+        from ..core.tensor import Tensor
+        from ..core.tensor_impl import TensorImpl
+        from ..core.compute_graph import GRAPH
+        
+        if not sharded_tensor._impl._values or len(sharded_tensor._impl._values) <= 1:
+            return sharded_tensor  # Nothing to reduce
+        
+        with GRAPH.graph:
+            reduced = self.maxpr(sharded_tensor._impl._values, reduction)
+        
+        impl = TensorImpl(
+            values=reduced,
+            traced=sharded_tensor._impl.traced,
+            batch_dims=sharded_tensor._impl.batch_dims,
+            sharding=None,  # Replicated after reduction
+        )
+        return Tensor(impl=impl)
 
 
 class ReduceScatterOp(Operation):
@@ -350,33 +435,7 @@ def all_gather(sharded_tensor, axis: int):
     Returns:
         Replicated tensor with gathered values
     """
-    from ..core.tensor import Tensor
-    from ..core.tensor_impl import TensorImpl
-    from ..core.compute_graph import GRAPH
-    from ..sharding.spec import ShardingSpec, DimSpec
-    
-    if not sharded_tensor._impl._values or len(sharded_tensor._impl._values) <= 1:
-        return sharded_tensor  # Already replicated
-    
-    # Get mesh from input sharding
-    mesh = sharded_tensor._impl.sharding.mesh if sharded_tensor._impl.sharding else None
-    
-    with GRAPH.graph:
-        gathered = all_gather_op.maxpr(sharded_tensor._impl._values, axis)
-    
-    # Create replicated sharding spec (all dims have empty axes)
-    # Infer rank from first gathered value
-    rank = len(gathered[0].type.shape) if gathered else 0
-    replicated_spec = ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)]) if mesh else None
-    
-    # Create replicated output tensor
-    impl = TensorImpl(
-        values=gathered,
-        traced=sharded_tensor._impl.traced,
-        batch_dims=sharded_tensor._impl.batch_dims,
-        sharding=replicated_spec,
-    )
-    return Tensor(impl=impl)
+    return all_gather_op(sharded_tensor, axis)
 
 
 def all_reduce(sharded_tensor, reduction: str = "sum"):
@@ -389,23 +448,77 @@ def all_reduce(sharded_tensor, reduction: str = "sum"):
     Returns:
         Tensor with reduced values (replicated across shards)
     """
-    from ..core.tensor import Tensor
-    from ..core.tensor_impl import TensorImpl
-    from ..core.compute_graph import GRAPH
+    return all_reduce_op(sharded_tensor, reduction)
+
+
+
+def simulate_grouped_all_reduce(
+    shard_results: List[TensorValue], 
+    mesh: "DeviceMesh", 
+    reduce_axes: "Set[str]",
+    all_reduce_op: AllReduceOp
+) -> List[TensorValue]:
+    """Simulate grouped AllReduce execution for SPMD verification.
     
-    if not sharded_tensor._impl._values or len(sharded_tensor._impl._values) <= 1:
-        return sharded_tensor  # Nothing to reduce
+    When only a subset of mesh axes are involved in reduction (e.g., partial results
+    from tensor parallelism on 'model' axis), we must effectively:
+    1. Group shards that share coordinates on non-reduced axes
+    2. AllReduce within each group
+    3. Broadcast the result to all members of the group
     
-    with GRAPH.graph:
-        reduced = all_reduce_op.maxpr(sharded_tensor._impl._values, reduction)
+    Args:
+        shard_results: List of shard values (length = mesh size)
+        mesh: The device mesh
+        reduce_axes: Set of mesh axis names to reduce over
+        all_reduce_op: The AllReduce operator to use
+        
+    Returns:
+        List of reduced shard values (same length, grouped values are identical)
+    """
+    if not reduce_axes:
+        return shard_results
+        
+    num_shards = len(shard_results)
     
-    impl = TensorImpl(
-        values=reduced,
-        traced=sharded_tensor._impl.traced,
-        batch_dims=sharded_tensor._impl.batch_dims,
-        sharding=None,  # Replicated after reduction
-    )
-    return Tensor(impl=impl)
+    # Check if we're reducing over all axes (simple case)
+    all_axes = set(mesh.axis_names)
+    if all_axes.issubset(reduce_axes):
+        return all_reduce_op.maxpr(shard_results, reduction="sum")
+        
+    # Complex case: Group shards by non-reduced axes
+    # Each group contains shards that should be reduced together
+    groups = {}
+    
+    for shard_idx, result in enumerate(shard_results):
+        # Build key from coords on NON-reduced axes
+        key_parts = []
+        for axis_name in mesh.axis_names:
+            if axis_name not in reduce_axes:
+                key_parts.append(mesh.get_coordinate(shard_idx, axis_name))
+        
+        # Use tuple of coords as grouping key
+        key = tuple(key_parts)
+        if key not in groups:
+            groups[key] = []
+        groups[key].append((shard_idx, result))
+    
+    # Execute reduction per group
+    new_results = [None] * num_shards
+    
+    for key, group_members in groups.items():
+        # group_members is a list of (shard_idx, shard_value)
+        group_shards = [val for _, val in group_members]
+        
+        if len(group_shards) > 1:
+            curr_reduced = all_reduce_op.maxpr(group_shards, reduction="sum")
+        else:
+            curr_reduced = [group_shards[0]]
+            
+        # Distribute results back to original positions
+        for i, (shard_idx, _) in enumerate(group_members):
+            new_results[shard_idx] = curr_reduced[i] if isinstance(curr_reduced, list) else curr_reduced
+            
+    return new_results
 
 
 __all__ = [
@@ -423,4 +536,5 @@ __all__ = [
     "shard",
     "all_gather",
     "all_reduce",
+    "simulate_grouped_all_reduce",
 ]
