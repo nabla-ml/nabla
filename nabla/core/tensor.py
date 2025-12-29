@@ -23,7 +23,11 @@ import warnings
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
-from rich.pretty import pretty_repr
+try:
+    from rich.pretty import pretty_repr
+except ImportError:
+    def pretty_repr(obj, **kwargs):
+        return repr(obj)
 
 from max import driver, graph
 from max.driver import CPU, Device, DLPackArray
@@ -393,6 +397,8 @@ class Tensor(DLPackArray, HasTensorValue):
     # ===== Realization =====
 
     def __await__(self):
+        if self.real:
+            return self
         yield from asyncio.create_task(GRAPH.evaluate(self))
         assert self.real
         return self

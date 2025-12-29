@@ -797,30 +797,16 @@ def squeeze_template(in_rank: int, axis: int) -> OpShardingRuleTemplate:
     - Dim at axis=0 is removed (was size 1, no sharding)
     - Input dim1 -> output dim0 (shifted down)
     
-    Rule: (removed, d0) -> (d0)
+    rule: (removed, d0) -> (d0)
     """
-    out_rank = in_rank - 1
-    # Normalize axis
-    if axis < 0:
-        axis = in_rank + axis
+    factors = [f"d{i}" for i in range(in_rank)]
+    out_factors = [f for i, f in enumerate(factors) if i != axis]
     
-    # Input factors: the squeezed dimension gets a dummy factor
-    in_factors = []
-    out_idx = 0
-    for i in range(in_rank):
-        if i == axis:
-            in_factors.append("squeezed")  # Will be removed
-        else:
-            in_factors.append(f"d{out_idx}")
-            out_idx += 1
-    
-    # Output factors: all dims except the squeezed one
-    out_factors = [f"d{i}" for i in range(out_rank)]
-    
-    in_mapping = {i: [in_factors[i]] for i in range(in_rank)}
-    out_mapping = {i: [out_factors[i]] for i in range(out_rank)}
+    in_mapping = {i: [factors[i]] for i in range(in_rank)}
+    out_mapping = {i: [out_factors[i]] for i in range(in_rank - 1)}
     
     return OpShardingRuleTemplate([in_mapping], [out_mapping])
+
 
 def swap_axes_template(rank: int, axis1: int, axis2: int) -> OpShardingRuleTemplate:
     """Template for swap_axes: swap two dimensions.

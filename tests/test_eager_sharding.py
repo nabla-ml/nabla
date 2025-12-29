@@ -122,7 +122,7 @@ class TestCollectivesInterface:
     
     def test_collective_op_names(self):
         """Collective ops should have correct names."""
-        from nabla.sharding.collectives import AllGatherOp, AllReduceOp, ReduceScatterOp
+        from nabla.ops.communication import ShardOp, AllGatherOp, AllReduceOp, ReduceScatterOp
         
         assert AllGatherOp().name == "all_gather"
         assert AllReduceOp().name == "all_reduce"
@@ -285,7 +285,7 @@ class TestMatmulSharding:
     sliced because it doesn't have factor m on any dim.
     """
     
-    @pytest.mark.skip(reason="Needs per-input factor-based slicing (not just output_sharding)")
+
     def test_matmul_row_sharded_a(self):
         """Matmul with A sharded on rows -> output sharded on rows."""
         mesh = DeviceMesh("m", (2,), ("x",))
@@ -304,7 +304,7 @@ class TestMatmulSharding:
         assert c._impl.sharding.dim_specs[0].axes == ["x"]
         assert c._impl.sharding.dim_specs[1].axes == []
     
-    @pytest.mark.skip(reason="Needs per-input factor-based slicing (not just output_sharding)")
+
     def test_matmul_col_sharded_b(self):
         """Matmul with B sharded on cols -> output sharded on cols."""
         mesh = DeviceMesh("m", (2,), ("x",))

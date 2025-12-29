@@ -452,6 +452,239 @@ def all_reduce(sharded_tensor, reduction: str = "sum"):
 
 
 
+class ReshardOp(Operation):
+    """Generic resharding between different specifications.
+    
+    This operation handles complex transitions like:
+    - Axis permutation (Transpose sharding)
+    - Splitting/Merging axes
+    - Changing device meshes (if device list same)
+    
+    Implementation Strategy:
+    1. Reconstruct Global Tensor (Gather all shards)
+    2. Slice Global Tensor according to new spec (Scatter)
+    
+    Note: This is a memory-intensive simulation. Real AllToAll would exchange
+    only necessary chunks.
+    """
+    
+    @property
+    def name(self) -> str:
+        return "reshard"
+    
+    def _reconstruct_global(
+        self,
+        shard_values: List[TensorValue],
+        source_spec: "ShardingSpec"
+    ) -> TensorValue:
+        """Reconstruct the global tensor from potentially multi-dimensional shards."""
+        # from max.graph import ops (already imported globally)
+        
+        # If duplicated/replicated, any shard is the global tensor
+        if source_spec.is_fully_replicated():
+            return shard_values[0]
+
+        # We need to assemble the shards.
+        # This is essentially the inverse of ShardOp._compute_shard_slice.
+        # We can iterate through the global grid of shards and concat them.
+        
+        # 1. Map each shard_idx -> coordinates in the mesh
+        # 2. Arrange shards in an N-dimensional grid corresponding to mesh axes
+        #    BUT mapped to Tensor Dimensions.
+        
+        # Actually, simpler: Use AllGather logic recursively?
+        # Or just use the fact that we know the global position of each shard.
+        
+        # Let's try a dimension-by-dimension reconstruction.
+        # But shards are interleaved.
+        
+        # Alternative: Create an empty global tensor (via slice updates? No, immutable).
+        # We must use Concat.
+        
+        # Strategy:
+        # A tensor dimension D is split into K parts.
+        # We need to find which shards belong to part 0, part 1, ... part K of dimension D.
+        # Then we concat them.
+        
+        # This is hard for arbitrary 2D meshes + arbitrary dimension mappings.
+        # E.g. Dim 0 sharded on "x", Dim 1 sharded on "y".
+        # We need to form a grid of shards [x, y] and concat rows then cols.
+        
+        # Algorithm:
+        # 1. Identify which mesh axes map to which tensor dimension.
+        # 2. Sort shards by their coordinates on these axes.
+        # 3. Perform hierarchical concatenation.
+        
+        # Simplification for prototype:
+        # If multiple dimensions are sharded, it's a multi-stage concat.
+        # Dim 0 is sharded on axis "x". Dim 1 is sharded on axis "y".
+        # We have shards S(x,y).
+        # We want to form T.
+        # T = Concat( [Concat([S(0,0), S(0,1)], axis=1), 
+        #              Concat([S(1,0), S(1,1)], axis=1)], axis=0 )
+        
+        # We need to determine the order of concatenation.
+        # Order by Tensor Dimensions: Minor to Major (inner to outer) usually?
+        
+        current_shards = shard_values[:] # Copy
+        
+        # We can reconstruct dimension by dimension, from last to first?
+        # NO, we must reconstruct based on the MESH structure?
+        # Actually, if we concat along tensor dimension D, we merge the shards that differ only along the axes mapped to D.
+        
+        # Let's iterate Tensor Dimensions D from 0 to Rank-1.
+        # For each dimension D:
+        #   Find mesh axes assigned to D.
+        #   If none, skip.
+        #   If yes (say axis "x"), we need to concat shards along D.
+        #   But "x" splits the shards.
+        #   Conceptually, we reduce the number of shards by concatenating groups.
+        
+        # This seems complex to implement generically locally.
+        # Let's assume we have a helper that does this.
+        # Wait, AllGatherOp does exactly this but only for ONE axis.
+        
+        # Hack for 2D Mesh / Independent Axes:
+        # 1. For each tensor dimension `d` that is sharded:
+        #    a. Identify the mesh axis `ax` it uses.
+        #    b. Group shards that are identical except for `ax`.
+        #    c. Concat them along `d`.
+        #    d. Replace the group with the result.
+        
+        # This works if axes don't overlap (which they don't, per spec).
+        
+        # Implementation:
+        # Track "current shards".
+        # For each tensor dim d (reverse order?):
+        #   sharding_axes = spec.dim_specs[d].axes
+        #   If empty, continue.
+        #   For each axis `ax` in `sharding_axes` (minor to major?):
+        #     We need to merge along `ax`.
+        #     Group current shards by coordinates of ALL OTHER axes.
+        #     Sort group by coordinate of `ax`.
+        #     Concat group along `d`.
+        
+        # Example: 2x2 mesh. D0 on "x", D1 on "y". Shards S(x,y).
+        # Process D1 (axis "y"):
+        #   Group by "x".
+        #   G0: [S(0,0), S(0,1)] (sorted by y) -> Result R0 = Concat(G0, axis=1)
+        #   G1: [S(1,0), S(1,1)] (sorted by y) -> Result R1 = Concat(G1, axis=1)
+        #   New shards: [R0, R1]. Each covers full D1, but split on D0("x").
+        # Process D0 (axis "x"):
+        #   Group by nothing (only 1 group).
+        #   G: [R0, R1] (sorted by x) -> Result Final = Concat(G, axis=0)
+        
+        current_shard_descs = []
+        for i in range(len(shard_values)):
+            # Store (value, {axis: coord})
+            coords = {ax: source_spec.mesh.get_coordinate(i, ax) for ax in source_spec.mesh.axis_names}
+            current_shard_descs.append( (shard_values[i], coords) )
+            
+        rank = len(shard_values[0].type.shape)
+        
+        # Iterate dimensions in reverse (minor to major) to be safe? 
+        # Actually order shouldn't matter if axes are disjoint.
+        for d in range(rank - 1, -1, -1):
+            if d >= len(source_spec.dim_specs): continue
+            dim_spec = source_spec.dim_specs[d]
+            
+            # Iterate axes (minor to major within dimension)
+            # Spec: "ordered from major to minor".
+            # So to reconstruct, we should concat Minor components first?
+            # E.g. D0 sharded on "a", "b". Total size = Size(a)*Size(b).
+            # We first concat "b" chunks to form "a" chunks. Then "a" chunks.
+            # So reverse order of axes.
+            
+            for ax in reversed(dim_spec.axes):
+                # We need to merge along `ax`.
+                # Group by coordinates of ALL other axes in the mesh.
+                groups = {}
+                for val, coords in current_shard_descs:
+                    # Key is signature of all axes EXCEPT `ax`
+                    key = tuple(v for k,v in coords.items() if k != ax)
+                    if key not in groups:
+                        groups[key] = []
+                    groups[key].append((coords[ax], val, coords))
+                
+                new_shard_descs = []
+                # Process each group
+                for key, members in groups.items():
+                    # Sort by coord on `ax`
+                    members.sort(key=lambda x: x[0])
+                    chunks = [m[1] for m in members]
+                    merged = ops.concat(chunks, axis=d)
+                    
+                    # Update coords: `ax` is now "merged" (we can drop it or set to 0)
+                    # We keep one representative coord dict
+                    base_coords = members[0][2].copy()
+                    del base_coords[ax] # Remove processed axis
+                    
+                    new_shard_descs.append((merged, base_coords))
+                
+                current_shard_descs = new_shard_descs
+                
+        # After processing all sharded axes, we should have 1 result (replicated)
+        # Or multiple if some axes were unused (replicated).
+        # If replicated axes exist in mesh, `current_shard_descs` has N copies.
+        # We just pick the first one.
+        
+        return current_shard_descs[0][0]
+
+    def maxpr(
+        self,
+        shard_values: List[TensorValue],
+        source_spec: "ShardingSpec",
+        target_spec: "ShardingSpec"
+    ) -> List[TensorValue]:
+        """Execute resharding logic."""
+        # 1. Reconstruct logical global tensor
+        global_tensor = self._reconstruct_global(shard_values, source_spec)
+        
+        # 2. Shard using target spec
+        # Reuse ShardOp logic
+        return shard_op.maxpr(global_tensor, target_spec.mesh, target_spec.dim_specs)
+
+    def __call__(self, tensor, target_spec: "ShardingSpec"):
+        """Reshard tensor to target spec."""
+        from ..core.tensor import Tensor
+        from ..core.tensor_impl import TensorImpl
+        from ..core.compute_graph import GRAPH
+        
+        if not tensor._impl.sharding:
+            # Assume tensor is replicated input, just shard it
+            return shard_op(tensor, target_spec.mesh, target_spec.dim_specs)
+            
+        with GRAPH.graph:
+            vals = self.maxpr(tensor._impl._values, tensor._impl.sharding, target_spec)
+            
+        impl = TensorImpl(
+            values=vals,
+            sharding=target_spec,
+            traced=tensor._impl.traced,
+            batch_dims=tensor._impl.batch_dims
+        )
+        # Propagate cached shape/dtype
+        impl.cached_shape = tensor.shape
+        impl.cached_dtype = tensor.dtype
+        impl.cached_device = tensor.device
+        
+        return Tensor(impl=impl)
+
+reshard_op = ReshardOp()
+
+def reshard(tensor, target_spec):
+    """Reshard a tensor to a new specification.
+    
+    Args:
+        tensor: Input sharded tensor
+        target_spec: Target ShardingSpec
+        
+    Returns:
+        New tensor sharded according to target_spec
+    """
+    return reshard_op(tensor, target_spec)
+
+
 def simulate_grouped_all_reduce(
     shard_results: List[TensorValue], 
     mesh: "DeviceMesh", 
@@ -536,5 +769,6 @@ __all__ = [
     "shard",
     "all_gather",
     "all_reduce",
+    "reshard",
     "simulate_grouped_all_reduce",
 ]

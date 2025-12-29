@@ -235,7 +235,7 @@ def test_collectives_interface():
     """Test that collective ops have correct interface."""
     print("\n=== Test: Collectives Interface ===")
     
-    from nabla.sharding.collectives import AllGatherOp, ReduceScatterOp, AllReduceOp
+    from nabla.ops.communication import shard, all_gather, all_reduce, ShardOp, AllGatherOp, AllReduceOp, ReduceScatterOp
     
     # Check names
     assert AllGatherOp().name == "all_gather"

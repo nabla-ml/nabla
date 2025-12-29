@@ -264,19 +264,19 @@ class ComputeGraph:
         all_values = []
         value_map = []  # List of (tensor, shard_idx) or (tensor, None) for single-value
         
-        for t in unrealized:
-            values = t._impl._values
-            if values and len(values) > 1:
-                # Sharded tensor: output all shards
-                for shard_idx, val in enumerate(values):
-                    all_values.append(val)
-                    value_map.append((t, shard_idx))
-            else:
-                # Single-value tensor
-                all_values.append(graph.TensorValue(t))
-                value_map.append((t, None))
-        
         with self.graph:
+            for t in unrealized:
+                values = t._impl._values
+                if values and len(values) > 1:
+                    # Sharded tensor: output all shards
+                    for shard_idx, val in enumerate(values):
+                        all_values.append(val)
+                        value_map.append((t, shard_idx))
+                else:
+                    # Single-value tensor
+                    all_values.append(graph.TensorValue(t))
+                    value_map.append((t, None))
+            
             self.graph.output(ops.random._peek_seed(), *all_values)
         
         if DEBUG_LAZY_EVAL:
