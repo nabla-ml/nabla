@@ -106,6 +106,12 @@ class ShardOp(Operation):
             
             chunk_size = math.ceil(dim_len / total_shards)
             start = my_shard_pos * chunk_size
+            
+            # Ensure start is within bounds (MAX Graph slice op errors if start > length)
+            # For empty shards at the end of uneven splits, start can be > dim_len
+            start = min(start, dim_len)
+            
+            # End is always clamped to dim_len
             end = min(start + chunk_size, dim_len)
             slices.append(slice(start, end))
         
@@ -672,9 +678,9 @@ class ReshardOp(Operation):
         
         current_shard_descs = []
         for i in range(len(shard_values)):
-            # Store (value, {axis: coord})
-            coords = {ax: source_spec.mesh.get_coordinate(i, ax) for ax in source_spec.mesh.axis_names}
-            current_shard_descs.append( (shard_values[i], coords) )
+            # Store (value, device_id)
+            # We will fetch coordinates on demand because sub-axes are not in axis_names
+            current_shard_descs.append( (shard_values[i], source_spec.mesh.devices[i]) )
             
         rank = len(shard_values[0].type.shape)
         
@@ -684,40 +690,70 @@ class ReshardOp(Operation):
             if d >= len(source_spec.dim_specs): continue
             dim_spec = source_spec.dim_specs[d]
             
-            # Iterate axes (minor to major within dimension)
-            # Spec: "ordered from major to minor".
-            # So to reconstruct, we should concat Minor components first?
-            # E.g. D0 sharded on "a", "b". Total size = Size(a)*Size(b).
-            # We first concat "b" chunks to form "a" chunks. Then "a" chunks.
-            # So reverse order of axes.
+        # Track usage of axes to know which ones are "active" for distinguishing shards
+        current_active_axes = set()
+        for dim in source_spec.dim_specs:
+            current_active_axes.update(dim.axes)
+        current_active_axes.update(source_spec.replicated_axes)
+        
+        # Iterate dimensions in reverse (minor to major) to be safe? 
+        # Actually order shouldn't matter if axes are disjoint.
+        for d in range(rank - 1, -1, -1):
+            if d >= len(source_spec.dim_specs): continue
+            dim_spec = source_spec.dim_specs[d]
             
             for ax in reversed(dim_spec.axes):
                 # We need to merge along `ax`.
-                # Group by coordinates of ALL other axes in the mesh.
+                # Group shards by coordinates of all OTHER active axes.
+                
                 groups = {}
-                for val, coords in current_shard_descs:
-                    # Key is signature of all axes EXCEPT `ax`
-                    key = tuple(v for k,v in coords.items() if k != ax)
+                for val, device_id in current_shard_descs:
+                    signature = []
+                    # Key depends on all currently active axes EXCEPT the one we are merging
+                    for check_ax in sorted(list(current_active_axes)):
+                        if check_ax == ax:
+                            continue
+                        # Use computed coord
+                        try:
+                            c = source_spec.mesh.get_coordinate(device_id, check_ax)
+                            signature.append((check_ax, c))
+                        except Exception:
+                            # Should not happen if spec is valid
+                            continue
+                            
+                    key = tuple(signature)
+                    
                     if key not in groups:
                         groups[key] = []
-                    groups[key].append((coords[ax], val, coords))
+                    
+                    # Store (coord_on_ax, val, device_id)
+                    my_coord = source_spec.mesh.get_coordinate(device_id, ax)
+                    groups[key].append((my_coord, val, device_id))
                 
                 new_shard_descs = []
                 # Process each group
                 for key, members in groups.items():
                     # Sort by coord on `ax`
                     members.sort(key=lambda x: x[0])
-                    chunks = [m[1] for m in members]
-                    merged = ops.concat(chunks, axis=d)
                     
-                    # Update coords: `ax` is now "merged" (we can drop it or set to 0)
-                    # We keep one representative coord dict
-                    base_coords = members[0][2].copy()
-                    del base_coords[ax] # Remove processed axis
+                    # Filter unique coords (handle replication)
+                    # If multiple devices have same coord on `ax` and same Key, they are replicas.
+                    unique_chunks = []
+                    seen_coords = set()
                     
-                    new_shard_descs.append((merged, base_coords))
+                    for m in members:
+                        coord = m[0]
+                        if coord not in seen_coords:
+                            unique_chunks.append(m[1])
+                            seen_coords.add(coord)
+                    
+                    merged = ops.concat(unique_chunks, axis=d)
+                    
+                    # keep representative device_id from first member
+                    new_shard_descs.append((merged, members[0][2]))
                 
                 current_shard_descs = new_shard_descs
+                current_active_axes.remove(ax)
                 
         # After processing all sharded axes, we should have 1 result (replicated)
         # Or multiple if some axes were unused (replicated).
