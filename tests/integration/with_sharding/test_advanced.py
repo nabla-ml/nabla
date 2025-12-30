@@ -11,7 +11,7 @@ from nabla import Tensor
 from nabla.sharding import DeviceMesh, DimSpec
 from nabla.ops.unary import relu
 
-from sharding_test_utils import make_array, make_randn
+from tests.common.sharding_utils import make_array, make_randn
 
 # import nabla.ops.communication
 # print(f"DEBUG_IMPORT: {nabla.ops.communication.__file__}")

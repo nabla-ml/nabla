@@ -357,8 +357,8 @@ class BinaryOperation(Operation):
         
         # Use GLOBAL shapes for broadcast logic (not shard-local)
         # This ensures sharded tensors broadcast correctly based on logical dims
-        x_global = tuple(int(d) for d in x._impl.global_shape or x._impl.physical_shape)
-        y_global = tuple(int(d) for d in y._impl.global_shape or y._impl.physical_shape)
+        x_global = tuple(d for d in x._impl.global_shape or x._impl.physical_shape)
+        y_global = tuple(d for d in y._impl.global_shape or y._impl.physical_shape)
         x_batch = x._impl.batch_dims
         y_batch = y._impl.batch_dims
         
@@ -375,13 +375,13 @@ class BinaryOperation(Operation):
         
         # Prepare x - unsqueeze then broadcast
         x = self._unsqueeze_to_rank(x, len(out_physical_shape), x_batch, out_batch_dims)
-        current = tuple(int(d) for d in (x._impl.global_shape or x._impl.physical_shape))
+        current = tuple(d for d in (x._impl.global_shape or x._impl.physical_shape))
         if current != out_physical_shape:
             x = view_ops.broadcast_to(x, out_logical_shape)
         
         # Prepare y - unsqueeze then broadcast
         y = self._unsqueeze_to_rank(y, len(out_physical_shape), y_batch, out_batch_dims)
-        current = tuple(int(d) for d in (y._impl.global_shape or y._impl.physical_shape))
+        current = tuple(d for d in (y._impl.global_shape or y._impl.physical_shape))
         if current != out_physical_shape:
             y = view_ops.broadcast_to(y, out_logical_shape)
         

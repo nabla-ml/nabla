@@ -1,7 +1,6 @@
 """Test the tracing infrastructure refactoring (OutputRefs op metadata)."""
 
-import sys
-sys.path.insert(0, '/Users/tillife/Documents/CodingProjects/nabla')
+
 
 from nabla.core.tensor import Tensor
 from nabla.ops import multi_output as multi_output_ops
