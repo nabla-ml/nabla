@@ -196,18 +196,46 @@ class AllGatherOp(Operation):
         self,
         shard_values: List[TensorValue],
         axis: int,
+        mesh: "DeviceMesh" = None,
+        sharded_axis_name: str = None,
     ) -> List[TensorValue]:
         """Gather all shards along the specified axis.
         
         Args:
             shard_values: List of shard TensorValues
             axis: Axis along which shards are split
+            mesh: Device mesh (needed for 2D+ meshes to identify unique shards)
+            sharded_axis_name: Name of the mesh axis that was sharded
             
         Returns:
             List of replicated TensorValues (all identical)
         """
-        # Concatenate all shards to get full tensor
-        full_tensor = ops.concat(shard_values, axis=axis)
+        # For 2D+ meshes, we need to select only unique shards
+        # (avoid concatenating duplicates from non-sharded mesh axes)
+        if mesh is not None and sharded_axis_name is not None:
+            sharded_axis_size = mesh.get_axis_size(sharded_axis_name)
+            
+            # Group shards by their coordinate on the sharded axis
+            unique_shards = []
+            seen_coords = set()
+            
+            for shard_idx, val in enumerate(shard_values):
+                coord = mesh.get_coordinate(shard_idx, sharded_axis_name)
+                if coord not in seen_coords:
+                    seen_coords.add(coord)
+                    unique_shards.append((coord, val))
+            
+            # Sort by coordinate and extract values
+            unique_shards.sort(key=lambda x: x[0])
+            shards_to_concat = [v for _, v in unique_shards]
+        else:
+            shards_to_concat = shard_values
+        
+        # Concatenate unique shards to get full tensor
+        if len(shards_to_concat) == 1:
+            full_tensor = shards_to_concat[0]
+        else:
+            full_tensor = ops.concat(shards_to_concat, axis=axis)
         
         # Return N copies (one per original shard location)
         return [full_tensor] * len(shard_values)
@@ -231,8 +259,15 @@ class AllGatherOp(Operation):
            (not sharded_tensor._impl.sharding or sharded_tensor._impl.sharding.is_fully_replicated()):
             return sharded_tensor  # Already logically replicated
             
-        # Get mesh from input sharding
+        # Get mesh and sharded axis info from input sharding
         mesh = sharded_tensor._impl.sharding.mesh if sharded_tensor._impl.sharding else None
+        sharded_axis_name = None
+        
+        if sharded_tensor._impl.sharding:
+            # Find which mesh axis this tensor dimension is sharded on
+            sharding = sharded_tensor._impl.sharding
+            if axis < len(sharding.dim_specs) and sharding.dim_specs[axis].axes:
+                sharded_axis_name = sharding.dim_specs[axis].axes[0]
         
         if not sharded_tensor._impl._values or len(sharded_tensor._impl._values) <= 1:
             # Physically gathered (single value) but logically sharded.
@@ -248,7 +283,6 @@ class AllGatherOp(Operation):
                 sharding=replicated_spec,
             )
             # Ensure shape is propagated (force resolution if needed)
-            # This handles cases where _values is empty (abstract tensor) and we need cached_shape
             impl.cached_shape = sharded_tensor.shape
             impl.cached_dtype = sharded_tensor.dtype
             impl.cached_device = sharded_tensor.device
@@ -256,18 +290,32 @@ class AllGatherOp(Operation):
             return Tensor(impl=impl)
         
         with GRAPH.graph:
-            gathered = self.maxpr(sharded_tensor._impl._values, axis)
+            gathered = self.maxpr(
+                sharded_tensor._impl._values, axis, 
+                mesh=mesh, sharded_axis_name=sharded_axis_name
+            )
         
-        # Create replicated sharding spec (all dims have empty axes)
-        rank = len(gathered[0].type.shape) if gathered else 0
-        replicated_spec = ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)]) if mesh else None
+        # Create output sharding spec: only the gathered dimension becomes replicated
+        # Other dimensions keep their original sharding
+        output_spec = None
+        if mesh and sharded_tensor._impl.sharding:
+            input_spec = sharded_tensor._impl.sharding
+            new_dim_specs = []
+            for dim_idx, dim_spec in enumerate(input_spec.dim_specs):
+                if dim_idx == axis:
+                    # This dimension is now gathered/replicated
+                    new_dim_specs.append(DimSpec([]))
+                else:
+                    # Preserve original sharding
+                    new_dim_specs.append(dim_spec)
+            output_spec = ShardingSpec(mesh, new_dim_specs)
         
-        # Create replicated output tensor
+        # Create output tensor
         impl = TensorImpl(
             values=gathered,
             traced=sharded_tensor._impl.traced,
             batch_dims=sharded_tensor._impl.batch_dims,
-            sharding=replicated_spec,
+            sharding=output_spec,
         )
         return Tensor(impl=impl)
 
@@ -449,6 +497,54 @@ def all_reduce(sharded_tensor, reduction: str = "sum"):
         Tensor with reduced values (replicated across shards)
     """
     return all_reduce_op(sharded_tensor, reduction)
+
+
+def gather_all_axes(sharded_tensor):
+    """Gather all sharded axes to produce a fully replicated tensor.
+    
+    Uses hierarchical concatenation to properly handle multi-axis sharding.
+    This is the correct way to reconstruct a tensor sharded on multiple dimensions.
+    
+    Args:
+        sharded_tensor: Tensor with any sharding configuration
+        
+    Returns:
+        Replicated tensor with the full global data
+    """
+    from ..core.tensor import Tensor
+    from ..core.tensor_impl import TensorImpl
+    from ..core.compute_graph import GRAPH
+    from ..sharding.spec import ShardingSpec, DimSpec
+    
+    if not sharded_tensor._impl._values or len(sharded_tensor._impl._values) <= 1:
+        return sharded_tensor  # Nothing to gather
+    
+    if not sharded_tensor._impl.sharding:
+        return sharded_tensor  # No sharding info
+    
+    spec = sharded_tensor._impl.sharding
+    mesh = spec.mesh
+    
+    if spec.is_fully_replicated():
+        return sharded_tensor  # Already replicated
+    
+    # Use ReshardOp's hierarchical reconstruction logic
+    with GRAPH.graph:
+        global_tensor = reshard_op._reconstruct_global(
+            sharded_tensor._impl._values, spec
+        )
+    
+    # Create replicated output
+    rank = len(global_tensor.type.shape)
+    replicated_spec = ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)])
+    
+    impl = TensorImpl(
+        values=[global_tensor],  # Single global value
+        traced=sharded_tensor._impl.traced,
+        batch_dims=sharded_tensor._impl.batch_dims,
+        sharding=replicated_spec,
+    )
+    return Tensor(impl=impl)
 
 
 
@@ -769,6 +865,7 @@ __all__ = [
     "shard",
     "all_gather",
     "all_reduce",
+    "gather_all_axes",
     "reshard",
     "simulate_grouped_all_reduce",
 ]

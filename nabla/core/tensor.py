@@ -149,7 +149,11 @@ class Tensor(DLPackArray, HasTensorValue):
         dim_specs: list[Any],
         replicated_axes: set[str] | None = None,
     ) -> Tensor:
-        """Annotate tensor with sharding constraint.
+        """Shard this tensor across a device mesh.
+        
+        This is a FUNCTIONAL operation that eagerly slices the tensor into
+        multiple TensorValues (one per shard). The returned tensor has
+        `len(mesh.devices)` internal values.
         
         Args:
             mesh: DeviceMesh to shard across
@@ -157,13 +161,18 @@ class Tensor(DLPackArray, HasTensorValue):
             replicated_axes: Axes to explicitly replicate (optional)
         
         Returns:
-            self (for chaining with .trace())
+            New tensor with multiple TensorValues (one per shard)
+        
+        Example:
+            x_sharded = x.shard(mesh, [DimSpec(["data"]), DimSpec([])])
         """
-        from ..sharding import ShardingSpec
-        self._impl.sharding = ShardingSpec(
-            mesh, dim_specs, replicated_axes=replicated_axes or set()
-        )
-        return self
+        from ..ops.communication import shard as shard_op
+        # ShardOp handles the actual slicing and returns a new tensor
+        result = shard_op(self, mesh, dim_specs)
+        # Set replicated_axes if provided
+        if replicated_axes and result._impl.sharding:
+            result._impl.sharding.replicated_axes = replicated_axes
+        return result
     
     def with_sharding(
         self,
@@ -468,11 +477,25 @@ class Tensor(DLPackArray, HasTensorValue):
         return self.driver_tensor.to(CPU()).item()
     
     def to_numpy(self):
-        """Convert tensor to numpy array, gathering shards if needed."""
+        """Convert tensor to numpy array, gathering shards if needed.
+        
+        For sharded tensors, uses hierarchical gather to properly
+        reconstruct multi-axis sharded tensors.
+        """
         import numpy as np
+        
+        # If sharded and not yet realized, gather all shards
+        if not self.real and self._impl.is_sharded and self._impl.sharding:
+            from ..ops.communication import gather_all_axes
+            # Use hierarchical gather for proper multi-axis support
+            gathered = gather_all_axes(self)
+            gathered._sync_realize()
+            return gathered.driver_tensor.to(CPU()).to_numpy()
+        
+        # Already realized or not sharded - standard path
         self._sync_realize()
         
-        # Multi-shard: gather along sharded dimension(s)
+        # Multi-shard storage (already realized): gather via numpy
         if self._impl._storages and len(self._impl._storages) > 1:
             return self._gather_shards_to_numpy()
         

@@ -66,19 +66,19 @@ def run_megatron_demo():
     # Input X: [B, S, H] -> Sharded on Batch ("data")
     np_x = np.random.randn(B, S, H).astype(np.float32)
     x = Tensor.from_dlpack(np_x).trace()
-    x.shard(mesh, [DimSpec(["data"]), DimSpec([]), DimSpec([])])
+    x = x.shard(mesh, [DimSpec(["data"]), DimSpec([]), DimSpec([])])
     
     # Weight 1 (Column Parallel): [H, FF] -> Sharded on Output ("model")
     # This means each device holds a subset of the output features (columns).
     np_w1 = np.random.randn(H, FF).astype(np.float32) * 0.1
     w1 = Tensor.from_dlpack(np_w1).trace()
-    w1.shard(mesh, [DimSpec([]), DimSpec(["model"])])
+    w1 = w1.shard(mesh, [DimSpec([]), DimSpec(["model"])])
 
     # Weight 2 (Row Parallel): [FF, H] -> Sharded on Input ("model")
     # This means each device holds a subset of the input features (rows).
     np_w2 = np.random.randn(FF, H).astype(np.float32) * 0.1
     w2 = Tensor.from_dlpack(np_w2).trace()
-    w2.shard(mesh, [DimSpec(["model"]), DimSpec([])])
+    w2 = w2.shard(mesh, [DimSpec(["model"]), DimSpec([])])
 
     print("\n[3] Initial Sharding:")
     print_sharding("Input X", x)
