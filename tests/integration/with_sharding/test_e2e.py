@@ -52,8 +52,8 @@ class TestUnaryOpsEvaluation:
         np_A = np.array([[-1, 2], [-3, 4], [5, -6], [7, 8]], dtype=np.float32)
         expected = np.maximum(0, np_A)
         
-        A = Tensor.from_dlpack(np_A).trace()
-        A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
+        A = Tensor.from_dlpack(np_A)
+        A = A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
         
         B = relu(A)
         asyncio.run(B.realize)
@@ -69,8 +69,8 @@ class TestUnaryOpsEvaluation:
         np_A = np.array([[0, 1], [2, 0], [1, 2], [0, 0]], dtype=np.float32)
         expected = np.exp(np_A)
         
-        A = Tensor.from_dlpack(np_A).trace()
-        A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
+        A = Tensor.from_dlpack(np_A)
+        A = A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
         
         B = exp(A)
         asyncio.run(B.realize)
@@ -86,8 +86,8 @@ class TestUnaryOpsEvaluation:
         np_A = np.arange(8, dtype=np.float32).reshape(4, 2)
         expected = 1 / (1 + np.exp(-np_A))
         
-        A = Tensor.from_dlpack(np_A).trace()
-        A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
+        A = Tensor.from_dlpack(np_A)
+        A = A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
         
         B = sigmoid(A)
         asyncio.run(B.realize)
@@ -107,11 +107,11 @@ class TestBinaryOpsEvaluation:
         np_B = np.ones((4, 2), dtype=np.float32) * 10
         expected = np_A + np_B
         
-        A = Tensor.from_dlpack(np_A).trace()
-        A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
+        A = Tensor.from_dlpack(np_A)
+        A = A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
         
-        B = Tensor.from_dlpack(np_B).trace()
-        B.shard(mesh, [DimSpec(["x"]), DimSpec([])])
+        B = Tensor.from_dlpack(np_B)
+        B = B.shard(mesh, [DimSpec(["x"]), DimSpec([])])
         
         C = A + B
         asyncio.run(C.realize)
@@ -127,10 +127,10 @@ class TestBinaryOpsEvaluation:
         np_B = np.array([[2, 3], [2, 3], [2, 3], [2, 3]], dtype=np.float32)
         expected = np_A * np_B
         
-        A = Tensor.from_dlpack(np_A).trace()
-        A.shard(mesh, [DimSpec(["x"]), DimSpec([])])  # Sharded
+        A = Tensor.from_dlpack(np_A)
+        A = A.shard(mesh, [DimSpec(["x"]), DimSpec([])])  # Sharded
         
-        B = Tensor.from_dlpack(np_B).trace()
+        B = Tensor.from_dlpack(np_B)
         # B is replicated (no explicit sharding)
         
         C = A * B
@@ -147,10 +147,10 @@ class TestBinaryOpsEvaluation:
         np_B = np.eye(4, dtype=np.float32) * 2
         expected = np_A @ np_B
         
-        A = Tensor.from_dlpack(np_A).trace()
-        A.shard(mesh, [DimSpec(["x"]), DimSpec([])])  # Row sharded
+        A = Tensor.from_dlpack(np_A)
+        A = A.shard(mesh, [DimSpec(["x"]), DimSpec([])])  # Row sharded
         
-        B = Tensor.from_dlpack(np_B).trace()
+        B = Tensor.from_dlpack(np_B)
         # B replicated
         
         C = A @ B
@@ -167,11 +167,11 @@ class TestBinaryOpsEvaluation:
         np_B = np.ones((4, 4), dtype=np.float32)
         expected = np_A @ np_B  # All 4s
         
-        A = Tensor.from_dlpack(np_A).trace()
-        A.shard(mesh, [DimSpec([]), DimSpec(["x"])])  # Col sharded
+        A = Tensor.from_dlpack(np_A)
+        A = A.shard(mesh, [DimSpec([]), DimSpec(["x"])])  # Col sharded
         
-        B = Tensor.from_dlpack(np_B).trace()
-        B.shard(mesh, [DimSpec(["x"]), DimSpec([])])  # Row sharded
+        B = Tensor.from_dlpack(np_B)
+        B = B.shard(mesh, [DimSpec(["x"]), DimSpec([])])  # Row sharded
         
         C = A @ B
         asyncio.run(C.realize)
@@ -193,8 +193,8 @@ class TestViewOpsEvaluation:
         np_A = np.arange(8, dtype=np.float32)
         expected = np_A.reshape(2, 4)
         
-        A = Tensor.from_dlpack(np_A).trace()
-        A.shard(mesh, [DimSpec(["x"])])
+        A = Tensor.from_dlpack(np_A)
+        A = A.shard(mesh, [DimSpec(["x"])])
         
         B = reshape(A, (2, 4))
         asyncio.run(B.realize)
@@ -211,8 +211,8 @@ class TestViewOpsEvaluation:
         np_A = np.arange(4, dtype=np.float32).reshape(4, 1)
         expected = np.broadcast_to(np_A, (4, 4))
         
-        A = Tensor.from_dlpack(np_A).trace()
-        A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
+        A = Tensor.from_dlpack(np_A)
+        A = A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
         
         B = broadcast_to(A, (4, 4))
         asyncio.run(B.realize)
@@ -232,8 +232,8 @@ class TestMoreOpsEvaluation:
         np_A = np.arange(8, dtype=np.float32).reshape(4, 2)
         expected = -np_A
         
-        A = Tensor.from_dlpack(np_A).trace()
-        A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
+        A = Tensor.from_dlpack(np_A)
+        A = A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
         
         B = neg(A)
         asyncio.run(B.realize)
@@ -249,8 +249,8 @@ class TestMoreOpsEvaluation:
         np_A = np.arange(8, dtype=np.float32).reshape(4, 2)
         expected = np_A.sum(axis=1, keepdims=True)  # Sum along cols
         
-        A = Tensor.from_dlpack(np_A).trace()
-        A.shard(mesh, [DimSpec(["x"]), DimSpec([])])  # Shard rows
+        A = Tensor.from_dlpack(np_A)
+        A = A.shard(mesh, [DimSpec(["x"]), DimSpec([])])  # Shard rows
         
         # Reduce on non-sharded dim (axis=1)
         B = reduce_sum(A, axis=1, keepdims=True)
@@ -267,8 +267,8 @@ class TestMoreOpsEvaluation:
         np_A = np.array([[0, 1], [-1, 2], [0.5, -0.5], [3, -3]], dtype=np.float32)
         expected = np.tanh(np_A)
         
-        A = Tensor.from_dlpack(np_A).trace()
-        A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
+        A = Tensor.from_dlpack(np_A)
+        A = A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
         
         B = tanh(A)
         asyncio.run(B.realize)
@@ -291,10 +291,10 @@ class TestChainedOpsEvaluation:
         
         expected = np.maximum(0, np_A) @ np_B
         
-        A = Tensor.from_dlpack(np_A).trace()
-        A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
+        A = Tensor.from_dlpack(np_A)
+        A = A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
         
-        B = Tensor.from_dlpack(np_B).trace()
+        B = Tensor.from_dlpack(np_B)
         
         C = relu(A) @ B
         asyncio.run(C.realize)
@@ -314,10 +314,10 @@ class TestChainedOpsEvaluation:
         reshaped = np_A.reshape(2, 4)
         expected = reshaped + np_B
         
-        A = Tensor.from_dlpack(np_A).trace()
-        A.shard(mesh, [DimSpec(["x"])])
+        A = Tensor.from_dlpack(np_A)
+        A = A.shard(mesh, [DimSpec(["x"])])
         
-        B = Tensor.from_dlpack(np_B).trace()
+        B = Tensor.from_dlpack(np_B)
         
         A_reshaped = reshape(A, (2, 4))
         C = A_reshaped + B

@@ -22,7 +22,7 @@ class TestShardingReductions(unittest.IsolatedAsyncioTestCase):
         axis = 0
         
         np_a = np.random.randn(M, N).astype(np.float32)
-        a = Tensor.from_dlpack(np_a).trace()
+        a = Tensor.from_dlpack(np_a)
         a = a.shard(self.mesh, [DimSpec(["x"]), DimSpec([])])
         
         # Sum over sharded dimension -> AllReduce
@@ -49,7 +49,7 @@ class TestShardingReductions(unittest.IsolatedAsyncioTestCase):
         axis = 1
         
         np_a = np.random.randn(M, N).astype(np.float32)
-        a = Tensor.from_dlpack(np_a).trace()
+        a = Tensor.from_dlpack(np_a)
         a = a.shard(self.mesh, [DimSpec(["x"]), DimSpec([])])
         
         c = reduce_sum(a, axis=axis)
@@ -74,7 +74,7 @@ class TestShardingReductions(unittest.IsolatedAsyncioTestCase):
         axis = 0
         
         np_a = np.random.randn(M, N).astype(np.float32)
-        a = Tensor.from_dlpack(np_a).trace()
+        a = Tensor.from_dlpack(np_a)
         a = a.shard(self.mesh, [DimSpec(["x"]), DimSpec([])])
         
         c = mean(a, axis=axis, keepdims=True)
@@ -98,7 +98,7 @@ class TestShardingReductions(unittest.IsolatedAsyncioTestCase):
         B, M, N = 4, 8, 8
         
         np_a = np.random.randn(B, M, N).astype(np.float32)
-        a = Tensor.from_dlpack(np_a).trace()
+        a = Tensor.from_dlpack(np_a)
         a = a.shard(self.mesh, [DimSpec(["x"]), DimSpec([]), DimSpec([])])
         
         # Reduce N first (local) -> (B, M)

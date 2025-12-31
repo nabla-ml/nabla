@@ -171,24 +171,28 @@ def test_shardy_propagation_standalone():
 
 
 def test_tensor_shard_method():
-    """Test the new Tensor.shard() method."""
+    """Test the Tensor.shard() method - functional API returns new tensor."""
     print("\n=== Test: Tensor.shard() Method ===")
     
     mesh = DeviceMesh("test", (2,), ("x",))
     
-    # Create tensor and shard it
-    A = Tensor.ones((4, 8)).trace()
-    result = A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
+    # Create tensor and shard it - shard() returns NEW tensor
+    # No .trace() needed - sharding triggers SPMD path automatically
+    A = Tensor.ones((4, 8))
+    A_sharded = A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
     
-    # Should return self for chaining
-    assert result is A, "shard() should return self"
+    # shard() is functional - returns new tensor, NOT self
+    # Original tensor unchanged, new tensor has sharding
     
-    # Should have sharding attached
-    assert A._impl.sharding is not None, "sharding should be set"
-    assert isinstance(A._impl.sharding, ShardingSpec), "sharding should be ShardingSpec"
-    assert A._impl.sharding.mesh.name == "test", "mesh name should match"
-    assert A._impl.sharding.dim_specs[0].axes == ["x"], "first dim should be sharded on x"
-    assert A._impl.sharding.dim_specs[1].axes == [], "second dim should be unsharded"
+    # Should have sharding attached to returned tensor
+    assert A_sharded._impl.sharding is not None, "sharding should be set"
+    assert isinstance(A_sharded._impl.sharding, ShardingSpec), "sharding should be ShardingSpec"
+    assert A_sharded._impl.sharding.mesh.name == "test", "mesh name should match"
+    assert A_sharded._impl.sharding.dim_specs[0].axes == ["x"], "first dim should be sharded on x"
+    assert A_sharded._impl.sharding.dim_specs[1].axes == [], "second dim should be unsharded"
+    
+    # Verify it has multiple shard values
+    assert A_sharded._impl.num_shards == 2, "should have 2 shards"
     
     print("  ✓ Tensor.shard() works!")
 
@@ -206,14 +210,16 @@ def test_eager_sharding_propagation_matmul():
     mesh = DeviceMesh("test", (2,), ("x",))
     
     # A sharded on first dim (4, 8) -> [x, -]
-    A = Tensor.ones((4, 8)).trace()
-    A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
+    # shard() is functional - use the returned tensor!
+    # No .trace() needed - sharding triggers SPMD path automatically
+    A = Tensor.ones((4, 8))
+    A_sharded = A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
     
     # B unsharded
-    B = Tensor.ones((8, 4)).trace()
+    B = Tensor.ones((8, 4))
     
-    # C = A @ B - sharding propagates automatically!
-    C = A @ B
+    # C = A_sharded @ B - sharding propagates automatically!
+    C = A_sharded @ B
     
     # Verify sharding was propagated eagerly
     assert C._impl.sharding is not None, "C should have sharding after op"
@@ -222,7 +228,7 @@ def test_eager_sharding_propagation_matmul():
     # C's first dim should be sharded on "x" (propagated from A's m dimension)
     # Matmul: (m, k) @ (k, n) -> (m, n), so m maps to x
     c_first_dim_axes = C._impl.sharding.dim_specs[0].axes
-    print(f"  A sharding: {A._impl.sharding}")
+    print(f"  A_sharded sharding: {A_sharded._impl.sharding}")
     print(f"  C sharding: {C._impl.sharding}")
     print(f"  C first dim axes: {c_first_dim_axes}")
     
@@ -252,20 +258,21 @@ def test_end_to_end_sharded_execution():
     
     mesh = DeviceMesh("test", (2,), ("x",))
     
-    # A sharded on first dim
-    A = Tensor.ones((4, 8)).trace()
-    A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
+    # A sharded on first dim - use functional shard() API
+    # No .trace() needed - sharding triggers SPMD path automatically
+    A = Tensor.ones((4, 8))
+    A_sharded = A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
     
     # B unsharded
-    B = Tensor.ones((8, 4)).trace()
+    B = Tensor.ones((8, 4))
     
-    # C = A @ B
-    C = A @ B
+    # C = A_sharded @ B
+    C = A_sharded @ B
     
     print(f"  Before await: C._impl.sharding = {C._impl.sharding}")
     print(f"  Before await: C._impl._values count = {len(C._impl._values)}")
     
-    # This should trigger _evaluate_sharded -> transform_to_sharded
+    # This should trigger sharded execution
     try:
         asyncio.run(C.realize)
         print(f"  After await: C._impl._storages count = {len(C._impl._storages) if C._impl._storages else 0}")

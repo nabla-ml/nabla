@@ -1,202 +1,139 @@
 # Sharding Module: Distributed Tensor Partitioning
 
-## Philosophy
+## Overview
 
-Sharding enables distributing large tensors and computations across multiple devices. This module provides the **specification** (how to shard) and **propagation** (infer sharding across operations), but not yet the execution (actually running sharded).
+This module enables distributing tensors across device meshes with automatic sharding propagation. Unlike many frameworks, nabla supports **eager sharded execution** via SPMD (Single Program Multiple Data).
 
-**Status**: Infrastructure ready, execution pending MAX multi-device support.
+**Status**: Specification, propagation, and SPMD execution are implemented. Multi-device hardware execution awaits MAX backend support.
 
 ---
 
-## Core Concepts (spec.py)
+## Module Structure
+
+| File | Purpose |
+|------|---------|
+| `spec.py` | DeviceMesh, ShardingSpec, DimSpec |
+| `propagation.py` | Factor-based algorithm, op templates |
+| `spmd.py` | Execution helpers (slice, reshard, align) |
+
+---
+
+## Core Concepts
 
 ### DeviceMesh
 
-Logical grid of devices. Example: `DeviceMesh((4, 8))` = 4×8 grid of 32 devices.
+Logical n-dimensional grid of devices with named axes:
 
-**Axis names**: `("data", "model")` for semantic clarity.
-
-**Why mesh?** Expresses multi-dimensional parallelism:
-- Axis 0: data parallelism
-- Axis 1: model/tensor parallelism
+```
+@cluster = <["dp"=2, "tp"=4]>  # 8 devices: 2×4
+```
 
 ### ShardingSpec
 
-Describes how a tensor is partitioned across a mesh.
-
-**Representation**: Per-dimension specification:
-- Which mesh axes this tensor dimension is sharded over
-- Whether replicated
-- Sub-axis splits for complex patterns
-
-**Example**: Tensor `(batch, features)` sharded on mesh `("data", "model")`:
-- `batch` → shard over "data" axis
-- `features` → shard over "model" axis
+Per-tensor sharding description:
+- **dim_specs**: How each dimension is sharded
+- **replicated_axes**: Explicitly replicated mesh axes
 
 ### DimSpec
 
-Per-dimension sharding specification.
-
-**Options**:
-- Sharded on specific mesh axes
-- Replicated across all devices
-- Partially sharded (sub-axis splitting)
+Per-dimension specification:
+- **axes**: Which mesh axes shard this dim (major→minor)
+- **is_open**: Can receive additional sharding during propagation
+- **priority**: Lower = stronger (user annotations beat inferred)
 
 ---
 
-## Sharding Propagation (propagation.py)
+## Factor-Based Propagation
 
-### The Problem
+**Inspired by XLA Shardy/GSPMD**. Uses einsum-like factor mappings:
 
-User annotates a few tensors with sharding specs. How to infer sharding for all intermediate tensors?
+```
+matmul: (m, k), (k, n) → (m, n)
+```
 
-**Challenge**: Different operations have different sharding semantics:
-- Matmul: contracting dimension can change sharding
-- Elementwise: preserve sharding
-- Reductions: reduce over sharded dimension requires all-reduce
+### Three-Phase Algorithm
 
-### The Solution: Factor-Based Propagation
+1. **Collect**: Project dimension→factor shardings
+2. **Merge**: Resolve conflicts using priority + strategy
+3. **Update**: Project factor→dimension shardings
 
-**Inspiration**: Shardy (Google's sharding propagation in JAX/GSPMD).
+### Conflict Resolution
 
-**Core idea**: 
-- Einsum-like notation **conceptually** describes operation: `(i,k), (k,j) → (i,j)` for matmul
-- Each factor (i, k, j) represents a semantic dimension
-- Sharding propagates through factors, not tensor positions
-- **Implementation**: Uses dictionaries mapping dimension indices to factor lists, with `to_einsum_notation()` for human-readable display
+- **BASIC**: Take longest common prefix (conservative)
+- **AGGRESSIVE**: Pick higher parallelism option
 
-**Algorithm**:
-1. **Collect**: Project tensor shardings onto factors
-2. **Resolve**: When factors conflict, apply priority rules
-3. **Update**: Project factor shardings back to tensors
+### Operations Templates
 
-### Propagation Strategy
-
-**BASIC**: Conservative—only keep common sharding prefix.
-
-**AGGRESSIVE**: Pick highest-parallelism option when conflict.
-
-**Why configurable?** Trade-off between safety and performance.
-
-### Operation Sharding Rules
-
-Each operation defines how its factors relate:
-- Matmul: `OpShardingRule.matmul_like()`
-- Elementwise: All dimensions map to same factors
-- Reduction: Factor disappears
-
-**Future**: Complete rule library for all operations.
+Templates generate factor mappings from shapes:
+- `matmul_template(batch_dims)` — handles batched matmul
+- `elementwise_template(rank)` — all dims map 1:1
+- `reduce_template(rank, reduce_dims)` — reduced dims are contracting factors
+- `transpose_template(rank, perm)` — permuted factor order
+- `broadcast_with_shapes_template(in_shape, out_shape)` — handles expansion
 
 ---
 
-## Integration Points
+## SPMD Execution Flow
 
-### With Core
+When `Operation.__call__` detects sharded inputs:
 
-- `TensorImpl.sharding_spec` stores partitioning metadata
-- `GRAPH.evaluate()` detects sharded tensors, triggers sharded path
-- Currently: validation only, no execution
+1. **Infer output sharding** via `infer_output_sharding(op, args, mesh)`
+2. **Detect conflicts** — reshard to replicated if axes overlap incompatibly
+3. **Per-shard execution** — run `maxpr()` on each shard's data
+4. **Wrap results** — create output tensor with N shard values
 
-### With Ops
-
-- Operations would need sharding rules registered
-- Currently: only a few template rules exist
-
-### Future: Execution
-
-- Partition MAX graph across devices
-- Insert collectives (all-reduce, all-gather, reduce-scatter)
-- Execute sharded computation
-- Relies on MAX multi-device support
+Key functions in `spmd.py`:
+- `has_sharded_inputs(args)` — detection
+- `get_mesh_from_args(args)` — extract mesh
+- `slice_for_shard(tensor, shape, sharding, idx)` — local slicing
+- `reshard_tensor(tensor, from_spec, to_spec, mesh)` — resharding
 
 ---
 
-## Key Architectural Decisions
+## User API
 
-### 1. Why Factor-Based Propagation?
+```python
+from nabla import Tensor, DeviceMesh, DimSpec
 
-**Enables**: Correct handling of reshapes and complex operations. Position-based propagation breaks on dimension splitting.
+mesh = DeviceMesh("test", (2,), ("x",))
+A = Tensor.ones((4, 8)).trace()
 
-### 2. Why Separate Spec from Execution?
+# Functional: returns new sharded tensor
+A_sharded = A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
 
-**Enables**: Design the API now, implement execution when MAX multi-device ready.
-
-### 3. Why Einsum Notation?
-
-**Enables**: Concise operation semantics. `(i,k),(k,j)→(i,j)` immediately clear.
-
-### 4. Why Propagation Strategies?
-
-**Enables**: User control over safety vs perf trade-off.
+# Explicit resharding constraint
+B = (A_sharded @ W).with_sharding(mesh, [DimSpec([]), DimSpec([])])
+```
 
 ---
 
 ## Current Limitations
 
-**No real execution**: Can specify and propagate sharding, but `GRAPH.evaluate()` currently uses a dummy implementation (generates zeros). Actual sharded execution awaits MAX multi-device support.
-
-**Limited op coverage**: Only templates for common patterns.
-
-**No cross-mesh**: Can't propagate between different device meshes.
-
-**No cost model**: AGGRESSIVE mode maximizes parallelism, not performance.
+- **Single-machine simulation**: All shards run on same device (no actual distribution)
+- **Collective ops pending**: AllReduce for sharded contracting dims not yet inserted
+- **Limited op coverage**: Templates exist for common ops; complex ops need manual rules
 
 ---
 
-## Future Directions
+## Key Design Decisions
 
-### Full Sharded Execution
-
-- Partition graph across mesh
-- Insert communication collectives
-- Execute on multiple devices
-- Reassemble results
-
-### Cost-Based Optimization
-
-Replace AGGRESSIVE strategy with cost model:
-- Consider communication overhead
-- Profile operation costs
-- Choose minimum-time sharding
-
-### Auto-Sharding
-
-Automatic sharding selection given:
-- Model
-- Mesh
-- Performance objectives
-
-No manual annotations needed.
-
-### Cross-Mesh Support
-
-Transfer tensors between different meshes (CPU ↔ TPU, different topologies).
-
-### Pipeline Parallelism
-
-Combine sharding with pipeline stages for very large models.
+| Decision | Rationale |
+|----------|-----------|
+| Factor-based propagation | Handles reshapes, complex ops correctly |
+| Functional `shard()` | Matches nabla's immutable tensor philosophy |
+| Eager SPMD | No separate compilation phase for sharding |
+| Priority system | User annotations override inferred sharding |
 
 ---
 
-## Common Misconceptions
+## Testing
 
-**"Sharding is for vmap"**: No. Vmap is single-device vectorization. Sharding is multi-device parallelism.
+```bash
+source venv/bin/activate
 
-**"We support distributed training"**: Not yet. Infrastructure exists, execution doesn't.
+# Unit tests (propagation, conflict resolution)
+python -m pytest tests/unit/sharding/ -v
 
-**"ShardingSpec is like PyTorch DDP"**: No. More expressive—supports arbitrary partitioning, not just data parallelism.
-
-**"Sharding propagation is for optimization"**: Partially. It's also for correctness—ensures sharding is consistent across operations.
-
----
-
-## Why Shardy?
-
-**Shardy** (sharding + study) is Google's approach in JAX. We adopt the same principles:
-- Factor-based propagation
-- Einsum operation semantics
-- Conflict resolution strategies
-
-**Benefit**: Proven approach, works for massive models (100B+ params).
-
-**Difference**: Our implementation is standalone, not tied to XLA compiler.
+# Integration tests (SPMD execution, end-to-end)
+python -m pytest tests/integration/with_sharding/ -v
+```

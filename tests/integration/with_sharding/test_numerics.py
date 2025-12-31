@@ -12,15 +12,16 @@ def test_matmul_values_sharded():
     
     # A: (4, 8) ones
     # Sharded on x (dim 0) -> 2 shards of (2, 8)
-    A = Tensor.ones((4, 8)).trace()
-    A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
+    # shard() is functional - use the returned tensor!
+    # No .trace() needed - sharding triggers SPMD path automatically
+    A = Tensor.ones((4, 8))
+    A_sharded = A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
     
-    # B: (8, 4) ones
-    # Replicated
-    B = Tensor.ones((8, 4)).trace()
+    # B: (8, 4) ones - replicated
+    B = Tensor.ones((8, 4))
     
-    # C = A @ B -> (4, 4) of 8.0s
-    C = A @ B
+    # C = A_sharded @ B -> (4, 4) of 8.0s
+    C = A_sharded @ B
     
     # Execute
     asyncio.run(C.realize)
