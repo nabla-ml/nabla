@@ -60,7 +60,7 @@ def add_one_custom(arg: nb.Tensor) -> nb.Tensor:
 
 
 if __name__ == "__main__":
-    a = nb.ndarange((2, 3))
+    a = nb.arange(6).reshape((2, 3))
     print(a)
 
     jitted_add_one_custom = nb.jit(add_one_custom)
