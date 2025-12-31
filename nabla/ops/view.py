@@ -176,7 +176,7 @@ class BroadcastToOp(LogicalShapeOperation):
         traced, batch_dims = self._collect_input_metadata(args)
         
         # Infer output sharding using propagation
-        output_sharding, input_shardings, needs_allreduce = self._infer_output_sharding(args, mesh, kwargs)
+        output_sharding, input_shardings, needs_allreduce = spmd.infer_output_sharding(self, args, mesh, kwargs)
         
         # Compute LOCAL target shape based on output sharding
         # If output is replicated (None sharding), local shape = global shape
@@ -272,7 +272,7 @@ class ReshapeOp(LogicalShapeOperation):
         traced, batch_dims = self._collect_input_metadata(args)
         
         # Infer output sharding using propagation
-        output_sharding, input_shardings, needs_allreduce = self._infer_output_sharding(args, mesh, kwargs)
+        output_sharding, input_shardings, needs_allreduce = spmd.infer_output_sharding(self, args, mesh, kwargs)
         
         # Compute LOCAL target shape based on output sharding
         # If output is replicated (None sharding), local shape = global shape

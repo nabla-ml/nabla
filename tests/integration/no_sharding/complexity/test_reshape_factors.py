@@ -142,8 +142,8 @@ class TestReshapeExecution:
         mesh = DeviceMesh("test", (2,), ("x",))
         
         # Create tensor and shard it
-        A = Tensor.ones((8, 4)).trace()
-        A.shard(mesh, [
+        A = Tensor.ones((8, 4))
+        A = A.shard(mesh, [
             DimSpec(["x"], is_open=False),  # First dim sharded
             DimSpec([], is_open=True)
         ])
@@ -165,8 +165,8 @@ class TestReshapeExecution:
         mesh = DeviceMesh("test", (2,), ("x",))
         
         # Create (2, 4) tensor with first dim sharded
-        A = Tensor.ones((2, 4)).trace()
-        A.shard(mesh, [
+        A = Tensor.ones((2, 4))
+        A = A.shard(mesh, [
             DimSpec(["x"], is_open=False),
             DimSpec([], is_open=True)
         ])
@@ -186,8 +186,8 @@ class TestReshapeExecution:
         mesh = DeviceMesh("test", (2,), ("x",))
         
         # Create (8,) tensor sharded
-        A = Tensor.ones((8,)).trace()
-        A.shard(mesh, [DimSpec(["x"], is_open=False)])
+        A = Tensor.ones((8,))
+        A = A.shard(mesh, [DimSpec(["x"], is_open=False)])
         
         # Reshape to (2, 4)
         B = reshape(A, (2, 4))
@@ -208,8 +208,8 @@ class TestReshapeWithOtherOperations:
         mesh = DeviceMesh("test", (2,), ("x",))
         
         # A: (8,) sharded -> reshape -> (2, 4) -> matmul with B
-        A = Tensor.ones((8,)).trace()
-        A.shard(mesh, [DimSpec(["x"], is_open=False)])
+        A = Tensor.ones((8,))
+        A = A.shard(mesh, [DimSpec(["x"], is_open=False)])
         
         # Reshape to (2, 4)
         A_reshaped = reshape(A, (2, 4))
@@ -218,7 +218,7 @@ class TestReshapeWithOtherOperations:
         assert A_reshaped._impl.sharding.dim_specs[0].axes == ["x"]
         
         # Matmul with B
-        B = Tensor.ones((4, 3)).trace()
+        B = Tensor.ones((4, 3))
         C = A_reshaped @ B
         
         # C should be row-sharded (from A_reshaped's row sharding)

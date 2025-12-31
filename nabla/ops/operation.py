@@ -38,7 +38,8 @@ class Operation(ABC):
         from max import graph as g
         
         # Check for sharded inputs - dispatch to SPMD path if found
-        if self._has_sharded_inputs(args):
+        from ..sharding import spmd
+        if spmd.has_sharded_inputs(args):
             return self._call_spmd(*args, **kwargs)
         
         any_traced = False
@@ -112,18 +113,6 @@ class Operation(ABC):
         
         return output
     
-    # ===== SPMD Sharding Support =====
-    
-    def _has_sharded_inputs(self, args: tuple) -> bool:
-        """Check if any input tensor is sharded."""
-        from ..sharding import spmd
-        return spmd.has_sharded_inputs(args)
-    
-    def _get_mesh_from_args(self, args: tuple):
-        """Extract the DeviceMesh from sharded inputs."""
-        from ..sharding import spmd
-        return spmd.get_mesh_from_args(args)
-    
     def _call_spmd(self, *args: Any, **kwargs: Any) -> Any:
         """SPMD execution: run maxpr per-shard and collect results."""
         from ..core.tensor import Tensor
@@ -152,13 +141,7 @@ class Operation(ABC):
         traced, batch_dims = self._collect_input_metadata(args)
         
         # Infer shardings: returns (output_sharding, per_input_shardings, reduce_axes)
-        # reduce_axes is a Set[str] of mesh axes for AllReduce
-        output_sharding, input_shardings, reduce_axes = self._infer_output_sharding(args, mesh, kwargs)
-        
-        # NOTE: Conflict detection (same mesh axis for different dims) is NOT done here.
-        # For operations like matmul, having the same axis on contracting dimensions is
-        # intentional (tensor parallelism) and handled correctly by AllReduce detection.
-        # Conflict detection is only needed for broadcast operations in BinaryOperation.__call__.
+        output_sharding, input_shardings, reduce_axes = spmd.infer_output_sharding(self, args, mesh, kwargs or {})
         
         # Execute per-shard, using each input's RESOLVED sharding for slicing
         with GRAPH.graph:
@@ -199,68 +182,6 @@ class Operation(ABC):
         
         return any_traced, max_batch_dims
     
-    def _wrap_shard_result(self, template: Any, all_shard_results: list, any_traced: bool, max_batch_dims: int, sharding) -> Any:
-        """Wrap shard results into a sharded Tensor."""
-        from ..core.tensor import Tensor
-        from ..core.tensor_impl import TensorImpl
-        from ..core import pytree
-        from max import graph as g
-        
-        if not pytree.is_tensor_value(template):
-            return template
-        
-        # Collect corresponding values from all shards
-        values = [r for r in all_shard_results if pytree.is_tensor_value(r)]
-        impl = TensorImpl(
-            values=values,
-            traced=any_traced,
-            batch_dims=max_batch_dims,
-            sharding=sharding,
-        )
-        if values:
-            impl.cache_metadata(values[0])
-        return Tensor(impl=impl)
-    
-    def _infer_output_sharding(self, args: tuple, mesh, kwargs: dict = None):
-        """Infer output sharding using factor-based propagation (Shardy algorithm)."""
-        from ..sharding import spmd
-        return spmd.infer_output_sharding(self, args, mesh, kwargs or {})
-    
-    def _needs_reshard(self, from_spec, to_spec) -> bool:
-        """Check if resharding is needed between two sharding specs."""
-        from ..sharding import spmd
-        return spmd.needs_reshard(from_spec, to_spec)
-    
-    def _reshard_output(self, output, from_spec, to_spec, mesh):
-        """Reshard output tensor from one sharding to another."""
-        from ..sharding import spmd
-        return spmd.reshard_tensor(output, from_spec, to_spec, mesh)
-    
-    def _reshard_conflicting_to_replicated(self, args, mesh, pytree, Tensor):
-        """Reshard all sharded inputs to replicated when conflict detected.
-        
-        This is called when the same mesh axis is used for different tensor
-        dimensions across inputs, making SPMD execution impossible without
-        resharding first.
-        """
-        from ..ops.communication import all_gather
-        
-        def reshard_if_sharded(x):
-            if not isinstance(x, Tensor):
-                return x
-            if not x._impl.is_sharded:
-                return x
-            # AllGather all sharded dimensions to make replicated
-            result = x
-            spec = x._impl.sharding
-            if spec:
-                for dim_idx, dim_spec in enumerate(spec.dim_specs):
-                    if dim_spec.axes:
-                        result = all_gather(result, axis=dim_idx)
-            return result
-        
-        return pytree.tree_map(reshard_if_sharded, args)
-    
     def _check_and_reshard_output(self, output, computed_sharding, kwargs):
         """Check if output has pre-annotated sharding and reshard if needed.
         
@@ -268,21 +189,21 @@ class Operation(ABC):
         and it differs from the computed sharding, insert resharding.
         """
         from ..core.tensor import Tensor
+        from ..sharding import spmd
         
         if not isinstance(output, Tensor):
             return output
         
         # Check if there's a pre-annotated target sharding
-        # This would be set by user via output.shard() before calling op
         target_sharding = kwargs.get('_target_output_sharding', None)
         
         if target_sharding is None:
             return output
         
         # Check if resharding is needed
-        if self._needs_reshard(computed_sharding, target_sharding):
+        if spmd.needs_reshard(computed_sharding, target_sharding):
             mesh = computed_sharding.mesh if computed_sharding else target_sharding.mesh
-            return self._reshard_output(output, computed_sharding, target_sharding, mesh)
+            return spmd.reshard_tensor(output, computed_sharding, target_sharding, mesh)
         
         return output
     
@@ -439,15 +360,11 @@ class BinaryOperation(Operation):
         x_map = get_axis_map(x, x_rank, out_rank)
         y_map = get_axis_map(y, y_rank, out_rank)
         
-        print(f"DEBUG_CONFLICT: x_rank={x_rank}, y_rank={y_rank}, x_map={x_map}, y_map={y_map}")
-        
         # Check for conflicts
         for axis in set(x_map) & set(y_map):
             if x_map[axis] != y_map[axis]:
-                print(f"DEBUG_CONFLICT: Conflict on axis {axis}")
                 return True
         
-        print(f"DEBUG_CONFLICT: No conflict")
         return False
     
     def _reshard_for_broadcast(self, x, y, mesh):
