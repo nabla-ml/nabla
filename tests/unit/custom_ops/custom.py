@@ -20,19 +20,16 @@ class AddOneCustomOp(Operation):
         return "add_one_custom"
 
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
-        from nabla.core.compute_graph import GRAPH
+        from nabla.ops.custom_mojo import call_custom_kernel
 
-        kernel_dir = Path(__file__).parent / "custom_kernels"
-        # Use load_paths which supports source directories according to docs
-        GRAPH.graph._kernel_library.load_paths(GRAPH.graph._context, [kernel_dir])
-
-        result = ops.custom(
-            name="add_one_custom",
-            device=DeviceRef.CPU(),
-            values=[args[0]],
-            out_types=[args[0].type],
+        # "custom_kernels" is relative to this file (magic resolution in helper)
+        result = call_custom_kernel(
+            func_name="add_one_custom",
+            kernel_path="custom_kernels",
+            values=args[0],
+            out_types=args[0].type,
         )
-        return result[0]
+        return result
 
 
 add_one_custom = AddOneCustomOp()
