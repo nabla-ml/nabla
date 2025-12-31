@@ -106,10 +106,18 @@ def check_sub_axes_maximality(axes: List[str]) -> List[str]:
 # --- Physical Layer: Device Mesh ---
 
 class DeviceMesh:
-    """Logical multi-dimensional view of devices: @name = <["axis1"=size1, ...]>."""
+    """Logical multi-dimensional view of devices: @name = <["axis1"=size1, ...]>.
+    
+    Args:
+        name: Name of the mesh
+        shape: Shape of the mesh (e.g., (2, 4) for 2x4 grid)
+        axis_names: Names for each axis (e.g., ("x", "y"))
+        devices: Logical device IDs (default: sequential 0..N-1)
+        device_refs: Physical device references (default: all CPU)
+    """
     
     def __init__(self, name: str, shape: Tuple[int, ...], axis_names: Tuple[str, ...], 
-                 devices: List[int] = None):
+                 devices: List[int] = None, device_refs: List = None):
         self.name = name
         self.shape = shape
         self.axis_names = axis_names
@@ -125,6 +133,12 @@ class DeviceMesh:
                 f"Mesh shape {shape} requires {total_devices} devices, "
                 f"but got {len(devices)}"
             )
+        
+        # Physical device references (for distributed execution)
+        if device_refs is None:
+            from max.graph import DeviceRef
+            device_refs = [DeviceRef.CPU() for _ in range(total_devices)]
+        self.device_refs = device_refs
         
         # Lookup table for axis name -> index
         self.axis_lookup = {name: i for i, name in enumerate(axis_names)}

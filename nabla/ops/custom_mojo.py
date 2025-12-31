@@ -59,21 +59,9 @@ def call_custom_kernel(
 
     resolved_paths: List[Path] = []
     for p in kernel_path:
-        path_obj = Path(p)
-        if not path_obj.is_absolute():
-            # "Magic" resolution relative to caller
-            try:
-                # Frame 0: this function
-                # Frame 1: caller (e.g. user's maxpr method)
-                frame = sys._getframe(1)
-                caller_file = frame.f_code.co_filename
-                if caller_file:
-                    resolved_path = Path(caller_file).parent / path_obj
-                    path_obj = resolved_path
-            except Exception:
-                # Fallback to CWD if stack inspection fails
-                path_obj = path_obj.absolute()
-        
+        # Standard resolution: consistent with Python file handling
+        # If absolute, used as is. If relative, relative to CWD.
+        path_obj = Path(p).resolve()
         resolved_paths.append(path_obj)
 
     # 1. Load the kernels into the graph context

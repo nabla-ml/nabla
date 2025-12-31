@@ -64,11 +64,19 @@ class ShardOp(Operation):
         global_shape = tuple(int(d) for d in x.type.shape)
         spec = ShardingSpec(mesh, dim_specs)
         
+        # Check if devices are unique (distributed mode)
+        devices_unique = len(set(mesh.device_refs)) == len(mesh.device_refs)
+        
         shard_values = []
         for shard_idx in range(num_shards):
             # Compute slice for this shard
             slices = self._compute_shard_slice(global_shape, spec, shard_idx)
             shard_val = x[slices]
+            
+            # Place on designated device if distributed
+            if devices_unique:
+                shard_val = ops.transfer_to(shard_val, mesh.device_refs[shard_idx])
+            
             shard_values.append(shard_val)
         
         return shard_values
@@ -216,6 +224,26 @@ class AllGatherOp(Operation):
         Returns:
             List of replicated TensorValues (all identical)
         """
+        # Check if devices are unique (distributed mode)
+        devices_unique = (
+            mesh is not None and 
+            len(set(mesh.device_refs)) == len(mesh.device_refs)
+        )
+        
+        # DISTRIBUTED: Use native MAX allgather
+        if devices_unique:
+            from max.graph.ops.allgather import allgather as max_allgather
+            from max.graph.type import BufferType
+            from max.dtype import DType
+            
+            # Create signal buffers (one per device)
+            signal_buffers = [
+                ops.buffer_create(BufferType(DType.int64, (1,), dev))
+                for dev in mesh.device_refs
+            ]
+            return max_allgather(shard_values, signal_buffers, axis=axis)
+        
+        # SIMULATED: Concat-based fallback
         # For 2D+ meshes, we need to select only unique shards
         # (avoid concatenating duplicates from non-sharded mesh axes)
         if mesh is not None and sharded_axis_name is not None:
@@ -341,12 +369,14 @@ class AllReduceOp(Operation):
         self,
         shard_values: List[TensorValue],
         reduction: str = "sum",
+        mesh: "DeviceMesh" = None,
     ) -> List[TensorValue]:
         """Reduce across all shards.
         
         Args:
             shard_values: List of shard TensorValues to reduce
             reduction: Reduction operation ("sum", "mean", "max", "min")
+            mesh: Device mesh (needed for distributed execution)
             
         Returns:
             List of reduced TensorValues (all identical)
@@ -354,6 +384,26 @@ class AllReduceOp(Operation):
         if not shard_values:
             return []
         
+        # Check if devices are unique (distributed mode)
+        devices_unique = (
+            mesh is not None and 
+            len(set(mesh.device_refs)) == len(mesh.device_refs)
+        )
+        
+        # DISTRIBUTED: Use native MAX allreduce (only sum supported currently)
+        if devices_unique and reduction == "sum":
+            from max.graph.ops.allreduce import sum as allreduce_sum
+            from max.graph.type import BufferType
+            from max.dtype import DType
+            
+            # Create signal buffers (one per device)
+            signal_buffers = [
+                ops.buffer_create(BufferType(DType.int64, (1,), dev))
+                for dev in mesh.device_refs
+            ]
+            return allreduce_sum(shard_values, signal_buffers)
+        
+        # SIMULATED: Loop-based fallback
         if reduction == "sum":
             result = shard_values[0]
             for sv in shard_values[1:]:
@@ -395,8 +445,11 @@ class AllReduceOp(Operation):
         if not sharded_tensor._impl._values or len(sharded_tensor._impl._values) <= 1:
             return sharded_tensor  # Nothing to reduce
         
+        # Get mesh from tensor's sharding spec
+        mesh = sharded_tensor._impl.sharding.mesh if sharded_tensor._impl.sharding else None
+        
         with GRAPH.graph:
-            reduced = self.maxpr(sharded_tensor._impl._values, reduction)
+            reduced = self.maxpr(sharded_tensor._impl._values, reduction, mesh=mesh)
         
         impl = TensorImpl(
             values=reduced,
@@ -422,6 +475,7 @@ class ReduceScatterOp(Operation):
         shard_values: List[TensorValue],
         axis: int,
         reduction: str = "sum",
+        mesh: "DeviceMesh" = None,
     ) -> List[TensorValue]:
         """Reduce across shards then scatter the result.
         
@@ -429,10 +483,47 @@ class ReduceScatterOp(Operation):
             shard_values: List of shard TensorValues
             axis: Axis along which to scatter the reduced result
             reduction: Reduction operation
+            mesh: Device mesh (needed for distributed execution)
             
         Returns:
             List of scattered TensorValues
         """
+        # Check if devices are unique (distributed mode)
+        devices_unique = (
+            mesh is not None and 
+            len(set(mesh.device_refs)) == len(mesh.device_refs)
+        )
+        
+        # DISTRIBUTED: Compose allreduce + scatter
+        if devices_unique and reduction == "sum":
+            from max.graph.ops.allreduce import sum as allreduce_sum
+            from max.graph.type import BufferType
+            from max.dtype import DType
+            
+            # Create signal buffers
+            signal_buffers = [
+                ops.buffer_create(BufferType(DType.int64, (1,), dev))
+                for dev in mesh.device_refs
+            ]
+            
+            # Reduce across all shards
+            reduced_values = allreduce_sum(shard_values, signal_buffers)
+            
+            # Scatter: each shard gets a slice of the result
+            num_shards = len(shard_values)
+            shape = reduced_values[0].type.shape
+            axis_size = int(shape[axis])
+            chunk_size = axis_size // num_shards
+            
+            scattered = []
+            for i, rv in enumerate(reduced_values):
+                slices = [slice(None)] * len(shape)
+                slices[axis] = slice(i * chunk_size, (i + 1) * chunk_size)
+                scattered.append(rv[tuple(slices)])
+            
+            return scattered
+        
+        # SIMULATED: Loop-based fallback
         # First reduce all values
         if reduction == "sum":
             full_result = shard_values[0]
@@ -848,7 +939,7 @@ def simulate_grouped_all_reduce(
     # Check if we're reducing over all axes (simple case)
     all_axes = set(mesh.axis_names)
     if all_axes.issubset(reduce_axes):
-        return all_reduce_op.maxpr(shard_results, reduction="sum")
+        return all_reduce_op.maxpr(shard_results, reduction="sum", mesh=mesh)
         
     # Complex case: Group shards by non-reduced axes
     # Each group contains shards that should be reduced together
@@ -875,7 +966,7 @@ def simulate_grouped_all_reduce(
         group_shards = [val for _, val in group_members]
         
         if len(group_shards) > 1:
-            curr_reduced = all_reduce_op.maxpr(group_shards, reduction="sum")
+            curr_reduced = all_reduce_op.maxpr(group_shards, reduction="sum", mesh=mesh)
         else:
             curr_reduced = [group_shards[0]]
             

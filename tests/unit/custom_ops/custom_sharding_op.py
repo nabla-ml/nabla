@@ -28,9 +28,14 @@ class CustomSumReduceOp(Operation):
         from max.graph import TensorType
         out_type = TensorType(x.type.dtype, out_shape, x.type.device)
 
+        from pathlib import Path
+        
+        # Use absolute path relative to this file
+        kernel_dir = Path(__file__).parent / "custom_kernels"
+        
         result = call_custom_kernel(
             func_name="custom_sum_reduce",
-            kernel_path="custom_kernels",
+            kernel_path=str(kernel_dir),
             values=x,
             out_types=out_type,
         )

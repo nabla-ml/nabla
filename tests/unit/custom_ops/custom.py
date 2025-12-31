@@ -22,10 +22,12 @@ class AddOneCustomOp(Operation):
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         from nabla.ops.custom_mojo import call_custom_kernel
 
-        # "custom_kernels" is relative to this file (magic resolution in helper)
+        # Use absolute path relative to this file
+        kernel_dir = Path(__file__).parent / "custom_kernels"
+        
         result = call_custom_kernel(
             func_name="add_one_custom",
-            kernel_path="custom_kernels",
+            kernel_path=str(kernel_dir),
             values=args[0],
             out_types=args[0].type,
         )
