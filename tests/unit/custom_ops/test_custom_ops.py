@@ -46,6 +46,25 @@ class TestAddOneCustomOp(unittest.TestCase):
 
         asyncio.run(run_test())
 
+    def test_verification_failure(self):
+        """Test that verification fails for invalid usage."""
+        import asyncio
+        from nabla.ops.custom_mojo import call_custom_kernel
+        
+        async def run_test():
+            x = nabla.Tensor.ones((3, 4))
+            # Intentionally pass 2 inputs when kernel expects 1
+            # distinct inputs to force signature mismatch
+            with self.assertRaises(Exception):
+                call_custom_kernel(
+                    func_name="add_one_custom",
+                    kernel_path="custom_kernels",
+                    values=[x, x], # Wrong number of inputs
+                    out_types=x.type,
+                )
+
+        asyncio.run(run_test())
+
 
 if __name__ == "__main__":
     unittest.main()

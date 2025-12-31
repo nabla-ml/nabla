@@ -43,8 +43,11 @@ from .context import _session
 _GRAPH_EPOCH: int = 0
 _SEED: ContextVar[Tensor] = ContextVar("_SEED")
 
+import os
+
 # Debug flag for lazy evaluation - prints graph outputs before compilation
-DEBUG_LAZY_EVAL: bool = True
+# Set NABLA_DEBUG=1 to enable
+DEBUG_LAZY_EVAL: bool = os.getenv("NABLA_DEBUG", "0") == "1"
 
 def seed() -> Tensor:
     """Returns the global random seed tensor, initializing if necessary."""

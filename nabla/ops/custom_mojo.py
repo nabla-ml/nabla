@@ -89,6 +89,14 @@ def call_custom_kernel(
         **kwargs
     )
 
+    # 3. Verify the operation
+    # This ensures the kernel signature matches the provided inputs/outputs
+    if results:
+        # Get the operation from the first result value
+        # Note: We assume all results come from the same operation
+        op_instance = results[0].to_mlir().owner
+        GRAPH.graph._kernel_library.verify_custom_op(op_instance)
+
     if unwrap_result:
         return results[0]
     return results
