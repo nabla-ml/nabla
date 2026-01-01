@@ -626,10 +626,7 @@ def reduce_scatter(sharded_tensor, axis: int):
     return reduce_scatter_op(sharded_tensor, axis)
 
 
-# Helper function for forward reference from GatherAllAxesOp
-def _reshard_reconstruct_global(shard_values: List[TensorValue], spec: "ShardingSpec") -> TensorValue:
-    """Delegate to ReshardOp's reconstruction logic."""
-    return reshard_op._reconstruct_global(shard_values, spec)
+
 
 
 class GatherAllAxesOp(Operation):
@@ -646,13 +643,98 @@ class GatherAllAxesOp(Operation):
     def maxpr(
         self,
         shard_values: List[TensorValue],
-        spec: "ShardingSpec",
+        source_spec: "ShardingSpec",
     ) -> TensorValue:
-        """Reconstruct global tensor via hierarchical concatenation."""
-        # Delegate to ReshardOp's reconstruction logic
-        # Note: reshard_op is defined later, so this is a forward reference
-        # that works because it's called at runtime, not import time
-        return _reshard_reconstruct_global(shard_values, spec)
+        """Reconstruct the global tensor from potentially multi-dimensional shards.
+        
+        Algorithm (hierarchical concatenation):
+        1. For each sharded tensor dimension (reverse order):
+           a. Group shards by coordinates on ALL mesh axes EXCEPT the one being merged
+           b. Within each group, sort by coordinate on the merge axis
+           c. Concatenate group members along the tensor dimension
+        2. After processing all sharded dimensions, one global tensor remains
+        """
+        # from max.graph import ops (already imported globally)
+        
+        # If duplicated/replicated, any shard is the global tensor
+        if source_spec.is_fully_replicated():
+            return shard_values[0]
+
+        # Build (value, device_id) descriptors for hierarchical concatenation
+        current_shard_descs = [
+            (shard_values[i], source_spec.mesh.devices[i]) 
+            for i in range(len(shard_values))
+        ]
+        rank = len(shard_values[0].type.shape)
+        
+        # Track active axes for distinguishing shards
+        current_active_axes = set()
+        for dim in source_spec.dim_specs:
+            current_active_axes.update(dim.axes)
+        current_active_axes.update(source_spec.replicated_axes)
+        
+        # Process dimensions in reverse order
+        for d in range(rank - 1, -1, -1):
+            if d >= len(source_spec.dim_specs): continue
+            dim_spec = source_spec.dim_specs[d]
+            
+            for ax in reversed(dim_spec.axes):
+                # Group shards by coordinates on all axes except the merge axis
+                groups = {}
+                for val, device_id in current_shard_descs:
+                    signature = []
+                    # Key depends on all currently active axes EXCEPT the one we are merging
+                    for check_ax in sorted(list(current_active_axes)):
+                        if check_ax == ax:
+                            continue
+                        # Use computed coord
+                        try:
+                            c = source_spec.mesh.get_coordinate(device_id, check_ax)
+                            signature.append((check_ax, c))
+                        except Exception:
+                            # Should not happen if spec is valid
+                            continue
+                            
+                    key = tuple(signature)
+                    
+                    if key not in groups:
+                        groups[key] = []
+                    
+                    # Store (coord_on_ax, val, device_id)
+                    my_coord = source_spec.mesh.get_coordinate(device_id, ax)
+                    groups[key].append((my_coord, val, device_id))
+                
+                new_shard_descs = []
+                # Process each group
+                for key, members in groups.items():
+                    # Sort by coord on `ax`
+                    members.sort(key=lambda x: x[0])
+                    
+                    # Filter unique coords (handle replication)
+                    # If multiple devices have same coord on `ax` and same Key, they are replicas.
+                    unique_chunks = []
+                    seen_coords = set()
+                    
+                    for m in members:
+                        coord = m[0]
+                        if coord not in seen_coords:
+                            unique_chunks.append(m[1])
+                            seen_coords.add(coord)
+                    
+                    merged = ops.concat(unique_chunks, axis=d)
+                    
+                    # keep representative device_id from first member
+                    new_shard_descs.append((merged, members[0][2]))
+                
+                current_shard_descs = new_shard_descs
+                current_active_axes.remove(ax)
+                
+        # After processing all sharded axes, we should have 1 result (replicated)
+        # Or multiple if some axes were unused (replicated).
+        # If replicated axes exist in mesh, `current_shard_descs` has N copies.
+        # We just pick the first one.
+        
+        return current_shard_descs[0][0]
     
     def __call__(self, sharded_tensor):
         """Gather all sharded axes to produce a replicated tensor.
@@ -742,103 +824,7 @@ class ReshardOp(Operation):
     def name(self) -> str:
         return "reshard"
     
-    def _reconstruct_global(
-        self,
-        shard_values: List[TensorValue],
-        source_spec: "ShardingSpec"
-    ) -> TensorValue:
-        """Reconstruct the global tensor from potentially multi-dimensional shards.
-        
-        Algorithm (hierarchical concatenation):
-        1. For each sharded tensor dimension (reverse order):
-           a. Group shards by coordinates on ALL mesh axes EXCEPT the one being merged
-           b. Within each group, sort by coordinate on the merge axis
-           c. Concatenate group members along the tensor dimension
-        2. After processing all sharded dimensions, one global tensor remains
-        
-        This is the inverse of ShardOp._compute_shard_slice.
-        """
-        # from max.graph import ops (already imported globally)
-        
-        # If duplicated/replicated, any shard is the global tensor
-        if source_spec.is_fully_replicated():
-            return shard_values[0]
 
-        # Build (value, device_id) descriptors for hierarchical concatenation
-        current_shard_descs = [
-            (shard_values[i], source_spec.mesh.devices[i]) 
-            for i in range(len(shard_values))
-        ]
-        rank = len(shard_values[0].type.shape)
-        
-        # Track active axes for distinguishing shards
-        current_active_axes = set()
-        for dim in source_spec.dim_specs:
-            current_active_axes.update(dim.axes)
-        current_active_axes.update(source_spec.replicated_axes)
-        
-        # Process dimensions in reverse order
-        for d in range(rank - 1, -1, -1):
-            if d >= len(source_spec.dim_specs): continue
-            dim_spec = source_spec.dim_specs[d]
-            
-            for ax in reversed(dim_spec.axes):
-                # Group shards by coordinates on all axes except the merge axis
-                groups = {}
-                for val, device_id in current_shard_descs:
-                    signature = []
-                    # Key depends on all currently active axes EXCEPT the one we are merging
-                    for check_ax in sorted(list(current_active_axes)):
-                        if check_ax == ax:
-                            continue
-                        # Use computed coord
-                        try:
-                            c = source_spec.mesh.get_coordinate(device_id, check_ax)
-                            signature.append((check_ax, c))
-                        except Exception:
-                            # Should not happen if spec is valid
-                            continue
-                            
-                    key = tuple(signature)
-                    
-                    if key not in groups:
-                        groups[key] = []
-                    
-                    # Store (coord_on_ax, val, device_id)
-                    my_coord = source_spec.mesh.get_coordinate(device_id, ax)
-                    groups[key].append((my_coord, val, device_id))
-                
-                new_shard_descs = []
-                # Process each group
-                for key, members in groups.items():
-                    # Sort by coord on `ax`
-                    members.sort(key=lambda x: x[0])
-                    
-                    # Filter unique coords (handle replication)
-                    # If multiple devices have same coord on `ax` and same Key, they are replicas.
-                    unique_chunks = []
-                    seen_coords = set()
-                    
-                    for m in members:
-                        coord = m[0]
-                        if coord not in seen_coords:
-                            unique_chunks.append(m[1])
-                            seen_coords.add(coord)
-                    
-                    merged = ops.concat(unique_chunks, axis=d)
-                    
-                    # keep representative device_id from first member
-                    new_shard_descs.append((merged, members[0][2]))
-                
-                current_shard_descs = new_shard_descs
-                current_active_axes.remove(ax)
-                
-        # After processing all sharded axes, we should have 1 result (replicated)
-        # Or multiple if some axes were unused (replicated).
-        # If replicated axes exist in mesh, `current_shard_descs` has N copies.
-        # We just pick the first one.
-        
-        return current_shard_descs[0][0]
 
     def maxpr(
         self,
@@ -848,7 +834,7 @@ class ReshardOp(Operation):
     ) -> List[TensorValue]:
         """Execute resharding logic."""
         # 1. Reconstruct logical global tensor
-        global_tensor = self._reconstruct_global(shard_values, source_spec)
+        global_tensor = gather_all_axes_op.maxpr(shard_values, source_spec)
         
         # 2. Shard using target spec
         # Reuse ShardOp logic

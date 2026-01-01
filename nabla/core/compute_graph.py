@@ -66,54 +66,7 @@ def driver_tensor_type(t: driver.Tensor) -> graph.TensorType:
 # 2. Graph Algorithms (Static Helpers)
 # =============================================================================
 
-def _collect_execution_graph(
-    unrealized: Iterable[Tensor],
-) -> tuple[list[TensorImpl], list[TensorImpl]]:
-    """Topologically sorts the subgraph required to compute 'unrealized'."""
-    op_impls: list[TensorImpl] = []
-    leaf_impls: list[TensorImpl] = []
-    visited: set[int] = set()
 
-    def _visit(impl: TensorImpl) -> None:
-        if id(impl) in visited:
-            return
-        visited.add(id(impl))
-
-        if impl.is_realized or not impl.parents:
-            leaf_impls.append(impl)
-            return
-
-        for parent in impl.parents:
-            _visit(parent)
-        op_impls.append(impl)
-
-    for t in unrealized:
-        _visit(t._impl)
-    return op_impls, leaf_impls
-
-
-def _needs_sharded_compilation(
-    unrealized: Iterable[Tensor],
-) -> tuple[bool, list[TensorImpl], list[TensorImpl]]:
-    """Determines if the graph requires sharded compilation strategies."""
-    op_impls, leaf_impls = _collect_execution_graph(unrealized)
-    
-    if not op_impls:
-        return False, [], []
-
-    # Check for sharding annotations
-    all_impls = op_impls + leaf_impls
-    if not any(impl.sharding is not None for impl in all_impls):
-        return False, [], []
-
-    # Verify tracing
-    if untraced := [impl for impl in op_impls if not impl.traced]:
-        raise ValueError(
-            f"Sharded compilation requires traced tensors. "
-            f"Found {len(untraced)} untraced operation(s)."
-        )
-
-    return True, op_impls, leaf_impls
 
 
 def _remove_unused_arguments(g: graph.Graph) -> None:
@@ -256,18 +209,12 @@ class ComputeGraph:
             add_target(t)
         
         # Select Strategy
-        needs_sharding, ops, leaves = _needs_sharded_compilation(targets)
-
-        if needs_sharding:
-            await self._evaluate_sharded(targets, ops, leaves)
-            return None
-            
         return await self._evaluate_normal(targets, return_model=return_model)
 
     # --- Execution Strategies ---
 
     async def _evaluate_normal(self, unrealized: list[Tensor], return_model: bool) -> Any:
-        """Standard compilation path for single-device execution.
+        """Standard compilation path handling both single-device and eager-sharded execution.
         
         Handles both regular tensors (single value) and sharded tensors (multiple values).
         """
@@ -308,116 +255,7 @@ class ComputeGraph:
         
         return await self._compile_and_execute_with_map(unrealized, value_map, return_model)
 
-    async def _evaluate_sharded(
-        self, 
-        unrealized: list[Tensor], 
-        op_impls: list[TensorImpl], 
-        leaf_impls: list[TensorImpl]
-    ) -> None:
-        """Sharded compilation path with graph transformation.
-        
-        1. Runs sharding propagation (annotates all tensors)
-        2. Builds sharded TensorValues by calling maxpr for each shard (same graph)
-        3. Compiles and executes normally
-        """
-        from ..sharding.transform import transform_trace_for_sharding
-        from ..sharding.spec import ShardingSpec
-        
-        # Find mesh from any sharded tensor
-        mesh = None
-        all_impls = op_impls + leaf_impls
-        for impl in all_impls:
-            if isinstance(impl.sharding, ShardingSpec):
-                mesh = impl.sharding.mesh
-                break
-        
-        if mesh is None:
-            raise ValueError("No mesh found in sharded tensors")
-        
-        # Create a FRESH graph for sharded execution.
-        # We do not want to mix the Logical Graph (which has dead ops) with the Sharded Graph.
-        # Since the Partitioner "replays" the trace (executes maxpr), it will populate this new graph.
-        sharded_graph = graph.Graph("sharded_main", input_types=[], context=self.context)
-        
-        # Transform: propagate + build sharded values in the NEW graph
-        root_impls = [t._impl for t in unrealized]
-        
-        with sharded_graph:
-             ops.random.set_seed(0) # TODO: Propagate actual seed
-             # This populates sharded_graph with the detailed SPMD ops
-             transform_trace_for_sharding(root_impls, mesh)
-             
-             # Set Outputs
-             # Collect all shard outputs (which are now in sharded_graph)
-             all_outputs: list = []
-             for t in unrealized:
-                 all_outputs.extend(t._impl._values)
-             sharded_graph.output(ops.random._peek_seed(), *all_outputs)
-        
-        if DEBUG_LAZY_EVAL:
-             print("[LAZY EVAL] Sharding: Graph Built. Inputs:", len(sharded_graph.inputs))
-             # op = _core.Operation._from_cmlir(sharded_graph._mlir_op)
-             # print(op)
-
-        # Compile and execute
-        # sharded_graph should have NO inputs (everything constant folded or replayed)
-        # Verify?
-        if len(sharded_graph.inputs) > 0:
-             # Are these real inputs? 
-             # partitioner currently doesn't create inputs, only constants.
-             # If we support logical inputs later, we'd need to bind them here.
-             pass
-
-        try:
-             model = _session().load(sharded_graph)
-             seed_val, *results = model()
-        except BaseException as e:
-             if DEBUG_LAZY_EVAL:
-                 print("[LAZY EVAL ERROR] Sharded Compilation Failed:")
-                 print(sharded_graph._module.operation)
-             raise RuntimeError(f"Sharded compilation failed: {e}") from e
-        
-        # Store results back into TensorImpls
-        result_idx = 0
-        for t in unrealized:
-            num_shards = len(t._impl._values)
-            shard_results = []
-            for _ in range(num_shards):
-                shard_results.append(results[result_idx])
-                result_idx += 1
-            t._impl._storages = shard_results
-            t._impl._values = []
-            t.real = True
-        
-        self._finalize_evaluation(seed_value=seed_val.item())
-
     # --- Low-Level Execution Mechanics ---
-
-    async def _compile_and_execute(self, unrealized: list[Tensor], return_model: bool) -> Any:
-        """Compiles the MLIR graph, executes it, and stores results."""
-        # 1. Optimizations
-        module = _core.Operation._from_cmlir(self.graph._module.operation)
-        _core.lower(module, [builtin.passes.RemoveDeadValues()])
-        _remove_unused_arguments(self.graph)
-        
-        # 2. Execution
-        inputs = [self.sources[inp._mlir_value] for inp in self.graph.inputs]
-        try:
-            model = _session().load(self.graph)
-            seed_val, *results = model(*inputs)
-        except BaseException as e:
-            self.graph._erase_output_if_present()
-            if DEBUG_LAZY_EVAL:
-                print("\n[LAZY EVAL ERROR] Failed to compile/execute. Graph state:")
-                print(self.graph._module.operation)
-                print("=" * 70)
-            raise RuntimeError(f"Failed to compile/execute graph: {e}") from e
-
-        # 3. Storage & Cleanup
-        self._store_results(unrealized, results)
-        result = (model, inputs) if return_model else None
-        self._finalize_evaluation(seed_value=seed_val.item())
-        return result
 
     async def _compile_and_execute_with_map(
         self, 
@@ -497,28 +335,7 @@ class ComputeGraph:
 # 4. High-Level Tools & Instance
 # =============================================================================
 
-def compile_with_sharding(outputs: list[Tensor], mesh: DeviceMesh):
-    """Standalone tool to compile a sharded MAX graph."""
-    from .tensor_impl import get_topological_order
-    
-    # Validation logic...
-    for t in outputs:
-        if not t.traced or t._impl.cached_shape is None:
-            raise ValueError("Invalid tensor for sharding (must be traced/cached).")
 
-    # Topological sort...
-    all_impls = []
-    seen = set()
-    for t in outputs:
-        for impl in get_topological_order(t._impl):
-            if id(impl) not in seen:
-                all_impls.append(impl)
-                seen.add(id(impl))
-
-    raise NotImplementedError(
-        "Sharding compiler not yet implemented. "
-        f"Graph has {len(all_impls)} operations ready for sharded compilation."
-    )
 
 
 # Global Singleton

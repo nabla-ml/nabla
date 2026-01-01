@@ -13,7 +13,6 @@ Run with: python test_sharding_integration.py
 from nabla import (
     Tensor, add, matmul,
     DeviceMesh, DimSpec, ShardingSpec,
-    compile_with_sharding,
     get_topological_order,
 )
 from nabla.ops.multi_output import split
@@ -109,31 +108,7 @@ def test_graph_walking_with_sharding():
     print("  ✓ Graph walking with sharding works!")
 
 
-def test_compile_with_sharding_validation():
-    """Test that compile_with_sharding validates inputs correctly."""
-    print("\n=== Test: Compile with Sharding Validation ===")
-    
-    mesh = DeviceMesh("test", (2,), ("x",))
-    
-    # Test 1: Untraced tensor should fail
-    untraced = Tensor.zeros((4,), traced=False)
-    try:
-        compile_with_sharding([untraced], mesh)
-        assert False, "Should have raised ValueError"
-    except ValueError as e:
-        assert "traced" in str(e).lower()
-        print("  ✓ Correctly rejects untraced tensors")
-    
-    # Test 2: Traced tensor with metadata should pass validation
-    # (but fail at NotImplementedError since we haven't implemented the compiler)
-    traced = Tensor.zeros((4,), traced=True)
-    z = add(traced, traced)  # This caches metadata
-    try:
-        compile_with_sharding([z], mesh)
-        assert False, "Should have raised NotImplementedError"
-    except NotImplementedError as e:
-        assert "not yet implemented" in str(e).lower()
-        print("  ✓ Correctly reaches NotImplementedError (validation passed)")
+
 
 
 def test_shardy_propagation_standalone():
@@ -291,7 +266,7 @@ def main():
     test_metadata_caching_multi_output()
     test_sharding_annotation()
     test_graph_walking_with_sharding()
-    test_compile_with_sharding_validation()
+
     test_shardy_propagation_standalone()
     
     # Eager sharding tests

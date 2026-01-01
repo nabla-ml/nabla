@@ -33,7 +33,7 @@ from .core.tensor_impl import (
 )
 
 # Compute graph
-from .core.compute_graph import GRAPH, driver_tensor_type, compile_with_sharding
+from .core.compute_graph import GRAPH, driver_tensor_type
 
 # Main Tensor class
 from .core.tensor import Tensor
@@ -224,5 +224,5 @@ __all__ = [
     "ShardingSpec",
     "compute_local_shape",
     "get_num_shards",
-    "compile_with_sharding",
+
 ]

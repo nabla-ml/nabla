@@ -31,7 +31,7 @@ class TestUnevenSharding(unittest.IsolatedAsyncioTestCase):
         
         # Square each element
         result = a_sharded * a_sharded
-        await result.realize
+        # await result.realize
         
         expected = np_a * np_a
         np.testing.assert_allclose(result.to_numpy(), expected, atol=1e-5)
@@ -43,7 +43,7 @@ class TestUnevenSharding(unittest.IsolatedAsyncioTestCase):
         a_sharded = a.shard(self.mesh, [DimSpec(["x"]), DimSpec([])])
         
         result = a_sharded + a_sharded
-        await result.realize
+        # await result.realize
         
         expected = np_a + np_a
         np.testing.assert_allclose(result.to_numpy(), expected, atol=1e-5)
@@ -55,7 +55,7 @@ class TestUnevenSharding(unittest.IsolatedAsyncioTestCase):
         a_sharded = a.shard(self.mesh, [DimSpec(["x"]), DimSpec([])])
         
         result = a_sharded * 2.0
-        await result.realize
+        # await result.realize
         
         expected = np_a * 2.0
         np.testing.assert_allclose(result.to_numpy(), expected, atol=1e-5)
@@ -77,7 +77,7 @@ class TestSmallTensors(unittest.IsolatedAsyncioTestCase):
         b = Tensor.from_dlpack(np_b)
         
         result = a @ b
-        await result.realize
+        # await result.realize
         
         expected = np_a @ np_b
         np.testing.assert_allclose(result.to_numpy(), expected, atol=1e-4)
@@ -88,7 +88,7 @@ class TestSmallTensors(unittest.IsolatedAsyncioTestCase):
         a = Tensor.from_dlpack(np_a).shard(self.mesh, [DimSpec(["x"]), DimSpec([])])
         
         result = a * 2.0
-        await result.realize
+        # await result.realize
         
         expected = np_a * 2.0
         np.testing.assert_allclose(result.to_numpy(), expected, atol=1e-5)
@@ -99,7 +99,7 @@ class TestSmallTensors(unittest.IsolatedAsyncioTestCase):
         a = Tensor.from_dlpack(np_a).shard(self.mesh, [DimSpec(["x"])])
         
         result = a + 1.0
-        await result.realize
+        # await result.realize
         
         expected = np_a + 1.0
         np.testing.assert_allclose(result.to_numpy(), expected, atol=1e-5)
@@ -120,7 +120,7 @@ class TestAsymmetricMeshes(unittest.IsolatedAsyncioTestCase):
         a_sharded = a.shard(mesh, [DimSpec(["x"]), DimSpec(["y"])])
         
         result = a_sharded * 2.0
-        await result.realize
+        # await result.realize
         
         expected = np_a * 2.0
         np.testing.assert_allclose(result.to_numpy(), expected, atol=1e-5)
@@ -134,7 +134,7 @@ class TestAsymmetricMeshes(unittest.IsolatedAsyncioTestCase):
         a_sharded = a.shard(mesh, [DimSpec(["x"]), DimSpec(["y"])])
         
         result = a_sharded + a_sharded
-        await result.realize
+        # await result.realize
         
         expected = np_a + np_a
         np.testing.assert_allclose(result.to_numpy(), expected, atol=1e-5)
@@ -149,7 +149,7 @@ class TestAsymmetricMeshes(unittest.IsolatedAsyncioTestCase):
         a_sharded = a.shard(mesh, [DimSpec(["y"]), DimSpec([])])
         
         result = a_sharded * 3.0
-        await result.realize
+        # await result.realize
         
         expected = np_a * 3.0
         np.testing.assert_allclose(result.to_numpy(), expected, atol=1e-5)
@@ -172,7 +172,7 @@ class TestCommunicationOpsEdgeCases(unittest.IsolatedAsyncioTestCase):
         a_sharded = a.shard(mesh, [DimSpec(["x"]), DimSpec(["y"])])
         
         gathered = gather_all_axes(a_sharded)
-        await gathered.realize
+        # await gathered.realize
         
         # Should reconstruct original
         np.testing.assert_allclose(gathered.to_numpy(), np_a, atol=1e-5)
@@ -210,7 +210,7 @@ class TestCommunicationOpsEdgeCases(unittest.IsolatedAsyncioTestCase):
         a_sharded = a.shard(mesh, [DimSpec(["x"]), DimSpec([])])
         
         result = all_reduce(a_sharded)
-        await result.realize
+        # await result.realize
         
         # After allreduce on sharded axis, each shard has the same value (sum)
         # The result is replicated (all shards identical)
@@ -239,7 +239,7 @@ class TestReductionEdgeCases(unittest.IsolatedAsyncioTestCase):
         # Reduce over both dims
         temp = reduce_sum(a_sharded, axis=1)
         result = reduce_sum(temp, axis=0)
-        await result.realize
+        # await result.realize
         
         expected = np.sum(np_a)
         np.testing.assert_allclose(result.to_numpy(), expected, atol=1e-4)
@@ -253,7 +253,7 @@ class TestReductionEdgeCases(unittest.IsolatedAsyncioTestCase):
         a_sharded = a.shard(self.mesh, [DimSpec(["x"]), DimSpec([])])
         
         result = reduce_sum(a_sharded, axis=0, keepdims=True)
-        await result.realize
+        # await result.realize
         
         expected = np.sum(np_a, axis=0, keepdims=True)
         self.assertEqual(tuple(int(d) for d in result.shape), (1, 6))
@@ -274,7 +274,7 @@ class TestBroadcastingWithSharding(unittest.IsolatedAsyncioTestCase):
         a_sharded = a.shard(self.mesh, [DimSpec(["x"]), DimSpec([])])
         
         result = a_sharded + 5.0
-        await result.realize
+        # await result.realize
         
         expected = np_a + 5.0
         np.testing.assert_allclose(result.to_numpy(), expected, atol=1e-5)
@@ -288,7 +288,7 @@ class TestBroadcastingWithSharding(unittest.IsolatedAsyncioTestCase):
         b = Tensor.from_dlpack(np_b)
         
         result = a + b
-        await result.realize
+        # await result.realize
         
         expected = np_a + np_b
         np.testing.assert_allclose(result.to_numpy(), expected, atol=1e-5)
