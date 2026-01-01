@@ -142,11 +142,12 @@ def _remove_unused_arguments(g: graph.Graph) -> None:
 # 3. The Compute Engine
 # =============================================================================
 
+
 class ComputeGraph:
     """Manages the DAG of operations, lazy evaluation, and compilation."""
 
     graph: graph.Graph
-    sources: dict[_core.Value[Any], Tensor]
+    sources: dict[_core.Value[Any], driver.Tensor]  # Maps buffer values to their storages
     unrealized: weakref.WeakValueDictionary[int, Tensor]
     epoch: int
 
@@ -170,30 +171,48 @@ class ComputeGraph:
     # --- Public API ---
 
     def add_input(self, tensor: Tensor) -> None:
-        """Registers an existing (realized) tensor as a graph input."""
-        if tensor.storage is None:
+        """Registers a realized tensor's storages as graph inputs.
+        
+        Handles both single-value and multi-shard tensors uniformly.
+        All storages become graph inputs, and corresponding TensorValues
+        are stored back in the tensor impl.
+        """
+        storages = tensor._impl._storages
+        if not storages:
             raise TypeError("Only realized tensors may be graph inputs.")
 
         op = _core.Operation._from_cmlir(self.graph._mlir_op)
         assert isinstance(op, mo.GraphOp)
         block = op.regions[0].front
         
-        with self.graph:
-            shape = tensor._impl.get_realized_shape()
-            tensor_type = graph.TensorType(
-                tensor.dtype, shape, graph.DeviceRef.from_device(tensor.device)
-            )
-            typ = tensor_type.as_buffer().to_mlir()
+        tensor_values = []
+        for storage in storages:
+            with self.graph:
+                tensor_type = graph.TensorType(
+                    storage.dtype, storage.shape,
+                    graph.DeviceRef.from_device(storage.device)
+                )
+                typ = tensor_type.as_buffer().to_mlir()
+                
+                # Update MLIR function signature
+                inputs = op.function_type.inputs
+                op.function_type = builtin.FunctionType([*inputs, typ])
+                
+                buffer_val = graph.BufferValue.from_mlir(
+                    block.add_argument(typ, _location())
+                )
+                tensor_values.append(buffer_val)
             
-            # Update MLIR function signature
-            inputs = op.function_type.inputs
-            op.function_type = builtin.FunctionType([*inputs, typ])
-            
-            tensor._value = graph.BufferValue.from_mlir(
-                block.add_argument(typ, _location())
-            )
-            
-        self.sources[tensor._value._mlir_value] = tensor
+            # Register source for execution
+            self.sources[buffer_val._mlir_value] = storage
+        
+        # Store values back - single value or list
+        if len(tensor_values) == 1:
+            tensor._value = tensor_values[0]
+        else:
+            # For multi-shard: store all values, convert buffers to tensor values
+            with self.graph:
+                tensor._impl._values = [bv[...] for bv in tensor_values]
 
     def add_unrealized(self, tensor: Tensor) -> None:
         """Registers a tensor as pending computation."""
@@ -385,7 +404,7 @@ class ComputeGraph:
         inputs = [self.sources[inp._mlir_value] for inp in self.graph.inputs]
         try:
             model = _session().load(self.graph)
-            seed_val, *results = model(*(inp.driver_tensor for inp in inputs))
+            seed_val, *results = model(*inputs)
         except BaseException as e:
             self.graph._erase_output_if_present()
             if DEBUG_LAZY_EVAL:
@@ -420,7 +439,7 @@ class ComputeGraph:
         inputs = [self.sources[inp._mlir_value] for inp in self.graph.inputs]
         try:
             model = _session().load(self.graph)
-            seed_val, *results = model(*(inp.driver_tensor for inp in inputs))
+            seed_val, *results = model(*inputs)
         except BaseException as e:
             self.graph._erase_output_if_present()
             if DEBUG_LAZY_EVAL:
@@ -472,8 +491,6 @@ class ComputeGraph:
 
     def _finalize_evaluation(self, seed_value: int) -> None:
         """Prepares the graph for the next epoch."""
-        for t in self.sources.values():
-            t._value = None
         self._reset(self.graph._context, seed_value)
 
 # =============================================================================

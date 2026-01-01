@@ -413,6 +413,7 @@ class AllReduceOp(Operation):
         from ..core.tensor import Tensor
         from ..core.tensor_impl import TensorImpl
         from ..core.compute_graph import GRAPH
+        from ..sharding.spec import ShardingSpec, DimSpec
         
         if not sharded_tensor._impl._values or len(sharded_tensor._impl._values) <= 1:
             return sharded_tensor  # Nothing to reduce
@@ -423,11 +424,17 @@ class AllReduceOp(Operation):
         with GRAPH.graph:
             reduced = self.maxpr(sharded_tensor._impl._values, mesh=mesh)
         
+        # Create replicated sharding spec (all dims have empty axes list)
+        output_spec = None
+        if mesh and reduced:
+            rank = len(reduced[0].type.shape) if reduced else 0
+            output_spec = ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)])
+        
         impl = TensorImpl(
             values=reduced,
             traced=sharded_tensor._impl.traced,
             batch_dims=sharded_tensor._impl.batch_dims,
-            sharding=None,  # Replicated after reduction
+            sharding=output_spec,
         )
         return Tensor(impl=impl)
 
@@ -660,9 +667,7 @@ class GatherAllAxesOp(Operation):
         from ..core.tensor_impl import TensorImpl
         from ..core.compute_graph import GRAPH
         from ..sharding.spec import ShardingSpec, DimSpec
-        
-        if not sharded_tensor._impl._values or len(sharded_tensor._impl._values) <= 1:
-            return sharded_tensor  # Nothing to gather
+        from max import graph as g
         
         if not sharded_tensor._impl.sharding:
             return sharded_tensor  # No sharding info
@@ -673,15 +678,27 @@ class GatherAllAxesOp(Operation):
         if spec.is_fully_replicated():
             return sharded_tensor  # Already replicated
         
+        # Access TensorValues - this triggers add_input for realized tensors
+        # via __tensorvalue__ if needed
+        shard_values = sharded_tensor._impl._values
+        
+        # If realized but _values is empty, the tensor needs to be added as input
+        if not shard_values and sharded_tensor._impl._storages:
+            GRAPH.add_input(sharded_tensor)
+            shard_values = sharded_tensor._impl._values
+        
+        if not shard_values or len(shard_values) <= 1:
+            return sharded_tensor  # Nothing to gather
+        
         with GRAPH.graph:
-            global_tensor = self.maxpr(sharded_tensor._impl._values, spec)
+            global_tensor = self.maxpr(shard_values, spec)
         
         # Create replicated output
         rank = len(global_tensor.type.shape)
         replicated_spec = ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)])
         
         impl = TensorImpl(
-            values=[global_tensor],  # Single global value
+            values=[global_tensor],
             traced=sharded_tensor._impl.traced,
             batch_dims=sharded_tensor._impl.batch_dims,
             sharding=replicated_spec,
