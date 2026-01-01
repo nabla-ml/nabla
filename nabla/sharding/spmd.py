@@ -276,7 +276,8 @@ def slice_for_shard(tensor_val: Any, shape: tuple, sharding: "ShardingSpec", sha
             total *= size
         
         chunk = math.ceil(dim_len / total)
-        slices.append(slice(pos * chunk, min((pos + 1) * chunk, dim_len)))
+        start = min(pos * chunk, dim_len)
+        slices.append(slice(start, min(start + chunk, dim_len)))
     
     return tensor_val[tuple(slices)]
 

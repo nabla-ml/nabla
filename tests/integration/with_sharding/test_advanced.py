@@ -13,8 +13,7 @@ from nabla.ops.unary import relu
 
 from tests.common.sharding_utils import make_array, make_randn
 
-# import nabla.ops.communication
-# print(f"DEBUG_IMPORT: {nabla.ops.communication.__file__}")
+
 
 # =============================================================================
 # Advanced Matmul Tests
@@ -226,7 +225,7 @@ class TestSubAxisSharding:
 class TestUnevenSharding:
     """Tests for shapes that don't divide evenly by mesh size (padding/uneven shards)."""
     
-    @pytest.mark.skip(reason="Environment issue causes stale code loading in CI/pytest, verified manually via reproduction script")
+
     def test_uneven_shard_sizes(self):
         """Shard dim 5 across 4 devices -> shards [2, 2, 1, 0]."""
         batch = 5
