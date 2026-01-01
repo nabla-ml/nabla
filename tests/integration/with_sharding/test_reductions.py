@@ -115,5 +115,41 @@ class TestShardingReductions(unittest.IsolatedAsyncioTestCase):
         actual = c.to_numpy()
         np.testing.assert_allclose(actual, expected, atol=1e-4)
 
+    async def test_reduce_scatter_basic(self):
+        """Test reduce_scatter sums and scatters correctly.
+        
+        Input: (M, N) sharded on M with 4 shards.
+        Each shard has local data to be summed then scattered.
+        Output: (M, N/4) per shard after sum + scatter on axis 1.
+        """
+        from nabla.ops.communication import reduce_scatter
+        
+        M, N = 8, 8  # 8x8, scatter axis has 8 elements / 4 shards = 2 per shard
+        
+        # Create data where we can verify the sum
+        np_a = np.ones((M, N), dtype=np.float32)
+        a = Tensor.from_dlpack(np_a)
+        
+        # Shard on axis 0 (M dimension)
+        a_sharded = a.shard(self.mesh, [DimSpec(["x"]), DimSpec([])])
+        
+        # reduce_scatter along axis 1:
+        # Sum all shards (all 1s, 4 shards) -> values are 4
+        # Then scatter along axis 1 -> each shard gets N/4 = 2 columns
+        result = reduce_scatter(a_sharded, axis=1)
+        
+        await result.realize
+        
+        # Check output shape - scattered axis should be N/num_shards = 8/4 = 2
+        # But M should stay the same (2 per shard due to sharding on axis 0)
+        shard_shape = result._impl._values[0].type.shape if result._impl._values else result.shape
+        self.assertEqual(int(shard_shape[1]), N // 4)  # 8 / 4 = 2
+        
+        # Verify numerical correctness:
+        # Sum of 4 copies of ones = 4.0 everywhere
+        shard_data = result.to_numpy()
+        expected_value = 4.0  # 4 shards of ones summed
+        np.testing.assert_allclose(shard_data, np.full_like(shard_data, expected_value), atol=1e-4)
+
 if __name__ == "__main__":
     unittest.main()

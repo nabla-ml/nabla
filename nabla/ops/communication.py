@@ -25,6 +25,10 @@ if TYPE_CHECKING:
     from ..sharding.spec import DeviceMesh, DimSpec, ShardingSpec
 
 
+def _is_distributed(mesh: "DeviceMesh") -> bool:
+    """Check if mesh has unique device refs (true distributed vs simulated)."""
+    return mesh is not None and len(set(mesh.device_refs)) == len(mesh.device_refs)
+
 class ShardOp(Operation):
     """Split a replicated tensor into multiple sharded TensorValues.
     
@@ -64,9 +68,6 @@ class ShardOp(Operation):
         global_shape = tuple(int(d) for d in x.type.shape)
         spec = ShardingSpec(mesh, dim_specs)
         
-        # Check if devices are unique (distributed mode)
-        devices_unique = len(set(mesh.device_refs)) == len(mesh.device_refs)
-        
         shard_values = []
         for shard_idx in range(num_shards):
             # Compute slice for this shard
@@ -74,7 +75,7 @@ class ShardOp(Operation):
             shard_val = x[slices]
             
             # Place on designated device if distributed
-            if devices_unique:
+            if _is_distributed(mesh):
                 shard_val = ops.transfer_to(shard_val, mesh.device_refs[shard_idx])
             
             shard_values.append(shard_val)
@@ -224,14 +225,8 @@ class AllGatherOp(Operation):
         Returns:
             List of replicated TensorValues (all identical)
         """
-        # Check if devices are unique (distributed mode)
-        devices_unique = (
-            mesh is not None and 
-            len(set(mesh.device_refs)) == len(mesh.device_refs)
-        )
-        
         # DISTRIBUTED: Use native MAX allgather
-        if devices_unique:
+        if _is_distributed(mesh):
             from max.graph.ops.allgather import allgather as max_allgather
             from max.graph.type import BufferType
             from max.dtype import DType
@@ -368,14 +363,15 @@ class AllReduceOp(Operation):
     def maxpr(
         self,
         shard_values: List[TensorValue],
-        reduction: str = "sum",
         mesh: "DeviceMesh" = None,
     ) -> List[TensorValue]:
-        """Reduce across all shards.
+        """Sum-reduce across all shards (AllReduce).
+        
+        Note: MAX only supports sum reduction natively. Other reductions
+        (mean, max, min) are not supported.
         
         Args:
             shard_values: List of shard TensorValues to reduce
-            reduction: Reduction operation ("sum", "mean", "max", "min")
             mesh: Device mesh (needed for distributed execution)
             
         Returns:
@@ -384,14 +380,8 @@ class AllReduceOp(Operation):
         if not shard_values:
             return []
         
-        # Check if devices are unique (distributed mode)
-        devices_unique = (
-            mesh is not None and 
-            len(set(mesh.device_refs)) == len(mesh.device_refs)
-        )
-        
-        # DISTRIBUTED: Use native MAX allreduce (only sum supported currently)
-        if devices_unique and reduction == "sum":
+        # DISTRIBUTED: Use native MAX allreduce
+        if _is_distributed(mesh):
             from max.graph.ops.allreduce import sum as allreduce_sum
             from max.graph.type import BufferType
             from max.dtype import DType
@@ -403,40 +393,22 @@ class AllReduceOp(Operation):
             ]
             return allreduce_sum(shard_values, signal_buffers)
         
-        # SIMULATED: Loop-based fallback
-        if reduction == "sum":
-            result = shard_values[0]
-            for sv in shard_values[1:]:
-                result = ops.add(result, sv)
-        elif reduction == "mean":
-            result = shard_values[0]
-            for sv in shard_values[1:]:
-                result = ops.add(result, sv)
-            n = len(shard_values)
-            result = ops.div(result, ops.constant(float(n), result.type.dtype))
-        elif reduction == "max":
-            result = shard_values[0]
-            for sv in shard_values[1:]:
-                result = ops.maximum(result, sv)
-        elif reduction == "min":
-            result = shard_values[0]
-            for sv in shard_values[1:]:
-                result = ops.minimum(result, sv)
-        else:
-            raise ValueError(f"Unknown reduction: {reduction}")
+        # SIMULATED: Sum using loop-based fallback
+        result = shard_values[0]
+        for sv in shard_values[1:]:
+            result = ops.add(result, sv)
         
         # All shards get the same reduced value
         return [result] * len(shard_values)
     
-    def __call__(self, sharded_tensor, reduction: str = "sum"):
-        """Reduce across all shards.
+    def __call__(self, sharded_tensor):
+        """Sum-reduce across all shards.
         
         Args:
             sharded_tensor: Tensor with partial values per shard
-            reduction: Reduction type ("sum", "mean", "max", "min")
             
         Returns:
-            Tensor with reduced values (replicated across shards)
+            Tensor with sum-reduced values (replicated across shards)
         """
         from ..core.tensor import Tensor
         from ..core.tensor_impl import TensorImpl
@@ -449,7 +421,7 @@ class AllReduceOp(Operation):
         mesh = sharded_tensor._impl.sharding.mesh if sharded_tensor._impl.sharding else None
         
         with GRAPH.graph:
-            reduced = self.maxpr(sharded_tensor._impl._values, reduction, mesh=mesh)
+            reduced = self.maxpr(sharded_tensor._impl._values, mesh=mesh)
         
         impl = TensorImpl(
             values=reduced,
@@ -474,28 +446,22 @@ class ReduceScatterOp(Operation):
         self,
         shard_values: List[TensorValue],
         axis: int,
-        reduction: str = "sum",
         mesh: "DeviceMesh" = None,
     ) -> List[TensorValue]:
-        """Reduce across shards then scatter the result.
+        """Sum-reduce across shards then scatter the result.
+        
+        Note: MAX only supports sum reduction natively.
         
         Args:
             shard_values: List of shard TensorValues
             axis: Axis along which to scatter the reduced result
-            reduction: Reduction operation
             mesh: Device mesh (needed for distributed execution)
             
         Returns:
             List of scattered TensorValues
         """
-        # Check if devices are unique (distributed mode)
-        devices_unique = (
-            mesh is not None and 
-            len(set(mesh.device_refs)) == len(mesh.device_refs)
-        )
-        
         # DISTRIBUTED: Compose allreduce + scatter
-        if devices_unique and reduction == "sum":
+        if _is_distributed(mesh):
             from max.graph.ops.allreduce import sum as allreduce_sum
             from max.graph.type import BufferType
             from max.dtype import DType
@@ -523,14 +489,10 @@ class ReduceScatterOp(Operation):
             
             return scattered
         
-        # SIMULATED: Loop-based fallback
-        # First reduce all values
-        if reduction == "sum":
-            full_result = shard_values[0]
-            for sv in shard_values[1:]:
-                full_result = ops.add(full_result, sv)
-        else:
-            raise NotImplementedError(f"Reduction {reduction} not yet implemented")
+        # SIMULATED: Sum all values then scatter
+        full_result = shard_values[0]
+        for sv in shard_values[1:]:
+            full_result = ops.add(full_result, sv)
         
         # Then scatter (split) along the axis
         num_shards = len(shard_values)
@@ -546,6 +508,51 @@ class ReduceScatterOp(Operation):
             scattered.append(full_result[tuple(slices)])
         
         return scattered
+    
+    def __call__(self, sharded_tensor, axis: int):
+        """Sum-reduce then scatter across shards.
+        
+        Args:
+            sharded_tensor: Tensor with values to reduce
+            axis: Axis along which to scatter the result
+            
+        Returns:
+            Tensor with scattered reduced values
+        """
+        from ..core.tensor import Tensor
+        from ..core.tensor_impl import TensorImpl
+        from ..core.compute_graph import GRAPH
+        from ..sharding.spec import ShardingSpec, DimSpec
+        
+        if not sharded_tensor._impl._values or len(sharded_tensor._impl._values) <= 1:
+            return sharded_tensor  # Nothing to reduce
+        
+        mesh = sharded_tensor._impl.sharding.mesh if sharded_tensor._impl.sharding else None
+        
+        with GRAPH.graph:
+            scattered = self.maxpr(sharded_tensor._impl._values, axis, mesh=mesh)
+        
+        # Output sharding: the scatter axis becomes sharded
+        output_spec = None
+        if mesh and sharded_tensor._impl.sharding:
+            input_spec = sharded_tensor._impl.sharding
+            # Create new spec where the scatter axis is sharded
+            new_dim_specs = []
+            rank = len(scattered[0].type.shape) if scattered else 0
+            for d in range(rank):
+                if d < len(input_spec.dim_specs):
+                    new_dim_specs.append(input_spec.dim_specs[d])
+                else:
+                    new_dim_specs.append(DimSpec([]))
+            output_spec = ShardingSpec(mesh, new_dim_specs)
+        
+        impl = TensorImpl(
+            values=scattered,
+            traced=sharded_tensor._impl.traced,
+            batch_dims=sharded_tensor._impl.batch_dims,
+            sharding=output_spec,
+        )
+        return Tensor(impl=impl)
 
 
 # Singleton instances
@@ -583,24 +590,111 @@ def all_gather(sharded_tensor, axis: int):
     return all_gather_op(sharded_tensor, axis)
 
 
-def all_reduce(sharded_tensor, reduction: str = "sum"):
-    """Reduce across all shards.
+def all_reduce(sharded_tensor):
+    """Sum-reduce across all shards.
+    
+    Note: MAX only supports sum reduction natively.
     
     Args:
         sharded_tensor: Tensor with partial values per shard
-        reduction: Reduction type ("sum", "mean", "max", "min")
         
     Returns:
-        Tensor with reduced values (replicated across shards)
+        Tensor with sum-reduced values (replicated across shards)
     """
-    return all_reduce_op(sharded_tensor, reduction)
+    return all_reduce_op(sharded_tensor)
 
 
-def gather_all_axes(sharded_tensor):
+def reduce_scatter(sharded_tensor, axis: int):
+    """Sum-reduce then scatter result across shards.
+    
+    Note: MAX only supports sum reduction natively.
+    
+    Args:
+        sharded_tensor: Tensor with values per shard
+        axis: Axis along which to scatter
+        
+    Returns:
+        Tensor with scattered reduced values
+    """
+    return reduce_scatter_op(sharded_tensor, axis)
+
+
+# Helper function for forward reference from GatherAllAxesOp
+def _reshard_reconstruct_global(shard_values: List[TensorValue], spec: "ShardingSpec") -> TensorValue:
+    """Delegate to ReshardOp's reconstruction logic."""
+    return reshard_op._reconstruct_global(shard_values, spec)
+
+
+class GatherAllAxesOp(Operation):
     """Gather all sharded axes to produce a fully replicated tensor.
     
     Uses hierarchical concatenation to properly handle multi-axis sharding.
     This is the correct way to reconstruct a tensor sharded on multiple dimensions.
+    """
+    
+    @property
+    def name(self) -> str:
+        return "gather_all_axes"
+    
+    def maxpr(
+        self,
+        shard_values: List[TensorValue],
+        spec: "ShardingSpec",
+    ) -> TensorValue:
+        """Reconstruct global tensor via hierarchical concatenation."""
+        # Delegate to ReshardOp's reconstruction logic
+        # Note: reshard_op is defined later, so this is a forward reference
+        # that works because it's called at runtime, not import time
+        return _reshard_reconstruct_global(shard_values, spec)
+    
+    def __call__(self, sharded_tensor):
+        """Gather all sharded axes to produce a replicated tensor.
+        
+        Args:
+            sharded_tensor: Tensor with any sharding configuration
+            
+        Returns:
+            Replicated tensor with the full global data
+        """
+        from ..core.tensor import Tensor
+        from ..core.tensor_impl import TensorImpl
+        from ..core.compute_graph import GRAPH
+        from ..sharding.spec import ShardingSpec, DimSpec
+        
+        if not sharded_tensor._impl._values or len(sharded_tensor._impl._values) <= 1:
+            return sharded_tensor  # Nothing to gather
+        
+        if not sharded_tensor._impl.sharding:
+            return sharded_tensor  # No sharding info
+        
+        spec = sharded_tensor._impl.sharding
+        mesh = spec.mesh
+        
+        if spec.is_fully_replicated():
+            return sharded_tensor  # Already replicated
+        
+        with GRAPH.graph:
+            global_tensor = self.maxpr(sharded_tensor._impl._values, spec)
+        
+        # Create replicated output
+        rank = len(global_tensor.type.shape)
+        replicated_spec = ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)])
+        
+        impl = TensorImpl(
+            values=[global_tensor],  # Single global value
+            traced=sharded_tensor._impl.traced,
+            batch_dims=sharded_tensor._impl.batch_dims,
+            sharding=replicated_spec,
+        )
+        return Tensor(impl=impl)
+
+
+# Singleton for GatherAllAxesOp (defined before ReshardOp for ordering)
+gather_all_axes_op = GatherAllAxesOp()
+
+
+def gather_all_axes(sharded_tensor):
+    """Gather all sharded axes to produce a fully replicated tensor.
     
     Args:
         sharded_tensor: Tensor with any sharding configuration
@@ -608,41 +702,7 @@ def gather_all_axes(sharded_tensor):
     Returns:
         Replicated tensor with the full global data
     """
-    from ..core.tensor import Tensor
-    from ..core.tensor_impl import TensorImpl
-    from ..core.compute_graph import GRAPH
-    from ..sharding.spec import ShardingSpec, DimSpec
-    
-    if not sharded_tensor._impl._values or len(sharded_tensor._impl._values) <= 1:
-        return sharded_tensor  # Nothing to gather
-    
-    if not sharded_tensor._impl.sharding:
-        return sharded_tensor  # No sharding info
-    
-    spec = sharded_tensor._impl.sharding
-    mesh = spec.mesh
-    
-    if spec.is_fully_replicated():
-        return sharded_tensor  # Already replicated
-    
-    # Use ReshardOp's hierarchical reconstruction logic
-    with GRAPH.graph:
-        global_tensor = reshard_op._reconstruct_global(
-            sharded_tensor._impl._values, spec
-        )
-    
-    # Create replicated output
-    rank = len(global_tensor.type.shape)
-    replicated_spec = ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)])
-    
-    impl = TensorImpl(
-        values=[global_tensor],  # Single global value
-        traced=sharded_tensor._impl.traced,
-        batch_dims=sharded_tensor._impl.batch_dims,
-        sharding=replicated_spec,
-    )
-    return Tensor(impl=impl)
-
+    return gather_all_axes_op(sharded_tensor)
 
 
 class ReshardOp(Operation):
@@ -670,133 +730,43 @@ class ReshardOp(Operation):
         shard_values: List[TensorValue],
         source_spec: "ShardingSpec"
     ) -> TensorValue:
-        """Reconstruct the global tensor from potentially multi-dimensional shards."""
+        """Reconstruct the global tensor from potentially multi-dimensional shards.
+        
+        Algorithm (hierarchical concatenation):
+        1. For each sharded tensor dimension (reverse order):
+           a. Group shards by coordinates on ALL mesh axes EXCEPT the one being merged
+           b. Within each group, sort by coordinate on the merge axis
+           c. Concatenate group members along the tensor dimension
+        2. After processing all sharded dimensions, one global tensor remains
+        
+        This is the inverse of ShardOp._compute_shard_slice.
+        """
         # from max.graph import ops (already imported globally)
         
         # If duplicated/replicated, any shard is the global tensor
         if source_spec.is_fully_replicated():
             return shard_values[0]
 
-        # We need to assemble the shards.
-        # This is essentially the inverse of ShardOp._compute_shard_slice.
-        # We can iterate through the global grid of shards and concat them.
-        
-        # 1. Map each shard_idx -> coordinates in the mesh
-        # 2. Arrange shards in an N-dimensional grid corresponding to mesh axes
-        #    BUT mapped to Tensor Dimensions.
-        
-        # Actually, simpler: Use AllGather logic recursively?
-        # Or just use the fact that we know the global position of each shard.
-        
-        # Let's try a dimension-by-dimension reconstruction.
-        # But shards are interleaved.
-        
-        # Alternative: Create an empty global tensor (via slice updates? No, immutable).
-        # We must use Concat.
-        
-        # Strategy:
-        # A tensor dimension D is split into K parts.
-        # We need to find which shards belong to part 0, part 1, ... part K of dimension D.
-        # Then we concat them.
-        
-        # This is hard for arbitrary 2D meshes + arbitrary dimension mappings.
-        # E.g. Dim 0 sharded on "x", Dim 1 sharded on "y".
-        # We need to form a grid of shards [x, y] and concat rows then cols.
-        
-        # Algorithm:
-        # 1. Identify which mesh axes map to which tensor dimension.
-        # 2. Sort shards by their coordinates on these axes.
-        # 3. Perform hierarchical concatenation.
-        
-        # Simplification for prototype:
-        # If multiple dimensions are sharded, it's a multi-stage concat.
-        # Dim 0 is sharded on axis "x". Dim 1 is sharded on axis "y".
-        # We have shards S(x,y).
-        # We want to form T.
-        # T = Concat( [Concat([S(0,0), S(0,1)], axis=1), 
-        #              Concat([S(1,0), S(1,1)], axis=1)], axis=0 )
-        
-        # We need to determine the order of concatenation.
-        # Order by Tensor Dimensions: Minor to Major (inner to outer) usually?
-        
-        current_shards = shard_values[:] # Copy
-        
-        # We can reconstruct dimension by dimension, from last to first?
-        # NO, we must reconstruct based on the MESH structure?
-        # Actually, if we concat along tensor dimension D, we merge the shards that differ only along the axes mapped to D.
-        
-        # Let's iterate Tensor Dimensions D from 0 to Rank-1.
-        # For each dimension D:
-        #   Find mesh axes assigned to D.
-        #   If none, skip.
-        #   If yes (say axis "x"), we need to concat shards along D.
-        #   But "x" splits the shards.
-        #   Conceptually, we reduce the number of shards by concatenating groups.
-        
-        # This seems complex to implement generically locally.
-        # Let's assume we have a helper that does this.
-        # Wait, AllGatherOp does exactly this but only for ONE axis.
-        
-        # Hack for 2D Mesh / Independent Axes:
-        # 1. For each tensor dimension `d` that is sharded:
-        #    a. Identify the mesh axis `ax` it uses.
-        #    b. Group shards that are identical except for `ax`.
-        #    c. Concat them along `d`.
-        #    d. Replace the group with the result.
-        
-        # This works if axes don't overlap (which they don't, per spec).
-        
-        # Implementation:
-        # Track "current shards".
-        # For each tensor dim d (reverse order?):
-        #   sharding_axes = spec.dim_specs[d].axes
-        #   If empty, continue.
-        #   For each axis `ax` in `sharding_axes` (minor to major?):
-        #     We need to merge along `ax`.
-        #     Group current shards by coordinates of ALL OTHER axes.
-        #     Sort group by coordinate of `ax`.
-        #     Concat group along `d`.
-        
-        # Example: 2x2 mesh. D0 on "x", D1 on "y". Shards S(x,y).
-        # Process D1 (axis "y"):
-        #   Group by "x".
-        #   G0: [S(0,0), S(0,1)] (sorted by y) -> Result R0 = Concat(G0, axis=1)
-        #   G1: [S(1,0), S(1,1)] (sorted by y) -> Result R1 = Concat(G1, axis=1)
-        #   New shards: [R0, R1]. Each covers full D1, but split on D0("x").
-        # Process D0 (axis "x"):
-        #   Group by nothing (only 1 group).
-        #   G: [R0, R1] (sorted by x) -> Result Final = Concat(G, axis=0)
-        
-        current_shard_descs = []
-        for i in range(len(shard_values)):
-            # Store (value, device_id)
-            # We will fetch coordinates on demand because sub-axes are not in axis_names
-            current_shard_descs.append( (shard_values[i], source_spec.mesh.devices[i]) )
-            
+        # Build (value, device_id) descriptors for hierarchical concatenation
+        current_shard_descs = [
+            (shard_values[i], source_spec.mesh.devices[i]) 
+            for i in range(len(shard_values))
+        ]
         rank = len(shard_values[0].type.shape)
         
-        # Iterate dimensions in reverse (minor to major) to be safe? 
-        # Actually order shouldn't matter if axes are disjoint.
-        for d in range(rank - 1, -1, -1):
-            if d >= len(source_spec.dim_specs): continue
-            dim_spec = source_spec.dim_specs[d]
-            
-        # Track usage of axes to know which ones are "active" for distinguishing shards
+        # Track active axes for distinguishing shards
         current_active_axes = set()
         for dim in source_spec.dim_specs:
             current_active_axes.update(dim.axes)
         current_active_axes.update(source_spec.replicated_axes)
         
-        # Iterate dimensions in reverse (minor to major) to be safe? 
-        # Actually order shouldn't matter if axes are disjoint.
+        # Process dimensions in reverse order
         for d in range(rank - 1, -1, -1):
             if d >= len(source_spec.dim_specs): continue
             dim_spec = source_spec.dim_specs[d]
             
             for ax in reversed(dim_spec.axes):
-                # We need to merge along `ax`.
-                # Group shards by coordinates of all OTHER active axes.
-                
+                # Group shards by coordinates on all axes except the merge axis
                 groups = {}
                 for val, device_id in current_shard_descs:
                     signature = []
@@ -939,7 +909,7 @@ def simulate_grouped_all_reduce(
     # Check if we're reducing over all axes (simple case)
     all_axes = set(mesh.axis_names)
     if all_axes.issubset(reduce_axes):
-        return all_reduce_op.maxpr(shard_results, reduction="sum", mesh=mesh)
+        return all_reduce_op.maxpr(shard_results, mesh=mesh)
         
     # Complex case: Group shards by non-reduced axes
     # Each group contains shards that should be reduced together
@@ -966,7 +936,7 @@ def simulate_grouped_all_reduce(
         group_shards = [val for _, val in group_members]
         
         if len(group_shards) > 1:
-            curr_reduced = all_reduce_op.maxpr(group_shards, reduction="sum", mesh=mesh)
+            curr_reduced = all_reduce_op.maxpr(group_shards, mesh=mesh)
         else:
             curr_reduced = [group_shards[0]]
             
@@ -983,15 +953,20 @@ __all__ = [
     "AllGatherOp", 
     "AllReduceOp",
     "ReduceScatterOp",
+    "GatherAllAxesOp",
+    "ReshardOp",
     # Singletons
     "shard_op",
     "all_gather_op",
     "all_reduce_op", 
     "reduce_scatter_op",
+    "gather_all_axes_op",
+    "reshard_op",
     # Public functions
     "shard",
     "all_gather",
     "all_reduce",
+    "reduce_scatter",
     "gather_all_axes",
     "reshard",
     "simulate_grouped_all_reduce",

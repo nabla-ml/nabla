@@ -199,7 +199,7 @@ class BroadcastToOp(LogicalShapeOperation):
             
             if needs_allreduce and len(shard_results) > 1:
                 from .communication import all_reduce_op
-                shard_results = all_reduce_op.maxpr(shard_results, reduction="sum", mesh=mesh)
+                shard_results = all_reduce_op.maxpr(shard_results, mesh=mesh)
         
         # Create output
         output = spmd.create_sharded_output(
@@ -296,7 +296,7 @@ class ReshapeOp(LogicalShapeOperation):
             # AllReduce if needed (unlikely for reshape but keep for consistency)
             if needs_allreduce and len(shard_results) > 1:
                 from .communication import all_reduce_op
-                shard_results = all_reduce_op.maxpr(shard_results, reduction="sum", mesh=mesh)
+                shard_results = all_reduce_op.maxpr(shard_results, mesh=mesh)
         
         # Create output
         output = spmd.create_sharded_output(
