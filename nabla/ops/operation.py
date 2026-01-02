@@ -31,126 +31,77 @@ class Operation(ABC):
         ...
     
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Unified dispatch for all operations.
+        
+        Handles sharded and unsharded tensors uniformly.
+        Unsharded operations run as single-shard execution.
+        """
         from ..core.tensor import Tensor
         from ..core.tensor_impl import TensorImpl
         from ..core.compute_graph import GRAPH
         from ..core import pytree
+        from ..sharding import spmd
         from max import graph as g
         
-        # Check for sharded inputs - dispatch to SPMD path if found
-        from ..sharding import spmd
-        if spmd.has_sharded_inputs(args):
-            return self._call_spmd(*args, **kwargs)
-        
+        # 1. Collect metadata from inputs
         any_traced = False
         any_has_tangent = False
         max_batch_dims = 0
+        any_sharded = False
         
-        def tensor_to_value(x: Any) -> Any:
-            nonlocal any_traced, any_has_tangent, max_batch_dims
+        def collect_metadata(x: Any) -> Any:
+            nonlocal any_traced, any_has_tangent, max_batch_dims, any_sharded
             if isinstance(x, Tensor):
-                if x._impl.traced:
-                    any_traced = True
-                if x._impl.tangent is not None:
-                    any_has_tangent = True
+                any_traced = any_traced or x._impl.traced
+                any_has_tangent = any_has_tangent or (x._impl.tangent is not None)
                 max_batch_dims = max(max_batch_dims, x._impl.batch_dims)
-                return g.TensorValue(x)
+                any_sharded = any_sharded or x._impl.is_sharded
             return x
         
-        def value_to_tensor(x: Any) -> Any:
-            if pytree.is_tensor_value(x):
-                impl = TensorImpl(values=x, traced=any_traced, batch_dims=max_batch_dims)
-                impl.cache_metadata(x)
-                return Tensor(impl=impl)
-            return x
+        pytree.tree_map(collect_metadata, args)
         
-        with GRAPH.graph:
-            converted_args = pytree.tree_map(tensor_to_value, args)
-            result_tree = self.maxpr(*converted_args, **kwargs)
+        # 2. Determine execution mode
+        mesh = spmd.get_mesh_from_args(args) if any_sharded else None
+        is_sharded_execution = mesh is not None
         
-        output = pytree.tree_map(value_to_tensor, result_tree)
-        
-        # OutputRefs for tracing
-        output_impls = [x._impl for x in pytree.tree_leaves(output) if isinstance(x, Tensor)]
-        
-        if output_impls:
-            import weakref
-            from ..core.tracing import OutputRefs
-            
-            _, output_tree_def = pytree.tree_flatten(output, is_leaf=pytree.is_tensor)
-            weak_refs = tuple(weakref.ref(impl) for impl in output_impls)
-            
-            def to_impl(x: Any) -> Any:
-                return x._impl if isinstance(x, Tensor) else x
-            
-            stored_args = pytree.tree_map(to_impl, args) if any_traced else ()
-            stored_kwargs = pytree.tree_map(to_impl, kwargs) if any_traced and kwargs else None
-            
-            output_refs = OutputRefs(
-                _refs=weak_refs,
-                tree_def=output_tree_def,
-                op=self,
-                op_args=stored_args,
-                op_kwargs=stored_kwargs
+        # 3. Setup for execution
+        if is_sharded_execution:
+            # SPMD path: ensure specs and infer shardings
+            args = spmd.ensure_specs(args, mesh)
+            output_sharding, input_shardings, reduce_axes = spmd.infer_output_sharding(
+                self, args, mesh, kwargs or {}
             )
             
-            for idx, impl in enumerate(output_impls):
-                impl.output_refs = output_refs
-                impl.output_index = idx
+            # Reshard inputs if they don't match the propagated requirements
+            # (Note: Replicated->Sharded is skipped by reshard_inputs optimization
+            # so we rely on get_shard_args to slice, avoiding extra graph nodes)
+            args = spmd.reshard_inputs(args, input_shardings, mesh)
+            
+            num_shards = len(mesh.devices)
+        else:
+            # Unsharded path: single execution, no sharding
+            output_sharding = None
+            input_shardings = None
+            reduce_axes = None
+            num_shards = 1
         
-        # JVP mode
-        if any_has_tangent:
-            tangents = pytree.tree_map(
-                lambda x: Tensor(impl=x._impl.tangent) if isinstance(x, Tensor) and x._impl.tangent else None,
-                args
-            )
-            output_tangent = self.jvp_rule(args, tangents, output)
-            if output_tangent is not None:
-                pytree.tree_map(
-                    lambda o, t: setattr(o._impl, 'tangent', t._impl) if isinstance(o, Tensor) and isinstance(t, Tensor) else None,
-                    output, output_tangent
-                )
+        # Helper to convert tensor to value for maxpr
+        def tensor_to_value(x: Any) -> Any:
+            return g.TensorValue(x) if isinstance(x, Tensor) else x
         
-        return output
-    
-    def _call_spmd(self, *args: Any, **kwargs: Any) -> Any:
-        """SPMD execution: run maxpr per-shard and collect results."""
-        from ..core.tensor import Tensor
-        from ..core.compute_graph import GRAPH
-        from ..core import pytree
-        from ..sharding.spec import ShardingSpec, DimSpec
-        from ..sharding import spmd
-        from max import graph as g
-        
-        mesh = spmd.get_mesh_from_args(args)
-        if mesh is None:
-            raise ValueError("SPMD dispatch called but no mesh found")
-        
-        num_shards = len(mesh.devices)
-        
-        # Annotate unsharded inputs as replicated (OPEN so propagation can assign sharding)
-        def ensure_sharding(x: Any) -> Any:
-            if isinstance(x, Tensor) and x._impl.sharding is None:
-                rank = len(x.shape)
-                x._impl.sharding = ShardingSpec(mesh, [DimSpec([], is_open=True) for _ in range(rank)])
-            return x
-        
-        args = pytree.tree_map(ensure_sharding, args)
-        
-        # Collect metadata
-        traced, batch_dims = self._collect_input_metadata(args)
-        
-        # Infer shardings: returns (output_sharding, per_input_shardings, reduce_axes)
-        output_sharding, input_shardings, reduce_axes = spmd.infer_output_sharding(self, args, mesh, kwargs or {})
-        
-        # Execute per-shard, using each input's RESOLVED sharding for slicing
+        # 4. Execute operation (loop or single)
         with GRAPH.graph:
             shard_results = []
             for shard_idx in range(num_shards):
-                shard_args = spmd.get_shard_args(
-                    args, shard_idx, input_shardings, g, Tensor, pytree
-                )
-                shard_results.append(self.maxpr(*shard_args, **kwargs))
+                if is_sharded_execution:
+                    shard_args = spmd.get_shard_args(
+                        args, shard_idx, input_shardings, g, Tensor, pytree
+                    )
+                else:
+                    shard_args = pytree.tree_map(tensor_to_value, args)
+                
+                shard_kwargs = self._transform_shard_kwargs(kwargs, output_sharding, shard_idx)
+                shard_results.append(self.maxpr(*shard_args, **shard_kwargs))
             
             # AllReduce partial results if contracting dimension was sharded
             if reduce_axes:
@@ -159,53 +110,105 @@ class Operation(ABC):
                     shard_results, mesh, reduce_axes, all_reduce_op
                 )
         
-        # Create output
-        output = spmd.create_sharded_output(
-            shard_results, output_sharding, traced, batch_dims, mesh=mesh
-        )
+        # 5. Create output tensors
+        if is_sharded_execution:
+            output = spmd.create_sharded_output(
+                shard_results, output_sharding, any_traced, max_batch_dims, mesh=mesh
+            )
+        else:
+            # Single result for unsharded
+            result = shard_results[0]
+            def value_to_tensor(x: Any) -> Any:
+                if pytree.is_tensor_value(x):
+                    impl = TensorImpl(values=x, traced=any_traced, batch_dims=max_batch_dims)
+                    impl.cache_metadata(x)
+                    return Tensor(impl=impl)
+                return x
+            output = pytree.tree_map(value_to_tensor, result)
         
-        # Reshard if output has pre-annotated constraint
-        return self._check_and_reshard_output(output, output_sharding, kwargs)
+        # 6. Common post-processing
+        self._setup_output_refs(output, args, kwargs, any_traced)
+        
+        if any_has_tangent:
+            self._apply_jvp(args, output)
+        
+        return output
     
-    def _collect_input_metadata(self, args: tuple) -> tuple:
-        """Collect traced and batch_dims info from inputs."""
+    def _setup_output_refs(self, output: Any, args: tuple, kwargs: dict, traced: bool) -> None:
+        """Set up OutputRefs for tracing support."""
         from ..core.tensor import Tensor
         from ..core import pytree
         
-        any_traced = False
-        max_batch_dims = 0
+        output_impls = [x._impl for x in pytree.tree_leaves(output) if isinstance(x, Tensor)]
         
-        for x in pytree.tree_leaves(args):
-            if isinstance(x, Tensor):
-                any_traced = any_traced or x._impl.traced
-                max_batch_dims = max(max_batch_dims, x._impl.batch_dims)
+        if not output_impls:
+            return
         
-        return any_traced, max_batch_dims
+        import weakref
+        from ..core.tracing import OutputRefs
+        
+        _, output_tree_def = pytree.tree_flatten(output, is_leaf=pytree.is_tensor)
+        weak_refs = tuple(weakref.ref(impl) for impl in output_impls)
+        
+        def to_impl(x: Any) -> Any:
+            return x._impl if isinstance(x, Tensor) else x
+        
+        stored_args = pytree.tree_map(to_impl, args) if traced else ()
+        stored_kwargs = pytree.tree_map(to_impl, kwargs) if traced and kwargs else None
+        
+        output_refs = OutputRefs(
+            _refs=weak_refs,
+            tree_def=output_tree_def,
+            op=self,
+            op_args=stored_args,
+            op_kwargs=stored_kwargs
+        )
+        
+        for idx, impl in enumerate(output_impls):
+            impl.output_refs = output_refs
+            impl.output_index = idx
     
-    def _check_and_reshard_output(self, output, computed_sharding, kwargs):
-        """Check if output has pre-annotated sharding and reshard if needed.
-        
-        If the output already has a sharding annotation (from user constraint),
-        and it differs from the computed sharding, insert resharding.
-        """
+    def _apply_jvp(self, args: tuple, output: Any) -> None:
+        """Apply JVP rule to compute output tangents."""
         from ..core.tensor import Tensor
-        from ..sharding import spmd
+        from ..core import pytree
         
-        if not isinstance(output, Tensor):
-            return output
+        tangents = pytree.tree_map(
+            lambda x: Tensor(impl=x._impl.tangent) if isinstance(x, Tensor) and x._impl.tangent else None,
+            args
+        )
+        output_tangent = self.jvp_rule(args, tangents, output)
+        if output_tangent is not None:
+            pytree.tree_map(
+                lambda o, t: setattr(o._impl, 'tangent', t._impl) if isinstance(o, Tensor) and isinstance(t, Tensor) else None,
+                output, output_tangent
+            )
+    
+    def _transform_shard_kwargs(
+        self, 
+        kwargs: dict, 
+        output_sharding: Any, 
+        shard_idx: int
+    ) -> dict:
+        """Transform kwargs for per-shard maxpr execution.
         
-        # Check if there's a pre-annotated target sharding
-        target_sharding = kwargs.get('_target_output_sharding', None)
+        Override this in operations that have shape/target kwargs that need
+        to be converted from GLOBAL to LOCAL for sharded execution.
         
-        if target_sharding is None:
-            return output
+        Examples:
+            - ReshapeOp: converts 'shape' from global to local based on output_sharding
+            - BroadcastToOp: converts 'shape' from global to local
         
-        # Check if resharding is needed
-        if spmd.needs_reshard(computed_sharding, target_sharding):
-            mesh = computed_sharding.mesh if computed_sharding else target_sharding.mesh
-            return spmd.reshard_tensor(output, computed_sharding, target_sharding, mesh)
-        
-        return output
+        Args:
+            kwargs: Original kwargs passed to __call__
+            output_sharding: Inferred output ShardingSpec (or None if replicated)
+            shard_idx: Current shard index being processed
+            
+        Returns:
+            kwargs suitable for this shard's maxpr call
+        """
+        # Default: pass kwargs unchanged (works for elementwise, reduce, etc.)
+        return kwargs
     
     def sharding_rule(
         self,
@@ -245,33 +248,16 @@ class BinaryOperation(Operation):
     
     def __call__(self, x: Tensor, y: Tensor) -> Tensor:
         from ..core.tensor import Tensor
-        from ..sharding import spmd
         
         x_batch = x._impl.batch_dims
         y_batch = y._impl.batch_dims
         out_batch_dims = max(x_batch, y_batch)
         
-        # Check for sharding conflicts BEFORE broadcasting
-        # When ranks differ and both are sharded, broadcast will shift sharding dimensions
-        # which can cause the same mesh axis to end up on different tensor dimensions
-        if x._impl.is_sharded or y._impl.is_sharded:
-            mesh = spmd.get_mesh_from_args((x, y))
-            if mesh and self._will_broadcast_cause_conflict(x, y):
-                # Reshard conflicting inputs to replicated before broadcast
-                x, y = self._reshard_for_broadcast(x, y, mesh)
-        
-        # Now do explicit broadcasting when ranks differ
-        x_rank = len(x.shape)
-        y_rank = len(y.shape)
-        if x_rank != y_rank or x.shape != y.shape:
+        # Explicit broadcasting when shapes differ
+        if len(x.shape) != len(y.shape) or x.shape != y.shape:
             x, y = self._prepare_for_broadcast(x, y, out_batch_dims)
         
-        # Check for sharded inputs - handled by SPMD dispatch
-        if x._impl.is_sharded or y._impl.is_sharded:
-            return super().__call__(x, y)
-        
-        result = super().__call__(x, y)
-        return result
+        return super().__call__(x, y)
     
     def _prepare_for_broadcast(self, x: Tensor, y: Tensor, out_batch_dims: int) -> tuple[Tensor, Tensor]:
         from . import view as view_ops
@@ -320,70 +306,17 @@ class BinaryOperation(Operation):
         # Add batch dims at front (logical axis 0 repeatedly)
         for _ in range(batch_dims_to_add):
             t = view_ops.unsqueeze(t, axis=0)
+            
+        # Update batch_dims if we added any, so that subsequent logical ops 
+        # (like unsqueeze for logical dims) respect the new batch structure.
+        if batch_dims_to_add > 0:
+            t._impl.batch_dims = target_batch_dims
+            
         # Add logical dims (at position = target_batch_dims, which is logical 0 after batch adds)
         for _ in range(logical_dims_to_add):
             t = view_ops.unsqueeze(t, axis=0)
         
         return t
-    
-    def _will_broadcast_cause_conflict(self, x, y) -> bool:
-        """Check if broadcasting will shift sharding to different dimensions, causing conflict."""
-        x_spec = x._impl.sharding
-        y_spec = y._impl.sharding
-        
-        # If only one is sharded, no conflict
-        if not (x_spec and y_spec):
-            return False
-            
-        x_has_sharding = any(d.axes for d in x_spec.dim_specs)
-        y_has_sharding = any(d.axes for d in y_spec.dim_specs)
-        
-        if not (x_has_sharding and y_has_sharding):
-            return False
-            
-        # Determine output rank
-        x_rank = len(x.shape)
-        y_rank = len(y.shape)
-        out_rank = max(x_rank, y_rank)
-        
-        # Helper to map axes to output dimensions (suffix alignment)
-        def get_axis_map(tensor, current_rank, target_rank):
-            axis_to_dims = {}
-            spec = tensor._impl.sharding
-            offset = target_rank - current_rank
-            for dim_idx, dim_spec in enumerate(spec.dim_specs):
-                out_dim = dim_idx + offset
-                for ax in dim_spec.axes:
-                    axis_to_dims.setdefault(ax, set()).add(out_dim)
-            return axis_to_dims
-            
-        x_map = get_axis_map(x, x_rank, out_rank)
-        y_map = get_axis_map(y, y_rank, out_rank)
-        
-        # Check for conflicts
-        for axis in set(x_map) & set(y_map):
-            if x_map[axis] != y_map[axis]:
-                return True
-        
-        return False
-    
-    def _reshard_for_broadcast(self, x, y, mesh):
-        """Reshard inputs to replicated to avoid broadcast conflicts."""
-        from ..ops.communication import all_gather
-        
-        def make_replicated(t):
-            if not t._impl.is_sharded:
-                return t
-            spec = t._impl.sharding
-            if not spec:
-                return t
-            result = t
-            for dim_idx, dim_spec in enumerate(spec.dim_specs):
-                if dim_spec.axes:
-                    result = all_gather(result, axis=dim_idx)
-            return result
-        
-        return make_replicated(x), make_replicated(y)
     
     @staticmethod
     def _broadcast_shapes(shape1: tuple, shape2: tuple) -> tuple:

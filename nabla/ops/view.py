@@ -143,70 +143,16 @@ class BroadcastToOp(LogicalShapeOperation):
         """Output shape is the target shape."""
         return kwargs.get("shape", input_shapes[0])
     
-    def _call_spmd(self, *args, **kwargs):
-        """SPMD execution for broadcast_to: compute local target shape per shard.
+    def _transform_shard_kwargs(self, kwargs: dict, output_sharding, shard_idx: int) -> dict:
+        """Convert global target shape to local shape for each shard."""
+        from ..sharding.spec import compute_local_shape
         
-        Like ReshapeOp, broadcast_to needs to compute the LOCAL target shape
-        based on the output sharding.
-        """
-        from ..core.tensor import Tensor
-        from ..core.compute_graph import GRAPH
-        from ..core import pytree
-        from ..sharding.spec import ShardingSpec, DimSpec, compute_local_shape
-        from ..sharding import spmd
-        from max import graph as g
+        global_shape = kwargs.get('shape')
+        if global_shape is None or output_sharding is None:
+            return kwargs
         
-        mesh = spmd.get_mesh_from_args(args)
-        if mesh is None:
-            raise ValueError("SPMD dispatch called but no mesh found")
-        
-        num_shards = len(mesh.devices)
-        global_target_shape = kwargs.get('shape')
-        
-        # Annotate unsharded inputs as replicated
-        def ensure_sharding(x):
-            if isinstance(x, Tensor) and x._impl.sharding is None:
-                rank = len(x.shape)
-                x._impl.sharding = ShardingSpec(mesh, [DimSpec([], is_open=True) for _ in range(rank)])
-            return x
-        
-        args = pytree.tree_map(ensure_sharding, args)
-        
-        # Collect metadata
-        traced, batch_dims = self._collect_input_metadata(args)
-        
-        # Infer output sharding using propagation
-        output_sharding, input_shardings, needs_allreduce = spmd.infer_output_sharding(self, args, mesh, kwargs)
-        
-        # Compute LOCAL target shape based on output sharding
-        # If output is replicated (None sharding), local shape = global shape
-        if output_sharding is None:
-            local_target_shape = global_target_shape
-        else:
-            local_target_shape = compute_local_shape(global_target_shape, output_sharding, device_id=0)
-        
-        # Execute per-shard with LOCAL target shape
-        with GRAPH.graph:
-            shard_results = []
-            for shard_idx in range(num_shards):
-                shard_args = spmd.get_shard_args(
-                    args, shard_idx, input_shardings, g, Tensor, pytree
-                )
-                # Use LOCAL target shape for each shard
-                local_kwargs = dict(kwargs)
-                local_kwargs['shape'] = local_target_shape
-                shard_results.append(self.maxpr(*shard_args, **local_kwargs))
-            
-            if needs_allreduce and len(shard_results) > 1:
-                from .communication import all_reduce_op
-                shard_results = all_reduce_op.maxpr(shard_results, mesh=mesh)
-        
-        # Create output
-        output = spmd.create_sharded_output(
-            shard_results, output_sharding, traced, batch_dims, mesh=mesh
-        )
-        
-        return self._check_and_reshard_output(output, output_sharding, kwargs)
+        local_shape = compute_local_shape(global_shape, output_sharding, device_id=shard_idx)
+        return {**kwargs, 'shape': local_shape}
 
 
 class ReshapeOp(LogicalShapeOperation):
@@ -231,79 +177,16 @@ class ReshapeOp(LogicalShapeOperation):
             
         return reshape_template(input_shapes[0], target_shape).instantiate(input_shapes, output_shapes)
     
-    def _call_spmd(self, *args, **kwargs):
-        """SPMD execution for reshape: compute local target shape per shard.
+    def _transform_shard_kwargs(self, kwargs: dict, output_sharding, shard_idx: int) -> dict:
+        """Convert global target shape to local shape for each shard."""
+        from ..sharding.spec import compute_local_shape
         
-        The key insight: when reshaping a sharded tensor, each shard has a 
-        LOCAL shape that differs from the GLOBAL shape. We need to compute
-        the LOCAL target shape based on the output sharding.
+        global_shape = kwargs.get('shape')
+        if global_shape is None or output_sharding is None:
+            return kwargs
         
-        Example:
-            Global: (8, 4) sharded on dim 0 with 2 shards
-            Local per shard: (4, 4)
-            Target global: (2, 4, 4)
-            Target output sharding: sharded on dim 0
-            Target local per shard: (1, 4, 4)
-        """
-        from ..core.tensor import Tensor
-        from ..core.compute_graph import GRAPH
-        from ..core import pytree
-        from ..sharding.spec import ShardingSpec, DimSpec, compute_local_shape
-        from ..sharding import spmd
-        from max import graph as g
-        
-        mesh = spmd.get_mesh_from_args(args)
-        if mesh is None:
-            raise ValueError("SPMD dispatch called but no mesh found")
-        
-        num_shards = len(mesh.devices)
-        global_target_shape = kwargs.get('shape')
-        
-        # Annotate unsharded inputs as replicated
-        def ensure_sharding(x):
-            if isinstance(x, Tensor) and x._impl.sharding is None:
-                rank = len(x.shape)
-                x._impl.sharding = ShardingSpec(mesh, [DimSpec([], is_open=True) for _ in range(rank)])
-            return x
-        
-        args = pytree.tree_map(ensure_sharding, args)
-        
-        # Collect metadata
-        traced, batch_dims = self._collect_input_metadata(args)
-        
-        # Infer output sharding using propagation
-        output_sharding, input_shardings, needs_allreduce = spmd.infer_output_sharding(self, args, mesh, kwargs)
-        
-        # Compute LOCAL target shape based on output sharding
-        # If output is replicated (None sharding), local shape = global shape
-        if output_sharding is None:
-            local_target_shape = global_target_shape
-        else:
-            local_target_shape = compute_local_shape(global_target_shape, output_sharding, device_id=0)
-        
-        # Execute per-shard with LOCAL target shape
-        with GRAPH.graph:
-            shard_results = []
-            for shard_idx in range(num_shards):
-                shard_args = spmd.get_shard_args(
-                    args, shard_idx, input_shardings, g, Tensor, pytree
-                )
-                # Use LOCAL target shape for each shard
-                local_kwargs = dict(kwargs)
-                local_kwargs['shape'] = local_target_shape
-                shard_results.append(self.maxpr(*shard_args, **local_kwargs))
-            
-            # AllReduce if needed (unlikely for reshape but keep for consistency)
-            if needs_allreduce and len(shard_results) > 1:
-                from .communication import all_reduce_op
-                shard_results = all_reduce_op.maxpr(shard_results, mesh=mesh)
-        
-        # Create output
-        output = spmd.create_sharded_output(
-            shard_results, output_sharding, traced, batch_dims, mesh=mesh
-        )
-        
-        return self._check_and_reshard_output(output, output_sharding, kwargs)
+        local_shape = compute_local_shape(global_shape, output_sharding, device_id=shard_idx)
+        return {**kwargs, 'shape': local_shape}
 
 
 _unsqueeze_op = UnsqueezeOp()

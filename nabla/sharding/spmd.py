@@ -32,6 +32,74 @@ def get_mesh_from_args(args: tuple) -> Optional["DeviceMesh"]:
     return None
 
 
+def ensure_specs(args: tuple, mesh: Optional["DeviceMesh"]) -> tuple:
+    """Ensure all tensors have explicit sharding specs.
+    
+    For unsharded tensors, assigns a replicated spec (all dims have empty axes).
+    This allows the unified SPMD dispatch to treat all tensors uniformly.
+    """
+    if mesh is None:
+        return args
+    
+    from ..core.tensor import Tensor
+    from ..core import pytree
+    from ..sharding.spec import ShardingSpec, DimSpec
+    
+    def assign_spec(x):
+        if not isinstance(x, Tensor):
+            return x
+        if x._impl.sharding is not None:
+            return x
+        rank = len(x.shape)
+        x._impl.sharding = ShardingSpec(mesh, [DimSpec([], is_open=True) for _ in range(rank)])
+        return x
+    
+    return pytree.tree_map(assign_spec, args)
+
+
+def reshard_inputs(
+    args: tuple, 
+    required_specs: "List[Optional[ShardingSpec]]", 
+    mesh: Optional["DeviceMesh"]
+) -> tuple:
+    """Pre-operation resharding: align inputs to their required specs.
+    
+    For each tensor input, compares its current sharding to the required sharding
+    from propagation. If they differ, inserts communication ops.
+    """
+    if mesh is None or not required_specs:
+        return args
+    
+    from ..core.tensor import Tensor
+    from ..core import pytree
+    
+    leaves = [a for a in pytree.tree_leaves(args) if isinstance(a, Tensor)]
+    if len(leaves) != len(required_specs):
+        return args
+    
+    tensor_to_spec = {id(t): spec for t, spec in zip(leaves, required_specs)}
+    
+    def reshard_if_needed(x):
+        if not isinstance(x, Tensor):
+            return x
+        required = tensor_to_spec.get(id(x))
+        if required is None:
+            return x
+        
+        current = x._impl.sharding
+        
+        # Optimization: If input is replicated/unsharded, do NOT insert a Reshard op.
+        # get_shard_args will handle slicing the replicated tensor directly.
+        if current is None or current.is_fully_replicated():
+            return x
+            
+        if not needs_reshard(current, required):
+            return x
+        return reshard_tensor(x, current, required, mesh)
+    
+    return pytree.tree_map(reshard_if_needed, args)
+
+
 def infer_output_sharding(
     op: Any,
     args: tuple,
@@ -202,39 +270,56 @@ def needs_reshard(from_spec: Optional["ShardingSpec"], to_spec: Optional["Shardi
 def detect_sharding_conflict(
     output_sharding: Optional["ShardingSpec"],
     input_shardings: "List[Optional[ShardingSpec]]",
+    input_shapes: "List[tuple[int, ...]]" = None,
 ) -> bool:
     """Detect if inputs have conflicting shardings that require resharding.
     
     A conflict exists when:
     1. Same mesh axis is used for DIFFERENT tensor dimensions across inputs
-       (e.g., input A uses "x" for dim0, input B uses "x" for dim1)
+       (considering broadcast alignment - smaller tensors align to suffix)
     2. Output is replicated but inputs have different sharded dimensions
+    
+    Args:
+        output_sharding: Sharding for output (or None if replicated)
+        input_shardings: List of input sharding specs
+        input_shapes: Optional list of input shapes for broadcast alignment.
+            If provided, dimensions are aligned to output using suffix rule.
     
     Returns:
         True if conflict detected (should reshard to replicated)
     """
-    # Collect non-None specs
+    # Collect non-None specs with their indices
     valid_specs = [(i, s) for i, s in enumerate(input_shardings) if s is not None]
     if len(valid_specs) < 2:
         return False
     
-    # Check 1: Mesh axis conflict - same axis for different dimensions
-    # Build mapping: axis_name -> set of dim indices it's used for
-    axis_to_dims: dict = {}
-    for _, spec in valid_specs:
-        for dim_idx, dim_spec in enumerate(spec.dim_specs):
-            for axis_name in dim_spec.axes:
-                if axis_name not in axis_to_dims:
-                    axis_to_dims[axis_name] = set()
-                axis_to_dims[axis_name].add(dim_idx)
+    # Determine output rank for broadcast alignment
+    if input_shapes:
+        out_rank = max(len(s) for s in input_shapes)
+    else:
+        out_rank = max(len(s.dim_specs) for _, s in valid_specs)
     
-    # If any axis is used for different dim indices, that's a conflict
-    for axis_name, dims_used in axis_to_dims.items():
+    # Check 1: Mesh axis conflict - same axis for different OUTPUT dimensions
+    # Build mapping: axis_name -> set of OUTPUT dim indices it's used for
+    axis_to_output_dims: dict = {}
+    for i, spec in valid_specs:
+        current_rank = len(spec.dim_specs)
+        offset = out_rank - current_rank  # Suffix alignment offset
+        
+        for dim_idx, dim_spec in enumerate(spec.dim_specs):
+            output_dim = dim_idx + offset  # Map to output dimension
+            for axis_name in dim_spec.axes:
+                if axis_name not in axis_to_output_dims:
+                    axis_to_output_dims[axis_name] = set()
+                axis_to_output_dims[axis_name].add(output_dim)
+    
+    # If any axis maps to different output dimensions, that's a conflict
+    for axis_name, dims_used in axis_to_output_dims.items():
         if len(dims_used) > 1:
-            # Same mesh axis used for different tensor dimensions!
+            # Same mesh axis would end up on different output dimensions!
             return True
     
-    # Check 2: Original conflict - different dimensions sharded
+    # Check 2: Output replicated but inputs sharded on different dimensions
     output_is_replicated = (
         output_sharding is None or
         all(not d.axes for d in output_sharding.dim_specs)
@@ -242,8 +327,11 @@ def detect_sharding_conflict(
     
     if output_is_replicated:
         sharded_dims_per_input = []
-        for _, spec in valid_specs:
-            dims_with_axes = {i for i, d in enumerate(spec.dim_specs) if d.axes}
+        for i, spec in valid_specs:
+            current_rank = len(spec.dim_specs)
+            offset = out_rank - current_rank
+            # Map to output dimensions
+            dims_with_axes = {dim_idx + offset for dim_idx, d in enumerate(spec.dim_specs) if d.axes}
             if dims_with_axes:
                 sharded_dims_per_input.append(dims_with_axes)
         
