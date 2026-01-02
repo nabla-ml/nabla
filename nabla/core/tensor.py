@@ -151,9 +151,8 @@ class Tensor(DLPackArray, HasTensorValue):
     ) -> Tensor:
         """Shard this tensor across a device mesh.
         
-        This is a FUNCTIONAL operation that eagerly slices the tensor into
-        multiple TensorValues (one per shard). The returned tensor has
-        `len(mesh.devices)` internal values.
+        This handles both initial sharding of replicated tensors AND resharding
+        of already sharded tensors.
         
         Args:
             mesh: DeviceMesh to shard across
@@ -162,17 +161,21 @@ class Tensor(DLPackArray, HasTensorValue):
         
         Returns:
             New tensor with multiple TensorValues (one per shard)
-        
-        Example:
-            x_sharded = x.shard(mesh, [DimSpec(["data"]), DimSpec([])])
         """
-        from ..ops.communication import shard as shard_op
-        # ShardOp handles the actual slicing and returns a new tensor
-        result = shard_op(self, mesh, dim_specs)
-        # Set replicated_axes if provided
-        if replicated_axes and result._impl.sharding:
-            result._impl.sharding.replicated_axes = replicated_axes
-        return result
+        from ..sharding import ShardingSpec
+        
+        # Construct target spec
+        target_spec = ShardingSpec(mesh, dim_specs, replicated_axes=replicated_axes or set())
+        
+        if self._impl.sharding:
+            from_spec = self._impl.sharding
+        else:
+            # Implicitly fully replicated if unsharded
+            from_spec = None # reshard_tensor handles None -> replicated logic
+            
+        from ..sharding.spmd import reshard_tensor
+        return reshard_tensor(self, from_spec, target_spec, mesh)
+
     
     def with_sharding(
         self,

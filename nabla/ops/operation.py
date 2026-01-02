@@ -87,6 +87,8 @@ class Operation(ABC):
                 )
                 
                 shard_kwargs = self._transform_shard_kwargs(kwargs, output_sharding, shard_idx)
+                if shard_kwargs is None:
+                    shard_kwargs = {}
                 shard_results.append(self.maxpr(*shard_args, **shard_kwargs))
             
             # AllReduce partial results if contracting dimension was sharded
@@ -201,7 +203,16 @@ class Operation(ABC):
         """
         # Default: pass kwargs unchanged (works for elementwise, reduce, etc.)
         return kwargs
-    
+
+    def infer_output_rank(self, input_shapes: tuple[tuple[int, ...], ...], **kwargs) -> int:
+        """Infer output rank from input shapes.
+        
+        Default implementation assumes element-wise operation (output rank equals input rank).
+        """
+        if not input_shapes:
+            return 0
+        return len(input_shapes[0])
+
     def sharding_rule(
         self,
         input_shapes: list[tuple[int, ...]],
@@ -214,9 +225,25 @@ class Operation(ABC):
         By default, assumes all inputs and output share the same factors
         (elementwise behavior).
         """
-        from ..sharding.propagation import elementwise_template, unary_template
-        output_rank = len(output_shapes[0]) if output_shapes else len(input_shapes[0])
+        from ..sharding.propagation import elementwise_template, unary_template, broadcast_template
+        
         n_inputs = len(input_shapes)
+        
+        # Handle cases where ranks differ (e.g. broadcasting elementwise)
+        if output_shapes and input_shapes:
+             out_rank = len(output_shapes[0])
+             # Check if any input rank differs from output rank (broadcasting needed)
+             if any(len(s) != out_rank for s in input_shapes):
+                  # TODO: This assumes standard suffix-alignment broadcasting for all mismatched ops.
+                  # Ideally, we should use a multi-input broadcast template, but for now 
+                  # standard propagation handles mismatch via 'new' factors if using correct rules.
+                  # A truly generic broadcast elementwise rule is complex.
+                  # For now, we rely on the specific overrides in Binary/Unary ops if needed,
+                  # or fallback to elementwise if ranks match.
+                  pass
+
+        # Standard elementwise
+        output_rank = len(output_shapes[0]) if output_shapes else len(input_shapes[0])
         if n_inputs == 1:
             return unary_template(output_rank).instantiate(input_shapes, output_shapes)
         else:
@@ -328,18 +355,7 @@ class BinaryOperation(Operation):
                 raise ValueError(f"Cannot broadcast shapes {shape1} and {shape2}")
         return tuple(result)
 
-    def sharding_rule(
-        self,
-        input_shapes: list[tuple[int, ...]],
-        output_shapes: list[tuple[int, ...]],
-    ) -> Any:
-        # Default to elementwise behavior for binary ops
-        from ..sharding.propagation import elementwise_template
-        # Use output rank to determine template
-        if not output_shapes:
-            return None
-        rank = len(output_shapes[0])
-        return elementwise_template(rank).instantiate(input_shapes, output_shapes)
+
 
 
 class LogicalAxisOperation(Operation):

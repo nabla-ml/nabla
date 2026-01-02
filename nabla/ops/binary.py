@@ -100,10 +100,23 @@ class MatmulOp(Operation):
         
         a_rank = len(input_shapes[0])
         b_rank = len(input_shapes[1])
-        out_rank = len(output_shapes[0])
+        a_rank = len(input_shapes[0])
+        b_rank = len(input_shapes[1])
         
-        # If ranks differ, use broadcast template
+        # Infer output rank from inputs if not provided
+        if output_shapes:
+            out_rank = len(output_shapes[0])
+        else:
+            # Matmul logic: output rank = max(a_rank, b_rank) approx (modulo broadcasting)
+            # Actually, standard matmul (batch..., m, k) @ (batch..., k, n) -> (batch..., m, n)
+            # Input ranks: B+2, B+2 -> B+2 (same).
+            # Broadcast matmul: (batch..., m, k) @ (k, n) -> (batch..., m, n). Rank: B+2, 2 -> B+2.
+            # So out_rank matches whichever input has batch dims (larger rank).
+            out_rank = max(a_rank, b_rank)
+        
+        # If ranks differ, use broadcast template (or standard if ranks match)
         if a_rank != b_rank:
+            # broadcast_matmul_template signature needs out_rank for factor generation
             return broadcast_matmul_template(a_rank, b_rank, out_rank).instantiate(
                 input_shapes, output_shapes
             )

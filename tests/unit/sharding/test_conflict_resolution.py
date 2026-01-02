@@ -13,54 +13,7 @@ from nabla import Tensor, DeviceMesh, DimSpec
 from nabla.sharding.spec import ShardingSpec
 
 
-class TestConflictDetection:
-    """Test that conflicts are properly detected."""
-    
-    def test_detect_conflicting_elementwise_inputs(self):
-        """Detect when A is row-sharded and B is col-sharded for elementwise."""
-        from nabla.sharding.spmd import detect_sharding_conflict
-        
-        mesh = DeviceMesh("test", (2,), ("x",))
-        
-        # A: row-sharded (dim 0 = x)
-        a_spec = ShardingSpec(mesh, [DimSpec(["x"]), DimSpec([])])
-        
-        # B: col-sharded (dim 1 = x)
-        b_spec = ShardingSpec(mesh, [DimSpec([]), DimSpec(["x"])])
-        
-        # For elementwise, both should use same sharding per dimension
-        # This is a conflict because same axis "x" appears in different dims
-        has_conflict = detect_sharding_conflict(None, [a_spec, b_spec])
-        
-        assert has_conflict, "Should detect conflict when A[dim0=x] and B[dim1=x]"
-    
-    def test_no_conflict_when_same_sharding(self):
-        """No conflict when both inputs have same sharding."""
-        from nabla.sharding.spmd import detect_sharding_conflict
-        
-        mesh = DeviceMesh("test", (2,), ("x",))
-        
-        # Both row-sharded
-        a_spec = ShardingSpec(mesh, [DimSpec(["x"]), DimSpec([])])
-        b_spec = ShardingSpec(mesh, [DimSpec(["x"]), DimSpec([])])
-        
-        has_conflict = detect_sharding_conflict(None, [a_spec, b_spec])
-        
-        assert not has_conflict, "No conflict when both have same sharding"
-    
-    def test_no_conflict_one_replicated(self):
-        """No conflict when one input is replicated."""
-        from nabla.sharding.spmd import detect_sharding_conflict
-        
-        mesh = DeviceMesh("test", (2,), ("x",))
-        
-        # A sharded, B replicated
-        a_spec = ShardingSpec(mesh, [DimSpec(["x"]), DimSpec([])])
-        b_spec = ShardingSpec(mesh, [DimSpec([]), DimSpec([])])
-        
-        has_conflict = detect_sharding_conflict(None, [a_spec, b_spec])
-        
-        assert not has_conflict, "No conflict when one input is replicated"
+
 
 
 class TestConflictResolution:

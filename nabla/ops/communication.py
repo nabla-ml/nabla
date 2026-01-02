@@ -46,11 +46,18 @@ class ShardOp(Operation):
     def name(self) -> str:
         return "shard"
     
+    def infer_sharding_spec(self, args, mesh, kwargs):
+        spec = kwargs['spec']
+        # Return input sharding to allow partial reuse/identity
+        input_spec = args[0]._impl.sharding
+        return spec, [input_spec], False
+    
     def maxpr(
         self,
         x: TensorValue,
         mesh: DeviceMesh,
         dim_specs: List[DimSpec],
+        **kwargs: Any,
     ) -> List[TensorValue]:
         """Create sharded TensorValues by slicing the input.
         
@@ -58,74 +65,90 @@ class ShardOp(Operation):
             x: Single TensorValue to shard
             mesh: Device mesh defining the shard topology
             dim_specs: Per-dimension sharding specification
-            
-        Returns:
-            List of TensorValues, one per shard
+            kwargs: Must include 'shard_idx' or we are in manual call mode?
+                    If manual call (e.g. simulation loop in ShardOp.__call__), we loop over shards.
         """
-        from ..sharding.spec import ShardingSpec
+        from ..sharding.spec import ShardingSpec, compute_local_shape
         
-        num_shards = len(mesh.devices)
+        # Determine execution context
+        # If kwargs contains shard_idx, we are in SPMD execution (called by Operation.__call__)
+        # If not, we are in ShardOp.__call__ (manual loop) or similar.
+        
         global_shape = tuple(int(d) for d in x.type.shape)
+        # Note: If x is sharded, default type.shape is local shape!
+        # But ShardOp inputs are sometimes global (in simulation) or local.
+        # We need to rely on what Operation.__call__ passes.
+        # In SPMD mode, args[0] is the local shard of input.
+        
         spec = ShardingSpec(mesh, dim_specs)
         
+        # If operating in SPMD mode
+        if "shard_idx" in kwargs:
+             shard_idx = kwargs["shard_idx"]
+             return self._slice_for_device(x, global_shape, spec, shard_idx, mesh)
+        
+        # Manual loop mode (simulated execution called from ShardOp.__call__)
+        num_shards = len(mesh.devices)
         shard_values = []
         for shard_idx in range(num_shards):
-            # Compute slice for this shard
-            slices = self._compute_shard_slice(global_shape, spec, shard_idx)
-            shard_val = x[slices]
+            val = self._slice_for_device(x, global_shape, spec, shard_idx, mesh)
             
-            # Place on designated device if distributed
             if _is_distributed(mesh):
-                shard_val = ops.transfer_to(shard_val, mesh.device_refs[shard_idx])
+                val = ops.transfer_to(val, mesh.device_refs[shard_idx])
+            shard_values.append(val)
             
-            shard_values.append(shard_val)
-        
         return shard_values
-    
-    def _compute_shard_slice(
-        self,
-        global_shape: tuple,
-        spec: ShardingSpec,
-        shard_idx: int,
-    ) -> tuple:
-        """Compute slice indices for a specific shard."""
-        slices = []
+
+    def _slice_for_device(self, x, global_shape, spec, shard_idx, mesh):
+        from ..sharding.spec import compute_local_shape
         
-        for dim_idx, dim_len in enumerate(global_shape):
-            if dim_idx >= len(spec.dim_specs):
-                slices.append(slice(None))
+        # Target local shape for this device
+        target_local_shape = compute_local_shape(global_shape, spec, shard_idx)
+        
+        slices = []
+        for d, (t_len, g_len) in enumerate(zip(target_local_shape, global_shape)):
+            # Check input dimension length
+            inp_len = int(x.type.shape[d])
+            
+            if inp_len == t_len:
+                # Identity slice (input matches target)
+                slices.append(slice(0, t_len))
                 continue
             
-            dim_spec = spec.dim_specs[dim_idx]
-            
-            if not dim_spec.axes:
-                # Replicated - full slice
-                slices.append(slice(None))
-                continue
-            
-            # Compute shard position and size
+            # Must compute offset in global coords
+            # (Re-implementing logic from compute_local_shape to get offset)
+            dim_spec = spec.dim_specs[d]
             total_shards = 1
             my_shard_pos = 0
-            
             for axis_name in dim_spec.axes:
-                size = spec.mesh.get_axis_size(axis_name)
-                coord = spec.mesh.get_coordinate(shard_idx, axis_name)
+                size = mesh.get_axis_size(axis_name)
+                coord = mesh.get_coordinate(shard_idx, axis_name)
                 my_shard_pos = (my_shard_pos * size) + coord
                 total_shards *= size
             
-            chunk_size = math.ceil(dim_len / total_shards)
+            chunk_size = math.ceil(g_len / total_shards)
             start = my_shard_pos * chunk_size
+            start = min(start, g_len)
             
-            # Ensure start is within bounds (MAX Graph slice op errors if start > length)
-            # For empty shards at the end of uneven splits, start can be > dim_len
-            start = min(start, dim_len)
-            
-            # End is always clamped to dim_len
-            end = min(start + chunk_size, dim_len)
-            slices.append(slice(start, end))
-        
-        return tuple(slices)
-    
+            # If input is GLOBAL length, slice from start
+            if inp_len == g_len:
+                # Normal slice
+                end = min(start + chunk_size, g_len)
+                slices.append(slice(start, end))
+            else:
+                 # Input length mismatch?
+                 # If input is not target length AND not global length, we might have an issue.
+                 # E.g. input is sharded differently.
+                 # But infer_sharding_spec only allowed reuse if input_spec was compatible.
+                 # For now, assume it must be global if not matching target.
+                 # Or check robustness.
+                 # If we are here, we fallback to slicing assuming input is global?
+                 # This might fail if input is partial.
+                 end = min(start + chunk_size, g_len)
+                 slices.append(slice(start, end))
+                 
+        return x[tuple(slices)]
+
     def __call__(self, x, mesh: DeviceMesh, dim_specs: List[DimSpec]):
         """Shard a tensor according to the given specification.
         
@@ -179,21 +202,12 @@ class ShardOp(Operation):
         
         return Tensor(impl=impl)
     
+    
     def _compute_global_from_local(self, local_shape, sharding):
-        """Compute global shape from local shard shape and sharding spec."""
-        from max import graph
-        
-        global_dims = []
-        for dim_idx, dim in enumerate(local_shape):
-            dim_val = int(dim)
-            if dim_idx < len(sharding.dim_specs):
-                dim_spec = sharding.dim_specs[dim_idx]
-                if dim_spec.axes:
-                    shard_count = dim_spec.get_total_shards(sharding.mesh)
-                    dim_val = dim_val * shard_count
-            global_dims.append(dim_val)
-        
-        return graph.Shape(global_dims)
+        """Deprecated: use spmd.compute_global_shape."""
+        from ..sharding.spmd import compute_global_shape
+        return compute_global_shape(local_shape, sharding)
+
 
 
 class AllGatherOp(Operation):
@@ -298,6 +312,11 @@ class AllGatherOp(Operation):
             if axis < len(sharding.dim_specs) and sharding.dim_specs[axis].axes:
                 sharded_axis_name = sharding.dim_specs[axis].axes[0]
         
+        # Ensure values exist (hydrate from storage if needed)
+        with GRAPH.graph:
+            from ..sharding.spmd import ensure_shard_values
+            ensure_shard_values(sharded_tensor)
+            
         if not sharded_tensor._impl._values or len(sharded_tensor._impl._values) <= 1:
             # Physically gathered (single value) but logically sharded.
             # We just need to update the metadata to be replicated.

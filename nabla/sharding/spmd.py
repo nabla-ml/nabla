@@ -113,19 +113,19 @@ def infer_output_sharding(
     by propagation and returned for per-input slicing.
     
     Returns:
-        Tuple of (output_sharding, input_shardings, needs_allreduce) where:
-        - output_sharding: ShardingSpec for output tensor
-        - input_shardings: list of propagated shardings for each input tensor
-        - needs_allreduce: True if contracting factors are sharded (partial results)
+        Tuple of (output_sharding, input_shardings, needs_allreduce)
     """
     if mesh is None:
         return None, [], False
+        
+    # Hook for Ops that define explicit sharding logic (bypassing propagation)
+    if hasattr(op, "infer_sharding_spec"):
+        return op.infer_sharding_spec(args, mesh, kwargs)
 
     from ..core.tensor import Tensor
     from ..core import pytree
     from ..sharding.spec import ShardingSpec, DimSpec
     from ..sharding.propagation import propagate_sharding
-    from typing import Tuple, List
     
     # Collect input specs and shapes
     leaves = [a for a in pytree.tree_leaves(args) if isinstance(a, Tensor)]
@@ -141,31 +141,22 @@ def infer_output_sharding(
             rank = len(t.shape)
             spec = ShardingSpec(mesh, [DimSpec([], is_open=True) for _ in range(rank)])
         input_specs.append(spec)
-        
-        # t.shape is already global shape (Tensor exposes global shape to user)
         input_shapes.append(tuple(int(d) for d in t.shape))
     
     if not any(spec.dim_specs and any(d.axes for d in spec.dim_specs) for spec in input_specs):
         return None, input_specs, False  # All inputs replicated
     
-    # Estimate output shape - ask operation if it provides a method, else heuristics
+    # Use rank inference instead of full shape inference
     try:
-        output_shape = op.infer_output_shape(input_shapes, **(kwargs or {}))
+        output_rank = op.infer_output_rank(input_shapes, **(kwargs or {}))
     except (NotImplementedError, AttributeError):
-        # Heuristics for common operations
-        if len(input_shapes) == 2 and len(input_shapes[0]) >= 2 and len(input_shapes[1]) >= 2:
-            # Matmul-like: (batch..., m, k) @ (batch..., k, n) -> (batch..., m, n)
-            a_shape, b_shape = input_shapes[0], input_shapes[1]
-            batch_dims = max(len(a_shape), len(b_shape)) - 2
-            batch_shape = a_shape[:batch_dims] if batch_dims > 0 else ()
-            output_shape = batch_shape + (a_shape[-2], b_shape[-1])
-        else:
-            # Fallback: same as first input (elementwise)
-            output_shape = input_shapes[0] if input_shapes else ()
-    
+        output_rank = len(input_shapes[0]) if input_shapes else 0
+
     # Get sharding rule from operation
     try:
-        rule = op.sharding_rule(input_shapes, [output_shape], **(kwargs or {}))
+        # We pass output_shapes=None to indicate we don't have full shapes
+        # The template instantiation will rely on input shapes for factor sizing
+        rule = op.sharding_rule(input_shapes, None, **(kwargs or {}))
     except (NotImplementedError, AttributeError):
         # Fallback to elementwise-like behavior: inherit from first sharded
         for spec in input_specs:
@@ -173,8 +164,7 @@ def infer_output_sharding(
                 return spec, input_specs, False
         return None, input_specs, False
     
-    # Create empty output spec
-    output_rank = len(output_shape)
+    # Create empty output spec based on rank
     output_spec = ShardingSpec(mesh, [DimSpec([], is_open=True) for _ in range(output_rank)])
     
     # Run factor-based propagation - updates input_specs and output_spec in-place
@@ -183,7 +173,6 @@ def infer_output_sharding(
     # Check if any contracting factors are sharded (need AllReduce for partial results)
     needs_allreduce = _check_contracting_factors_sharded(rule, input_specs)
     
-    # print(f"DEBUG: infer_output_sharding returning spec len={len(output_spec.dim_specs)}")
     return output_spec, input_specs, needs_allreduce
 
 
@@ -219,15 +208,7 @@ def _check_contracting_factors_sharded(
 
 
 
-# Keep backward-compatible alias
-def infer_output_sharding_elementwise(args: tuple, mesh: "DeviceMesh") -> Optional["ShardingSpec"]:
-    """Deprecated: use infer_output_sharding with op argument."""
-    from ..core.tensor import Tensor
-    from ..core import pytree
-    for a in pytree.tree_leaves(args):
-        if isinstance(a, Tensor) and a._impl.is_sharded and a._impl.sharding:
-            return a._impl.sharding
-    return None
+
 
 
 # ============================================================================
@@ -270,81 +251,7 @@ def needs_reshard(from_spec: Optional["ShardingSpec"], to_spec: Optional["Shardi
     return any(f.axes != t.axes for f, t in zip(from_spec.dim_specs, to_spec.dim_specs))
 
 
-def detect_sharding_conflict(
-    output_sharding: Optional["ShardingSpec"],
-    input_shardings: "List[Optional[ShardingSpec]]",
-    input_shapes: "List[tuple[int, ...]]" = None,
-) -> bool:
-    """Detect if inputs have conflicting shardings that require resharding.
-    
-    A conflict exists when:
-    1. Same mesh axis is used for DIFFERENT tensor dimensions across inputs
-       (considering broadcast alignment - smaller tensors align to suffix)
-    2. Output is replicated but inputs have different sharded dimensions
-    
-    Args:
-        output_sharding: Sharding for output (or None if replicated)
-        input_shardings: List of input sharding specs
-        input_shapes: Optional list of input shapes for broadcast alignment.
-            If provided, dimensions are aligned to output using suffix rule.
-    
-    Returns:
-        True if conflict detected (should reshard to replicated)
-    """
-    # Collect non-None specs with their indices
-    valid_specs = [(i, s) for i, s in enumerate(input_shardings) if s is not None]
-    if len(valid_specs) < 2:
-        return False
-    
-    # Determine output rank for broadcast alignment
-    if input_shapes:
-        out_rank = max(len(s) for s in input_shapes)
-    else:
-        out_rank = max(len(s.dim_specs) for _, s in valid_specs)
-    
-    # Check 1: Mesh axis conflict - same axis for different OUTPUT dimensions
-    # Build mapping: axis_name -> set of OUTPUT dim indices it's used for
-    axis_to_output_dims: dict = {}
-    for i, spec in valid_specs:
-        current_rank = len(spec.dim_specs)
-        offset = out_rank - current_rank  # Suffix alignment offset
-        
-        for dim_idx, dim_spec in enumerate(spec.dim_specs):
-            output_dim = dim_idx + offset  # Map to output dimension
-            for axis_name in dim_spec.axes:
-                if axis_name not in axis_to_output_dims:
-                    axis_to_output_dims[axis_name] = set()
-                axis_to_output_dims[axis_name].add(output_dim)
-    
-    # If any axis maps to different output dimensions, that's a conflict
-    for axis_name, dims_used in axis_to_output_dims.items():
-        if len(dims_used) > 1:
-            # Same mesh axis would end up on different output dimensions!
-            return True
-    
-    # Check 2: Output replicated but inputs sharded on different dimensions
-    output_is_replicated = (
-        output_sharding is None or
-        all(not d.axes for d in output_sharding.dim_specs)
-    )
-    
-    if output_is_replicated:
-        sharded_dims_per_input = []
-        for i, spec in valid_specs:
-            current_rank = len(spec.dim_specs)
-            offset = out_rank - current_rank
-            # Map to output dimensions
-            dims_with_axes = {dim_idx + offset for dim_idx, d in enumerate(spec.dim_specs) if d.axes}
-            if dims_with_axes:
-                sharded_dims_per_input.append(dims_with_axes)
-        
-        if len(sharded_dims_per_input) >= 2:
-            first = sharded_dims_per_input[0]
-            for other in sharded_dims_per_input[1:]:
-                if first != other:
-                    return True
-    
-    return False
+
 
 
 
@@ -377,6 +284,39 @@ def slice_for_shard(tensor_val: Any, shape: tuple, sharding: "ShardingSpec", sha
 # SPMD Argument Extraction
 # ============================================================================
 
+def ensure_shard_values(tensor: "Tensor") -> list:
+    """Ensure tensor has symbolic values, hydrating from storage if needed.
+    
+    If a tensor is realized (has _storages but cleared _values), this creates
+    new graph inputs for the storages and populates _values.
+    """
+    if tensor._impl._values:
+        return tensor._impl._values
+        
+    if tensor._impl._storages and len(tensor._impl._storages) > 0:
+        from ..core.compute_graph import GRAPH
+        from ..core.tensor import Tensor
+        
+        # We must be in a graph context to add inputs
+        try:
+            # Check if we are in a graph context
+            _ = GRAPH.graph
+            
+            with GRAPH.graph:
+                new_values = []
+                for s in tensor._impl._storages:
+                    # Wrap storage as Tensor to adapt to graph input
+                    t = Tensor(storage=s)
+                    new_values.append(t.__tensorvalue__())
+                tensor._impl._values = new_values
+                return new_values
+        except LookupError:
+            # Not in a graph context - return empty or handle gracefully?
+            # Operations requiring values will fail anyway.
+            pass
+            
+    return []
+
 def get_shard_args(args: tuple, shard_idx: int, 
                    per_input_shardings: "List[Optional[ShardingSpec]]",
                    g: Any, Tensor: type, pytree: Any) -> tuple:
@@ -407,7 +347,7 @@ def get_shard_args(args: tuple, shard_idx: int,
             this_sharding = per_input_shardings[input_idx[0]]
         input_idx[0] += 1
         
-        vals = x._impl._values or []
+        vals = ensure_shard_values(x)
         candidate = None
         
         if len(vals) > 1 and shard_idx < len(vals):
@@ -431,6 +371,9 @@ def get_shard_args(args: tuple, shard_idx: int,
 
 
 
+
+
+
 # ============================================================================
 # Resharding
 # ============================================================================
@@ -439,101 +382,44 @@ def reshard_tensor(tensor: "Tensor", from_spec: Optional["ShardingSpec"],
                    to_spec: Optional["ShardingSpec"], mesh: "DeviceMesh") -> "Tensor":
     """Reshard tensor from one sharding spec to another.
     
-    Handles three cases:
-    1. Sharded → Replicated: AllGather on each sharded dimension
-    2. Replicated → Sharded: Shard operation
-    3. Sharded(axis1) → Sharded(axis2): AllGather then Shard
-    
-    Args:
-        tensor: Input tensor with current sharding
-        from_spec: Current sharding specification
-        to_spec: Target sharding specification
-        mesh: Device mesh
-        
-    Returns:
-        Tensor with target sharding
+    Unified strategy:
+    1. Gather any dimension where current sharding does not match target.
+    2. Shard the tensor to the target spec (Smart ShardOp handles identity for matching dims).
     """
     from ..ops.communication import all_gather, shard as shard_op
     
-    if not from_spec or not to_spec:
+    if mesh is None:
         return tensor
-    
+        
+    if not from_spec:
+        # Unsharded inputs are treated as replicated but open
+        from_spec = create_replicated_spec(mesh, len(tensor.shape))
+        
     if not needs_reshard(from_spec, to_spec):
         return tensor
-    
-    # Handle each dimension independently
+
+    # 1. Gather pass: Resolve Incompatibilities
     result = tensor
-    for dim, (from_dim, to_dim) in enumerate(zip(from_spec.dim_specs, to_spec.dim_specs)):
-        from_axes = from_dim.axes
-        to_axes = to_dim.axes
-        
-        if from_axes == to_axes:
-            continue  # No change for this dimension
-        
-        # Case 1: Sharded → Replicated (AllGather)
-        if from_axes and not to_axes:
-            result = all_gather(result, axis=dim)
-            # Update from_spec to reflect this dimension is now replicated
-            from_spec.dim_specs[dim] = to_dim
-        
-        # Case 2: Different sharding axes (AllGather then re-Shard)
-        elif from_axes and to_axes and from_axes != to_axes:
-            # First gather to replicated
-            result = all_gather(result, axis=dim)
-            # Then shard on new axes (handled below in Case 3)
-            from_axes = []  # Now replicated
+    # We iterate over current spec state. Gathers update result.sharding.
     
-    # Case 3: Any remaining replicated → sharded transitions
-    # Check if any dimension needs to be sharded
-    if any(not from_dim.axes and to_dim.axes 
-           for from_dim, to_dim in zip(from_spec.dim_specs, to_spec.dim_specs)):
-        # Shard entire tensor with target spec
+    for dim, (from_dim, to_dim) in enumerate(zip(from_spec.dim_specs, to_spec.dim_specs)):
+        # If current dimension is sharded...
+        if from_dim.axes:
+            # ...and it doesn't match the target
+            if from_dim.axes != to_dim.axes:
+                result = all_gather(result, axis=dim)
+                # result now has this dimension replicated
+    
+    # 2. Shard pass: Apply target sharding
+    # Smart ShardOp will be a no-op (identity slice) for dimensions that already match.
+    # It will slice dimensions that are Replicated (from Gather or originally) but need Sharding.
+    if needs_reshard(result._impl.sharding, to_spec):
         result = shard_op(result, mesh, to_spec.dim_specs)
     
     return result
 
 
-def align_input_shardings(args: tuple, target: Optional["ShardingSpec"], mesh: "DeviceMesh",
-                          check_fn: Callable, reshard_fn: Callable) -> tuple:
-    """Align sharded inputs that conflict with target sharding.
-    
-    When propagation determines a unified sharding (target) but inputs have
-    different shardings, this function reshards inputs to match the target.
-    For example, if A is sharded on dim0 and B on dim1, and propagation resolves
-    to replicated, both A and B will be AllGathered to become replicated.
-    
-    Args:
-        args: Input arguments (may contain Tensors)
-        target: Target sharding spec from propagation (unified for operation)
-        mesh: Device mesh
-        check_fn: Function to check if resharding needed (needs_reshard)
-        reshard_fn: Function to perform resharding (reshard_tensor)
-    
-    Returns:
-        Args tuple with inputs resharded to match target where needed
-    """
-    from ..core.tensor import Tensor
-    from ..core import pytree
-    
-    if not target:
-        return args
-    
-    def align(x):
-        if not isinstance(x, Tensor):
-            return x
-        current = x._impl.sharding
-        if current is None:
-            return x
-        
-        # Check if current sharding matches target
-        if not check_fn(current, target):
-            return x  # No resharding needed
-        
-        # Reshard this input to match target
-        # This will AllGather sharded dimensions that should be replicated
-        return reshard_fn(x, current, target, mesh)
-    
-    return pytree.tree_map(align, args)
+
 
 
 # ============================================================================

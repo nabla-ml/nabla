@@ -42,13 +42,8 @@ class UnsqueezeOp(LogicalAxisOperation):
         axis = kwargs.get("axis", 0)
         return unsqueeze_template(in_rank, axis).instantiate(input_shapes, output_shapes)
     
-    def infer_output_shape(self, input_shapes: list[tuple[int, ...]], **kwargs) -> tuple[int, ...]:
-        """Insert new dimension of size 1 at axis position."""
-        in_shape = input_shapes[0]
-        axis = kwargs.get("axis", 0)
-        if axis < 0:
-            axis = len(in_shape) + 1 + axis
-        return in_shape[:axis] + (1,) + in_shape[axis:]
+    def infer_output_rank(self, input_shapes, **kwargs) -> int:
+        return len(input_shapes[0]) + 1
 
 
 class SqueezeOp(LogicalAxisOperation):
@@ -73,13 +68,8 @@ class SqueezeOp(LogicalAxisOperation):
         axis = kwargs.get("axis", 0)
         return squeeze_template(in_rank, axis).instantiate(input_shapes, output_shapes)
     
-    def infer_output_shape(self, input_shapes: list[tuple[int, ...]], **kwargs) -> tuple[int, ...]:
-        """Remove dimension of size 1 at axis position."""
-        in_shape = input_shapes[0]
-        axis = kwargs.get("axis", 0)
-        if axis < 0:
-            axis = len(in_shape) + axis
-        return in_shape[:axis] + in_shape[axis+1:]
+    def infer_output_rank(self, input_shapes, **kwargs) -> int:
+        return len(input_shapes[0]) - 1
 
 
 class SwapAxesOp(LogicalAxisOperation):
@@ -136,13 +126,21 @@ class BroadcastToOp(LogicalShapeOperation):
         """
         from ..sharding.propagation import broadcast_with_shapes_template
         in_shape = input_shapes[0]
-        out_shape = output_shapes[0]
+        
+        # Use target shape from kwargs if output_shapes not provided (SPMD case)
+        out_shape = kwargs.get("shape")
+        if out_shape is None:
+            if output_shapes:
+                out_shape = output_shapes[0]
+            else:
+                # Should not happen for broadcast_to unless shape arg missing
+                return None
+
         return broadcast_with_shapes_template(in_shape, out_shape).instantiate(input_shapes, output_shapes)
     
-    def infer_output_shape(self, input_shapes: list[tuple[int, ...]], **kwargs) -> tuple[int, ...]:
-        """Output shape is the target shape."""
-        return kwargs.get("shape", input_shapes[0])
-    
+    def infer_output_rank(self, input_shapes, **kwargs) -> int:
+        return len(kwargs.get("shape", input_shapes[0]))
+
     def _transform_shard_kwargs(self, kwargs: dict, output_sharding, shard_idx: int) -> dict:
         """Convert global target shape to local shape for each shard."""
         from ..sharding.spec import compute_local_shape
@@ -163,9 +161,8 @@ class ReshapeOp(LogicalShapeOperation):
     def maxpr(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
         return ops.reshape(x, shape)
     
-    def infer_output_shape(self, input_shapes: list[tuple[int, ...]], **kwargs) -> tuple[int, ...]:
-        """Output shape is the target shape."""
-        return kwargs.get("shape")
+    def infer_output_rank(self, input_shapes, **kwargs) -> int:
+        return len(kwargs.get("shape"))
 
     def sharding_rule(self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]], **kwargs):
         """Create sharding rule for reshape using compound factors."""
