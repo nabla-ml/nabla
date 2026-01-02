@@ -9,6 +9,12 @@ from nabla.sharding import DeviceMesh, ShardingSpec, DimSpec
 
 class TestCustomSharding(unittest.TestCase):
     
+    def setUp(self):
+        # Reset the global graph to avoid interference from other tests
+        from nabla.core.compute_graph import GRAPH
+        GRAPH._reset(None, 0)
+
+    
     def test_basic_execution(self):
         """Test basic execution without sharding."""
         import asyncio

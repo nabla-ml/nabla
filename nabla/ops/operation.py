@@ -33,8 +33,8 @@ class Operation(ABC):
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Unified dispatch for all operations.
         
-        Handles sharded and unsharded tensors uniformly.
-        Unsharded operations run as single-shard execution.
+        Handles sharded and unsharded tensors uniformly via SPMD logic.
+        Unsharded execution is treated as a special case with mesh=None (implicit 1-shard).
         """
         from ..core.tensor import Tensor
         from ..core.tensor_impl import TensorImpl
@@ -60,71 +60,63 @@ class Operation(ABC):
         
         pytree.tree_map(collect_metadata, args)
         
-        # 2. Determine execution mode
+        # 2. Determine execution mode (Implicit)
         mesh = spmd.get_mesh_from_args(args) if any_sharded else None
-        is_sharded_execution = mesh is not None
         
-        # 3. Setup for execution
-        if is_sharded_execution:
-            # SPMD path: ensure specs and infer shardings
-            args = spmd.ensure_specs(args, mesh)
-            output_sharding, input_shardings, reduce_axes = spmd.infer_output_sharding(
-                self, args, mesh, kwargs or {}
-            )
-            
-            # Reshard inputs if they don't match the propagated requirements
-            # (Note: Replicated->Sharded is skipped by reshard_inputs optimization
-            # so we rely on get_shard_args to slice, avoiding extra graph nodes)
-            args = spmd.reshard_inputs(args, input_shardings, mesh)
-            
-            num_shards = len(mesh.devices)
-        else:
-            # Unsharded path: single execution, no sharding
-            output_sharding = None
-            input_shardings = None
-            reduce_axes = None
-            num_shards = 1
+        # 3. Setup for execution (Common)
+        # Ensure proper specifications (Pass-through if mesh is None)
+        args = spmd.ensure_specs(args, mesh)
         
-        # Helper to convert tensor to value for maxpr
-        def tensor_to_value(x: Any) -> Any:
-            return g.TensorValue(x) if isinstance(x, Tensor) else x
+        # Infer sharding (Returns None/[]/False if mesh is None)
+        output_sharding, input_shardings, reduce_axes = spmd.infer_output_sharding(
+            self, args, mesh, kwargs or {}
+        )
         
-        # 4. Execute operation (loop or single)
+        # Eagerly reshard inputs (Pass-through if mesh is None)
+        args = spmd.reshard_inputs(args, input_shardings, mesh)
+        
+        num_shards = len(mesh.devices) if mesh else 1
+        
+        # 4. Execute operation (Common Loop)
         with GRAPH.graph:
             shard_results = []
             for shard_idx in range(num_shards):
-                if is_sharded_execution:
-                    shard_args = spmd.get_shard_args(
-                        args, shard_idx, input_shardings, g, Tensor, pytree
-                    )
-                else:
-                    shard_args = pytree.tree_map(tensor_to_value, args)
+                # Retrieve shard arguments (Handles slicing or value extraction)
+                shard_args = spmd.get_shard_args(
+                    args, shard_idx, input_shardings or [], g, Tensor, pytree
+                )
                 
                 shard_kwargs = self._transform_shard_kwargs(kwargs, output_sharding, shard_idx)
                 shard_results.append(self.maxpr(*shard_args, **shard_kwargs))
             
             # AllReduce partial results if contracting dimension was sharded
-            if reduce_axes:
+            if reduce_axes and mesh:
                 from .communication import all_reduce_op, simulate_grouped_all_reduce
                 shard_results = simulate_grouped_all_reduce(
                     shard_results, mesh, reduce_axes, all_reduce_op
                 )
         
-        # 5. Create output tensors
-        if is_sharded_execution:
-            output = spmd.create_sharded_output(
-                shard_results, output_sharding, any_traced, max_batch_dims, mesh=mesh
+        # 5. Create output tensors (Unified & Pytree-aware)
+        if not shard_results:
+            return None # Should not happen
+            
+        # Reconstruct output structure from first result
+        flat_results_per_shard = [pytree.tree_leaves(res) for res in shard_results]
+        treedef = pytree.tree_structure(shard_results[0])
+        num_leaves = len(flat_results_per_shard[0])
+        
+        output_leaves = []
+        for i in range(num_leaves):
+            # Collect this leaf's values across all shards
+            leaf_shards = [shard[i] for shard in flat_results_per_shard]
+            
+            # Create sharded/unsharded tensor from list of values
+            tensor = spmd.create_sharded_output(
+                leaf_shards, output_sharding, any_traced, max_batch_dims, mesh=mesh
             )
-        else:
-            # Single result for unsharded
-            result = shard_results[0]
-            def value_to_tensor(x: Any) -> Any:
-                if pytree.is_tensor_value(x):
-                    impl = TensorImpl(values=x, traced=any_traced, batch_dims=max_batch_dims)
-                    impl.cache_metadata(x)
-                    return Tensor(impl=impl)
-                return x
-            output = pytree.tree_map(value_to_tensor, result)
+            output_leaves.append(tensor)
+            
+        output = pytree.tree_unflatten(treedef, output_leaves)
         
         # 6. Common post-processing
         self._setup_output_refs(output, args, kwargs, any_traced)

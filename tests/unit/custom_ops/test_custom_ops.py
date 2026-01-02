@@ -14,6 +14,12 @@ import nabla
 class TestAddOneCustomOp(unittest.TestCase):
     """Test the add_one_custom operation."""
 
+    def setUp(self):
+        # Reset the global graph to avoid interference from other tests
+        from nabla.core.compute_graph import GRAPH
+        GRAPH._reset(None, 0)
+
+
     def test_add_one_custom_basic(self):
         """Test basic add_one_custom functionality."""
         import asyncio

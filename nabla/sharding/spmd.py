@@ -118,6 +118,9 @@ def infer_output_sharding(
         - input_shardings: list of propagated shardings for each input tensor
         - needs_allreduce: True if contracting factors are sharded (partial results)
     """
+    if mesh is None:
+        return None, [], False
+
     from ..core.tensor import Tensor
     from ..core import pytree
     from ..sharding.spec import ShardingSpec, DimSpec
