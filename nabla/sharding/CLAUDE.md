@@ -109,9 +109,9 @@ B = (A_sharded @ W).with_sharding(mesh, [DimSpec([]), DimSpec([])])
 
 ## Current Limitations
 
-- **Single-machine simulation**: All shards run on same device (no actual distribution)
-- **Collective ops pending**: AllReduce for sharded contracting dims not yet inserted
-- **Limited op coverage**: Templates exist for common ops; complex ops need manual rules
+- **Single-machine simulation**: All shards run on same device (awaiting MAX multi-device backend)
+- **Limited op coverage**: Templates exist for common ops (`matmul`, `elementwise`, `reduce`, `transpose`, `broadcast`); complex ops need manual rules
+- **No cost model**: `AGGRESSIVE` conflict resolution doesn't consider communication cost
 
 ---
 

@@ -79,7 +79,7 @@ This module is organized into four logical subdirectories:
 
 **Purpose**: Specify and propagate tensor sharding across device meshes.
 
-**Status**: Infrastructure complete, execution pending MAX multi-device support.
+**Status**: Fully implemented. Simulated SPMD execution works; real multi-device hardware awaits MAX backend.
 
 **Key mechanisms**:
 - Factor-based sharding propagation (inspired by Shardy/GSPMD)
@@ -176,7 +176,7 @@ Operations automatically preserve batch dimensions, enabling transparent nested 
 - Complete operations library (binary, unary, creation, reduction, view, multi-output)
 - vmap transform with nested vmap support
 - compile transform with dynamic dimensions
-- Sharding specification & propagation (no execution yet)
+- Sharding specification, propagation, and simulated execution
 - Pytree system for nested structures
 - OutputRefs autodiff graph infrastructure
 
@@ -304,7 +304,7 @@ A: Prefix semantics are simpler. Batch always at front, operations auto-propagat
 A: Users think in logical space, vmap operates in physical space. Clean abstraction boundary.
 
 **Q: Is this production-ready?**  
-A: Core execution: yes. Autodiff: infrastructure ready. Sharding: spec done, execution pending.
+A: Core execution: yes. Autodiff: infrastructure ready. Sharding: fully implemented (simulated), awaiting MAX multi-device.
 
 ---
 
