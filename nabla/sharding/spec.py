@@ -418,7 +418,7 @@ def compute_local_shape(
             continue
 
         dim_spec = sharding.dim_specs[dim_idx]
-        global_len = global_shape[dim_idx]
+        global_len = int(global_shape[dim_idx])
         
         # Fully replicated dimension
         if not dim_spec.axes:

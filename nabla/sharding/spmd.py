@@ -386,6 +386,7 @@ def reshard_tensor(tensor: "Tensor", from_spec: Optional["ShardingSpec"],
     This is simpler and more robust than incremental gather/shard.
     """
     from ..ops.communication import all_gather, shard as shard_op
+    from ..sharding.spec import DimSpec
     
     if mesh is None:
         return tensor

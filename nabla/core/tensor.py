@@ -213,6 +213,15 @@ class Tensor(DLPackArray, HasTensorValue):
         self._impl.sharding = target
         return self
 
+    @property
+    def sharding(self) -> Any | None:
+        """Get the current sharding specification of the tensor.
+        
+        Returns:
+            ShardingSpec object if sharded, else None.
+        """
+        return self._impl.sharding
+
     # ===== Factory methods =====
 
     @classmethod

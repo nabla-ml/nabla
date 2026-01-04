@@ -576,9 +576,20 @@ def _update_from_factors(
                     # Filter out:
                     # 1. Axes explicitly replicated on target
                     # 2. Axes already used by earlier dimensions (CRITICAL FIX)
+                    original_axes_count = len(f_state.axes)
                     valid_axes = [ax for ax in f_state.axes 
                                  if ax not in spec.replicated_axes
                                  and ax not in used_axes_in_tensor]
+                    
+                    # PROPAGATION FIX: If we forced axes to be dropped due to tensor-local conflict
+                    # (e.g. axis used twice), we MUST propagate this reduction back to the Factor.
+                    # Otherwise, Inputs will think Factor has sharding (TP), while Output drops it (*),
+                    # causing execution on sharded inputs as if they were replicated.
+                    if len(valid_axes) < original_axes_count:
+                        # Downgrade the factor state globally
+                        f_state.axes = list(valid_axes)
+                        # Maybe update priority? No, just axes constraint.
+                    
                     proposed_axes.extend(valid_axes)
                     proposed_prio = min(proposed_prio, f_state.priority)
                     has_factor_info = True
@@ -634,10 +645,13 @@ def propagate_sharding(
     _collect_to_factors(output_specs, rule.output_mappings, rule, mesh, state, strategy, max_priority)
     
     # Phase 3: Update (Phase 2 Resolve is implicit in Collect/Merge)
+    # Phase 3: Update (Phase 2 Resolve is implicit in Collect/Merge)
     changed = False
-    if _update_from_factors(input_specs, rule.input_mappings, state):
-        changed = True
+    # Update Outputs first: allows output constraints/conflicts to propagate back to factors
+    # before we update inputs. Critical for implicit resharding logic.
     if _update_from_factors(output_specs, rule.output_mappings, state):
+        changed = True
+    if _update_from_factors(input_specs, rule.input_mappings, state):
         changed = True
     
     return changed
