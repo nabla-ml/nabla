@@ -64,7 +64,8 @@ class TestComplexTraces(unittest.TestCase):
         # 'xpr' shows output usage LOCAL shapes (shards).
         # Global: (4, 4, 8, 16).
         # Local:  (2, 2, 8, 16) (Batch/2, Heads/2).
-        self.assertIn(f"f32[{int(B/dp)}, {int(H/tp)}, {S}, {D}]", trace_str)
+        # Now shows: f32[global](factors)(local=[local])
+        self.assertIn(f"local=[{int(B/dp)},{int(H/tp)},{S},{D}]", trace_str)
 
         # 3. Numerical Verification
         import asyncio
@@ -246,8 +247,8 @@ class TestComplexTraces(unittest.TestCase):
         # Searching for 'shard' inside the function body.
         
         # Extract the body of the trace
-        self.assertIn("SHARD", trace_str)
-        self.assertIn("ALL_GATHER", trace_str)
+        self.assertIn("shard", trace_str)
+        self.assertIn("all_gather", trace_str)
         
         # Verify sharding specs
         # We expect specs to appear.

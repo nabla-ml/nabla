@@ -74,7 +74,11 @@ def test_2d_tensor_parallel():
     print("-" * 70)
     print("TRACE OUTPUT:")
     print("-" * 70)
-    trace = capture_trace(mlp_block_forward, x, w1, w2)
+    def wrapped_forward(x, w1, w2):
+        out = mlp_block_forward(x, w1, w2)
+        return out + 1
+
+    trace = capture_trace(wrapped_forward, x, w1, w2)
     print(trace)
     print()
     

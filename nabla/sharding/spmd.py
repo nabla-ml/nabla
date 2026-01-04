@@ -140,7 +140,7 @@ def infer_output_sharding(
             # Create replicated spec for unsharded inputs (OPEN so they can receive sharding)
             rank = len(t.shape)
             spec = ShardingSpec(mesh, [DimSpec([], is_open=True) for _ in range(rank)])
-        input_specs.append(spec)
+        input_specs.append(spec.clone())
         input_shapes.append(tuple(int(d) for d in t.shape))
     
     if not any(spec.dim_specs and any(d.axes for d in spec.dim_specs) for spec in input_specs):

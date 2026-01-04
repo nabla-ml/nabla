@@ -253,6 +253,14 @@ class DimSpec:
         for axis in self.axes:
             total *= mesh.get_axis_size(axis)
         return total
+    
+    def clone(self) -> 'DimSpec':
+        """Create a deep copy of this DimSpec."""
+        return DimSpec(
+            axes=list(self.axes),
+            is_open=self.is_open,
+            priority=self.priority
+        )
 
 
 @dataclass
@@ -371,6 +379,14 @@ class ShardingSpec:
     def get_min_priority(self) -> int:
         """Get the minimum (highest urgency) priority used in this spec."""
         return min((d.priority for d in self.dim_specs), default=0)
+    
+    def clone(self) -> 'ShardingSpec':
+        """Create a deep copy of this ShardingSpec."""
+        return ShardingSpec(
+            mesh=self.mesh,
+            dim_specs=[d.clone() for d in self.dim_specs],
+            replicated_axes=set(self.replicated_axes)
+        )
 
 
 def compute_local_shape(

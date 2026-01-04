@@ -538,7 +538,12 @@ def _update_from_factors(
     mappings: List[Dict[int, List[str]]],
     state: FactorShardingState,
 ) -> bool:
-    """Phase 3: Project factor shardings back to dimension shardings (UPDATE)."""
+    """Phase 3: Project factor shardings back to dimension shardings (UPDATE).
+    
+    IMPORTANT: Tracks axes used across ALL dimensions of a tensor to prevent
+    the same axis from being assigned to multiple dimensions (which is invalid).
+    If a conflict arises, later dimensions get the axis stripped (replicated).
+    """
     did_change = False
     
     for t_idx, spec in enumerate(specs):
@@ -548,10 +553,15 @@ def _update_from_factors(
         new_dim_specs = []
         spec_dirty = False
         
+        # Track axes already assigned to dimensions within THIS tensor
+        used_axes_in_tensor: Set[str] = set()
+        
         for dim_idx, current_dim in enumerate(spec.dim_specs):
             factors = mapping.get(dim_idx, [])
             
             if not factors:
+                # Keep current axes as used
+                used_axes_in_tensor.update(current_dim.axes)
                 new_dim_specs.append(current_dim)
                 continue
             
@@ -563,14 +573,18 @@ def _update_from_factors(
             for f in factors:
                 f_state = state.get(f)
                 if f_state is not None:
-                    # Filter out axes that are explicitly replicated on target
+                    # Filter out:
+                    # 1. Axes explicitly replicated on target
+                    # 2. Axes already used by earlier dimensions (CRITICAL FIX)
                     valid_axes = [ax for ax in f_state.axes 
-                                 if ax not in spec.replicated_axes]
+                                 if ax not in spec.replicated_axes
+                                 and ax not in used_axes_in_tensor]
                     proposed_axes.extend(valid_axes)
                     proposed_prio = min(proposed_prio, f_state.priority)
                     has_factor_info = True
             
             if not has_factor_info:
+                used_axes_in_tensor.update(current_dim.axes)
                 new_dim_specs.append(current_dim)
                 continue
             
@@ -579,6 +593,8 @@ def _update_from_factors(
             )
             
             if should_update:
+                # Mark these axes as used BEFORE adding the dim spec
+                used_axes_in_tensor.update(proposed_axes)
                 new_dim_specs.append(DimSpec(
                     axes=proposed_axes,
                     is_open=proposed_open,
@@ -586,6 +602,7 @@ def _update_from_factors(
                 ))
                 spec_dirty = True
             else:
+                used_axes_in_tensor.update(current_dim.axes)
                 new_dim_specs.append(current_dim)
         
         if spec_dirty:
