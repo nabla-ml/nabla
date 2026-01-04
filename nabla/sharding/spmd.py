@@ -382,9 +382,8 @@ def reshard_tensor(tensor: "Tensor", from_spec: Optional["ShardingSpec"],
                    to_spec: Optional["ShardingSpec"], mesh: "DeviceMesh") -> "Tensor":
     """Reshard tensor from one sharding spec to another.
     
-    Unified strategy:
-    1. Gather any dimension where current sharding does not match target.
-    2. Shard the tensor to the target spec (Smart ShardOp handles identity for matching dims).
+    Strategy: Gather all sharded axes to get global data, then shard according to target.
+    This is simpler and more robust than incremental gather/shard.
     """
     from ..ops.communication import all_gather, shard as shard_op
     
@@ -392,29 +391,26 @@ def reshard_tensor(tensor: "Tensor", from_spec: Optional["ShardingSpec"],
         return tensor
         
     if not from_spec:
-        # Unsharded inputs are treated as replicated but open
         from_spec = create_replicated_spec(mesh, len(tensor.shape))
         
     if not needs_reshard(from_spec, to_spec):
         return tensor
 
-    # 1. Gather pass: Resolve Incompatibilities
+    # Step 1: Gather all axes to get fully replicated (global) tensor
+    # We iterate over the *current* sharding spec (from_spec)
+    # and all_gather any dimension that is sharded.
     result = tensor
-    # We iterate over current spec state. Gathers update result.sharding.
+    if from_spec:
+        for dim, dim_spec in enumerate(from_spec.dim_specs):
+            # If this dimension is sharded (has axes), gather it
+            if dim_spec.axes:
+                 # Note: all_gather adds 'Replication' semantics to this dim
+                 # but keeps the Tensor rank same.
+                 # The resulting tensor has updated sharding (replicated on this dim).
+                 result = all_gather(result, axis=dim)
     
-    for dim, (from_dim, to_dim) in enumerate(zip(from_spec.dim_specs, to_spec.dim_specs)):
-        # If current dimension is sharded...
-        if from_dim.axes:
-            # ...and it doesn't match the target
-            if from_dim.axes != to_dim.axes:
-                result = all_gather(result, axis=dim)
-                # result now has this dimension replicated
-    
-    # 2. Shard pass: Apply target sharding
-    # Smart ShardOp will be a no-op (identity slice) for dimensions that already match.
-    # It will slice dimensions that are Replicated (from Gather or originally) but need Sharding.
-    if needs_reshard(result._impl.sharding, to_spec):
-        result = shard_op(result, mesh, to_spec.dim_specs)
+    # Step 2: Apply target sharding (shard_op works on global data)
+    result = shard_op(result, mesh, to_spec.dim_specs)
     
     return result
 
