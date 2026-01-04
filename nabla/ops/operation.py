@@ -90,13 +90,6 @@ class Operation(ABC):
                 if shard_kwargs is None:
                     shard_kwargs = {}
                 shard_results.append(self.maxpr(*shard_args, **shard_kwargs))
-            
-            # AllReduce partial results if contracting dimension was sharded
-            if reduce_axes and mesh:
-                from .communication import all_reduce_op, simulate_grouped_all_reduce
-                shard_results = simulate_grouped_all_reduce(
-                    shard_results, mesh, reduce_axes, all_reduce_op
-                )
         
         # 5. Create output tensors (Unified & Pytree-aware)
         if not shard_results:
@@ -120,13 +113,78 @@ class Operation(ABC):
             
         output = pytree.tree_unflatten(treedef, output_leaves)
         
-        # 6. Common post-processing
+        # 7. Common post-processing - set up refs for the main op output
+        # This must happen before all_reduce modifies the output
         self._setup_output_refs(output, args, kwargs, any_traced)
+        
+        
+        # 8. AllReduce partial results if contracting dimension was sharded
+        if reduce_axes and mesh:
+            output = self._apply_auto_reduction(output, mesh, reduce_axes)
         
         if any_has_tangent:
             self._apply_jvp(args, output)
         
         return output
+
+    def _apply_auto_reduction(self, output: Any, mesh: "DeviceMesh", reduce_axes: set[str]) -> Any:
+        """Apply automatic AllReduce to partial results if needed."""
+        from ..core.tensor import Tensor
+        from ..core import pytree
+        from .communication import all_reduce_op, simulate_grouped_all_reduce
+        from ..sharding.spec import ShardingSpec, DimSpec
+        from ..core.tensor_impl import TensorImpl
+        from ..core.compute_graph import GRAPH
+
+        def apply_grouped_all_reduce(t):
+            if not isinstance(t, Tensor) or not t._impl._values:
+                return t
+            
+            # Apply graph-level grouped all-reduce
+            with GRAPH.graph:
+                reduced_values = simulate_grouped_all_reduce(
+                    t._impl._values, mesh, reduce_axes, all_reduce_op
+                )
+            
+            # Create new Tensor with reduced values (replicated output)
+            # Note: We assume full replication for now, but this might need refinement
+            # based on which axes were actually reduced.
+            # If we reduced over ALL axes in the mesh, it's fully replicated.
+            # If we reduced over a SUBSET (e.g. TP), it might still be sharded on others (e.g. DP).
+            
+            # Logic: Start with the current sharding spec of 't' (the partial result)
+            # The partial result 't' has "complex" sharding where reduced axes are technically 
+            # sharded but contain partial sums.
+            # The output should have those axes marked as replicated (empty set).
+            
+            current_spec = t._impl.sharding
+            if current_spec:
+                new_dim_specs = []
+                for ds in current_spec.dim_specs:
+                    # Remove any axes that were reduced
+                    new_axes = sorted(list(set(ds.axes) - reduce_axes))
+                    new_dim_specs.append(DimSpec(new_axes))
+                new_spec = ShardingSpec(mesh, new_dim_specs)
+            else:
+                # Fallback to full replication if no spec (shouldn't happen)
+                rank = len(t.shape)
+                new_spec = ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)])
+
+            # Create new Tensor with reduced values
+            # Use shared helper to ensure correct global shape metadata and initialization
+            from ..sharding import spmd
+            reduced_tensor = spmd.create_sharded_output(
+                reduced_values, new_spec, t.traced, t.batch_dims, mesh
+            )
+            
+            # Setup tracing refs so ALL_REDUCE appears in trace
+            all_reduce_op._setup_output_refs(reduced_tensor, (t,), {}, t.traced)
+            
+            return reduced_tensor
+            
+
+        
+        return pytree.tree_map(apply_grouped_all_reduce, output)
     
     def _setup_output_refs(self, output: Any, args: tuple, kwargs: dict, traced: bool) -> None:
         """Set up OutputRefs for tracing support."""
@@ -148,7 +206,8 @@ class Operation(ABC):
             return x._impl if isinstance(x, Tensor) else x
         
         stored_args = pytree.tree_map(to_impl, args) if traced else ()
-        stored_kwargs = pytree.tree_map(to_impl, kwargs) if traced and kwargs else None
+        # Always store kwargs for debugging (xpr) - they're cheap
+        stored_kwargs = pytree.tree_map(to_impl, kwargs) if kwargs else None
         
         output_refs = OutputRefs(
             _refs=weak_refs,

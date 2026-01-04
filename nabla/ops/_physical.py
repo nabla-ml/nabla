@@ -104,7 +104,7 @@ class MeanPhysicalOp(Operation):
 # Batch Management Ops (Explicit Metadata Modification)
 # =============================================================================
 
-def _copy_impl_with_batch_dims(x: "Tensor", new_batch_dims: int) -> "Tensor":
+def _copy_impl_with_batch_dims(x: "Tensor", new_batch_dims: int, op: "Operation" = None, kwargs: dict = None) -> "Tensor":
     from ..core.tensor import Tensor
     from ..core.tensor_impl import TensorImpl
     
@@ -118,7 +118,14 @@ def _copy_impl_with_batch_dims(x: "Tensor", new_batch_dims: int) -> "Tensor":
     new_impl.cached_shape = x._impl.cached_shape
     new_impl.cached_dtype = x._impl.cached_dtype
     new_impl.cached_device = x._impl.cached_device
-    return Tensor(impl=new_impl)
+    
+    output = Tensor(impl=new_impl)
+    
+    # Setup tracing refs if op provided
+    if op is not None and x._impl.traced:
+        op._setup_output_refs(output, (x,), kwargs or {}, True)
+    
+    return output
 
 
 class IncrBatchDimsOp(Operation):
@@ -130,7 +137,7 @@ class IncrBatchDimsOp(Operation):
         return x
     
     def __call__(self, x: Tensor) -> Tensor:
-        return _copy_impl_with_batch_dims(x, x._impl.batch_dims + 1)
+        return _copy_impl_with_batch_dims(x, x._impl.batch_dims + 1, op=self, kwargs={})
 
 
 class DecrBatchDimsOp(Operation):
@@ -144,7 +151,7 @@ class DecrBatchDimsOp(Operation):
     def __call__(self, x: Tensor) -> Tensor:
         if x._impl.batch_dims <= 0:
             raise ValueError("Cannot decrement batch_dims below 0")
-        return _copy_impl_with_batch_dims(x, x._impl.batch_dims - 1)
+        return _copy_impl_with_batch_dims(x, x._impl.batch_dims - 1, op=self, kwargs={})
 
 
 class MoveAxisToBatchDimsOp(Operation):

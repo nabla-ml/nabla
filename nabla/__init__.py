@@ -224,5 +224,7 @@ __all__ = [
     "ShardingSpec",
     "compute_local_shape",
     "get_num_shards",
-
+    # Debug
+    "xpr",
+    "capture_trace",
 ]

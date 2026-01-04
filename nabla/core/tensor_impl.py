@@ -162,6 +162,13 @@ class TensorImpl:
         return self.output_refs.op
     
     @property
+    def op_kwargs(self) -> dict[str, Any] | None:
+        """Get the operation keyword arguments."""
+        if self.output_refs is None:
+            return None
+        return self.output_refs.op_kwargs
+
+    @property
     def op_name(self) -> str | None:
         """Get the operation name."""
         if self.output_refs is None:

@@ -200,7 +200,13 @@ class ShardOp(Operation):
             device = tensor_type.device
             impl.cached_device = device.to_device() if hasattr(device, 'to_device') else device
         
-        return Tensor(impl=impl)
+        output = Tensor(impl=impl)
+        
+        # Setup tracing refs for graph traversal
+        traced = x._impl.traced if isinstance(x, Tensor) else False
+        self._setup_output_refs(output, (x,), {'mesh': mesh, 'dim_specs': dim_specs}, traced)
+        
+        return output
     
     
     def _compute_global_from_local(self, local_shape, sharding):
@@ -365,7 +371,12 @@ class AllGatherOp(Operation):
             batch_dims=sharded_tensor._impl.batch_dims,
             sharding=output_spec,
         )
-        return Tensor(impl=impl)
+        output = Tensor(impl=impl)
+        
+        # Setup tracing refs for graph traversal
+        self._setup_output_refs(output, (sharded_tensor,), {'axis': axis}, sharded_tensor._impl.traced)
+        
+        return output
 
 
 class AllReduceOp(Operation):
@@ -455,7 +466,12 @@ class AllReduceOp(Operation):
             batch_dims=sharded_tensor._impl.batch_dims,
             sharding=output_spec,
         )
-        return Tensor(impl=impl)
+        output = Tensor(impl=impl)
+        
+        # Setup tracing refs for graph traversal
+        self._setup_output_refs(output, (sharded_tensor,), {}, sharded_tensor._impl.traced)
+        
+        return output
 
 
 class ReduceScatterOp(Operation):
