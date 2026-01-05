@@ -14,7 +14,12 @@
 
 **Nabla** is a lazy eager execution framework for MAX, combining PyTorch's imperative API with JAX-inspired transforms (vmap, compile).
 
----
+When you get 2 GPUs:
+```
+python -m pytest tests/unit/sharding/test_distributed_gpu.py \
+                 tests/unit/debug/test_debug_stress.py \
+                 tests/unit/debug/test_sharded_attention.py -v
+```
 
 ## Project Structure
 
