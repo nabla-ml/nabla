@@ -29,6 +29,61 @@ def _is_distributed(mesh: "DeviceMesh") -> bool:
     """Check if mesh has unique device refs (true distributed vs simulated)."""
     return mesh is not None and len(set(mesh.device_refs)) == len(mesh.device_refs)
 
+
+class CollectiveOperation(Operation):
+    """Base class for collective communication operations.
+    
+    Reduces boilerplate for operations that:
+    1. Take a sharded/replicated tensor as input
+    2. Hydrate its values
+    3. Perform a MAX graph operation (maxpr)
+    4. Return a new Tensor with updated sharding spec
+    """
+    
+    def __call__(self, sharded_tensor, **kwargs):
+        from ..core.tensor import Tensor
+        from ..core.tensor_impl import TensorImpl
+        from ..core.compute_graph import GRAPH
+        
+        # 1. Validation and early exit
+        if not self._should_proceed(sharded_tensor):
+            return sharded_tensor
+            
+        mesh = sharded_tensor._impl.sharding.mesh if sharded_tensor._impl.sharding else None
+        
+        # 2. Execution in graph context
+        with GRAPH.graph:
+            from ..sharding.spmd import ensure_shard_values
+            ensure_shard_values(sharded_tensor)
+            
+            # Call the specific implementation
+            result_values = self.maxpr(sharded_tensor._impl._values, mesh=mesh, **kwargs)
+            
+        # 3. Output wrapping
+        output_spec = self._compute_output_spec(sharded_tensor, result_values, **kwargs)
+        
+        impl = TensorImpl(
+            values=result_values,
+            traced=sharded_tensor._impl.traced,
+            batch_dims=sharded_tensor._impl.batch_dims,
+            sharding=output_spec,
+        )
+        output = Tensor(impl=impl)
+        
+        # 4. Tracing setup
+        self._setup_output_refs(output, (sharded_tensor,), kwargs, sharded_tensor._impl.traced)
+        
+        return output
+        
+    def _should_proceed(self, tensor):
+        """Check if operation should proceed (values exist, not trivial)."""
+        # Default: proceed if we have values > 1
+        return tensor._impl._values and len(tensor._impl._values) > 1
+        
+    def _compute_output_spec(self, input_tensor, results, **kwargs):
+        """Compute output sharding spec. Default: preserve input spec."""
+        return input_tensor._impl.sharding
+
 class ShardOp(Operation):
     """Split a replicated tensor into multiple sharded TensorValues.
     
@@ -379,7 +434,7 @@ class AllGatherOp(Operation):
         return output
 
 
-class AllReduceOp(Operation):
+class AllReduceOp(CollectiveOperation):
     """Reduce values across all shards using the specified reduction.
     
     Takes N TensorValues with partial results and produces N TensorValues
@@ -431,50 +486,18 @@ class AllReduceOp(Operation):
         # All shards get the same reduced value
         return [result] * len(shard_values)
     
-    def __call__(self, sharded_tensor):
-        """Sum-reduce across all shards.
-        
-        Args:
-            sharded_tensor: Tensor with partial values per shard
-            
-        Returns:
-            Tensor with sum-reduced values (replicated across shards)
-        """
-        from ..core.tensor import Tensor
-        from ..core.tensor_impl import TensorImpl
-        from ..core.compute_graph import GRAPH
+    def _compute_output_spec(self, input_tensor, results, **kwargs):
+        """Output is fully replicated."""
         from ..sharding.spec import ShardingSpec, DimSpec
+        mesh = input_tensor._impl.sharding.mesh if input_tensor._impl.sharding else None
         
-        if not sharded_tensor._impl._values or len(sharded_tensor._impl._values) <= 1:
-            return sharded_tensor  # Nothing to reduce
-        
-        # Get mesh from tensor's sharding spec
-        mesh = sharded_tensor._impl.sharding.mesh if sharded_tensor._impl.sharding else None
-        
-        with GRAPH.graph:
-            reduced = self.maxpr(sharded_tensor._impl._values, mesh=mesh)
-        
-        # Create replicated sharding spec (all dims have empty axes list)
-        output_spec = None
-        if mesh and reduced:
-            rank = len(reduced[0].type.shape) if reduced else 0
-            output_spec = ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)])
-        
-        impl = TensorImpl(
-            values=reduced,
-            traced=sharded_tensor._impl.traced,
-            batch_dims=sharded_tensor._impl.batch_dims,
-            sharding=output_spec,
-        )
-        output = Tensor(impl=impl)
-        
-        # Setup tracing refs for graph traversal
-        self._setup_output_refs(output, (sharded_tensor,), {}, sharded_tensor._impl.traced)
-        
-        return output
+        if mesh and results:
+            rank = len(results[0].type.shape)
+            return ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)])
+        return None
 
 
-class ReduceScatterOp(Operation):
+class ReduceScatterOp(CollectiveOperation):
     """Reduce then scatter the result across shards.
     
     Each shard receives a different portion of the reduced result.
@@ -551,50 +574,301 @@ class ReduceScatterOp(Operation):
         
         return scattered
     
-    def __call__(self, sharded_tensor, axis: int):
-        """Sum-reduce then scatter across shards.
-        
-        Args:
-            sharded_tensor: Tensor with values to reduce
-            axis: Axis along which to scatter the result
-            
-        Returns:
-            Tensor with scattered reduced values
-        """
-        from ..core.tensor import Tensor
-        from ..core.tensor_impl import TensorImpl
-        from ..core.compute_graph import GRAPH
+    def _compute_output_spec(self, input_tensor, results, **kwargs):
+        """Output sharding: the scatter axis becomes sharded."""
         from ..sharding.spec import ShardingSpec, DimSpec
         
-        if not sharded_tensor._impl._values or len(sharded_tensor._impl._values) <= 1:
-            return sharded_tensor  # Nothing to reduce
+        mesh = input_tensor._impl.sharding.mesh if input_tensor._impl.sharding else None
+        input_spec = input_tensor._impl.sharding
         
-        mesh = sharded_tensor._impl.sharding.mesh if sharded_tensor._impl.sharding else None
-        
-        with GRAPH.graph:
-            scattered = self.maxpr(sharded_tensor._impl._values, axis, mesh=mesh)
-        
-        # Output sharding: the scatter axis becomes sharded
-        output_spec = None
-        if mesh and sharded_tensor._impl.sharding:
-            input_spec = sharded_tensor._impl.sharding
+        if mesh and input_spec:
             # Create new spec where the scatter axis is sharded
+            # Note: This is a simplification. Real logic would depend on which mesh axis we scattered over.
+            # But currently ReduceScatterOp takes an int axis, implying we scatter over the *shards*.
+            # If the shards correspond to a mesh axis, we should mark it.
+            # For now, we logic similar to original implementation which assumed appending new dim specs.
+            
+            # Use scattered results to check rank
+            rank = len(results[0].type.shape) if results else 0
             new_dim_specs = []
-            rank = len(scattered[0].type.shape) if scattered else 0
             for d in range(rank):
                 if d < len(input_spec.dim_specs):
                     new_dim_specs.append(input_spec.dim_specs[d])
                 else:
                     new_dim_specs.append(DimSpec([]))
-            output_spec = ShardingSpec(mesh, new_dim_specs)
+            return ShardingSpec(mesh, new_dim_specs)
+            
+        return None
+
+
+class PPermuteOp(CollectiveOperation):
+    """Point-to-point permutation collective.
+    
+    Each device sends its value to exactly one other device according to a
+    permutation table. This is useful for ring-based algorithms, pipeline
+    parallelism, and halo exchange.
+    
+    Example:
+        # Ring shift: device 0→1→2→3→0
+        perm = [(0, 1), (1, 2), (2, 3), (3, 0)]
+        y = ppermute(x, perm)
+    """
+    
+    @property
+    def name(self) -> str:
+        return "ppermute"
+    
+    def maxpr(
+        self,
+        shard_values: List[TensorValue],
+        permutation: List[tuple],
+        mesh: "DeviceMesh" = None,
+    ) -> List[TensorValue]:
+        """Permute values between devices according to permutation.
         
-        impl = TensorImpl(
-            values=scattered,
-            traced=sharded_tensor._impl.traced,
-            batch_dims=sharded_tensor._impl.batch_dims,
-            sharding=output_spec,
-        )
-        return Tensor(impl=impl)
+        Args:
+            shard_values: List of TensorValues, one per device
+            permutation: List of (source_idx, dest_idx) pairs
+            mesh: Device mesh for distributed execution
+            
+        Returns:
+            List of TensorValues after permutation (zeros for missing dests)
+        """
+        num_devices = len(shard_values)
+        
+        # Build reverse map: dest -> src
+        dest_to_src = {}
+        for src, dst in permutation:
+            if dst in dest_to_src:
+                raise ValueError(f"Destination {dst} appears multiple times in permutation")
+            dest_to_src[dst] = src
+        
+        # Create result array
+        results = []
+        
+        for dst in range(num_devices):
+            if dst in dest_to_src:
+                src = dest_to_src[dst]
+                val = shard_values[src]
+                
+                # DISTRIBUTED: Transfer to destination device
+                if _is_distributed(mesh):
+                    val = ops.transfer_to(val, mesh.device_refs[dst])
+                
+                results.append(val)
+            else:
+                # No sender for this destination - return zeros
+                template = shard_values[0]
+                zero_val = ops.constant(0, template.type.dtype, template.type.device)
+                zero_val = ops.broadcast_to(zero_val, template.type.shape)
+                results.append(zero_val)
+        
+        return results
+    
+
+
+
+class AllToAllOp(CollectiveOperation):
+    """All-to-all collective (distributed transpose).
+    
+    Each device splits its tensor along split_axis, sends parts to other devices,
+    receives from all, and concatenates along concat_axis. This is useful for
+    expert routing (MoE), axis swapping, and distributed FFT.
+    
+    Example:
+        # 4 devices, each has [4, N], after all_to_all each has [4, N] but
+        # with data transposed across devices
+        y = all_to_all(x, split_axis=0, concat_axis=0)
+    """
+    
+    @property
+    def name(self) -> str:
+        return "all_to_all"
+    
+    def maxpr(
+        self,
+        shard_values: List[TensorValue],
+        split_axis: int,
+        concat_axis: int,
+        mesh: "DeviceMesh" = None,
+        tiled: bool = True,
+    ) -> List[TensorValue]:
+        """All-to-all: distributed transpose of tensor blocks.
+        
+        Args:
+            shard_values: List of TensorValues, one per device
+            split_axis: Axis along which to split each shard
+            concat_axis: Axis along which to concatenate received chunks
+            mesh: Device mesh for distributed execution
+            tiled: If True, concatenate; if False, stack (adds new dim)
+            
+        Returns:
+            List of TensorValues after all-to-all exchange
+        """
+        num_devices = len(shard_values)
+        
+        if num_devices <= 1:
+            return shard_values
+        
+        # 1. Each device splits its tensor into num_devices chunks
+        chunks_per_device = []
+        for val in shard_values:
+            shape = val.type.shape
+            axis_size = int(shape[split_axis])
+            chunk_size = axis_size // num_devices
+            
+            if axis_size % num_devices != 0:
+                raise ValueError(
+                    f"Split axis size {axis_size} not divisible by {num_devices} devices"
+                )
+            
+            chunks = []
+            for i in range(num_devices):
+                slices = [slice(None)] * len(shape)
+                slices[split_axis] = slice(i * chunk_size, (i + 1) * chunk_size)
+                chunks.append(val[tuple(slices)])
+            
+            chunks_per_device.append(chunks)
+        
+        # 2. Transpose: device j collects chunk[i][j] from each device i
+        received_per_device = []
+        for dst in range(num_devices):
+            received = []
+            for src in range(num_devices):
+                chunk = chunks_per_device[src][dst]
+                
+                # DISTRIBUTED: Transfer chunk to destination
+                if _is_distributed(mesh):
+                    chunk = ops.transfer_to(chunk, mesh.device_refs[dst])
+                
+                received.append(chunk)
+            received_per_device.append(received)
+        
+        # 3. Each device concatenates (or stacks) received chunks
+        results = []
+        for dst in range(num_devices):
+            if tiled:
+                concatenated = ops.concat(received_per_device[dst], axis=concat_axis)
+            else:
+                concatenated = ops.stack(received_per_device[dst], axis=concat_axis)
+            results.append(concatenated)
+        
+        return results
+    
+
+
+
+class AxisIndexOp(Operation):
+    """Return the device's position along a mesh axis.
+    
+    This is essential for shard_map-style programming where each device
+    needs to know its position for conditional logic.
+    
+    Example:
+        idx = axis_index('i')  # Returns 0, 1, 2, 3 on 4 devices
+    """
+    
+    @property
+    def name(self) -> str:
+        return "axis_index"
+    
+    def maxpr(
+        self,
+        mesh: "DeviceMesh",
+        axis_name: str,
+        shard_idx: int,
+    ) -> TensorValue:
+        """Return this device's index along the specified axis.
+        
+        Args:
+            mesh: Device mesh
+            axis_name: Name of axis to get index for
+            shard_idx: Current shard index
+            
+        Returns:
+            Scalar TensorValue with the axis index
+        """
+        coord = mesh.get_coordinate(shard_idx, axis_name)
+        return ops.constant(coord, mesh.device_refs[shard_idx].dtype if hasattr(mesh.device_refs[shard_idx], 'dtype') else None)
+    
+    def __call__(self, mesh: "DeviceMesh", axis_name: str) -> List[TensorValue]:
+        """Get axis indices for all devices.
+        
+        Args:
+            mesh: Device mesh
+            axis_name: Name of axis to get indices for
+            
+        Returns:
+            List of scalar TensorValues, one per device
+        """
+        from ..core.compute_graph import GRAPH
+        from max.dtype import DType
+        from max.graph import DeviceRef
+        
+        results = []
+        with GRAPH.graph:
+            for shard_idx in range(len(mesh.devices)):
+                coord = mesh.get_coordinate(shard_idx, axis_name)
+                # Use device ref from mesh, or default to CPU
+                device = mesh.device_refs[shard_idx] if mesh.device_refs else DeviceRef.CPU()
+                val = ops.constant(coord, DType.int32, device)
+                results.append(val)
+        
+        return results
+
+
+class PMeanOp(CollectiveOperation):
+    """Compute mean across all shards (psum / axis_size).
+    
+    This is a convenience wrapper that combines psum with division
+    by the number of devices.
+    """
+    
+    @property
+    def name(self) -> str:
+        return "pmean"
+    
+    def maxpr(
+        self,
+        shard_values: List[TensorValue],
+        mesh: "DeviceMesh" = None,
+        axis_name: str = None,
+    ) -> List[TensorValue]:
+        """Compute mean across shards.
+        
+        Args:
+            shard_values: List of shard TensorValues
+            mesh: Device mesh
+            axis_name: Name of axis to reduce along (for size calculation)
+            
+        Returns:
+            List of mean TensorValues (all identical)
+        """
+        # First do psum
+        reduced = all_reduce_op.maxpr(shard_values, mesh=mesh)
+        
+        # Then divide by axis size
+        if axis_name and mesh:
+            axis_size = mesh.get_axis_size(axis_name)
+        else:
+            axis_size = len(shard_values)
+        
+        # Divide each result by axis_size
+        # Get dtype and device from the reduced tensor
+        dtype = reduced[0].type.dtype
+        device = reduced[0].type.device
+        scale = ops.constant(1.0 / axis_size, dtype, device)
+        return [ops.mul(r, scale) for r in reduced]
+    
+    def _compute_output_spec(self, input_tensor, results, **kwargs):
+        """Output is fully replicated."""
+        from ..sharding.spec import ShardingSpec, DimSpec
+        mesh = input_tensor._impl.sharding.mesh if input_tensor._impl.sharding else None
+        
+        if mesh and results:
+            rank = len(results[0].type.shape)
+            return ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)])
+        return None
 
 
 # Singleton instances
@@ -602,6 +876,10 @@ shard_op = ShardOp()
 all_gather_op = AllGatherOp()
 all_reduce_op = AllReduceOp()
 reduce_scatter_op = ReduceScatterOp()
+ppermute_op = PPermuteOp()
+all_to_all_op = AllToAllOp()
+axis_index_op = AxisIndexOp()
+pmean_op = PMeanOp()
 
 
 # Public API functions
@@ -658,10 +936,97 @@ def reduce_scatter(sharded_tensor, axis: int):
     Returns:
         Tensor with scattered reduced values
     """
-    return reduce_scatter_op(sharded_tensor, axis)
+    return reduce_scatter_op(sharded_tensor, axis=axis)
 
 
+def ppermute(sharded_tensor, permutation: List[tuple]):
+    """Point-to-point permutation collective.
+    
+    Each device sends its value to exactly one other device according to
+    a permutation table. Useful for ring-based algorithms, pipeline
+    parallelism, and halo exchange.
+    
+    Args:
+        sharded_tensor: Tensor with multiple shards
+        permutation: List of (source_idx, dest_idx) pairs specifying
+                     which device sends to which. Destinations without
+                     senders receive zeros.
+        
+    Returns:
+        Tensor with permuted values
+        
+    Example:
+        # Ring shift: device 0→1→2→3→0
+        perm = [(0, 1), (1, 2), (2, 3), (3, 0)]
+        y = ppermute(x, perm)
+    """
+    return ppermute_op(sharded_tensor, permutation=permutation)
 
+
+def all_to_all(sharded_tensor, split_axis: int, concat_axis: int, tiled: bool = True):
+    """All-to-all collective (distributed transpose).
+    
+    Each device splits its tensor along split_axis, sends parts to other
+    devices, receives from all, and concatenates along concat_axis. Useful
+    for expert routing (MoE), axis swapping, and distributed FFT.
+    
+    Note: Currently simulated using transfer_to. Will use native MAX
+    all_to_all when available for better performance.
+    
+    Args:
+        sharded_tensor: Tensor with multiple shards
+        split_axis: Axis along which to split each shard
+        concat_axis: Axis along which to concatenate received chunks
+        tiled: If True, concatenate; if False, stack (adds new dimension)
+        
+    Returns:
+        Tensor after all-to-all exchange
+        
+    Example:
+        # 4 devices, each has [4, 8], exchange along first axis
+        y = all_to_all(x, split_axis=0, concat_axis=0)
+    """
+    return all_to_all_op(sharded_tensor, split_axis=split_axis, concat_axis=concat_axis, tiled=tiled)
+
+
+def axis_index(mesh: "DeviceMesh", axis_name: str) -> List[TensorValue]:
+    """Return each device's position along a mesh axis.
+    
+    Essential for shard_map-style programming where devices need to
+    know their position for conditional logic.
+    
+    Args:
+        mesh: Device mesh
+        axis_name: Name of axis to get indices for
+        
+    Returns:
+        List of scalar TensorValues, one per device, containing 0, 1, 2, ...
+        
+    Example:
+        # 4 devices along axis 'i'
+        indices = axis_index(mesh, 'i')  # [0, 1, 2, 3]
+    """
+    return axis_index_op(mesh, axis_name)
+
+
+def pmean(sharded_tensor, axis_name: str = None):
+    """Compute mean across all shards.
+    
+    Equivalent to psum(x) / axis_size. Useful for averaging gradients
+    in data parallelism.
+    
+    Args:
+        sharded_tensor: Tensor with partial values per shard
+        axis_name: Name of mesh axis for size calculation (optional)
+        
+    Returns:
+        Tensor with mean values (replicated across shards)
+        
+    Example:
+        # Average gradients across data-parallel workers
+        avg_grad = pmean(grad_shard, 'dp')
+    """
+    return pmean_op(sharded_tensor, axis_name=axis_name)
 
 
 class GatherAllAxesOp(Operation):
@@ -991,6 +1356,10 @@ __all__ = [
     "AllGatherOp", 
     "AllReduceOp",
     "ReduceScatterOp",
+    "PPermuteOp",
+    "AllToAllOp",
+    "AxisIndexOp",
+    "PMeanOp",
     "GatherAllAxesOp",
     "ReshardOp",
     # Singletons
@@ -998,6 +1367,10 @@ __all__ = [
     "all_gather_op",
     "all_reduce_op", 
     "reduce_scatter_op",
+    "ppermute_op",
+    "all_to_all_op",
+    "axis_index_op",
+    "pmean_op",
     "gather_all_axes_op",
     "reshard_op",
     # Public functions
@@ -1005,6 +1378,10 @@ __all__ = [
     "all_gather",
     "all_reduce",
     "reduce_scatter",
+    "ppermute",
+    "all_to_all",
+    "axis_index",
+    "pmean",
     "gather_all_axes",
     "reshard",
     "simulate_grouped_all_reduce",
