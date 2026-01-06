@@ -111,6 +111,21 @@ class NegOp(UnaryOperation):
         return ops.negate(x)
 
 
+class AbsOp(UnaryOperation):
+    """Absolute value.
+    
+    abs(x) = |x|
+    """
+    
+    @property
+    def name(self) -> str:
+        return "abs"
+    
+    def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+        """Apply abs element-wise."""
+        return ops.abs(x)
+
+
 # ===== Singleton instances exposed as functions =====
 
 relu = ReluOp()
@@ -118,6 +133,7 @@ sigmoid = SigmoidOp()
 tanh = TanhOp()
 exp = ExpOp()
 neg = NegOp()
+abs = AbsOp()
 
 
 __all__ = [
@@ -126,9 +142,11 @@ __all__ = [
     "TanhOp",
     "ExpOp",
     "NegOp",
+    "AbsOp",
     "relu",
     "sigmoid",
     "tanh",
     "exp",
     "neg",
+    "abs",
 ]

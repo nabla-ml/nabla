@@ -43,6 +43,28 @@ class MoveAxisOp(Operation):
         order.pop(source)
         order.insert(destination, source)
         return ops.permute(x, tuple(order))
+    
+    def sharding_rule(
+        self,
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        **kwargs: Any,
+    ) -> Any:
+        from ..sharding.propagation import transpose_template
+        rank = len(input_shapes[0])
+        source = kwargs.get("source")
+        destination = kwargs.get("destination")
+        
+        # Normalize axes (same as maxpr logic)
+        if source < 0: source += rank
+        if destination < 0: destination += rank
+        
+        # Calculate permutation
+        perm = list(range(rank))
+        val = perm.pop(source)
+        perm.insert(destination, val)
+        
+        return transpose_template(rank, perm).instantiate(input_shapes, output_shapes)
 
 
 class UnsqueezePhysicalOp(Operation):
@@ -53,6 +75,17 @@ class UnsqueezePhysicalOp(Operation):
     def maxpr(self, x: TensorValue, *, axis: int = 0) -> TensorValue:
         return ops.unsqueeze(x, axis)
 
+    def sharding_rule(
+        self,
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        **kwargs: Any,
+    ) -> Any:
+        from ..sharding.propagation import unsqueeze_template
+        rank = len(input_shapes[0])
+        axis = kwargs.get("axis", 0)
+        return unsqueeze_template(rank, axis).instantiate(input_shapes, output_shapes)
+
 
 class SqueezePhysicalOp(Operation):
     @property
@@ -62,6 +95,18 @@ class SqueezePhysicalOp(Operation):
     def maxpr(self, x: TensorValue, *, axis: int = 0) -> TensorValue:
         return ops.squeeze(x, axis)
 
+    def sharding_rule(
+        self,
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        **kwargs: Any,
+    ) -> Any:
+        from ..sharding.propagation import squeeze_template
+        # Squeeze input rank is output_rank + 1, but template takes input_rank
+        rank = len(input_shapes[0])
+        axis = kwargs.get("axis", 0)
+        return squeeze_template(rank, axis).instantiate(input_shapes, output_shapes)
+
 
 class BroadcastToPhysicalOp(Operation):
     @property
@@ -70,6 +115,54 @@ class BroadcastToPhysicalOp(Operation):
     
     def maxpr(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
         return ops.broadcast_to(x, shape)
+
+    def sharding_rule(
+        self,
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        **kwargs: Any,
+    ) -> Any:
+        # Custom broadcast rule: 1->N maps to [] -> [d], N->N maps to [d] -> [d]
+        from ..sharding.propagation import OpShardingRuleTemplate
+        
+        in_shape = input_shapes[0]
+        # shape kwarg might be missing if inferred? But for physical op it's required arg
+        # However, output_shapes[0] is reliable source of truth
+        out_shape = output_shapes[0]
+        
+        in_rank = len(in_shape)
+        out_rank = len(out_shape)
+        
+        # Align ranks (left-pad input with 1s implicitly? No, physical op expects explicit shape?)
+        # BroadcastToPhysicalOp usually assumes ranks match or just broadcasting dims?
+        # ops.broadcast_to works if input is broadcastable.
+        
+        # For sharding, we map factors.
+        # We assume output rank >= input rank.
+        # Right alignment? 
+        # Numpy broadcasting: right align.
+        
+        offset = out_rank - in_rank
+        
+        factors = [f"d{i}" for i in range(out_rank)]
+        out_mapping = {i: [factors[i]] for i in range(out_rank)}
+        in_mapping = {}
+        
+        for i in range(in_rank):
+            # Input dim i corresponds to Output dim i + offset
+            out_dim_idx = i + offset
+            in_dim_size = in_shape[i]
+            out_dim_size = out_shape[out_dim_idx]
+            
+            if in_dim_size == 1 and out_dim_size > 1:
+                # Broadcasting: Input dimension matches NOTHING (it's replicated/scalar wrt this factor)
+                # Output dimension maps to factor d_{i+offset}
+                in_mapping[i] = [] # Empty list = no factor constraints
+            else:
+                # Standard mapping (identity or 1->1)
+                in_mapping[i] = [factors[out_dim_idx]]
+                
+        return OpShardingRuleTemplate([in_mapping], [out_mapping]).instantiate(input_shapes, output_shapes)
 
 
 # =============================================================================

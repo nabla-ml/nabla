@@ -49,6 +49,8 @@ from .compute_graph import GRAPH, driver_tensor_type
 
 # Import ops modules
 from ..ops import binary as binary_ops
+from ..ops import unary as unary_ops
+from ..ops import reduction
 from ..ops import creation
 
 
@@ -154,28 +156,12 @@ class Tensor(DLPackArray, HasTensorValue):
         This handles both initial sharding of replicated tensors AND resharding
         of already sharded tensors.
         
-        Args:
-            mesh: DeviceMesh to shard across
-            dim_specs: List of DimSpec for each dimension
-            replicated_axes: Axes to explicitly replicate (optional)
-        
-        Returns:
-            New tensor with multiple TensorValues (one per shard)
+        If the tensor has batch_dims (e.g. inside vmap), replicated specs are
+        automatically prepended for those dimensions because `dim_specs` refers
+        to logical dimensions.
         """
-        from ..sharding import ShardingSpec
-        
-        # Construct target spec
-        target_spec = ShardingSpec(mesh, dim_specs, replicated_axes=replicated_axes or set())
-        
-        if self._impl.sharding:
-            from_spec = self._impl.sharding
-        else:
-            # Implicitly fully replicated if unsharded
-            from_spec = None # reshard_tensor handles None -> replicated logic
-            
-        from ..sharding.spmd import reshard_tensor
-        return reshard_tensor(self, from_spec, target_spec, mesh)
-
+        from ..ops import communication as comm
+        return comm.reshard(self, mesh, dim_specs, replicated_axes=replicated_axes)
     
     def with_sharding(
         self,
@@ -195,23 +181,9 @@ class Tensor(DLPackArray, HasTensorValue):
             
         Returns:
             New tensor with target sharding (resharded if necessary)
-        
-        Example:
-            # Force output to be replicated, even if operation infers sharding
-            C = (A @ B).with_sharding(mesh, [DimSpec([]), DimSpec([])])
         """
-        from ..sharding import ShardingSpec
-        from ..sharding.spmd import needs_reshard, reshard_tensor
-        
-        target = ShardingSpec(mesh, dim_specs, replicated_axes=replicated_axes or set())
-        
-        # If already has sharding and it differs, reshard
-        if self._impl.sharding and needs_reshard(self._impl.sharding, target):
-            return reshard_tensor(self, self._impl.sharding, target, mesh)
-        
-        # Otherwise just annotate
-        self._impl.sharding = target
-        return self
+        from ..ops import communication as comm
+        return comm.reshard(self, mesh, dim_specs, replicated_axes=replicated_axes)
 
     @property
     def sharding(self) -> Any | None:
@@ -448,6 +420,14 @@ class Tensor(DLPackArray, HasTensorValue):
             fut = pool.submit(loop.run_until_complete, self.realize)
         return fut.result()
 
+    # ===== Reduction Operations =====
+    
+    def sum(self, axis: int = 0, keepdims: bool = False) -> Tensor:
+        return reduction.reduce_sum(self, axis=axis, keepdims=keepdims)
+        
+    def mean(self, axis: int = 0, keepdims: bool = False) -> Tensor:
+        return reduction.mean(self, axis=axis, keepdims=keepdims)
+
     # ===== Data access =====
 
     def __bool__(self) -> bool:
@@ -518,6 +498,21 @@ class Tensor(DLPackArray, HasTensorValue):
         for dim in self.shape:
             elts *= int(dim)
         return elts
+
+    # ===== Unary Operators =====
+
+    def __neg__(self) -> Tensor:
+        return unary_ops.neg(self)
+        
+    def __pos__(self) -> Tensor:
+        return self
+        
+    def __abs__(self) -> Tensor:
+        return unary_ops.abs(self)
+    
+    def __invert__(self) -> Tensor:
+        # TODO: Implement bitwise not op
+        raise NotImplementedError("Bitwise NOT not yet implemented")
 
     # ===== Operators using binary_ops =====
 

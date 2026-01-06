@@ -242,7 +242,7 @@ def _validate_batch_sizes(args: tuple, in_axes: tuple[AxisSpec, ...], axis_size:
 # Batching Primitives
 # =============================================================================
 
-def _batch_tensor(tensor: Tensor, axis: AxisSpec, batch_dim) -> Tensor:
+def _batch_tensor(tensor: Tensor, axis: AxisSpec, batch_dim, spmd_axis_name: str | None) -> Tensor:
     """Prepare tensor for batched execution by moving axis to batch_dims.
     
     Follows the exact same logic as nabla/transforms/vmap.py:_batch_tensor.
@@ -255,9 +255,11 @@ def _batch_tensor(tensor: Tensor, axis: AxisSpec, batch_dim) -> Tensor:
         tensor: Input tensor
         axis: Axis specification (None for broadcast, int for batched axis)
         batch_dim: Dim object (StaticDim or SymbolicDim) for the batch dimension
+        spmd_axis_name: Optional mesh axis name to shard the batch dimension on.
     """
     from ..ops import view as l_ops
     from ..ops import _physical as p_ops
+    from ..ops import communication as comm_ops
     from max.graph.dim import StaticDim
     
     old_batch_dims = tensor._impl.batch_dims
@@ -283,30 +285,33 @@ def _batch_tensor(tensor: Tensor, axis: AxisSpec, batch_dim) -> Tensor:
         if old_batch_dims > 0:
             t = p_ops.moveaxis(t, source=old_batch_dims, destination=0)
         
-        return t
-    
-    # Batched axis case: move LOGICAL axis to front of LOGICAL shape
-    if axis != 0:
-        # Normalize negative axis
-        logical_rank = len(tensor.shape)
-        norm_axis = axis if axis >= 0 else logical_rank + axis
-        
-        # Translate to physical axis
-        physical_axis = old_batch_dims + norm_axis
-        
-        # Move to front of logical (= position old_batch_dims in physical)
-        t = p_ops.moveaxis(tensor, source=physical_axis, destination=old_batch_dims)
     else:
-        t = tensor
+        # Batched axis case: move LOGICAL axis to front of LOGICAL shape
+        if axis != 0:
+            # Normalize negative axis
+            logical_rank = len(tensor.shape)
+            norm_axis = axis if axis >= 0 else logical_rank + axis
+            
+            # Translate to physical axis
+            physical_axis = old_batch_dims + norm_axis
+            
+            # Move to front of logical (= position old_batch_dims in physical)
+            t = p_ops.moveaxis(tensor, source=physical_axis, destination=old_batch_dims)
+        else:
+            t = tensor
+        
+        # Now the batched axis is at physical position old_batch_dims (front of logical)
+        # Increment batch_dims - it becomes the LAST batch dim
+        t = p_ops.incr_batch_dims(t)
+        
+        # Move the last batch dim (at physical position old_batch_dims) to position 0
+        if old_batch_dims > 0:
+            t = p_ops.moveaxis(t, source=old_batch_dims, destination=0)
     
-    # Now the batched axis is at physical position old_batch_dims (front of logical)
-    # Increment batch_dims - it becomes the LAST batch dim
-    t = p_ops.incr_batch_dims(t)
-    
-    # Move the last batch dim (at physical position old_batch_dims) to position 0
-    if old_batch_dims > 0:
-        t = p_ops.moveaxis(t, source=old_batch_dims, destination=0)
-    
+    # Apply sharding to the new batch dimension (now at physical index 0) if requested
+    if spmd_axis_name is not None and t._impl.sharding:
+         t = comm_ops.shard_batch_dims(t, t._impl.sharding.mesh, spmd_axis_name, batch_axis=0)
+
     return t
 
 
@@ -364,6 +369,7 @@ def vmap(
     in_axes: AxisSpec = 0,
     out_axes: AxisSpec = 0,
     axis_size: int | None = None,
+    spmd_axis_name: str | None = None,
 ) -> Callable[..., T]:
     """Vectorize a function over batch dimensions.
     
@@ -383,6 +389,8 @@ def vmap(
         axis_size: Optional explicit batch size. Required when all in_axes
             are None (pure broadcast). If provided with batched inputs,
             must match the inferred batch size.
+        spmd_axis_name: Optional mesh axis name to shard the batch dimension on.
+            Requires inputs to have an associated DeviceMesh.
     
     Returns:
         Vectorized function.
@@ -407,10 +415,14 @@ def vmap(
         
         >>> # Nested vmap
         >>> vmap(vmap(fn))(x_with_two_batch_dims)
+        
+        >>> # Sharded data parallel execution
+        >>> @vmap(spmd_axis_name="data")
+        >>> def forward(x): ...
     """
     # Support decorator usage: @vmap or @vmap(in_axes=...)
     if func is None:
-        return lambda f: vmap(f, in_axes=in_axes, out_axes=out_axes, axis_size=axis_size)
+        return lambda f: vmap(f, in_axes=in_axes, out_axes=out_axes, axis_size=axis_size, spmd_axis_name=spmd_axis_name)
     
     def vectorized(*args: Any) -> Any:
         if not args:
@@ -424,7 +436,7 @@ def vmap(
         
         # Batch all inputs
         batched = tuple(
-            _map_prefix(_batch_tensor, arg, ax, batch_dim)
+            _map_prefix(_batch_tensor, arg, ax, batch_dim, spmd_axis_name)
             for arg, ax in zip(args, in_ax)
         )
         

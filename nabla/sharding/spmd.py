@@ -136,12 +136,32 @@ def infer_output_sharding(
     input_shapes = []
     for t in leaves:
         spec = t._impl.sharding
+        
+        # Determine global physical shape
+        # cached_shape is Global Physical if sharded, or local if unsharded (but local=global)
+        # We need physical shape (rank) to create correct default spec
+        shape = t._impl.cached_shape
+        if shape is None and (t._impl.sharding is None or t._impl.sharding.is_fully_replicated()):
+            shape = t._impl.physical_shape
+            
+        if shape is None:
+             # Fallback if truly unknown (should not happen in valid graph)
+             # Use logical shape + placeholder for batch dims if necessary?
+             # For now assume shape is available.
+             if t._impl.batch_dims > 0:
+                  # Try to reconstruct from logical?
+                  pass
+             shape = t.shape # Logical fallback (might be wrong rank if batch_dims!)
+        
+        phys_shape_tuple = tuple(int(d) for d in shape)
+        
         if spec is None:
             # Create replicated spec for unsharded inputs (OPEN so they can receive sharding)
-            rank = len(t.shape)
+            # Must use PHYSICAL rank
+            rank = len(phys_shape_tuple)
             spec = ShardingSpec(mesh, [DimSpec([], is_open=True) for _ in range(rank)])
         input_specs.append(spec.clone())
-        input_shapes.append(tuple(int(d) for d in t.shape))
+        input_shapes.append(phys_shape_tuple)
     
     if not any(spec.dim_specs and any(d.axes for d in spec.dim_specs) for spec in input_specs):
         return None, input_specs, False  # All inputs replicated
@@ -240,15 +260,7 @@ def create_replicated_spec(mesh: "DeviceMesh", rank: int) -> "ShardingSpec":
     return ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)])
 
 
-def needs_reshard(from_spec: Optional["ShardingSpec"], to_spec: Optional["ShardingSpec"]) -> bool:
-    """Check if specs differ requiring resharding."""
-    if (from_spec is None) != (to_spec is None):
-        return True
-    if from_spec is None:
-        return False
-    if len(from_spec.dim_specs) != len(to_spec.dim_specs):
-        return True
-    return any(f.axes != t.axes for f, t in zip(from_spec.dim_specs, to_spec.dim_specs))
+from .spec import needs_reshard
 
 
 

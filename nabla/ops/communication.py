@@ -204,7 +204,7 @@ class ShardOp(Operation):
                  
         return x[tuple(slices)]
 
-    def __call__(self, x, mesh: DeviceMesh, dim_specs: List[DimSpec]):
+    def __call__(self, x, mesh: DeviceMesh, dim_specs: List[DimSpec], replicated_axes: Optional[Set[str]] = None):
         """Shard a tensor according to the given specification.
         
         This overrides the base __call__ to handle multi-value output specially.
@@ -218,10 +218,9 @@ class ShardOp(Operation):
         # Store global shape BEFORE sharding (from input tensor)
         global_shape = None
         if isinstance(x, Tensor):
-            # Get the global shape from input (which is still unsharded)
-            global_shape = x._impl.cached_shape or (
-                x._impl.physical_shape if x._impl.physical_shape else None
-            )
+            # Get the global physical shape from input
+            # ShardOp must operate on physical shape to handle batch_dims correctly
+            global_shape = x._impl.physical_shape if x._impl.physical_shape else x._impl.cached_shape
         
         with GRAPH.graph:
             # Convert input to TensorValue
@@ -231,7 +230,7 @@ class ShardOp(Operation):
             shard_values = self.maxpr(x_val, mesh, dim_specs)
         
         # Create output tensor with multiple values
-        spec = ShardingSpec(mesh, dim_specs)
+        spec = ShardingSpec(mesh, dim_specs, replicated_axes=replicated_axes or set())
         impl = TensorImpl(
             values=shard_values,
             traced=x._impl.traced if isinstance(x, Tensor) else False,
@@ -599,6 +598,104 @@ class ReduceScatterOp(CollectiveOperation):
             return ShardingSpec(mesh, new_dim_specs)
             
         return None
+
+class ReshardOp(Operation):
+    """Generic resharding operation.
+    
+    Reshards a tensor from its current sharding (or replication) to a new target
+    sharding specification. Handles both logical to physical spec conversion
+    (for batch_dims) and the actual data movement (gather + shard).
+    """
+    
+    @property
+    def name(self) -> str:
+        return "reshard"
+    
+    def maxpr(self, *args, **kwargs):
+        """ReshardOp is a composite operation that orchestrates other ops.
+        
+        It doesn't have its own maxpr because resharding is implemented as:
+        1. all_gather (if currently sharded) -> get global tensor
+        2. shard_op -> apply new sharding
+        
+        This pattern is similar to JAX's reshard which also compiles to
+        a sequence of collectives rather than a single primitive.
+        """
+        raise NotImplementedError(
+            "ReshardOp is a composite operation. "
+            "Use __call__ which orchestrates all_gather + shard_op."
+        )
+        
+    def __call__(
+        self,
+        tensor: "Tensor",
+        mesh: "DeviceMesh",
+        dim_specs: List["DimSpec"],
+        replicated_axes: Optional[Set[str]] = None,
+    ) -> "Tensor":
+        """Reshard tensor to target specs.
+        
+        Args:
+            tensor: Input tensor
+            mesh: Target device mesh
+            dim_specs: List of DimSpecs. Can be logical (len=rank) or physical (len=rank+batch_dims).
+            replicated_axes: Optional set of axes to force replication on.
+        """
+        from ..sharding.spec import ShardingSpec, DimSpec, needs_reshard
+        from ..core.tensor import Tensor
+        
+        # 1. Handle batch_dims (Logical -> Physical conversion)
+        # If tensor has batch_dims, we might need to prepend replicated specs
+        batch_dims = tensor._impl.batch_dims
+        current_rank = len(tensor.shape) # Logical rank
+        
+        if batch_dims > 0:
+            # Check provided specs length
+            if len(dim_specs) == current_rank:
+                # User provided logical specs. Prepend replicated batch specs.
+                batch_specs = [DimSpec([], is_open=True) for _ in range(batch_dims)]
+                
+                # Inherit existing batch specs if possible
+                if tensor._impl.sharding:
+                    current_s = tensor._impl.sharding
+                    if len(current_s.dim_specs) >= batch_dims:
+                         for i in range(batch_dims):
+                             batch_specs[i] = current_s.dim_specs[i].clone()
+                             
+                dim_specs = batch_specs + list(dim_specs)
+            elif len(dim_specs) != (current_rank + batch_dims):
+                 # Length mismatch - neither logical nor physical?
+                 # Let validation downstream handle it or warn?
+                 pass
+        
+        # 2. Construct Target Spec
+        target_spec = ShardingSpec(mesh, dim_specs, replicated_axes=replicated_axes or set())
+        current_spec = tensor._impl.sharding
+        
+        # 3. Check if reshard needed
+        if not needs_reshard(current_spec, target_spec):
+            # Just return input (maybe update spec if None -> Replicated implicit)
+            # Or assume caller handles metadata update? 
+            # Ideally return tensor as-is if strictly no change.
+            # But ensure spec is set if it was None?
+            if current_spec is None:
+                 tensor._impl.sharding = target_spec
+            return tensor
+
+        # 4. Perform Resharding (Gather + Shard)
+        # Gather all sharded axes to get global data
+        result = tensor
+        if current_spec:
+            from . import all_gather
+            for dim, dim_spec in enumerate(current_spec.dim_specs):
+                if dim_spec.axes:
+                    result = all_gather(result, axis=dim)
+        
+        # Shard to target using module-level shard_op (efficient)
+        result = shard_op(result, mesh, target_spec.dim_specs, replicated_axes=target_spec.replicated_axes)
+        
+        return result
+
 
 
 class PPermuteOp(CollectiveOperation):
@@ -1204,81 +1301,7 @@ def gather_all_axes(sharded_tensor):
     return gather_all_axes_op(sharded_tensor)
 
 
-class ReshardOp(Operation):
-    """Generic resharding between different specifications.
-    
-    This operation handles complex transitions like:
-    - Axis permutation (Transpose sharding)
-    - Splitting/Merging axes
-    - Changing device meshes (if device list same)
-    
-    Implementation Strategy:
-    1. Reconstruct Global Tensor (Gather all shards)
-    2. Slice Global Tensor according to new spec (Scatter)
-    
-    Note: This is a memory-intensive simulation. Real AllToAll would exchange
-    only necessary chunks.
-    """
-    
-    @property
-    def name(self) -> str:
-        return "reshard"
-    
 
-
-    def maxpr(
-        self,
-        shard_values: List[TensorValue],
-        source_spec: "ShardingSpec",
-        target_spec: "ShardingSpec"
-    ) -> List[TensorValue]:
-        """Execute resharding logic."""
-        # 1. Reconstruct logical global tensor
-        global_tensor = gather_all_axes_op.maxpr(shard_values, source_spec)
-        
-        # 2. Shard using target spec
-        # Reuse ShardOp logic
-        return shard_op.maxpr(global_tensor, target_spec.mesh, target_spec.dim_specs)
-
-    def __call__(self, tensor, target_spec: "ShardingSpec"):
-        """Reshard tensor to target spec."""
-        from ..core.tensor import Tensor
-        from ..core.tensor_impl import TensorImpl
-        from ..core.compute_graph import GRAPH
-        
-        if not tensor._impl.sharding:
-            # Assume tensor is replicated input, just shard it
-            return shard_op(tensor, target_spec.mesh, target_spec.dim_specs)
-            
-        with GRAPH.graph:
-            vals = self.maxpr(tensor._impl._values, tensor._impl.sharding, target_spec)
-            
-        impl = TensorImpl(
-            values=vals,
-            sharding=target_spec,
-            traced=tensor._impl.traced,
-            batch_dims=tensor._impl.batch_dims
-        )
-        # Propagate cached shape/dtype
-        impl.cached_shape = tensor.shape
-        impl.cached_dtype = tensor.dtype
-        impl.cached_device = tensor.device
-        
-        return Tensor(impl=impl)
-
-reshard_op = ReshardOp()
-
-def reshard(tensor, target_spec):
-    """Reshard a tensor to a new specification.
-    
-    Args:
-        tensor: Input sharded tensor
-        target_spec: Target ShardingSpec
-        
-    Returns:
-        New tensor sharded according to target_spec
-    """
-    return reshard_op(tensor, target_spec)
 
 
 def simulate_grouped_all_reduce(
@@ -1375,6 +1398,7 @@ __all__ = [
     "reshard_op",
     # Public functions
     "shard",
+    "shard_batch_dims",
     "all_gather",
     "all_reduce",
     "reduce_scatter",
@@ -1382,7 +1406,86 @@ __all__ = [
     "all_to_all",
     "axis_index",
     "pmean",
+    "pmean",
     "gather_all_axes",
     "reshard",
     "simulate_grouped_all_reduce",
+]
+
+
+def shard_batch_dims(
+    tensor: "Tensor", 
+    mesh: "DeviceMesh", 
+    axis_names: str | List[str], 
+    batch_axis: int = 0
+) -> "Tensor":
+    """Shard the batch dimension(s) of a tensor (e.g. inside vmap).
+    
+    This allows explicit control over how vmapped batch dimensions map to the device mesh,
+    enabling JAX-like `spmd_axis_name` functionality.
+    
+    Args:
+        tensor: The tensor to shard (must have batch_dims > 0)
+        mesh: The device mesh
+        axis_names: Mesh axis name(s) to shard the batch dimension(s) on.
+                    Can be a single string (shard outer batch dim) or list (shard multiple).
+        batch_axis: Which batch dimension to start sharding from (relative to batch dims).
+                    Default 0 (the outermost batch dimension).
+                    
+    Returns:
+        Tensor sharded on the batch dimension(s).
+    """
+    from ..sharding.spec import ShardingSpec, DimSpec
+    from ..sharding.spmd import reshard_tensor
+    
+    if tensor.batch_dims == 0:
+        raise ValueError("Cannot shard batch dims of a tensor with no batch dimensions (not inside vmap?)")
+
+    if isinstance(axis_names, str):
+        axis_names = [axis_names]
+        
+    if batch_axis + len(axis_names) > tensor.batch_dims:
+        raise ValueError(
+            f"Cannot shard {len(axis_names)} axes starting at batch_axis {batch_axis}: "
+            f"tensor only has {tensor.batch_dims} batch dimensions."
+        )
+
+    # Start with existing spec or create fully replicated one
+    current_spec = tensor._impl.sharding
+    physical_rank = len(tensor._impl.physical_shape) if tensor._impl.physical_shape else (len(tensor.shape) + tensor.batch_dims)
+    
+    if current_spec:
+        # Clone existing specs
+        new_specs = [ds.clone() for ds in current_spec.dim_specs]
+        # Pad if missing (shouldn't happen with new robust logic but be safe)
+        while len(new_specs) < physical_rank:
+            new_specs.append(DimSpec([]))
+    else:
+        # Create fully replicated specs
+        new_specs = [DimSpec([]) for _ in range(physical_rank)]
+        
+    # Update the specific batch dimensions
+    for i, axis_name in enumerate(axis_names):
+        assert axis_name in mesh.axis_names, f"Axis {axis_name} not in mesh {mesh.axis_names}"
+        
+        # Physical index of the batch dimension
+        # batch dims are always at the start (0..batch_dims-1)
+        idx = batch_axis + i
+        new_specs[idx] = DimSpec([axis_name], is_open=True) # Open? Or Closed?
+        # Usually internal vmap batching is "open" conceptually, but DimSpec is data layout.
+        
+    target_spec = ShardingSpec(mesh, new_specs)
+    
+    # Reshard
+    # Use generic ReshardOp
+    return reshard(tensor, mesh, new_specs)
+
+reshard = ReshardOp()
+shard = shard_op
+
+__all__ = [
+    "CollectiveOperation",
+    "ShardOp", "AllGatherOp", "AllReduceOp", "ReduceScatterOp", "PPermuteOp", "AllToAllOp", "AxisIndexOp", "ReshardOp",
+    "shard", "all_gather", "all_reduce", "reduce_scatter", "ppermute", "all_to_all", "axis_index", "reshard",
+    "shard_batch_dims",
 ]

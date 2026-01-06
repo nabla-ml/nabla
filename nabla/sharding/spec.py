@@ -410,13 +410,15 @@ def compute_local_shape(
         >>> compute_local_shape((8, 4), spec, device_id=0)
         (4, 4)  # First half of dim 0
     """
+    if len(global_shape) != len(sharding.dim_specs):
+        raise ValueError(
+            f"Rank mismatch: global_shape has rank {len(global_shape)}, "
+            f"but sharding spec has {len(sharding.dim_specs)} dim specs. "
+            f"Ensure you are passing physical shape if sharding includes batch dims."
+        )
+
     local_shape = []
     for dim_idx in range(len(global_shape)):
-        if dim_idx >= len(sharding.dim_specs):
-            # Implicitly replicated if dim spec missing
-            local_shape.append(global_shape[dim_idx])
-            continue
-
         dim_spec = sharding.dim_specs[dim_idx]
         global_len = int(global_shape[dim_idx])
         
@@ -461,3 +463,13 @@ def get_num_shards(sharding: ShardingSpec) -> int:
         Number of shards (devices)
     """
     return len(sharding.mesh.devices)
+
+def needs_reshard(from_spec: Optional["ShardingSpec"], to_spec: Optional["ShardingSpec"]) -> bool:
+    """Check if specs differ requiring resharding."""
+    if (from_spec is None) != (to_spec is None):
+        return True
+    if from_spec is None:
+        return False
+    if len(from_spec.dim_specs) != len(to_spec.dim_specs):
+        return True
+    return any(f.axes != t.axes for f, t in zip(from_spec.dim_specs, to_spec.dim_specs))

@@ -374,6 +374,7 @@ class BinaryOperation(Operation):
     
     def _unsqueeze_to_rank(self, t: Tensor, target_rank: int, current_batch_dims: int, target_batch_dims: int) -> Tensor:
         from . import view as view_ops
+        from max.graph import ops
         
         current_rank = len(t._impl.physical_shape)
         batch_dims_to_add = target_batch_dims - current_batch_dims
