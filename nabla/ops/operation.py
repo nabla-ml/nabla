@@ -339,70 +339,97 @@ class BinaryOperation(Operation):
     
     def _prepare_for_broadcast(self, x: Tensor, y: Tensor, out_batch_dims: int) -> tuple[Tensor, Tensor]:
         from . import view as view_ops
+        from . import _physical as physical_ops
         
-        # Use GLOBAL shapes for broadcast logic (not shard-local)
-        # This ensures sharded tensors broadcast correctly based on logical dims
-        x_global = tuple(d for d in x._impl.global_shape or x._impl.physical_shape)
-        y_global = tuple(d for d in y._impl.global_shape or y._impl.physical_shape)
-        x_batch = x._impl.batch_dims
-        y_batch = y._impl.batch_dims
+        # 1. Align LOGICAL ranks first (Standard Numpy broadcasting)
+        # This pads dimensions on the LEFT of the logical shape (inner relative to batch)
+        x_logical_rank = len(x.shape)
+        y_logical_rank = len(y.shape)
+        target_logical_rank = max(x_logical_rank, y_logical_rank)
         
-        # Split into batch and logical (using global shapes)
-        x_batch_shape = x_global[:x_batch]
-        x_logical_shape = x_global[x_batch:]
-        y_batch_shape = y_global[:y_batch]
-        y_logical_shape = y_global[y_batch:]
+    def _prepare_for_broadcast(self, x: Tensor, y: Tensor, out_batch_dims: int) -> tuple[Tensor, Tensor]:
+        """Align tensors for broadcasting.
         
-        # Compute broadcasted shapes (using global shapes)
-        out_batch_shape = self._broadcast_shapes(x_batch_shape, y_batch_shape)
-        out_logical_shape = self._broadcast_shapes(x_logical_shape, y_logical_shape)
-        out_physical_shape = out_batch_shape + out_logical_shape
+        Strategy:
+        1. Align LOGICAL ranks using logical unsqueeze (translates to physical unsqueeze with offset).
+        2. Broadcast to final PHYSICAL shape (handles batch dim alignment via standard right-alignment).
         
-        # Prepare x - unsqueeze then broadcast
-        x = self._unsqueeze_to_rank(x, len(out_physical_shape), x_batch, out_batch_dims)
-        current = tuple(d for d in (x._impl.global_shape or x._impl.physical_shape))
-        if current != out_physical_shape:
-            x = view_ops.broadcast_to(x, out_logical_shape)
-        
-        # Prepare y - unsqueeze then broadcast
-        y = self._unsqueeze_to_rank(y, len(out_physical_shape), y_batch, out_batch_dims)
-        current = tuple(d for d in (y._impl.global_shape or y._impl.physical_shape))
-        if current != out_physical_shape:
-            y = view_ops.broadcast_to(y, out_logical_shape)
-        
-        return x, y
-    
-    def _unsqueeze_to_rank(self, t: Tensor, target_rank: int, current_batch_dims: int, target_batch_dims: int) -> Tensor:
+        Args:
+           x: First input
+           y: Second input
+           out_batch_dims: The target number of batch dimensions (usually max(x.bd, y.bd))
+           
+        Returns:
+           (x, y) adjusted to have same physical shape/rank.
+        """
         from . import view as view_ops
-        from max.graph import ops
+        from . import _physical as physical_ops
         
-        current_rank = len(t._impl.physical_shape)
-        batch_dims_to_add = target_batch_dims - current_batch_dims
-        current_logical_rank = current_rank - current_batch_dims
-        target_logical_rank = target_rank - target_batch_dims
-        logical_dims_to_add = target_logical_rank - current_logical_rank
+        x_logical_rank = len(x.shape)
+        y_logical_rank = len(y.shape)
         
-        # Add batch dims at front (logical axis 0 repeatedly)
-        for _ in range(batch_dims_to_add):
-            t = view_ops.unsqueeze(t, axis=0)
+        # 1. Align Logical Ranks (prepend 1s to logical shape)
+        # This ensures that (H, W) matches (C, H, W) correctly logically
+        if x_logical_rank < y_logical_rank:
+            for _ in range(y_logical_rank - x_logical_rank):
+                x = self._unsqueeze_logical(x, 0)
+        elif y_logical_rank < x_logical_rank:
+            for _ in range(x_logical_rank - y_logical_rank):
+                y = self._unsqueeze_logical(y, 0)
+        
+        # 2. Compute target physical shape
+        # We need to broadcast to the common shape.
+        # Since we aligned logical ranks, logical parts should broadcast standardly.
+        # Batch parts: standard broadcasting (right-aligned) correctly handles 
+        # prepending missing batch dimensions.
+        
+        try:
+            def get_shape_tuple(t):
+                 if t._impl.cached_shape is not None: return tuple(t._impl.cached_shape)
+                 if t._impl.physical_shape is not None: return tuple(t._impl.physical_shape)
+                 # Final fallback: convert Dims to int if possible
+                 try:
+                    return tuple(int(d) for d in t.shape)
+                 except (TypeError, ValueError):
+                    # Handle symbolic/dynamic shapes gracefully? 
+                    # For now just return raw shape if int conversion fails
+                    return tuple(t.shape)
             
-        # Update batch_dims if we added any, so that subsequent logical ops 
-        # (like unsqueeze for logical dims) respect the new batch structure.
-        if batch_dims_to_add > 0:
-            t._impl.batch_dims = target_batch_dims
+            s1 = get_shape_tuple(x)
+            s2 = get_shape_tuple(y)
+            target_phys = self._broadcast_shapes(s1, s2)
+        except ValueError:
+             # If direct broadcast fails, it might be due to user logical error, let it bubble
+             raise
+             
+        # 3. Apply Physical Broadcast
+        if s1 != target_phys:
+            x = physical_ops.broadcast_to_physical(x, target_phys)
             
-        # Add logical dims (at position = target_batch_dims, which is logical 0 after batch adds)
-        for _ in range(logical_dims_to_add):
-            t = view_ops.unsqueeze(t, axis=0)
+        if s2 != target_phys:
+            y = physical_ops.broadcast_to_physical(y, target_phys)
+            
+        # 4. Ensure batch_dims metadata is correct on outputs
+        if x._impl.batch_dims != out_batch_dims:
+            x = physical_ops._copy_impl_with_batch_dims(x, out_batch_dims)
         
-        return t
-    
-    @staticmethod
-    def _broadcast_shapes(shape1: tuple, shape2: tuple) -> tuple:
-        max_len = max(len(shape1), len(shape2))
-        s1 = (1,) * (max_len - len(shape1)) + tuple(shape1)
-        s2 = (1,) * (max_len - len(shape2)) + tuple(shape2)
-        
+        if y._impl.batch_dims != out_batch_dims:
+            y = physical_ops._copy_impl_with_batch_dims(y, out_batch_dims)
+            
+        return x, y
+
+    def _unsqueeze_logical(self, t: Tensor, axis: int) -> Tensor:
+        from . import view as view_ops
+        return view_ops.unsqueeze(t, axis)
+
+    def _broadcast_shapes(self, s1: tuple[int, ...], s2: tuple[int, ...]) -> tuple[int, ...]:
+        """Compute broadcast shape of two physical shapes."""
+        # Standard numpy-style broadcasting
+        if len(s1) > len(s2):
+            s2 = (1,) * (len(s1) - len(s2)) + s2
+        elif len(s2) > len(s1):
+            s1 = (1,) * (len(s2) - len(s1)) + s1
+            
         result = []
         for d1, d2 in zip(s1, s2):
             if d1 == d2:
@@ -412,7 +439,7 @@ class BinaryOperation(Operation):
             elif d2 == 1:
                 result.append(d1)
             else:
-                raise ValueError(f"Cannot broadcast shapes {shape1} and {shape2}")
+                raise ValueError(f"Operands could not be broadcast together with shapes {s1} {s2}")
         return tuple(result)
 
 
@@ -458,8 +485,23 @@ class LogicalShapeOperation(Operation):
     """
     
     def __call__(self, x: Tensor, *, shape: tuple[int, ...]) -> Tensor:
-        batch_shape = x._impl.batch_shape
-        physical_shape = tuple(batch_shape) + tuple(shape) if batch_shape else tuple(shape)
+        batch_dims = x._impl.batch_dims
+        
+        if batch_dims > 0:
+            # For sharded tensors, use GLOBAL batch shape from cached_shape
+            # (not local batch_shape which is per-shard)
+            # This ensures consistency with infer_output_sharding which uses cached_shape
+            if x._impl.cached_shape is not None:
+                global_batch_shape = tuple(int(d) for d in x._impl.cached_shape[:batch_dims])
+            elif x._impl.batch_shape is not None:
+                # Fallback to local batch_shape for unsharded tensors
+                global_batch_shape = tuple(int(d) for d in x._impl.batch_shape)
+            else:
+                global_batch_shape = ()
+            physical_shape = global_batch_shape + tuple(shape)
+        else:
+            physical_shape = tuple(shape)
+        
         return super().__call__(x, shape=physical_shape)
 
 

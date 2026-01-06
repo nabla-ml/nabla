@@ -50,8 +50,10 @@ def ensure_specs(args: tuple, mesh: Optional["DeviceMesh"]) -> tuple:
             return x
         if x._impl.sharding is not None:
             return x
-        rank = len(x.shape)
-        x._impl.sharding = ShardingSpec(mesh, [DimSpec([], is_open=True) for _ in range(rank)])
+        # Use PHYSICAL rank (logical + batch_dims) for sharding spec
+        # Sharding specs must cover ALL physical dimensions
+        physical_rank = len(x.shape) + x._impl.batch_dims
+        x._impl.sharding = ShardingSpec(mesh, [DimSpec([], is_open=True) for _ in range(physical_rank)])
         return x
     
     return pytree.tree_map(assign_spec, args)
@@ -132,6 +134,14 @@ def infer_output_sharding(
     if not leaves:
         return None, [], False
     
+    def dim_to_int(d):
+        """Safely convert Dim object to int."""
+        try:
+            return int(d)
+        except (TypeError, ValueError):
+            # Symbolic dim - use a placeholder size (shouldn't happen in practice)
+            return 1
+    
     input_specs = []
     input_shapes = []
     for t in leaves:
@@ -145,15 +155,18 @@ def infer_output_sharding(
             shape = t._impl.physical_shape
             
         if shape is None:
-             # Fallback if truly unknown (should not happen in valid graph)
-             # Use logical shape + placeholder for batch dims if necessary?
-             # For now assume shape is available.
-             if t._impl.batch_dims > 0:
-                  # Try to reconstruct from logical?
-                  pass
-             shape = t.shape # Logical fallback (might be wrong rank if batch_dims!)
-        
-        phys_shape_tuple = tuple(int(d) for d in shape)
+             # Fallback: reconstruct physical shape from logical + batch_shape
+             batch_dims = t._impl.batch_dims
+             if batch_dims > 0 and t._impl.batch_shape is not None:
+                  # Prepend batch dims to logical shape
+                  batch_ints = tuple(dim_to_int(d) for d in t._impl.batch_shape)
+                  logical_ints = tuple(dim_to_int(d) for d in t.shape)
+                  phys_shape_tuple = batch_ints + logical_ints
+             else:
+                  # No batch dims or batch_shape unavailable - use logical as physical
+                  phys_shape_tuple = tuple(dim_to_int(d) for d in t.shape)
+        else:
+            phys_shape_tuple = tuple(dim_to_int(d) for d in shape)
         
         if spec is None:
             # Create replicated spec for unsharded inputs (OPEN so they can receive sharding)
@@ -329,13 +342,40 @@ def ensure_shard_values(tensor: "Tensor") -> list:
             
     return []
 
+
+def reshard_inputs(
+    args: List["Tensor"], 
+    input_shardings: List[ShardingSpec], 
+    mesh: "DeviceMesh"
+) -> List["Tensor"]:
+    """Ensure all inputs match the required sharding specs, inserting ReshardOps if needed."""
+    if mesh is None or not input_shardings:
+        return args
+        
+    resharded_args = []
+    
+    for x, target_spec in zip(args, input_shardings):
+         if not hasattr(x, '_impl'): # Skip non-tensors
+             resharded_args.append(x)
+             continue
+             
+         current = x._impl.sharding
+         
+         if needs_reshard(current, target_spec):
+             x = reshard_tensor(x, current, target_spec, mesh)
+             
+         resharded_args.append(x)
+         
+    # If args was tuple, return tuple (since we appended to list)
+    if isinstance(args, tuple):
+        return tuple(resharded_args)
+    return resharded_args
+
+
 def get_shard_args(args: tuple, shard_idx: int, 
                    per_input_shardings: "List[Optional[ShardingSpec]]",
                    g: Any, Tensor: type, pytree: Any) -> tuple:
     """Get per-shard TensorValues, slicing each input according to its OWN sharding.
-    
-    For already-sharded inputs: use their shard values.
-    For replicated inputs: slice according to that input's propagated sharding.
     
     Args:
         args: Input arguments (may contain Tensors)
@@ -345,44 +385,34 @@ def get_shard_args(args: tuple, shard_idx: int,
         Tensor: Tensor class
         pytree: pytree module
     """
-    from typing import List
-    
-    input_idx = [0]  # Use list for closure mutation
+    # Use list for closure mutation
+    input_idx = [0]
     
     def extract(x):
         if not isinstance(x, Tensor):
             return x
         
-        # Get THIS input's sharding (may differ from other inputs)
+        # Get THIS input's sharding
         this_sharding = None
-        if input_idx[0] < len(per_input_shardings):
+        if per_input_shardings and input_idx[0] < len(per_input_shardings):
             this_sharding = per_input_shardings[input_idx[0]]
         input_idx[0] += 1
         
-        vals = ensure_shard_values(x)
-        candidate = None
-        
-        if len(vals) > 1 and shard_idx < len(vals):
-            # We have specific value for this shard (could be replicated or sharded)
-            candidate = vals[shard_idx]
-        else:
-            # Fallback to global value (or lazy load)
-            candidate = g.TensorValue(x)
-        
-        # If we need sharding, check if we need to slice
-        if this_sharding and not this_sharding.is_fully_replicated():
-            # If candidate shape matches global shape, we imply it's full data (replicated)
-            # and needs to be sliced to match the target sharding.
-            # NOTE: We use strict equality check on known dimensions.
-            if tuple(candidate.type.shape) == tuple(x.shape):
-                 return slice_for_shard(candidate, x.shape, this_sharding, shard_idx)
-        
-        return candidate
+        if x._impl.is_sharded:
+            vals = x._impl._values
+            
+            if len(vals) > 1 and shard_idx < len(vals):
+                # Distributed/Simulated: Return specific shard
+                return vals[shard_idx]
+            elif len(vals) == 1:
+                return x.__tensorvalue__()
+            else:
+                return x.__tensorvalue__()
+                
+        # Unsharded case
+        return x.__tensorvalue__()
     
     return pytree.tree_map(extract, args)
-
-
-
 
 
 
@@ -392,11 +422,7 @@ def get_shard_args(args: tuple, shard_idx: int,
 
 def reshard_tensor(tensor: "Tensor", from_spec: Optional["ShardingSpec"],
                    to_spec: Optional["ShardingSpec"], mesh: "DeviceMesh") -> "Tensor":
-    """Reshard tensor from one sharding spec to another.
-    
-    Strategy: Gather all sharded axes to get global data, then shard according to target.
-    This is simpler and more robust than incremental gather/shard.
-    """
+    """Reshard tensor from one sharding spec to another."""
     from ..ops.communication import all_gather, shard as shard_op
     from ..sharding.spec import DimSpec
     
@@ -409,20 +435,12 @@ def reshard_tensor(tensor: "Tensor", from_spec: Optional["ShardingSpec"],
     if not needs_reshard(from_spec, to_spec):
         return tensor
 
-    # Step 1: Gather all axes to get fully replicated (global) tensor
-    # We iterate over the *current* sharding spec (from_spec)
-    # and all_gather any dimension that is sharded.
     result = tensor
     if from_spec:
         for dim, dim_spec in enumerate(from_spec.dim_specs):
-            # If this dimension is sharded (has axes), gather it
             if dim_spec.axes:
-                 # Note: all_gather adds 'Replication' semantics to this dim
-                 # but keeps the Tensor rank same.
-                 # The resulting tensor has updated sharding (replicated on this dim).
                  result = all_gather(result, axis=dim)
     
-    # Step 2: Apply target sharding (shard_op works on global data)
     result = shard_op(result, mesh, to_spec.dim_specs)
     
     return result

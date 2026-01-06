@@ -126,9 +126,16 @@ class BroadcastToPhysicalOp(Operation):
         from ..sharding.propagation import OpShardingRuleTemplate
         
         in_shape = input_shapes[0]
-        # shape kwarg might be missing if inferred? But for physical op it's required arg
-        # However, output_shapes[0] is reliable source of truth
-        out_shape = output_shapes[0]
+        
+        # Output shape source: kwargs 'shape' is primary for Physical op,
+        # but output_shapes[0] is valid if provided.
+        if output_shapes is not None:
+             out_shape = output_shapes[0]
+        else:
+             out_shape = kwargs.get("shape")
+             
+        if out_shape is None:
+             raise ValueError("BroadcastToPhysicalOp requires 'shape' kwarg or output_shapes")
         
         in_rank = len(in_shape)
         out_rank = len(out_shape)
@@ -162,7 +169,20 @@ class BroadcastToPhysicalOp(Operation):
                 # Standard mapping (identity or 1->1)
                 in_mapping[i] = [factors[out_dim_idx]]
                 
+                
         return OpShardingRuleTemplate([in_mapping], [out_mapping]).instantiate(input_shapes, output_shapes)
+
+    def _transform_shard_kwargs(self, kwargs: dict, output_sharding: Any, shard_idx: int) -> dict:
+        """Convert global target shape to local shape for each shard."""
+        from ..sharding.spec import compute_local_shape
+        
+        global_shape = kwargs.get('shape')
+        if global_shape is None or output_sharding is None:
+            return kwargs
+        
+        # output_sharding is expected to be a single ShardingSpec for this op
+        local_shape = compute_local_shape(global_shape, output_sharding, device_id=shard_idx)
+        return {**kwargs, 'shape': local_shape}
 
 
 # =============================================================================
