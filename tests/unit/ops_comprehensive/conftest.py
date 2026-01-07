@@ -68,6 +68,13 @@ def assert_shape(result: Tensor, expected_shape: tuple):
     assert actual == expected_shape, f"Shape mismatch: got {actual}, expected {expected_shape}"
 
 
+def assert_physical_shape(result: Tensor, expected_shape: tuple):
+    """Assert tensor's physical shape (global_shape) matches expected."""
+    actual = result.global_shape or result.local_shape
+    actual = tuple(int(d) for d in actual)
+    assert actual == expected_shape, f"Physical shape mismatch: got {actual}, expected {expected_shape}"
+
+
 def assert_dtype(result: Tensor, expected_dtype):
     """Assert tensor dtype matches expected."""
     assert result.dtype == expected_dtype, f"Dtype mismatch: got {result.dtype}, expected {expected_dtype}"

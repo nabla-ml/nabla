@@ -22,10 +22,9 @@ class ReduceSumOp(ReduceOperation):
         return "reduce_sum"
     
     def maxpr(self, x: TensorValue, *, axis: int, keepdims: bool = False) -> TensorValue:
-        result = ops.sum(x, axis)
-        if not keepdims:
-            result = ops.squeeze(result, axis)
-        return result
+        # maxpr must only have ONE MAX operation for sharding propagation to work correctly.
+        # keepdims is always True here; squeeze happens at Tensor level if needed.
+        return ops.sum(x, axis)
     
     def sharding_rule(
         self,
@@ -33,12 +32,12 @@ class ReduceSumOp(ReduceOperation):
         output_shapes: list[tuple[int, ...]],
         **kwargs: Any,
     ) -> Any:
-        """Reduce: (d0, d1, ...) -> (d0, ...) with reduce_dim removed."""
+        """Reduce: (d0, d1, ...) -> (d0, 1, ...) with reduce_dim kept as size 1."""
         from ..sharding.propagation import reduce_template
         rank = len(input_shapes[0])
         axis = kwargs.get("axis", 0)
-        keepdims = kwargs.get("keepdims", False)
-        return reduce_template(rank, [axis], keepdims).instantiate(input_shapes, output_shapes)
+        # maxpr always keeps dims; squeeze happens at Tensor level
+        return reduce_template(rank, [axis], keepdims=True).instantiate(input_shapes, output_shapes)
     
     def infer_output_shape(self, input_shapes: list[tuple[int, ...]], **kwargs: Any) -> tuple[int, ...]:
         """Compute output shape for reduction."""
@@ -60,10 +59,9 @@ class MeanOp(ReduceOperation):
         return "mean"
     
     def maxpr(self, x: TensorValue, *, axis: int, keepdims: bool = False) -> TensorValue:
-        result = ops.mean(x, axis)
-        if not keepdims:
-            result = ops.squeeze(result, axis)
-        return result
+        # maxpr must only have ONE MAX operation for sharding propagation to work correctly.
+        # keepdims is always True here; squeeze happens at Tensor level if needed.
+        return ops.mean(x, axis)
     
     def sharding_rule(
         self,
@@ -71,12 +69,12 @@ class MeanOp(ReduceOperation):
         output_shapes: list[tuple[int, ...]],
         **kwargs: Any,
     ) -> Any:
-        """Reduce: (d0, d1, ...) -> (d0, ...) with reduce_dim removed."""
+        """Reduce: (d0, d1, ...) -> (d0, 1, ...) with reduce_dim kept as size 1."""
         from ..sharding.propagation import reduce_template
         rank = len(input_shapes[0])
         axis = kwargs.get("axis", 0)
-        keepdims = kwargs.get("keepdims", False)
-        return reduce_template(rank, [axis], keepdims).instantiate(input_shapes, output_shapes)
+        # maxpr always keeps dims; squeeze happens at Tensor level
+        return reduce_template(rank, [axis], keepdims=True).instantiate(input_shapes, output_shapes)
     
     def infer_output_shape(self, input_shapes: list[tuple[int, ...]], **kwargs: Any) -> tuple[int, ...]:
         """Compute output shape for reduction."""
@@ -93,11 +91,17 @@ class MeanOp(ReduceOperation):
 
 _reduce_sum_op = ReduceSumOp()
 _mean_op = MeanOp()
-
-
-
 def reduce_sum(x: Tensor, *, axis: int, keepdims: bool = False) -> Tensor:
-    return _reduce_sum_op(x, axis=axis, keepdims=keepdims)
+    from .view import squeeze
+    
+    # The sharding rule always assumes keepdims=True output shape then squeeze separately
+    result = _reduce_sum_op(x, axis=axis, keepdims=True)
+    
+    if not keepdims:
+        # Squeeze at Tensor level so sharding propagation handles it correctly
+        result = squeeze(result, axis=axis)
+    
+    return result
 
 
 def mean(x: Tensor, *, axis: int, keepdims: bool = False) -> Tensor:

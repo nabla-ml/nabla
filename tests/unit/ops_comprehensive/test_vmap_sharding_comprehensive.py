@@ -644,7 +644,6 @@ class TestNestedVmapSharding:
 class TestVmapCompositeSharded:
     """Test vmap on composite functions with sharding."""
     
-    @pytest.mark.xfail(reason="Known limitation: unsharded tensors (w, b) captured in vmap with sharded input need proper broadcast handling")
     @pytest.mark.parametrize("mesh_shape,mesh_axes", [
         ((2,), ("dp",)),
         ((4,), ("dp",)),

@@ -112,20 +112,8 @@ class BroadcastToOp(LogicalShapeOperation):
         return "broadcast_to"
     
     def maxpr(self, x: TensorValue, *, shape: tuple[int, ...], batch_dims: int = 0) -> TensorValue:
-        # Numpy broadcast aligns from the right. If input has fewer dims than target,
-        # we need to unsqueeze to add the missing dimensions.
-        # 
-        # For batched tensors: physical shape = (batch..., logical...)
-        # We insert the new dims AFTER the batch dims so broadcast aligns correctly.
-        # E.g., scalar with batch_dims=1: (4,) -> (4, 1) -> broadcast to (4, 8)
-        in_rank = x.rank
-        out_rank = len(shape)
-        
-        if in_rank < out_rank:
-            # Add dimensions after batch_dims (at position batch_dims)
-            for _ in range(out_rank - in_rank):
-                x = ops.unsqueeze(x, batch_dims)
-        
+        # Simple same-rank broadcast. Any unsqueezing should happen at the Tensor level
+        # (in the broadcast_to function) so sharding propagation can handle it.
         return ops.broadcast_to(x, shape)
     
     def sharding_rule(
@@ -217,6 +205,25 @@ def swap_axes(x: Tensor, axis1: int, axis2: int) -> Tensor:
     return _swap_axes_op(x, axis1=axis1, axis2=axis2)
 
 def broadcast_to(x: Tensor, shape: tuple[int, ...]) -> Tensor:
+    # Numpy broadcast aligns from the right. If input has fewer dims than target,
+    # we need to unsqueeze to add the missing dimensions.
+    #
+    # For batched tensors: physical shape = (batch..., logical...)
+    # We insert the new dims AFTER the batch dims so broadcast aligns correctly.
+    # E.g., scalar with batch_dims=1, logical shape () -> broadcast to (8,)
+    #       physical (4,) -> unsqueeze at axis=1 -> (4, 1) -> broadcast to (4, 8)
+    #
+    # IMPORTANT: This must happen at Tensor level (not in maxpr) so that
+    # unsqueeze operations go through sharding propagation.
+    in_logical_rank = len(x.shape)
+    out_logical_rank = len(shape)
+    
+    if in_logical_rank < out_logical_rank:
+        batch_dims = x._impl.batch_dims
+        # Insert dimensions after batch dims (at logical position 0, which is physical batch_dims)
+        for _ in range(out_logical_rank - in_logical_rank):
+            x = unsqueeze(x, axis=0)  # Logical axis 0 -> physical axis batch_dims
+    
     return _broadcast_to_op(x, shape=shape)
 
 def reshape(x: Tensor, shape: tuple[int, ...]) -> Tensor:
