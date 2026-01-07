@@ -16,7 +16,7 @@ import numpy as np
 from typing import Callable
 
 import nabla
-from nabla import Tensor, DeviceMesh
+from nabla import Tensor, DeviceMesh, P
 from nabla.sharding.spec import DimSpec
 
 

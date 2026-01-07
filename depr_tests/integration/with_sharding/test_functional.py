@@ -18,7 +18,7 @@ from nabla import Tensor
 from nabla.sharding import DeviceMesh, DimSpec
 from nabla.ops.unary import relu
 
-from tests.common.sharding_utils import make_array, make_randn
+from depr_tests.common.sharding_utils import make_array, make_randn
 
 
 class TestMLPSharded:

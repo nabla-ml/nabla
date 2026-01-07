@@ -2,25 +2,38 @@
 
 ## Context Summary
 
-This document provides a complete plan for implementing rigorous unit tests for the nabla ML framework. Paste this into your first prompt to resume work.
+This document provides a complete plan for implementing rigorous unit tests for the nabla ML framework.
 
-### What We've Done So Far
+### Current Status (Updated January 2026)
 
-1. **Fixed bugs**:
-   - `AllGatherOp.maxpr()` for 2D meshes
-   - Added `is_sharded` and `physical_shape` properties to `Tensor` class
-   - Cleaned up duplicate `_prepare_for_broadcast` method
+**Test Files:**
+- `conftest.py` - Shared fixtures and helpers ✅
+- `test_physical_ops.py` - Physical operations tests ✅
+- `test_logical_ops.py` - Logical operations without batch_dims ✅
+- `test_vmap_ops.py` - Basic vmap transform tests ✅
+- `test_vmap_sharding_comprehensive.py` - vmap + sharding inside function ✅
+- `test_vmap_advanced.py` - Advanced in_axes/out_axes variations ✅ (NEW)
+- `test_binary_ops_sharding.py` - Binary ops sharding propagation ✅ (NEW)
 
-2. **Started test suite** in `tests/unit/ops_comprehensive/`:
-   - Created `conftest.py` with shared fixtures (NEEDS FIXES - see below)
-   - Created `test_physical_ops.py`, `test_logical_ops.py`, `test_vmap_ops.py` (NOT YET VALIDATED)
+### Key Findings
 
-3. **Key Learnings**:
-   - `tensor.shape` returns **LOGICAL** shape (excludes batch_dims prefix)
-   - `tensor._impl.physical_shape` returns **PHYSICAL** shape
-   - `DeviceMesh` constructor: `DeviceMesh("name", (shape,), ("axis_names",))`
-   - Tensor realization is async: `asyncio.run(tensor.realize)`
-   - Use `Tensor.from_dlpack(np_array)` for tensor creation
+1. **vmap + sharding tests are CORRECT**: Tests in `test_vmap_sharding_comprehensive.py` properly
+   apply sharding INSIDE the vmapped function on logical shapes. This is the intended pattern.
+
+2. **Binary ops DO have sharding rules**: The `Operation.sharding_rule()` method returns
+   `elementwise_template(rank)` for binary ops, which correctly propagates sharding from
+   both inputs to the output.
+
+3. **Two valid testing patterns for vmap + sharding**:
+   - Pattern A (test_vmap_sharding_comprehensive.py): Shard INSIDE vmap function on logical shapes
+   - Pattern B (test_vmap_ops.py): Pre-shard inputs before vmap (data parallelism pattern)
+
+### Key Learnings:
+- `tensor.shape` returns **LOGICAL** shape (excludes batch_dims prefix)
+- `tensor._impl.physical_shape` returns **PHYSICAL** shape
+- `DeviceMesh` constructor: `DeviceMesh("name", (shape,), ("axis_names",))`
+- Tensor realization is async: `asyncio.run(tensor.realize)`
+- Use `Tensor.from_dlpack(np_array)` for tensor creation
 
 ---
 

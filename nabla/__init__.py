@@ -132,6 +132,7 @@ from .sharding.spec import (
     compute_local_shape,
     get_num_shards,
 )
+from .sharding.partition_spec import P, PartitionSpec
 
 __all__ = [
     # Context
@@ -222,6 +223,8 @@ __all__ = [
     "DeviceMesh",
     "DimSpec",
     "ShardingSpec",
+    "P",
+    "PartitionSpec",
     "compute_local_shape",
     "get_num_shards",
     # Debug
