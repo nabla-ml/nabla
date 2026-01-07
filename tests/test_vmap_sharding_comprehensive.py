@@ -311,14 +311,18 @@ class TestVmapReductionsWithSharding:
 class TestVmapViewOpsWithSharding:
     """Test vmap on view ops with sharding."""
     
-    def test_vmap_reshape_with_sharding(self):
-        """vmap(reshape) with sharded input."""
+    def test_vmap_reshape_merge_sharded_dim(self):
+        """vmap(reshape) that merges a sharded dimension.
+        
+        This tests the case where reshape merges a sharded dimension with another.
+        The library should automatically gather before reshape to maintain correctness.
+        """
         batch = 4
         mesh = DeviceMesh("mesh", (2,), ("tp",))
         
         def f(x):  # x has LOGICAL shape (8, 16)
-            x_sharded = x.shard(mesh, P(None, "tp"))
-            return reshape(x_sharded, (128,))
+            x_sharded = x.shard(mesh, P(None, "tp"))  # Shard dim 1
+            return reshape(x_sharded, (128,))  # Merge dims - triggers auto-gather
         
         np_x = make_array(batch, 8, 16, seed=42)
         x = tensor_from_numpy(np_x)
@@ -327,6 +331,44 @@ class TestVmapViewOpsWithSharding:
         expected = np_x.reshape(batch, 128)
         
         assert_shape(result, (batch, 128))
+        assert_allclose(result, expected)
+    
+    def test_vmap_reshape_split_sharded_dim(self):
+        """vmap(reshape) that splits a sharded dimension - no gather needed."""
+        batch = 4
+        mesh = DeviceMesh("mesh", (2,), ("tp",))
+        
+        def f(x):  # x has LOGICAL shape (128,) sharded on dim 0
+            x_sharded = x.shard(mesh, P("tp"))
+            # Reshape (128,) -> (8, 16): splits the sharded dimension
+            return reshape(x_sharded, (8, 16))
+        
+        np_x = make_array(batch, 128, seed=42)
+        x = tensor_from_numpy(np_x)
+        
+        result = vmap(f)(x)
+        expected = np_x.reshape(batch, 8, 16)
+        
+        assert_shape(result, (batch, 8, 16))
+        assert_allclose(result, expected)
+    
+    def test_vmap_reshape_unsharded_dim(self):
+        """vmap(reshape) where the reshaping dimension is NOT sharded."""
+        batch = 4
+        mesh = DeviceMesh("mesh", (2,), ("tp",))
+        
+        def f(x):  # x has LOGICAL shape (8, 16) with first dim sharded
+            x_sharded = x.shard(mesh, P("tp", None))  # Shard on dim 0 (rows)
+            # Reshape only the unsharded dim: (8, 16) -> (8, 4, 4)
+            return reshape(x_sharded, (8, 4, 4))
+        
+        np_x = make_array(batch, 8, 16, seed=42)
+        x = tensor_from_numpy(np_x)
+        
+        result = vmap(f)(x)
+        expected = np_x.reshape(batch, 8, 4, 4)
+        
+        assert_shape(result, (batch, 8, 4, 4))
         assert_allclose(result, expected)
     
     def test_vmap_swap_axes_with_sharding(self):
@@ -600,13 +642,17 @@ class TestVmapShardingAllViewOps:
         ((2, 2), ("dp", "tp")),
     ])
     def test_reshape_with_sharding(self, mesh_shape, mesh_axes):
-        """vmap(reshape) with sharded input - tests sharding on reshaped dims."""
+        """vmap(reshape) with sharded input - merge pattern.
+        
+        Tests reshape that merges a sharded dimension. The library should
+        auto-gather to maintain correctness.
+        """
         batch = 4
         mesh = DeviceMesh("mesh", mesh_shape, mesh_axes)
         
-        def f(x):  # x has LOGICAL shape (8, 16)
+        def f(x):  # x has LOGICAL shape (8, 16) sharded on dim 1
             x_sharded = x.shard(mesh, P(None, mesh_axes[-1]))
-            return reshape(x_sharded, (128,))
+            return reshape(x_sharded, (128,))  # Merge dims
         
         np_x = make_array(batch, 8, 16, seed=42)
         x = tensor_from_numpy(np_x)
