@@ -111,7 +111,21 @@ class BroadcastToOp(LogicalShapeOperation):
     def name(self) -> str:
         return "broadcast_to"
     
-    def maxpr(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
+    def maxpr(self, x: TensorValue, *, shape: tuple[int, ...], batch_dims: int = 0) -> TensorValue:
+        # Numpy broadcast aligns from the right. If input has fewer dims than target,
+        # we need to unsqueeze to add the missing dimensions.
+        # 
+        # For batched tensors: physical shape = (batch..., logical...)
+        # We insert the new dims AFTER the batch dims so broadcast aligns correctly.
+        # E.g., scalar with batch_dims=1: (4,) -> (4, 1) -> broadcast to (4, 8)
+        in_rank = x.rank
+        out_rank = len(shape)
+        
+        if in_rank < out_rank:
+            # Add dimensions after batch_dims (at position batch_dims)
+            for _ in range(out_rank - in_rank):
+                x = ops.unsqueeze(x, batch_dims)
+        
         return ops.broadcast_to(x, shape)
     
     def sharding_rule(
@@ -158,7 +172,7 @@ class ReshapeOp(LogicalShapeOperation):
     def name(self) -> str:
         return "reshape"
     
-    def maxpr(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
+    def maxpr(self, x: TensorValue, *, shape: tuple[int, ...], batch_dims: int = 0) -> TensorValue:
         return ops.reshape(x, shape)
     
     def infer_output_rank(self, input_shapes, **kwargs) -> int:

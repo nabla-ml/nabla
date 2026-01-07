@@ -220,7 +220,7 @@ class ShardOp(Operation):
         if isinstance(x, Tensor):
             # Get the global physical shape from input
             # ShardOp must operate on physical shape to handle batch_dims correctly
-            global_shape = x._impl.physical_shape if x._impl.physical_shape else x._impl.cached_shape
+            global_shape = x._impl.physical_shape if x._impl.physical_shape else x.global_shape
         
         with GRAPH.graph:
             # Convert input to TensorValue
@@ -297,7 +297,9 @@ class AllGatherOp(Operation):
             sharded_axis_name: Name of the mesh axis that was sharded
             
         Returns:
-            List of replicated TensorValues (all identical)
+            List of TensorValues - gathered along the specified axis.
+            For 2D+ meshes, each device gets its appropriate slice based on
+            coordinates on OTHER (non-gathered) mesh axes.
         """
         # DISTRIBUTED: Use native MAX allgather
         if _is_distributed(mesh):
@@ -312,36 +314,83 @@ class AllGatherOp(Operation):
             ]
             return max_allgather(shard_values, signal_buffers, axis=axis)
         
-        # SIMULATED: Concat-based fallback
-        # For 2D+ meshes, we need to select only unique shards
-        # (avoid concatenating duplicates from non-sharded mesh axes)
-        if mesh is not None and sharded_axis_name is not None:
+        # SIMULATED: For multi-dimensional meshes, we need to gather within
+        # groups that share the same coordinates on non-gathered axes.
+        #
+        # Example: 2x2 mesh with axes ("x", "y"), gathering along "x":
+        #   Group 1 (y=0): devices 0,1 -> concat their data
+        #   Group 2 (y=1): devices 2,3 -> concat their data  
+        #   Device 0 gets Group 1 result, Device 2 gets Group 2 result, etc.
+        
+        if mesh is None or sharded_axis_name is None:
+            # Fallback: simple concat all
+            if len(shard_values) == 1:
+                return shard_values
+            full_tensor = ops.concat(shard_values, axis=axis)
+            return [full_tensor] * len(shard_values)
+        
+        # Get all mesh axis names
+        all_axes = list(mesh.axis_names)
+        other_axes = [ax for ax in all_axes if ax != sharded_axis_name]
+        
+        if not other_axes:
+            # 1D mesh: simple case - gather all, return same to all
             sharded_axis_size = mesh.get_axis_size(sharded_axis_name)
             
-            # Group shards by their coordinate on the sharded axis
+            # Group by coordinate on the sharded axis
             unique_shards = []
             seen_coords = set()
-            
             for shard_idx, val in enumerate(shard_values):
                 coord = mesh.get_coordinate(shard_idx, sharded_axis_name)
                 if coord not in seen_coords:
                     seen_coords.add(coord)
                     unique_shards.append((coord, val))
-            
-            # Sort by coordinate and extract values
             unique_shards.sort(key=lambda x: x[0])
             shards_to_concat = [v for _, v in unique_shards]
-        else:
-            shards_to_concat = shard_values
+            
+            if len(shards_to_concat) == 1:
+                full_tensor = shards_to_concat[0]
+            else:
+                full_tensor = ops.concat(shards_to_concat, axis=axis)
+            
+            return [full_tensor] * len(shard_values)
         
-        # Concatenate unique shards to get full tensor
-        if len(shards_to_concat) == 1:
-            full_tensor = shards_to_concat[0]
-        else:
-            full_tensor = ops.concat(shards_to_concat, axis=axis)
+        # Multi-dimensional mesh: group devices by their coordinates on OTHER axes
+        # Each group will produce its own gathered result
         
-        # Return N copies (one per original shard location)
-        return [full_tensor] * len(shard_values)
+        # Build groups: key = tuple of coordinates on other axes
+        groups = {}  # {other_coords: [(sharded_coord, shard_idx, value)]}
+        for shard_idx, val in enumerate(shard_values):
+            # Get this device's coordinates on OTHER axes
+            other_coords = tuple(mesh.get_coordinate(shard_idx, ax) for ax in other_axes)
+            # Get coordinate on the axis being gathered
+            sharded_coord = mesh.get_coordinate(shard_idx, sharded_axis_name)
+            
+            if other_coords not in groups:
+                groups[other_coords] = []
+            groups[other_coords].append((sharded_coord, shard_idx, val))
+        
+        # For each group, gather along the sharded axis
+        gathered_per_group = {}  # {other_coords: gathered_tensor}
+        for other_coords, members in groups.items():
+            # Sort by coordinate on the sharded axis
+            members.sort(key=lambda x: x[0])
+            shards_to_concat = [val for _, _, val in members]
+            
+            if len(shards_to_concat) == 1:
+                gathered = shards_to_concat[0]
+            else:
+                gathered = ops.concat(shards_to_concat, axis=axis)
+            
+            gathered_per_group[other_coords] = gathered
+        
+        # Assign each device its group's gathered result
+        results = []
+        for shard_idx in range(len(shard_values)):
+            other_coords = tuple(mesh.get_coordinate(shard_idx, ax) for ax in other_axes)
+            results.append(gathered_per_group[other_coords])
+        
+        return results
     
     def __call__(self, sharded_tensor, axis: int):
         """Gather all shards to produce a replicated tensor.

@@ -27,11 +27,11 @@ def test_metadata_caching_single_output():
     z = add(x, y)
     
     # Verify cached metadata
-    assert z._impl.cached_shape is not None, "cached_shape should be set"
+    assert z.global_shape is not None, "cached_shape should be set"
     assert z._impl.cached_dtype is not None, "cached_dtype should be set"
     assert z._impl.cached_device is not None, "cached_device should be set"
     
-    print(f"  z.cached_shape: {z._impl.cached_shape}")
+    print(f"  z.cached_shape: {z.global_shape}")
     print(f"  z.cached_dtype: {z._impl.cached_dtype}")
     print("  ✓ Single output caching works!")
 
@@ -44,11 +44,11 @@ def test_metadata_caching_multi_output():
     a, b = split(x, num_splits=2, axis=0)
     
     # Both outputs should have cached metadata
-    assert a._impl.cached_shape is not None, "a.cached_shape should be set"
-    assert b._impl.cached_shape is not None, "b.cached_shape should be set"
+    assert a.global_shape is not None, "a.cached_shape should be set"
+    assert b.global_shape is not None, "b.cached_shape should be set"
     
-    print(f"  a.cached_shape: {a._impl.cached_shape}")
-    print(f"  b.cached_shape: {b._impl.cached_shape}")
+    print(f"  a.cached_shape: {a.global_shape}")
+    print(f"  b.cached_shape: {b.global_shape}")
     print("  ✓ Multi-output caching works!")
 
 

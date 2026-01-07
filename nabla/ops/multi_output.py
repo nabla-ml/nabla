@@ -26,10 +26,10 @@ from typing import Any
 
 from max.graph import TensorValue, ops
 
-from .operation import Operation
+from .operation import Operation, LogicalAxisOperation
 
 
-class SplitOp(Operation):
+class SplitOp(LogicalAxisOperation):
     """Split a tensor into multiple equal chunks along an axis.
     
     Example:
@@ -74,9 +74,28 @@ class SplitOp(Operation):
         # Use MAX's native split which returns list[TensorValue]
         result_list = ops.split(x, split_sizes, axis)
         return tuple(result_list)
+    
+    def sharding_rule(
+        self,
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        **kwargs,
+    ):
+        """Split preserves sharding on all dims except split axis shrinks.
+        
+        All outputs share the same factors as input, except the split axis
+        has a smaller size (handled by factor sizing).
+        """
+        from ..sharding.propagation import unary_template
+        rank = len(input_shapes[0])
+        # All outputs share same factor structure as input
+        return unary_template(rank).instantiate(input_shapes, output_shapes)
+    
+    def infer_output_rank(self, input_shapes, **kwargs) -> int:
+        return len(input_shapes[0])  # Same rank as input
 
 
-class ChunkOp(Operation):
+class ChunkOp(LogicalAxisOperation):
     """Split a tensor into a specified number of chunks.
     
     Similar to SplitOp but returns a list instead of tuple.
@@ -124,9 +143,23 @@ class ChunkOp(Operation):
         
         # Use MAX's native split
         return ops.split(x, split_sizes, axis)
+    
+    def sharding_rule(
+        self,
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        **kwargs,
+    ):
+        """Chunk preserves sharding on all dims (like split)."""
+        from ..sharding.propagation import unary_template
+        rank = len(input_shapes[0])
+        return unary_template(rank).instantiate(input_shapes, output_shapes)
+    
+    def infer_output_rank(self, input_shapes, **kwargs) -> int:
+        return len(input_shapes[0])  # Same rank as input
 
 
-class UnbindOp(Operation):
+class UnbindOp(LogicalAxisOperation):
     """Remove a dimension and return tuple of slices.
     
     Example:
@@ -164,6 +197,24 @@ class UnbindOp(Operation):
         # Squeeze out the axis dimension from each slice
         results = [ops.squeeze(s, axis) for s in sliced]
         return tuple(results)
+    
+    def sharding_rule(
+        self,
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        **kwargs,
+    ):
+        """Unbind: the unbound axis is removed, other dims shift.
+        
+        Similar to squeeze - the axis being removed loses its factor.
+        """
+        from ..sharding.propagation import squeeze_template
+        rank = len(input_shapes[0])
+        axis = kwargs.get("axis", 0)
+        return squeeze_template(rank, axis).instantiate(input_shapes, output_shapes)
+    
+    def infer_output_rank(self, input_shapes, **kwargs) -> int:
+        return len(input_shapes[0]) - 1  # One dimension removed
 
 
 class MinMaxOp(Operation):

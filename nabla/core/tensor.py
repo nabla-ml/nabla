@@ -194,6 +194,45 @@ class Tensor(DLPackArray, HasTensorValue):
         """
         return self._impl.sharding
 
+    @property
+    def is_sharded(self) -> bool:
+        """Whether this tensor is sharded across multiple devices.
+        
+        Returns:
+            True if tensor has a sharding specification.
+        """
+        return self._impl.is_sharded
+    
+    @property
+    def local_shape(self) -> graph.Shape | None:
+        """Local shape of this tensor (including batch dims).
+        
+        For sharded tensors, this is the shape of shard 0.
+        For unsharded tensors, this equals global_shape.
+        """
+        return self._impl.physical_shape
+    
+    @property
+    def global_shape(self) -> graph.Shape | None:
+        """Global shape of this tensor (including batch dims).
+        
+        For sharded tensors, this is the full shape before sharding.
+        For unsharded tensors, this equals local_shape.
+        """
+        if self._impl.cached_shape is not None:
+            return self._impl.cached_shape
+        return self._impl.physical_shape
+
+    @property
+    def physical_shape(self) -> graph.Shape | None:
+        """DEPRECATED: Use local_shape instead.
+        
+        Physical shape of shard 0 (including batch dims at prefix).
+        For sharded tensors, this is the LOCAL shard shape.
+        For unsharded tensors, this equals the full shape.
+        """
+        return self._impl.physical_shape
+
     # ===== Factory methods =====
 
     @classmethod
@@ -305,19 +344,20 @@ class Tensor(DLPackArray, HasTensorValue):
 
     @property
     def shape(self) -> graph.Shape:
-        """Returns the global logical shape of the tensor.
+        """Returns the global logical shape of the tensor (excludes batch dims).
         
         For sharded tensors, this returns the full tensor shape (not shard shape).
-        Use local_shape to get the shape of individual shards.
+        Use local_shape to get the physical shape including batch dims.
         """
-        # Prefer global_shape for consistency (already a Shape!)
-        if self._impl.global_shape is not None:
-            return self._impl.global_shape
+        # Use _impl.global_shape which properly excludes batch dims
+        gs = self._impl.global_shape
+        if gs is not None:
+            return gs
         # Fallback for unrealized tensors without cached shape
         shape = self._backing_value.shape
         return shape if isinstance(shape, graph.Shape) else graph.Shape(shape)
     
-    def local_shape(self, shard_idx: int = 0) -> graph.Shape:
+    def shard_shape(self, shard_idx: int = 0) -> graph.Shape:
         """Returns the shape of a specific shard.
         
         Args:

@@ -15,12 +15,6 @@ if TYPE_CHECKING:
 # Detection & Extraction
 # ============================================================================
 
-def has_sharded_inputs(args: tuple) -> bool:
-    """True if any tensor in args is sharded."""
-    from ..core.tensor import Tensor
-    from ..core import pytree
-    return any(isinstance(a, Tensor) and a._impl.is_sharded for a in pytree.tree_leaves(args))
-
 
 def get_mesh_from_args(args: tuple) -> Optional["DeviceMesh"]:
     """Extract DeviceMesh from first tensor with sharding spec."""
@@ -90,9 +84,13 @@ def reshard_inputs(
         
         current = x._impl.sharding
         
-        # Optimization: If input is replicated/unsharded, do NOT insert a Reshard op.
-        # get_shard_args will handle slicing the replicated tensor directly.
+        # If input is replicated/unsharded but required spec has sharded axes,
+        # we need to actually shard it to match
         if current is None or current.is_fully_replicated():
+            if required is not None and not required.is_fully_replicated():
+                # Shard the unsharded tensor to match the required spec
+                from ..ops.communication import shard as shard_fn
+                return shard_fn(x, mesh, required.dim_specs)
             return x
             
         if not needs_reshard(current, required):
@@ -150,7 +148,7 @@ def infer_output_sharding(
         # Determine global physical shape
         # cached_shape is Global Physical if sharded, or local if unsharded (but local=global)
         # We need physical shape (rank) to create correct default spec
-        shape = t._impl.cached_shape
+        shape = t.global_shape
         if shape is None and (t._impl.sharding is None or t._impl.sharding.is_fully_replicated()):
             shape = t._impl.physical_shape
             
@@ -277,34 +275,6 @@ from .spec import needs_reshard
 
 
 
-
-
-
-
-def slice_for_shard(tensor_val: Any, shape: tuple, sharding: "ShardingSpec", shard_idx: int) -> Any:
-    """Slice replicated tensor to extract portion for given shard."""
-    slices = []
-    for dim, dim_len in enumerate(shape):
-        dim_len = int(dim_len)
-        if dim >= len(sharding.dim_specs) or not sharding.dim_specs[dim].axes:
-            slices.append(slice(None))
-            continue
-        
-        # Compute position for multi-axis sharding
-        dim_spec = sharding.dim_specs[dim]
-        total, pos = 1, 0
-        for axis in dim_spec.axes:
-            size = sharding.mesh.get_axis_size(axis)
-            pos = pos * size + sharding.mesh.get_coordinate(shard_idx, axis)
-            total *= size
-        
-        chunk = math.ceil(dim_len / total)
-        start = min(pos * chunk, dim_len)
-        slices.append(slice(start, min(start + chunk, dim_len)))
-    
-    return tensor_val[tuple(slices)]
-
-
 # ============================================================================
 # SPMD Argument Extraction
 # ============================================================================
@@ -342,34 +312,6 @@ def ensure_shard_values(tensor: "Tensor") -> list:
             
     return []
 
-
-def reshard_inputs(
-    args: List["Tensor"], 
-    input_shardings: List[ShardingSpec], 
-    mesh: "DeviceMesh"
-) -> List["Tensor"]:
-    """Ensure all inputs match the required sharding specs, inserting ReshardOps if needed."""
-    if mesh is None or not input_shardings:
-        return args
-        
-    resharded_args = []
-    
-    for x, target_spec in zip(args, input_shardings):
-         if not hasattr(x, '_impl'): # Skip non-tensors
-             resharded_args.append(x)
-             continue
-             
-         current = x._impl.sharding
-         
-         if needs_reshard(current, target_spec):
-             x = reshard_tensor(x, current, target_spec, mesh)
-             
-         resharded_args.append(x)
-         
-    # If args was tuple, return tuple (since we appended to list)
-    if isinstance(args, tuple):
-        return tuple(resharded_args)
-    return resharded_args
 
 
 def get_shard_args(args: tuple, shard_idx: int, 

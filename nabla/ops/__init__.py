@@ -1,7 +1,7 @@
 """Operations for tensor manipulation."""
 
 # Base classes
-from .operation import Operation, BinaryOperation, UnaryOperation, ReduceOperation, LogicalShapeOperation, LogicalAxisOperation
+from .operation import Operation, BinaryOperation, UnaryOperation, ReduceOperation, LogicalShapeOperation, LogicalAxisOperation, ensure_tensor
 
 # Binary operations
 from .binary import add, mul, sub, div, matmul, AddOp, MulOp, SubOp, DivOp, MatmulOp
@@ -39,6 +39,7 @@ __all__ = [
     "ReduceOperation",
     "LogicalShapeOperation",
     "LogicalAxisOperation",
+    "ensure_tensor",
     # Binary
     "add", "mul", "sub", "div", "matmul",
     "AddOp", "MulOp", "SubOp", "DivOp", "MatmulOp",

@@ -287,7 +287,7 @@ class TensorImpl:
     @property
     def batch_shape(self) -> graph.Shape | None:
         """Shape of batch dimensions (first batch_dims axes of physical shape)."""
-        physical = self.physical_shape
+        physical = self.local_shape
         if physical is None or self.batch_dims == 0:
             return None
         return graph.Shape(physical[:self.batch_dims])

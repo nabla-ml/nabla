@@ -115,6 +115,39 @@ class BroadcastToPhysicalOp(Operation):
     
     def maxpr(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
         return ops.broadcast_to(x, shape)
+    
+    def __call__(self, x: "Tensor", *, shape: tuple[int, ...]) -> "Tensor":
+        """Broadcast physical shape, auto-incrementing batch_dims when rank increases.
+        
+        Args:
+            x: Input tensor
+            shape: Target GLOBAL physical shape
+        """
+        # Use global_shape for rank comparison since target shape is global
+        in_rank = len(x.global_shape) if x.global_shape else len(x.local_shape or x.shape)
+        out_rank = len(shape)
+        added_dims = max(0, out_rank - in_rank)
+        
+        # Unsqueeze at position 0 for each missing dimension (traced operation)
+        for _ in range(added_dims):
+            x = _unsqueeze_physical_op(x, axis=0)
+        
+        result = super().__call__(x, shape=shape)
+        
+        # Increment batch_dims for each new leading dimension added
+        if added_dims > 0:
+            for _ in range(added_dims):
+                result = _incr_batch_dims_op(result)
+        
+        return result
+    
+    def infer_output_rank(self, input_shapes: tuple[tuple[int, ...], ...], **kwargs) -> int:
+        """Output rank is the target shape's rank."""
+        target_shape = kwargs.get("shape")
+        if target_shape is not None:
+            return len(target_shape)
+        # Fallback to input rank if shape not provided
+        return len(input_shapes[0]) if input_shapes else 0
 
     def sharding_rule(
         self,
@@ -199,6 +232,31 @@ class ReduceSumPhysicalOp(Operation):
         if not keepdims:
             result = ops.squeeze(result, axis=axis)
         return result
+    
+    def sharding_rule(
+        self,
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        **kwargs,
+    ):
+        """Reduce: (d0, d1, ...) -> (d0, ...) with reduce_dim removed."""
+        from ..sharding.propagation import reduce_template
+        rank = len(input_shapes[0])
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+        return reduce_template(rank, [axis], keepdims).instantiate(input_shapes, output_shapes)
+    
+    def infer_output_shape(self, input_shapes: list[tuple[int, ...]], **kwargs) -> tuple[int, ...]:
+        """Compute output shape for reduction."""
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+        in_shape = input_shapes[0]
+        if axis < 0:
+            axis = len(in_shape) + axis
+        if keepdims:
+            return tuple(1 if i == axis else d for i, d in enumerate(in_shape))
+        else:
+            return tuple(d for i, d in enumerate(in_shape) if i != axis)
 
 
 class MeanPhysicalOp(Operation):
@@ -211,6 +269,31 @@ class MeanPhysicalOp(Operation):
         if not keepdims:
             result = ops.squeeze(result, axis=axis)
         return result
+    
+    def sharding_rule(
+        self,
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        **kwargs,
+    ):
+        """Reduce: (d0, d1, ...) -> (d0, ...) with reduce_dim removed."""
+        from ..sharding.propagation import reduce_template
+        rank = len(input_shapes[0])
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+        return reduce_template(rank, [axis], keepdims).instantiate(input_shapes, output_shapes)
+    
+    def infer_output_shape(self, input_shapes: list[tuple[int, ...]], **kwargs) -> tuple[int, ...]:
+        """Compute output shape for reduction."""
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+        in_shape = input_shapes[0]
+        if axis < 0:
+            axis = len(in_shape) + axis
+        if keepdims:
+            return tuple(1 if i == axis else d for i, d in enumerate(in_shape))
+        else:
+            return tuple(d for i, d in enumerate(in_shape) if i != axis)
 
 
 # =============================================================================
@@ -228,7 +311,7 @@ def _copy_impl_with_batch_dims(x: "Tensor", new_batch_dims: int, op: "Operation"
         batch_dims=new_batch_dims,
         sharding=x._impl.sharding,
     )
-    new_impl.cached_shape = x._impl.cached_shape
+    new_impl.cached_shape = x.global_shape
     new_impl.cached_dtype = x._impl.cached_dtype
     new_impl.cached_device = x._impl.cached_device
     

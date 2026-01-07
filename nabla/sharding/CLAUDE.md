@@ -1,139 +1,226 @@
-# Sharding Module: Distributed Tensor Partitioning
+# Nabla Sharding Architecture
 
-## Overview
+This document serves as the authoritative reference for Nabla's distributed tensor system. It details the **Expected Behavior**, **Execution Pipeline**, and **Theoretical Foundations** of the sharding engine.
 
-This module enables distributing tensors across device meshes with automatic sharding propagation. Unlike many frameworks, nabla supports **eager sharded execution** via SPMD (Single Program Multiple Data).
+## 1. Core Philosophy
 
-**Status**: Specification, propagation, and SPMD execution are implemented. Multi-device hardware execution awaits MAX backend support.
+Nabla implements a **Unified SPMD (Single Program, Multiple Data)** architecture with **Factor-Based Propagation**.
 
----
-
-## Module Structure
-
-| File | Purpose |
-|------|---------|
-| `spec.py` | DeviceMesh, ShardingSpec, DimSpec |
-| `propagation.py` | Factor-based algorithm, op templates |
-| `spmd.py` | Execution helpers (slice, reshard, align) |
+### Key Principles
+1.  **Uniformity**: Unsharded execution is just a special case (Mesh Size = 1). There are no separate "sharded" vs "unsharded" code paths in operations.
+2.  **Symbolic Core, Concrete Shell**: sharding *propagation* is symbolic (factor-based), but *rule instantiation* handles concrete shape semantics (broadcasting, reshaping).
+3.  **Lazy Evaluation**: We incur the cost of sharding inference only during graph building. Actual data movement happens only during execution/realization.
+4.  **Expectation of Correctness**: Invalid sharding states (e.g., sharding a dimension of size 1) are caught during Propagation, ensuring runtime execution is always valid.
 
 ---
 
-## Core Concepts
+## 2. The Big Question: Why Shapes? Can't we just use Rank?
 
-### DeviceMesh
+**Q: Do we really need specific input/output shapes, or is Rank (number of dimensions) enough?**
 
-Logical n-dimensional grid of devices with named axes:
+**A: Rank is NOT enough. Validity requires Shapes.**
 
-```
-@cluster = <["dp"=2, "tp"=4]>  # 8 devices: 2×4
-```
+While the *propagation algorithm* itself (`(m, k) -> (m)`) is symbolic, correctly **mapping** a tensor to that symbolic rule requires shape knowledge.
 
-### ShardingSpec
+### Case 1: Implicit Broadcasting (The "Rank 2" Trap)
+Consider `C = A + B`. Both are Rank 2.
+*   **Scenario X**: `A:(10, 10)`, `B:(10, 10)`. Rule: `(d0, d1), (d0, d1) -> (d0, d1)`.
+    *   Here, `A` and `B` share factors. Sharding `A` implies sharding `B`.
+*   **Scenario Y**: `A:(1, 10)`, `B:(10, 10)`. Rule: `(new, d1), (d0, d1) -> (d0, d1)`.
+    *   Here, `A`'s dim 0 is size 1. It CANNOT be sharded on a 4-device mesh. It is a "new" (or broadcast) factor.
+    *   If we used only Rank, we would treat Scenario Y like Scenario X. We would try to shard `A`'s size-1 dimension, leading to crashes or silent data corruption.
 
-Per-tensor sharding description:
-- **dim_specs**: How each dimension is sharded
-- **replicated_axes**: Explicitly replicated mesh axes
+### Case 2: Reshaping (The Conservation of Data)
+Consider `Reshape(A) -> B`.
+*   `A:(100, 20)`, `B:(2000,)`. Rule: `(a, b) -> (a * b)`.
+    *   We map `A`'s dim 0 to factor `a` and dim 1 to `b`.
+*   `A:(100, 20)`, `B:(40, 50)`. Rule: ???
+    *   Without knowing the numbers, we don't know which input factors flow to which output factors. `100` splits into `40 * 2.5`? No.
+    *   We utilize **Factor Sizing** to decompose dimensions: `100 = 2 * 50`, `20 = 20`. `40 = 2 * 20`.
+    *   This decomposition requires concrete values to track how data moves.
 
-### DimSpec
-
-Per-dimension specification:
-- **axes**: Which mesh axes shard this dim (major→minor)
-- **is_open**: Can receive additional sharding during propagation
-- **priority**: Lower = stronger (user annotations beat inferred)
-
----
-
-## Factor-Based Propagation
-
-**Inspired by XLA Shardy/GSPMD**. Uses einsum-like factor mappings:
-
-```
-matmul: (m, k), (k, n) → (m, n)
-```
-
-### Three-Phase Algorithm
-
-1. **Collect**: Project dimension→factor shardings
-2. **Merge**: Resolve conflicts using priority + strategy
-3. **Update**: Project factor→dimension shardings
-
-### Conflict Resolution
-
-- **BASIC**: Take longest common prefix (conservative)
-- **AGGRESSIVE**: Pick higher parallelism option
-
-### Operations Templates
-
-Templates generate factor mappings from shapes:
-- `matmul_template(batch_dims)` — handles batched matmul
-- `elementwise_template(rank)` — all dims map 1:1
-- `reduce_template(rank, reduce_dims)` — reduced dims are contracting factors
-- `transpose_template(rank, perm)` — permuted factor order
-- `broadcast_with_shapes_template(in_shape, out_shape)` — handles expansion
+**Conclusion**: The **Core Propagation** is symbolic (Factors), but the **Frontend (Rule Instantiation)** must be Shape-Aware to generate the *correct* symbolic rule.
 
 ---
 
-## SPMD Execution Flow
+## 3. Deep Dive: The Life of an Operation
 
-When `Operation.__call__` detects sharded inputs:
+What *exactly* happens when you call `z = x + y` (or any `Operation.__call__`)?
 
-1. **Infer output sharding** via `infer_output_sharding(op, args, mesh)`
-2. **Detect conflicts** — reshard to replicated if axes overlap incompatibly
-3. **Per-shard execution** — run `maxpr()` on each shard's data
-4. **Wrap results** — create output tensor with N shard values
+### Phase 1: The Setup (Frontend)
+We are in Python. We have `Tensor` objects with metadata (`shape`, `sharding`, `mesh`).
 
-Key functions in `spmd.py`:
-- `has_sharded_inputs(args)` — detection
-- `get_mesh_from_args(args)` — extract mesh
-- `slice_for_shard(tensor, shape, sharding, idx)` — local slicing
-- `reshard_tensor(tensor, from_spec, to_spec, mesh)` — resharding
+1.  **Metadata Scan**: We check `x` and `y`.
+    *   Are any sharded? Yes -> We extract the `DeviceMesh`.
+    *   Are any traced? Yes -> We are building a graph.
+2.  **Regularization**:
+    *   If `x` is sharded but `y` is not, we temporarily assign `y` a `Replicated` sharding spec (empty axes). This brings everyone to the same "protocol".
 
----
+### Phase 2: The Logic (Sharding Engine)
+We need to decide: *How should the output `z` be sharded? Do inputs need to move?*
 
-## User API
+3.  **Rule Instantiation**:
+    *   We look at `x.shape` and `y.shape`.
+    *   We ask the Op: "Give me your logic." (e.g., `Elementwise`).
+    *   The Op returns an `OpShardingRule`: e.g., `(d0, d1), (d0, d1) -> (d0, d1)`.
+4.  **Propagation (The Solver)**:
+    *   We feed the Rule + Input Specs into `propagate_sharding`.
+    *   **Collect**: `x` says "I am sharded on `d0`". `y` says "I am replicated".
+    *   **Resolve**: Factor `d0` is now marked as "Sharded".
+    *   **Update**: We tell `y`: "You MUST be sharded on `d0` now". We tell `z`: "You inherits sharding on `d0`".
+5.  **Output**:
+    *   `output_spec`: Sharding for `z`.
+    *   `input_specs`: Required sharding for `x` and `y`.
+    *   `needs_allreduce`: Bool (Did we sum over a sharded dimension?).
 
-```python
-from nabla import Tensor, DeviceMesh, DimSpec
+### Phase 3: The Execution (Backend)
+Now we have the Plan. We execute it.
 
-mesh = DeviceMesh("test", (2,), ("x",))
-A = Tensor.ones((4, 8)).trace()
-
-# Functional: returns new sharded tensor
-A_sharded = A.shard(mesh, [DimSpec(["x"]), DimSpec([])])
-
-# Explicit resharding constraint
-B = (A_sharded @ W).with_sharding(mesh, [DimSpec([]), DimSpec([])])
-```
-
----
-
-## Current Limitations
-
-- **Single-machine simulation**: All shards run on same device (awaiting MAX multi-device backend)
-- **Limited op coverage**: Templates exist for common ops (`matmul`, `elementwise`, `reduce`, `transpose`, `broadcast`); complex ops need manual rules
-- **No cost model**: `AGGRESSIVE` conflict resolution doesn't consider communication cost
-
----
-
-## Key Design Decisions
-
-| Decision | Rationale |
-|----------|-----------|
-| Factor-based propagation | Handles reshapes, complex ops correctly |
-| Functional `shard()` | Matches nabla's immutable tensor philosophy |
-| Eager SPMD | No separate compilation phase for sharding |
-| Priority system | User annotations override inferred sharding |
+6.  **Resharding (Alignment)**:
+    *   We check `y`. Current: Replicated. Required: Sharded on `d0`.
+    *   **Action**: `y = reshard(y, target=Sharded)`.
+    *   *Note*: Ideally, `reshard` is smart. Moving Replicated->Sharded is just slicing. Moving Sharded->Replicated is AllGather.
+7.  **SPMD Loop (The shard breakdown)**:
+    *   We iterate over `device_id` from 0 to `N-1`.
+    *   **Slice**: We get the *local piece* of `x` and `y` for this device.
+        *   `x_local = x.get_shard(device_id)`
+        *   `y_local = y.get_shard(device_id)`
+    *   **Compute**: `z_local = maxpr(x_local, y_local)`. (This is the raw math op).
+    *   **Collect**: We get a list `[z_0, z_1, ... z_N]`.
+8.  **Reduction (If check failed in Phase 2)**:
+    *   If `needs_allreduce` is True, we apply `AllReduce(sum)` across `z_local` chunks.
+9.  **Packaging**:
+    *   We wrap `[z_0, ...]` into a new `Tensor` object with the inferred `output_spec`.
 
 ---
 
-## Testing
+## 4. Architectural Status & Future Directions
 
-```bash
-source venv/bin/activate
+The core sharding infrastructure is **complete**:
+- ✅ Factor-based propagation with 3-phase algorithm (Collect, Merge, Update)
+- ✅ Unified SPMD dispatch (unsharded = mesh size 1)
+- ✅ Complete communication ops: `ShardOp`, `AllGatherOp`, `AllReduceOp`, `ReduceScatterOp`, `GatherAllAxesOp`
+- ✅ AllReduce insertion for sharded contracting dimensions (e.g., K in matmul)
+- ✅ Lazy graph-based resharding (ops add to graph, not eager eval)
 
-# Unit tests (propagation, conflict resolution)
-python -m pytest tests/unit/sharding/ -v
+### Current Extension Points
 
-# Integration tests (SPMD execution, end-to-end)
-python -m pytest tests/integration/with_sharding/ -v
-```
+### 1. Unified Broadcasting Logic
+*   **Current State**: `BinaryOperation` manually handles broadcasting logic (unsqueezing/reshaping) in Python before calling `super().__call__`.
+*   **Ideal State**: `Operation.sharding_rule` should handle broadcasting natively via **Multi-Input Broadcast Templates**. This would allow us to delete the manual broadcasting code in `binary.py`.
+
+### 2. Autograd Integration
+*   **Current State**: `vjp_rule` is separate.
+*   **Ideal State**: Sharding propagation should automatically apply to the backward pass graph. Since the backward pass is just Ops, it *should* just work, but we need to verify `vjp_rule` definitions correctly propagate `kwargs` (like `axis`) which affect sharding.
+
+### 3. VMap & Batching Integration
+
+> [!IMPORTANT]
+> This is a critical design area that requires careful thought before implementation.
+
+#### How JAX Handles VMap + Sharding
+
+JAX treats `vmap` and sharding as **orthogonal transformations** that compose:
+
+1.  **`vmap` inside `jit(sharding)`**: Sharding happens *first*. Each device gets a shard. Then `vmap` vectorizes *within* that shard. The batch dimension `vmap` adds is **local** to each device.
+
+2.  **`shard_map`**: Explicit SPMD. The function sees a *local shard*. If you want batching *within* that shard, you use `vmap` inside.
+
+JAX's `PartitionSpec` applies to the **full array shape**, including any batch dimensions introduced by `vmap`. The XLA compiler then figures out how to map the batched, sharded computation efficiently.
+
+#### The Core Tension: Who "Owns" the Dimension?
+
+When you have a tensor of shape `(VMAP_DIM, REST...)`:
+*   Is `VMAP_DIM` a "batch" dimension (managed by vmap)?
+*   Or a "global" dimension (potentially sharded)?
+
+**The order of transformation application matters!**
+*   `jit(vmap(f))`: `vmap` runs first, creating a batched computation. Then `jit` compiles/shards the *batched* result. The batch dimension CAN be sharded.
+*   `vmap(jit(f))`: `jit` compiles `f` for a single element. `vmap` maps this. Sharding inside `jit(f)` sees the *un-batched* shape.
+
+#### Nabla's Current `batch_dims` Approach
+
+`batch_dims` is stored on `TensorImpl`. This is similar to JAX's `vmap` internal state.
+*   `LogicalAxisOperation` translates logical axes by adding `batch_dims` offset.
+*   `Operation.sharding_rule` receives *logical* shapes (excluding batch dims).
+
+**Current Behavior**: Sharding rules operate on the "inner" (non-vmapped) shape. This is consistent with `vmap(jit(f))`.
+
+#### Concrete Scenarios
+
+| Scenario | Input | VMap Axis | Sharding | Expected Behavior |
+|---|---|---|---|---|
+| **A** | `(4, 8)` | 0 (Batch) | None | Works trivially. No mesh. |
+| **B** | `(4, 8)` | 0 (Batch) | Dim 1 sharded on `"d"` | Correct. `vmap` iterates Batch within each shard. Rule sees `(4,)` per shard. |
+| **C** | `(4, 8)` | 0 (Batch) | **Dim 0** sharded on `"d"` | **Tricky!** Sharding the vmap axis. Each device sees `(2, 8)`. `vmap` should iterate the *local* 2. |
+
+**Scenario C is the challenge.** If `batch_dims=1`, the `ShardingSpec` has `[DimSpec("d"), DimSpec([])]`. The first DimSpec covers the *physical* batch dimension.
+
+#### Proposed Approach for Nabla
+
+**Option 1: Current (Recommended for Now)**
+*   Sharding applies to **logical** shape only.
+*   `batch_dims` are implicitly replicated.
+*   **Pro**: Simpler, covers common data parallelism use cases.
+*   **Con**: Cannot shard the vmap batch dimension directly.
+
+**Option 2: Full Unification (Future Work)**
+*   `ShardingSpec` applies to **physical** shape (including batch dims).
+*   `vmap` transform explicitly prepends `DimSpec([], is_open=True)` to `ShardingSpec`.
+*   **Pro**: More powerful, allows sharding the vmap batch dimension.
+*   **Con**: More complex, requires careful integration.
+
+**Recommendation**: Start with Option 1. Users who need Scenario C can manually reshape/shard before vmapping.
+
+---
+
+## 5. Architectural Shortcomings & Known Limitations
+
+> [!WARNING]
+> These are fundamental architectural constraints, not bugs.
+
+### 1. No Cost Model for Sharding Decisions
+
+**Current Behavior**: `AGGRESSIVE` conflict resolution picks higher parallelism without considering communication cost.
+
+**Impact**: May choose suboptimal shardings (e.g., sharding a dimension that requires expensive AllGather downstream).
+
+**Mitigation**: Users can override with explicit `priority` on `DimSpec` annotations.
+
+### 2. No Cross-Mesh Propagation
+
+**Current Behavior**: All tensors in an operation must share the same `DeviceMesh`.
+
+**Impact**: Cannot express pipelines that transition between different mesh topologies (e.g., DP mesh → TP mesh).
+
+**Workaround**: Explicit gather-to-replicated, then re-shard on new mesh.
+
+### 3. Single-Machine Simulation Only (Hardware Limitation)
+
+**Current Behavior**: All shards run on the same device. `_is_distributed(mesh)` checks for unique device refs.
+
+**Impact**: Real distributed issues (network latency, collective semantics, memory pressure) are untested.
+
+**Status**: Awaiting MAX multi-device backend support.
+
+### 4. Limited Sharding Template Coverage
+
+**Current Templates**: `matmul`, `elementwise`, `reduce`, `transpose`, `broadcast`.
+
+**Missing**: Attention, convolution, scatter/gather, custom user ops.
+
+**Note**: This is intentional for rapid architectural iteration. Templates can be added incrementally.
+
+### 5. Uneven Shard Handling
+
+**Current Behavior**: `compute_local_shape` uses `math.ceil(dim_size / num_shards)`, creating uneven last shards.
+
+**Impact**: Operations on shards with different sizes may require padding or masking (not automated).
+
+### 6. No Automatic Gradient Sharding Verification
+
+**Current Behavior**: VJP rules are separate from sharding rules.
+
+**Risk**: A `vjp_rule` that doesn't correctly handle sharded kwargs (like `axis`) could produce incorrect gradients.
+
+**Status**: Infrastructure ready; needs verification tests.

@@ -65,6 +65,11 @@ class MatmulOp(Operation):
     def __call__(self, x: Tensor, y: Tensor) -> Tensor:
         from ..core.tensor import Tensor
         from . import view as view_ops
+        from .operation import ensure_tensor
+        
+        # Ensure both inputs are Tensors (converts scalars/arrays)
+        x = ensure_tensor(x)
+        y = ensure_tensor(y)
         
         x_was_1d = len(x.shape) == 1
         y_was_1d = len(y.shape) == 1

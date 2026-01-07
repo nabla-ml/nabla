@@ -39,7 +39,7 @@ class TestResharding(unittest.TestCase):
         # We need to trace creation to allow reshard op to graph it
         sharded = shard(self.tensor, self.mesh_2x2, spec.dim_specs)
         
-        resharded = reshard(sharded, spec)
+        resharded = reshard(sharded, self.mesh_2x2, spec.dim_specs)
         
         # Realize both to compare values
         asyncio.run(sharded.realize)
@@ -59,7 +59,7 @@ class TestResharding(unittest.TestCase):
         
         rep = shard(self.tensor, self.mesh_2x2, replicated_spec.dim_specs)
         
-        resharded = reshard(rep, target_spec)
+        resharded = reshard(rep, target_spec.mesh, target_spec.dim_specs)
         asyncio.run(resharded.realize)
         
         # Verify specific shard content
@@ -77,7 +77,7 @@ class TestResharding(unittest.TestCase):
         target_spec = ShardingSpec(self.mesh_2x2, [DimSpec([]), DimSpec([])])
         
         sharded = shard(self.tensor, self.mesh_2x2, source_spec.dim_specs)
-        resharded = reshard(sharded, target_spec)
+        resharded = reshard(sharded, target_spec.mesh, target_spec.dim_specs)
         asyncio.run(resharded.realize)
         
         # Every shard should now be the full tensor
@@ -90,7 +90,7 @@ class TestResharding(unittest.TestCase):
         target_spec = ShardingSpec(self.mesh_2x2, [DimSpec(["y"]), DimSpec(["x"])])
         
         sharded = shard(self.tensor, self.mesh_2x2, source_spec.dim_specs)
-        resharded = reshard(sharded, target_spec)
+        resharded = reshard(sharded, target_spec.mesh, target_spec.dim_specs)
         asyncio.run(resharded.realize)
         
         # Device 1: x=0, y=1.
