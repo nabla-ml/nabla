@@ -172,8 +172,8 @@ class GraphPrinter:
         dtype = self._format_type(node)
         batch_dims = getattr(node, 'batch_dims', 0)
         
-        # Local Shape
-        local_shape = node.local_shape
+        # Local Shape - use physical_local_shape(0) for first shard
+        local_shape = node.physical_local_shape(0)
         local_str = self._format_shape_part(local_shape, batch_dims)
         
         # Global Shape & Factors
@@ -183,11 +183,8 @@ class GraphPrinter:
         if node.sharding:
             factors_str = self._format_spec_factors(node.sharding)
             try:
-                # Infer global shape
-                # Note: node.local_shape is already a tuple/Shape from TensorImpl
+                # Infer global shape from local shape and sharding spec
                 if local_shape is not None:
-                     # Calculate global shape tuple
-                     # compute_global_shape returns a tuple
                      g_shape = compute_global_shape(tuple(local_shape), node.sharding)
                      global_str = self._format_shape_part(g_shape, batch_dims)
             except Exception:

@@ -142,6 +142,26 @@ def mesh_2d_1x4():
     return DeviceMesh("mesh_2d_1x4", (1, 4), ("dp", "tp"))
 
 
+# --- Asymmetric 2D Meshes (critical for proper testing) ---
+
+@pytest.fixture
+def mesh_2x4():
+    """Asymmetric 2D mesh with shape (2, 4)."""
+    return DeviceMesh("mesh_2x4", (2, 4), ("dp", "tp"))
+
+
+@pytest.fixture
+def mesh_4x2():
+    """Asymmetric 2D mesh with shape (4, 2)."""
+    return DeviceMesh("mesh_4x2", (4, 2), ("dp", "tp"))
+
+
+@pytest.fixture
+def mesh_3x2():
+    """Asymmetric 2D mesh with shape (3, 2) - non-power-of-2."""
+    return DeviceMesh("mesh_3x2", (3, 2), ("dp", "tp"))
+
+
 # --- 3D Meshes ---
 
 @pytest.fixture
@@ -160,6 +180,18 @@ def mesh_3d_2x2x4():
 def mesh_3d_4x2x2():
     """3D mesh with shape (4, 2, 2) named ('dp', 'tp', 'pp')."""
     return DeviceMesh("mesh_3d_4x2x2", (4, 2, 2), ("dp", "tp", "pp"))
+
+
+@pytest.fixture
+def mesh_3d_2x4x2():
+    """3D mesh with shape (2, 4, 2) named ('dp', 'tp', 'pp')."""
+    return DeviceMesh("mesh_3d_2x4x2", (2, 4, 2), ("dp", "tp", "pp"))
+
+
+@pytest.fixture
+def mesh_3d_2x2x4():
+    """3D mesh with shape (2, 2, 4) named ('dp', 'tp', 'pp')."""
+    return DeviceMesh("mesh_3d_2x2x4", (2, 2, 4), ("dp", "tp", "pp"))
 
 
 # =============================================================================

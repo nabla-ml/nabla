@@ -129,11 +129,10 @@ class ShardOp(Operation):
         # If kwargs contains shard_idx, we are in SPMD execution (called by Operation.__call__)
         # If not, we are in ShardOp.__call__ (manual loop) or similar.
         
-        global_shape = tuple(int(d) for d in x.type.shape)
-        # Note: If x is sharded, default type.shape is local shape!
-        # But ShardOp inputs are sometimes global (in simulation) or local.
-        # We need to rely on what Operation.__call__ passes.
-        # In SPMD mode, args[0] is the local shard of input.
+        global_shape = kwargs.pop('global_shape', None)
+        if global_shape is None:
+            # Fallback: compute from x.type.shape (only correct for unsharded inputs)
+            global_shape = tuple(int(d) for d in x.type.shape)
         
         spec = ShardingSpec(mesh, dim_specs)
         
@@ -215,19 +214,25 @@ class ShardOp(Operation):
         from ..sharding.spec import ShardingSpec
         from max import graph as g
         
-        # Store global shape BEFORE sharding (from input tensor)
+        # Compute global shape BEFORE sharding (from input tensor's local + sharding)
         global_shape = None
         if isinstance(x, Tensor):
-            # Get the global physical shape from input
-            # ShardOp must operate on physical shape to handle batch_dims correctly
-            global_shape = x._impl.physical_shape if x._impl.physical_shape else x.global_shape
+            # For sharded inputs, compute global from local + sharding
+            local = x._impl.physical_local_shape(0)
+            if local is not None and x._impl.sharding:
+                from ..sharding.spmd import compute_global_shape
+                global_shape = compute_global_shape(tuple(local), x._impl.sharding)
+            elif x._impl.cached_shape is not None:
+                global_shape = tuple(int(d) for d in x._impl.cached_shape)
+            elif local is not None:
+                global_shape = tuple(int(d) for d in local)
         
         with GRAPH.graph:
             # Convert input to TensorValue
             x_val = g.TensorValue(x) if isinstance(x, Tensor) else x
             
-            # Execute shard operation
-            shard_values = self.maxpr(x_val, mesh, dim_specs)
+            # Execute shard operation with global_shape
+            shard_values = self.maxpr(x_val, mesh, dim_specs, global_shape=global_shape)
         
         # Create output tensor with multiple values
         spec = ShardingSpec(mesh, dim_specs, replicated_axes=replicated_axes or set())
@@ -429,18 +434,37 @@ class AllGatherOp(Operation):
         if not sharded_tensor._impl._values or len(sharded_tensor._impl._values) <= 1:
             # Physically gathered (single value) but logically sharded.
             # We just need to update the metadata to be replicated.
-            rank = len(sharded_tensor.shape)
+            # IMPORTANT: Compute the GLOBAL shape, not just copy local shape!
+            from ..sharding.spmd import compute_global_shape
+            from max.graph import Shape
+            
+            batch_dims = sharded_tensor._impl.batch_dims
+            
+            # Get local physical shape
+            local_shape = sharded_tensor._impl.physical_local_shape(0)
+            if local_shape is None:
+                local_shape = sharded_tensor.shape  # Fallback
+            
+            # Compute global shape from local shape and current sharding
+            if sharded_tensor._impl.sharding and local_shape is not None:
+                global_shape_tuple = compute_global_shape(tuple(local_shape), sharded_tensor._impl.sharding)
+                global_shape = Shape(global_shape_tuple)
+            else:
+                global_shape = local_shape
+            
+            # Create replicated output sharding spec with correct rank
+            rank = len(global_shape) if global_shape else len(sharded_tensor.shape)
             replicated_spec = ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)]) if mesh else None
             
             impl = TensorImpl(
                 storages=sharded_tensor._impl._storages,  # Copy storages!
                 values=sharded_tensor._impl._values,
                 traced=sharded_tensor._impl.traced,
-                batch_dims=sharded_tensor._impl.batch_dims,
+                batch_dims=batch_dims,
                 sharding=replicated_spec,
             )
-            # Ensure shape is propagated (force resolution if needed)
-            impl.cached_shape = sharded_tensor.shape
+            # Set GLOBAL shape as cached shape
+            impl.cached_shape = global_shape
             impl.cached_dtype = sharded_tensor.dtype
             impl.cached_device = sharded_tensor.device
             
@@ -451,6 +475,17 @@ class AllGatherOp(Operation):
                 sharded_tensor._impl._values, axis, 
                 mesh=mesh, sharded_axis_name=sharded_axis_name
             )
+        
+        # Compute global shape from input: after gather on axis, that axis is replicated
+        from ..sharding.spmd import compute_global_shape
+        from max.graph import Shape
+        
+        local_shape = sharded_tensor._impl.physical_local_shape(0)
+        if sharded_tensor._impl.sharding and local_shape is not None:
+            global_shape_tuple = compute_global_shape(tuple(local_shape), sharded_tensor._impl.sharding)
+            global_shape = Shape(global_shape_tuple)
+        else:
+            global_shape = sharded_tensor._impl.cached_shape
         
         # Create output sharding spec: only the gathered dimension becomes replicated
         # Other dimensions keep their original sharding
@@ -467,13 +502,16 @@ class AllGatherOp(Operation):
                     new_dim_specs.append(dim_spec)
             output_spec = ShardingSpec(mesh, new_dim_specs)
         
-        # Create output tensor
+        # Create output tensor with cached global shape
         impl = TensorImpl(
             values=gathered,
             traced=sharded_tensor._impl.traced,
             batch_dims=sharded_tensor._impl.batch_dims,
             sharding=output_spec,
         )
+        impl.cached_shape = global_shape  # Set global shape!
+        impl.cached_dtype = sharded_tensor.dtype
+        impl.cached_device = sharded_tensor.device
         output = Tensor(impl=impl)
         
         # Setup tracing refs for graph traversal

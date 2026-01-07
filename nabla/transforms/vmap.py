@@ -37,6 +37,7 @@ from typing import Any, TypeVar, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..core.tensor import Tensor
+    from ..sharding.mesh import DeviceMesh
 
 # =============================================================================
 # Type Definitions
@@ -242,10 +243,8 @@ def _validate_batch_sizes(args: tuple, in_axes: tuple[AxisSpec, ...], axis_size:
 # Batching Primitives
 # =============================================================================
 
-def _batch_tensor(tensor: Tensor, axis: AxisSpec, batch_dim, spmd_axis_name: str | None) -> Tensor:
+def _batch_tensor(tensor: Tensor, axis: AxisSpec, batch_dim, spmd_axis_name: str | None, mesh: "DeviceMesh | None") -> Tensor:
     """Prepare tensor for batched execution by moving axis to batch_dims.
-    
-    Follows the exact same logic as nabla/transforms/vmap.py:_batch_tensor.
     
     The key insight: after adding/moving an axis to batch_dims, we need to 
     ensure it ends up at physical position 0 (the outermost batch position).
@@ -256,6 +255,7 @@ def _batch_tensor(tensor: Tensor, axis: AxisSpec, batch_dim, spmd_axis_name: str
         axis: Axis specification (None for broadcast, int for batched axis)
         batch_dim: Dim object (StaticDim or SymbolicDim) for the batch dimension
         spmd_axis_name: Optional mesh axis name to shard the batch dimension on.
+        mesh: Optional device mesh for sharding the batch dimension.
     """
     from ..ops import view as l_ops
     from ..ops import _physical as p_ops
@@ -301,27 +301,50 @@ def _batch_tensor(tensor: Tensor, axis: AxisSpec, batch_dim, spmd_axis_name: str
             t = tensor
         
         # Now the batched axis is at physical position old_batch_dims (front of logical)
+        # Apply sharding to the batch axis BEFORE incr_batch_dims (while it's still logical)
+        if spmd_axis_name is not None and mesh is not None:
+            from ..sharding.spec import DimSpec
+            
+            # The axis to shard is at physical position old_batch_dims (front of logical)
+            # We need to create a PHYSICAL shard spec that:
+            # 1. Inherits existing batch sharding for positions 0..old_batch_dims-1
+            # 2. Shards the new batch axis (at old_batch_dims) on spmd_axis_name
+            # 3. Leaves logical dims replicated
+            
+            logical_rank = len(t.shape)
+            physical_rank = old_batch_dims + logical_rank
+            
+            # Start with replicated specs for all physical dims
+            dim_specs = [DimSpec([]) for _ in range(physical_rank)]
+            
+            # Inherit existing batch sharding if tensor already has sharding
+            if t._impl.sharding:
+                for i in range(min(old_batch_dims, len(t._impl.sharding.dim_specs))):
+                    dim_specs[i] = t._impl.sharding.dim_specs[i].clone()
+            
+            # Shard the new batch axis (at position old_batch_dims) on spmd_axis_name
+            dim_specs[old_batch_dims] = DimSpec([spmd_axis_name])
+            
+            t = comm_ops.shard_op(t, mesh, dim_specs)
+        
         # Increment batch_dims - it becomes the LAST batch dim
         t = p_ops.incr_batch_dims(t)
         
         # Move the last batch dim (at physical position old_batch_dims) to position 0
         if old_batch_dims > 0:
             t = p_ops.moveaxis(t, source=old_batch_dims, destination=0)
-    
-    # Apply sharding to the new batch dimension (now at physical index 0) if requested
-    if spmd_axis_name is not None and t._impl.sharding:
-         t = comm_ops.shard_batch_dims(t, t._impl.sharding.mesh, spmd_axis_name, batch_axis=0)
 
     return t
 
 
-def _unbatch_tensor(tensor: Tensor, axis: AxisSpec) -> Tensor:
+def _unbatch_tensor(tensor: Tensor, axis: AxisSpec, spmd_axis_name: str | None = None, mesh: "DeviceMesh | None" = None) -> Tensor:
     """Restore tensor after batched execution by moving batch_dims to axis.
-    
-    Follows the exact same logic as nabla/transforms/vmap.py:_unbatch_tensor.
     
     The reverse of _batch_tensor: moves the outermost batch dim (position 0)
     back to its original logical position.
+    
+    Note: spmd_axis_name sharding is PRESERVED on the output axis - we don't
+    all_gather automatically. The user can explicitly gather if needed.
     """
     from ..ops import view as l_ops
     from ..ops import _physical as p_ops
@@ -338,6 +361,9 @@ def _unbatch_tensor(tensor: Tensor, axis: AxisSpec) -> Tensor:
     
     # Now decrement batch_dims - the last batch dim becomes front of logical
     t = p_ops.decr_batch_dims(t)
+    
+    # Note: We do NOT all_gather here - output stays sharded on spmd_axis_name
+    # The user can explicitly all_gather if they need replicated output
     
     if axis is None:
         # Squeeze out the broadcast dimension at LOGICAL axis 0
@@ -370,6 +396,7 @@ def vmap(
     out_axes: AxisSpec = 0,
     axis_size: int | None = None,
     spmd_axis_name: str | None = None,
+    mesh: "DeviceMesh | None" = None,
 ) -> Callable[..., T]:
     """Vectorize a function over batch dimensions.
     
@@ -390,7 +417,7 @@ def vmap(
             are None (pure broadcast). If provided with batched inputs,
             must match the inferred batch size.
         spmd_axis_name: Optional mesh axis name to shard the batch dimension on.
-            Requires inputs to have an associated DeviceMesh.
+        mesh: Device mesh for SPMD sharding. Required when spmd_axis_name is set.
     
     Returns:
         Vectorized function.
@@ -422,7 +449,7 @@ def vmap(
     """
     # Support decorator usage: @vmap or @vmap(in_axes=...)
     if func is None:
-        return lambda f: vmap(f, in_axes=in_axes, out_axes=out_axes, axis_size=axis_size, spmd_axis_name=spmd_axis_name)
+        return lambda f: vmap(f, in_axes=in_axes, out_axes=out_axes, axis_size=axis_size, spmd_axis_name=spmd_axis_name, mesh=mesh)
     
     def vectorized(*args: Any) -> Any:
         if not args:
@@ -436,7 +463,7 @@ def vmap(
         
         # Batch all inputs
         batched = tuple(
-            _map_prefix(_batch_tensor, arg, ax, batch_dim, spmd_axis_name)
+            _map_prefix(_batch_tensor, arg, ax, batch_dim, spmd_axis_name, mesh)
             for arg, ax in zip(args, in_ax)
         )
         
@@ -450,7 +477,7 @@ def vmap(
         
         # Unbatch all outputs
         unbatched = [
-            _map_prefix(_unbatch_tensor, out, ax)
+            _map_prefix(_unbatch_tensor, out, ax, spmd_axis_name, mesh)
             for out, ax in zip(out_list, out_ax)
         ]
         
