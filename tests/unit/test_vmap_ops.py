@@ -35,7 +35,7 @@ from nabla import (
 )
 from nabla.sharding.spec import DimSpec
 
-from .conftest import (
+from tests.conftest import (
     make_array, make_positive_array, tensor_from_numpy, to_numpy,
     assert_allclose, assert_shape, assert_batch_dims,
     shard_on_axis, replicated,

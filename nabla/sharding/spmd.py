@@ -184,15 +184,21 @@ def infer_output_sharding(
         output_rank = len(input_shapes[0]) if input_shapes else 0
 
     # Get sharding rule from operation
+    rule = None
     try:
         # We pass output_shapes=None to indicate we don't have full shapes
         # The template instantiation will rely on input shapes for factor sizing
         rule = op.sharding_rule(input_shapes, None, **(kwargs or {}))
     except (NotImplementedError, AttributeError):
+        rule = None
+        
+    if rule is None:
         # Fallback to elementwise-like behavior: inherit from first sharded
         for spec in input_specs:
             if any(d.axes for d in spec.dim_specs):
-                return spec, input_specs, False
+                # Ensure rank match before inheriting
+                if len(spec.dim_specs) == output_rank:
+                    return spec.clone(), input_specs, False
         return None, input_specs, False
     
     # Create empty output spec based on rank
@@ -211,10 +217,14 @@ def _check_contracting_factors_sharded(
     rule: "OpShardingRule",
     input_specs: "List[ShardingSpec]",
 ) -> "Set[str]":
-    """Check if any contracting factor has sharding (requires AllReduce).
+    """Check if any contracting factor has CONSISTENT sharding across ALL inputs (requires AllReduce).
     
     A contracting factor appears in inputs but not outputs (e.g., k in matmul).
-    If such a factor is sharded, the operation produces partial results.
+    AllReduce is needed ONLY if the contracting dimension is sharded on the SAME axis
+    across ALL inputs that contribute to that factor.
+    
+    If one input has k sharded and another has k unsharded, the local computation
+    is complete (each shard has the full k dimension from at least one input).
     
     Returns:
         Set of mesh axis names that require AllReduce.
@@ -224,15 +234,30 @@ def _check_contracting_factors_sharded(
     if not contracting_factors:
         return reduce_axes
     
-    # For each contracting factor, check if it's sharded in any input
     for factor in contracting_factors:
+        # Collect sharding axes for this factor from ALL inputs
+        factor_axes_per_input = []
+        
         for t_idx, mapping in enumerate(rule.input_mappings):
             for dim_idx, factors in mapping.items():
                 if factor in factors and t_idx < len(input_specs):
                     spec = input_specs[t_idx]
                     if dim_idx < len(spec.dim_specs):
-                        # Add all axes used for this contracting dimension
-                        reduce_axes.update(spec.dim_specs[dim_idx].axes)
+                        axes = spec.dim_specs[dim_idx].axes
+                        factor_axes_per_input.append(set(axes))
+        
+        # Only reduce if ALL inputs have the same non-empty sharding for this factor
+        if len(factor_axes_per_input) > 1:
+            # Check if all have the same non-empty axes
+            first_axes = factor_axes_per_input[0]
+            if first_axes and all(axes == first_axes for axes in factor_axes_per_input):
+                reduce_axes.update(first_axes)
+        elif len(factor_axes_per_input) == 1:
+            # Single input with this factor - if sharded, need reduce
+            # (Actually, this shouldn't happen for matmul since k appears in both inputs)
+            # But handle it for generality
+            reduce_axes.update(factor_axes_per_input[0])
+    
     return reduce_axes
 
 

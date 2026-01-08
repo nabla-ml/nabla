@@ -68,6 +68,9 @@ class CollectiveOperation(Operation):
             batch_dims=sharded_tensor._impl.batch_dims,
             sharding=output_spec,
         )
+        # Preserve cached_shape from input (most collectives preserve global shape)
+        impl.cached_shape = sharded_tensor._impl.cached_shape
+        
         output = Tensor(impl=impl)
         
         # 4. Tracing setup
@@ -1014,7 +1017,7 @@ class AxisIndexOp(Operation):
         coord = mesh.get_coordinate(shard_idx, axis_name)
         return ops.constant(coord, mesh.device_refs[shard_idx].dtype if hasattr(mesh.device_refs[shard_idx], 'dtype') else None)
     
-    def __call__(self, mesh: "DeviceMesh", axis_name: str) -> List[TensorValue]:
+    def __call__(self, mesh: "DeviceMesh", axis_name: str) -> "Tensor":
         """Get axis indices for all devices.
         
         Args:
@@ -1022,12 +1025,15 @@ class AxisIndexOp(Operation):
             axis_name: Name of axis to get indices for
             
         Returns:
-            List of scalar TensorValues, one per device
+            Tensor (sharded/distributed) containing the index for each device.
         """
         from ..core.compute_graph import GRAPH
         from max.dtype import DType
         from max.graph import DeviceRef
-        
+        from ..core.tensor import Tensor
+        from ..core.tensor_impl import TensorImpl
+        from ..sharding.spec import ShardingSpec, DimSpec
+
         results = []
         with GRAPH.graph:
             for shard_idx in range(len(mesh.devices)):
@@ -1035,9 +1041,21 @@ class AxisIndexOp(Operation):
                 # Use device ref from mesh, or default to CPU
                 device = mesh.device_refs[shard_idx] if mesh.device_refs else DeviceRef.CPU()
                 val = ops.constant(coord, DType.int32, device)
+                # Reshape to (1,) to match sharded 1D tensor logic
+                val = ops.reshape(val, (1,))
                 results.append(val)
         
-        return results
+        # Result is a 1D tensor [0, 1, 2...] sharded on axis_name
+        # Shape: (axis_size,)
+        spec = ShardingSpec(mesh, [DimSpec([axis_name])])
+        
+        impl = TensorImpl(
+            values=results,
+            traced=False,
+            batch_dims=0,
+            sharding=spec
+        )
+        return Tensor(impl=impl)
 
 
 class PMeanOp(CollectiveOperation):

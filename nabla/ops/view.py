@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from max.graph import TensorValue, ops
 
-from .operation import LogicalAxisOperation, LogicalShapeOperation
+from .operation import Operation, LogicalAxisOperation, LogicalShapeOperation
 
 if TYPE_CHECKING:
     from ..core.tensor import Tensor
@@ -237,6 +237,31 @@ _broadcast_to_op = BroadcastToOp()
 _reshape_op = ReshapeOp()
 
 
+class SliceTensorOp(Operation):
+    @property
+    def name(self) -> str:
+        return "slice_tensor"
+    
+    def maxpr(self, x: TensorValue, start: Any, size: Any) -> TensorValue:
+        # data is TensorValue
+        # start/size are lists of int or TensorValue
+        slices = []
+        for s, sz in zip(start, size):
+            end = s + sz
+            slices.append(slice(s, end))
+        return ops.slice_tensor(x, slices)
+
+    def sharding_rule(self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]], **kwargs):
+        """Slice: preserves dimension mapping (1-to-1)."""
+        from ..sharding.propagation import elementwise_template
+        return elementwise_template(len(input_shapes[0])).instantiate(input_shapes, output_shapes)
+        
+    def infer_output_rank(self, input_shapes, **kwargs) -> int:
+        return len(input_shapes[0])
+
+_slice_tensor_op = SliceTensorOp()
+
+
 def unsqueeze(x: Tensor, axis: int = 0) -> Tensor:
     return _unsqueeze_op(x, axis=axis)
 
@@ -271,8 +296,388 @@ def broadcast_to(x: Tensor, shape: tuple[int, ...]) -> Tensor:
 def reshape(x: Tensor, shape: tuple[int, ...]) -> Tensor:
     return _reshape_op(x, shape=shape)
 
+def slice_tensor(x: Tensor, start: Any, size: Any) -> Tensor:
+    return _slice_tensor_op(x, start=start, size=size)
+
+
+# =============================================================================
+# Gather Operation - Properly Implemented
+# =============================================================================
+
+class GatherOp(Operation):
+    """Gather elements from data tensor along an axis using indices.
+    
+    For axis=0: data[i0, i1, ...] with indices[k0, k1, ...] gives
+    output[k0, k1, ..., i1, ...] where the axis dimension is replaced
+    by the indices dimensions.
+    
+    Uses Operation base class (not LogicalAxisOperation) because gather
+    takes multiple tensor inputs and needs custom axis handling.
+    """
+    
+    @property
+    def name(self) -> str:
+        return "gather"
+    
+    def __call__(self, x: "Tensor", indices: "Tensor", *, axis: int = 0) -> "Tensor":
+        """Call gather with logical axis translation."""
+        data_batch_dims = x._impl.batch_dims
+        indices_batch_dims = indices._impl.batch_dims
+        logical_ndim = len(x.shape)
+        
+        # Translate logical axis to physical axis
+        if axis < 0:
+            axis = logical_ndim + axis
+        phys_axis = data_batch_dims + axis
+        
+        # Pass batch_dims info to maxpr for proper batched gather handling
+        # Only use batched gather when BOTH inputs have matching batch dims
+        use_batched = (data_batch_dims > 0 and indices_batch_dims > 0 
+                       and data_batch_dims == indices_batch_dims)
+        batch_dims = data_batch_dims if use_batched else 0
+        
+        return super().__call__(x, indices, axis=phys_axis, batch_dims=batch_dims)
+    
+    def maxpr(self, x: TensorValue, indices: TensorValue, *, axis: int = 0, batch_dims: int = 0) -> TensorValue:
+        from max.dtype import DType
+        
+        if batch_dims > 0:
+            # Use gather_nd with batch_dims for batched gather
+            # gather_nd expects indices of shape (..., index_depth) where last dim indexes into data
+            # For 1D gather along a logical axis, we reshape indices to add a trailing dim
+            indices_shape = list(indices.shape)
+            
+            # Reshape indices: (..., k) -> (..., k, 1) for 1D indexing
+            new_shape = indices_shape + [1]
+            indices = ops.reshape(indices, new_shape)
+            
+            # Cast to int64 if needed
+            if indices.dtype != DType.int64:
+                indices = ops.cast(indices, DType.int64)
+            
+            return ops.gather_nd(x, indices, batch_dims=batch_dims)
+        else:
+            # Simple case: use regular gather
+            return ops.gather(x, indices, axis)
+    
+    def sharding_rule(
+        self,
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        **kwargs,
+    ):
+        """Gather sharding rule using proper template.
+        
+        Rule pattern: Data(d0, d1, ..., d_axis, ..., dn), Indices(i0, i1, ...) 
+                     -> Output(d0, ..., d_{axis-1}, i0, i1, ..., d_{axis+1}, ..., dn)
+        
+        The gathered axis factor is 'contracting' (appears only in input).
+        """
+        from ..sharding.propagation import gather_template
+        
+        if not input_shapes or len(input_shapes) < 2:
+            return None
+        
+        data_rank = len(input_shapes[0])
+        indices_rank = len(input_shapes[1])
+        axis = kwargs.get("axis", 0)
+        if axis < 0:
+            axis += data_rank
+        
+        return gather_template(data_rank, indices_rank, axis).instantiate(
+            input_shapes, output_shapes
+        )
+
+
+_gather_op = GatherOp()
+
+
+def gather(x: "Tensor", indices: "Tensor", axis: int = 0) -> "Tensor":
+    """Gather elements from x along axis using indices.
+    
+    Args:
+        x: Data tensor to gather from
+        indices: Index tensor (integer indices)
+        axis: Axis along which to gather (default 0)
+        
+    Returns:
+        Gathered tensor where axis dimension is replaced by indices dimensions
+    """
+    from .operation import ensure_tensor
+    indices = ensure_tensor(indices)
+    return _gather_op(x, indices, axis=axis)
+
+
+# =============================================================================
+# Scatter Operation - Properly Implemented
+# =============================================================================
+
+class ScatterOp(Operation):
+    """Scatter updates into data tensor at indices along an axis.
+    
+    For axis=0: data[indices[k], ...] = updates[k, ...]
+    Output has same shape as input data.
+    
+    Uses Operation base class (not LogicalAxisOperation) because scatter
+    takes multiple tensor inputs and needs custom axis handling.
+    """
+    
+    @property
+    def name(self) -> str:
+        return "scatter"
+    
+    def __call__(
+        self, 
+        x: "Tensor", 
+        indices: "Tensor", 
+        updates: "Tensor", 
+        *, 
+        axis: int = 0
+    ) -> "Tensor":
+        """Call scatter with logical axis translation."""
+        batch_dims = x._impl.batch_dims
+        logical_ndim = len(x.shape)
+        
+        # Translate logical axis to physical axis
+        if axis < 0:
+            axis = logical_ndim + axis
+        phys_axis = batch_dims + axis
+        
+        return super().__call__(x, indices, updates, axis=phys_axis)
+    
+    def maxpr(
+        self, 
+        x: TensorValue, 
+        indices: TensorValue, 
+        updates: TensorValue, 
+        *, 
+        axis: int = 0
+    ) -> TensorValue:
+        from max.dtype import DType
+        
+        # Use scatter_nd which has more flexible index handling.
+        # scatter_nd expects indices of shape (..., index_depth) where index_depth
+        # is the number of dimensions to index into.
+        #
+        # For scatter along axis=0 into (8, 4) with 1D indices (2,) and updates (2, 4):
+        # - We reshape indices from (2,) to (2, 1) to indicate 1-dimension indexing
+        # - updates shape (2, 4) provides the values for each index
+        #
+        # For scatter along axis=1 into (4, 8) with 1D indices (3,) and updates (4, 3):
+        # - We need to expand indices to include all row indices
+        # - indices becomes shape (4, 3, 2) - for each (row, update_idx), give (row, col)
+        
+        indices_shape = list(indices.shape)
+        
+        if axis == 0:
+            # Simple case: just add trailing dimension to indices
+            # indices (k,) -> (k, 1) for k updates along first axis
+            new_indices_shape = indices_shape + [1]
+            indices = ops.reshape(indices, new_indices_shape)
+            # Cast to int64 if needed (scatter_nd expects int64)
+            if indices.dtype != DType.int64:
+                indices = ops.cast(indices, DType.int64)
+            return ops.scatter_nd(x, updates, indices)
+        else:
+            # For axis != 0, we need to construct full coordinate indices
+            # For axis=1, data (4, 8), indices (3,), updates (4, 3)
+            # We need indices of shape (4, 3, 2) where each (i, j, :) = (i, indices[j])
+            
+            leading_dims = [int(d) for d in x.shape[:axis]]
+            trailing_update_dims = [int(d) for d in indices_shape]
+            full_shape = leading_dims + trailing_update_dims
+            
+            coord_list = []
+            
+            # Add leading dimension coordinates
+            for d, dim_size in enumerate(leading_dims):
+                # Create range for this dimension using ops.range
+                from max.graph import DeviceRef
+                coord = ops.range(0, dim_size, 1, dtype=DType.int64, device=DeviceRef.CPU())
+                # Reshape for broadcasting: insert 1s everywhere except position d
+                shape = [1] * len(full_shape)
+                shape[d] = dim_size
+                coord = ops.reshape(coord, shape)
+                # Broadcast to full_shape
+                coord = ops.broadcast_to(coord, full_shape)
+                coord_list.append(coord)
+            
+            # Add the actual indices (for the scatter axis)
+            idx = indices
+            if idx.dtype != DType.int64:
+                idx = ops.cast(idx, DType.int64)
+            # Reshape: add leading 1s for broadcasting
+            shape = [1] * len(leading_dims) + trailing_update_dims
+            idx = ops.reshape(idx, shape)
+            idx = ops.broadcast_to(idx, full_shape)
+            coord_list.append(idx)
+            
+            # Stack coordinates along last axis
+            stacked = ops.stack(coord_list, axis=-1)
+            
+            return ops.scatter_nd(x, updates, stacked)
+    
+    def sharding_rule(
+        self,
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        **kwargs,
+    ):
+        """Scatter sharding rule using proper template.
+        
+        Rule pattern: Data(d...), Indices(i...), Updates(i..., d_suffix...) -> Data(d...)
+        
+        Updates must align with indices dims + data dims (excluding axis).
+        """
+        from ..sharding.propagation import scatter_template
+        
+        if not input_shapes or len(input_shapes) < 3:
+            return None
+        
+        data_rank = len(input_shapes[0])
+        indices_rank = len(input_shapes[1])
+        axis = kwargs.get("axis", 0)
+        if axis < 0:
+            axis += data_rank
+        
+        return scatter_template(data_rank, indices_rank, axis).instantiate(
+            input_shapes, output_shapes
+        )
+
+
+_scatter_op = ScatterOp()
+
+
+def scatter(x: "Tensor", indices: "Tensor", updates: "Tensor", axis: int = 0) -> "Tensor":
+    """Scatter updates into x at indices along axis.
+    
+    Args:
+        x: Data tensor to scatter into
+        indices: Index tensor (integer indices)
+        updates: Values to scatter (shape: indices_shape + data_shape[axis+1:])
+        axis: Axis along which to scatter (default 0)
+        
+    Returns:
+        Updated tensor with same shape as x
+    """
+    from .operation import ensure_tensor
+    x = ensure_tensor(x)
+    indices = ensure_tensor(indices)
+    updates = ensure_tensor(updates)
+    return _scatter_op(x, indices, updates, axis=axis)
+
+
+# =============================================================================
+# Concatenate Operation - Properly Implemented
+# =============================================================================
+
+class ConcatenateOp(LogicalAxisOperation):
+    """Concatenate tensors along an axis.
+    
+    All input tensors must have same shape except along concat axis.
+    The concat axis dimension is summed.
+    
+    Following the established pattern from LogicalAxisOperation.
+    """
+    
+    @property
+    def name(self) -> str:
+        return "concatenate"
+    
+    def __call__(self, tensors: Sequence["Tensor"], axis: int = 0) -> "Tensor":
+        """Override to handle list of tensors with batch_dims adjustment."""
+        if not tensors:
+            raise ValueError("concatenate expects at least one tensor")
+        
+        first = tensors[0]
+        batch_dims = first._impl.batch_dims
+        
+        # Adjust axis for batch_dims (logical -> physical)
+        if axis < 0:
+            axis += len(first.shape)
+        phys_axis = batch_dims + axis
+        
+        # Call parent Operation.__call__ directly (skip LogicalAxisOperation)
+        return super(LogicalAxisOperation, self).__call__(tensors, axis=phys_axis)
+    
+    def maxpr(self, tensors: list[TensorValue], *, axis: int = 0) -> TensorValue:
+        return ops.concat(tensors, axis)
+    
+    def sharding_rule(
+        self,
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        **kwargs,
+    ):
+        """Concatenate sharding rule using proper template.
+        
+        All inputs must have same sharding on non-concat axes.
+        Concat axis cannot be sharded (would require coordination).
+        """
+        from ..sharding.propagation import concatenate_template
+        
+        if not input_shapes:
+            return None
+        
+        rank = len(input_shapes[0])
+        num_inputs = len(input_shapes)
+        axis = kwargs.get("axis", 0)
+        if axis < 0:
+            axis += rank
+        
+        return concatenate_template(rank, num_inputs, axis).instantiate(
+            input_shapes, output_shapes
+        )
+    
+    def infer_output_rank(self, input_shapes, **kwargs) -> int:
+        """Output has same rank as inputs."""
+        return len(input_shapes[0])
+
+
+_concatenate_op = ConcatenateOp()
+
+
+def concatenate(tensors: Sequence["Tensor"], axis: int = 0) -> "Tensor":
+    """Concatenate tensors along an axis.
+    
+    Args:
+        tensors: Sequence of tensors to concatenate
+        axis: Axis along which to concatenate (default 0)
+        
+    Returns:
+        Concatenated tensor
+    """
+    return _concatenate_op(tensors, axis=axis)
+
+
+def stack(tensors: list["Tensor"], axis: int = 0) -> "Tensor":
+    """Stack tensors along a new axis.
+    
+    All tensors must have the same shape. A new dimension is inserted
+    at axis position.
+    
+    Args:
+        tensors: List of tensors to stack
+        axis: Position of new axis (default 0)
+        
+    Returns:
+        Stacked tensor with one more dimension than inputs
+    """
+    if not tensors:
+        raise ValueError("stack requires at least one tensor")
+    
+    # 1. Unsqueeze all inputs at the stack axis
+    expanded = [unsqueeze(t, axis=axis) for t in tensors]
+    
+    # 2. Concatenate along that axis
+    return concatenate(expanded, axis=axis)
+
 
 __all__ = [
-    "UnsqueezeOp", "SqueezeOp", "SwapAxesOp", "BroadcastToOp", "ReshapeOp",
-    "unsqueeze", "squeeze", "swap_axes", "broadcast_to", "reshape",
+    "UnsqueezeOp", "SqueezeOp", "SwapAxesOp", "BroadcastToOp", "ReshapeOp", "SliceTensorOp",
+    "GatherOp", "ScatterOp", "ConcatenateOp",
+    "unsqueeze", "squeeze", "swap_axes", "broadcast_to", "reshape", "slice_tensor",
+    "gather", "scatter", "concatenate", "stack",
 ]
+
+

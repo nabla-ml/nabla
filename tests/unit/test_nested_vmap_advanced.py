@@ -25,7 +25,7 @@ from nabla import (
 )
 from nabla.core.trace import trace
 
-from .conftest import (
+from tests.conftest import (
     make_array, tensor_from_numpy, to_numpy,
     assert_allclose, assert_shape, assert_is_sharded,
 )

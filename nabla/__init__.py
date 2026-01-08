@@ -48,6 +48,10 @@ from .ops.view import (
     swap_axes,
     broadcast_to,
     reshape,
+    gather,
+    scatter,
+    concatenate,
+    stack,
 )
 
 from .ops._physical import (
@@ -185,6 +189,11 @@ __all__ = [
     "swap_axes",
     "moveaxis",
     "broadcast_to",
+    "reshape",
+    "gather",
+    "scatter", 
+    "concatenate",
+    "stack",
     "incr_batch_dims",
     "decr_batch_dims",
     "move_axis_to_batch_dims",

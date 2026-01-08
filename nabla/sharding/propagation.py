@@ -477,6 +477,14 @@ def _collect_to_factors(
                     if proposed_axis not in spec.replicated_axes:
                         axes_for_f = [proposed_axis]
                 
+                # CRITICAL FIX: Skip contributions from empty closed dimensions.
+                # An empty closed dim (e.g., h's dim1 with {}) doesn't mean "force replicate this factor".
+                # It means "this tensor doesn't use this factor on this dimension".
+                # Other tensors (like W's dim0 for factor k) should still be able to contribute sharding.
+                if not axes_for_f and not dim_spec.is_open:
+                    # Empty + closed = this dim has no sharding info to contribute
+                    continue
+                
                 state.merge(
                     f,
                     axes_for_f,
@@ -581,14 +589,11 @@ def _update_from_factors(
                                  if ax not in spec.replicated_axes
                                  and ax not in used_axes_in_tensor]
                     
-                    # PROPAGATION FIX: If we forced axes to be dropped due to tensor-local conflict
-                    # (e.g. axis used twice), we MUST propagate this reduction back to the Factor.
-                    # Otherwise, Inputs will think Factor has sharding (TP), while Output drops it (*),
-                    # causing execution on sharded inputs as if they were replicated.
-                    if len(valid_axes) < original_axes_count:
-                        # Downgrade the factor state globally
-                        f_state.axes = list(valid_axes)
-                        # Maybe update priority? No, just axes constraint.
+                    # NOTE: We DO NOT propagate local axis conflicts back to the global factor.
+                    # This allows different tensors to use the same axis on different factors.
+                    # E.g., for matmul h[m,k] @ W[k,n]: h can have 'stage' on m (dim0),
+                    # and W can have 'stage' on k (dim0). These are different factors, valid.
+                    # If we globally downgrade k just because h can't use it on dim1, we break W.
                     
                     proposed_axes.extend(valid_axes)
                     proposed_prio = min(proposed_prio, f_state.priority)
@@ -1061,6 +1066,189 @@ def embedding_template(vocab_sharded: bool = False) -> OpShardingRuleTemplate:
     indices_mapping = {0: ["b"], 1: ["s"]}
     output_mapping = {0: ["b"], 1: ["s"], 2: ["e"]}
     return OpShardingRuleTemplate([embed_mapping, indices_mapping], [output_mapping])
+
+
+# =============================================================================
+# Gather / Scatter / Concatenate Templates (for PP and view ops)
+# =============================================================================
+
+def gather_template(data_rank: int, indices_rank: int, axis: int) -> OpShardingRuleTemplate:
+    """Template for gather: Data[d0, ..., d_axis, ..., dn], Indices[i0, ...] 
+                           -> Output[d0, ..., d_{axis-1}, i0, ..., d_{axis+1}, ..., dn]
+    
+    The gathered axis (d_axis) is a 'contracting' factor - it appears only in input.
+    Indices dimensions replace the gathered axis in the output.
+    
+    Example (axis=0):
+        Data(N, D), Indices(K) -> Output(K, D)
+        Factors: d0=N (contracting), d1=D, i0=K
+        Rule: (d0, d1), (i0) -> (i0, d1)
+    
+    Example (axis=1):
+        Data(B, N, D), Indices(K) -> Output(B, K, D)
+        Factors: d0=B, d1=N (contracting), d2=D, i0=K
+        Rule: (d0, d1, d2), (i0) -> (d0, i0, d2)
+    """
+    # Normalize axis
+    if axis < 0:
+        axis += data_rank
+    
+    # Data factors: d0, d1, ..., d_{data_rank-1}
+    data_factors = [f"d{i}" for i in range(data_rank)]
+    
+    # Indices factors: i0, i1, ..., i_{indices_rank-1}
+    indices_factors = [f"i{i}" for i in range(indices_rank)]
+    
+    # Output factors: data_factors[:axis] + indices_factors + data_factors[axis+1:]
+    out_factors = data_factors[:axis] + indices_factors + data_factors[axis+1:]
+    
+    # Build mappings
+    data_mapping = {i: [data_factors[i]] for i in range(data_rank)}
+    indices_mapping = {i: [indices_factors[i]] for i in range(indices_rank)}
+    out_mapping = {i: [out_factors[i]] for i in range(len(out_factors))}
+    
+    return OpShardingRuleTemplate([data_mapping, indices_mapping], [out_mapping])
+
+
+def scatter_template(data_rank: int, indices_rank: int, axis: int) -> OpShardingRuleTemplate:
+    """Template for scatter: Data[d...], Indices[i...], Updates[i..., d_suffix...] -> Data[d...]
+    
+    Scatter writes updates at positions specified by indices along the given axis.
+    Output has same shape as input data.
+    
+    The indices + updates alignment is: Updates = Indices_dims + Data_dims[axis+1:]
+    
+    Example (axis=0):
+        Data(N, D), Indices(K), Updates(K, D) -> Output(N, D)
+        Factors: d0=N, d1=D, i0=K
+        Rule: (d0, d1), (i0), (i0, d1) -> (d0, d1)
+    
+    Example (axis=1):
+        Data(B, N, D), Indices(K), Updates(B, K, D) -> Output(B, N, D)
+        Factors: d0=B, d1=N, d2=D, i0=K
+        Rule: (d0, d1, d2), (i0), (d0, i0, d2) -> (d0, d1, d2)
+    """
+    # Normalize axis
+    if axis < 0:
+        axis += data_rank
+    
+    # Data factors
+    data_factors = [f"d{i}" for i in range(data_rank)]
+    
+    # Indices factors
+    indices_factors = [f"i{i}" for i in range(indices_rank)]
+    
+    # Updates factors: data_factors[:axis] + indices_factors + data_factors[axis+1:]
+    # This matches the gather output shape: the axis dim is replaced by indices dims
+    updates_factors = data_factors[:axis] + indices_factors + data_factors[axis+1:]
+    
+    # Build mappings
+    data_mapping = {i: [data_factors[i]] for i in range(data_rank)}
+    indices_mapping = {i: [indices_factors[i]] for i in range(indices_rank)}
+    updates_mapping = {i: [updates_factors[i]] for i in range(len(updates_factors))}
+    out_mapping = {i: [data_factors[i]] for i in range(data_rank)}
+    
+    return OpShardingRuleTemplate(
+        [data_mapping, indices_mapping, updates_mapping], 
+        [out_mapping]
+    )
+
+
+def concatenate_template(rank: int, num_inputs: int, axis: int) -> OpShardingRuleTemplate:
+    """Template for concatenate: Input0[d...], Input1[d...], ... -> Output[d...]
+    
+    All inputs must have the same sharding on non-concat axes.
+    The concat axis is special: each input contributes its slice, and they combine.
+    
+    For simplicity and correctness, we require:
+    - Non-concat axes: must have identical sharding across all inputs
+    - Concat axis: should NOT be sharded (sharding along concat axis is complex)
+    
+    This template enforces shared factors for all dims across all inputs.
+    The concat axis gets a "concat_slot" factor that varies per input (not sharded).
+    
+    Example (3 inputs, axis=0):
+        Input0(A, D), Input1(B, D), Input2(C, D) -> Output(A+B+C, D)
+        For sharding: All share factor d1 for dim 1
+        Dim 0: each input has its own size, concat axis should be replicated
+        
+        Rule: (c0, d1), (c1, d1), (c2, d1) -> (concat, d1)
+        where concat is NOT sharded (compound of c0, c1, c2)
+    """
+    # Normalize axis
+    if axis < 0:
+        axis += rank
+    
+    # Create factors for each dimension
+    # Non-concat dims: shared factor "d{i}" across all inputs
+    # Concat dim: each input has its own factor "c{input_idx}_{axis}"
+    
+    input_mappings = []
+    for input_idx in range(num_inputs):
+        mapping = {}
+        for dim in range(rank):
+            if dim == axis:
+                # Concat axis: each input has its own factor (not shared)
+                # This means the concat axis cannot propagate sharding between inputs
+                mapping[dim] = [f"c{input_idx}"]
+            else:
+                # Non-concat dims: shared factor
+                mapping[dim] = [f"d{dim}"]
+        input_mappings.append(mapping)
+    
+    # Output mapping: non-concat dims share factors, concat dim is compound
+    out_mapping = {}
+    for dim in range(rank):
+        if dim == axis:
+            # Concat axis: compound of all input concat factors
+            # This represents the concatenated dimension
+            out_mapping[dim] = [f"c{i}" for i in range(num_inputs)]
+        else:
+            out_mapping[dim] = [f"d{dim}"]
+    
+    return OpShardingRuleTemplate(input_mappings, [out_mapping])
+
+
+def stack_template(rank: int, num_inputs: int, axis: int) -> OpShardingRuleTemplate:
+    """Template for stack: Input0[d...], Input1[d...], ... -> Output[N, d...]
+    
+    Stack inserts a new dimension at axis position, so output rank = input_rank + 1.
+    All inputs must have identical shape and sharding.
+    
+    Example (2 inputs, input_rank=2, axis=0):
+        Input0(M, N), Input1(M, N) -> Output(2, M, N)
+        Factors: d0=M, d1=N, stack_dim=2
+        Rule: (d0, d1), (d0, d1) -> (stack, d0, d1)
+    """
+    # Input rank (each input has same rank)
+    input_rank = rank
+    output_rank = rank + 1
+    
+    # Normalize axis for output
+    if axis < 0:
+        axis += output_rank
+    
+    # Input factors: all inputs share the same factors
+    input_factors = [f"d{i}" for i in range(input_rank)]
+    
+    input_mappings = []
+    for _ in range(num_inputs):
+        mapping = {i: [input_factors[i]] for i in range(input_rank)}
+        input_mappings.append(mapping)
+    
+    # Output factors: insert new "stack" factor at axis position
+    out_factors = []
+    input_idx = 0
+    for i in range(output_rank):
+        if i == axis:
+            out_factors.append("stack")
+        else:
+            out_factors.append(input_factors[input_idx])
+            input_idx += 1
+    
+    out_mapping = {i: [out_factors[i]] for i in range(output_rank)}
+    
+    return OpShardingRuleTemplate(input_mappings, [out_mapping])
 
 
 # ============================================================================

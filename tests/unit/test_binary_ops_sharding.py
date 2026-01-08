@@ -20,7 +20,7 @@ from nabla import DeviceMesh, P
 from nabla import add, sub, mul, div, matmul
 from nabla.sharding.spec import DimSpec, ShardingSpec
 
-from .conftest import (
+from tests.conftest import (
     make_array, make_positive_array, tensor_from_numpy, to_numpy,
     assert_allclose, assert_shape, assert_is_sharded,
     shard_on_axis, shard_on_axes, replicated,
