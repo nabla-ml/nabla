@@ -808,7 +808,7 @@ class ReshardOp(Operation):
             # Ideally return tensor as-is if strictly no change.
             # But ensure spec is set if it was None?
             if current_spec is None:
-                 tensor._impl.sharding = target_spec
+                tensor._impl.sharding = target_spec
             return tensor
 
         # 4. Perform Resharding (Gather + Shard)

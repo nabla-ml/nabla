@@ -208,8 +208,10 @@ def shard_on_axis(tensor: Tensor, mesh: DeviceMesh, axis: int, mesh_axis: int = 
         mesh_axis: Which mesh axis to use for sharding (default 0 = first axis name)
     """
     rank = len(tensor.shape)
-    specs = [DimSpec([]) for _ in range(rank)]
-    specs[axis] = DimSpec([mesh.axis_names[mesh_axis]])
+    # Default to open specs so they can accept further sharding (e.g. broadcasting)
+    specs = [DimSpec([], is_open=True) for _ in range(rank)]
+    # The sharded axis is fixed (closed) unless explicitly opened (sharding constraint)
+    specs[axis] = DimSpec([mesh.axis_names[mesh_axis]], is_open=False)
     return tensor.shard(mesh, specs)
 
 
@@ -224,14 +226,16 @@ def shard_on_axes(tensor: Tensor, mesh: DeviceMesh, axis_mapping: dict[int, int]
                            tensor axis 1 on mesh axis 1
     """
     rank = len(tensor.shape)
-    specs = [DimSpec([]) for _ in range(rank)]
+    # Default to open specs
+    specs = [DimSpec([], is_open=True) for _ in range(rank)]
     for tensor_axis, mesh_axis in axis_mapping.items():
-        specs[tensor_axis] = DimSpec([mesh.axis_names[mesh_axis]])
+        specs[tensor_axis] = DimSpec([mesh.axis_names[mesh_axis]], is_open=False)
     return tensor.shard(mesh, specs)
 
 
 def replicated(tensor: Tensor, mesh: DeviceMesh) -> Tensor:
-    """Create a fully replicated sharded tensor."""
+    """Create a fully replicated sharded tensor (open to sharding propagation)."""
     rank = len(tensor.shape)
-    specs = [DimSpec([]) for _ in range(rank)]
+    # Replicated starts with no axes but should be Open to allow it to match sharded inputs
+    specs = [DimSpec([], is_open=True) for _ in range(rank)]
     return tensor.shard(mesh, specs)

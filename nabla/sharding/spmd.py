@@ -32,25 +32,10 @@ def ensure_specs(args: tuple, mesh: Optional["DeviceMesh"]) -> tuple:
     For unsharded tensors, assigns a replicated spec (all dims have empty axes).
     This allows the unified SPMD dispatch to treat all tensors uniformly.
     """
-    if mesh is None:
-        return args
-    
-    from ..core.tensor import Tensor
-    from ..core import pytree
-    from ..sharding.spec import ShardingSpec, DimSpec
-    
-    def assign_spec(x):
-        if not isinstance(x, Tensor):
-            return x
-        if x._impl.sharding is not None:
-            return x
-        # Use PHYSICAL rank (logical + batch_dims) for sharding spec
-        # Sharding specs must cover ALL physical dimensions
-        physical_rank = len(x.shape) + x._impl.batch_dims
-        x._impl.sharding = ShardingSpec(mesh, [DimSpec([], is_open=True) for _ in range(physical_rank)])
-        return x
-    
-    return pytree.tree_map(assign_spec, args)
+    # NABLA 2025: Removed in-place annotation to support functional purity.
+    # Downstream components (infer_output_sharding, reshard_inputs, get_shard_args)
+    # now robustly handle unsharded (None spec) tensors by treating them as replicated.
+    return args
 
 
 def reshard_inputs(

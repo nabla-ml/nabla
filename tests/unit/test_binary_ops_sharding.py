@@ -185,10 +185,14 @@ class TestBinaryOpsMismatchedSharding:
         a = tensor_from_numpy(np_a)
         b = tensor_from_numpy(np_b)
         
-        # a sharded on axis 0 (dp), b sharded on axis 1 (tp)
-        a_sharded = a.shard(mesh_2d, P("dp", None))
-        b_sharded = b.shard(mesh_2d, P(None, "tp"))
+        # a sharded on axis 0 (dp), but open on axis 1 to accept 'tp' sharding
+        # b sharded on axis 1 (tp), but open on axis 0 to accept 'dp' sharding
+        specs_a = [DimSpec(["dp"], is_open=False), DimSpec([], is_open=True)]
+        specs_b = [DimSpec([], is_open=True), DimSpec(["tp"], is_open=False)]
         
+        a_sharded = a.shard(mesh_2d, specs_a)
+        b_sharded = b.shard(mesh_2d, specs_b)
+    
         result = add(a_sharded, b_sharded)
         expected = np_a + np_b
         

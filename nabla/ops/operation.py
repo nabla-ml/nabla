@@ -354,8 +354,11 @@ class BinaryOperation(Operation):
         y_logical = tuple(int(d) for d in y.shape)
         target_logical = self._broadcast_shapes(x_logical, y_logical)
         
-        x = view_ops.broadcast_to(x, target_logical)
-        y = view_ops.broadcast_to(y, target_logical)
+        # Optimize: Skip if shapes already match target
+        if x_logical != target_logical:
+            x = view_ops.broadcast_to(x, target_logical)
+        if y_logical != target_logical:
+            y = view_ops.broadcast_to(y, target_logical)
         
         # Step 2: Broadcast PHYSICAL shapes (batch dims) - use GLOBAL shapes
         x_batch_dims = x._impl.batch_dims
@@ -371,8 +374,17 @@ class BinaryOperation(Operation):
         
         target_physical = batch_shape + target_logical
         
-        x = physical_ops.broadcast_to_physical(x, target_physical)
-        y = physical_ops.broadcast_to_physical(y, target_physical)
+        # Optimize: Skip physical broadcast if specs match target
+        # Note: We must check if cached_shape matches target to be safe
+        x_global = x.global_shape or x.local_shape
+        y_global = y.global_shape or y.local_shape
+        
+        # We need to broadcast strict physical shapes including batch dims
+        if tuple(int(d) for d in x_global) != target_physical:
+             x = physical_ops.broadcast_to_physical(x, target_physical)
+             
+        if tuple(int(d) for d in y_global) != target_physical:
+             y = physical_ops.broadcast_to_physical(y, target_physical)
         
         return super().__call__(x, y)
 

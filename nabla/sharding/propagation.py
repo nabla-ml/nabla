@@ -582,12 +582,11 @@ def _update_from_factors(
                 f_state = state.get(f)
                 if f_state is not None:
                     # Filter out:
-                    # 1. Axes explicitly replicated on target
-                    # 2. Axes already used by earlier dimensions (CRITICAL FIX)
-                    original_axes_count = len(f_state.axes)
+                    # 1. Axes already used by earlier dimensions (CRITICAL FIX)
+                    # NOTE: We removed 'ax not in spec.replicated_axes' because for Open dims,
+                    # currently unused axes are listed as replicated but shouldn't be blocked.
                     valid_axes = [ax for ax in f_state.axes 
-                                 if ax not in spec.replicated_axes
-                                 and ax not in used_axes_in_tensor]
+                                 if ax not in used_axes_in_tensor]
                     
                     # NOTE: We DO NOT propagate local axis conflicts back to the global factor.
                     # This allows different tensors to use the same axis on different factors.
@@ -628,6 +627,9 @@ def _update_from_factors(
     return did_change
 
 
+    return did_change
+
+
 def propagate_sharding(
     rule: OpShardingRule,
     input_specs: List[ShardingSpec],
@@ -649,7 +651,6 @@ def propagate_sharding(
     _collect_to_factors(input_specs, rule.input_mappings, rule, mesh, state, strategy, max_priority)
     _collect_to_factors(output_specs, rule.output_mappings, rule, mesh, state, strategy, max_priority)
     
-    # Phase 3: Update (Phase 2 Resolve is implicit in Collect/Merge)
     # Phase 3: Update (Phase 2 Resolve is implicit in Collect/Merge)
     changed = False
     # Update Outputs first: allows output constraints/conflicts to propagate back to factors

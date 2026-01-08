@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from .tensor_impl import TensorImpl
 
 # Communication operations that define context boundaries for printing
-COMM_OPS = {"shard", "all_gather", "all_reduce", "reduce_scatter", "gather_all_axes", "reshard"}
+COMM_OPS = {"shard", "all_gather", "all_reduce", "reduce_scatter", "gather_all_axes", "reshard", "ppermute", "all_to_all", "pmean"}
 
 # ANSI color codes for terminal output
 # minimalist, readable color scheme:
