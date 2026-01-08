@@ -311,7 +311,7 @@ class TestBroadcastToPhysical:
         assert_is_sharded(result, True)
         assert_allclose(result, expected)
     
-    @pytest.mark.xfail(reason="Known bug: sharded tensor broadcasting by adding leading dim produces incorrect values (all same value)")
+    # @pytest.mark.xfail(reason="Known bug: sharded tensor broadcasting by adding leading dim produces incorrect values (all same value)")
     def test_broadcast_add_leading_dim_sharded(self, mesh_1d):
         """Broadcast by adding leading dim to sharded tensor."""
         # Shape (4,) sharded → (2, 4)

@@ -85,6 +85,9 @@ class UnsqueezePhysicalOp(Operation):
         rank = len(input_shapes[0])
         axis = kwargs.get("axis", 0)
         return unsqueeze_template(rank, axis).instantiate(input_shapes, output_shapes)
+    
+    def infer_output_rank(self, input_shapes: tuple[tuple[int, ...], ...], **kwargs) -> int:
+        return len(input_shapes[0]) + 1
 
 
 class SqueezePhysicalOp(Operation):
@@ -106,6 +109,9 @@ class SqueezePhysicalOp(Operation):
         rank = len(input_shapes[0])
         axis = kwargs.get("axis", 0)
         return squeeze_template(rank, axis).instantiate(input_shapes, output_shapes)
+
+    def infer_output_rank(self, input_shapes: tuple[tuple[int, ...], ...], **kwargs) -> int:
+        return len(input_shapes[0]) - 1
 
 
 class BroadcastToPhysicalOp(Operation):
