@@ -408,13 +408,17 @@ class LogicalAxisOperation(Operation):
     # True for unsqueeze (uses ndim+1 for negative axis normalization)
     axis_offset_for_insert: bool = False
     
+    # Arguments that should be treated as axes and translated
+    axis_arg_names: set[str] = {'axis', 'dim'}
+    
     def __call__(self, x: Tensor, **kwargs: Any) -> Tensor:
         batch_dims = x._impl.batch_dims
         logical_ndim = len(x.shape)
         
         translated = {}
         for key, value in kwargs.items():
-            if isinstance(value, int) and not isinstance(value, bool):
+            # Only translate if key is identified as an axis argument
+            if key in self.axis_arg_names and isinstance(value, int):
                 if value < 0:
                     offset = 1 if self.axis_offset_for_insert else 0
                     value = logical_ndim + offset + value
@@ -444,18 +448,19 @@ class LogicalShapeOperation(Operation):
             # For sharded tensors, use GLOBAL batch shape from cached_shape
             # (not local batch_shape which is per-shard)
             # This ensures consistency with infer_output_sharding which uses cached_shape
-            if x.global_shape is not None:
-                global_batch_shape = tuple(int(d) for d in x.global_shape[:batch_dims])
-            elif x._impl.batch_shape is not None:
-                # Fallback to local batch_shape for unsharded tensors
-                global_batch_shape = tuple(int(d) for d in x._impl.batch_shape)
+            if x._impl.cached_shape is not None:
+                # Use cached global physical shape (includes batch dims)
+                global_batch_shape = tuple(int(d) for d in x._impl.cached_shape[:batch_dims])
             else:
-                global_batch_shape = ()
+                # Fallback to local physical shape for unsharded tensors
+                # (For unsharded tensors, local physical == global physical)
+                global_phys = x.local_shape
+                global_batch_shape = tuple(int(d) for d in global_phys[:batch_dims])
             physical_shape = global_batch_shape + tuple(shape)
         else:
             physical_shape = tuple(shape)
         
-        return super().__call__(x, shape=physical_shape, batch_dims=batch_dims)
+        return super().__call__(x, shape=physical_shape)
 
 
 __all__ = [

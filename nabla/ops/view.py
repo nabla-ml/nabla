@@ -73,6 +73,8 @@ class SqueezeOp(LogicalAxisOperation):
 
 
 class SwapAxesOp(LogicalAxisOperation):
+    axis_arg_names = ("axis1", "axis2")
+    
     @property
     def name(self) -> str:
         return "swap_axes"
@@ -111,7 +113,7 @@ class BroadcastToOp(LogicalShapeOperation):
     def name(self) -> str:
         return "broadcast_to"
     
-    def maxpr(self, x: TensorValue, *, shape: tuple[int, ...], batch_dims: int = 0) -> TensorValue:
+    def maxpr(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
         # Simple same-rank broadcast. Any unsqueezing should happen at the Tensor level
         # (in the broadcast_to function) so sharding propagation can handle it.
         return ops.broadcast_to(x, shape)
@@ -160,7 +162,47 @@ class ReshapeOp(LogicalShapeOperation):
     def name(self) -> str:
         return "reshape"
     
-    def maxpr(self, x: TensorValue, *, shape: tuple[int, ...], batch_dims: int = 0) -> TensorValue:
+    def __call__(self, x: "Tensor", *, shape: tuple[int, ...]) -> "Tensor":
+        """Reshape with conservative sharding safety.
+        
+        If ANY logical dimension is sharded, we gather the entire tensor
+        before reshaping. This is conservative but always correct.
+        
+        A smarter implementation could analyze the reshape to determine
+        if sharded dimensions are actually affected.
+        """
+        from ..sharding.spec import DimSpec, ShardingSpec
+        
+        spec = x._impl.sharding
+        if spec:
+            batch_dims = x._impl.batch_dims
+            logical_rank = len(x.shape)
+            
+            # Check if any logical dimension is sharded
+            has_sharded_logical = False
+            for i in range(logical_rank):
+                phys_idx = batch_dims + i
+                if phys_idx < len(spec.dim_specs) and spec.dim_specs[phys_idx].axes:
+                    has_sharded_logical = True
+                    break
+            
+            if has_sharded_logical:
+                # Conservative: unshard all logical dimensions
+                # Keep batch dimensions as-is
+                new_dim_specs = []
+                for i in range(len(spec.dim_specs)):
+                    if i < batch_dims:
+                        # Preserve batch dim sharding
+                        new_dim_specs.append(spec.dim_specs[i].clone())
+                    else:
+                        # Unshard logical dims
+                        new_dim_specs.append(DimSpec([]))
+                
+                x = x.with_sharding(spec.mesh, new_dim_specs)
+        
+        return super().__call__(x, shape=shape)
+    
+    def maxpr(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
         return ops.reshape(x, shape)
     
     def infer_output_rank(self, input_shapes, **kwargs) -> int:

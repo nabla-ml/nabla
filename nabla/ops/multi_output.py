@@ -42,6 +42,36 @@ class SplitOp(LogicalAxisOperation):
     def name(self) -> str:
         return "split"
     
+    def __call__(self, x: Tensor, **kwargs: Any) -> tuple[Tensor, ...]:
+        # Enforce replication on split axis to ensure correct global result semantics
+        # If we split a sharded axis without gathering, we get partial results 
+        # that don't match the global shape expectation of 'Replicated'.
+        
+        from ..sharding.spec import DimSpec, ShardingSpec
+        
+        # 1. Determine physical split axis
+        rank = len(x.shape)
+        batch_dims = x._impl.batch_dims
+        axis = kwargs.get("axis", 0)
+        
+        if axis < 0:
+            axis = rank + axis
+        
+        phys_axis = batch_dims + axis
+        
+        # 2. Check if input is sharded on this axis
+        spec = x._impl.sharding
+        if spec and phys_axis < len(spec.dim_specs):
+            ds = spec.dim_specs[phys_axis]
+            if ds.axes:  # Check if sharded (non-empty axes)
+                # 3. Reshard to remove sharding on this axis (AllGather)
+                new_dim_specs = list(spec.dim_specs)
+                new_dim_specs[phys_axis] = DimSpec([]) # Replicated
+                
+                x = x.with_sharding(spec.mesh, new_dim_specs)
+        
+        return super().__call__(x, **kwargs)
+
     def maxpr(
         self, 
         x: TensorValue, 
@@ -74,6 +104,35 @@ class SplitOp(LogicalAxisOperation):
         # Use MAX's native split which returns list[TensorValue]
         result_list = ops.split(x, split_sizes, axis)
         return tuple(result_list)
+
+        """Split tensor into num_splits equal parts along axis.
+        
+        Args:
+            x: Input TensorValue
+            num_splits: Number of equal splits
+            axis: Axis to split along (default: 0)
+            
+        Returns:
+            Tuple of TensorValues, one for each split
+        """
+        # Get axis size and compute chunk sizes
+        shape = list(x.type.shape)
+        axis_size = int(shape[axis])
+        
+        print(f"DEBUG: SplitOp.maxpr called with num_splits={num_splits}, axis={axis}, axis_size={axis_size}, shape={shape}")
+
+        
+        if axis_size % num_splits != 0:
+            raise ValueError(
+                f"Cannot split axis of size {axis_size} into {num_splits} equal parts"
+            )
+        
+        chunk_size = axis_size // num_splits
+        split_sizes = [chunk_size] * num_splits
+        
+        # Use MAX's native split which returns list[TensorValue]
+        result_list = ops.split(x, split_sizes, axis)
+        return tuple(result_list)
     
     def sharding_rule(
         self,
@@ -81,15 +140,36 @@ class SplitOp(LogicalAxisOperation):
         output_shapes: list[tuple[int, ...]],
         **kwargs,
     ):
-        """Split preserves sharding on all dims except split axis shrinks.
+        """Split preserves sharding on non-split dimensions.
         
-        All outputs share the same factors as input, except the split axis
-        has a smaller size (handled by factor sizing).
+        The split axis changes size, so we must assign a new factor to it
+        in the output to avoid size mismatch conflicts.
         """
-        from ..sharding.propagation import unary_template
+        from ..sharding.propagation import OpShardingRuleTemplate
+        
         rank = len(input_shapes[0])
-        # All outputs share same factor structure as input
-        return unary_template(rank).instantiate(input_shapes, output_shapes)
+        axis = kwargs.get("axis", 0)
+        if axis < 0: axis += rank
+        
+        # Input factors: a, b, c...
+        in_factors = [chr(97 + i) for i in range(rank)]
+        
+        # Output factors: change split axis to 'z'
+        out_factors = list(in_factors)
+        out_factors[axis] = 'z'
+        
+        in_mapping = {i: [in_factors[i]] for i in range(rank)}
+        out_mapping = {i: [out_factors[i]] for i in range(rank)}
+        
+        if output_shapes is not None:
+            count = len(output_shapes)
+        else:
+            count = kwargs.get("num_splits", 2)
+        
+        return OpShardingRuleTemplate(
+            input_mappings=[in_mapping],
+            output_mappings=[out_mapping] * count
+        ).instantiate(input_shapes, output_shapes)
     
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
         return len(input_shapes[0])  # Same rank as input
@@ -109,7 +189,31 @@ class ChunkOp(LogicalAxisOperation):
     @property
     def name(self) -> str:
         return "chunk"
-    
+    def __call__(self, x: Tensor, **kwargs: Any) -> list[Tensor]:
+        # Enforce replication on split axis (see SplitOp.__call__ for details)
+        from ..sharding.spec import DimSpec, ShardingSpec
+        
+        rank = len(x.shape)
+        batch_dims = x._impl.batch_dims
+        axis = kwargs.get("axis", 0)
+        
+        if axis < 0:
+            axis = rank + axis
+        
+        phys_axis = batch_dims + axis
+        
+        spec = x._impl.sharding
+        if spec and phys_axis < len(spec.dim_specs):
+            ds = spec.dim_specs[phys_axis]
+            if ds.axes:  # Check if sharded (non-empty axes)
+                # 3. Reshard to remove sharding on this axis (AllGather)
+                new_dim_specs = list(spec.dim_specs)
+                new_dim_specs[phys_axis] = DimSpec([]) # Replicated
+                
+                x = x.with_sharding(spec.mesh, new_dim_specs)
+        
+        return super().__call__(x, **kwargs)
+
     def maxpr(
         self, 
         x: TensorValue, 
@@ -129,17 +233,17 @@ class ChunkOp(LogicalAxisOperation):
         """
         shape = list(x.type.shape)
         axis_size = int(shape[axis])
-        chunk_size = (axis_size + chunks - 1) // chunks  # ceiling division
         
-        # Compute chunk sizes (last chunk may be smaller)
+        # Numpy-style splitting (distribute remainder)
+        div = axis_size // chunks
+        rem = axis_size % chunks
+        
         split_sizes = []
-        remaining = axis_size
         for i in range(chunks):
-            if remaining <= 0:
-                break
-            size = min(chunk_size, remaining)
-            split_sizes.append(size)
-            remaining -= size
+            size = div + 1 if i < rem else div
+            # Skip empty chunks if checking strict length
+            if size > 0:
+                split_sizes.append(size)
         
         # Use MAX's native split
         return ops.split(x, split_sizes, axis)
@@ -150,10 +254,43 @@ class ChunkOp(LogicalAxisOperation):
         output_shapes: list[tuple[int, ...]],
         **kwargs,
     ):
-        """Chunk preserves sharding on all dims (like split)."""
-        from ..sharding.propagation import unary_template
+        """Chunk preserves sharding on non-split dimensions."""
+        from ..sharding.propagation import OpShardingRuleTemplate
+        
         rank = len(input_shapes[0])
-        return unary_template(rank).instantiate(input_shapes, output_shapes)
+        axis = kwargs.get("axis", 0)
+        if axis < 0: axis += rank
+        
+        # Input factors: a, b, c...
+        in_factors = [chr(97 + i) for i in range(rank)]
+        
+        # Output factors: change split axis to 'z'
+        out_factors = list(in_factors)
+        out_factors[axis] = 'z'
+        
+        in_mapping = {i: [in_factors[i]] for i in range(rank)}
+        out_mapping = {i: [out_factors[i]] for i in range(rank)}
+        
+        if output_shapes is not None:
+            count = len(output_shapes)
+        else:
+            # Calculate expected number of chunks based on logic
+            # input_shapes[0] is (d0, d1, ...)
+            # sharding_rule might see abstract shapes? No, concrete integers in input_shapes.
+            chunks = kwargs.get("chunks", 1)
+            dim_size = input_shapes[0][axis]
+            
+            div = dim_size // chunks
+            rem = dim_size % chunks
+            count = 0
+            for i in range(chunks):
+                s = div + 1 if i < rem else div
+                if s > 0: count += 1
+        
+        return OpShardingRuleTemplate(
+            input_mappings=[in_mapping],
+            output_mappings=[out_mapping] * count
+        ).instantiate(input_shapes, output_shapes)
     
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
         return len(input_shapes[0])  # Same rank as input

@@ -155,22 +155,59 @@ class ShardOp(Operation):
 
     def _slice_for_device(self, x, global_shape, spec, shard_idx, mesh):
         from ..sharding.spec import compute_local_shape
+        from ..core.tensor import Tensor
         
+        # Determine effective input value for this shard
+        effective_x = x
+        input_shard_offset = [0] * len(global_shape)
+        
+        # Handle Tensor input (Simulation Mode)
+        if isinstance(x, Tensor):
+            if x._impl._values:
+                # Eager mode: extract underlying value(s)
+                if len(x._impl._values) > shard_idx:
+                    # Input is sharded/distributed, pick corresponding shard
+                    effective_x = x._impl._values[shard_idx]
+                    
+                    # If input had sharding, we must compute its global offset 
+                    if x._impl.sharding:
+                        for d, dim_spec in enumerate(x._impl.sharding.dim_specs):
+                            # Calculate global offset for this dimension on this shard
+                            offset = 0
+                            shard_pos = 0
+                            total_shards = 1
+                            for axis in dim_spec.axes:
+                                size = mesh.get_axis_size(axis)
+                                coord = mesh.get_coordinate(shard_idx, axis)
+                                shard_pos = (shard_pos * size) + coord
+                                total_shards *= size
+                            
+                            # Assuming uniform chunking (standard SPMD)
+                            dim_global_len = int(global_shape[d])
+                            chunk_size = math.ceil(dim_global_len / total_shards)
+                            input_shard_offset[d] = shard_pos * chunk_size
+                else:
+                    # Input is unsharded/replicated (single value), broadcast it
+                    effective_x = x._impl._values[0]
+            else:
+                 # Lazy mode but passed as Tensor? Should have been converted to TensorValue
+                 # Fallback to direct usage (might fail if not subscriptable)
+                 pass
+
         # Target local shape for this device
         target_local_shape = compute_local_shape(global_shape, spec, shard_idx)
         
         slices = []
         for d, (t_len, g_len) in enumerate(zip(target_local_shape, global_shape)):
-            # Check input dimension length
-            inp_len = int(x.type.shape[d])
+            # Use effective input (local shard) shape
+            inp_len = int(effective_x.type.shape[d])
             
             if inp_len == t_len:
                 # Identity slice (input matches target)
                 slices.append(slice(0, t_len))
                 continue
             
-            # Must compute offset in global coords
-            # (Re-implementing logic from compute_local_shape to get offset)
+            # Compute slice range in GLOBAL coordinates
             dim_spec = spec.dim_specs[d]
             total_shards = 1
             my_shard_pos = 0
@@ -181,27 +218,25 @@ class ShardOp(Operation):
                 total_shards *= size
             
             chunk_size = math.ceil(g_len / total_shards)
-            start = my_shard_pos * chunk_size
-            start = min(start, g_len)
+            start_global = my_shard_pos * chunk_size
+            start_global = min(start_global, g_len)
             
-            # If input is GLOBAL length, slice from start
-            if inp_len == g_len:
-                # Normal slice
-                end = min(start + chunk_size, g_len)
-                slices.append(slice(start, end))
-            else:
-                 # Input length mismatch?
-                 # If input is not target length AND not global length, we might have an issue.
-                 # E.g. input is sharded differently.
-                 # But infer_sharding_spec only allowed reuse if input_spec was compatible.
-                 # For now, assume it must be global if not matching target.
-                 # Or check robustness.
-                 # If we are here, we fallback to slicing assuming input is global?
-                 # This might fail if input is partial.
-                 end = min(start + chunk_size, g_len)
-                 slices.append(slice(start, end))
+            end_global = min(start_global + chunk_size, g_len)
+            
+            # Map GLOBAL coordinates to LOCAL input coordinates
+            # local_start = global_start - input_shard_offset
+            # Clip to valid input range [0, inp_len]
+            
+            start_local = start_global - input_shard_offset[d]
+            end_local = end_global - input_shard_offset[d]
+            
+            # Ensure indices are valid for local input
+            start_local = max(0, min(start_local, inp_len))
+            end_local = max(0, min(end_local, inp_len))
+            
+            slices.append(slice(start_local, end_local))
                  
-        return x[tuple(slices)]
+        return effective_x[tuple(slices)]
 
     def __call__(self, x, mesh: DeviceMesh, dim_specs: List[DimSpec], replicated_axes: Optional[Set[str]] = None):
         """Shard a tensor according to the given specification.
@@ -228,11 +263,15 @@ class ShardOp(Operation):
                 global_shape = tuple(int(d) for d in local)
         
         with GRAPH.graph:
-            # Convert input to TensorValue
-            x_val = g.TensorValue(x) if isinstance(x, Tensor) else x
+            # Convert input to TensorValue (lazy) or keep as Tensor (eager simulation)
+            x_input = x
+            if isinstance(x, Tensor) and not x._impl._values:
+                 # Lazy mode: use TensorValue
+                 x_input = g.TensorValue(x)
             
             # Execute shard operation with global_shape
-            shard_values = self.maxpr(x_val, mesh, dim_specs, global_shape=global_shape)
+            # maxpr and _slice_for_device will handle picking the correct shard and slicing it
+            shard_values = self.maxpr(x_input, mesh, dim_specs, global_shape=global_shape)
         
         # Create output tensor with multiple values
         spec = ShardingSpec(mesh, dim_specs, replicated_axes=replicated_axes or set())
@@ -246,7 +285,7 @@ class ShardOp(Operation):
         # Cache GLOBAL shape from input, not local shard shape
         # This is critical for sharding propagation to work correctly
         if global_shape is not None:
-            impl.cached_shape = global_shape
+            impl.cached_shape = g.Shape(global_shape)
         elif shard_values:
             # Fallback: compute global from local shard shape
             local_shape = shard_values[0].type.shape
