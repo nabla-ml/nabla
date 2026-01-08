@@ -370,10 +370,15 @@ class GraphPrinter:
             name = self._get_next_name()
             self.var_names[id(node)] = name
             
-            op_name = node.op_name.lower() if node.op_name else "unknown"
+            op_name = node.op_name.lower() if node.op_name else "const"
             arg_names = [f"{C_VAR}{self.var_names.get(id(p), '?')}{RESET}" for p in node.parents]
             args_str = ", ".join(arg_names)
             kwargs_str = self._format_kwargs(node.op_kwargs)
+            
+            # Fallback for communication ops on constants (where inputs weren't captured)
+            if not args_str and op_name in ('shard', 'reshard'):
+                args_str = f"{C_VAR}const{RESET}"
+
             call_args = ", ".join(filter(None, [args_str, kwargs_str]))
             
             info_str = self._format_full_info(node)

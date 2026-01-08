@@ -126,6 +126,26 @@ class AbsOp(UnaryOperation):
         return ops.abs(x)
 
 
+class SoftmaxOp(UnaryOperation):
+    """Softmax activation function.
+    
+    softmax(x, axis) = exp(x) / sum(exp(x), axis)
+    """
+    
+    @property
+    def name(self) -> str:
+        return "softmax"
+    
+    def __call__(self, x: "Tensor", axis: int = -1) -> "Tensor":
+        """Apply softmax along specified axis."""
+        return super().__call__(x, axis=axis)
+    
+    def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+        """Apply softmax using MAX's native softmax."""
+        axis = kwargs.get("axis", -1)
+        return ops.softmax(x, axis=axis)
+
+
 # ===== Singleton instances exposed as functions =====
 
 relu = ReluOp()
@@ -134,6 +154,7 @@ tanh = TanhOp()
 exp = ExpOp()
 neg = NegOp()
 abs = AbsOp()
+softmax = SoftmaxOp()
 
 
 __all__ = [
@@ -143,10 +164,12 @@ __all__ = [
     "ExpOp",
     "NegOp",
     "AbsOp",
+    "SoftmaxOp",
     "relu",
     "sigmoid",
     "tanh",
     "exp",
     "neg",
     "abs",
+    "softmax",
 ]

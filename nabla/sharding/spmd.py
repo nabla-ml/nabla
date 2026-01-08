@@ -193,7 +193,8 @@ def infer_output_sharding(
     propagate_sharding(rule, input_specs, [output_spec])
     
     # Check if any contracting factors are sharded (need AllReduce for partial results)
-    needs_allreduce = _check_contracting_factors_sharded(rule, input_specs)
+    # Check if any contracting factors are sharded (need AllReduce for partial results)
+    needs_allreduce = _check_contracting_factors_sharded(rule, input_specs, output_spec)
     
     return output_spec, input_specs, needs_allreduce
 
@@ -201,48 +202,56 @@ def infer_output_sharding(
 def _check_contracting_factors_sharded(
     rule: "OpShardingRule",
     input_specs: "List[ShardingSpec]",
+    output_spec: Optional["ShardingSpec"],
 ) -> "Set[str]":
-    """Check if any contracting factor has CONSISTENT sharding across ALL inputs (requires AllReduce).
+    """Check if contracting factors need AllReduce.
     
-    A contracting factor appears in inputs but not outputs (e.g., k in matmul).
-    AllReduce is needed ONLY if the contracting dimension is sharded on the SAME axis
-    across ALL inputs that contribute to that factor.
+    AllReduce is needed ONLY when computing partial sums of the SAME output:
+    Returns set of mesh axis names that require AllReduce.
     
-    If one input has k sharded and another has k unsharded, the local computation
-    is complete (each shard has the full k dimension from at least one input).
-    
-    Returns:
-        Set of mesh axis names that require AllReduce.
+    Logic:
+    - Identify contracting factors (inputs only).
+    - If a contracting factor is sharded on axis X...
+    - AND axis X is NOT used in the output sharding...
+    - THEN we need AllReduce on X (aggregating partial results).
+    - IF axis X IS used in the output, it implies independent local computation
+      (e.g. diagonal/local attention), so No AllReduce.
     """
-    reduce_axes = set()
     contracting_factors = rule.get_contracting_factors()
     if not contracting_factors:
-        return reduce_axes
-    
-    for factor in contracting_factors:
-        # Collect sharding axes for this factor from ALL inputs
-        factor_axes_per_input = []
+        return set()
         
-        for t_idx, mapping in enumerate(rule.input_mappings):
-            for dim_idx, factors in mapping.items():
-                if factor in factors and t_idx < len(input_specs):
-                    spec = input_specs[t_idx]
-                    if dim_idx < len(spec.dim_specs):
-                        axes = spec.dim_specs[dim_idx].axes
-                        factor_axes_per_input.append(set(axes))
-        
-        # Only reduce if ALL inputs have the same non-empty sharding for this factor
-        if len(factor_axes_per_input) > 1:
-            # Check if all have the same non-empty axes
-            first_axes = factor_axes_per_input[0]
-            if first_axes and all(axes == first_axes for axes in factor_axes_per_input):
-                reduce_axes.update(first_axes)
-        elif len(factor_axes_per_input) == 1:
-            # Single input with this factor - if sharded, need reduce
-            # (Actually, this shouldn't happen for matmul since k appears in both inputs)
-            # But handle it for generality
-            reduce_axes.update(factor_axes_per_input[0])
+    reduce_axes = set()
     
+    # Identify which axes are preserved in the output
+    preserved_axes = set()
+    if output_spec:
+        for ds in output_spec.dim_specs:
+            preserved_axes.update(ds.axes)
+    
+    print(f"DEBUG: Contracting {contracting_factors}, Preserved {preserved_axes}")
+
+    # Check each input spec to see if contracting factors are sharded
+    for t_idx, spec in enumerate(input_specs):
+        if t_idx >= len(rule.input_mappings):
+            continue
+        mapping = rule.input_mappings[t_idx]
+        
+        # Check each dimension of the input tensor
+        for dim_idx, current_dim in enumerate(spec.dim_specs):
+            factors = mapping.get(dim_idx, [])
+            
+            # If this dimension is sharded (has axes)
+            if current_dim.axes:
+                 # Check if any associated factor is contracting
+                 for f in factors:
+                     if f in contracting_factors:
+                         # Check if the axis is consumed by the contraction
+                         # or preserved in the output
+                         for ax in current_dim.axes:
+                             if ax not in preserved_axes:
+                                 reduce_axes.add(ax)
+                         
     return reduce_axes
 
 
