@@ -343,12 +343,28 @@ class UnbindOp(LogicalAxisOperation):
     ):
         """Unbind: the unbound axis is removed, other dims shift.
         
-        Similar to squeeze - the axis being removed loses its factor.
+        Outputs (N slices) all share the same sharding: factor at axis is gone.
         """
-        from ..sharding.propagation import squeeze_template
+        from ..sharding.propagation import OpShardingRuleTemplate
         rank = len(input_shapes[0])
         axis = kwargs.get("axis", 0)
-        return squeeze_template(rank, axis).instantiate(input_shapes, output_shapes)
+        
+        factors = [f"d{i}" for i in range(rank)]
+        in_mapping = {i: [factors[i]] for i in range(rank)}
+        
+        # Remove factor at axis
+        out_factors = [factors[i] for i in range(rank) if i != axis]
+        out_mapping = {i: [out_factors[i]] for i in range(len(out_factors))}
+        
+        # Determine number of outputs (N)
+        # Unbind returns 'axis_size' outputs.
+        # But sharding_rule might be called with concrete input_shapes containing integer dims.
+        if output_shapes:
+            count = len(output_shapes)
+        else:
+            count = input_shapes[0][axis]
+
+        return OpShardingRuleTemplate([in_mapping], [out_mapping] * count).instantiate(input_shapes, output_shapes)
     
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
         return len(input_shapes[0]) - 1  # One dimension removed

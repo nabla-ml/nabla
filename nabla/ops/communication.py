@@ -811,13 +811,19 @@ class ReshardOp(Operation):
                 tensor._impl.sharding = target_spec
             return tensor
 
-        # 4. Perform Resharding (Gather + Shard)
-        # Gather all sharded axes to get global data
+        # 4. Perform Resharding with SMART per-dimension logic
+        # Only gather dimensions where axes are being REMOVED (not extended)
         result = tensor
         if current_spec:
             from . import all_gather
-            for dim, dim_spec in enumerate(current_spec.dim_specs):
-                if dim_spec.axes:
+            for dim in range(len(current_spec.dim_specs)):
+                from_axes = set(current_spec.dim_specs[dim].axes) if dim < len(current_spec.dim_specs) else set()
+                to_axes = set(target_spec.dim_specs[dim].axes) if dim < len(target_spec.dim_specs) else set()
+                
+                # Only gather if removing axes that aren't preserved in target
+                # If from_axes is subset of to_axes, no gather needed (just extending)
+                axes_to_remove = from_axes - to_axes
+                if axes_to_remove:
                     result = all_gather(result, axis=dim)
         
         # Shard to target using module-level shard_op (efficient)

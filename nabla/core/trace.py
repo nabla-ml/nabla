@@ -275,7 +275,9 @@ class GraphPrinter:
     def _format_kwargs(self, kwargs: dict | None) -> str:
         if not kwargs: return ""
         parts = []
-        for k, v in kwargs.items():
+        # Sort keys for deterministic output
+        for k in sorted(kwargs.keys()):
+            v = kwargs[k]
             # Skip internal tracking fields only
             if k in ('shard_idx',): continue
             

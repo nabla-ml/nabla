@@ -383,7 +383,19 @@ def get_shard_args(args: tuple, shard_idx: int,
 
 def reshard_tensor(tensor: "Tensor", from_spec: Optional["ShardingSpec"],
                    to_spec: Optional["ShardingSpec"], mesh: "DeviceMesh") -> "Tensor":
-    """Reshard tensor from one sharding spec to another."""
+    """Reshard tensor from one sharding spec to another with MINIMAL communication.
+    
+    Smart resharding strategy:
+    - Only gather dimensions where axes are being REMOVED (not extended)
+    - If new sharding is an extension (e.g., <dp> -> <dp, tp>), no gather needed
+    - If new sharding is completely different (e.g., <dp> -> <tp>), gather then shard
+    
+    Examples:
+        <*, *> -> <dp, tp>: Just slice (no gather)
+        <dp, *> -> <dp, tp>: Just slice dim 1 (no gather on dim 0!)
+        <dp, *> -> <*, tp>: Gather dim 0, slice dim 1
+        <dp, tp> -> <tp, dp>: Gather both, then reshard (axis swap)
+    """
     from ..ops.communication import all_gather, shard as shard_op
     from ..sharding.spec import DimSpec
     
@@ -397,11 +409,20 @@ def reshard_tensor(tensor: "Tensor", from_spec: Optional["ShardingSpec"],
         return tensor
 
     result = tensor
-    if from_spec:
-        for dim, dim_spec in enumerate(from_spec.dim_specs):
-            if dim_spec.axes:
-                 result = all_gather(result, axis=dim)
     
+    # Per-dimension analysis: only gather where axes are being REMOVED
+    for dim in range(len(from_spec.dim_specs)):
+        from_axes = set(from_spec.dim_specs[dim].axes) if dim < len(from_spec.dim_specs) else set()
+        to_axes = set(to_spec.dim_specs[dim].axes) if dim < len(to_spec.dim_specs) else set()
+        
+        # Need gather ONLY if removing axes that aren't preserved in the target
+        # If from_axes is a subset of to_axes, no gather needed (just extending sharding)
+        axes_to_remove = from_axes - to_axes
+        if axes_to_remove:
+            # This dimension has axes being removed, need to gather
+            result = all_gather(result, axis=dim)
+    
+    # Apply new sharding (local slicing for new/extended axes)
     result = shard_op(result, mesh, to_spec.dim_specs)
     
     return result

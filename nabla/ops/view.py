@@ -37,10 +37,20 @@ class UnsqueezeOp(LogicalAxisOperation):
         **kwargs,
     ):
         """Unsqueeze: insert new dimension at axis position."""
-        from ..sharding.propagation import unsqueeze_template
+        from ..sharding.propagation import OpShardingRuleTemplate
         in_rank = len(input_shapes[0])
         axis = kwargs.get("axis", 0)
-        return unsqueeze_template(in_rank, axis).instantiate(input_shapes, output_shapes)
+        
+        # Input: d0, d1, ...
+        factors = [f"d{i}" for i in range(in_rank)]
+        in_str = " ".join(factors)
+        
+        # Output: insert "new_dim" at axis
+        out_factors = list(factors)
+        out_factors.insert(axis, "new_dim")
+        out_str = " ".join(out_factors)
+                 
+        return OpShardingRuleTemplate.parse(f"{in_str} -> {out_str}", input_shapes).instantiate(input_shapes, output_shapes)
     
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
         return len(input_shapes[0]) + 1
@@ -63,10 +73,20 @@ class SqueezeOp(LogicalAxisOperation):
         **kwargs,
     ):
         """Squeeze: remove dimension at axis position."""
-        from ..sharding.propagation import squeeze_template
+        from ..sharding.propagation import OpShardingRuleTemplate
         in_rank = len(input_shapes[0])
         axis = kwargs.get("axis", 0)
-        return squeeze_template(in_rank, axis).instantiate(input_shapes, output_shapes)
+        
+        # Input: d0, ...
+        factors = [f"d{i}" for i in range(in_rank)]
+        in_str = " ".join(factors)
+        
+        # Output: remove factor at axis
+        out_factors = list(factors)
+        out_factors.pop(axis)
+        out_str = " ".join(out_factors)
+        
+        return OpShardingRuleTemplate.parse(f"{in_str} -> {out_str}", input_shapes).instantiate(input_shapes, output_shapes)
     
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
         return len(input_shapes[0]) - 1
@@ -88,12 +108,21 @@ class SwapAxesOp(LogicalAxisOperation):
         output_shapes: list[tuple[int, ...]],
         **kwargs,
     ):
-        """SwapAxes: swap two dimensions and their shardings."""
-        from ..sharding.propagation import swap_axes_template
+        """SwapAxes: swap two dimensions."""
+        from ..sharding.propagation import OpShardingRuleTemplate
         in_rank = len(input_shapes[0])
         axis1 = kwargs.get("axis1", 0)
         axis2 = kwargs.get("axis2", 1)
-        return swap_axes_template(in_rank, axis1, axis2).instantiate(input_shapes, output_shapes)
+        
+        factors = [f"d{i}" for i in range(in_rank)]
+        in_str = " ".join(factors)
+        
+        # Output: swap factors
+        out_factors = list(factors)
+        out_factors[axis1], out_factors[axis2] = out_factors[axis2], out_factors[axis1]
+        out_str = " ".join(out_factors)
+        
+        return OpShardingRuleTemplate.parse(f"{in_str} -> {out_str}", input_shapes).instantiate(input_shapes, output_shapes)
     
     def infer_output_shape(self, input_shapes: list[tuple[int, ...]], **kwargs) -> tuple[int, ...]:
         """Swap dimensions at axis1 and axis2."""
@@ -128,7 +157,7 @@ class BroadcastToOp(LogicalShapeOperation):
         
         Uses shape-aware template to handle dimension expansion (size 1 -> N).
         """
-        from ..sharding.propagation import broadcast_with_shapes_template
+        from ..sharding.propagation import OpShardingRuleTemplate
         in_shape = input_shapes[0]
         
         # Use target shape from kwargs if output_shapes not provided (SPMD case)
@@ -140,7 +169,31 @@ class BroadcastToOp(LogicalShapeOperation):
                 # Should not happen for broadcast_to unless shape arg missing
                 return None
 
-        return broadcast_with_shapes_template(in_shape, out_shape).instantiate(input_shapes, output_shapes)
+        in_rank = len(in_shape)
+        out_rank = len(out_shape)
+        
+        # Factors for output dimensions
+        out_factors = [f"d{i}" for i in range(out_rank)]
+        out_mapping = {i: [out_factors[i]] for i in range(out_rank)}
+        
+        # Map input dims to output factors (right-aligned)
+        in_mapping = {}
+        offset = out_rank - in_rank
+        
+        for i in range(in_rank):
+            # Input dim i corresponds to output dim i + offset
+            out_idx = i + offset
+            if out_idx >= 0:
+                if in_shape[i] == out_shape[out_idx]:
+                    # Match: share factor
+                    in_mapping[i] = [out_factors[out_idx]]
+                else:
+                    # Broadcast (1->N) or mismatch: distinct factor
+                    in_mapping[i] = [f"bcast_{i}"]
+            else:
+                 in_mapping[i] = [f"d_extra_{i}"]
+
+        return OpShardingRuleTemplate([in_mapping], [out_mapping]).instantiate(input_shapes, output_shapes)
     
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
         return len(kwargs.get("shape", input_shapes[0]))
@@ -209,14 +262,90 @@ class ReshapeOp(LogicalShapeOperation):
         return len(kwargs.get("shape"))
 
     def sharding_rule(self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]], **kwargs):
-        """Create sharding rule for reshape using compound factors."""
-        from ..sharding.propagation import reshape_template
+        """Create sharding rule for reshape using greedy factor matching."""
+        from ..sharding.propagation import OpShardingRuleTemplate
+        from math import prod
         
-        target_shape = kwargs.get('shape')
-        if target_shape is None:
-            return None
+        if not input_shapes: return None
+        in_shape = input_shapes[0]
+        out_shape = kwargs.get('shape')
+        if out_shape is None: 
+            if output_shapes: out_shape = output_shapes[0]
+            else: return None
             
-        return reshape_template(input_shapes[0], target_shape).instantiate(input_shapes, output_shapes)
+        in_rank = len(in_shape)
+        out_rank = len(out_shape)
+        
+        # Heuristic: The tensor with MORE dimensions has the Atomic Factors
+        if in_rank >= out_rank:
+            # Input is atomic, Output is compound
+            factors = [f"d{i}" for i in range(in_rank)]
+            in_mapping = {i: [factors[i]] for i in range(in_rank)}
+            out_mapping = {}
+            
+            factor_idx = 0
+            current_prod = 1
+            current_factors = []
+            
+            # Match input factors to output dimensions
+            for out_dim_idx in range(out_rank):
+                target_size = out_shape[out_dim_idx]
+                
+                # Consume input factors
+                while factor_idx < in_rank:
+                    f_size = in_shape[factor_idx]
+                    current_factors.append(factors[factor_idx])
+                    current_prod *= f_size
+                    factor_idx += 1
+                    
+                    if current_prod == target_size:
+                        out_mapping[out_dim_idx] = list(current_factors)
+                        current_factors = []
+                        current_prod = 1
+                        break
+                    elif current_prod > target_size:
+                        # Split required (not supported by simple propagation yet) - assign all
+                        out_mapping[out_dim_idx] = list(current_factors)
+                        current_factors = []
+                        current_prod = 1
+                        break
+            
+            # Flush remaining
+            if list(out_mapping.keys())[-1] != out_rank - 1 and current_factors:
+                 # Assign to last dim?
+                 pass
+                 
+        else:
+            # Output is atomic, Input is compound
+            factors = [f"d{i}" for i in range(out_rank)]
+            out_mapping = {i: [factors[i]] for i in range(out_rank)}
+            in_mapping = {}
+            
+            factor_idx = 0
+            current_prod = 1
+            current_factors = []
+            
+            for in_dim_idx in range(in_rank):
+                target_size = in_shape[in_dim_idx]
+                
+                while factor_idx < out_rank:
+                    f_size = out_shape[factor_idx]
+                    current_factors.append(factors[factor_idx])
+                    current_prod *= f_size
+                    factor_idx += 1
+                    
+                    if current_prod == target_size:
+                        in_mapping[in_dim_idx] = list(current_factors)
+                        current_factors = []
+                        current_prod = 1
+                        break
+                    elif current_prod > target_size:
+                        in_mapping[in_dim_idx] = list(current_factors)
+                        current_factors = []
+                        current_prod = 1
+                        break
+                        
+        return OpShardingRuleTemplate([in_mapping], [out_mapping]).instantiate(input_shapes, output_shapes)
     
     def _transform_shard_kwargs(self, kwargs: dict, output_sharding, shard_idx: int) -> dict:
         """Convert global target shape to local shape for each shard."""
@@ -251,10 +380,7 @@ class SliceTensorOp(Operation):
             slices.append(slice(s, end))
         return ops.slice_tensor(x, slices)
 
-    def sharding_rule(self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]], **kwargs):
-        """Slice: preserves dimension mapping (1-to-1)."""
-        from ..sharding.propagation import elementwise_template
-        return elementwise_template(len(input_shapes[0])).instantiate(input_shapes, output_shapes)
+    # sharding_rule inherited from Operation (elementwise identity)
         
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
         return len(input_shapes[0])
@@ -366,14 +492,10 @@ class GatherOp(Operation):
         output_shapes: list[tuple[int, ...]],
         **kwargs,
     ):
-        """Gather sharding rule using proper template.
-        
-        Rule pattern: Data(d0, d1, ..., d_axis, ..., dn), Indices(i0, i1, ...) 
-                     -> Output(d0, ..., d_{axis-1}, i0, i1, ..., d_{axis+1}, ..., dn)
-        
-        The gathered axis factor is 'contracting' (appears only in input).
+        """Gather sharding rule: Data(d...), Indices(i...) 
+        -> Output(d_prefix..., i..., d_suffix...).
         """
-        from ..sharding.propagation import gather_template
+        from ..sharding.propagation import OpShardingRuleTemplate
         
         if not input_shapes or len(input_shapes) < 2:
             return None
@@ -383,8 +505,20 @@ class GatherOp(Operation):
         axis = kwargs.get("axis", 0)
         if axis < 0:
             axis += data_rank
+            
+        # Data factors: d0, ...
+        data_factors = [f"d{i}" for i in range(data_rank)]
+        data_str = " ".join(data_factors)
         
-        return gather_template(data_rank, indices_rank, axis).instantiate(
+        # Indices factors: i0, ...
+        indices_factors = [f"i{i}" for i in range(indices_rank)]
+        indices_str = " ".join(indices_factors)
+        
+        # Output factors: replace axis factor with indices factors
+        out_factors = data_factors[:axis] + indices_factors + data_factors[axis+1:]
+        out_str = " ".join(out_factors)
+        
+        return OpShardingRuleTemplate.parse(f"{data_str}, {indices_str} -> {out_str}", input_shapes).instantiate(
             input_shapes, output_shapes
         )
 
@@ -523,13 +657,9 @@ class ScatterOp(Operation):
         output_shapes: list[tuple[int, ...]],
         **kwargs,
     ):
-        """Scatter sharding rule using proper template.
-        
-        Rule pattern: Data(d...), Indices(i...), Updates(i..., d_suffix...) -> Data(d...)
-        
-        Updates must align with indices dims + data dims (excluding axis).
+        """Scatter sharding rule: Data(d...), Indices(i...), Updates(i..., d_suffix...) -> Data.
         """
-        from ..sharding.propagation import scatter_template
+        from ..sharding.propagation import OpShardingRuleTemplate
         
         if not input_shapes or len(input_shapes) < 3:
             return None
@@ -539,8 +669,23 @@ class ScatterOp(Operation):
         axis = kwargs.get("axis", 0)
         if axis < 0:
             axis += data_rank
+            
+        # Data factors
+        data_factors = [f"d{i}" for i in range(data_rank)]
+        data_str = " ".join(data_factors)
         
-        return scatter_template(data_rank, indices_rank, axis).instantiate(
+        # Indices factors
+        indices_factors = [f"i{i}" for i in range(indices_rank)]
+        indices_str = " ".join(indices_factors)
+        
+        # Updates factors: match gather output
+        updates_factors = data_factors[:axis] + indices_factors + data_factors[axis+1:]
+        updates_str = " ".join(updates_factors)
+
+        # Output maps back to data (d0 ...)
+        out_str = data_str
+        
+        return OpShardingRuleTemplate.parse(f"{data_str}, {indices_str}, {updates_str} -> {out_str}", input_shapes).instantiate(
             input_shapes, output_shapes
         )
 
@@ -609,12 +754,14 @@ class ConcatenateOp(LogicalAxisOperation):
         output_shapes: list[tuple[int, ...]],
         **kwargs,
     ):
-        """Concatenate sharding rule using proper template.
+        """Concatenate: inputs share factors on non-concat axis.
         
-        All inputs must have same sharding on non-concat axes.
-        Concat axis cannot be sharded (would require coordination).
+        CRITICAL FIX: Concat axis uses a SHARED factor 'c_concat' across all inputs and output.
+        This effectively treats the concat axis as "elastic" but requires uniform sharding.
+        If inputs are sharded on 'x', output must be sharded on 'x'.
+        The fact that input sizes sum to output size is handled by runtime, not propagation factors.
         """
-        from ..sharding.propagation import concatenate_template
+        from ..sharding.propagation import OpShardingRuleTemplate
         
         if not input_shapes:
             return None
@@ -624,8 +771,27 @@ class ConcatenateOp(LogicalAxisOperation):
         axis = kwargs.get("axis", 0)
         if axis < 0:
             axis += rank
+            
+        input_mappings = []
+        for input_idx in range(num_inputs):
+            mapping = {}
+            for dim in range(rank):
+                if dim == axis:
+                    # Shared factor for concat axis -> enforces sharding consistency
+                    mapping[dim] = ["c_concat"]
+                else:
+                    mapping[dim] = [f"d{dim}"]
+            input_mappings.append(mapping)
+            
+        # Output mapping
+        out_mapping = {}
+        for dim in range(rank):
+            if dim == axis:
+                out_mapping[dim] = ["c_concat"]
+            else:
+                out_mapping[dim] = [f"d{dim}"]
         
-        return concatenate_template(rank, num_inputs, axis).instantiate(
+        return OpShardingRuleTemplate(input_mappings, [out_mapping]).instantiate(
             input_shapes, output_shapes
         )
     

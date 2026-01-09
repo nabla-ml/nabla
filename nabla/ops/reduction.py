@@ -22,22 +22,9 @@ class ReduceSumOp(ReduceOperation):
         return "reduce_sum"
     
     def maxpr(self, x: TensorValue, *, axis: int, keepdims: bool = False) -> TensorValue:
-        # maxpr must only have ONE MAX operation for sharding propagation to work correctly.
-        # keepdims is always True here; squeeze happens at Tensor level if needed.
         return ops.sum(x, axis)
     
-    def sharding_rule(
-        self,
-        input_shapes: list[tuple[int, ...]],
-        output_shapes: list[tuple[int, ...]],
-        **kwargs: Any,
-    ) -> Any:
-        """Reduce: (d0, d1, ...) -> (d0, 1, ...) with reduce_dim kept as size 1."""
-        from ..sharding.propagation import reduce_template
-        rank = len(input_shapes[0])
-        axis = kwargs.get("axis", 0)
-        # maxpr always keeps dims; squeeze happens at Tensor level
-        return reduce_template(rank, [axis], keepdims=True).instantiate(input_shapes, output_shapes)
+    # sharding_rule inherited from ReduceOperation
     
     def infer_output_shape(self, input_shapes: list[tuple[int, ...]], **kwargs: Any) -> tuple[int, ...]:
         """Compute output shape for reduction."""
@@ -59,22 +46,9 @@ class MeanOp(ReduceOperation):
         return "mean"
     
     def maxpr(self, x: TensorValue, *, axis: int, keepdims: bool = False) -> TensorValue:
-        # maxpr must only have ONE MAX operation for sharding propagation to work correctly.
-        # keepdims is always True here; squeeze happens at Tensor level if needed.
         return ops.mean(x, axis)
     
-    def sharding_rule(
-        self,
-        input_shapes: list[tuple[int, ...]],
-        output_shapes: list[tuple[int, ...]],
-        **kwargs: Any,
-    ) -> Any:
-        """Reduce: (d0, d1, ...) -> (d0, 1, ...) with reduce_dim kept as size 1."""
-        from ..sharding.propagation import reduce_template
-        rank = len(input_shapes[0])
-        axis = kwargs.get("axis", 0)
-        # maxpr always keeps dims; squeeze happens at Tensor level
-        return reduce_template(rank, [axis], keepdims=True).instantiate(input_shapes, output_shapes)
+    # sharding_rule inherited from ReduceOperation
     
     def infer_output_shape(self, input_shapes: list[tuple[int, ...]], **kwargs: Any) -> tuple[int, ...]:
         """Compute output shape for reduction."""

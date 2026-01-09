@@ -36,6 +36,7 @@ from nabla import (
     matmul,
 )
 from nabla.ops.multi_output import split, chunk, unbind
+from nabla.core.trace import trace
 
 from tests.conftest import (
     make_array, make_positive_array, tensor_from_numpy, to_numpy,
@@ -434,8 +435,33 @@ class TestVmapCompositeWithSharding:
         w2 = tensor_from_numpy(np_w2)
         b1 = tensor_from_numpy(np_b1)
         
+        # Define the vmapped function for tracing
+        vmapped_mlp = vmap(mlp_layer, in_axes=(0, None, None, None))
+        
+        # === TRACE DEBUG: Megatron-style MLP with tensor parallelism ===
+        print(f"\n{'='*70}")
+        print(f"TEST: test_mlp_layer_megatron_style")
+        print(f"Pattern: Column Parallel → ReLU → Row Parallel")
+        print(f"  Layer 1: x @ w1_sharded(<*, tp>) = column parallel (no reduction)")
+        print(f"  Layer 2: h @ w2_sharded(<tp, *>) = row parallel (AllReduce needed)")
+        print(f"mesh_shape=(2,), mesh_axes=('tp',)")
+        print(f"{'='*70}")
+        t = trace(vmapped_mlp, x, w1, w2, b1)
+        print(t)
+        # Check for AllReduce in trace
+        trace_str = str(t)
+        if "all_reduce" in trace_str.lower():
+            print("✅ AllReduce detected in trace - CORRECT for row-parallel!")
+        else:
+            print("❌ WARNING: No AllReduce detected - row-parallel matmul may be INCORRECT!")
+        # Check for shard ops
+        shard_count = trace_str.lower().count("shard(")
+        print(f"📊 Found {shard_count} shard operations in trace")
+        print(f"{'='*70}\n")
+        # === END TRACE DEBUG ===
+        
         # Batch over x, broadcast weights and biases
-        result = vmap(mlp_layer, in_axes=(0, None, None, None))(x, w1, w2, b1)
+        result = vmapped_mlp(x, w1, w2, b1)
         
         # Expected computation
         h1 = np_x @ np_w1 + np_b1

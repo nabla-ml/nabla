@@ -19,6 +19,7 @@ import numpy as np
 import nabla
 from nabla import DeviceMesh, P, vmap
 from nabla import add, mul, relu, sigmoid, matmul, reduce_sum, mean
+from nabla.core.trace import trace
 
 from tests.conftest import (
     make_array, tensor_from_numpy, to_numpy,
@@ -48,8 +49,21 @@ class TestSpmdAxisNameBasic:
         np_x = make_array(batch, 16, seed=42)
         x = tensor_from_numpy(np_x)
         
+        # Define the vmapped function for tracing
+        vmapped_relu = vmap(relu, spmd_axis_name=spmd_axis)
+        
+        # === TRACE DEBUG: See what operations are generated ===
+        print(f"\n{'='*60}")
+        print(f"TEST: test_spmd_basic_relu")
+        print(f"mesh_shape={mesh_shape}, mesh_axes={mesh_axes}, spmd_axis={spmd_axis}")
+        print(f"{'='*60}")
+        t = trace(vmapped_relu, x)
+        print(t)
+        print(f"{'='*60}\n")
+        # === END TRACE DEBUG ===
+        
         # Apply vmap with spmd_axis_name
-        result = vmap(relu, spmd_axis_name=spmd_axis)(x)
+        result = vmapped_relu(x)
         expected = np.maximum(np_x, 0)
         
         assert_shape(result, (batch, 16))
@@ -162,6 +176,18 @@ class TestSpmdAxisWithLogicalSharding:
             row_sharded = row.shard(mesh, P("tp"))  # Shard logical dim on tp
             return relu(row_sharded)
         
+        # === TRACE DEBUG: Critical composability test ===
+        print(f"\n{'='*60}")
+        print(f"TEST: test_spmd_plus_logical_sharding_relu")
+        print(f"CRITICAL: batch dim on 'dp' + logical dim on 'tp'")
+        print(f"mesh_shape=(2, 4), mesh_axes=('dp', 'tp')")
+        print(f"Expected: multi-axis sharding [dp, tp] on output")
+        print(f"{'='*60}")
+        t = trace(f, x)
+        print(t)
+        print(f"{'='*60}\n")
+        # === END TRACE DEBUG ===
+        
         result = f(x)
         expected = np.maximum(np_x, 0)
         
@@ -257,6 +283,24 @@ class TestSpmdAxisWithLogicalSharding:
             wi_sharded = wi.shard(mesh, P("tp", None))
             return matmul(xi_sharded, wi_sharded)
         
+        # === TRACE DEBUG: Row parallel matmul requires AllReduce! ===
+        print(f"\n{'='*60}")
+        print(f"TEST: test_spmd_plus_logical_matmul_row_parallel")
+        print(f"CRITICAL: Contracting dim K is sharded on 'tp'")
+        print(f"Expected: AllReduce should appear in trace!")
+        print(f"mesh_shape=(2, 4), mesh_axes=('dp', 'tp')")
+        print(f"{'='*60}")
+        t = trace(f, x, w)
+        print(t)
+        # Check if all_reduce appears in trace
+        trace_str = str(t)
+        if "all_reduce" in trace_str.lower():
+            print("✅ AllReduce detected in trace - CORRECT!")
+        else:
+            print("❌ WARNING: No AllReduce detected - may be INCORRECT!")
+        print(f"{'='*60}\n")
+        # === END TRACE DEBUG ===
+        
         result = f(x, w)
         expected = np_x @ np_w
         
@@ -279,6 +323,23 @@ class TestSpmdAxisWithLogicalSharding:
         def f(row):  # row: (16,)
             row_sharded = row.shard(mesh, P("tp"))
             return reduce_sum(row_sharded, axis=0)  # Sum over features
+        
+        # === TRACE DEBUG: Reduction over sharded axis requires AllReduce! ===
+        print(f"\n{'='*60}")
+        print(f"TEST: test_spmd_plus_logical_reduction")
+        print(f"CRITICAL: Reducing sharded axis (tp)")
+        print(f"Expected: AllReduce should appear after local reduce_sum!")
+        print(f"mesh_shape=(2, 4), mesh_axes=('dp', 'tp')")
+        print(f"{'='*60}")
+        t = trace(f, x)
+        print(t)
+        trace_str = str(t)
+        if "all_reduce" in trace_str.lower():
+            print("✅ AllReduce detected - CORRECT for reducing sharded axis!")
+        else:
+            print("❌ WARNING: No AllReduce detected - reduction may be INCORRECT!")
+        print(f"{'='*60}\n")
+        # === END TRACE DEBUG ===
         
         result = f(x)
         expected = np.sum(np_x, axis=1)

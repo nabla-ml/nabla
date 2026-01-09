@@ -70,22 +70,7 @@ class WhereOp(Operation):
     ) -> graph.TensorValue:
         return ops.where(condition, x, y)
     
-    def sharding_rule(
-        self,
-        input_shapes: list[tuple[int, ...]],
-        output_shapes: list[tuple[int, ...]],
-        **kwargs,
-    ):
-        """Where uses elementwise (ternary) semantics - all dims shared."""
-        from ..sharding.propagation import elementwise_template
-        
-        # Output shape should match broadcast of all inputs
-        # Use output rank for the template
-        if not output_shapes:
-            return None
-        
-        out_rank = len(output_shapes[0])
-        return elementwise_template(out_rank).instantiate(input_shapes, output_shapes)
+    # sharding_rule inherited from Operation (elementwise)
 
 
 

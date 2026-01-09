@@ -195,7 +195,8 @@ class Operation(ABC):
             )
             
             # Setup tracing refs so ALL_REDUCE appears in trace
-            all_reduce_op._setup_output_refs(reduced_tensor, (t,), {}, t.traced)
+            trace_kwargs = {'mesh': mesh, 'reduce_axes': list(reduce_axes)}
+            all_reduce_op._setup_output_refs(reduced_tensor, (t,), trace_kwargs, t.traced)
             
             return reduced_tensor
             
@@ -297,33 +298,26 @@ class Operation(ABC):
     ):
         """Default sharding rule: elementwise for same-rank ops.
         
-        Operations can override this to provide custom factor mappings.
-        By default, assumes all inputs and output share the same factors
-        (elementwise behavior).
+        All inputs and output share the same factors (d0, d1, ...).
         """
-        from ..sharding.propagation import elementwise_template, unary_template, broadcast_template
+        from ..sharding.propagation import OpShardingRuleTemplate
         
         n_inputs = len(input_shapes)
-        
-        # Handle cases where ranks differ (e.g. broadcasting elementwise)
-        if output_shapes and input_shapes:
-             out_rank = len(output_shapes[0])
-             # Check if any input rank differs from output rank (broadcasting needed)
-             if any(len(s) != out_rank for s in input_shapes):
-                  # TODO: This assumes standard suffix-alignment broadcasting for all mismatched ops.
-                  # Ideally, we should use a multi-input broadcast template, but for now 
-                  # standard propagation handles mismatch via 'new' factors if using correct rules.
-                  # A truly generic broadcast elementwise rule is complex.
-                  # For now, we rely on the specific overrides in Binary/Unary ops if needed,
-                  # or fallback to elementwise if ranks match.
-                  pass
-
-        # Standard elementwise
         output_rank = len(output_shapes[0]) if output_shapes else len(input_shapes[0])
+        
+        # All dims share factors d0, d1, ..., d{rank-1}
+        mapping = {i: [f"d{i}"] for i in range(output_rank)}
+        
         if n_inputs == 1:
-            return unary_template(output_rank).instantiate(input_shapes, output_shapes)
+            # Unary: (d0, d1, ...) -> (d0, d1, ...)
+            return OpShardingRuleTemplate([mapping], [mapping]).instantiate(
+                input_shapes, output_shapes
+            )
         else:
-            return elementwise_template(output_rank).instantiate(input_shapes, output_shapes)
+            # Elementwise: (d0, d1, ...), (d0, d1, ...) -> (d0, d1, ...)
+            return OpShardingRuleTemplate(
+                [mapping] * n_inputs, [mapping]
+            ).instantiate(input_shapes, output_shapes)
     
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         raise NotImplementedError(f"'{self.name}' does not implement vjp_rule")
@@ -439,10 +433,117 @@ class LogicalAxisOperation(Operation):
                 translated[key] = value
         
         return super().__call__(x, **translated)
+    
+    def sharding_rule(
+        self,
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        **kwargs,
+    ):
+        """Reduce sharding rule: (d0, d1, ...) -> (d0, ...) with axis dim removed.
+        
+        The reduced dimension gets no factor in the output.
+        """
+        from ..sharding.propagation import OpShardingRuleTemplate
+        
+        rank = len(input_shapes[0])
+        axis = kwargs.get("axis", 0)
+        
+        # Input: all dims have factors
+        in_mapping = {i: [f"d{i}"] for i in range(rank)}
+        
+        # Output: reduced dim has no factor (empty list)
+        out_mapping = {}
+        for i in range(rank):
+            if i == axis:
+                out_mapping[i] = []  # Reduced dim - no factor
+            else:
+                out_mapping[i] = [f"d{i}"]
+        
+        return OpShardingRuleTemplate([in_mapping], [out_mapping]).instantiate(
+            input_shapes, output_shapes
+        )
 
+# Proper ABC for reduction operations with reduce sharding rule
+class ReduceOperation(LogicalAxisOperation):
+    """Base for reduction operations (sum, mean, max, min, etc.).
+    
+    Inherits axis translation from LogicalAxisOperation.
+    Provides reduce sharding rule: reduced dim gets no factor.
+    """
+    
+    def sharding_rule(
+        self,
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        **kwargs,
+    ):
+        """Reduction: reduce dims are removed or sized 1.
+        
+        If keepdims=True, reduced dim becomes size 1 but retains a factor (mapped to nothing/replicated).
+        If keepdims=False, reduced dim is removed from output string.
+        """
+        from ..sharding.propagation import OpShardingRuleTemplate
+        
+        if not input_shapes:
+            return None
+            
+        rank = len(input_shapes[0])
+        reduce_axes = kwargs.get("axis", None)
+        keepdims = kwargs.get("keepdims", False)
+        
+        if reduce_axes is None:
+            reduce_axes = tuple(range(rank))
+        elif isinstance(reduce_axes, int):
+            reduce_axes = (reduce_axes,)
+        else:
+            reduce_axes = tuple(reduce_axes)
+            
+        # Normalize reduce axes
+        reduce_axes = tuple(
+            ax + rank if ax < 0 else ax 
+            for ax in reduce_axes
+        )
+        
+        factors = [f"d{i}" for i in range(rank)]
+        in_mapping = {i: [factors[i]] for i in range(rank)}
+        out_mapping = {}
+        
+        if keepdims:
+            # Output has same rank, but reduced dims are size 1.
+            # We map reduced dims to empty factors -> enforced replication or contraction
+            for i in range(rank):
+                if i in reduce_axes:
+                    out_mapping[i] = [] # Reduced factor
+                else:
+                    out_mapping[i] = [factors[i]]
+        else:
+            # Output has lower rank. Reduced dims are skipped.
+            out_idx = 0
+            for i in range(rank):
+                if i not in reduce_axes:
+                    out_mapping[out_idx] = [factors[i]]
+                    out_idx += 1
+                    
+        return OpShardingRuleTemplate([in_mapping], [out_mapping]).instantiate(
+            input_shapes, output_shapes
+        )
+    
+    def infer_output_shape(self, input_shapes: list[tuple[int, ...]], **kwargs) -> tuple[int, ...]:
+        """Compute output shape for reduction."""
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+        in_shape = input_shapes[0]
+        
+        # Normalize negative axis
+        if axis < 0:
+            axis = len(in_shape) + axis
+        
+        if keepdims:
+            return tuple(1 if i == axis else d for i, d in enumerate(in_shape))
+        else:
+            return tuple(d for i, d in enumerate(in_shape) if i != axis)
 
-# Alias for backward compatibility and semantic clarity
-ReduceOperation = LogicalAxisOperation
 UnaryOperation = Operation
 
 

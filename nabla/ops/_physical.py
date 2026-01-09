@@ -50,21 +50,25 @@ class MoveAxisOp(Operation):
         output_shapes: list[tuple[int, ...]],
         **kwargs: Any,
     ) -> Any:
-        from ..sharding.propagation import transpose_template
+        from ..sharding.propagation import OpShardingRuleTemplate
         rank = len(input_shapes[0])
         source = kwargs.get("source")
         destination = kwargs.get("destination")
         
-        # Normalize axes (same as maxpr logic)
+        # Normalize axes
         if source < 0: source += rank
         if destination < 0: destination += rank
         
+        factors = [f"d{i}" for i in range(rank)]
+        in_str = " ".join(factors)
+        
         # Calculate permutation
-        perm = list(range(rank))
+        perm = list(factors)
         val = perm.pop(source)
         perm.insert(destination, val)
+        out_str = " ".join(perm)
         
-        return transpose_template(rank, perm).instantiate(input_shapes, output_shapes)
+        return OpShardingRuleTemplate.parse(f"{in_str} -> {out_str}", input_shapes).instantiate(input_shapes, output_shapes)
 
 
 class UnsqueezePhysicalOp(Operation):
@@ -81,10 +85,19 @@ class UnsqueezePhysicalOp(Operation):
         output_shapes: list[tuple[int, ...]],
         **kwargs: Any,
     ) -> Any:
-        from ..sharding.propagation import unsqueeze_template
+        from ..sharding.propagation import OpShardingRuleTemplate
         rank = len(input_shapes[0])
         axis = kwargs.get("axis", 0)
-        return unsqueeze_template(rank, axis).instantiate(input_shapes, output_shapes)
+        
+        factors = [f"d{i}" for i in range(rank)]
+        in_str = " ".join(factors)
+        
+        # Insert "new_dim"
+        out_factors = list(factors)
+        out_factors.insert(axis, "new_dim")
+        out_str = " ".join(out_factors)
+                
+        return OpShardingRuleTemplate.parse(f"{in_str} -> {out_str}", input_shapes).instantiate(input_shapes, output_shapes)
     
     def infer_output_rank(self, input_shapes: tuple[tuple[int, ...], ...], **kwargs) -> int:
         return len(input_shapes[0]) + 1
@@ -104,11 +117,19 @@ class SqueezePhysicalOp(Operation):
         output_shapes: list[tuple[int, ...]],
         **kwargs: Any,
     ) -> Any:
-        from ..sharding.propagation import squeeze_template
-        # Squeeze input rank is output_rank + 1, but template takes input_rank
+        from ..sharding.propagation import OpShardingRuleTemplate
         rank = len(input_shapes[0])
         axis = kwargs.get("axis", 0)
-        return squeeze_template(rank, axis).instantiate(input_shapes, output_shapes)
+        
+        factors = [f"d{i}" for i in range(rank)]
+        in_str = " ".join(factors)
+        
+        # Remove factor at axis
+        out_factors = list(factors)
+        out_factors.pop(axis)
+        out_str = " ".join(out_factors)
+                
+        return OpShardingRuleTemplate.parse(f"{in_str} -> {out_str}", input_shapes).instantiate(input_shapes, output_shapes)
 
     def infer_output_rank(self, input_shapes: tuple[tuple[int, ...], ...], **kwargs) -> int:
         return len(input_shapes[0]) - 1
@@ -244,11 +265,19 @@ class ReduceSumPhysicalOp(Operation):
         **kwargs,
     ):
         """Reduce: (d0, d1, ...) -> (d0, 1, ...) with reduce_dim kept as size 1."""
-        from ..sharding.propagation import reduce_template
+        from ..sharding.propagation import OpShardingRuleTemplate
         rank = len(input_shapes[0])
         axis = kwargs.get("axis", 0)
-        # maxpr always keeps dims
-        return reduce_template(rank, [axis], keepdims=True).instantiate(input_shapes, output_shapes)
+        
+        factors = [f"d{i}" for i in range(rank)]
+        in_str = " ".join(factors)
+        
+        out_factors = list(factors)
+        if 0 <= axis < rank:
+            out_factors[axis] = "1"
+        out_str = " ".join(out_factors)
+        
+        return OpShardingRuleTemplate.parse(f"{in_str} -> {out_str}", input_shapes).instantiate(input_shapes, output_shapes)
     
     def infer_output_shape(self, input_shapes: list[tuple[int, ...]], **kwargs) -> tuple[int, ...]:
         """Compute output shape for reduction."""
@@ -279,11 +308,19 @@ class MeanPhysicalOp(Operation):
         **kwargs,
     ):
         """Reduce: (d0, d1, ...) -> (d0, 1, ...) with reduce_dim kept as size 1."""
-        from ..sharding.propagation import reduce_template
+        from ..sharding.propagation import OpShardingRuleTemplate
         rank = len(input_shapes[0])
         axis = kwargs.get("axis", 0)
-        # maxpr always keeps dims
-        return reduce_template(rank, [axis], keepdims=True).instantiate(input_shapes, output_shapes)
+        
+        factors = [f"d{i}" for i in range(rank)]
+        in_str = " ".join(factors)
+        
+        out_factors = list(factors)
+        if 0 <= axis < rank:
+            out_factors[axis] = "1"
+        out_str = " ".join(out_factors)
+        
+        return OpShardingRuleTemplate.parse(f"{in_str} -> {out_str}", input_shapes).instantiate(input_shapes, output_shapes)
     
     def infer_output_shape(self, input_shapes: list[tuple[int, ...]], **kwargs) -> tuple[int, ...]:
         """Compute output shape for reduction."""

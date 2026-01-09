@@ -96,39 +96,15 @@ class MatmulOp(Operation):
         input_shapes: list[tuple[int, ...]],
         output_shapes: list[tuple[int, ...]],
     ) -> Any:
-        """Matmul: supports both batched and broadcast cases.
+        """Matmul: (batch..., m, k) @ (batch..., k, n) -> (batch..., m, n).
         
-        Standard: (batch, m, k) @ (batch, k, n) -> (batch, m, n)
-        Broadcast: (batch, m, k) @ (k, n) -> (batch, m, n)  # weights no batch
+        k is the contracting factor (appears only in inputs).
+        Also handles broadcast case where one input lacks batch dims.
         """
-        from ..sharding.propagation import matmul_template, broadcast_matmul_template
-        
-        a_rank = len(input_shapes[0])
-        b_rank = len(input_shapes[1])
-        a_rank = len(input_shapes[0])
-        b_rank = len(input_shapes[1])
-        
-        # Infer output rank from inputs if not provided
-        if output_shapes:
-            out_rank = len(output_shapes[0])
-        else:
-            # Matmul logic: output rank = max(a_rank, b_rank) approx (modulo broadcasting)
-            # Actually, standard matmul (batch..., m, k) @ (batch..., k, n) -> (batch..., m, n)
-            # Input ranks: B+2, B+2 -> B+2 (same).
-            # Broadcast matmul: (batch..., m, k) @ (k, n) -> (batch..., m, n). Rank: B+2, 2 -> B+2.
-            # So out_rank matches whichever input has batch dims (larger rank).
-            out_rank = max(a_rank, b_rank)
-        
-        # If ranks differ, use broadcast template (or standard if ranks match)
-        if a_rank != b_rank:
-            # broadcast_matmul_template signature needs out_rank for factor generation
-            return broadcast_matmul_template(a_rank, b_rank, out_rank).instantiate(
-                input_shapes, output_shapes
-            )
-        
-        # Same rank: use standard template
-        batch_dims = a_rank - 2
-        return matmul_template(batch_dims).instantiate(input_shapes, output_shapes)
+        from ..sharding.propagation import OpShardingRuleTemplate
+        return OpShardingRuleTemplate.parse("... m k, ... k n -> ... m n", input_shapes).instantiate(
+            input_shapes, output_shapes
+        )
     
     # NOTE: No custom _infer_output_sharding needed - the generic factor-based
     # propagation handles matmul correctly via sharding_rule() above.

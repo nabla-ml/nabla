@@ -385,6 +385,66 @@ class OpShardingRuleTemplate:
         # Re-use logic for consistency
         return OpShardingRule(self.input_mappings, self.output_mappings, {}).to_einsum_notation()
 
+    @classmethod
+    def parse(cls, equation: str, input_shapes: Optional[List[Tuple[int, ...]]] = None) -> "OpShardingRuleTemplate":
+        """Create template from einsum string (e.g. 'mk,kn->mn').
+        
+        Supports '...' for broadcasting batch dimensions.
+        """
+        lhs, rhs = equation.split('->')
+        input_strs = [s.strip() for s in lhs.split(',')]
+        output_strs = [s.strip() for s in rhs.split(',')]
+        
+        input_mappings = []
+        output_mappings = []
+        
+        def parse_factors(s: str, shape: Optional[Tuple[int, ...]] = None, batch_rank: int = 0) -> Dict[int, List[str]]:
+            mapping = {}
+            parts = s.split()
+            idx = 0
+            for part in parts:
+                if part == '...':
+                    if shape is not None:
+                         explicit_count = len(parts) - 1
+                         batch_rank = len(shape) - explicit_count
+                    
+                    if batch_rank < 0:
+                         raise ValueError(f"Batch rank negative/invalid for spec '{s}'")
+                    
+                    for b in range(batch_rank):
+                        mapping[idx] = [f"b{b}"]
+                        idx += 1
+                elif part == '1':
+                    mapping[idx] = []
+                    idx += 1
+                else:
+                    mapping[idx] = [part]
+                    idx += 1
+            return mapping
+
+        # Pass 1: Inputs and deduce batch_rank
+        batch_rank = 0
+        for i, s in enumerate(input_strs):
+            shape = input_shapes[i] if input_shapes else None
+            # If shape available, we can verify/deduce batch_rank from '...'
+            if '...' in s and shape:
+                explicit = len(s.split()) - 1
+                br = len(shape) - explicit
+                if batch_rank == 0: batch_rank = br
+                elif br != batch_rank:
+                     # Mismatch in batch rank? 
+                     # For broadcasting, usually max rank wins, or they align.
+                     # We take max for safety if broadcasting?
+                     batch_rank = max(batch_rank, br)
+
+            input_mappings.append(parse_factors(s, shape, batch_rank))
+            
+        # Pass 2: Outputs
+        for s in output_strs:
+            output_mappings.append(parse_factors(s, None, batch_rank))
+                 
+        return cls(input_mappings, output_mappings)
+
 
 # --- Propagation Algorithm ---
 
@@ -662,599 +722,6 @@ def propagate_sharding(
     
     return changed
 
-
-# --- Template Factories ---
-
-def matmul_template(batch_dims: int = 0) -> OpShardingRuleTemplate:
-    """Template for matmul: (...batch, m, k) @ (...batch, k, n) -> (...batch, m, n)."""
-    batch_factors = [f"b{i}" for i in range(batch_dims)]
-    
-    a_mapping = {i: [batch_factors[i]] for i in range(batch_dims)}
-    a_mapping[batch_dims] = ["m"]
-    a_mapping[batch_dims + 1] = ["k"]
-    
-    b_mapping = {i: [batch_factors[i]] for i in range(batch_dims)}
-    b_mapping[batch_dims] = ["k"]
-    b_mapping[batch_dims + 1] = ["n"]
-    
-    c_mapping = {i: [batch_factors[i]] for i in range(batch_dims)}
-    c_mapping[batch_dims] = ["m"]
-    c_mapping[batch_dims + 1] = ["n"]
-    
-    return OpShardingRuleTemplate([a_mapping, b_mapping], [c_mapping])
-
-
-def broadcast_matmul_template(
-    a_rank: int, b_rank: int, out_rank: int
-) -> OpShardingRuleTemplate:
-    """Template for broadcast matmul with different input ranks.
-    
-    Handles cases like:
-    - (batch, m, k) @ (k, n) -> (batch, m, n)  # weights don't have batch
-    - (m, k) @ (batch, k, n) -> (batch, m, n)  # activations don't have batch
-    
-    The batch dims come from whichever input has them (broadcast semantics).
-    """
-    out_batch_dims = out_rank - 2
-    a_batch_dims = a_rank - 2
-    b_batch_dims = b_rank - 2
-    
-    batch_factors = [f"b{i}" for i in range(out_batch_dims)]
-    
-    # Input A mapping: only include batch factors if it has batch dims
-    a_mapping = {}
-    if a_batch_dims > 0:
-        for i in range(a_batch_dims):
-            a_mapping[i] = [batch_factors[i]]
-    a_mapping[a_rank - 2] = ["m"]  # second-to-last = m
-    a_mapping[a_rank - 1] = ["k"]  # last = k
-    
-    # Input B mapping: only include batch factors if it has batch dims
-    b_mapping = {}
-    if b_batch_dims > 0:
-        for i in range(b_batch_dims):
-            b_mapping[i] = [batch_factors[i]]
-    b_mapping[b_rank - 2] = ["k"]  # second-to-last = k
-    b_mapping[b_rank - 1] = ["n"]  # last = n
-    
-    # Output mapping: always has full batch dims
-    c_mapping = {i: [batch_factors[i]] for i in range(out_batch_dims)}
-    c_mapping[out_batch_dims] = ["m"]
-    c_mapping[out_batch_dims + 1] = ["n"]
-    
-    return OpShardingRuleTemplate([a_mapping, b_mapping], [c_mapping])
-
-def elementwise_template(rank: int, prefix: str = "d") -> OpShardingRuleTemplate:
-    factors = [f"{prefix}{i}" for i in range(rank)]
-    mapping = {i: [factors[i]] for i in range(rank)}
-    return OpShardingRuleTemplate([mapping, mapping], [mapping])
-
-def unary_template(rank: int, prefix: str = "d") -> OpShardingRuleTemplate:
-    factors = [f"{prefix}{i}" for i in range(rank)]
-    mapping = {i: [factors[i]] for i in range(rank)}
-    return OpShardingRuleTemplate([mapping], [mapping])
-
-def broadcast_template(in_rank: int, out_rank: int) -> OpShardingRuleTemplate:
-    """Template for broadcast operation: input dims align to output SUFFIX.
-    
-    For broadcast (4,) -> (4,4) with numpy semantics:
-    - Input dim0 maps to output dim1 (last dim)
-    - Output dim0 is NEW (gets a new factor, replicated)
-    
-    Rule: (j) -> (i, j) where i is new, j preserves sharding from input.
-    
-    Also handles dimension expansion where input dim has size 1 but output has larger size.
-    In that case, the expanded dimension gets a NEW factor since it's being replicated.
-    """
-    # New dimensions get new factors (will be replicated since input doesn't have them)
-    new_dims = out_rank - in_rank
-    
-    # For same-rank broadcast, we need to mark size-1 dimensions as NEW factors
-    # since their values are being replicated
-    out_factors = []
-    in_factors = [f"d{i}" for i in range(in_rank)]
-    
-    # Output factors: first new_dims are brand new, rest align with input suffix
-    for i in range(new_dims):
-        out_factors.append(f"new{i}")  # New dimensions from rank expansion
-    for i in range(in_rank):
-        out_factors.append(f"d{i}")  # Align with input dimensions
-    
-    in_mapping = {i: [in_factors[i]] for i in range(in_rank)}
-    out_mapping = {i: [out_factors[i]] for i in range(out_rank)}
-    
-    return OpShardingRuleTemplate([in_mapping], [out_mapping])
-
-
-def broadcast_with_shapes_template(in_shape: tuple, out_shape: tuple) -> OpShardingRuleTemplate:
-    """Template for broadcast with known shapes.
-    
-    This handles both rank expansion and dimension expansion (size 1 -> N).
-    Dimensions that are replicated (1 -> N) get new factors.
-    Dimensions that match get shared factors.
-    """
-    in_rank = len(in_shape)
-    out_rank = len(out_shape)
-    new_dims = out_rank - in_rank
-    
-    # Align input to output suffix
-    in_factors = []
-    out_factors = []
-    factor_idx = 0
-    
-    # First new_dims of output are new factors
-    for i in range(new_dims):
-        out_factors.append(f"new{i}")
-    
-    # Remaining output dims align with input
-    for i in range(in_rank):
-        in_size = in_shape[i]
-        out_idx = new_dims + i
-        out_size = out_shape[out_idx] if out_idx < len(out_shape) else 0
-        
-        if in_size == 1 and out_size > 1:
-            # Dimension expansion: size 1 -> N means replication
-            # Input dim gets its own factor, output gets a NEW factor
-            in_factors.append(f"in{i}")
-            out_factors.append(f"expand{i}")
-        else:
-            # Same size: shared factor
-            in_factors.append(f"d{i}")
-            out_factors.append(f"d{i}")
-    
-    in_mapping = {i: [in_factors[i]] for i in range(in_rank)}
-    out_mapping = {i: [out_factors[i]] for i in range(out_rank)}
-    
-    return OpShardingRuleTemplate([in_mapping], [out_mapping])
-
-
-
-def unsqueeze_template(in_rank: int, axis: int) -> OpShardingRuleTemplate:
-    """Template for unsqueeze: insert a new dimension at axis.
-    
-    For unsqueeze (4,) axis=0 -> (1,4):
-    - New dim at axis=0 gets new factor (replicated)
-    - Input dim0 -> output dim1 (shifted by 1)
-    
-    Rule: (d0) -> (new, d0)
-    """
-    out_rank = in_rank + 1
-    # Normalize axis
-    if axis < 0:
-        axis = out_rank + axis
-    
-    # Input factors
-    in_factors = [f"d{i}" for i in range(in_rank)]
-    
-    # Output factors: insert "new" at axis position
-    out_factors = in_factors[:axis] + [] + in_factors[axis:]  # Copy input factors
-    
-    # Build output by inserting new factor at axis
-    out_factors_with_new = []
-    in_idx = 0
-    for i in range(out_rank):
-        if i == axis:
-            out_factors_with_new.append("new")  # New dimension
-        else:
-            out_factors_with_new.append(in_factors[in_idx])
-            in_idx += 1
-    
-    in_mapping = {i: [in_factors[i]] for i in range(in_rank)}
-    out_mapping = {i: [out_factors_with_new[i]] for i in range(out_rank)}
-    
-    return OpShardingRuleTemplate([in_mapping], [out_mapping])
-
-
-
-def transpose_template(rank: int, perm: List[int]) -> OpShardingRuleTemplate:
-    factors = [f"d{i}" for i in range(rank)]
-    in_mapping = {i: [factors[i]] for i in range(rank)}
-    out_mapping = {i: [factors[perm[i]]] for i in range(rank)}
-    return OpShardingRuleTemplate([in_mapping], [out_mapping])
-
-def squeeze_template(in_rank: int, axis: int) -> OpShardingRuleTemplate:
-    """Template for squeeze: remove dimension at axis (must be size 1).
-    
-    For squeeze (1,4) axis=0 -> (4,):
-    - Dim at axis=0 is removed (was size 1, no sharding)
-    - Input dim1 -> output dim0 (shifted down)
-    
-    rule: (removed, d0) -> (d0)
-    """
-    factors = [f"d{i}" for i in range(in_rank)]
-    out_factors = [f for i, f in enumerate(factors) if i != axis]
-    
-    in_mapping = {i: [factors[i]] for i in range(in_rank)}
-    out_mapping = {i: [out_factors[i]] for i in range(in_rank - 1)}
-    
-    return OpShardingRuleTemplate([in_mapping], [out_mapping])
-
-
-def swap_axes_template(rank: int, axis1: int, axis2: int) -> OpShardingRuleTemplate:
-    """Template for swap_axes: swap two dimensions.
-    
-    This is equivalent to transpose with a permutation that swaps axis1 and axis2.
-    """
-    # Normalize axes
-    if axis1 < 0:
-        axis1 = rank + axis1
-    if axis2 < 0:
-        axis2 = rank + axis2
-    
-    # Create permutation that swaps axis1 and axis2
-    perm = list(range(rank))
-    perm[axis1], perm[axis2] = perm[axis2], perm[axis1]
-    
-    return transpose_template(rank, perm)
-
-def reduce_template(rank: int, reduce_dims: List[int], keepdims: bool = False) -> OpShardingRuleTemplate:
-    factors = [f"d{i}" for i in range(rank)]
-    reduce_set = set(reduce_dims)
-    in_mapping = {i: [factors[i]] for i in range(rank)}
-    out_mapping = {}
-    out_idx = 0
-    for i in range(rank):
-        if i in reduce_set:
-            if keepdims:
-                out_mapping[out_idx] = []
-                out_idx += 1
-        else:
-            out_mapping[out_idx] = [factors[i]]
-            out_idx += 1
-    return OpShardingRuleTemplate([in_mapping], [out_mapping])
-
-def reshape_template(in_shape: Tuple[int, ...], out_shape: Tuple[int, ...]) -> OpShardingRuleTemplate:
-    """Create sharding rule template for reshape with compound factors.
-    
-    This automatically determines factor mappings for arbitrary reshapes by:
-    1. Finding which dimensions merge/split
-    2. Creating atomic factors from the shape with HIGHER rank (more granular)
-    3. Mapping compound factors for the shape with LOWER rank (less granular)
-    
-    Examples:
-        reshape_template((2, 4), (8,))     -> {0: ["d0"], 1: ["d1"]} -> {0: ["d0", "d1"]}
-        reshape_template((8,), (2, 4))     -> {0: ["d0", "d1"]} -> {0: ["d0"], 1: ["d1"]}
-    """
-    import math
-    
-    in_size = math.prod(in_shape)
-    out_size = math.prod(out_shape)
-    
-    if in_size != out_size:
-        raise ValueError(f"Reshape size mismatch: {in_size} != {out_size}")
-    
-    in_rank = len(in_shape)
-    out_rank = len(out_shape)
-    
-    # Strategy: Use the shape with more dimensions as the source of atomic factors
-    # This assumes that the higher-rank shape creates the granularity boundary
-    
-    if in_rank >= out_rank:
-        # Input has more/equal dims: Input dims are ATOMIC factors
-        # Output dims are COMPOUND of input factors
-        factors = [f"d{i}" for i in range(in_rank)]
-        in_mapping = {i: [factors[i]] for i in range(in_rank)}
-        
-        out_mapping = {}
-        factor_idx = 0
-        current_prod = 1
-        current_factors = []
-        
-        # Iterate over output dims and try to form them from input factors
-        for out_dim_idx in range(out_rank):
-            target_size = out_shape[out_dim_idx]
-            
-            # Consume input factors until we match target size
-            while factor_idx < in_rank:
-                f_size = in_shape[factor_idx]
-                current_factors.append(factors[factor_idx])
-                current_prod *= f_size
-                factor_idx += 1
-                
-                if current_prod == target_size:
-                    # Match found!
-                    out_mapping[out_dim_idx] = list(current_factors)
-                    current_factors = []
-                    current_prod = 1
-                    break
-                elif current_prod > target_size:
-                    # Input granularity is coarser than output required
-                    # This happens if input dim splits into multiple output dims
-                    # BUT we assumed in_rank >= out_rank, so this usually implies simple merge
-                    # OR mixed split/merge.
-                    # Fallback for now: Assign remaining factors to this output dim?
-                    # Strict mapping requires splitting factors, which this template doesn't do yet.
-                    # We'll assign current factors and move on, relying on runtime checks.
-                    out_mapping[out_dim_idx] = list(current_factors)
-                    current_factors = []
-                    current_prod = 1
-                    break
-            
-            if out_dim_idx not in out_mapping and current_factors:
-                 # Flush remaining if we exhausted factors but didn't exact match (shouldn't happen if shapes align)
-                 out_mapping[out_dim_idx] = list(current_factors)
-
-    else:
-        # Output has more dims: Output dims are ATOMIC factors
-        # Input dims are COMPOUND of output factors
-        factors = [f"d{i}" for i in range(out_rank)]
-        out_mapping = {i: [factors[i]] for i in range(out_rank)}
-        
-        in_mapping = {}
-        factor_idx = 0
-        current_prod = 1
-        current_factors = []
-        
-        # Iterate over input dims and try to form them from output factors
-        for in_dim_idx in range(in_rank):
-            target_size = in_shape[in_dim_idx]
-            
-            # Consume output factors until we match target size
-            while factor_idx < out_rank:
-                f_size = out_shape[factor_idx]
-                current_factors.append(factors[factor_idx])
-                current_prod *= f_size
-                factor_idx += 1
-                
-                if current_prod == target_size:
-                    # Match found!
-                    in_mapping[in_dim_idx] = list(current_factors)
-                    current_factors = []
-                    current_prod = 1
-                    break
-                elif current_prod > target_size:
-                    in_mapping[in_dim_idx] = list(current_factors)
-                    current_factors = []
-                    current_prod = 1
-                    break
-
-            if in_dim_idx not in in_mapping and current_factors:
-                 in_mapping[in_dim_idx] = list(current_factors)
-    
-    return OpShardingRuleTemplate([in_mapping], [out_mapping])
-
-def gather_template(data_rank: int, indices_rank: int, axis: int) -> OpShardingRuleTemplate:
-    data_factors = [f"d{i}" for i in range(data_rank)]
-    indices_factors = [f"i{i}" for i in range(indices_rank)]
-    
-    data_mapping = {i: [data_factors[i]] for i in range(data_rank)}
-    indices_mapping = {i: [indices_factors[i]] for i in range(indices_rank)}
-    
-    out_mapping = {}
-    out_idx = 0
-    for i in range(data_rank):
-        if i == axis:
-            for j in range(indices_rank):
-                out_mapping[out_idx] = [indices_factors[j]]
-                out_idx += 1
-        else:
-            out_mapping[out_idx] = [data_factors[i]]
-            out_idx += 1
-    
-    return OpShardingRuleTemplate([data_mapping, indices_mapping], [out_mapping])
-
-def attention_template(batch_dims: int = 1, has_head_dim: bool = True) -> OpShardingRuleTemplate:
-    batch_factors = [f"b{i}" for i in range(batch_dims)]
-    
-    q_mapping = {i: [batch_factors[i]] for i in range(batch_dims)}
-    if has_head_dim:
-        q_mapping[batch_dims] = ["h"]
-        q_mapping[batch_dims + 1] = ["sq"]
-        q_mapping[batch_dims + 2] = ["d"]
-    else:
-        q_mapping[batch_dims] = ["sq"]
-        q_mapping[batch_dims + 1] = ["d"]
-    
-    k_mapping = {i: [batch_factors[i]] for i in range(batch_dims)}
-    if has_head_dim:
-        k_mapping[batch_dims] = ["h"]
-        k_mapping[batch_dims + 1] = ["skv"]
-        k_mapping[batch_dims + 2] = ["d"]
-    else:
-        k_mapping[batch_dims] = ["skv"]
-        k_mapping[batch_dims + 1] = ["d"]
-        
-    v_mapping = dict(k_mapping)
-    out_mapping = dict(q_mapping)
-    
-    return OpShardingRuleTemplate([q_mapping, k_mapping, v_mapping], [out_mapping])
-
-def embedding_template(vocab_sharded: bool = False) -> OpShardingRuleTemplate:
-    if vocab_sharded:
-        embed_mapping = {0: ["v"], 1: ["e"]}
-    else:
-        embed_mapping = {0: [], 1: ["e"]}
-    indices_mapping = {0: ["b"], 1: ["s"]}
-    output_mapping = {0: ["b"], 1: ["s"], 2: ["e"]}
-    return OpShardingRuleTemplate([embed_mapping, indices_mapping], [output_mapping])
-
-
-# =============================================================================
-# Gather / Scatter / Concatenate Templates (for PP and view ops)
-# =============================================================================
-
-def gather_template(data_rank: int, indices_rank: int, axis: int) -> OpShardingRuleTemplate:
-    """Template for gather: Data[d0, ..., d_axis, ..., dn], Indices[i0, ...] 
-                           -> Output[d0, ..., d_{axis-1}, i0, ..., d_{axis+1}, ..., dn]
-    
-    The gathered axis (d_axis) is a 'contracting' factor - it appears only in input.
-    Indices dimensions replace the gathered axis in the output.
-    
-    Example (axis=0):
-        Data(N, D), Indices(K) -> Output(K, D)
-        Factors: d0=N (contracting), d1=D, i0=K
-        Rule: (d0, d1), (i0) -> (i0, d1)
-    
-    Example (axis=1):
-        Data(B, N, D), Indices(K) -> Output(B, K, D)
-        Factors: d0=B, d1=N (contracting), d2=D, i0=K
-        Rule: (d0, d1, d2), (i0) -> (d0, i0, d2)
-    """
-    # Normalize axis
-    if axis < 0:
-        axis += data_rank
-    
-    # Data factors: d0, d1, ..., d_{data_rank-1}
-    data_factors = [f"d{i}" for i in range(data_rank)]
-    
-    # Indices factors: i0, i1, ..., i_{indices_rank-1}
-    indices_factors = [f"i{i}" for i in range(indices_rank)]
-    
-    # Output factors: data_factors[:axis] + indices_factors + data_factors[axis+1:]
-    out_factors = data_factors[:axis] + indices_factors + data_factors[axis+1:]
-    
-    # Build mappings
-    data_mapping = {i: [data_factors[i]] for i in range(data_rank)}
-    indices_mapping = {i: [indices_factors[i]] for i in range(indices_rank)}
-    out_mapping = {i: [out_factors[i]] for i in range(len(out_factors))}
-    
-    return OpShardingRuleTemplate([data_mapping, indices_mapping], [out_mapping])
-
-
-def scatter_template(data_rank: int, indices_rank: int, axis: int) -> OpShardingRuleTemplate:
-    """Template for scatter: Data[d...], Indices[i...], Updates[i..., d_suffix...] -> Data[d...]
-    
-    Scatter writes updates at positions specified by indices along the given axis.
-    Output has same shape as input data.
-    
-    The indices + updates alignment is: Updates = Indices_dims + Data_dims[axis+1:]
-    
-    Example (axis=0):
-        Data(N, D), Indices(K), Updates(K, D) -> Output(N, D)
-        Factors: d0=N, d1=D, i0=K
-        Rule: (d0, d1), (i0), (i0, d1) -> (d0, d1)
-    
-    Example (axis=1):
-        Data(B, N, D), Indices(K), Updates(B, K, D) -> Output(B, N, D)
-        Factors: d0=B, d1=N, d2=D, i0=K
-        Rule: (d0, d1, d2), (i0), (d0, i0, d2) -> (d0, d1, d2)
-    """
-    # Normalize axis
-    if axis < 0:
-        axis += data_rank
-    
-    # Data factors
-    data_factors = [f"d{i}" for i in range(data_rank)]
-    
-    # Indices factors
-    indices_factors = [f"i{i}" for i in range(indices_rank)]
-    
-    # Updates factors: data_factors[:axis] + indices_factors + data_factors[axis+1:]
-    # This matches the gather output shape: the axis dim is replaced by indices dims
-    updates_factors = data_factors[:axis] + indices_factors + data_factors[axis+1:]
-    
-    # Build mappings
-    data_mapping = {i: [data_factors[i]] for i in range(data_rank)}
-    indices_mapping = {i: [indices_factors[i]] for i in range(indices_rank)}
-    updates_mapping = {i: [updates_factors[i]] for i in range(len(updates_factors))}
-    out_mapping = {i: [data_factors[i]] for i in range(data_rank)}
-    
-    return OpShardingRuleTemplate(
-        [data_mapping, indices_mapping, updates_mapping], 
-        [out_mapping]
-    )
-
-
-def concatenate_template(rank: int, num_inputs: int, axis: int) -> OpShardingRuleTemplate:
-    """Template for concatenate: Input0[d...], Input1[d...], ... -> Output[d...]
-    
-    All inputs must have the same sharding on non-concat axes.
-    The concat axis is special: each input contributes its slice, and they combine.
-    
-    For simplicity and correctness, we require:
-    - Non-concat axes: must have identical sharding across all inputs
-    - Concat axis: should NOT be sharded (sharding along concat axis is complex)
-    
-    This template enforces shared factors for all dims across all inputs.
-    The concat axis gets a "concat_slot" factor that varies per input (not sharded).
-    
-    Example (3 inputs, axis=0):
-        Input0(A, D), Input1(B, D), Input2(C, D) -> Output(A+B+C, D)
-        For sharding: All share factor d1 for dim 1
-        Dim 0: each input has its own size, concat axis should be replicated
-        
-        Rule: (c0, d1), (c1, d1), (c2, d1) -> (concat, d1)
-        where concat is NOT sharded (compound of c0, c1, c2)
-    """
-    # Normalize axis
-    if axis < 0:
-        axis += rank
-    
-    # Create factors for each dimension
-    # Non-concat dims: shared factor "d{i}" across all inputs
-    # Concat dim: each input has its own factor "c{input_idx}_{axis}"
-    
-    input_mappings = []
-    for input_idx in range(num_inputs):
-        mapping = {}
-        for dim in range(rank):
-            if dim == axis:
-                # Concat axis: each input has its own factor (not shared)
-                # This means the concat axis cannot propagate sharding between inputs
-                mapping[dim] = [f"c{input_idx}"]
-            else:
-                # Non-concat dims: shared factor
-                mapping[dim] = [f"d{dim}"]
-        input_mappings.append(mapping)
-    
-    # Output mapping: non-concat dims share factors, concat dim is compound
-    out_mapping = {}
-    for dim in range(rank):
-        if dim == axis:
-            # Concat axis: compound of all input concat factors
-            # This represents the concatenated dimension
-            out_mapping[dim] = [f"c{i}" for i in range(num_inputs)]
-        else:
-            out_mapping[dim] = [f"d{dim}"]
-    
-    return OpShardingRuleTemplate(input_mappings, [out_mapping])
-
-
-def stack_template(rank: int, num_inputs: int, axis: int) -> OpShardingRuleTemplate:
-    """Template for stack: Input0[d...], Input1[d...], ... -> Output[N, d...]
-    
-    Stack inserts a new dimension at axis position, so output rank = input_rank + 1.
-    All inputs must have identical shape and sharding.
-    
-    Example (2 inputs, input_rank=2, axis=0):
-        Input0(M, N), Input1(M, N) -> Output(2, M, N)
-        Factors: d0=M, d1=N, stack_dim=2
-        Rule: (d0, d1), (d0, d1) -> (stack, d0, d1)
-    """
-    # Input rank (each input has same rank)
-    input_rank = rank
-    output_rank = rank + 1
-    
-    # Normalize axis for output
-    if axis < 0:
-        axis += output_rank
-    
-    # Input factors: all inputs share the same factors
-    input_factors = [f"d{i}" for i in range(input_rank)]
-    
-    input_mappings = []
-    for _ in range(num_inputs):
-        mapping = {i: [input_factors[i]] for i in range(input_rank)}
-        input_mappings.append(mapping)
-    
-    # Output factors: insert new "stack" factor at axis position
-    out_factors = []
-    input_idx = 0
-    for i in range(output_rank):
-        if i == axis:
-            out_factors.append("stack")
-        else:
-            out_factors.append(input_factors[input_idx])
-            input_idx += 1
-    
-    out_mapping = {i: [out_factors[i]] for i in range(output_rank)}
-    
-    return OpShardingRuleTemplate(input_mappings, [out_mapping])
-
-
-# ============================================================================
-# Hierarchical Propagation Pass (XLA Shardy-style)
-# ============================================================================
 
 def run_hierarchical_propagation_pass(
     operations_with_rules,
