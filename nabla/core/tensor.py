@@ -144,6 +144,21 @@ class Tensor(DLPackArray, HasTensorValue):
         """Enable tracing on this tensor for autograd."""
         self._impl.traced = True
         return self
+
+    @property
+    def dual(self) -> Tensor | None:
+        """Get the dual (sharded/physical) tensor associated with this tensor."""
+        if self._impl.dual is not None:
+            return Tensor(impl=self._impl.dual)
+        return None
+
+    @dual.setter
+    def dual(self, value: Tensor | None) -> None:
+        """Set the dual (sharded/physical) associated with this tensor."""
+        if value is None:
+            self._impl.dual = None
+        else:
+            self._impl.dual = value._impl
     
     def shard(
         self,
@@ -184,6 +199,30 @@ class Tensor(DLPackArray, HasTensorValue):
         """
         from ..ops import communication as comm
         return comm.reshard(self, mesh, dim_specs, replicated_axes=replicated_axes)
+
+    def with_sharding_constraint(
+        self,
+        mesh: Any,
+        dim_specs: list[Any],
+    ) -> Tensor:
+        """Apply sharding constraint for global optimization.
+        
+        This sets a constraint that the GlobalShardingOptimizer will try to satisfy.
+        It does NOT immediately reshard the tensor.
+        
+        Args:
+            mesh: DeviceMesh to constrain to
+            dim_specs: List of DimSpec for each dimension
+        
+        Returns:
+            Self (for chaining)
+        """
+        from ..sharding.spec import ShardingSpec
+        
+        spec = ShardingSpec(mesh, dim_specs)
+        print(f"DEBUG: Setting sharding_constraint on TensorImpl {id(self._impl)}: {spec}")
+        self._impl.sharding_constraint = spec
+        return self
 
     @property
     def sharding(self) -> Any | None:

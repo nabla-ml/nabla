@@ -229,7 +229,7 @@ def _check_contracting_factors_sharded(
         for ds in output_spec.dim_specs:
             preserved_axes.update(ds.axes)
     
-    print(f"DEBUG: Contracting {contracting_factors}, Preserved {preserved_axes}")
+
 
     # Check each input spec to see if contracting factors are sharded
     for t_idx, spec in enumerate(input_specs):
@@ -458,7 +458,8 @@ def create_sharded_output(results: List[Any], sharding: Optional["ShardingSpec"]
         # Implicitly replicated tensors should be Open to allow modification during propagation
         sharding = ShardingSpec(mesh, [DimSpec([], is_open=True) for _ in range(rank)])
     
-    impl = TensorImpl(values=results, traced=traced, batch_dims=batch_dims, sharding=sharding)
+    impl = TensorImpl(values=results, traced=traced, batch_dims=batch_dims)
+    impl.sharding = sharding
     
     # Cache metadata - compute GLOBAL shape from local + sharding for sharded outputs
     local_shape = tuple(first.type.shape)

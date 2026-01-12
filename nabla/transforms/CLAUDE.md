@@ -79,6 +79,38 @@ Operations automatically preserve all batch dimensions via `max()` propagation.
 
 ---
 
+## Shard Map: Automatic Distribution
+
+### The Core Idea
+
+Bridge between "Logical" (user view) and "Physical" (distributed execution). Allows writing code as if it runs on a single device, but executes it partitioned across a mesh.
+
+### The Mechanism: Dual Execution
+
+Replaces complex graph patching with a clean **Trace-and-Replay** model:
+
+1. **Trace Logical Graph**: Captures the computation using standard logical tensors.
+2. **Replay on Duals**: Re-executes the graph using physical (sharded) tensors.
+
+**The Workflow**:
+1. **Realize Inputs**: Ensures a clean starting state.
+2. **Trace**: `trace(func, args)` captures the operation history.
+3. **Attach Duals**: Maps input arguments to their sharded physical counterparts (duals) based on `in_specs`.
+4. **Replay Loop**:
+    - Iterates through captured logical nodes.
+    - Resolves arguments to their `.dual` (physical) counterparts.
+    - Executes operations on duals (triggering SPMD propagation).
+    - Updates output duals (`logical.dual = physical_result`).
+5. **Finalize**: Returns the duals of the trace outputs, applying `out_specs` if provided.
+
+### Why Dual Execution?
+
+- **Separation of Concerns**: Tracing captures *what* to compute. Replay captures *how* to distribute it.
+- **Robustness**: Handles constants (untraced nodes skipped), complex compositions, and mixed updates cleaner than in-place patching.
+- **Verification**: The generated trace acts as a "sharding plan" that can be inspected before execution.
+
+---
+
 ## Compile: Computation Caching
 
 ### The Philosophy

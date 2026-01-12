@@ -66,8 +66,8 @@ class CollectiveOperation(Operation):
             values=result_values,
             traced=sharded_tensor._impl.traced,
             batch_dims=sharded_tensor._impl.batch_dims,
-            sharding=output_spec,
         )
+        impl.sharding = output_spec
         # Preserve cached_shape from input (most collectives preserve global shape)
         impl.cached_shape = sharded_tensor._impl.cached_shape
         
@@ -282,8 +282,8 @@ class ShardOp(Operation):
             values=shard_values,
             traced=x._impl.traced if isinstance(x, Tensor) else False,
             batch_dims=x._impl.batch_dims if isinstance(x, Tensor) else 0,
-            sharding=spec,
         )
+        impl.sharding = spec
         
         # Cache GLOBAL shape from input, not local shard shape
         # This is critical for sharding propagation to work correctly
@@ -503,8 +503,8 @@ class AllGatherOp(Operation):
                 values=sharded_tensor._impl._values,
                 traced=sharded_tensor._impl.traced,
                 batch_dims=batch_dims,
-                sharding=replicated_spec,
             )
+            impl.sharding = replicated_spec
             # Set GLOBAL shape as cached shape
             impl.cached_shape = global_shape
             impl.cached_dtype = sharded_tensor.dtype
@@ -549,8 +549,8 @@ class AllGatherOp(Operation):
             values=gathered,
             traced=sharded_tensor._impl.traced,
             batch_dims=sharded_tensor._impl.batch_dims,
-            sharding=output_spec,
         )
+        impl.sharding = output_spec
         impl.cached_shape = global_shape  # Set global shape!
         impl.cached_dtype = sharded_tensor.dtype
         impl.cached_device = sharded_tensor.device
@@ -1430,8 +1430,8 @@ class GatherAllAxesOp(Operation):
             values=[global_tensor],
             traced=sharded_tensor._impl.traced,
             batch_dims=sharded_tensor._impl.batch_dims,
-            sharding=replicated_spec,
         )
+        impl.sharding = replicated_spec
         return Tensor(impl=impl)
 
 

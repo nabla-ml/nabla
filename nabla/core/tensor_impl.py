@@ -52,15 +52,18 @@ class TensorImpl:
         parents: List of parent TensorImpls (derived from output_refs.op_args).
         op: The operation that created this tensor (from output_refs).
         op_name: Name of the operation (from output_refs).
+        dual: Reference to the dual (sharded) TensorImpl for replay/transformations.
     """
-    __slots__ = ('_values', '_storages', 'sharding', 'traced','tangent', 'cotangent', 'batch_dims', 'output_refs', 'output_index', 'cached_shape', 'cached_dtype', 'cached_device', '__weakref__')
+    __slots__ = ('_values', '_storages', 'sharding', 'sharding_constraint', 'traced','tangent', 'cotangent', 'dual', 'batch_dims', 'output_refs', 'output_index', 'cached_shape', 'cached_dtype', 'cached_device', '__weakref__')
     
     _values: list[graph.BufferValue | graph.TensorValue]
     _storages: list[driver.Tensor] | None
     sharding: object | None
+    sharding_constraint: object | None
     traced: bool
     tangent: TensorImpl | None   # For JVP (forward-mode autodiff)
     cotangent: TensorImpl | None # For VJP (reverse-mode autodiff)
+    dual: TensorImpl | None      # For transformations (shard_map)
     batch_dims: int
     output_refs: OutputRefs | None   # Shared OutputRefs instance (set by Operation.__call__)
     output_index: int            # Position among sibling outputs (0-indexed)
@@ -75,7 +78,7 @@ class TensorImpl:
         values: graph.BufferValue | graph.TensorValue | list[graph.BufferValue | graph.TensorValue] | None = None,
         traced: bool = False,
         batch_dims: int = 0,
-        sharding: ShardingSpec | None = None,
+        sharding_constraint: ShardingSpec | None = None,
     ):
         # Normalize values to list
         if values is None:
@@ -93,8 +96,18 @@ class TensorImpl:
         else:
             self._storages = [storages]
         
-        self.sharding = sharding
+        self.sharding = None  # Always start unsharded (unless manually set later)
+        self.sharding_constraint = sharding_constraint
         self.traced = traced
+        self.tangent = None
+        self.cotangent = None
+        self.dual = None # Initialize dual
+        self.batch_dims = batch_dims
+        self.output_refs = None
+        self.output_index = 0
+        self.cached_shape = None
+        self.cached_dtype = None
+        self.cached_device = None
         self.tangent = None    # Populated during JVP
         self.cotangent = None  # Populated during VJP
         self.batch_dims = batch_dims
@@ -109,7 +122,7 @@ class TensorImpl:
         self.cached_device = None
         
         # Validate sharding consistency (basic checks for now)
-        self._validate_sharding()
+
     
     def _validate_sharding(self) -> None:
         """Validate that shards are consistent with sharding specification.

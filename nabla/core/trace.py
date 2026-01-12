@@ -21,7 +21,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Callable
 
 from .pytree import tree_leaves
+from . import pytree
 from .tensor import Tensor
+from .tensor_impl import TensorImpl
 from ..sharding.spmd import compute_global_shape
 
 if TYPE_CHECKING:
@@ -63,46 +65,62 @@ class Trace:
         self.inputs = inputs
         self.outputs = outputs
         self._computed = False
-        self.nodes: list[TensorImpl] = []
+        self.nodes: list[OutputRefs] = []
         
         # Flatten inputs to establish the boundary
-        self._input_nodes = {
+        # We track input TENSORS, not refs, because inputs might not have output_refs (leaves)
+        self._input_tensor_ids = {
             id(t._impl) for t in tree_leaves(inputs) if isinstance(t, Tensor)
         }
         
     def compute(self) -> None:
-        """Compute the topological ordering of the subgraph."""
+        """Compute the topological ordering of the subgraph (list of OutputRefs)."""
         if self._computed:
             return
             
         visited: set[int] = set()
-        nodes: list[TensorImpl] = []
+        nodes: list[OutputRefs] = []
         
-        # We search backwards from outputs
+        # Get all output tensors
         output_leaves = [
             t._impl for t in tree_leaves(self.outputs) if isinstance(t, Tensor)
         ]
         
-        def dfs(node: TensorImpl) -> None:
-            node_id = id(node)
-            if node_id in visited:
-                return
-            
-            # If we hit an input boundary, we stop recursing but include the node
-            # This effectively makes it a "leaf" for this specific trace
-            if node_id in self._input_nodes:
-                visited.add(node_id)
-                return
-            
-            # Recurse into parents
-            for parent in node.parents:
-                dfs(parent)
-            
-            visited.add(node_id)
-            nodes.append(node)
-            
+        # Identify "root" operations (those producing the outputs)
+        root_refs: list[OutputRefs] = []
         for leaf in output_leaves:
-            dfs(leaf)
+            if leaf.output_refs is not None:
+                root_refs.append(leaf.output_refs)
+            # If leaf has no output_refs, it's a constant or input leaf, so no op to trace.
+        
+        def dfs(refs: OutputRefs) -> None:
+            refs_id = id(refs)
+            if refs_id in visited:
+                return
+            
+            # Recurse into parents (arguments to this op)
+            # Iterate through args to find tensor inputs
+            arg_leaves = []
+            for arg in tree_leaves(refs.op_args):
+                if isinstance(arg, Tensor):
+                    arg_leaves.append(arg._impl)
+                elif isinstance(arg, TensorImpl):
+                     arg_leaves.append(arg)
+            
+            for arg in arg_leaves:
+                # If arg is an input to the trace, stop.
+                if id(arg) in self._input_tensor_ids:
+                    continue
+                
+                # If arg was produced by an op, recurse
+                if arg.output_refs:
+                    dfs(arg.output_refs)
+            
+            visited.add(refs_id)
+            nodes.append(refs)
+            
+        for root in root_refs:
+            dfs(root)
             
         self.nodes = nodes
         self._computed = True
@@ -133,7 +151,7 @@ def trace(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Trace:
         **kwargs: Keyword arguments (pytrees) passed to the function.
         
     Returns:
-        A Trace object. Call print() on it to see the formatted graph.
+        A Trace object with the computed graph nodes.
     """
     # Collect all input tensor leaves
     flat_args = tree_leaves(args)
@@ -155,12 +173,15 @@ def trace(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Trace:
         outputs = fn(*args, **kwargs)
         
         # Build trace from inputs to outputs
-        return Trace(args, outputs)
+        traced = Trace(args, outputs)
+        traced.compute()
+        return traced
     finally:
         # Restore original traced state
         for t in input_tensors:
             if id(t) in original_traced:
                 t._impl.traced = original_traced[id(t)]
+
 
 
 class GraphPrinter:
@@ -366,35 +387,67 @@ class GraphPrinter:
             current_block_mesh = None
             block_lines = []
 
-        for node in self.trace.nodes:
-            if id(node) in self.var_names: continue
+        for refs in self.trace.nodes:
+            # refs is OutputRefs
+            op_name = refs.op.name.lower() if hasattr(refs.op, 'name') else str(type(refs.op).__name__)
             
-            name = self._get_next_name()
-            self.var_names[id(node)] = name
+            # Helper to find parent variable names
+            arg_names = []
+            def collect_arg_names(x):
+                if isinstance(x, Tensor):
+                     arg_names.append(f"{C_VAR}{self.var_names.get(id(x._impl), '?')}{RESET}")
+                elif isinstance(x, TensorImpl):
+                     arg_names.append(f"{C_VAR}{self.var_names.get(id(x), '?')}{RESET}")
+                return x
+            pytree.tree_map(collect_arg_names, refs.op_args)
             
-            op_name = node.op_name.lower() if node.op_name else "const"
-            arg_names = [f"{C_VAR}{self.var_names.get(id(p), '?')}{RESET}" for p in node.parents]
             args_str = ", ".join(arg_names)
-            kwargs_str = self._format_kwargs(node.op_kwargs)
+            kwargs_str = self._format_kwargs(refs.op_kwargs)
             
-            # Fallback for communication ops on constants (where inputs weren't captured)
+             # Fallback for communication ops on constants
             if not args_str and op_name in ('shard', 'reshard'):
                 args_str = f"{C_VAR}const{RESET}"
 
             call_args = ", ".join(filter(None, [args_str, kwargs_str]))
             
-            info_str = self._format_full_info(node)
-            line = f"    {C_VAR}{name}{RESET}: {info_str} = {op_name}({call_args})"
+            # Outputs
+            outputs = refs.get_alive_outputs()
+            valid_outputs = [o for o in outputs if o is not None]
             
-            is_sharded = node.sharding and node.sharding.mesh
+            # Skip if no outputs are alive (dead code)
+            if not valid_outputs:
+                continue
+
+            # Assign names and format info
+            lhs_parts = []
+            is_sharded = False
+            first_valid = valid_outputs[0]
+            if first_valid.sharding and first_valid.sharding.mesh:
+                is_sharded = True
+            
+            # Determine mesh (use first valid output)
+            mesh = first_valid.sharding.mesh if is_sharded and first_valid.sharding else None
+
+            for out in outputs:
+                if out is None:
+                    lhs_parts.append("_")
+                    continue
+                
+                name = self._get_next_name()
+                self.var_names[id(out)] = name
+                info = self._format_full_info(out)
+                lhs_parts.append(f"{C_VAR}{name}{RESET}: {info}")
+            
+            lhs_str = ", ".join(lhs_parts)
+            line = f"    {lhs_str} = {op_name}({call_args})"
+            
             is_comm = op_name in COMM_OPS
             
             if is_comm:
                 flush_block()
                 lines.append(line.replace("    ", "  "))
             elif is_sharded: 
-                mesh = node.sharding.mesh
-                if current_block_mesh and current_block_mesh.name != mesh.name:
+                if current_block_mesh and mesh and current_block_mesh.name != mesh.name:
                     flush_block()
                 
                 current_block_mesh = mesh
