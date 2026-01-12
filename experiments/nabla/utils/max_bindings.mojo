@@ -550,7 +550,7 @@ struct MaxGraph(ImplicitlyCopyable, Movable):
 
     fn __exit__(self) raises:
         """Exit graph context - enables with statement pattern."""
-        _ = self._py_graph.__exit__(None, None, None)
+        _ = self._py_graph.__exit__(Python.none(), Python.none(), Python.none())
 
     fn enter_context(self) raises:
         """Enter graph context (explicit alternative to __enter__)."""

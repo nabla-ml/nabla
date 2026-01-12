@@ -27,7 +27,7 @@ fn err_loc() -> String:
 
 
 struct MoTree(Copyable, Movable):
-    alias Treeable = Variant[Self, Tensor, Int, Float32, Dict[String, Self]]
+    comptime Treeable = Variant[Self, Tensor, Int, Float32, Dict[String, Self]]
     var data: List[Self.Treeable]
 
     fn __init__(out self) raises:
@@ -723,45 +723,45 @@ fn broadcast_shapes(shape_a: List[Int], shape_b: List[Int]) raises -> List[Int]:
 trait Operation:
     @staticmethod
     fn name(kwargs: Dict[String, List[Int]]) -> String:
-        pass
+        ...
 
     @staticmethod
     fn shape(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> List[Int]:
-        pass
+        ...
 
     @staticmethod
     fn dtype(inputs: List[Tensor], kwargs: Dict[String, List[Int]]) raises -> DType:
-        pass
+        ...
 
     @staticmethod
     fn device(
         inputs: List[Tensor], kwargs: Dict[String, List[Int]]
     ) raises -> MaxDevice:
-        pass
+        ...
 
     @staticmethod
     fn batch_dims(
         inputs: List[Tensor], kwargs: Dict[String, List[Int]]
     ) raises -> List[Int]:
-        pass
+        ...
 
     @staticmethod
     fn maxpr(
         inputs: List[MaxTensorValue], kwargs: Dict[String, List[Int]]
     ) raises -> MaxTensorValue:
-        pass
+        ...
 
     @staticmethod
     fn vjp_rule(
         primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]
     ) raises -> List[Tensor]:
-        pass
+        ...
 
     @staticmethod
     fn jvp_rule(
         primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]
     ) raises -> Tensor:
-        pass
+        ...
 
     @staticmethod
     fn stage_realization(inputs: List[Tensor]) raises -> Bool:
@@ -865,19 +865,19 @@ trait BinaryOp(Operation):
     fn maxpr(
         inputs: List[MaxTensorValue], kwargs: Dict[String, List[Int]]
     ) raises -> MaxTensorValue:
-        pass
+        ...
 
     @staticmethod
     fn vjp_rule(
         primals: List[Tensor], cotangent: Tensor, kwargs: Dict[String, List[Int]]
     ) raises -> List[Tensor]:
-        pass
+        ...
 
     @staticmethod
     fn jvp_rule(
         primals: List[Tensor], tangents: List[Tensor], kwargs: Dict[String, List[Int]]
     ) raises -> Tensor:
-        pass
+        ...
 
 
 struct AddOp(BinaryOp):

@@ -40,7 +40,7 @@ fn test_jit() raises:
 
     var mlp_jit = jit(mlp)
 
-    for it in range(100):
+    for it in range(1000):
         var t_iter_start = perf_counter_ns()
 
         var input = randn([4, 512])
@@ -49,6 +49,7 @@ fn test_jit() raises:
         var t_iter_end = perf_counter_ns()
         var iter_time_ms = (t_iter_end - t_iter_start) / 1_000_000
 
-        if it % 10 == 0:
+        if it % 100 == 0:
             print("Iteration", it, "| Time:", iter_time_ms, "ms")
-            print(output.as_tensor())
+        if it == 0:
+            print("First iteration output sample:", output.as_tensor())

@@ -8,7 +8,7 @@ from ..utils.max_bindings import (
 )
 from ..utils.debug import err_loc
 from python import Python, PythonObject
-from memory import ArcPointer, UnsafePointer
+from memory import ArcPointer, UnsafePointer, LegacyUnsafePointer
 
 
 struct TensorImpl(Copyable, Movable):
@@ -208,14 +208,15 @@ struct Tensor(ImplicitlyCopyable, Movable, Writable):
     fn remove_tensor_value(mut self):
         self._storage[].tensor_value = Optional[MaxTensorValue](None)
 
-    fn to_numpy_ptr[dtype: DType](self) raises -> UnsafePointer[Scalar[dtype]]:
+    fn to_numpy_ptr[dtype: DType](self) raises -> LegacyUnsafePointer[Scalar[dtype]]:
         """Get an unsafe pointer to the underlying data copy on the Host."""
         if not self.has_data():
             raise Error("\nTensor data is not materialized" + err_loc())
         return (
             self.to_numpy()
-            .__array_interface__["data"][0]
+            .__array_interface__[PythonObject("data")][PythonObject(0)]
             .unsafe_get_as_pointer[dtype]()
+            .as_legacy_pointer()
         )
 
     # Getters/Setters for autodiff-related fields

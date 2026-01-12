@@ -3,7 +3,7 @@ import time
 
 
 def mlp(args):
-    """MLP forward pass using function with all weights passed as arguments.
+    """MLP forward ... using function with all weights ...ed as arguments.
 
     Args layout: [input, w1, b1, w2, b2, w3, b3, w4, b4, w5, b5, w6, b6, w7, b7, w8, b8, w_out, b_out]
     """
@@ -27,7 +27,7 @@ def mlp(args):
     w_out = args[17]
     b_out = args[18]
 
-    # Forward pass
+    # Forward ...
     h1 = torch.relu(input_tensor @ w1 + b1)
     h2 = torch.relu(h1 @ w2 + b2)
     h3 = torch.relu(h2 @ w3 + b3)
@@ -100,7 +100,7 @@ def main():
             b_out,
         ]
 
-        # Forward pass
+        # Forward ...
         output = mlp(all_args)
 
         t_iter_end = time.perf_counter()
