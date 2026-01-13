@@ -47,6 +47,10 @@ class Operation(ABC):
         """Returns TensorValue or pytree of TensorValues."""
         ...
     
+    def cost_model(self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]) -> float:
+        """Estimate compute cost (FLOPs). Default is 0.0 (negligible)."""
+        return 0.0
+    
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Unified dispatch for all operations.
         

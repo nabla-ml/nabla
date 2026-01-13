@@ -59,6 +59,30 @@ class MatmulOp(Operation):
     def name(self) -> str:
         return "matmul"
     
+    def cost_model(self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]) -> float:
+        """Estimate FLOPs for matmul: 2 * M * N * K."""
+        # Standard case: A[..., M, K], B[..., K, N] -> C[..., M, N]
+        if not input_shapes or len(input_shapes) < 2:
+            return 0.0
+            
+        shape_a = input_shapes[0]
+        shape_b = input_shapes[1]
+        
+        if len(shape_a) < 2 or len(shape_b) < 2:
+            return 0.0
+            
+        # Last two dims are M, K and K, N
+        m = shape_a[-2]
+        k = shape_a[-1]
+        n = shape_b[-1]
+        
+        # Batch size
+        batch_size = 1
+        for d in shape_a[:-2]:
+            batch_size *= d
+            
+        return 2.0 * batch_size * m * n * k
+    
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.matmul(args[0], args[1])
     
