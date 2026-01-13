@@ -348,8 +348,9 @@ def _copy_impl_with_batch_dims(x: "Tensor", new_batch_dims: int, op: "Operation"
         values=x._impl._values,
         traced=x._impl.traced,
         batch_dims=new_batch_dims,
-        sharding=x._impl.sharding,
     )
+    # Sharding must be set after construction (not a constructor arg)
+    new_impl.sharding = x._impl.sharding
     new_impl.cached_shape = x.global_shape
     new_impl.cached_dtype = x._impl.cached_dtype
     new_impl.cached_device = x._impl.cached_device

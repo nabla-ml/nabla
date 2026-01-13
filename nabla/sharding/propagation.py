@@ -266,18 +266,28 @@ class OpShardingRule:
         return input_factors - output_factors
     
     def to_einsum_notation(self) -> str:
+        """Convert to einsum-like notation string.
+        
+        Outputs space-separated format: "m k, k n -> m n"
+        - Single factors: just the factor name
+        - Multiple factors on one dim: grouped with parentheses
+        - Empty mapping: "1" (for reduced/broadcast dimensions)
+        """
         def mapping_to_str(mapping: Dict[int, List[str]]) -> str:
             if not mapping:
-                return "()"
+                return "1"
             sorted_dims = sorted(mapping.keys())
             parts = []
             for d in sorted_dims:
                 factors = mapping[d]
-                if len(factors) == 1:
+                if not factors:
+                    parts.append("1")
+                elif len(factors) == 1:
                     parts.append(factors[0])
                 else:
-                    parts.append(f"({','.join(factors)})")
-            return f"({', '.join(parts)})"
+                    # Multiple factors on one dimension - keep parentheses for grouping
+                    parts.append(f"({' '.join(factors)})")
+            return " ".join(parts)
         
         inputs = ", ".join(mapping_to_str(m) for m in self.input_mappings)
         outputs = ", ".join(mapping_to_str(m) for m in self.output_mappings)

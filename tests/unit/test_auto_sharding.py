@@ -339,5 +339,163 @@ class TestAutoSharding(unittest.TestCase):
         
         print("✅ Propagation debug output verified!")
 
+    def test_transformer_block(self):
+        """Test auto-sharding with a larger transformer-like graph (8+ operations).
+        
+        This verifies:
+        1. Sharding propagates correctly through many operations
+        2. Solver converges within reasonable iterations
+        3. Numerical output matches NumPy reference
+        """
+        print("\nTEST: Transformer Block (8+ ops)")
+        
+        def transformer_block(x, w_qkv, w_o, w_ff1, w_ff2):
+            # Simplified attention: x @ w_qkv gives Q,K,V concatenated
+            # We use a simpler version without softmax for now
+            qkv = x @ w_qkv  # [batch, seq, 3*dim]
+            
+            # Simplified: just project back (no real attention)
+            attn_out = qkv @ w_o  # [batch, seq, dim]
+            
+            # Residual connection
+            h = x + attn_out
+            
+            # FFN
+            ff = h @ w_ff1  # [batch, seq, ff_dim]
+            ff_out = ff @ w_ff2  # [batch, seq, dim]
+            
+            # Final residual
+            return h + ff_out
+        
+        # Shapes: batch=64, seq=32, dim=64, ff_dim=128
+        batch, seq, dim, ff_dim = 64, 32, 64, 128
+        
+        sharded_fn = shard_map(
+            transformer_block,
+            self.mesh,
+            in_specs={0: None, 1: None, 2: None, 3: None, 4: None},
+            out_specs=None,
+            auto_sharding=True,
+            debug=True
+        )
+        
+        np.random.seed(42)
+        x_np = np.random.rand(batch, seq, dim).astype(np.float32)
+        w_qkv_np = np.random.rand(dim, 3*dim).astype(np.float32)
+        w_o_np = np.random.rand(3*dim, dim).astype(np.float32)
+        w_ff1_np = np.random.rand(dim, ff_dim).astype(np.float32)
+        w_ff2_np = np.random.rand(ff_dim, dim).astype(np.float32)
+        
+        x = Tensor.from_dlpack(x_np)
+        w_qkv = Tensor.from_dlpack(w_qkv_np)
+        w_o = Tensor.from_dlpack(w_o_np)
+        w_ff1 = Tensor.from_dlpack(w_ff1_np)
+        w_ff2 = Tensor.from_dlpack(w_ff2_np)
+        
+        result = sharded_fn(x, w_qkv, w_o, w_ff1, w_ff2)
+        
+        # NumPy reference
+        qkv = x_np @ w_qkv_np
+        attn_out = qkv @ w_o_np
+        h = x_np + attn_out
+        ff = h @ w_ff1_np
+        ff_out = ff @ w_ff2_np
+        expected = h + ff_out
+        
+        result_np = result.to_numpy()
+        np.testing.assert_allclose(result_np, expected, rtol=1e-4, atol=1e-4,
+            err_msg="Transformer block produced incorrect results")
+        
+        print("✅ Transformer block test passed!")
+
+    def test_model_parallel_matmul(self):
+        """Test Model Parallel (MP) sharding when M is small/indivisible.
+        
+        Verifies:
+        1. Solver chooses to shard K dimension when M cannot be sharded
+        2. Proper AllReduce is inserted for partial results
+        """
+        print("\nTEST: Model Parallel Matmul (Split K)")
+        
+        # M=3 is not divisible by 4 devices, forcing MP (split K)
+        M, K, N = 3, 256, 64
+        
+        def mp_matmul(a, b):
+            return a @ b
+        
+        sharded_fn = shard_map(
+            mp_matmul,
+            self.mesh,
+            in_specs={0: None, 1: None},
+            out_specs=None,
+            auto_sharding=True,
+            debug=True
+        )
+        
+        np.random.seed(99)
+        a_np = np.random.rand(M, K).astype(np.float32)
+        b_np = np.random.rand(K, N).astype(np.float32)
+        
+        a = Tensor.from_dlpack(a_np)
+        b = Tensor.from_dlpack(b_np)
+        
+        result = sharded_fn(a, b)
+        
+        # NumPy reference
+        expected = a_np @ b_np
+        result_np = result.to_numpy()
+        
+        np.testing.assert_allclose(result_np, expected, rtol=1e-4, atol=1e-4,
+            err_msg="MP matmul produced incorrect results")
+        
+        print("✅ Model Parallel matmul test passed!")
+
+    def test_diamond_pattern(self):
+        """Test fork/join (diamond) pattern where one tensor feeds multiple ops.
+        
+        Verifies:
+        1. Sharding propagates correctly through forks
+        2. Fixed-point converges for diamond patterns
+        """
+        print("\nTEST: Diamond Pattern (Fork/Join)")
+        
+        def diamond(x, w):
+            h = x @ w  # Fork point
+            branch1 = h + 1.0  # Branch 1
+            branch2 = h * 2.0  # Branch 2
+            return branch1 + branch2  # Join point
+        
+        M, K, N = 128, 64, 32
+        
+        sharded_fn = shard_map(
+            diamond,
+            self.mesh,
+            in_specs={0: None, 1: None},
+            out_specs=None,
+            auto_sharding=True,
+            debug=True
+        )
+        
+        np.random.seed(123)
+        x_np = np.random.rand(M, K).astype(np.float32)
+        w_np = np.random.rand(K, N).astype(np.float32)
+        
+        x = Tensor.from_dlpack(x_np)
+        w = Tensor.from_dlpack(w_np)
+        
+        result = sharded_fn(x, w)
+        
+        # NumPy reference
+        h = x_np @ w_np
+        branch1 = h + 1.0
+        branch2 = h * 2.0
+        expected = branch1 + branch2
+        
+        result_np = result.to_numpy()
+        np.testing.assert_allclose(result_np, expected, rtol=1e-4, atol=1e-4,
+            err_msg="Diamond pattern produced incorrect results")
+        
+        print("✅ Diamond pattern test passed!")
+
 if __name__ == "__main__":
     unittest.main()

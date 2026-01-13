@@ -248,12 +248,17 @@ class SimpleSolver:
         input_shapes = [tuple(tensors[t_id]["shape"]) for t_id in node["inputs"]]
         output_shapes = [tuple(tensors[t_id]["shape"]) for t_id in node["outputs"]]
         
+        equation = rule_info["equation"]
+        
         # Parse the sharding rule
         try:
-            template = OpShardingRuleTemplate.parse(rule_info["equation"], input_shapes)
+            template = OpShardingRuleTemplate.parse(equation, input_shapes)
             rule = template.instantiate(input_shapes, output_shapes)
-        except Exception:
-            # If rule parsing fails, skip propagation for this node
+        except Exception as e:
+            # If rule parsing fails, log warning and skip propagation for this node
+            if debug:
+                print(f"[Solver] WARNING: Failed to parse rule for node {node['id']} [{node['op_name']}]: {e}")
+                print(f"         Equation: {equation}")
             return False
         
         # Collect specs
