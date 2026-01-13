@@ -131,8 +131,9 @@ class ShardingGraphExtractor:
                         "factor_sizes": rule.factor_sizes
                     }
             except Exception as e:
-                # Fallback or log? For now, None.
-                pass
+                # Log the error in debug mode
+                if self.debug:
+                    print(f"[GraphExtractor] WARNING: Failed to get sharding_rule for node {i} [{op.name}]: {e}")
 
             cost = op.cost_model(input_shapes, output_shapes)
 

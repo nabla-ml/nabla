@@ -80,12 +80,21 @@ def shard_map(
 
             # Replay graph on duals
             for node_idx, refs in enumerate(traced.nodes):
-                if not refs.op_args: continue # Skip untraced constant subgraphs
+                if not refs.op_args:
+                    if debug and auto_sharding:
+                        print(f"[shard_map] WARNING: Skipping node {node_idx} (no op_args - constant subgraph)")
+                    continue  # Skip untraced constant subgraphs
 
                 dual_args = pytree.tree_map(_resolve_dual, refs.op_args)
                 
                 # AUTO SHARDING: Apply Input Constraints for this Node
-                if auto_sharding and "nodes" in solution and str(node_idx) in solution["nodes"]:
+                node_key = str(node_idx)
+                has_solution = auto_sharding and "nodes" in solution and node_key in solution["nodes"]
+                
+                if auto_sharding and not has_solution and debug:
+                    print(f"[shard_map] WARNING: No solution for node {node_idx} [{refs.op.name}]")
+                
+                if has_solution:
                     node_sol = solution["nodes"][str(node_idx)]
                     input_constraints = node_sol.get("inputs", {})
                     
@@ -108,9 +117,36 @@ def shard_map(
                     
                     dual_args = pytree.tree_unflatten(tree_def, flat_duals)
 
+
                 dual_kwargs = pytree.tree_map(_resolve_dual, refs.op_kwargs) if refs.op_kwargs else {}
                 
+                # DEBUG: Log sharding state before operation
+                if debug and auto_sharding:
+                    flat_check, _ = pytree.tree_flatten(dual_args)
+                    input_shardings = []
+                    for d in flat_check:
+                        if isinstance(d, Tensor) and hasattr(d, '_impl') and d._impl.sharding:
+                            input_shardings.append(str(d._impl.sharding))
+                        else:
+                            input_shardings.append("unsharded")
+                    print(f"[shard_map] Node {node_idx} [{refs.op.name}] INPUT shardings: {input_shardings}")
+                    if "nodes" in solution and str(node_idx) in solution["nodes"]:
+                        print(f"[shard_map]   Solver wanted inputs: {solution['nodes'][str(node_idx)].get('inputs', {})}")
+                
                 result = refs.op(*dual_args, **dual_kwargs)
+                
+                # DEBUG: Log output sharding after operation
+                if debug and auto_sharding:
+                    flat_res_check = [x for x in pytree.tree_leaves(result) if isinstance(x, Tensor)]
+                    output_shardings = []
+                    for r in flat_res_check:
+                        if hasattr(r, '_impl') and r._impl.sharding:
+                            output_shardings.append(str(r._impl.sharding))
+                        else:
+                            output_shardings.append("unsharded")
+                    print(f"[shard_map] Node {node_idx} [{refs.op.name}] OUTPUT shardings (eager): {output_shardings}")
+                    if "nodes" in solution and str(node_idx) in solution["nodes"]:
+                        print(f"[shard_map]   Solver wanted outputs: {solution['nodes'][str(node_idx)].get('outputs', {})}")
                 
                 # Update output duals
                 flat_res = [x for x in pytree.tree_leaves(result) if isinstance(x, Tensor)]

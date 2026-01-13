@@ -2,196 +2,316 @@
 # Nabla 2026
 # ===----------------------------------------------------------------------=== #
 
-"""Simple Solver: Optimizes sharding strategies based on cost model."""
+"""Simple Solver: Optimizes sharding strategies using propagation infrastructure.
+
+This solver integrates with the factor-based propagation system in propagation.py
+to enable bidirectional sharding flow. It uses cost heuristics to seed initial
+constraints, then propagates them through the graph.
+"""
 
 from __future__ import annotations
 
 import json
 from typing import Any, Dict, List, Optional, Tuple
 
+from ..sharding.spec import DeviceMesh, DimSpec, ShardingSpec
+from ..sharding.propagation import (
+    OpShardingRule,
+    OpShardingRuleTemplate,
+    propagate_sharding,
+    PropagationStrategy,
+)
+
+
 class SimpleSolver:
-    """Greedy solver that selects the best sharding strategy for each node."""
+    """Solver that uses factor-based propagation with cost-based seeding.
+    
+    The solver works in three phases:
+    1. Parse: Convert JSON graph into ShardingSpec objects
+    2. Seed: Apply cost-based heuristics to set initial constraints (e.g., matmul DP/MP)
+    3. Propagate: Use bidirectional propagation to flow constraints to all tensors
+    4. Export: Convert propagated specs to node-centric solution JSON
+    """
 
     def __init__(self, mesh_shape: Tuple[int, ...], axis_names: Tuple[str, ...]):
         self.mesh_shape = mesh_shape
         self.axis_names = axis_names
-        self.total_devices = 1
-        for d in mesh_shape:
-            self.total_devices *= d
+        self.mesh = DeviceMesh(
+            name="solver_mesh",
+            shape=mesh_shape,
+            axis_names=axis_names,
+            devices=list(range(self._compute_total_devices(mesh_shape)))
+        )
+        self.total_devices = self._compute_total_devices(mesh_shape)
+    
+    @staticmethod
+    def _compute_total_devices(shape: Tuple[int, ...]) -> int:
+        total = 1
+        for d in shape:
+            total *= d
+        return total
 
-    def solve(self, json_graph: str, debug: bool = False) -> Dict[int, Any]:
-        """Solve for optimal sharding specs.
+    def solve(self, json_graph: str, debug: bool = False) -> Dict[str, Any]:
+        """Solve for optimal sharding specs using propagation.
         
         Returns:
-            Dict mapping tensor_id -> ShardingSpec dict representation
+            Node-centric solution dict:
             {
-                "tensor_id": { "dims": [["x"], None], "replicated": [] }
+                "nodes": {
+                    "node_id": {
+                        "inputs": { "0": {"dims": [...], "replicated": []} },
+                        "outputs": { "0": {"dims": [...], "replicated": []} }
+                    }
+                }
             }
         """
         if debug:
-            print("\n[AutoSharding] Starting Solver...")
+            print("\n[AutoSharding] Starting Propagation-Based Solver...")
 
         graph = json.loads(json_graph)
         tensors = {t["id"]: t for t in graph["tensors"]}
         nodes = graph["nodes"]
         
-        solution = {}
+        # Phase 1: Create ShardingSpecs for all tensors
+        tensor_specs: Dict[int, ShardingSpec] = {}
+        for t_id, t_info in tensors.items():
+            shape = tuple(t_info["shape"])
+            spec = self._create_initial_spec(shape, t_info.get("fixed_sharding"))
+            tensor_specs[t_id] = spec
         
-        # Greedy node-by-node optimization
-        # In a real solver, we would propagate costs globally (DP or ILP).
-        # Here we just look at each op and pick the best local strategy.
+        if debug:
+            print(f"[Solver] Created {len(tensor_specs)} tensor specs")
         
-        # We need to track assigned sharding to ensure consistency?
-        # For now, let's just optimize independent ops and assume the propagation engine
-        # will handle the resharding logic/costs between them if they mismatch.
-        # But wait, if we pick A -> B mismatching, we pay cost. 
-        # The simple solver described in the plan:
-        # "Select strategy with Min Cost (Greedy for now)."
-        
+        # Phase 2: Cost-based seeding for key operations
+        # This sets initial constraints that propagation will spread
+        seeded_nodes: Dict[str, Dict] = {}
         for node in nodes:
             op_name = node["op_name"]
+            node_id = str(node["id"])
             
             if debug:
-                print(f"[Solver] Analyzing Node {node['id']}: {op_name}")
-            
-            # DEFAULT: Replicated (Cost = Base Compute)
-            # Todo: If inputs are already sharded, we might prefer preserving that?
+                print(f"[Solver] Analyzing Node {node_id}: {op_name}")
             
             if op_name == "matmul":
-                self._solve_matmul(node, tensors, solution, debug)
-            else:
-                # Default: Pass through or Replicated
-                pass
-                
+                seeding = self._seed_matmul(node, tensors, tensor_specs, debug)
+                if seeding:
+                    seeded_nodes[node_id] = seeding
+        
+        # Phase 3: FIXED-POINT propagation across entire graph
+        # Iterate until no changes, enabling true bidirectional flow
+        MAX_ITERATIONS = 100
+        for iteration in range(MAX_ITERATIONS):
+            changed = False
+            for node in nodes:
+                if self._propagate_node(node, tensors, tensor_specs, debug):
+                    changed = True
+            
+            if debug:
+                print(f"[Solver] Propagation iteration {iteration + 1}: changed={changed}")
+            
+            if not changed:
+                if debug:
+                    print(f"[Solver] Fixed-point reached after {iteration + 1} iterations")
+                break
+        else:
+            if debug:
+                print(f"[Solver] WARNING: Did not converge after {MAX_ITERATIONS} iterations")
+        
+        # Phase 4: Export to node-centric solution format
+        solution = self._export_solution(nodes, tensors, tensor_specs, seeded_nodes, debug)
+        
         if debug:
-            print(f"[Solver] Solution:\n{json.dumps(solution, indent=2)}")
+            print(f"[Solver] Final Solution:\n{json.dumps(solution, indent=2)}")
             print("-" * 50)
 
         return solution
-
-    def _solve_matmul(self, node: Dict, tensors: Dict, solution: Dict, debug: bool = False):
-        """Optimize Matmul Strategy."""
-        # Rule: mk,kn->mn
-        # Strategies:
-        # 1. Data Parallel (Split M): mk on x, kn repl -> mn on x. 
-        #    Compute = Base/N. Comm = 0 (if inputs are right).
-        # 2. Model Parallel (Split K): mk on x, kn on x -> mn partial -> AllReduce.
-        #    Compute = Base/N. Comm = AllReduce(MN).
+    
+    def _create_initial_spec(
+        self, shape: Tuple[int, ...], fixed: Optional[Dict]
+    ) -> ShardingSpec:
+        """Create initial ShardingSpec for a tensor."""
+        if fixed:
+            # Parse fixed constraint
+            dim_specs = []
+            for ax in fixed.get("dims", []):
+                if ax is None:
+                    dim_specs.append(DimSpec([], is_open=True))
+                else:
+                    dim_specs.append(DimSpec(ax, is_open=False))
+            replicated = frozenset(fixed.get("replicated", []))
+        else:
+            # Default: fully open (can be sharded by propagation)
+            dim_specs = [DimSpec([], is_open=True) for _ in shape]
+            replicated = frozenset()
         
+        return ShardingSpec(
+            mesh=self.mesh,
+            dim_specs=dim_specs,
+            replicated_axes=replicated
+        )
+    
+    def _seed_matmul(
+        self,
+        node: Dict,
+        tensors: Dict,
+        tensor_specs: Dict[int, ShardingSpec],
+        debug: bool = False
+    ) -> Optional[Dict]:
+        """Cost-based seeding for matmul: choose DP vs MP."""
         rule = node.get("sharding_rule")
-        if not rule: return
+        if not rule:
+            return None
         
         factor_sizes = rule.get("factor_sizes", {})
-        
-        # Extract shapes
-        # We assume standard dot product for simplicity of this prototype
-        # factors: m, k, n
-        
         m_size = factor_sizes.get("m", 1024)
         k_size = factor_sizes.get("k", 1024)
         n_size = factor_sizes.get("n", 1024)
         
         flops = node["compute_stats"]["flops"]
         
-        # Cost Model Constants (Arbitrary for demo)
-        TIME_PER_FLOP = 1e-12  # 1 TFLOPs device = 1e-12 s/flop? No 1e-12 is 1ps. 
-        # Say 1 GFLOPS device. 1e-9 s/flop.
-        # Let's say 1 unit of work.
-        
-        # Strategy 1: Data Parallel (Split M)
-        # We need to check if M is divisible by mesh size
-        # Let's assume 1D mesh for simplicity "data" axis
         axis_name = self.axis_names[0] if self.axis_names else "d"
         mesh_dim = self.mesh_shape[0] if self.mesh_shape else 1
         
+        # Cost calculation
         dp_cost = float("inf")
         if m_size % mesh_dim == 0:
-            # Parallel compute
-            compute = flops / mesh_dim
-            # Comm cost: 0 (assuming inputs available)
-            dp_cost = compute
-            
-        # Strategy 2: Model Parallel (Split K)
+            dp_cost = flops / mesh_dim
+        
         mp_cost = float("inf")
         if k_size % mesh_dim == 0:
             compute = flops / mesh_dim
-            # Comm cost: AllReduce(Output Size)
-            # Output is M * N * 4 bytes
             comm_bytes = m_size * n_size * 4
-            # Bandwidth 10 GB/s -> 1e10 bytes/s
-            comm_time = comm_bytes / 1e10 
-            # We need to normalize units. Let's assume flops is dominant usually?
-            # 2e9 flops vs 4MB comm. 
-            # 2e9 * 1e-12 = 0.002s. 
-            # 4e6 / 1e10 = 0.0004s.
-            # So MP is viable.
-            
-            # Using a simplified weight
-            COMM_PENALTY_WEIGHT = 1000.0 # Emphasize comm cost
+            COMM_PENALTY_WEIGHT = 1000.0
             mp_cost = compute + (comm_bytes * COMM_PENALTY_WEIGHT)
 
         if debug:
             print(f"  > Costs: DP={dp_cost:.2e}, MP={mp_cost:.2e} (M={m_size}, K={k_size}, N={n_size})")
 
-        # Decision
-        solution.setdefault("nodes", {})
-             
-        # Matmul output (generic logic from before but now structured)
-        # Out ID
-        out_id = node["outputs"][0]
-        out_rank = len(tensors[out_id]["shape"])
-             
-        # Inputs
+        # Apply seeding to tensor specs
         in_a_id = node["inputs"][0]
         in_b_id = node["inputs"][1]
+        out_id = node["outputs"][0]
+        
         rank_a = len(tensors[in_a_id]["shape"])
         rank_b = len(tensors[in_b_id]["shape"])
-
-        # Prepare spec structures
-        node_solution = {
-            "inputs": {},
-            "outputs": {}
-        }
-             
+        out_rank = len(tensors[out_id]["shape"])
+        
+        strategy = "none"
+        
         if dp_cost < mp_cost and dp_cost != float("inf"):
+            strategy = "dp"
             if debug:
                 print("  > Selected Strategy: Data Parallel (Split M)")
-                 
-            # DP Specs:
-            # Output: (..., m, n) -> Split M (dim -2)
-            dims_out = [None] * out_rank
-            dims_out[-2] = [axis_name]
-                 
-            # Input A: (..., m, k) -> Split M (dim -2)
-            dims_a = [None] * rank_a
-            dims_a[-2] = [axis_name]
-                 
-            # Input B: (..., k, n) -> Replicated
-            dims_b = [None] * rank_b
-                 
-            node_solution["outputs"]["0"] = {"dims": dims_out, "replicated": []}
-            node_solution["inputs"]["0"] = {"dims": dims_a, "replicated": []}
-            node_solution["inputs"]["1"] = {"dims": dims_b, "replicated": []}
-                 
+            
+            # Seed constraints with low priority (will be propagated)
+            self._set_dim_sharding(tensor_specs[in_a_id], -2, [axis_name])
+            self._set_dim_sharding(tensor_specs[out_id], -2, [axis_name])
+            # B stays replicated (open)
+            
         elif mp_cost != float("inf"):
+            strategy = "mp"
             if debug:
                 print("  > Selected Strategy: Model Parallel (Split K)")
-                 
-            # MP Specs:
-            # Output: (..., m, n) -> Replicated
-            dims_out = [None] * out_rank
-                 
-            # Input A: (..., m, k) -> Split K (dim -1)
-            dims_a = [None] * rank_a
-            dims_a[-1] = [axis_name]
             
-            # Input B: (..., k, n) -> Split K (dim -2)
-            dims_b = [None] * rank_b
-            dims_b[-2] = [axis_name]
-                 
-            node_solution["outputs"]["0"] = {"dims": dims_out, "replicated": []}
-            node_solution["inputs"]["0"] = {"dims": dims_a, "replicated": []}
-            node_solution["inputs"]["1"] = {"dims": dims_b, "replicated": []}
-             
-        # Store in main solution
-        solution["nodes"][str(node["id"])] = node_solution
+            self._set_dim_sharding(tensor_specs[in_a_id], -1, [axis_name])
+            self._set_dim_sharding(tensor_specs[in_b_id], -2, [axis_name])
+            # Output replicated (open)
+        
+        return {"strategy": strategy, "axis": axis_name}
+    
+    def _set_dim_sharding(
+        self, spec: ShardingSpec, dim_idx: int, axes: List[str]
+    ) -> None:
+        """Set sharding for a dimension (handles negative indices)."""
+        if dim_idx < 0:
+            dim_idx = len(spec.dim_specs) + dim_idx
+        if 0 <= dim_idx < len(spec.dim_specs):
+            spec.dim_specs[dim_idx] = DimSpec(axes=axes, is_open=True, priority=5)
+    
+    def _propagate_node(
+        self,
+        node: Dict,
+        tensors: Dict,
+        tensor_specs: Dict[int, ShardingSpec],
+        debug: bool = False
+    ) -> bool:
+        """Propagate sharding through a single node using factor-based propagation.
+        
+        Returns:
+            True if any specs were modified, False otherwise.
+        """
+        rule_info = node.get("sharding_rule")
+        if not rule_info or "equation" not in rule_info:
+            return False
+        
+        # Get input/output shapes
+        input_shapes = [tuple(tensors[t_id]["shape"]) for t_id in node["inputs"]]
+        output_shapes = [tuple(tensors[t_id]["shape"]) for t_id in node["outputs"]]
+        
+        # Parse the sharding rule
+        try:
+            template = OpShardingRuleTemplate.parse(rule_info["equation"], input_shapes)
+            rule = template.instantiate(input_shapes, output_shapes)
+        except Exception:
+            # If rule parsing fails, skip propagation for this node
+            return False
+        
+        # Collect specs
+        input_specs = [tensor_specs[t_id] for t_id in node["inputs"]]
+        output_specs = [tensor_specs[t_id] for t_id in node["outputs"]]
+        
+        # Propagate bidirectionally and return whether changes occurred
+        changed = propagate_sharding(
+            rule,
+            input_specs,
+            output_specs,
+            strategy=PropagationStrategy.BASIC
+        )
+        return changed
+    
+    def _export_solution(
+        self,
+        nodes: List[Dict],
+        tensors: Dict,
+        tensor_specs: Dict[int, ShardingSpec],
+        seeded_nodes: Dict[str, Dict],
+        debug: bool = False
+    ) -> Dict[str, Any]:
+        """Export propagated specs to node-centric solution format."""
+        solution = {"nodes": {}}
+        
+        for node in nodes:
+            node_id = str(node["id"])
+            
+            # Build node solution
+            node_sol = {
+                "inputs": {},
+                "outputs": {}
+            }
+            
+            # Export input specs
+            for i, t_id in enumerate(node["inputs"]):
+                spec = tensor_specs[t_id]
+                node_sol["inputs"][str(i)] = self._spec_to_dict(spec)
+            
+            # Export output specs
+            for i, t_id in enumerate(node["outputs"]):
+                spec = tensor_specs[t_id]
+                node_sol["outputs"][str(i)] = self._spec_to_dict(spec)
+            
+            solution["nodes"][node_id] = node_sol
+        
+        return solution
+    
+    def _spec_to_dict(self, spec: ShardingSpec) -> Dict[str, Any]:
+        """Convert ShardingSpec to dict format for JSON."""
+        dims = []
+        for ds in spec.dim_specs:
+            if ds.axes:
+                dims.append(list(ds.axes))
+            else:
+                dims.append(None)
+        return {
+            "dims": dims,
+            "replicated": list(spec.replicated_axes)
+        }
