@@ -1,5 +1,10 @@
-The user has created the follwign impeltaito plan to make the shard_map tranfromation in nabla/transforms/shard_map.py a working automated sharding system. However, this is sitll in its early stages and needs to be further developed. Teh user is quite happy with what we have right now. This system relies ont eh fact that each operaiton (if the inptus are sharded) correctly uses its local sharding_rule to determine weather after a respective spmd-call on the respetive maxpr-method, we need any resharing or communication. Teh shard_map trafo itself retreives an (probalby unsharded) trace from the orignal function, then apsse sit to the solver as a JSON with mesh and shape annoations,a nd sharidng constraints, then the solver returns a sharding plan, which is then applied to the original trace by replaying each oepration in teh trace given the now specified sharding constraints on the input tensors and output tensors. However the user is unsure if this system actuayl works correcty and want the new Agent to rigorously investigate thsi behavrious. The user wants the solver to work in a forward and backward way, and want it to be able to use all the infroamtion availabe by our sharding representation/propagation as stated int eh nabla/sharding module. The user wants the Agent to read the repsetive CLAUDE.md files and the repstive python files to gather the correct context, and to do the apporiat research.
+The user has created the following implementation plan to make the shard_map transformation in nabla/transforms/shard_map.py a working automated sharding system. However, this is still in its early stages and needs to be further developed. The user is quite happy with what we have right now. This system relies on the fact that each operation (if the inputs are sharded) correctly uses its local sharding_rule to determine whether after a respective spmd-call on the respective maxpr-method, we need any resharding or communication. The shard_map trafo itself retrieves an (probably unsharded) trace from the original function, then passes it to the solver as a JSON with mesh and shape annotations, and sharding constraints, then the solver returns a sharding plan, which is then applied to the original trace by replaying each operation in the trace given the now specified sharding constraints on the input tensors and output tensors. However the user is unsure if this system actually works correctly and want the new Agent to rigorously investigate this behavior. The user wants the solver to work in a forward and backward way, and want it to be able to use all the information available by our sharding representation/propagation as stated in the nabla/sharding module. The user wants the Agent to read the respective CLAUDE.md files and the respective python files to gather the correct context, and to do the appropriate research.
 
+
+Here is the original implementation plan after we added the shard_map trafo, and before we started working on the actually auto-sharding capabilities/solver/JSON-representation:
+
+
+START:
 
 # Automated Sharding System Design
 
@@ -123,3 +128,11 @@ While the current system is functional and verified for basic workflows, several
 4.  **Framework Integration**:
     -   **Current**: Standalone Nabla.
     -   **Missing**: Adapters to ingest graphs from JAX/PyTorch or lowering to XLA/StableHLO sharding annotations.
+
+END
+
+End of the original implementation plan, which has already been implemented partially, but still needs a lot of work to be turned into a reliable auto-sharding system. We stick to a primitive, greedy, !bidirectional!, Python-based solver for now, but expect this to change to a proper, ILP-based, dynamic-programming-based, C++-based solver in the future. We should plan for this type of solver now already, and think about how to represent the problem accordingly!
+
+If the Agent thinks that we need to change things about the implementation plan, it should try to convince the user so verbally first, then create its own new implementation plan as an artifact, and then ask the user to proceed with this plan.
+
+General goals: The agent should create concise, readable and elegant code, which works nicely together with what the library provides already.
