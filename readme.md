@@ -1,12 +1,16 @@
-# Nabla
+# NABLA
 
-Nabla is a Machine Learning library for the emerging Mojo/Python ecosystem, featuring:
+Welcome! Nabla is a Machine Learning library for the emerging Mojo/Python ecosystem, featuring:
 
 - Gradient computation the PyTorch way (imperatively via .backward())
 - Purely-functional, JAX-like composable function transformations: `grad`, `vmap`, `jit`, etc.
 - Custom differentiable CPU/GPU kernels
 
 For tutorials and API reference, visit: [nablaml.com](https://nablaml.com/index.html)
+
+> NOTE: Go to the latest release branch to explore its code: [nabla/v25.7](https://github.com/nabla-ml/nabla/tree/nabla/v25.7).
+
+> *Why does this main branch look so different compared to the latest release?* We are currently working on a complete rewrite of Nabla, which will include Sharding, distributed training, a new execution model, and many more cool features. Stay tuned! 🔥
 
 ## Installation
 
@@ -63,6 +67,8 @@ pip install -e ".[dev]"
 ```
 
 ## Repository Structure
+
+> NOTE: Find the following repository structure on the latest release branch: [nabla/v25.7](https://github.com/nabla-ml/nabla/tree/nabla/v25.7).
 
 <!-- ![alt text](assets/image.png) -->
 
