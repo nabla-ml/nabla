@@ -51,30 +51,6 @@ class Operation(ABC):
         """Estimate compute cost (FLOPs). Default is 0.0 (negligible)."""
         return 0.0
     
-    def communication_cost(
-        self,
-        input_specs: list,  # List[ShardingSpec]
-        output_spec,  # ShardingSpec
-        mesh,  # DeviceMesh
-        **kwargs,
-    ) -> float:
-        """Estimate communication cost based on sharding.
-        
-        Default is 0.0 (no communication needed for elementwise ops).
-        Override in ops that trigger collective communication (e.g., matmul with
-        sharded contracting dimension).
-        
-        Args:
-            input_specs: Sharding specs for each input tensor
-            output_spec: Sharding spec for output tensor
-            mesh: Device mesh for communication
-            **kwargs: Op-specific attributes (e.g. axis, keepdims)
-            
-        Returns:
-            Estimated communication cost (normalized units)
-        """
-        return 0.0
-    
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Unified dispatch for all operations.
         
