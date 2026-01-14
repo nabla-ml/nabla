@@ -94,3 +94,5 @@ poetry.lock
 tmp_experiments
 mojo_experiments
 depr_nabla
+tmp_shardy_ref
+tmp_auto_sharding_refs
