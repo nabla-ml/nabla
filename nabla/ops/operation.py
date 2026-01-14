@@ -60,6 +60,33 @@ class Operation(ABC):
         """
         return 0.0
     
+    def memory_cost(
+        self, 
+        input_shapes: list[tuple[int, ...]], 
+        output_shapes: list[tuple[int, ...]], 
+        dtype_bytes: int = 4
+    ) -> int:
+        """Estimate memory usage (bytes) for output tensors.
+        
+        Used by the solver for memory-aware sharding decisions. This estimates
+        the memory required to store the operation's output tensors.
+        
+        Args:
+            input_shapes: Shapes of input tensors
+            output_shapes: Shapes of output tensors
+            dtype_bytes: Bytes per element (default 4 for float32)
+        
+        Returns:
+            Total bytes for all output tensors.
+        """
+        total = 0
+        for shape in output_shapes:
+            elements = 1
+            for dim in shape:
+                elements *= dim
+            total += elements * dtype_bytes
+        return total
+    
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Unified dispatch for all operations.
         

@@ -156,8 +156,13 @@ class BroadcastToOp(LogicalShapeOperation):
         """Broadcast: input dims align to output SUFFIX (numpy semantics).
         
         Uses shape-aware template to handle dimension expansion (size 1 -> N).
+        Handles scalar inputs (rank 0) by treating them as fully replicated.
         """
         from ..sharding.propagation import OpShardingRuleTemplate
+        
+        if not input_shapes:
+            return None
+            
         in_shape = input_shapes[0]
         
         # Use target shape from kwargs if output_shapes not provided (SPMD case)
@@ -171,6 +176,17 @@ class BroadcastToOp(LogicalShapeOperation):
 
         in_rank = len(in_shape)
         out_rank = len(out_shape)
+        
+        # Handle scalar input (rank 0): no input dims to map
+        # The output is purely new dimensions - no sharding propagates from input
+        if in_rank == 0:
+            out_factors = [f"d{i}" for i in range(out_rank)]
+            out_mapping = {i: [out_factors[i]] for i in range(out_rank)}
+            # Empty input mapping for scalar
+            in_mapping = {}
+            return OpShardingRuleTemplate([in_mapping], [out_mapping]).instantiate(
+                input_shapes, output_shapes
+            )
         
         # Factors for output dimensions
         out_factors = [f"d{i}" for i in range(out_rank)]

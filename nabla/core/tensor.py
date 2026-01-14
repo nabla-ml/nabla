@@ -516,11 +516,27 @@ class Tensor(DLPackArray, HasTensorValue):
         return id(self)
 
     def __dlpack__(self, stream: int | None = None):
+        # If sharded, gather first to present a single global tensor view
+        if self._impl.is_sharded and self._impl.sharding and not self._impl.sharding.is_fully_replicated():
+            from ..ops.communication import gather_all_axes
+            gathered = gather_all_axes(self)
+            gathered._sync_realize()
+            assert gathered.storage is not None
+            return gathered.storage.__dlpack__(stream=stream)
+            
         self._sync_realize()
         assert self.storage is not None
         return self.storage.__dlpack__(stream=stream)
 
     def __dlpack_device__(self):
+        # If sharded, gather first to present a single global tensor view
+        if self._impl.is_sharded and self._impl.sharding and not self._impl.sharding.is_fully_replicated():
+            from ..ops.communication import gather_all_axes
+            gathered = gather_all_axes(self)
+            gathered._sync_realize()
+            assert gathered.storage is not None
+            return gathered.storage.__dlpack_device__()
+
         self._sync_realize()
         assert self.storage is not None
         return self.storage.__dlpack_device__()
