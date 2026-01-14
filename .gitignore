@@ -90,3 +90,7 @@ __pypackages__/
 
 # Poetry
 poetry.lock
+
+tmp_experiments
+mojo_experiments
+depr_nabla
