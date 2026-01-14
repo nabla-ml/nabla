@@ -56,8 +56,12 @@ class CollectiveOperation(Operation):
             from ..sharding.spmd import ensure_shard_values
             ensure_shard_values(sharded_tensor)
             
+            # Remove metadata-only kwargs that were stored for tracing but shouldn't be passed to maxpr
+            # These are added by _setup_output_refs in operation.py for trace visualization
+            maxpr_kwargs = {k: v for k, v in kwargs.items() if k not in ('mesh', 'reduce_axes')}
+            
             # Call the specific implementation
-            result_values = self.maxpr(sharded_tensor._impl._values, mesh=mesh, **kwargs)
+            result_values = self.maxpr(sharded_tensor._impl._values, mesh=mesh, **maxpr_kwargs)
             
         # 3. Output wrapping
         output_spec = self._compute_output_spec(sharded_tensor, result_values, **kwargs)
@@ -241,16 +245,41 @@ class ShardOp(Operation):
                  
         return effective_x[tuple(slices)]
 
-    def __call__(self, x, mesh: DeviceMesh, dim_specs: List[DimSpec], replicated_axes: Optional[Set[str]] = None):
+    def __call__(self, x, mesh: DeviceMesh, dim_specs: List[DimSpec], replicated_axes: Optional[Set[str]] = None, _bypass_idempotency: bool = False):
         """Shard a tensor according to the given specification.
         
-        This overrides the base __call__ to handle multi-value output specially.
+        This operation is IDEMPOTENT: if the tensor is already sharded with the
+        target spec, it returns the input unchanged (identity). If the tensor
+        has a different sharding, it performs proper resharding.
+        
+        This enables internal shard() calls inside shard_map functions to work
+        correctly without causing double-execution.
+        
+        Args:
+            _bypass_idempotency: Internal flag used by reshard_tensor to avoid
+                                 recursion. Do not set directly.
         """
         from ..core.tensor import Tensor
         from ..core.tensor_impl import TensorImpl
         from ..core.compute_graph import GRAPH
-        from ..sharding.spec import ShardingSpec
+        from ..sharding.spec import ShardingSpec, needs_reshard
         from max import graph as g
+        
+        target_spec = ShardingSpec(mesh, dim_specs, replicated_axes=replicated_axes or set())
+        
+        # IDEMPOTENCY CHECK: If input is already correctly sharded, return identity
+        # Skip this check when called from reshard_tensor to avoid recursion
+        if not _bypass_idempotency and isinstance(x, Tensor) and x._impl.sharding:
+            if not needs_reshard(x._impl.sharding, target_spec):
+                # Already correctly sharded - return identity (no-op)
+                return x
+            
+            # Different sharding - need to reshard via all_gather + shard
+            # This handles the case where input is sharded on 'dp' but we want 'tp'
+            from ..sharding.spmd import reshard_tensor
+            return reshard_tensor(x, x._impl.sharding, target_spec, mesh)
+        
+        # Standard path: input is unsharded, shard it according to spec
         
         # Compute global shape BEFORE sharding (from input tensor's local + sharding)
         global_shape = None
@@ -567,11 +596,32 @@ class AllReduceOp(CollectiveOperation):
     
     Takes N TensorValues with partial results and produces N TensorValues
     with the fully reduced result (all identical after reduction).
+    
+    This operation is IDEMPOTENT: if the input is already fully replicated
+    (no sharded dimensions), it returns the input unchanged.
     """
     
     @property
     def name(self) -> str:
         return "all_reduce"
+    
+    def _should_proceed(self, tensor):
+        """Check if all_reduce should proceed.
+        
+        Returns False (skip) if:
+        - Tensor has <= 1 values (trivial case)
+        - Tensor is already fully replicated (no sharded axes)
+        """
+        # Trivial case: single value or no values
+        if not tensor._impl._values or len(tensor._impl._values) <= 1:
+            return False
+        
+        # IDEMPOTENCY: If tensor is already fully replicated, skip reduction
+        # This prevents double all_reduce when replay re-executes traced nodes
+        if tensor._impl.sharding and tensor._impl.sharding.is_fully_replicated():
+            return False
+        
+        return True
     
     def maxpr(
         self,

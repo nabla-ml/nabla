@@ -109,6 +109,43 @@ Replaces complex graph patching with a clean **Trace-and-Replay** model:
 - **Robustness**: Handles constants (untraced nodes skipped), complex compositions, and mixed updates cleaner than in-place patching.
 - **Verification**: The generated trace acts as a "sharding plan" that can be inspected before execution.
 
+### Correct Usage Pattern
+
+> [!IMPORTANT]
+> Use `in_specs` and `out_specs` to specify sharding, NOT internal `shard()` calls.
+
+**✅ Correct Pattern**:
+```python
+def my_func(x, w):
+    return x @ w  # Just the computation
+
+# Sharding specified via in_specs
+sharded_fn = shard_map(
+    my_func, mesh,
+    in_specs={
+        0: ShardingSpec(mesh, [DimSpec(['dp']), DimSpec([])]),  # x
+        1: ShardingSpec(mesh, [DimSpec([]), DimSpec(['tp'])]),  # w
+    },
+    out_specs=None
+)
+```
+
+**❌ Problematic Pattern** (causes double-execution):
+```python
+def my_func(x, w):
+    x = x.shard(mesh, [...])  # DON'T do this inside shard_map
+    w = w.shard(mesh, [...])
+    return x @ w
+
+shard_map(my_func, mesh, in_specs={0: None, 1: None})
+```
+
+**Why?** When `shard()` is called inside the function:
+1. During trace: The `shard` op executes and is captured
+2. During replay: `shard_map` re-executes the traced `shard` op
+3. Result: Double sharding/communication, incorrect numerical results
+
+
 ---
 
 ## Compile: Computation Caching

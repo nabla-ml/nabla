@@ -423,7 +423,8 @@ def reshard_tensor(tensor: "Tensor", from_spec: Optional["ShardingSpec"],
             result = all_gather(result, axis=dim)
     
     # Apply new sharding (local slicing for new/extended axes)
-    result = shard_op(result, mesh, to_spec.dim_specs)
+    # Use _bypass_idempotency to prevent recursion back to reshard_tensor
+    result = shard_op(result, mesh, to_spec.dim_specs, _bypass_idempotency=True)
     
     return result
 

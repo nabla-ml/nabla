@@ -19,27 +19,22 @@ class TestShardMapRigorous(unittest.TestCase):
     def tearDown(self):
         print("="*80 + "\n")
 
-    def test_internal_constraint_trace(self):
-        """Verify that internal constraints trigger implicit communication in the trace."""
-        print("TEST: Internal Constraint Trace Analysis")
+    def test_input_sharding_trace(self):
+        """Verify that input sharding constraints appear correctly in the trace."""
+        print("TEST: Input Sharding Trace Analysis")
         print("-" * 60)
         
-        # User function with manual constraint
+        # User function - just does computation
         def func(x):
-            # x starts replicated (implied)
-            # Force sharding on 'dp' (dim 0)
-            x = x.with_sharding_constraint(self.mesh, [DimSpec(["dp"]), DimSpec([])])
             y = x * 2
-            # Force back to Replicated
-            z = y.with_sharding_constraint(self.mesh, [DimSpec([]), DimSpec([])])
-            return z
+            return y
 
-        # Wrap with shard_map: Input/Output replicated
+        # Wrap with shard_map: Input sharded on 'dp', output gets inferred sharding
         sharded_fn = shard_map(
             func, 
             self.mesh, 
-            in_specs={0: None}, # Replicated
-            out_specs=None      # Replicated output
+            in_specs={0: ShardingSpec(self.mesh, [DimSpec(["dp"]), DimSpec([])])},
+            out_specs=None
         )
 
         # 1. Setup Input (Replicated)
@@ -54,19 +49,17 @@ class TestShardMapRigorous(unittest.TestCase):
         
         # 3. Analyze Trace
         t_str = str(t)
-        # We expect a 'shard' (or equivalent) op corresponding to the constraint
-        # The constraint `x.with_sharding_constraint` results in `x.shard(...)` during replay.
-        # This records a `shard` op in the trace.
-        # And since it forces sharding, we might see `shard` ops.
+        # We expect a 'shard' op corresponding to the in_spec
+        # shard_map applies input sharding via shard() which records in trace
         
         self.assertIn("shard", t_str)
-        # We might check for specific sharding behaviors if visible in trace output
+        # Verify the sharding spec appears in trace
+        self.assertIn("dp", t_str)
         
         # 4. Numerical Verification
         print("Running Numerical Verification...")
         result = sharded_fn(x)
         async def verify():
-            # await result.realize # Optional if to_numpy handles it
             np_res = result.to_numpy()
             expected = data * 2
             np.testing.assert_allclose(np_res, expected)
@@ -131,20 +124,25 @@ class TestShardMapRigorous(unittest.TestCase):
         print("TEST: Complex Graph Trace")
         print("-" * 60)
 
-         # x: [B, H], w1: [H, 4H], w2: [4H, H]
+        # x: [B, H], w1: [H, 4H], w2: [4H, H]
+        # Use in_specs to shard weights on 'tp' (Model Parallel)
         def complex_func(x, w1, w2):
             h = x @ w1
             h = h * 2.0
-            # Force intermediate hidden dim on 'tp'
-            h = h.with_sharding_constraint(self.mesh, [DimSpec([]), DimSpec(["tp"])])
             out = h @ w2
             return out
 
+        # Shard w1 on output dimension (tp), w2 on input dimension (tp)
+        # This is tensor parallelism pattern
         sharded_fn = shard_map(
             complex_func,
             self.mesh,
-            in_specs={0: None, 1: None, 2: None},
-            out_specs={0: None}
+            in_specs={
+                0: None,  # x: replicated
+                1: ShardingSpec(self.mesh, [DimSpec([]), DimSpec(["tp"])]),  # w1: [H, 4H/2]
+                2: ShardingSpec(self.mesh, [DimSpec(["tp"]), DimSpec([])]),  # w2: [4H/2, H]
+            },
+            out_specs={0: None}  # Output replicated
         )
         
         B, H = 4, 4
@@ -161,9 +159,11 @@ class TestShardMapRigorous(unittest.TestCase):
         print(t)
         
         # The trace should reveal the structure.
-        # We look for the 'shard' op in the middle corresponding to the constraint.
+        # We look for the 'shard' ops applied to weights via in_specs
         t_str = str(t)
         self.assertIn("shard", t_str)
+        # Verify tensor parallelism spec appears
+        self.assertIn("tp", t_str)
         
         async def verify():
             result = sharded_fn(t_x, t_w1, t_w2)

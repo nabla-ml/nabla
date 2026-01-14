@@ -76,7 +76,25 @@ def shard_map(
             for i, x in enumerate(flat_args):
                 if isinstance(x, Tensor):
                     spec = in_specs.get(i)
-                    x.dual = x.shard(mesh, spec.dim_specs) if spec else x
+                    if spec:
+                        # Check if input is already sharded with a DIFFERENT spec
+                        from ..sharding.spec import needs_reshard
+                        if x._impl.sharding and needs_reshard(x._impl.sharding, spec):
+                            # Pre-sharded with different spec - use existing sharding
+                            # Resharding would cause shape mismatch with traced constants
+                            import warnings
+                            warnings.warn(
+                                f"shard_map input {i} is already sharded with {x._impl.sharding} "
+                                f"but in_spec wants {spec}. Using existing sharding. "
+                                f"To force a specific sharding, pass an unsharded tensor.",
+                                UserWarning
+                            )
+                            x.dual = x
+                        else:
+                            # Unsharded or same spec - apply in_spec
+                            x.dual = x.shard(mesh, spec.dim_specs)
+                    else:
+                        x.dual = x
 
             # Replay graph on duals
             for node_idx, refs in enumerate(traced.nodes):
