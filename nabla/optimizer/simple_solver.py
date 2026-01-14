@@ -163,7 +163,8 @@ class SimpleSolver:
         - DP (Data Parallel): Split M dimension, no AllReduce needed
         - MP (Model Parallel): Split K dimension, requires AllReduce on output
         """
-        from ..sharding.cost_model import allreduce_cost
+        from ..ops.binary import matmul
+        from ..sharding.spec import ShardingSpec, DimSpec
         
         rule = node.get("sharding_rule")
         if not rule:
@@ -191,9 +192,48 @@ class SimpleSolver:
         mp_cost = float("inf")
         if k_size % mesh_dim == 0:
             mp_compute = flops / mesh_dim
-            # Output is M×N, dtype=float32 (4 bytes)
-            output_bytes = m_size * n_size * 4
-            mp_comm = allreduce_cost(output_bytes, self.mesh, [axis_name])
+            
+            # Create hypothetical specs for MP scenario to query cost
+            # Input A: [..., M, K] -> shard K (-1)
+            # Input B: [..., K, N] -> shard K (-2)
+            # Output: [..., M, N] -> replicated (start with, but actually parallel execution produces partials)
+            
+            # NOTE: communication_cost expects global shapes
+            shape_a = tuple(tensors[node["inputs"][0]]["shape"])
+            shape_b = tuple(tensors[node["inputs"][1]]["shape"])
+            shape_out = tuple(tensors[node["outputs"][0]]["shape"])
+            
+            # Construct dummy specs consistent with MP strategy
+            # We only care about the sharded axes for cost calculation
+            
+            # A: Shard last dim (K)
+            dims_a = [DimSpec([]) for _ in shape_a]
+            dims_a[-1] = DimSpec([axis_name])
+            spec_a = ShardingSpec(self.mesh, dims_a)
+            
+            # B: Shard second to last dim (K)
+            dims_b = [DimSpec([]) for _ in shape_b]
+            if len(dims_b) >= 2:
+                dims_b[-2] = DimSpec([axis_name])
+            spec_b = ShardingSpec(self.mesh, dims_b)
+            
+            # Output: Initally empty (sharding determined by op) 
+            # or we pass what we expect? 
+            # communication_cost check inputs to see if reduction is needed.
+            # Output spec argument is currently unused in MatmulOp.communication_cost logic, 
+            # but good to pass a placeholder.
+            dims_out = [DimSpec([]) for _ in shape_out]
+            spec_out = ShardingSpec(self.mesh, dims_out)
+            
+            # Query Op for cost
+            mp_comm = matmul.communication_cost(
+                [spec_a, spec_b], 
+                [spec_out], 
+                [shape_a, shape_b], 
+                [shape_out], 
+                self.mesh
+            )
+            
             mp_cost = mp_compute + mp_comm
 
         if debug:

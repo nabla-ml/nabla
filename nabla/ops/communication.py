@@ -25,10 +25,6 @@ if TYPE_CHECKING:
     from ..sharding.spec import DeviceMesh, DimSpec, ShardingSpec
 
 
-def _is_distributed(mesh: "DeviceMesh") -> bool:
-    """Check if mesh has unique device refs (true distributed vs simulated)."""
-    return mesh is not None and len(set(mesh.device_refs)) == len(mesh.device_refs)
-
 
 class CollectiveOperation(Operation):
     """Base class for collective communication operations.
@@ -154,7 +150,7 @@ class ShardOp(Operation):
         for shard_idx in range(num_shards):
             val = self._slice_for_device(x, global_shape, spec, shard_idx, mesh)
             
-            if _is_distributed(mesh):
+            if mesh.is_distributed:
                 val = ops.transfer_to(val, mesh.device_refs[shard_idx])
             shard_values.append(val)
             
@@ -356,6 +352,54 @@ class AllGatherOp(Operation):
     @property
     def name(self) -> str:
         return "all_gather"
+
+    def communication_cost(
+        self, 
+        input_specs: list["ShardingSpec"], 
+        output_specs: list["ShardingSpec"], 
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        mesh: "DeviceMesh"
+    ) -> float:
+        """Estimate AllGather cost."""
+        
+        if not output_shapes:
+            return 0.0
+            
+        # AllGather produces the full replicated tensor.
+        # We need the size of the LOCAL shard (input) for the cost formula.
+        # Approximation: Total Size / Num Devices
+        
+        # Calculate TOTAL bytes
+        num_elements = 1
+        for d in output_shapes[0]:
+            num_elements *= d
+        total_size_bytes = num_elements * 4
+        
+        local_bytes = total_size_bytes // (len(mesh.devices) or 1)
+        
+        return self.estimate_cost(local_bytes, mesh, mesh.axis_names)
+
+    @staticmethod
+    def estimate_cost(
+        size_bytes: int,
+        mesh: "DeviceMesh",
+        axes: list[str],
+    ) -> float:
+        """Estimate cost of AllGather across specified mesh axes."""
+        if not axes:
+            return 0.0
+        
+        n_devices = 1
+        for axis in axes:
+            n_devices *= mesh.get_axis_size(axis)
+        
+        if n_devices <= 1:
+            return 0.0
+        
+        bandwidth = getattr(mesh, 'bandwidth', 1.0)
+        cost = (n_devices - 1) / n_devices * size_bytes * n_devices / bandwidth
+        return cost
     
     def maxpr(
         self,
@@ -378,7 +422,7 @@ class AllGatherOp(Operation):
             coordinates on OTHER (non-gathered) mesh axes.
         """
         # DISTRIBUTED: Use native MAX allgather
-        if _is_distributed(mesh):
+        if mesh.is_distributed:
             from max.graph.ops.allgather import allgather as max_allgather
             from max.graph.type import BufferType
             from max.dtype import DType
@@ -604,6 +648,47 @@ class AllReduceOp(CollectiveOperation):
     @property
     def name(self) -> str:
         return "all_reduce"
+
+    def communication_cost(
+        self, 
+        input_specs: list["ShardingSpec"], 
+        output_specs: list["ShardingSpec"], 
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        mesh: "DeviceMesh"
+    ) -> float:
+        """Estimate AllReduce cost."""
+        if not input_shapes:
+            return 0.0
+            
+        # Calculate bytes
+        num_elements = 1
+        for d in input_shapes[0]:
+            num_elements *= d
+        size_bytes = num_elements * 4
+        
+        return self.estimate_cost(size_bytes, mesh, mesh.axis_names)
+
+    @staticmethod
+    def estimate_cost(
+        size_bytes: int,
+        mesh: "DeviceMesh",
+        axes: list[str],
+    ) -> float:
+        """Estimate cost of AllReduce across specified mesh axes."""
+        if not axes:
+            return 0.0
+        
+        n_devices = 1
+        for axis in axes:
+            n_devices *= mesh.get_axis_size(axis)
+        
+        if n_devices <= 1:
+            return 0.0
+        
+        bandwidth = getattr(mesh, 'bandwidth', 1.0)
+        cost = 2.0 * (n_devices - 1) / n_devices * size_bytes / bandwidth
+        return cost
     
     def _should_proceed(self, tensor):
         """Check if all_reduce should proceed.
@@ -644,7 +729,7 @@ class AllReduceOp(CollectiveOperation):
             return []
         
         # DISTRIBUTED: Use native MAX allreduce
-        if _is_distributed(mesh):
+        if mesh.is_distributed:
             from max.graph.ops.allreduce import sum as allreduce_sum
             from max.graph.type import BufferType
             from max.dtype import DType
@@ -674,6 +759,73 @@ class AllReduceOp(CollectiveOperation):
             return ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)])
         return None
 
+    def simulate_grouped_execution(
+        self,
+        shard_results: List[TensorValue], 
+        mesh: "DeviceMesh", 
+        reduce_axes: "Set[str]",
+    ) -> List[TensorValue]:
+        """Simulate grouped AllReduce execution for SPMD verification.
+        
+        When only a subset of mesh axes are involved in reduction (e.g., partial results
+        from tensor parallelism on 'model' axis), we must effectively:
+        1. Group shards that share coordinates on non-reduced axes
+        2. AllReduce within each group
+        3. Broadcast the result to all members of the group
+        
+        Args:
+            shard_results: List of shard values (length = mesh size)
+            mesh: The device mesh
+            reduce_axes: Set of mesh axis names to reduce over
+            
+        Returns:
+            List of reduced shard values (same length, grouped values are identical)
+        """
+        if not reduce_axes:
+            return shard_results
+            
+        num_shards = len(shard_results)
+        
+        # Check if we're reducing over all axes (simple case)
+        all_axes = set(mesh.axis_names)
+        if all_axes.issubset(reduce_axes):
+            return self.maxpr(shard_results, mesh=mesh)
+            
+        # Complex case: Group shards by non-reduced axes
+        # Each group contains shards that should be reduced together
+        groups = {}
+        
+        for shard_idx, result in enumerate(shard_results):
+            # Build key from coords on NON-reduced axes
+            key_parts = []
+            for axis_name in mesh.axis_names:
+                if axis_name not in reduce_axes:
+                    key_parts.append(mesh.get_coordinate(shard_idx, axis_name))
+            
+            # Use tuple of coords as grouping key
+            key = tuple(key_parts)
+            if key not in groups:
+                groups[key] = []
+            groups[key].append((shard_idx, result))
+        
+        # Execute reduction per group
+        new_results = [None] * num_shards
+        
+        for key, group_members in groups.items():
+            # group_members is a list of (shard_idx, shard_value)
+            group_shards = [val for _, val in group_members]
+            
+            if len(group_shards) > 1:
+                curr_reduced = self.maxpr(group_shards, mesh=mesh)
+            else:
+                curr_reduced = [group_shards[0]]
+                
+            # Distribute results back to original positions
+            for i, (shard_idx, _) in enumerate(group_members):
+                new_results[shard_idx] = curr_reduced[i] if isinstance(curr_reduced, list) else curr_reduced
+                
+        return new_results
+
 
 class ReduceScatterOp(CollectiveOperation):
     """Reduce then scatter the result across shards.
@@ -684,6 +836,47 @@ class ReduceScatterOp(CollectiveOperation):
     @property
     def name(self) -> str:
         return "reduce_scatter"
+
+    def communication_cost(
+        self, 
+        input_specs: list["ShardingSpec"], 
+        output_specs: list["ShardingSpec"], 
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        mesh: "DeviceMesh"
+    ) -> float:
+        """Estimate ReduceScatter cost."""
+        if not input_shapes:
+            return 0.0
+            
+        # Input is full size (before scatter)
+        num_elements = 1
+        for d in input_shapes[0]:
+            num_elements *= d
+        size_bytes = num_elements * 4
+        
+        return self.estimate_cost(size_bytes, mesh, mesh.axis_names)
+
+    @staticmethod
+    def estimate_cost(
+        size_bytes: int,
+        mesh: "DeviceMesh",
+        axes: list[str],
+    ) -> float:
+        """Estimate cost of ReduceScatter across specified mesh axes."""
+        if not axes:
+            return 0.0
+        
+        n_devices = 1
+        for axis in axes:
+            n_devices *= mesh.get_axis_size(axis)
+        
+        if n_devices <= 1:
+            return 0.0
+        
+        bandwidth = getattr(mesh, 'bandwidth', 1.0)
+        cost = (n_devices - 1) / n_devices * size_bytes / bandwidth
+        return cost
     
     def maxpr(
         self,
@@ -789,6 +982,80 @@ class ReshardOp(Operation):
     @property
     def name(self) -> str:
         return "reshard"
+
+    def communication_cost(
+        self, 
+        input_specs: list["ShardingSpec"], 
+        output_specs: list["ShardingSpec"], 
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        mesh: "DeviceMesh"
+    ) -> float:
+        """Estimate cost of resharding."""
+        from typing import Set, Optional
+        
+        # ReshardOp maps input_specs[0] -> output_specs[0]
+        # (implicit resharding logic)
+        
+        from_spec = input_specs[0] if input_specs else None
+        
+        # output_specs might be empty if we rely on "to_spec" passed in kwargs?
+        # But for generic modeling we assume output_specs[0] is the target.
+        to_spec = output_specs[0] if output_specs else None
+        
+        if not input_shapes:
+            return 0.0
+            
+        # Total tensor bytes
+        num_elements = 1
+        for d in input_shapes[0]:
+            num_elements *= d
+        tensor_bytes = num_elements * 4
+        
+        # Reuse logic from original resharding_cost
+        # Default: no resharding if specs are None or identical
+        if from_spec is None and to_spec is None:
+            return 0.0
+        
+        if from_spec is None:
+            # Unsharded -> Sharded: just local slicing, no communication
+            return 0.0
+        
+        if to_spec is None:
+            # Sharded -> Unsharded: need AllGather on all sharded dims
+            axes_to_gather: Set[str] = set()
+            for dim_spec in from_spec.dim_specs:
+                axes_to_gather.update(dim_spec.axes)
+            # Use AllGatherOp.estimate_cost
+            return AllGatherOp.estimate_cost(
+                tensor_bytes // from_spec.total_shards,
+                mesh,
+                list(axes_to_gather)
+            )
+        
+        # Compare dimension-by-dimension
+        total_cost = 0.0
+        
+        if len(from_spec.dim_specs) != len(to_spec.dim_specs):
+            # Rank mismatch - can't reshard directly
+            return float('inf')
+        
+        for from_dim, to_dim in zip(from_spec.dim_specs, to_spec.dim_specs):
+            from_axes = set(from_dim.axes)
+            to_axes = set(to_dim.axes)
+            
+            # Axes being removed need AllGather
+            removed_axes = from_axes - to_axes
+            if removed_axes:
+                # Estimate local shard size for this dimension
+                from_shards = 1
+                for axis in from_dim.axes:
+                    from_shards *= mesh.get_axis_size(axis)
+                local_bytes = tensor_bytes // from_shards
+                
+                total_cost += AllGatherOp.estimate_cost(local_bytes, mesh, list(removed_axes))
+        
+        return total_cost
     
     def maxpr(self, *args, **kwargs):
         """ReshardOp is a composite operation that orchestrates other ops.
@@ -1504,73 +1771,6 @@ def gather_all_axes(sharded_tensor):
 
 
 
-def simulate_grouped_all_reduce(
-    shard_results: List[TensorValue], 
-    mesh: "DeviceMesh", 
-    reduce_axes: "Set[str]",
-    all_reduce_op: AllReduceOp
-) -> List[TensorValue]:
-    """Simulate grouped AllReduce execution for SPMD verification.
-    
-    When only a subset of mesh axes are involved in reduction (e.g., partial results
-    from tensor parallelism on 'model' axis), we must effectively:
-    1. Group shards that share coordinates on non-reduced axes
-    2. AllReduce within each group
-    3. Broadcast the result to all members of the group
-    
-    Args:
-        shard_results: List of shard values (length = mesh size)
-        mesh: The device mesh
-        reduce_axes: Set of mesh axis names to reduce over
-        all_reduce_op: The AllReduce operator to use
-        
-    Returns:
-        List of reduced shard values (same length, grouped values are identical)
-    """
-    if not reduce_axes:
-        return shard_results
-        
-    num_shards = len(shard_results)
-    
-    # Check if we're reducing over all axes (simple case)
-    all_axes = set(mesh.axis_names)
-    if all_axes.issubset(reduce_axes):
-        return all_reduce_op.maxpr(shard_results, mesh=mesh)
-        
-    # Complex case: Group shards by non-reduced axes
-    # Each group contains shards that should be reduced together
-    groups = {}
-    
-    for shard_idx, result in enumerate(shard_results):
-        # Build key from coords on NON-reduced axes
-        key_parts = []
-        for axis_name in mesh.axis_names:
-            if axis_name not in reduce_axes:
-                key_parts.append(mesh.get_coordinate(shard_idx, axis_name))
-        
-        # Use tuple of coords as grouping key
-        key = tuple(key_parts)
-        if key not in groups:
-            groups[key] = []
-        groups[key].append((shard_idx, result))
-    
-    # Execute reduction per group
-    new_results = [None] * num_shards
-    
-    for key, group_members in groups.items():
-        # group_members is a list of (shard_idx, shard_value)
-        group_shards = [val for _, val in group_members]
-        
-        if len(group_shards) > 1:
-            curr_reduced = all_reduce_op.maxpr(group_shards, mesh=mesh)
-        else:
-            curr_reduced = [group_shards[0]]
-            
-        # Distribute results back to original positions
-        for i, (shard_idx, _) in enumerate(group_members):
-            new_results[shard_idx] = curr_reduced[i] if isinstance(curr_reduced, list) else curr_reduced
-            
-    return new_results
 
 
 __all__ = [
@@ -1609,7 +1809,7 @@ __all__ = [
     "pmean",
     "gather_all_axes",
     "reshard",
-    "simulate_grouped_all_reduce",
+    "reshard",
 ]
 
 

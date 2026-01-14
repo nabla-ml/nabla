@@ -106,6 +106,10 @@ Replaces complex graph patching with a clean **Trace-and-Replay** model:
 ### Why Dual Execution?
 
 - **Separation of Concerns**: Tracing captures *what* to compute. Replay captures *how* to distribute it.
+- **[Core Architecture](../core/CLAUDE.md)** - Lazy execution, weakrefs, dual state, epoch tracking
+- **[Operations Design](../ops/CLAUDE.md)** - Singleton pattern, ABC hierarchy, batch propagation
+- **[Transforms Guide](CLAUDE.md)** - Vmap internals, compile caching, dynamic dims
+- **[Sharding System](../sharding/CLAUDE.md)** - Factor propagation, conflict resolution, future execution
 - **Robustness**: Handles constants (untraced nodes skipped), complex compositions, and mixed updates cleaner than in-place patching.
 - **Verification**: The generated trace acts as a "sharding plan" that can be inspected before execution.
 

@@ -149,6 +149,11 @@ class DeviceMesh:
         self.phys_strides = [1] * len(shape)
         for i in range(len(shape) - 2, -1, -1):
             self.phys_strides[i] = shape[i+1] * self.phys_strides[i+1]
+
+    @property
+    def is_distributed(self) -> bool:
+        """Check if mesh has unique device refs (true distributed vs simulated)."""
+        return self.device_refs is not None and len(set(self.device_refs)) == len(self.device_refs)
     
     def __repr__(self) -> str:
         axes_str = ", ".join(f'"{n}"={s}' for n, s in zip(self.axis_names, self.shape))
@@ -373,6 +378,15 @@ class ShardingSpec:
     def is_fully_replicated(self) -> bool:
         """Returns True if tensor is fully replicated (no dimension sharding)."""
         return all(dim.is_replicated() for dim in self.dim_specs)
+    
+    @property
+    def total_shards(self) -> int:
+        """Get total number of shards across all dimensions."""
+        total = 1
+        for dim_spec in self.dim_specs:
+            for axis in dim_spec.axes:
+                total *= self.mesh.get_axis_size(axis)
+        return total
     
     def get_max_priority(self) -> int:
         """Get the maximum (lowest urgency) priority used in this spec."""

@@ -101,7 +101,9 @@ The core sharding infrastructure is **complete**:
 - ✅ Unified SPMD dispatch (unsharded = mesh size 1)
 - ✅ Complete communication ops: `ShardOp`, `AllGatherOp`, `AllReduceOp`, `ReduceScatterOp`, `GatherAllAxesOp`
 - ✅ AllReduce insertion for sharded contracting dimensions (e.g., K in matmul)
+- ✅ AllReduce insertion for sharded contracting dimensions (e.g., K in matmul)
 - ✅ Lazy graph-based resharding (ops add to graph, not eager eval)
+- ✅ **Operation-Centric Cost Model**: `communication_cost` method on all Ops.
 
 ### Current Extension Points
 
@@ -179,13 +181,15 @@ When you have a tensor of shape `(VMAP_DIM, REST...)`:
 > [!WARNING]
 > These are fundamental architectural constraints, not bugs.
 
-### 1. No Cost Model for Sharding Decisions
+### 1. Cost Model Status
+    
+**Current Behavior**: We have implemented an **Operation-Centric Cost Model**.
+- Each `Operation` implements `communication_cost(...)`.
+- `MatmulOp` estimates MP costs (AllReduce).
+- `ReshardOp` converts changes to `AllGather` costs.
+- `AllReduce`/`AllGather`/`ReduceScatter` have precise cost formulas.
 
-**Current Behavior**: `AGGRESSIVE` conflict resolution picks higher parallelism without considering communication cost.
-
-**Impact**: May choose suboptimal shardings (e.g., sharding a dimension that requires expensive AllGather downstream).
-
-**Mitigation**: Users can override with explicit `priority` on `DimSpec` annotations.
+**Next Steps**: Use this cost model in `propagation.py`'s solver loop (currently used by `SimpleSolver`).
 
 ### 2. No Cross-Mesh Propagation
 

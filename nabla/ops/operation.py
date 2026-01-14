@@ -50,6 +50,28 @@ class Operation(ABC):
     def cost_model(self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]) -> float:
         """Estimate compute cost (FLOPs). Default is 0.0 (negligible)."""
         return 0.0
+
+    def communication_cost(
+        self, 
+        input_specs: list["ShardingSpec"], 
+        output_specs: list["ShardingSpec"], 
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        mesh: "DeviceMesh"
+    ) -> float:
+        """Estimate communication cost for this operation's sharding strategy.
+        
+        Args:
+            input_specs: List of ShardingSpecs for inputs
+            output_specs: List of ShardingSpecs for outputs
+            input_shapes: List of input shapes (global)
+            output_shapes: List of output shapes (global)
+            mesh: DeviceMesh being used
+            
+        Returns:
+            Estimated communication cost (arbitrary units, normalized to bandwidth)
+        """
+        return 0.0
     
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Unified dispatch for all operations.
@@ -152,7 +174,7 @@ class Operation(ABC):
         """Apply automatic AllReduce to partial results if needed."""
         from ..core.tensor import Tensor
         from ..core import pytree
-        from .communication import all_reduce_op, simulate_grouped_all_reduce
+        from .communication import all_reduce_op
         from ..sharding.spec import ShardingSpec, DimSpec
         from ..core.tensor_impl import TensorImpl
         from ..core.compute_graph import GRAPH
@@ -163,8 +185,8 @@ class Operation(ABC):
             
             # Apply graph-level grouped all-reduce
             with GRAPH.graph:
-                reduced_values = simulate_grouped_all_reduce(
-                    t._impl._values, mesh, reduce_axes, all_reduce_op
+                reduced_values = all_reduce_op.simulate_grouped_execution(
+                    t._impl._values, mesh, reduce_axes
                 )
             
             # Create new Tensor with reduced values (replicated output)

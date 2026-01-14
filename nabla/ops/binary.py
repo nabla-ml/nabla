@@ -82,6 +82,53 @@ class MatmulOp(Operation):
             batch_size *= d
             
         return 2.0 * batch_size * m * n * k
+
+    def communication_cost(
+        self, 
+        input_specs: list["ShardingSpec"], 
+        output_specs: list["ShardingSpec"], 
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        mesh: "DeviceMesh"
+    ) -> float:
+        """Estimate communication cost for MatMul (e.g. MP AllReduce)."""
+        from .communication import AllReduceOp
+        
+        if not input_specs or len(input_specs) < 2:
+            return 0.0
+            
+        # MatMul Rule: ... mk, ... kn -> ... mn
+        # Contracting dimension is 'k' (inner dimension)
+        
+        spec_a = input_specs[0]
+        spec_b = input_specs[1]
+        
+        if not spec_a.dim_specs or not spec_b.dim_specs:
+            return 0.0
+            
+        # A: [..., M, K] -> K is index -1
+        # B: [..., K, N] -> K is index -2
+        k_sharding_a = spec_a.dim_specs[-1].axes
+        k_sharding_b = spec_b.dim_specs[-2].axes if len(spec_b.dim_specs) >= 2 else []
+        
+        # If K is sharded, we likely need an AllReduce on the output
+        if k_sharding_a or k_sharding_b:
+            if not output_shapes:
+                return 0.0
+            
+            # Calculate output size in bytes (assuming float32)
+            out_shape = output_shapes[0]
+            num_elements = 1
+            for d in out_shape:
+                num_elements *= d
+            output_bytes = num_elements * 4
+            
+            # Axes to reduce over: union of sharding axes on K
+            reduce_axes = list(set(k_sharding_a) | set(k_sharding_b))
+            
+            return AllReduceOp.estimate_cost(output_bytes, mesh, reduce_axes)
+            
+        return 0.0
     
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.matmul(args[0], args[1])

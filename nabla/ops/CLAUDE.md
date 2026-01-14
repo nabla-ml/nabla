@@ -13,7 +13,7 @@ Operations are **singleton objects** inheriting from `Operation`. This enables:
 
 ### `Operation` (Base)
 
-Defines: `name`, `maxpr()`, optional `vjp_rule()`, `jvp_rule()`, `sharding_rule()`
+Defines: `name`, `maxpr()`, `communication_cost()`, optional `vjp_rule()`, `jvp_rule()`, `sharding_rule()`
 
 **The `__call__` method orchestrates everything**:
 1. Extract tensors from pytree inputs
@@ -122,4 +122,4 @@ Base class handles all metadata propagation automatically.
 | `view.py` | reshape, transpose |
 | `multi_output.py` | split, unbind |
 | `_physical.py` | vmap internals (not user-facing) |
-| `communication.py` | shard, all_gather, all_reduce |
+| `communication.py` | shard, collectives, **cost model logic** |

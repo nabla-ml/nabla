@@ -3,11 +3,11 @@
 import unittest
 
 from nabla.sharding.spec import DeviceMesh
-from nabla.sharding.cost_model import (
-    allreduce_cost,
-    allgather_cost,
-    reduce_scatter_cost,
-    resharding_cost,
+from nabla.ops.communication import (
+    AllReduceOp,
+    AllGatherOp,
+    ReduceScatterOp,
+    ReshardOp,
 )
 
 
@@ -23,8 +23,8 @@ class TestCommunicationCostModel(unittest.TestCase):
 
     def test_allreduce_cost_scales_with_size(self):
         """Larger tensors should have higher AllReduce cost."""
-        cost_small = allreduce_cost(1000, self.mesh, ["d"])
-        cost_large = allreduce_cost(10000, self.mesh, ["d"])
+        cost_small = AllReduceOp.estimate_cost(1000, self.mesh, ["d"])
+        cost_large = AllReduceOp.estimate_cost(10000, self.mesh, ["d"])
         
         # Cost should scale linearly with size
         self.assertGreater(cost_large, cost_small)
@@ -36,8 +36,8 @@ class TestCommunicationCostModel(unittest.TestCase):
         mesh_2 = DeviceMesh("m2", (2,), ("d",), devices=[0, 1])
         mesh_8 = DeviceMesh("m8", (8,), ("d",), devices=list(range(8)))
         
-        cost_2 = allreduce_cost(1000, mesh_2, ["d"])
-        cost_8 = allreduce_cost(1000, mesh_8, ["d"])
+        cost_2 = AllReduceOp.estimate_cost(1000, mesh_2, ["d"])
+        cost_8 = AllReduceOp.estimate_cost(1000, mesh_8, ["d"])
         
         # Cost formula: 2 * (n-1)/n * size
         # n=2: 2 * 0.5 * 1000 = 1000
@@ -47,18 +47,18 @@ class TestCommunicationCostModel(unittest.TestCase):
     def test_allreduce_cost_zero_for_single_device(self):
         """AllReduce on single device should be zero cost."""
         mesh_1 = DeviceMesh("m1", (1,), ("d",), devices=[0])
-        cost = allreduce_cost(1000, mesh_1, ["d"])
+        cost = AllReduceOp.estimate_cost(1000, mesh_1, ["d"])
         self.assertEqual(cost, 0.0)
         
     def test_allreduce_cost_zero_for_empty_axes(self):
         """AllReduce with no axes should be zero cost."""
-        cost = allreduce_cost(1000, self.mesh, [])
+        cost = AllReduceOp.estimate_cost(1000, self.mesh, [])
         self.assertEqual(cost, 0.0)
 
     def test_allgather_cost_formula(self):
         """AllGather cost should follow (n-1)/n * total_size formula."""
         size = 1000
-        cost = allgather_cost(size, self.mesh, ["d"])
+        cost = AllGatherOp.estimate_cost(size, self.mesh, ["d"])
         
         # Expected: (4-1)/4 * 1000 * 4 = 0.75 * 4000 = 3000
         expected = (4 - 1) / 4 * size * 4
@@ -67,7 +67,7 @@ class TestCommunicationCostModel(unittest.TestCase):
     def test_reduce_scatter_cost_formula(self):
         """ReduceScatter cost should follow (n-1)/n * size formula."""
         size = 1000
-        cost = reduce_scatter_cost(size, self.mesh, ["d"])
+        cost = ReduceScatterOp.estimate_cost(size, self.mesh, ["d"])
         
         # Expected: (4-1)/4 * 1000 = 750
         expected = (4 - 1) / 4 * size
@@ -75,7 +75,14 @@ class TestCommunicationCostModel(unittest.TestCase):
 
     def test_resharding_cost_zero_if_both_none(self):
         """Resharding between None specs should be zero."""
-        cost = resharding_cost(None, None, 1000, self.mesh)
+        op = ReshardOp()
+        # Mock inputs/outputs. communication_cost(in_specs, out_specs, shapes, shapes, mesh)
+        # For None specs, we simulate passing []? Or [None]? 
+        # API requires ShardingSpec objects usually.
+        # But our ReshardOp logic handles "from_spec is None" by checking input_specs[0].
+        
+        # If input_specs is empty/None -> from_spec = None
+        cost = op.communication_cost([], [], [(1000,)], [(1000,)], self.mesh)
         self.assertEqual(cost, 0.0)
 
     def test_resharding_cost_zero_for_shard_only(self):
@@ -83,7 +90,11 @@ class TestCommunicationCostModel(unittest.TestCase):
         from nabla.sharding.spec import DimSpec, ShardingSpec
         
         to_spec = ShardingSpec(self.mesh, [DimSpec(["d"]), DimSpec([])])
-        cost = resharding_cost(None, to_spec, 1000, self.mesh)
+        op = ReshardOp()
+        
+        # input_specs=[] implies from_spec=None (Unsharded)
+        # output_specs=[to_spec]
+        cost = op.communication_cost([], [to_spec], [(1000,)], [(1000,)], self.mesh)
         self.assertEqual(cost, 0.0)
 
     def test_resharding_cost_nonzero_for_gather(self):
@@ -91,7 +102,11 @@ class TestCommunicationCostModel(unittest.TestCase):
         from nabla.sharding.spec import DimSpec, ShardingSpec
         
         from_spec = ShardingSpec(self.mesh, [DimSpec(["d"]), DimSpec([])])
-        cost = resharding_cost(from_spec, None, 4000, self.mesh)  # 4000 bytes global
+        op = ReshardOp()
+        
+        # input_specs=[from_spec]
+        # output_specs=[] (implies to_spec=None/Unsharded)
+        cost = op.communication_cost([from_spec], [], [(1000,)], [(1000,)], self.mesh)
         
         # Should be positive (AllGather cost)
         self.assertGreater(cost, 0.0)
@@ -101,8 +116,8 @@ class TestCommunicationCostModel(unittest.TestCase):
         mesh_slow = DeviceMesh("slow", (4,), ("d",), devices=[0, 1, 2, 3], bandwidth=1.0)
         mesh_fast = DeviceMesh("fast", (4,), ("d",), devices=[0, 1, 2, 3], bandwidth=2.0)
         
-        cost_slow = allreduce_cost(1000, mesh_slow, ["d"])
-        cost_fast = allreduce_cost(1000, mesh_fast, ["d"])
+        cost_slow = AllReduceOp.estimate_cost(1000, mesh_slow, ["d"])
+        cost_fast = AllReduceOp.estimate_cost(1000, mesh_fast, ["d"])
         
         # Faster bandwidth = lower cost
         self.assertLess(cost_fast, cost_slow)
@@ -111,13 +126,13 @@ class TestCommunicationCostModel(unittest.TestCase):
     def test_2d_mesh_multi_axis(self):
         """Cost should increase when reducing over multiple axes."""
         # Reduce over just "dp" (2 devices)
-        cost_dp = allreduce_cost(1000, self.mesh_2d, ["dp"])
+        cost_dp = AllReduceOp.estimate_cost(1000, self.mesh_2d, ["dp"])
         
         # Reduce over just "tp" (4 devices)  
-        cost_tp = allreduce_cost(1000, self.mesh_2d, ["tp"])
+        cost_tp = AllReduceOp.estimate_cost(1000, self.mesh_2d, ["tp"])
         
         # Reduce over both (8 devices)
-        cost_both = allreduce_cost(1000, self.mesh_2d, ["dp", "tp"])
+        cost_both = AllReduceOp.estimate_cost(1000, self.mesh_2d, ["dp", "tp"])
         
         # More devices = higher communication cost
         self.assertLess(cost_dp, cost_both)

@@ -84,6 +84,7 @@ This module is organized into four logical subdirectories:
 **Key mechanisms**:
 - Factor-based sharding propagation (inspired by Shardy/GSPMD)
 - Einsum-style operation sharding rules
+- **Operation-Centric Cost Model** for optimization
 - Conflict resolution strategies (BASIC vs AGGRESSIVE)
 
 **[📖 Read sharding design → sharding/CLAUDE.md](sharding/CLAUDE.md)**
