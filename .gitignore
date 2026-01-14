@@ -60,7 +60,6 @@ htmlcov/
 coverage.xml
 nosetests.xml
 *.cover
-tmp
 
 # Type checking
 .mypy_cache/
