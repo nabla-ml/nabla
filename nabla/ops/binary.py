@@ -130,6 +130,51 @@ class MatmulOp(Operation):
             input_shapes, output_shapes
         )
     
+    def communication_cost(
+        self,
+        input_specs: list,  # List[ShardingSpec]
+        output_spec,  # ShardingSpec
+        mesh,  # DeviceMesh
+        **kwargs,
+    ) -> float:
+        """AllReduce cost when contracting dimension (K) is sharded.
+        
+        For matmul A[..., M, K] @ B[..., K, N] -> C[..., M, N]:
+        - K is the contracting dimension (last dim of A, second-last of B)
+        - If K is sharded, output has partial sums that require AllReduce
+        """
+        from ..sharding.cost_model import allreduce_cost
+        
+        if not input_specs or len(input_specs) < 2:
+            return 0.0
+        
+        spec_a = input_specs[0]  # A[..., M, K]
+        if spec_a is None or not spec_a.dim_specs:
+            return 0.0
+        
+        # K is last dimension of A
+        k_dim_spec = spec_a.dim_specs[-1]
+        
+        if k_dim_spec.axes:
+            # K is sharded - need AllReduce on output
+            # Output shape: [..., M, N]
+            # Get M and N from output spec's shape context
+            if output_spec and hasattr(output_spec, 'dim_specs') and len(output_spec.dim_specs) >= 2:
+                # Estimate output size from mesh and dim count
+                # For now, we'll compute based on the number of dims
+                # This is called during seeding when we have factor_sizes
+                m_size = 1
+                n_size = 1
+                # Simplified: we don't have shapes here, just specs
+                # Return cost based on axis parallelism as a proxy
+                output_bytes = 4  # Will be overridden by solver with actual sizes
+                return allreduce_cost(output_bytes, mesh, list(k_dim_spec.axes))
+            
+            # Fallback: return a small fixed cost indicating AllReduce is needed
+            return allreduce_cost(4, mesh, list(k_dim_spec.axes))
+        
+        return 0.0
+    
     # NOTE: No custom _infer_output_sharding needed - the generic factor-based
     # propagation handles matmul correctly via sharding_rule() above.
 

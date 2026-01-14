@@ -157,7 +157,14 @@ class SimpleSolver:
         tensor_specs: Dict[int, ShardingSpec],
         debug: bool = False
     ) -> Optional[Dict]:
-        """Cost-based seeding for matmul: choose DP vs MP."""
+        """Cost-based seeding for matmul: choose DP vs MP.
+        
+        Uses communication cost model for accurate DP vs MP tradeoffs:
+        - DP (Data Parallel): Split M dimension, no AllReduce needed
+        - MP (Model Parallel): Split K dimension, requires AllReduce on output
+        """
+        from ..sharding.cost_model import allreduce_cost
+        
         rule = node.get("sharding_rule")
         if not rule:
             return None
@@ -173,16 +180,21 @@ class SimpleSolver:
         mesh_dim = self.mesh_shape[0] if self.mesh_shape else 1
         
         # Cost calculation
+        # DP: Split M dimension - no communication needed (each device has independent rows)
         dp_cost = float("inf")
         if m_size % mesh_dim == 0:
-            dp_cost = flops / mesh_dim
+            dp_compute = flops / mesh_dim
+            dp_comm = 0.0  # No AllReduce for non-contracting dimension
+            dp_cost = dp_compute + dp_comm
         
+        # MP: Split K dimension - requires AllReduce on output
         mp_cost = float("inf")
         if k_size % mesh_dim == 0:
-            compute = flops / mesh_dim
-            comm_bytes = m_size * n_size * 4
-            COMM_PENALTY_WEIGHT = 1000.0
-            mp_cost = compute + (comm_bytes * COMM_PENALTY_WEIGHT)
+            mp_compute = flops / mesh_dim
+            # Output is M×N, dtype=float32 (4 bytes)
+            output_bytes = m_size * n_size * 4
+            mp_comm = allreduce_cost(output_bytes, self.mesh, [axis_name])
+            mp_cost = mp_compute + mp_comm
 
         if debug:
             print(f"  > Costs: DP={dp_cost:.2e}, MP={mp_cost:.2e} (M={m_size}, K={k_size}, N={n_size})")

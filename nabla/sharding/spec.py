@@ -117,10 +117,12 @@ class DeviceMesh:
     """
     
     def __init__(self, name: str, shape: Tuple[int, ...], axis_names: Tuple[str, ...], 
-                 devices: List[int] = None, device_refs: List = None):
+                 devices: List[int] = None, device_refs: List = None,
+                 bandwidth: float = 1.0):
         self.name = name
         self.shape = shape
         self.axis_names = axis_names
+        self.bandwidth = bandwidth  # Normalized bandwidth for cost modeling
         
         # Default to sequential device IDs if not specified
         total_devices = int(np.prod(shape))
