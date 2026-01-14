@@ -47,29 +47,16 @@ class Operation(ABC):
         """Returns TensorValue or pytree of TensorValues."""
         ...
     
-    def cost_model(self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]) -> float:
-        """Estimate compute cost (FLOPs). Default is 0.0 (negligible)."""
-        return 0.0
-
-    def communication_cost(
-        self, 
-        input_specs: list["ShardingSpec"], 
-        output_specs: list["ShardingSpec"], 
-        input_shapes: list[tuple[int, ...]],
-        output_shapes: list[tuple[int, ...]],
-        mesh: "DeviceMesh"
-    ) -> float:
-        """Estimate communication cost for this operation's sharding strategy.
+    def compute_cost(self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]) -> float:
+        """Estimate compute cost (FLOPs) for this operation.
         
-        Args:
-            input_specs: List of ShardingSpecs for inputs
-            output_specs: List of ShardingSpecs for outputs
-            input_shapes: List of input shapes (global)
-            output_shapes: List of output shapes (global)
-            mesh: DeviceMesh being used
-            
+        Override in subclasses to provide accurate FLOP estimates.
+        Communication costs are NOT included here - they are computed from
+        the CollectiveOperations (AllReduce, AllGather, etc.) that get
+        inserted by the SPMD execution based on factor propagation.
+        
         Returns:
-            Estimated communication cost (arbitrary units, normalized to bandwidth)
+            Estimated FLOPs. Default is 0.0 (negligible compute).
         """
         return 0.0
     
@@ -359,7 +346,20 @@ class Operation(ABC):
 
 
 class BinaryOperation(Operation):
-    """Base for binary element-wise ops with batch_dims-aware broadcasting."""
+    """Base for binary element-wise ops with batch_dims-aware broadcasting.
+    
+    Provides default compute_cost: 1 FLOP per output element (elementwise).
+    Override in subclasses for ops with different cost (e.g., MatmulOp).
+    """
+    
+    def compute_cost(self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]) -> float:
+        """Elementwise binary op: 1 FLOP per output element."""
+        if not output_shapes:
+            return 0.0
+        num_elements = 1
+        for d in output_shapes[0]:
+            num_elements *= d
+        return float(num_elements)
     
     def __call__(self, x: Tensor, y: Tensor) -> Tensor:
         from . import view as view_ops
@@ -496,7 +496,17 @@ class ReduceOperation(LogicalAxisOperation):
     
     Inherits axis translation from LogicalAxisOperation.
     Provides reduce sharding rule: reduced dim gets no factor.
+    Provides default compute_cost: 1 FLOP per input element.
     """
+    
+    def compute_cost(self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]) -> float:
+        """Reduction: 1 FLOP per input element (for summing/comparing)."""
+        if not input_shapes:
+            return 0.0
+        num_elements = 1
+        for d in input_shapes[0]:
+            num_elements *= d
+        return float(num_elements)
     
     def sharding_rule(
         self,
@@ -570,7 +580,22 @@ class ReduceOperation(LogicalAxisOperation):
         else:
             return tuple(d for i, d in enumerate(in_shape) if i != axis)
 
-UnaryOperation = Operation
+
+class UnaryOperation(Operation):
+    """Base for unary element-wise operations.
+    
+    Provides default compute_cost: 1 FLOP per element.
+    Override for ops with higher cost (e.g., sigmoid, tanh).
+    """
+    
+    def compute_cost(self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]) -> float:
+        """Unary elementwise op: 1 FLOP per element by default."""
+        if not input_shapes:
+            return 0.0
+        num_elements = 1
+        for d in input_shapes[0]:
+            num_elements *= d
+        return float(num_elements)
 
 
 class LogicalShapeOperation(Operation):

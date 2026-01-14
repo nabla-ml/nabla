@@ -135,7 +135,7 @@ class ShardingGraphExtractor:
                 if self.debug:
                     print(f"[GraphExtractor] WARNING: Failed to get sharding_rule for node {i} [{op.name}]: {e}")
 
-            cost = op.cost_model(input_shapes, output_shapes)
+            cost = op.compute_cost(input_shapes, output_shapes)
 
             self.nodes.append({
                 "id": i,

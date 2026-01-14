@@ -64,6 +64,15 @@ class SigmoidOp(UnaryOperation):
     def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
         """Apply sigmoid element-wise."""
         return ops.sigmoid(x)
+    
+    def compute_cost(self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]) -> float:
+        """Sigmoid: ~4 FLOPs per element (neg, exp, add, div)."""
+        if not input_shapes:
+            return 0.0
+        num_elements = 1
+        for d in input_shapes[0]:
+            num_elements *= d
+        return 4.0 * num_elements
 
 
 class TanhOp(UnaryOperation):
@@ -79,6 +88,15 @@ class TanhOp(UnaryOperation):
     def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
         """Apply tanh element-wise."""
         return ops.tanh(x)
+    
+    def compute_cost(self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]) -> float:
+        """Tanh: ~6 FLOPs per element (2 exp, 2 add/sub, 1 div)."""
+        if not input_shapes:
+            return 0.0
+        num_elements = 1
+        for d in input_shapes[0]:
+            num_elements *= d
+        return 6.0 * num_elements
 
 
 class ExpOp(UnaryOperation):
@@ -144,6 +162,15 @@ class SoftmaxOp(UnaryOperation):
         """Apply softmax using MAX's native softmax."""
         axis = kwargs.get("axis", -1)
         return ops.softmax(x, axis=axis)
+    
+    def compute_cost(self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]) -> float:
+        """Softmax: ~3 FLOPs per element (exp, sum, div)."""
+        if not input_shapes:
+            return 0.0
+        num_elements = 1
+        for d in input_shapes[0]:
+            num_elements *= d
+        return 3.0 * num_elements
 
 
 # ===== Singleton instances exposed as functions =====

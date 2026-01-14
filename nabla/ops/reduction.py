@@ -24,6 +24,7 @@ class ReduceSumOp(ReduceOperation):
     def maxpr(self, x: TensorValue, *, axis: int, keepdims: bool = False) -> TensorValue:
         return ops.sum(x, axis)
     
+    # compute_cost inherited from ReduceOperation: 1 FLOP per input element
     # sharding_rule inherited from ReduceOperation
     
     def infer_output_shape(self, input_shapes: list[tuple[int, ...]], **kwargs: Any) -> tuple[int, ...]:
@@ -47,6 +48,16 @@ class MeanOp(ReduceOperation):
     
     def maxpr(self, x: TensorValue, *, axis: int, keepdims: bool = False) -> TensorValue:
         return ops.mean(x, axis)
+    
+    def compute_cost(self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]) -> float:
+        """Mean: 1 sum + 1 div per output element."""
+        if not input_shapes:
+            return 0.0
+        num_elements = 1
+        for d in input_shapes[0]:
+            num_elements *= d
+        # Sum cost + one division per output
+        return float(num_elements) + (float(num_elements) / input_shapes[0][0] if input_shapes[0] else 0)
     
     # sharding_rule inherited from ReduceOperation
     
