@@ -360,19 +360,14 @@ def get_shard_args(args: tuple, shard_idx: int,
             this_sharding = per_input_shardings[input_idx[0]]
         input_idx[0] += 1
         
-        if x._impl.is_sharded:
-            vals = x._impl._values
-            
-            if len(vals) > 1 and shard_idx < len(vals):
-                # Distributed/Simulated: Return specific shard
-                return vals[shard_idx]
-            elif len(vals) == 1:
-                return x.__tensorvalue__()
-            else:
-                return x.__tensorvalue__()
-                
-        # Unsharded case
-        return x.__tensorvalue__()
+        # Hydrate if needed (realized tensor) then access values
+        x.hydrate()
+        vals = x.values
+        
+        # Return the value for this shard
+        if shard_idx < len(vals):
+            return vals[shard_idx]
+        return vals[0] if vals else x.__tensorvalue__()
     
     return pytree.tree_map(extract, args)
 

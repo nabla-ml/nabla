@@ -194,13 +194,18 @@ class Operation(ABC):
         from ..core.compute_graph import GRAPH
 
         def apply_grouped_all_reduce(t):
-            if not isinstance(t, Tensor) or not t._impl._values:
+            if not isinstance(t, Tensor):
+                return t
+            
+            # Hydrate values if needed and check we have values to reduce
+            t.hydrate()
+            if not t._impl._values:  # Check raw after hydrate
                 return t
             
             # Apply graph-level grouped all-reduce
             with GRAPH.graph:
                 reduced_values = all_reduce_op.simulate_grouped_execution(
-                    t._impl._values, mesh, reduce_axes
+                    t.values, mesh, reduce_axes
                 )
             
             # Create new Tensor with reduced values (replicated output)

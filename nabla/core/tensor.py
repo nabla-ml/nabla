@@ -111,6 +111,36 @@ class Tensor(DLPackArray, HasTensorValue):
             self._impl._values = [value]
 
     @property
+    def values(self) -> list[graph.TensorValue]:
+        """Get all graph values as TensorValues.
+        
+        Raises RuntimeError if values are empty - call hydrate() first for realized tensors.
+        """
+        if not self._impl._values:
+            if self._impl._storages:
+                raise RuntimeError(
+                    "Tensor has storages but no values. Call tensor.hydrate() first "
+                    "to populate values from storages."
+                )
+            raise RuntimeError("Tensor has no values.")
+        
+        # Convert BufferValues to TensorValues
+        return [
+            v[...] if isinstance(v, graph.BufferValue) else v 
+            for v in self._impl._values
+        ]
+    
+    def hydrate(self) -> "Tensor":
+        """Populate values from storages for realized tensors.
+        
+        Call this before accessing values on a tensor that was realized.
+        Returns self for chaining.
+        """
+        if not self._impl._values and self._impl._storages:
+            GRAPH.add_input(self)
+        return self
+
+    @property
     def _backing_value(self) -> driver.Tensor | graph.BufferValue | graph.TensorValue:
         if self._impl._storages is not None and len(self._impl._storages) > 0:
             return self._impl._storages[0]

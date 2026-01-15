@@ -46,17 +46,17 @@ class CollectiveOperation(Operation):
             
         mesh = sharded_tensor._impl.sharding.mesh if sharded_tensor._impl.sharding else None
         
+        # Hydrate values from storages if needed (MUST be before graph context)
+        sharded_tensor.hydrate()
+        
         # 2. Execution in graph context
         with GRAPH.graph:
-            # from ..sharding.spmd import ensure_shard_values
-            # ensure_shard_values(sharded_tensor)
-            
             # Remove metadata-only kwargs that were stored for tracing but shouldn't be passed to maxpr
             # These are added by _setup_output_refs in operation.py for trace visualization
             maxpr_kwargs = {k: v for k, v in kwargs.items() if k not in ('mesh', 'reduce_axes')}
             
             # Call the specific implementation
-            result_values = self.maxpr(sharded_tensor._impl._values, mesh=mesh, **maxpr_kwargs)
+            result_values = self.maxpr(sharded_tensor.values, mesh=mesh, **maxpr_kwargs)
             
         # 3. Output wrapping
         output_spec = self._compute_output_spec(sharded_tensor, result_values, **kwargs)
@@ -78,9 +78,16 @@ class CollectiveOperation(Operation):
         return output
         
     def _should_proceed(self, tensor):
-        """Check if operation should proceed (values exist, not trivial)."""
-        # Default: proceed if we have values > 1
-        return tensor._impl._values and len(tensor._impl._values) > 1
+        """Check if operation should proceed (has sharding and potentially multiple shards)."""
+        # Proceed if sharded - hydrate() will populate values
+        if not tensor._impl.sharding:
+            return False
+        # If has storages, we can hydrate; otherwise need values
+        if tensor._impl._storages and len(tensor._impl._storages) > 1:
+            return True
+        if tensor._impl._values and len(tensor._impl._values) > 1:
+            return True
+        return False
         
     def _compute_output_spec(self, input_tensor, results, **kwargs):
         """Compute output sharding spec. Default: preserve input spec."""
@@ -165,11 +172,15 @@ class ShardOp(Operation):
         
         # Handle Tensor input (Simulation Mode)
         if isinstance(x, Tensor):
-            if x._impl._values:
+            # Hydrate values if needed (realized tensor)
+            x.hydrate()
+            vals = x._impl._values  # Use raw after hydrate for indexing
+            
+            if vals:
                 # Eager mode: extract underlying value(s)
-                if len(x._impl._values) > shard_idx:
+                if len(vals) > shard_idx:
                     # Input is sharded/distributed, pick corresponding shard
-                    effective_x = x._impl._values[shard_idx]
+                    effective_x = vals[shard_idx]
                     
                     # If input had sharding, we must compute its global offset 
                     if x._impl.sharding:
@@ -190,11 +201,7 @@ class ShardOp(Operation):
                             input_shard_offset[d] = shard_pos * chunk_size
                 else:
                     # Input is unsharded/replicated (single value), broadcast it
-                    effective_x = x._impl._values[0]
-            else:
-                 # Lazy mode but passed as Tensor? Should have been converted to TensorValue
-                 # Fallback to direct usage (might fail if not subscriptable)
-                 pass
+                    effective_x = vals[0]
 
         # Target local shape for this device
         target_local_shape = compute_local_shape(global_shape, spec, shard_idx)
@@ -289,11 +296,15 @@ class ShardOp(Operation):
             elif local is not None:
                 global_shape = tuple(int(d) for d in local)
         
+        # Hydrate values from storages if needed (MUST be before graph context)
+        if isinstance(x, Tensor):
+            x.hydrate()
+        
         with GRAPH.graph:
             # Convert input to TensorValue (lazy) or keep as Tensor (eager simulation)
             x_input = x
             if isinstance(x, Tensor) and not x._impl._values:
-                 # Lazy mode: use TensorValue
+                 # No values even after hydrate - use TensorValue
                  x_input = g.TensorValue(x)
             
             # Execute shard operation with global_shape
@@ -526,9 +537,9 @@ class AllGatherOp(Operation):
         from ..core.compute_graph import GRAPH
         from ..sharding.spec import ShardingSpec, DimSpec
         
-        if (not sharded_tensor._impl._values or len(sharded_tensor._impl._values) <= 1) and \
-           (not sharded_tensor._impl.sharding or sharded_tensor._impl.sharding.is_fully_replicated()):
-            return sharded_tensor  # Already logically replicated
+        if (not sharded_tensor._impl._values and not sharded_tensor._impl._storages) or \
+           (sharded_tensor._impl.sharding and sharded_tensor._impl.sharding.is_fully_replicated()):
+            return sharded_tensor  # Already replicated or no data
             
         # Get mesh and sharded axis info from input sharding
         mesh = sharded_tensor._impl.sharding.mesh if sharded_tensor._impl.sharding else None
@@ -540,17 +551,10 @@ class AllGatherOp(Operation):
             if axis < len(sharding.dim_specs) and sharding.dim_specs[axis].axes:
                 sharded_axis_name = sharding.dim_specs[axis].axes[0]
         
-        # Hydrate values if realized (missing values but has storages)
-        if (not sharded_tensor._impl._values or len(sharded_tensor._impl._values) == 0) and \
-           (sharded_tensor._impl._storages and len(sharded_tensor._impl._storages) > 0):
-             GRAPH.add_input(sharded_tensor)
-
-        # # Ensure values exist (hydrate from storage if needed) - WE ARE NOT ALLOWED TO DO ANYTHING STORAGE REALTED HERE!!!!NEVER
-        # with GRAPH.graph:
-        #     from ..sharding.spmd import ensure_shard_values
-        #     ensure_shard_values(sharded_tensor)
+        # Hydrate values from storages if needed (realized tensor)
+        sharded_tensor.hydrate()
             
-        if not sharded_tensor._impl._values or len(sharded_tensor._impl._values) <= 1:
+        if len(sharded_tensor.values) <= 1:
             # Physically gathered (single value) but logically sharded.
             # We just need to update the metadata to be replicated.
             # IMPORTANT: Compute the GLOBAL shape, not just copy local shape!
@@ -577,7 +581,7 @@ class AllGatherOp(Operation):
             
             impl = TensorImpl(
                 storages=sharded_tensor._impl._storages,  # Copy storages!
-                values=sharded_tensor._impl._values,
+                values=sharded_tensor._impl._values,  # Keep raw for passthrough
                 traced=sharded_tensor._impl.traced,
                 batch_dims=batch_dims,
             )
@@ -591,7 +595,7 @@ class AllGatherOp(Operation):
         
         with GRAPH.graph:
             gathered = self.maxpr(
-                sharded_tensor._impl._values, axis, 
+                sharded_tensor.values, axis, 
                 mesh=mesh, sharded_axis_name=sharded_axis_name
             )
         
@@ -698,11 +702,15 @@ class AllReduceOp(CollectiveOperation):
         """Check if all_reduce should proceed.
         
         Returns False (skip) if:
-        - Tensor has <= 1 values (trivial case)
+        - Tensor has <= 1 values/storages (trivial case)
         - Tensor is already fully replicated (no sharded axes)
         """
-        # Trivial case: single value or no values
-        if not tensor._impl._values or len(tensor._impl._values) <= 1:
+        # Check both values and storages for multi-shard tensors
+        has_multiple_shards = (
+            (tensor._impl._values and len(tensor._impl._values) > 1) or
+            (tensor._impl._storages and len(tensor._impl._storages) > 1)
+        )
+        if not has_multiple_shards:
             return False
         
         # IDEMPOTENCY: If tensor is already fully replicated, skip reduction
@@ -1728,12 +1736,9 @@ class GatherAllAxesOp(Operation):
         if spec.is_fully_replicated():
             return sharded_tensor  # Already replicated
         
-        # Hydrate values if realized (missing values but has storages)
-        # if (not sharded_tensor._impl._values or len(sharded_tensor._impl._values) == 0) and \
-        #    (sharded_tensor._impl._storages and len(sharded_tensor._impl._storages) > 0):
-        #      GRAPH.add_input(sharded_tensor)
-
-        shard_values = sharded_tensor._impl._values
+        # Hydrate values from storages if needed (realized tensor)
+        sharded_tensor.hydrate()
+        shard_values = sharded_tensor.values
         
         if not shard_values or len(shard_values) <= 1:
             return sharded_tensor  # Nothing to gather
