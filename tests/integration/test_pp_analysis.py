@@ -7,7 +7,7 @@ Contains:
 """
 
 import unittest
-import asyncio
+
 import numpy as np
 from nabla.core.tensor import Tensor
 from nabla import ops
@@ -72,33 +72,30 @@ class TestPPAnalysis(unittest.TestCase):
         print(f"\n✅ PASS: Result shape {result.shape}")
 
         # --- Numerical Verification ---
-        async def verify():
-            # NumPy Reference
-            h_shards = np.split(h_np, NUM_STAGES, axis=0)
-            w_shards = np.split(W_np, NUM_STAGES, axis=0)
-            
-            shard_results = []
-            for i in range(NUM_STAGES):
-                # Local computation per stage
-                res = np.maximum(h_shards[i] @ w_shards[i], 0) # ReLU
-                shard_results.append(res)
-            
-            # Simulate PP Permute: i -> (i+1)%N
-            # Stage k receives from k-1
-            permuted_results = [None] * NUM_STAGES
-            for i in range(NUM_STAGES):
-                target = (i + 1) % NUM_STAGES
-                permuted_results[target] = shard_results[i]
-            
-            expected = np.concatenate(permuted_results, axis=0)
-            
-            # Get Nabla result
-            actual = result.to_numpy()
-            
-            np.testing.assert_allclose(actual, expected, rtol=1e-5, atol=1e-5)
-            print("✅ PASS: Numerical verification")
-
-        asyncio.run(verify())
+        # NumPy Reference
+        h_shards = np.split(h_np, NUM_STAGES, axis=0)
+        w_shards = np.split(W_np, NUM_STAGES, axis=0)
+        
+        shard_results = []
+        for i in range(NUM_STAGES):
+            # Local computation per stage
+            res = np.maximum(h_shards[i] @ w_shards[i], 0) # ReLU
+            shard_results.append(res)
+        
+        # Simulate PP Permute: i -> (i+1)%N
+        # Stage k receives from k-1
+        permuted_results = [None] * NUM_STAGES
+        for i in range(NUM_STAGES):
+            target = (i + 1) % NUM_STAGES
+            permuted_results[target] = shard_results[i]
+        
+        expected = np.concatenate(permuted_results, axis=0)
+        
+        # Get Nabla result
+        actual = result.to_numpy()
+        
+        np.testing.assert_allclose(actual, expected, rtol=1e-5, atol=1e-5)
+        print("✅ PASS: Numerical verification")
     def test_unbatched_2d_transformer_pp(self):
         """Unbatched 2D Transformer block: attention + FFN.
         
@@ -149,14 +146,14 @@ class TestPPAnalysis(unittest.TestCase):
         
         def make_weight(d_in, d_out):
             w_np = np.random.randn(d_in * NUM_STAGES, d_out).astype(np.float32) * 0.1
-            return ops.shard(Tensor.from_dlpack(w_np), mesh, [DimSpec(["stage"]), DimSpec([])])
+            return ops.shard(Tensor.from_dlpack(w_np), mesh, [DimSpec(["stage"]), DimSpec([])]), w_np
         
-        Wq = make_weight(D_MODEL, D_MODEL)
-        Wk = make_weight(D_MODEL, D_MODEL)
-        Wv = make_weight(D_MODEL, D_MODEL)
-        Wo = make_weight(D_MODEL, D_MODEL)
-        W1 = make_weight(D_MODEL, D_FF)
-        W2 = make_weight(D_FF, D_MODEL)
+        Wq, wq_np = make_weight(D_MODEL, D_MODEL)
+        Wk, wk_np = make_weight(D_MODEL, D_MODEL)
+        Wv, wv_np = make_weight(D_MODEL, D_MODEL)
+        Wo, wo_np = make_weight(D_MODEL, D_MODEL)
+        W1, w1_np = make_weight(D_MODEL, D_FF)
+        W2, w2_np = make_weight(D_FF, D_MODEL)
         
         print(f"\nShapes:")
         print(f"  x: {x.shape} local {x._impl.physical_local_shape(0)}")
@@ -177,101 +174,107 @@ class TestPPAnalysis(unittest.TestCase):
         print(f"\n✅ PASS: Result shape {result.shape}")
 
         # --- Numerical Verification ---
-        async def verify():
-            # Split inputs and weights per stage
-            x_shards = np.split(x_np, NUM_STAGES, axis=0)
-            
-            # Wq was created sharded, so convert back then split
-            wq_shards = np.split(Wq.to_numpy(), NUM_STAGES, axis=0)
-            
-            # Helper to split based on "make_weight" logic (sharding on dim 0)
-            def split_w(t_val):
-                return np.split(t_val.to_numpy(), NUM_STAGES, axis=0)
-            
-            sq = split_w(Wq); sk = split_w(Wk); sv = split_w(Wv); so = split_w(Wo)
-            s1 = split_w(W1); s2 = split_w(W2)
-            
-            shard_results = []
-            for i in range(NUM_STAGES):
-                xi = x_shards[i]
-                
-                # Attention
-                Q = xi @ sq[i]
-                K = xi @ sk[i]
-                V = xi @ sv[i]
-                scores = Q @ K.swapaxes(0, 1) / np.sqrt(D_MODEL)
-                # Softmax on last axis
-                e_x = np.exp(scores - np.max(scores, axis=-1, keepdims=True))
-                attn = e_x / np.sum(e_x, axis=-1, keepdims=True)
-                attn_out = (attn @ V) @ so[i]
-                
-                h = xi + attn_out
-                
-                # FFN
-                ff = np.maximum(h @ s1[i], 0)
-                ff_out = ff @ s2[i]
-                
-                res = h + ff_out
-                shard_results.append(res)
-            
-            # Permute
-            permuted = [None] * NUM_STAGES
-            for i in range(NUM_STAGES):
-                permuted[(i + 1) % NUM_STAGES] = shard_results[i]
-            
-            # With Shardy AllReduce removed, the result is the local partial sum.
-            # But wait, 'softmax' on partial sum is weird.
-            # User intent: "we compute local shards".
-            # We will verify that what we get matches "Softmax(Partial) @ V_partial".
-            
-            # Construct expected tensor for Device 0 (which is what to_numpy() returns for <*, *> or <*, stage>?)
-            # result is <*, stage>. to_numpy() on sharded tensor GATHERS all shards.
-            # So actual should be the concatenation of all `permuted` shards!
-            
-            # Since result is <*, stage>, actual is (Batch, Total_Dim).
-            # It matches expected if expected is concatenation of partial-processed shards.
-            expected = np.concatenate(permuted, axis=1) # Concatenate along stage axis (1)
-
-            actual = result.to_numpy() # This triggers execution
-            
-            # We updated logic to be: Q = xi @ sq[i] (Partial). 
-            # Original code sum() calculated global Q.
-            # We need to recalculate `shard_results` using local logic only.
-            
-            # RE-RUN REF LOGIC FOR LOCAL ONLY
-            shard_results_local = []
-            for i in range(NUM_STAGES):
-                xi = x_shards[i]
-                # Local Attention (No Sum)
-                Q = xi @ sq[i]
-                K = xi @ sk[i]
-                V = xi @ sv[i]
-                scores = Q @ K.swapaxes(0, 1) / np.sqrt(D_MODEL)
-                
-                # Softmax on local scores (User: "result is correctly sharded")
-                e_x = np.exp(scores - np.max(scores, axis=-1, keepdims=True))
-                attn = e_x / np.sum(e_x, axis=-1, keepdims=True)
-                
-                attn_out = (attn @ V) @ so[i]
-                h = xi + attn_out
-                
-                ff = np.maximum(h @ s1[i], 0)
-                ff_out = ff @ s2[i]
-                res = h + ff_out
-                shard_results_local.append(res)
-            
-            
-            permuted_local = [None] * NUM_STAGES
-            for i in range(NUM_STAGES):
-                permuted_local[(i + 1) % NUM_STAGES] = shard_results_local[i]
-                
-            expected = np.concatenate(permuted_local, axis=0) # Unbatched 2D MLP shards on axis 0
-            
-            actual = result.to_numpy()
-            np.testing.assert_allclose(actual, expected, rtol=1e-4, atol=1e-4)
-            print("✅ PASS: Numerical verification")
+        # --- Numerical Verification ---
+        # Split inputs and weights per stage
+        x_shards = np.split(x_np, NUM_STAGES, axis=0)
         
-        asyncio.run(verify())
+        # Wq was created sharded, so convert back then split
+        wq_shards = np.split(wq_np, NUM_STAGES, axis=0)
+        
+        # Helper to split based on "make_weight" logic (sharding on dim 0)
+        def split_w(t_val):
+            return np.split(t_val, NUM_STAGES, axis=0)
+        
+        sq = split_w(wq_np); sk = split_w(wk_np); sv = split_w(wv_np); so = split_w(wo_np)
+        s1 = split_w(w1_np); s2 = split_w(w2_np)
+        
+        shard_results = []
+        for i in range(NUM_STAGES):
+            xi = x_shards[i]
+            
+            # Attention
+            Q = xi @ sq[i]
+            K = xi @ sk[i]
+            V = xi @ sv[i]
+            scores = Q @ K.swapaxes(0, 1) / np.sqrt(D_MODEL)
+            # Softmax on last axis
+            e_x = np.exp(scores - np.max(scores, axis=-1, keepdims=True))
+            attn = e_x / np.sum(e_x, axis=-1, keepdims=True)
+            attn_out = (attn @ V) @ so[i]
+            
+            h = xi + attn_out
+            
+            # FFN
+            ff = np.maximum(h @ s1[i], 0)
+            ff_out = ff @ s2[i]
+            
+            res = h + ff_out
+            shard_results.append(res)
+        
+        # Permute
+        permuted = [None] * NUM_STAGES
+        for i in range(NUM_STAGES):
+            permuted[(i + 1) % NUM_STAGES] = shard_results[i]
+        
+        # With Shardy AllReduce removed, the result is the local partial sum.
+        # But wait, 'softmax' on partial sum is weird.
+        # User intent: "we compute local shards".
+        # We will verify that what we get matches "Softmax(Partial) @ V_partial".
+        
+        # Construct expected tensor for Device 0 (which is what to_numpy() returns for <*, *> or <*, stage>?)
+        # result is <*, stage>. to_numpy() on sharded tensor GATHERS all shards.
+        # So actual should be the concatenation of all `permuted` shards!
+        
+        # Since result is <*, stage>, actual is (Batch, Total_Dim).
+        # It matches expected if expected is concatenation of partial-processed shards.
+        # DEBUG: Checking expected construction
+        # expected = np.concatenate(permuted, axis=1) # Concatenate along stage axis (1) --> This produces (4, 32) but we want (16, 8) if sharded on axis 0!
+        expected = np.concatenate(permuted, axis=0) 
+        print(f"DEBUG: expected.shape={expected.shape}")
+
+        print(f"DEBUG: result.is_sharded={result.is_sharded}")
+        print(f"DEBUG: result.sharding={result.sharding}")
+        
+        actual = result.to_numpy() # This triggers execution
+        print(f"DEBUG: actual.shape={actual.shape}")
+        
+        # We updated logic to be: Q = xi @ sq[i] (Partial). 
+        # Original code sum() calculated global Q.
+        # We need to recalculate `shard_results` using local logic only.
+        
+        # RE-RUN REF LOGIC FOR LOCAL ONLY
+        shard_results_local = []
+        for i in range(NUM_STAGES):
+            xi = x_shards[i]
+            # Local Attention (No Sum)
+            Q = xi @ sq[i]
+            K = xi @ sk[i]
+            V = xi @ sv[i]
+            scores = Q @ K.swapaxes(0, 1) / np.sqrt(D_MODEL)
+            
+            # Softmax on local scores (User: "result is correctly sharded")
+            e_x = np.exp(scores - np.max(scores, axis=-1, keepdims=True))
+            attn = e_x / np.sum(e_x, axis=-1, keepdims=True)
+            
+            attn_out = (attn @ V) @ so[i]
+            h = xi + attn_out
+            
+            ff = np.maximum(h @ s1[i], 0)
+            ff_out = ff @ s2[i]
+            res = h + ff_out
+            shard_results_local.append(res)
+        
+        
+        permuted_local = [None] * NUM_STAGES
+        for i in range(NUM_STAGES):
+            permuted_local[(i + 1) % NUM_STAGES] = shard_results_local[i]
+            
+        expected = np.concatenate(permuted_local, axis=0) # Unbatched 2D MLP shards on axis 0
+        
+        actual = result.to_numpy()
+        np.testing.assert_allclose(actual, expected, rtol=1e-4, atol=1e-4)
+        print("✅ PASS: Numerical verification")
+    
         self.assertNotIn("all_reduce", str(t))
     
     def test_pp_with_replicated_batch(self):
@@ -323,24 +326,21 @@ class TestPPAnalysis(unittest.TestCase):
         self.assertEqual(tuple(int(d) for d in result.shape), (BATCH, D_OUT))
         print(f"\n✅ PASS: Result shape {result.shape}")
 
-        async def verify():
-            # x split on 1 (data), W split on 0 (input)
-            x_shards = np.split(x_np, NUM_STAGES, axis=1)
-            w_shards = np.split(w_np, NUM_STAGES, axis=0)
-            
-            
-            # Partial sums
-            # With all_reduce, inputs are summed
-            total_y = sum(x_s @ w_s for x_s, w_s in zip(x_shards, w_shards))
-            
-            # ppermute rotates replicated result -> identity
-            expected = total_y
-            actual = result.to_numpy()
-            
-            np.testing.assert_allclose(actual, expected, rtol=1e-5, atol=1e-5)
-            print("✅ PASS: Numerical verification")
+        # x split on 1 (data), W split on 0 (input)
+        x_shards = np.split(x_np, NUM_STAGES, axis=1)
+        w_shards = np.split(w_np, NUM_STAGES, axis=0)
         
-        asyncio.run(verify())
+        
+        # Partial sums
+        # With all_reduce, inputs are summed
+        total_y = sum(x_s @ w_s for x_s, w_s in zip(x_shards, w_shards))
+        
+        # ppermute rotates replicated result -> identity
+        expected = total_y
+        actual = result.to_numpy()
+        
+        np.testing.assert_allclose(actual, expected, rtol=1e-5, atol=1e-5)
+        print("✅ PASS: Numerical verification")
     
     def test_mlp_batched_shard_data_dim(self):
         """Full MLP with batched input, data concatenated/sharded on dim 1.
@@ -413,28 +413,25 @@ class TestPPAnalysis(unittest.TestCase):
         self.assertEqual(tuple(int(d) for d in result.shape), (BATCH, D_OUT))
         print(f"\n✅ PASS: Result shape {result.shape}")
         
-        async def verify():
-            # x split on 1, W1 split on 0
-            x_shards = np.split(x_np, NUM_STAGES, axis=1)
-            w1_shards = np.split(w1_np, NUM_STAGES, axis=0)
-            w2_whole = w2_np # W2 is replicated
-            
-            # Calculate global sum of partials (AllReduce)
-            h_partials = [x_shards[i] @ w1_shards[i] for i in range(NUM_STAGES)]
-            h_total = sum(h_partials)
-            
-            # Apply ReLU and W2
-            h_relu = np.maximum(h_total, 0)
-            final_y = h_relu @ w2_whole
-            
-            # ppermute -> identity
-            expected = final_y
-            actual = result.to_numpy()
-            
-            np.testing.assert_allclose(actual, expected, rtol=1e-5, atol=1e-5)
-            print("✅ PASS: Numerical verification")
-
-        asyncio.run(verify())
+        # x split on 1, W1 split on 0
+        x_shards = np.split(x_np, NUM_STAGES, axis=1)
+        w1_shards = np.split(w1_np, NUM_STAGES, axis=0)
+        w2_whole = w2_np # W2 is replicated
+        
+        # Calculate global sum of partials (AllReduce)
+        h_partials = [x_shards[i] @ w1_shards[i] for i in range(NUM_STAGES)]
+        h_total = sum(h_partials)
+        
+        # Apply ReLU and W2
+        h_relu = np.maximum(h_total, 0)
+        final_y = h_relu @ w2_whole
+        
+        # ppermute -> identity
+        expected = final_y
+        actual = result.to_numpy()
+        
+        np.testing.assert_allclose(actual, expected, rtol=1e-5, atol=1e-5)
+        print("✅ PASS: Numerical verification")
     
     def test_mlp_unbatched_pp(self):
         """Full MLP with NO batch - single 1D input per stage.
@@ -502,28 +499,25 @@ class TestPPAnalysis(unittest.TestCase):
         self.assertEqual(tuple(int(d) for d in result.shape), (D_OUT,))
         print(f"\n✅ PASS: Result shape {result.shape}")
 
-        async def verify():
-            # x split on 0 (only axis), W1 split on 0
-            x_shards = np.split(x_np, NUM_STAGES, axis=0)
-            w1_shards = np.split(w1_np, NUM_STAGES, axis=0)
-            w2_whole = w2_np
-            
-            # Calculate global sum of partials (AllReduce)
-            h_partials = [x_shards[i] @ w1_shards[i] for i in range(NUM_STAGES)]
-            h_total = sum(h_partials)
-            
-            # Apply ReLU and W2
-            h_relu = np.maximum(h_total, 0)
-            final_y = h_relu @ w2_whole
-            
-            # ppermute -> identity
-            expected = final_y
-            actual = result.to_numpy()
-            
-            np.testing.assert_allclose(actual, expected, rtol=1e-5, atol=1e-5)
-            print("✅ PASS: Numerical verification")
-
-        asyncio.run(verify())
+        # x split on 0 (only axis), W1 split on 0
+        x_shards = np.split(x_np, NUM_STAGES, axis=0)
+        w1_shards = np.split(w1_np, NUM_STAGES, axis=0)
+        w2_whole = w2_np
+        
+        # Calculate global sum of partials (AllReduce)
+        h_partials = [x_shards[i] @ w1_shards[i] for i in range(NUM_STAGES)]
+        h_total = sum(h_partials)
+        
+        # Apply ReLU and W2
+        h_relu = np.maximum(h_total, 0)
+        final_y = h_relu @ w2_whole
+        
+        # ppermute -> identity
+        expected = final_y
+        actual = result.to_numpy()
+        
+        np.testing.assert_allclose(actual, expected, rtol=1e-5, atol=1e-5)
+        print("✅ PASS: Numerical verification")
 
     def test_transformer_attention_block_pp_2d(self):
         """Transformer Block with 2D Inputs and 'Row-Parallel' Sharding.
@@ -613,50 +607,47 @@ class TestPPAnalysis(unittest.TestCase):
         self.assertEqual(tuple(int(d) for d in result.shape), (BATCH, TOTAL_DIM))
         print(f"\n✅ PASS: Result shape {result.shape}")
         
-        async def verify():
-            # NumPy Ref
-            # Split inputs and first-layer weights
-            x_shards = np.split(x_np, NUM_STAGES, axis=1)
-            wq_shards = np.split(Wq.to_numpy(), NUM_STAGES, axis=0)
-            wk_shards = np.split(Wk.to_numpy(), NUM_STAGES, axis=0)
-            wv_shards = np.split(Wv.to_numpy(), NUM_STAGES, axis=0)
+        # NumPy Ref
+        # Split inputs and first-layer weights
+        x_shards = np.split(x_np, NUM_STAGES, axis=1)
+        wq_shards = np.split(Wq.to_numpy(), NUM_STAGES, axis=0)
+        wk_shards = np.split(Wk.to_numpy(), NUM_STAGES, axis=0)
+        wv_shards = np.split(Wv.to_numpy(), NUM_STAGES, axis=0)
+        
+        # Q = Sum(x_i @ wq_i)
+        # This logic mimics what the trace should do (Row Parallel)
+        Q = sum(x_shards[i] @ wq_shards[i] for i in range(NUM_STAGES))
+        K = sum(x_shards[i] @ wk_shards[i] for i in range(NUM_STAGES))
+        V = sum(x_shards[i] @ wv_shards[i] for i in range(NUM_STAGES))
+        
+        scores = Q @ K.T
+        scores = np.exp(scores) / np.sum(np.exp(scores), axis=-1, keepdims=True)
+        out = scores @ V
+        
+        # Output Projection (Col Parallel / Fan Out)
+        # Wo is [D, D*S] sharded on 1.
+        # We compute [B, D] @ [D, D*S].
+        # This naturally shards the output columns.
+        final = out @ Wo.to_numpy()
+        
+        res_val = x_np + final
+        
+        # Simulate PP Permute: i -> (i+1)%N
+        # 1. Split result into shards along sharded axis (1)
+        res_shards = np.split(res_val, NUM_STAGES, axis=1)
+        
+        # 2. Permute shards
+        permuted = [None] * NUM_STAGES
+        for i in range(NUM_STAGES):
+            permuted[(i + 1) % NUM_STAGES] = res_shards[i]
             
-            # Q = Sum(x_i @ wq_i)
-            # This logic mimics what the trace should do (Row Parallel)
-            Q = sum(x_shards[i] @ wq_shards[i] for i in range(NUM_STAGES))
-            K = sum(x_shards[i] @ wk_shards[i] for i in range(NUM_STAGES))
-            V = sum(x_shards[i] @ wv_shards[i] for i in range(NUM_STAGES))
-            
-            scores = Q @ K.T
-            scores = np.exp(scores) / np.sum(np.exp(scores), axis=-1, keepdims=True)
-            out = scores @ V
-            
-            # Output Projection (Col Parallel / Fan Out)
-            # Wo is [D, D*S] sharded on 1.
-            # We compute [B, D] @ [D, D*S].
-            # This naturally shards the output columns.
-            final = out @ Wo.to_numpy()
-            
-            res_val = x_np + final
-            
-            # Simulate PP Permute: i -> (i+1)%N
-            # 1. Split result into shards along sharded axis (1)
-            res_shards = np.split(res_val, NUM_STAGES, axis=1)
-            
-            # 2. Permute shards
-            permuted = [None] * NUM_STAGES
-            for i in range(NUM_STAGES):
-                permuted[(i + 1) % NUM_STAGES] = res_shards[i]
-                
-            # 3. Concatenate back
-            expected = np.concatenate(permuted, axis=1)
-            
-            actual = result.to_numpy()
-            
-            np.testing.assert_allclose(actual, expected, rtol=1e-4, atol=1e-4)
-            print("✅ PASS: Numerical verification")
-
-        asyncio.run(verify())
+        # 3. Concatenate back
+        expected = np.concatenate(permuted, axis=1)
+        
+        actual = result.to_numpy()
+        
+        np.testing.assert_allclose(actual, expected, rtol=1e-4, atol=1e-4)
+        print("✅ PASS: Numerical verification")
 
     def test_1d_input_pp(self):
         """1D input concatenated on its single axis.
@@ -711,23 +702,20 @@ class TestPPAnalysis(unittest.TestCase):
         self.assertEqual(tuple(int(d) for d in result.shape), (D_OUT,))
         print(f"\n✅ PASS: Result shape {result.shape}")
         
-        async def verify():
-            # x split on 0 (only axis), W split on 0
-            x_shards = np.split(x_np, NUM_STAGES, axis=0)
-            w_shards = np.split(w_np, NUM_STAGES, axis=0)
-            
-            # 1D @ 2D -> 1D partial sum
-            # With all_reduce, we sum these up
-            total_y = sum(x_shards[i] @ w_shards[i] for i in range(NUM_STAGES))
-            
-            # ppermute rotates replicated result -> identity
-            expected = total_y
-            actual = result.to_numpy()
-            
-            np.testing.assert_allclose(actual, expected, rtol=1e-5, atol=1e-5)
-            print("✅ PASS: Numerical verification")
-
-        asyncio.run(verify())
+        # x split on 0 (only axis), W split on 0
+        x_shards = np.split(x_np, NUM_STAGES, axis=0)
+        w_shards = np.split(w_np, NUM_STAGES, axis=0)
+        
+        # 1D @ 2D -> 1D partial sum
+        # With all_reduce, we sum these up
+        total_y = sum(x_shards[i] @ w_shards[i] for i in range(NUM_STAGES))
+        
+        # ppermute rotates replicated result -> identity
+        expected = total_y
+        actual = result.to_numpy()
+        
+        np.testing.assert_allclose(actual, expected, rtol=1e-5, atol=1e-5)
+        print("✅ PASS: Numerical verification")
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ Test Hierarchy:
 4. test_sharding_ops.py - Sharding operations and vmap+sharding combo
 """
 
-import asyncio
+
 import pytest
 import numpy as np
 from typing import Callable

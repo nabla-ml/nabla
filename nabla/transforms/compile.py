@@ -165,7 +165,7 @@ class CompiledFunction(Generic[T]):
         arg_counter = 0
         for i, arg in enumerate(flat):
             if isinstance(arg, Tensor):
-                arg._sync_realize()  # Ensure realized
+                arg.realize()  # Ensure realized
                 tensor_idx.append(i)
                 
                 shape = self._build_signature_shape(arg, arg_counter)

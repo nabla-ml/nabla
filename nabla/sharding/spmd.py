@@ -298,38 +298,39 @@ from .spec import needs_reshard
 # SPMD Argument Extraction
 # ============================================================================
 
-def ensure_shard_values(tensor: "Tensor") -> list:
-    """Ensure tensor has symbolic values, hydrating from storage if needed.
+# THE FOLLOWING FUNCTION SHOULD NOT EXIST!!!
+# def ensure_shard_values(tensor: "Tensor") -> list:
+#     """Ensure tensor has symbolic values, hydrating from storage if needed.
     
-    If a tensor is realized (has _storages but cleared _values), this creates
-    new graph inputs for the storages and populates _values.
-    """
-    if tensor._impl._values:
-        return tensor._impl._values
+#     If a tensor is realized (has _storages but cleared _values), this creates
+#     new graph inputs for the storages and populates _values.
+#     """
+#     if tensor._impl._values:
+#         return tensor._impl._values
         
-    if tensor._impl._storages and len(tensor._impl._storages) > 0:
-        from ..core.compute_graph import GRAPH
-        from ..core.tensor import Tensor
+#     if tensor._impl._storages and len(tensor._impl._storages) > 0:
+#         from ..core.compute_graph import GRAPH
+#         from ..core.tensor import Tensor
         
-        # We must be in a graph context to add inputs
-        try:
-            # Check if we are in a graph context
-            _ = GRAPH.graph
+#         # We must be in a graph context to add inputs
+#         try:
+#             # Check if we are in a graph context
+#             _ = GRAPH.graph
             
-            with GRAPH.graph:
-                new_values = []
-                for s in tensor._impl._storages:
-                    # Wrap storage as Tensor to adapt to graph input
-                    t = Tensor(storage=s)
-                    new_values.append(t.__tensorvalue__())
-                tensor._impl._values = new_values
-                return new_values
-        except LookupError:
-            # Not in a graph context - return empty or handle gracefully?
-            # Operations requiring values will fail anyway.
-            pass
+#             with GRAPH.graph:
+#                 new_values = []
+#                 for s in tensor._impl._storages:
+#                     # Wrap storage as Tensor to adapt to graph input
+#                     t = Tensor(storage=s)
+#                     new_values.append(t.__tensorvalue__())
+#                 tensor._impl._values = new_values
+#                 return new_values
+#         except LookupError:
+#             # Not in a graph context - return empty or handle gracefully?
+#             # Operations requiring values will fail anyway.
+#             pass
             
-    return []
+#     return []
 
 
 

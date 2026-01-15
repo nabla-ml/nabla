@@ -44,7 +44,7 @@ class TestShardMapComplex(unittest.TestCase):
         
         # Execute
         res = sharded_fn(x)
-        res._sync_realize()
+        res.realize()
 
         # Verification
         expected = np.sum(x_np, axis=0) # (4,)
@@ -72,7 +72,7 @@ class TestShardMapComplex(unittest.TestCase):
         sharded_fn = shard_map(my_reshape, self.mesh, in_specs, out_specs)
         
         res = sharded_fn(x)
-        res._sync_realize()
+        res.realize()
         
         expected = x_np.reshape(16)
         np.testing.assert_allclose(res.to_numpy(), expected, rtol=1e-5)
@@ -105,7 +105,7 @@ class TestShardMapComplex(unittest.TestCase):
         sharded_fn = shard_map(my_matmul, self.mesh, in_specs, out_specs)
         
         res = sharded_fn(a, b)
-        res._sync_realize()
+        res.realize()
         
         expected = a_np @ b_np
         np.testing.assert_allclose(res.to_numpy(), expected, rtol=1e-4)
@@ -140,7 +140,7 @@ class TestShardMapComplex(unittest.TestCase):
         sharded_fn = shard_map(my_model, self.mesh, in_specs, out_specs)
         
         res = sharded_fn(x)
-        res._sync_realize()
+        res.realize()
         
         # Expected
         # (x + 1) @ W -> (2 @ 2I) = 4
@@ -175,7 +175,7 @@ class TestShardMapComplex(unittest.TestCase):
         self.assertEqual(res._impl.sharding.dim_specs[1].axes, [])
         
         # Run it
-        res._sync_realize()
+        res.realize()
         expected = x_np
         np.testing.assert_allclose(res.to_numpy(), expected)
 

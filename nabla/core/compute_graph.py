@@ -171,7 +171,7 @@ class ComputeGraph:
         """Registers a tensor as pending computation."""
         self.unrealized[id(tensor)] = tensor
 
-    async def evaluate(
+    def evaluate(
         self, 
         tensor: Tensor, 
         *extra_outputs: Any, 
@@ -209,11 +209,11 @@ class ComputeGraph:
             add_target(t)
         
         # Select Strategy
-        return await self._evaluate_normal(targets, return_model=return_model)
+        return self._evaluate_normal(targets, return_model=return_model)
 
     # --- Execution Strategies ---
 
-    async def _evaluate_normal(self, unrealized: list[Tensor], return_model: bool) -> Any:
+    def _evaluate_normal(self, unrealized: list[Tensor], return_model: bool) -> Any:
         """Standard compilation path handling both single-device and eager-sharded execution.
         
         Handles both regular tensors (single value) and sharded tensors (multiple values).
@@ -229,6 +229,7 @@ class ComputeGraph:
             print("-" * 70)
         
         # Collect all output values - for sharded tensors, collect ALL shard values
+        # Also build index mapping for result storage
         # Also build index mapping for result storage
         all_values = []
         value_map = []  # List of (tensor, shard_idx) or (tensor, None) for single-value
@@ -253,11 +254,11 @@ class ComputeGraph:
             print(self.graph._module.operation)
             print("=" * 70)
         
-        return await self._compile_and_execute_with_map(unrealized, value_map, return_model)
+        return self._compile_and_execute_with_map(unrealized, value_map, return_model)
 
     # --- Low-Level Execution Mechanics ---
 
-    async def _compile_and_execute_with_map(
+    def _compile_and_execute_with_map(
         self, 
         unrealized: list[Tensor], 
         value_map: list[tuple[Tensor, int | None]], 
@@ -269,16 +270,22 @@ class ComputeGraph:
         handling both single-value and multi-shard tensors.
         """
         # 1. Optimizations
-        module = _core.Operation._from_cmlir(self.graph._module.operation)
-        _core.lower(module, [builtin.passes.RemoveDeadValues()])
-        _remove_unused_arguments(self.graph)
-        
-        # 2. Execution
-        inputs = [self.sources[inp._mlir_value] for inp in self.graph.inputs]
         try:
+            module = _core.Operation._from_cmlir(self.graph._module.operation)
+            _core.lower(module, [builtin.passes.RemoveDeadValues()])
+            _remove_unused_arguments(self.graph)
+        except Exception as e:
+            if DEBUG_LAZY_EVAL:
+                print(f"[LAZY EVAL ERROR] Optimization failed: {e}")
+            raise
+
+        # 2. Execution
+        try:
+            inputs = [self.sources[inp._mlir_value] for inp in self.graph.inputs]
             model = _session().load(self.graph)
             seed_val, *results = model(*inputs)
         except BaseException as e:
+
             self.graph._erase_output_if_present()
             if DEBUG_LAZY_EVAL:
                 print("\n[LAZY EVAL ERROR] Failed to compile/execute. Graph state:")
@@ -329,14 +336,8 @@ class ComputeGraph:
 
     def _finalize_evaluation(self, seed_value: int) -> None:
         """Prepares the graph for the next epoch."""
-        self._reset(self.graph._context, seed_value)
-
-# =============================================================================
-# 4. High-Level Tools & Instance
-# =============================================================================
-
-
-
+        # Force new context creation to avoid pollution/segfaults
+        self._reset(None, seed_value)
 
 # Global Singleton
 GRAPH = ComputeGraph()

@@ -1,6 +1,6 @@
 
 import unittest
-import asyncio
+
 import numpy as np
 from nabla.core.tensor import Tensor
 from nabla import ops
@@ -85,34 +85,34 @@ class TestTruePipelineParallelism(unittest.TestCase):
         # Verify result
         result = pipeline_step(x, W)
         
-        async def verify():
-            # NumPy Reference
-            # "Batch" matmul manually
-            x_local = [x_np[i] for i in range(STAGES)] # list of (D,)
-            w_local = [w_np[i] for i in range(STAGES)] # list of (D, D)
+        # Verify result
+        result = pipeline_step(x, W)
+        
+        # NumPy Reference
+        # "Batch" matmul manually
+        x_local = [x_np[i] for i in range(STAGES)] # list of (D,)
+        w_local = [w_np[i] for i in range(STAGES)] # list of (D, D)
+        
+        y_local = []
+        for i in range(STAGES):
+            # (1, D) @ (D, D) -> (1, D)
+            res = np.maximum(x_local[i] @ w_local[i], 0)
+            y_local.append(res)
+        
+        # PPermute logic
+        y_permuted = [None] * STAGES
+        for i in range(STAGES):
+            # i sends to (i+1)%S
+            # receiver r = (i+1)%S gets from i
+            # So output[r] = y_local[i]
+            y_permuted[(i + 1) % STAGES] = y_local[i]
             
-            y_local = []
-            for i in range(STAGES):
-                # (1, D) @ (D, D) -> (1, D)
-                res = np.maximum(x_local[i] @ w_local[i], 0)
-                y_local.append(res)
-            
-            # PPermute logic
-            y_permuted = [None] * STAGES
-            for i in range(STAGES):
-                # i sends to (i+1)%S
-                # receiver r = (i+1)%S gets from i
-                # So output[r] = y_local[i]
-                y_permuted[(i + 1) % STAGES] = y_local[i]
-                
-            expected = np.stack(y_permuted, axis=0)
-            
-            actual = result.to_numpy()
-            
-            np.testing.assert_allclose(actual, expected, rtol=1e-5, atol=1e-5)
-            print("\n✅ PASS: Numerical Verification")
-
-        asyncio.run(verify())
+        expected = np.stack(y_permuted, axis=0)
+        
+        actual = result.to_numpy()
+        
+        np.testing.assert_allclose(actual, expected, rtol=1e-5, atol=1e-5)
+        print("\n✅ PASS: Numerical Verification")
 
     def test_pp_stage_batch_2d(self):
         """
@@ -166,29 +166,26 @@ class TestTruePipelineParallelism(unittest.TestCase):
         
         result = pipeline_step(x, W)
         
-        async def verify():
-            # NumPy Reference
-            x_local = [x_np[i] for i in range(STAGES)] # list of (B, D)
-            w_local = [w_np[i] for i in range(STAGES)] # list of (D, D)
+        # NumPy Reference
+        x_local = [x_np[i] for i in range(STAGES)] # list of (B, D)
+        w_local = [w_np[i] for i in range(STAGES)] # list of (D, D)
+        
+        y_local = []
+        for i in range(STAGES):
+            # (B, D) @ (D, D) -> (B, D)
+            res = np.maximum(x_local[i] @ w_local[i], 0)
+            y_local.append(res)
+        
+        
+        y_permuted = [None] * STAGES
+        for i in range(STAGES):
+            y_permuted[(i + 1) % STAGES] = y_local[i]
             
-            y_local = []
-            for i in range(STAGES):
-                # (B, D) @ (D, D) -> (B, D)
-                res = np.maximum(x_local[i] @ w_local[i], 0)
-                y_local.append(res)
-            
-            
-            y_permuted = [None] * STAGES
-            for i in range(STAGES):
-                y_permuted[(i + 1) % STAGES] = y_local[i]
-                
-            expected = np.stack(y_permuted, axis=0)
-            actual = result.to_numpy()
-            
-            np.testing.assert_allclose(actual, expected, rtol=1e-5, atol=1e-5)
-            print("\n✅ PASS: Numerical Verification")
-            
-        asyncio.run(verify())
+        expected = np.stack(y_permuted, axis=0)
+        actual = result.to_numpy()
+        
+        np.testing.assert_allclose(actual, expected, rtol=1e-5, atol=1e-5)
+        print("\n✅ PASS: Numerical Verification")
 
     def test_pp_dp_2d_mesh(self):
         """
@@ -266,53 +263,50 @@ class TestTruePipelineParallelism(unittest.TestCase):
         
         result = hybrid_step(x, W)
         
-        async def verify():
-            # Calculate Expected Result locally
-            # We effectively simulate the parallel grid
-            
-            # 1. Compute locally per (pp, dp) shard
-            y_shards = {} # (p,d) -> result slice
-            
-            for p in range(PP_SIZE):
-                for d in range(DP_SIZE):
-                    # Local Inputs
-                    # x slice: STAGE=p, BATCH=d*B_local : (d+1)*B_local
-                    x_slice = x_np[p, d*BATCH_PER_DP : (d+1)*BATCH_PER_DP, :]
-                    w_slice = w_np[p, :, :]
-                    
-                    # Local Compute
-                    y_slice = np.maximum(x_slice @ w_slice, 0)
-                    y_shards[(p, d)] = y_slice
-            
-            # 2. Simulate PPermute
-            # (p, d) -> y_final[(p+1)%P, d_slice]
-            # We want to reconstruct the GLOBAL [STAGES, BATCH, D]
-            
-            y_final_check = np.zeros_like(x_np)
-            
-            for p in range(PP_SIZE):
-                for d in range(DP_SIZE):
-                    # Data at (p,d) *moves to* ((p+1)%P, d)
-                    # So the data currently held at y_shards[(p,d)] IS the data for stage P, batch slice D
-                    # WAIT. PPermute effectively rotates the TENSOR CONTENT relative to the DEVICE GRID.
-                    # Or does it rotate the DEVICE OWNERSHIP?
-                    # x[s] starts at stage s. 
-                    # After ppermute, the data at stage s moves to s+1.
-                    # So y_shards[(p,d)] contains the calculation result of stage p.
-                    # It creates a tensor 'result' where slicing result along PP axis at (p+1) gives this data.
-                    
-                    target_p = (p + 1) % PP_SIZE
-                    
-                    # Place into global array
-                    batch_start = d * BATCH_PER_DP
-                    batch_end = (d + 1) * BATCH_PER_DP
-                    y_final_check[target_p, batch_start:batch_end, :] = y_shards[(p, d)]
-            
-            actual = result.to_numpy()
-            np.testing.assert_allclose(actual, y_final_check, rtol=1e-5, atol=1e-5)
-            print("\n✅ PASS: Numerical Verification")
-            
-        asyncio.run(verify())
+        # Calculate Expected Result locally
+        # We effectively simulate the parallel grid
+        
+        # 1. Compute locally per (pp, dp) shard
+        y_shards = {} # (p,d) -> result slice
+        
+        for p in range(PP_SIZE):
+            for d in range(DP_SIZE):
+                # Local Inputs
+                # x slice: STAGE=p, BATCH=d*B_local : (d+1)*B_local
+                x_slice = x_np[p, d*BATCH_PER_DP : (d+1)*BATCH_PER_DP, :]
+                w_slice = w_np[p, :, :]
+                
+                # Local Compute
+                y_slice = np.maximum(x_slice @ w_slice, 0)
+                y_shards[(p, d)] = y_slice
+        
+        # 2. Simulate PPermute
+        # (p, d) -> y_final[(p+1)%P, d_slice]
+        # We want to reconstruct the GLOBAL [STAGES, BATCH, D]
+        
+        y_final_check = np.zeros_like(x_np)
+        
+        for p in range(PP_SIZE):
+            for d in range(DP_SIZE):
+                # Data at (p,d) *moves to* ((p+1)%P, d)
+                # So the data currently held at y_shards[(p,d)] IS the data for stage P, batch slice D
+                # WAIT. PPermute effectively rotates the TENSOR CONTENT relative to the DEVICE GRID.
+                # Or does it rotate the DEVICE OWNERSHIP?
+                # x[s] starts at stage s. 
+                # After ppermute, the data at stage s moves to s+1.
+                # So y_shards[(p,d)] contains the calculation result of stage p.
+                # It creates a tensor 'result' where slicing result along PP axis at (p+1) gives this data.
+                
+                target_p = (p + 1) % PP_SIZE
+                
+                # Place into global array
+                batch_start = d * BATCH_PER_DP
+                batch_end = (d + 1) * BATCH_PER_DP
+                y_final_check[target_p, batch_start:batch_end, :] = y_shards[(p, d)]
+        
+        actual = result.to_numpy()
+        np.testing.assert_allclose(actual, y_final_check, rtol=1e-5, atol=1e-5)
+        print("\n✅ PASS: Numerical Verification")
 
 
 if __name__ == "__main__":

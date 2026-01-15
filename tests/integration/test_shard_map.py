@@ -1,5 +1,5 @@
 
-import asyncio
+
 import unittest
 import numpy as np
 from nabla.core.tensor import Tensor
@@ -59,13 +59,10 @@ class TestShardMapRigorous(unittest.TestCase):
         # 4. Numerical Verification
         print("Running Numerical Verification...")
         result = sharded_fn(x)
-        async def verify():
-            np_res = result.to_numpy()
-            expected = data * 2
-            np.testing.assert_allclose(np_res, expected)
-            print("✅ PASS: Numerical verification")
-        
-        asyncio.run(verify())
+        np_res = result.to_numpy()
+        expected = data * 2
+        np.testing.assert_allclose(np_res, expected)
+        print("✅ PASS: Numerical verification")
 
 
     def test_io_constraints_sharding(self):
@@ -107,17 +104,14 @@ class TestShardMapRigorous(unittest.TestCase):
         # Run
         result = sharded_fn(t1, t2)
         
-        async def verify():
-            print(f"Result Sharding: {result.sharding}")
-            # Verify output spec
-            self.assertEqual(result.sharding.dim_specs[1].axes, ["tp"])
-            
-            np_res = result.to_numpy()
-            expected = d1 + d2
-            np.testing.assert_allclose(np_res, expected, atol=1e-5)
-            print("✅ PASS: Result Verified")
-            
-        asyncio.run(verify())
+        print(f"Result Sharding: {result.sharding}")
+        # Verify output spec
+        self.assertEqual(result.sharding.dim_specs[1].axes, ["tp"])
+        
+        np_res = result.to_numpy()
+        expected = d1 + d2
+        np.testing.assert_allclose(np_res, expected, atol=1e-5)
+        print("✅ PASS: Result Verified")
 
     def test_complex_graph_trace(self):
         """Verify complex graph with mixed constraints."""
@@ -165,14 +159,11 @@ class TestShardMapRigorous(unittest.TestCase):
         # Verify tensor parallelism spec appears
         self.assertIn("tp", t_str)
         
-        async def verify():
-            result = sharded_fn(t_x, t_w1, t_w2)
-            res_np = result.to_numpy()
-            expected = (d_x @ d_w1 * 2.0) @ d_w2
-            np.testing.assert_allclose(res_np, expected, atol=1e-4)
-            print("✅ PASS: Complex Graph Verified")
-            
-        asyncio.run(verify())
+        result = sharded_fn(t_x, t_w1, t_w2)
+        res_np = result.to_numpy()
+        expected = (d_x @ d_w1 * 2.0) @ d_w2
+        np.testing.assert_allclose(res_np, expected, atol=1e-4)
+        print("✅ PASS: Complex Graph Verified")
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

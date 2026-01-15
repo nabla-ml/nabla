@@ -25,7 +25,6 @@ if TYPE_CHECKING:
     from ..sharding.spec import DeviceMesh, DimSpec, ShardingSpec
 
 
-
 class CollectiveOperation(Operation):
     """Base class for collective communication operations.
     
@@ -49,8 +48,8 @@ class CollectiveOperation(Operation):
         
         # 2. Execution in graph context
         with GRAPH.graph:
-            from ..sharding.spmd import ensure_shard_values
-            ensure_shard_values(sharded_tensor)
+            # from ..sharding.spmd import ensure_shard_values
+            # ensure_shard_values(sharded_tensor)
             
             # Remove metadata-only kwargs that were stored for tracing but shouldn't be passed to maxpr
             # These are added by _setup_output_refs in operation.py for trace visualization
@@ -541,10 +540,15 @@ class AllGatherOp(Operation):
             if axis < len(sharding.dim_specs) and sharding.dim_specs[axis].axes:
                 sharded_axis_name = sharding.dim_specs[axis].axes[0]
         
-        # Ensure values exist (hydrate from storage if needed)
-        with GRAPH.graph:
-            from ..sharding.spmd import ensure_shard_values
-            ensure_shard_values(sharded_tensor)
+        # Hydrate values if realized (missing values but has storages)
+        if (not sharded_tensor._impl._values or len(sharded_tensor._impl._values) == 0) and \
+           (sharded_tensor._impl._storages and len(sharded_tensor._impl._storages) > 0):
+             GRAPH.add_input(sharded_tensor)
+
+        # # Ensure values exist (hydrate from storage if needed) - WE ARE NOT ALLOWED TO DO ANYTHING STORAGE REALTED HERE!!!!NEVER
+        # with GRAPH.graph:
+        #     from ..sharding.spmd import ensure_shard_values
+        #     ensure_shard_values(sharded_tensor)
             
         if not sharded_tensor._impl._values or len(sharded_tensor._impl._values) <= 1:
             # Physically gathered (single value) but logically sharded.
@@ -897,7 +901,7 @@ class ReduceScatterOp(CollectiveOperation):
             List of scattered TensorValues
         """
         # DISTRIBUTED: Compose allreduce + scatter
-        if _is_distributed(mesh):
+        if mesh and mesh.is_distributed:
             from max.graph.ops.allreduce import sum as allreduce_sum
             from max.graph.type import BufferType
             from max.dtype import DType
@@ -1201,7 +1205,7 @@ class PPermuteOp(CollectiveOperation):
                 val = shard_values[src]
                 
                 # DISTRIBUTED: Transfer to destination device
-                if _is_distributed(mesh):
+                if mesh and mesh.is_distributed:
                     val = ops.transfer_to(val, mesh.device_refs[dst])
                 
                 results.append(val)
@@ -1287,7 +1291,7 @@ class AllToAllOp(CollectiveOperation):
                 chunk = chunks_per_device[src][dst]
                 
                 # DISTRIBUTED: Transfer chunk to destination
-                if _is_distributed(mesh):
+                if mesh and mesh.is_distributed:
                     chunk = ops.transfer_to(chunk, mesh.device_refs[dst])
                 
                 received.append(chunk)
@@ -1699,7 +1703,7 @@ class GatherAllAxesOp(Operation):
         # We just pick the first one.
         
         return current_shard_descs[0][0]
-    
+
     def __call__(self, sharded_tensor):
         """Gather all sharded axes to produce a replicated tensor.
         
@@ -1724,14 +1728,12 @@ class GatherAllAxesOp(Operation):
         if spec.is_fully_replicated():
             return sharded_tensor  # Already replicated
         
-        # Access TensorValues - this triggers add_input for realized tensors
-        # via __tensorvalue__ if needed
+        # Hydrate values if realized (missing values but has storages)
+        # if (not sharded_tensor._impl._values or len(sharded_tensor._impl._values) == 0) and \
+        #    (sharded_tensor._impl._storages and len(sharded_tensor._impl._storages) > 0):
+        #      GRAPH.add_input(sharded_tensor)
+
         shard_values = sharded_tensor._impl._values
-        
-        # If realized but _values is empty, the tensor needs to be added as input
-        if not shard_values and sharded_tensor._impl._storages:
-            GRAPH.add_input(sharded_tensor)
-            shard_values = sharded_tensor._impl._values
         
         if not shard_values or len(shard_values) <= 1:
             return sharded_tensor  # Nothing to gather
@@ -1750,6 +1752,7 @@ class GatherAllAxesOp(Operation):
         )
         impl.sharding = replicated_spec
         return Tensor(impl=impl)
+
 
 
 # Singleton for GatherAllAxesOp (defined before ReshardOp for ordering)

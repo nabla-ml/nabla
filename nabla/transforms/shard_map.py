@@ -68,7 +68,7 @@ def shard_map(
             # For now, let's rely on Node Inputs forcing the state.
 
         # Pre-realize inputs preventing lazy graph pollution
-        pytree.tree_map(lambda x: x._sync_realize() if isinstance(x, Tensor) else x, (args, kwargs))
+        pytree.tree_map(lambda x: x.realize() if isinstance(x, Tensor) else x, (args, kwargs))
 
         try:
             # Attach input duals matches in_specs (Boundary condition)

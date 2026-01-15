@@ -18,9 +18,7 @@
 
 from __future__ import annotations
 
-import asyncio
-import warnings
-from concurrent.futures import ThreadPoolExecutor
+
 from typing import TYPE_CHECKING, Any
 
 try:
@@ -241,7 +239,7 @@ class Tensor(DLPackArray, HasTensorValue):
             True if tensor has a sharding specification.
         """
         return self._impl.is_sharded
-    
+
     @property
     def local_shape(self) -> graph.Shape | None:
         """Local shape of this tensor (including batch dims).
@@ -468,36 +466,21 @@ class Tensor(DLPackArray, HasTensorValue):
 
     # ===== Realization =====
 
-    def __await__(self):
-        if self.real:
-            return self
-        yield from asyncio.create_task(GRAPH.evaluate(self))
-        assert self.real
-        return self
+    def realize(self) -> Tensor:
+        """Force immediate realization of the tensor (blocking).
+        
+        This blocks the main thread until the tensor's value is computed.
+        """
+        return self.realize()
 
-    @property
-    async def realize(self):
-        return await self
-
-    def _sync_realize(self) -> Tensor:
+    def realize(self) -> Tensor:
         if self.real:
             return self
         if not self._in_global_compute_graph:
             raise TypeError("Can't realize symbolic tensors in graph compilation.")
-        if not _in_running_loop():
-            return asyncio.run(self.realize)
-        
-        def is_interactive() -> bool:
-            import __main__ as main
-            return not hasattr(main, "__file__")
-
-        if not is_interactive():
-            warnings.warn("Use of synchronous tensor method inside another event loop.")
-
-        loop = asyncio.new_event_loop()
-        with ThreadPoolExecutor() as pool:
-            fut = pool.submit(loop.run_until_complete, self.realize)
-        return fut.result()
+            
+        GRAPH.evaluate(self)
+        return self
 
     # ===== Reduction Operations =====
     
@@ -520,11 +503,11 @@ class Tensor(DLPackArray, HasTensorValue):
         if self._impl.is_sharded and self._impl.sharding and not self._impl.sharding.is_fully_replicated():
             from ..ops.communication import gather_all_axes
             gathered = gather_all_axes(self)
-            gathered._sync_realize()
+            gathered.realize()
             assert gathered.storage is not None
             return gathered.storage.__dlpack__(stream=stream)
             
-        self._sync_realize()
+        self.realize()
         assert self.storage is not None
         return self.storage.__dlpack__(stream=stream)
 
@@ -533,11 +516,11 @@ class Tensor(DLPackArray, HasTensorValue):
         if self._impl.is_sharded and self._impl.sharding and not self._impl.sharding.is_fully_replicated():
             from ..ops.communication import gather_all_axes
             gathered = gather_all_axes(self)
-            gathered._sync_realize()
+            gathered.realize()
             assert gathered.storage is not None
             return gathered.storage.__dlpack_device__()
 
-        self._sync_realize()
+        self.realize()
         assert self.storage is not None
         return self.storage.__dlpack_device__()
 
@@ -549,7 +532,7 @@ class Tensor(DLPackArray, HasTensorValue):
     def __repr__(self):
         if not self._in_global_compute_graph:
             return repr(self)
-        self._sync_realize()
+        self.realize()
         dt = self.driver_tensor.to(CPU())
         values = [dt[idx].item() for idx in dt._iterate_indices()]
         return f"{self.type}: [{', '.join(str(v) for v in values)}]"
@@ -560,32 +543,20 @@ class Tensor(DLPackArray, HasTensorValue):
     def item(self):
         if self.num_elements() != 1:
             raise TypeError("Only single-element tensors can be converted to Python scalars")
-        self._sync_realize()
+        self.realize()
         return self.driver_tensor.to(CPU()).item()
     
     def to_numpy(self):
-        """Convert tensor to numpy array, gathering shards if needed.
-        
-        For sharded tensors, uses gather_all_axes to properly reconstruct
-        multi-axis sharded tensors before realization.
-        """
-        # If sharded (multiple values OR multiple storages), gather first
-        if self._impl.is_sharded and self._impl.sharding:
-            sharding = self._impl.sharding
-            
-            # If fully replicated, all shards are identical - just use first
-            if sharding.is_fully_replicated():
-                self._sync_realize()
-                return self.driver_tensor.to(CPU()).to_numpy()
-            
-            # Sharded: use gather_all_axes to get single global value
+        """Convert tensor to numpy array, gathering shards if needed."""
+        # If sharded, gather all shards first
+        if self._impl.is_sharded and self._impl.sharding and not self._impl.sharding.is_fully_replicated():
             from ..ops.communication import gather_all_axes
             gathered = gather_all_axes(self)
-            gathered._sync_realize()
+            gathered.realize()
             return gathered.driver_tensor.to(CPU()).to_numpy()
         
         # Standard path: realize and convert
-        self._sync_realize()
+        self.realize()
         return self.driver_tensor.to(CPU()).to_numpy()
 
     def num_elements(self) -> int:
