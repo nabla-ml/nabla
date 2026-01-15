@@ -143,6 +143,32 @@ class CollectiveOperation(Operation):
         """
         return 0.0
 
+    def _group_shards_by_axes(self, shard_values, mesh, group_by_axes):
+        """Group shards by coordinates on specific axes.
+        
+        Args:
+            shard_values: List of shard values (one per device)
+            mesh: Device mesh
+            group_by_axes: List/set of axis names to use for grouping. 
+                           Devices with same coords on these axes will be in same group.
+        
+        Returns:
+            Dict mapping coord_tuple -> list of (shard_idx, value)
+        """
+        groups = {}
+        for shard_idx, val in enumerate(shard_values):
+            # Build key from coords on grouping axes
+            key_parts = []
+            for axis_name in group_by_axes:
+                key_parts.append(mesh.get_coordinate(shard_idx, axis_name))
+            
+            key = tuple(key_parts)
+            if key not in groups:
+                 groups[key] = []
+            groups[key].append((shard_idx, val))
+            
+        return groups
+
 class ShardOp(Operation):
     """Split a replicated tensor into multiple sharded TensorValues.
     
@@ -489,19 +515,13 @@ class AllGatherOp(CollectiveOperation):
             return [full_tensor] * len(shard_values)
         
         # Multi-dimensional: Group devices by their coordinates on OTHER axes
-        groups = {}
-        for shard_idx, val in enumerate(shard_values):
-            other_coords = tuple(mesh.get_coordinate(shard_idx, ax) for ax in other_axes)
-            sharded_coord = mesh.get_coordinate(shard_idx, sharded_axis_name)
-            
-            if other_coords not in groups:
-                groups[other_coords] = []
-            groups[other_coords].append((sharded_coord, val))
+        groups = self._group_shards_by_axes(shard_values, mesh, other_axes)
         
         # Gather per group
         gathered_per_group = {}
         for other_coords, members in groups.items():
-            members.sort(key=lambda x: x[0])
+            # Sort by coord on the sharded axis
+            members.sort(key=lambda x: mesh.get_coordinate(x[0], sharded_axis_name))
             shards = [val for _, val in members]
             gathered = ops.concat(shards, axis=axis) if len(shards) > 1 else shards[0]
             gathered_per_group[other_coords] = gathered
@@ -739,22 +759,9 @@ class AllReduceOp(CollectiveOperation):
         if all_axes.issubset(reduce_axes):
             return self.maxpr(shard_results, mesh=mesh)
             
-        # Complex case: Group shards by non-reduced axes
-        # Each group contains shards that should be reduced together
-        groups = {}
-        
-        for shard_idx, result in enumerate(shard_results):
-            # Build key from coords on NON-reduced axes
-            key_parts = []
-            for axis_name in mesh.axis_names:
-                if axis_name not in reduce_axes:
-                    key_parts.append(mesh.get_coordinate(shard_idx, axis_name))
-            
-            # Use tuple of coords as grouping key
-            key = tuple(key_parts)
-            if key not in groups:
-                groups[key] = []
-            groups[key].append((shard_idx, result))
+        # Group by axes NOT in reduce_axes (we reduce WITHIN these groups)
+        group_axes = [ax for ax in all_axes if ax not in reduce_axes]
+        groups = self._group_shards_by_axes(shard_results, mesh, group_axes)
         
         # Execute reduction per group
         new_results = [None] * num_shards
@@ -1693,68 +1700,6 @@ def reshard(tensor: "Tensor", mesh: "DeviceMesh", dim_specs: List["DimSpec"], re
     return reshard_op(tensor, mesh, dim_specs, replicated_axes, **kwargs)
 
 
-def shard_batch_dims(
-    tensor: "Tensor", 
-    mesh: "DeviceMesh", 
-    axis_names: str | List[str], 
-    batch_axis: int = 0
-) -> "Tensor":
-    """Shard the batch dimension(s) of a tensor (e.g. inside vmap).
-    
-    This allows explicit control over how vmapped batch dimensions map to the device mesh,
-    enabling JAX-like `spmd_axis_name` functionality.
-    
-    Args:
-        tensor: The tensor to shard (must have batch_dims > 0)
-        mesh: The device mesh
-        axis_names: Mesh axis name(s) to shard the batch dimension(s) on.
-                    Can be a single string (shard outer batch dim) or list (shard multiple).
-        batch_axis: Which batch dimension to start sharding from (relative to batch dims).
-                    Default 0 (the outermost batch dimension).
-                    
-    Returns:
-        Tensor sharded on the batch dimension(s).
-    """
-    from ..sharding.spec import ShardingSpec, DimSpec
-    
-    if tensor.batch_dims == 0:
-        raise ValueError("Cannot shard batch dims of a tensor with no batch dimensions (not inside vmap?)")
-
-    if isinstance(axis_names, str):
-        axis_names = [axis_names]
-        
-    if batch_axis + len(axis_names) > tensor.batch_dims:
-        raise ValueError(
-            f"Cannot shard {len(axis_names)} axes starting at batch_axis {batch_axis}: "
-            f"tensor only has {tensor.batch_dims} batch dimensions."
-        )
-
-    # Start with existing spec or create fully replicated one
-    current_spec = tensor._impl.sharding
-    physical_rank = len(tensor._impl.physical_shape) if tensor._impl.physical_shape else (len(tensor.shape) + tensor.batch_dims)
-    
-    if current_spec:
-        # Clone existing specs
-        new_specs = [ds.clone() for ds in current_spec.dim_specs]
-        # Pad if missing (shouldn't happen with new robust logic but be safe)
-        while len(new_specs) < physical_rank:
-            new_specs.append(DimSpec([]))
-    else:
-        # Create fully replicated specs
-        new_specs = [DimSpec([]) for _ in range(physical_rank)]
-        
-    # Update the specific batch dimensions
-    for i, axis_name in enumerate(axis_names):
-        assert axis_name in mesh.axis_names, f"Axis {axis_name} not in mesh {mesh.axis_names}"
-        
-        # Physical index of the batch dimension
-        # batch dims are always at the start (0..batch_dims-1)
-        idx = batch_axis + i
-        new_specs[idx] = DimSpec([axis_name], is_open=True) # Open? Or Closed?
-        # Usually internal vmap batching is "open" conceptually, but DimSpec is data layout.
-        
-    # Reshard using generic ReshardOp
-    return reshard_op(tensor, mesh, new_specs)
 
 
 __all__ = [
@@ -1764,5 +1709,4 @@ __all__ = [
     "shard_op", "all_gather_op", "all_reduce_op", "reduce_scatter_op", "ppermute_op", "all_to_all_op", "axis_index_op", "pmean_op", "gather_all_axes_op", "reshard_op",
     # Public functions
     "shard", "all_gather", "all_reduce", "reduce_scatter", "ppermute", "all_to_all", "axis_index", "pmean", "gather_all_axes", "reshard",
-    "shard_batch_dims",
 ]
