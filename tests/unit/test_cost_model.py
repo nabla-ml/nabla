@@ -60,8 +60,8 @@ class TestCommunicationCostModel(unittest.TestCase):
         size = 1000
         cost = AllGatherOp.estimate_cost(size, self.mesh, ["d"])
         
-        # Expected: (4-1)/4 * 1000 * 4 = 0.75 * 4000 = 3000
-        expected = (4 - 1) / 4 * size * 4
+        # Expected: (4-1)/4 * 1000 = 750 (cost is based on bytes passed)
+        expected = (4 - 1) / 4 * size
         self.assertAlmostEqual(cost, expected, places=5)
 
     def test_reduce_scatter_cost_formula(self):

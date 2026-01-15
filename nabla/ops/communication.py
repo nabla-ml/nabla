@@ -33,6 +33,8 @@ class CollectiveOperation(Operation):
     2. Hydrate its values
     3. Perform a MAX graph operation (maxpr)
     4. Return a new Tensor with updated sharding spec
+    
+    Also provides unified cost modeling infrastructure.
     """
     
     def __call__(self, sharded_tensor, **kwargs):
@@ -46,16 +48,13 @@ class CollectiveOperation(Operation):
             
         mesh = sharded_tensor._impl.sharding.mesh if sharded_tensor._impl.sharding else None
         
-        # Hydrate values from storages if needed (MUST be before graph context)
+        # Hydrate values from storages if needed
         sharded_tensor.hydrate()
         
         # 2. Execution in graph context
         with GRAPH.graph:
-            # Remove metadata-only kwargs that were stored for tracing but shouldn't be passed to maxpr
-            # These are added by _setup_output_refs in operation.py for trace visualization
+            # Filter kwargs for maxpr
             maxpr_kwargs = {k: v for k, v in kwargs.items() if k not in ('mesh', 'reduce_axes')}
-            
-            # Call the specific implementation
             result_values = self.maxpr(sharded_tensor.values, mesh=mesh, **maxpr_kwargs)
             
         # 3. Output wrapping
@@ -79,19 +78,70 @@ class CollectiveOperation(Operation):
         
     def _should_proceed(self, tensor):
         """Check if operation should proceed (has sharding and potentially multiple shards)."""
-        # Proceed if sharded - hydrate() will populate values
         if not tensor._impl.sharding:
             return False
-        # If has storages, we can hydrate; otherwise need values
-        if tensor._impl._storages and len(tensor._impl._storages) > 1:
-            return True
-        if tensor._impl._values and len(tensor._impl._values) > 1:
+        # If has storages/values, check if > 1 (distributed/sharded) or if we need to enforce algo
+        if (tensor._impl._values and len(tensor._impl._values) > 1) or \
+           (tensor._impl._storages and len(tensor._impl._storages) > 1):
             return True
         return False
         
     def _compute_output_spec(self, input_tensor, results, **kwargs):
         """Compute output sharding spec. Default: preserve input spec."""
         return input_tensor._impl.sharding
+
+    def communication_cost(
+        self, 
+        input_specs: list["ShardingSpec"], 
+        output_specs: list["ShardingSpec"], 
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        mesh: "DeviceMesh"
+    ) -> float:
+        """Unified communication cost estimation.
+        
+        Delegates to self.estimate_cost() which must be implemented by subclasses.
+        Calculates basic tensor size metrics to pass to estimate_cost.
+        """
+        if not input_shapes:
+            return 0.0
+            
+        # Calculate tensor size in bytes
+        # Assumes float32 (4 bytes) by default
+        num_elements = 1
+        for d in input_shapes[0]:
+            num_elements *= d
+        size_bytes = num_elements * 4
+        
+        # Extract axes info if possible
+        # This is heuristics-based as specific op logic differs
+        axes = []
+        if input_specs and input_specs[0]:
+            # Collect all sharded axes from input
+            for dim_spec in input_specs[0].dim_specs:
+                axes.extend(dim_spec.axes)
+        
+        return self.estimate_cost(size_bytes, mesh, axes, input_specs, output_specs)
+
+    @classmethod
+    def estimate_cost(
+        cls,
+        size_bytes: int,
+        mesh: "DeviceMesh",
+        axes: list[str],
+        input_specs: list["ShardingSpec"] = None,
+        output_specs: list["ShardingSpec"] = None,
+    ) -> float:
+        """Estimate cost of the collective operation.
+        
+        Args:
+            size_bytes: Total size of the tensor in bytes
+            mesh: Device mesh
+            axes: Relevant mesh axes for this operation
+            input_specs: Input sharding specs (optional context)
+            output_specs: Output sharding specs (optional context)
+        """
+        return 0.0
 
 class ShardOp(Operation):
     """Split a replicated tensor into multiple sharded TensorValues.
@@ -123,21 +173,10 @@ class ShardOp(Operation):
         dim_specs: List[DimSpec],
         **kwargs: Any,
     ) -> List[TensorValue]:
-        """Create sharded TensorValues by slicing the input.
-        
-        Args:
-            x: Single TensorValue to shard
-            mesh: Device mesh defining the shard topology
-            dim_specs: Per-dimension sharding specification
-            kwargs: Must include 'shard_idx' or we are in manual call mode?
-                    If manual call (e.g. simulation loop in ShardOp.__call__), we loop over shards.
-        """
-        from ..sharding.spec import ShardingSpec, compute_local_shape
-        
-        # Determine execution context
-        # If kwargs contains shard_idx, we are in SPMD execution (called by Operation.__call__)
-        # If not, we are in ShardOp.__call__ (manual loop) or similar.
-        
+        """Create sharded TensorValues by slicing the input."""
+        from ..sharding.spec import ShardingSpec
+
+        # Determine global shape
         global_shape = kwargs.pop('global_shape', None)
         if global_shape is None:
             # Fallback: compute from x.type.shape (only correct for unsharded inputs)
@@ -145,12 +184,16 @@ class ShardOp(Operation):
         
         spec = ShardingSpec(mesh, dim_specs)
         
-        # If operating in SPMD mode
+        # DISTRIBUTED SPMD MODE (called per-shard internally by Operation.__call__)
         if "shard_idx" in kwargs:
              shard_idx = kwargs["shard_idx"]
              return self._slice_for_device(x, global_shape, spec, shard_idx, mesh)
         
-        # Manual loop mode (simulated execution called from ShardOp.__call__)
+        # SIMULATION MODE (manual loop)
+        return self._simulate_shard_execution(x, global_shape, spec, mesh)
+
+    def _simulate_shard_execution(self, x, global_shape, spec, mesh):
+        """Execute sharding manually for all devices (simulation)."""
         num_shards = len(mesh.devices)
         shard_values = []
         for shard_idx in range(num_shards):
@@ -352,63 +395,44 @@ class ShardOp(Operation):
 
 
 
-class AllGatherOp(Operation):
-    """Gather shards along an axis to produce replicated full tensors.
-    
-    Takes N sharded TensorValues and produces N replicated TensorValues,
-    each containing the full concatenated tensor.
-    """
+class AllGatherOp(CollectiveOperation):
+    """Gather shards along an axis to produce replicated full tensors."""
     
     @property
     def name(self) -> str:
         return "all_gather"
 
-    def communication_cost(
-        self, 
-        input_specs: list["ShardingSpec"], 
-        output_specs: list["ShardingSpec"], 
-        input_shapes: list[tuple[int, ...]],
-        output_shapes: list[tuple[int, ...]],
-        mesh: "DeviceMesh"
-    ) -> float:
-        """Estimate AllGather cost."""
-        
-        if not output_shapes:
-            return 0.0
-            
-        # AllGather produces the full replicated tensor.
-        # We need the size of the LOCAL shard (input) for the cost formula.
-        # Approximation: Total Size / Num Devices
-        
-        # Calculate TOTAL bytes
-        num_elements = 1
-        for d in output_shapes[0]:
-            num_elements *= d
-        total_size_bytes = num_elements * 4
-        
-        local_bytes = total_size_bytes // (len(mesh.devices) or 1)
-        
-        return self.estimate_cost(local_bytes, mesh, mesh.axis_names)
-
-    @staticmethod
+    @classmethod
     def estimate_cost(
+        cls,
         size_bytes: int,
         mesh: "DeviceMesh",
         axes: list[str],
+        input_specs: list["ShardingSpec"] = None,
+        output_specs: list["ShardingSpec"] = None,
     ) -> float:
-        """Estimate cost of AllGather across specified mesh axes."""
+        """Estimate AllGather cost."""
+        # For AllGather, size_bytes usually represents the output (full) size.
+        # But we need to know the LOCAL shard size for bandwidth calc.
+        # Approximation: if input_specs provided, use explicit shard info.
+        
         if not axes:
             return 0.0
-        
+            
         n_devices = 1
         for axis in axes:
             n_devices *= mesh.get_axis_size(axis)
         
         if n_devices <= 1:
             return 0.0
+            
+        # If size_bytes is total size, local is size_bytes / n_devices
+        local_bytes = size_bytes // n_devices
         
         bandwidth = getattr(mesh, 'bandwidth', 1.0)
-        cost = (n_devices - 1) / n_devices * size_bytes * n_devices / bandwidth
+        # Cost = (N-1)/N * TotalSize / Bandwidth
+        # Or: (N-1) * LocalSize / Bandwidth
+        cost = (n_devices - 1) / n_devices * size_bytes / bandwidth
         return cost
     
     def maxpr(
@@ -418,21 +442,9 @@ class AllGatherOp(Operation):
         mesh: "DeviceMesh" = None,
         sharded_axis_name: str = None,
     ) -> List[TensorValue]:
-        """Gather all shards along the specified axis.
-        
-        Args:
-            shard_values: List of shard TensorValues
-            axis: Axis along which shards are split
-            mesh: Device mesh (needed for 2D+ meshes to identify unique shards)
-            sharded_axis_name: Name of the mesh axis that was sharded
-            
-        Returns:
-            List of TensorValues - gathered along the specified axis.
-            For 2D+ meshes, each device gets its appropriate slice based on
-            coordinates on OTHER (non-gathered) mesh axes.
-        """
+        """Gather all shards along the specified axis."""
         # DISTRIBUTED: Use native MAX allgather
-        if mesh.is_distributed:
+        if mesh and mesh.is_distributed:
             from max.graph.ops.allgather import allgather as max_allgather
             from max.graph.type import BufferType
             from max.dtype import DType
@@ -444,14 +456,7 @@ class AllGatherOp(Operation):
             ]
             return max_allgather(shard_values, signal_buffers, axis=axis)
         
-        # SIMULATED: For multi-dimensional meshes, we need to gather within
-        # groups that share the same coordinates on non-gathered axes.
-        #
-        # Example: 2x2 mesh with axes ("x", "y"), gathering along "x":
-        #   Group 1 (y=0): devices 0,1 -> concat their data
-        #   Group 2 (y=1): devices 2,3 -> concat their data  
-        #   Device 0 gets Group 1 result, Device 2 gets Group 2 result, etc.
-        
+        # SIMULATED
         if mesh is None or sharded_axis_name is None:
             # Fallback: simple concat all
             if len(shard_values) == 1:
@@ -459,15 +464,17 @@ class AllGatherOp(Operation):
             full_tensor = ops.concat(shard_values, axis=axis)
             return [full_tensor] * len(shard_values)
         
+        return self._simulate_grouped_gather(shard_values, axis, mesh, sharded_axis_name)
+
+    def _simulate_grouped_gather(self, shard_values, axis, mesh, sharded_axis_name):
+        """Handle simulated gather logic for multi-dimensional meshes."""
         # Get all mesh axis names
         all_axes = list(mesh.axis_names)
         other_axes = [ax for ax in all_axes if ax != sharded_axis_name]
         
         if not other_axes:
-            # 1D mesh: simple case - gather all, return same to all
-            sharded_axis_size = mesh.get_axis_size(sharded_axis_name)
-            
-            # Group by coordinate on the sharded axis
+            # 1D mesh: simple case - gather all
+            # Group by coordinate on the sharded axis to ensure correct ordering
             unique_shards = []
             seen_coords = set()
             for shard_idx, val in enumerate(shard_values):
@@ -478,48 +485,32 @@ class AllGatherOp(Operation):
             unique_shards.sort(key=lambda x: x[0])
             shards_to_concat = [v for _, v in unique_shards]
             
-            if len(shards_to_concat) == 1:
-                full_tensor = shards_to_concat[0]
-            else:
-                full_tensor = ops.concat(shards_to_concat, axis=axis)
-            
+            full_tensor = ops.concat(shards_to_concat, axis=axis) if len(shards_to_concat) > 1 else shards_to_concat[0]
             return [full_tensor] * len(shard_values)
         
-        # Multi-dimensional mesh: group devices by their coordinates on OTHER axes
-        # Each group will produce its own gathered result
-        
-        # Build groups: key = tuple of coordinates on other axes
-        groups = {}  # {other_coords: [(sharded_coord, shard_idx, value)]}
+        # Multi-dimensional: Group devices by their coordinates on OTHER axes
+        groups = {}
         for shard_idx, val in enumerate(shard_values):
-            # Get this device's coordinates on OTHER axes
             other_coords = tuple(mesh.get_coordinate(shard_idx, ax) for ax in other_axes)
-            # Get coordinate on the axis being gathered
             sharded_coord = mesh.get_coordinate(shard_idx, sharded_axis_name)
             
             if other_coords not in groups:
                 groups[other_coords] = []
-            groups[other_coords].append((sharded_coord, shard_idx, val))
+            groups[other_coords].append((sharded_coord, val))
         
-        # For each group, gather along the sharded axis
-        gathered_per_group = {}  # {other_coords: gathered_tensor}
+        # Gather per group
+        gathered_per_group = {}
         for other_coords, members in groups.items():
-            # Sort by coordinate on the sharded axis
             members.sort(key=lambda x: x[0])
-            shards_to_concat = [val for _, _, val in members]
-            
-            if len(shards_to_concat) == 1:
-                gathered = shards_to_concat[0]
-            else:
-                gathered = ops.concat(shards_to_concat, axis=axis)
-            
+            shards = [val for _, val in members]
+            gathered = ops.concat(shards, axis=axis) if len(shards) > 1 else shards[0]
             gathered_per_group[other_coords] = gathered
         
-        # Assign each device its group's gathered result
+        # Distribute results
         results = []
         for shard_idx in range(len(shard_values)):
             other_coords = tuple(mesh.get_coordinate(shard_idx, ax) for ax in other_axes)
             results.append(gathered_per_group[other_coords])
-        
         return results
     
     def __call__(self, sharded_tensor, axis: int):
@@ -644,67 +635,39 @@ class AllGatherOp(Operation):
 
 
 class AllReduceOp(CollectiveOperation):
-    """Reduce values across all shards using the specified reduction.
-    
-    Takes N TensorValues with partial results and produces N TensorValues
-    with the fully reduced result (all identical after reduction).
-    
-    This operation is IDEMPOTENT: if the input is already fully replicated
-    (no sharded dimensions), it returns the input unchanged.
-    """
+    """Reduce values across all shards using the specified reduction."""
     
     @property
     def name(self) -> str:
         return "all_reduce"
 
-    def communication_cost(
-        self, 
-        input_specs: list["ShardingSpec"], 
-        output_specs: list["ShardingSpec"], 
-        input_shapes: list[tuple[int, ...]],
-        output_shapes: list[tuple[int, ...]],
-        mesh: "DeviceMesh"
-    ) -> float:
-        """Estimate AllReduce cost."""
-        if not input_shapes:
-            return 0.0
-            
-        # Calculate bytes
-        num_elements = 1
-        for d in input_shapes[0]:
-            num_elements *= d
-        size_bytes = num_elements * 4
-        
-        return self.estimate_cost(size_bytes, mesh, mesh.axis_names)
-
-    @staticmethod
+    @classmethod
     def estimate_cost(
+        cls,
         size_bytes: int,
         mesh: "DeviceMesh",
         axes: list[str],
+        input_specs: list["ShardingSpec"] = None,
+        output_specs: list["ShardingSpec"] = None,
     ) -> float:
-        """Estimate cost of AllReduce across specified mesh axes."""
+        """Estimate AllReduce cost."""
         if not axes:
             return 0.0
-        
+            
         n_devices = 1
         for axis in axes:
             n_devices *= mesh.get_axis_size(axis)
         
         if n_devices <= 1:
             return 0.0
-        
+            
         bandwidth = getattr(mesh, 'bandwidth', 1.0)
+        # 2 * (N-1)/N * Size / Bandwidth
         cost = 2.0 * (n_devices - 1) / n_devices * size_bytes / bandwidth
         return cost
     
     def _should_proceed(self, tensor):
-        """Check if all_reduce should proceed.
-        
-        Returns False (skip) if:
-        - Tensor has <= 1 values/storages (trivial case)
-        - Tensor is already fully replicated (no sharded axes)
-        """
+        """Check if all_reduce should proceed."""
         # Check both values and storages for multi-shard tensors
         has_multiple_shards = (
             (tensor._impl._values and len(tensor._impl._values) > 1) or
@@ -714,7 +677,6 @@ class AllReduceOp(CollectiveOperation):
             return False
         
         # IDEMPOTENCY: If tensor is already fully replicated, skip reduction
-        # This prevents double all_reduce when replay re-executes traced nodes
         if tensor._impl.sharding and tensor._impl.sharding.is_fully_replicated():
             return False
         
@@ -725,23 +687,12 @@ class AllReduceOp(CollectiveOperation):
         shard_values: List[TensorValue],
         mesh: "DeviceMesh" = None,
     ) -> List[TensorValue]:
-        """Sum-reduce across all shards (AllReduce).
-        
-        Note: MAX only supports sum reduction natively. Other reductions
-        (mean, max, min) are not supported.
-        
-        Args:
-            shard_values: List of shard TensorValues to reduce
-            mesh: Device mesh (needed for distributed execution)
-            
-        Returns:
-            List of reduced TensorValues (all identical)
-        """
+        """Sum-reduce across all shards (AllReduce)."""
         if not shard_values:
             return []
         
         # DISTRIBUTED: Use native MAX allreduce
-        if mesh.is_distributed:
+        if mesh and mesh.is_distributed:
             from max.graph.ops.allreduce import sum as allreduce_sum
             from max.graph.type import BufferType
             from max.dtype import DType
@@ -777,22 +728,7 @@ class AllReduceOp(CollectiveOperation):
         mesh: "DeviceMesh", 
         reduce_axes: "Set[str]",
     ) -> List[TensorValue]:
-        """Simulate grouped AllReduce execution for SPMD verification.
-        
-        When only a subset of mesh axes are involved in reduction (e.g., partial results
-        from tensor parallelism on 'model' axis), we must effectively:
-        1. Group shards that share coordinates on non-reduced axes
-        2. AllReduce within each group
-        3. Broadcast the result to all members of the group
-        
-        Args:
-            shard_results: List of shard values (length = mesh size)
-            mesh: The device mesh
-            reduce_axes: Set of mesh axis names to reduce over
-            
-        Returns:
-            List of reduced shard values (same length, grouped values are identical)
-        """
+        """Simulate grouped AllReduce execution for SPMD verification."""
         if not reduce_axes:
             return shard_results
             
@@ -840,52 +776,35 @@ class AllReduceOp(CollectiveOperation):
 
 
 class ReduceScatterOp(CollectiveOperation):
-    """Reduce then scatter the result across shards.
-    
-    Each shard receives a different portion of the reduced result.
-    """
+    """Reduce then scatter the result across shards."""
     
     @property
     def name(self) -> str:
         return "reduce_scatter"
 
-    def communication_cost(
-        self, 
-        input_specs: list["ShardingSpec"], 
-        output_specs: list["ShardingSpec"], 
-        input_shapes: list[tuple[int, ...]],
-        output_shapes: list[tuple[int, ...]],
-        mesh: "DeviceMesh"
-    ) -> float:
-        """Estimate ReduceScatter cost."""
-        if not input_shapes:
-            return 0.0
-            
-        # Input is full size (before scatter)
-        num_elements = 1
-        for d in input_shapes[0]:
-            num_elements *= d
-        size_bytes = num_elements * 4
-        
-        return self.estimate_cost(size_bytes, mesh, mesh.axis_names)
-
-    @staticmethod
+    @classmethod
     def estimate_cost(
+        cls,
         size_bytes: int,
         mesh: "DeviceMesh",
         axes: list[str],
+        input_specs: list["ShardingSpec"] = None,
+        output_specs: list["ShardingSpec"] = None,
     ) -> float:
-        """Estimate cost of ReduceScatter across specified mesh axes."""
+        """Estimate ReduceScatter cost."""
+        # Input is full size (before scatter).
+        # Same cost formula as AllGather (symetric) or (N-1)/N * Size
+        
         if not axes:
             return 0.0
-        
+            
         n_devices = 1
         for axis in axes:
             n_devices *= mesh.get_axis_size(axis)
         
         if n_devices <= 1:
             return 0.0
-        
+            
         bandwidth = getattr(mesh, 'bandwidth', 1.0)
         cost = (n_devices - 1) / n_devices * size_bytes / bandwidth
         return cost
@@ -1004,15 +923,11 @@ class ReshardOp(Operation):
         mesh: "DeviceMesh"
     ) -> float:
         """Estimate cost of resharding."""
-        from typing import Set, Optional
-        
-        # ReshardOp maps input_specs[0] -> output_specs[0]
-        # (implicit resharding logic)
+        # ReshardOp maps input_specs[0] -> output_specs[0] or explicit target
         
         from_spec = input_specs[0] if input_specs else None
         
-        # output_specs might be empty if we rely on "to_spec" passed in kwargs?
-        # But for generic modeling we assume output_specs[0] is the target.
+        # Ideally output_specs[0] is the target.
         to_spec = output_specs[0] if output_specs else None
         
         if not input_shapes:
@@ -1024,7 +939,6 @@ class ReshardOp(Operation):
             num_elements *= d
         tensor_bytes = num_elements * 4
         
-        # Reuse logic from original resharding_cost
         # Default: no resharding if specs are None or identical
         if from_spec is None and to_spec is None:
             return 0.0
@@ -1035,21 +949,24 @@ class ReshardOp(Operation):
         
         if to_spec is None:
             # Sharded -> Unsharded: need AllGather on all sharded dims
-            axes_to_gather: Set[str] = set()
+            axes_to_gather = set()
             for dim_spec in from_spec.dim_specs:
                 axes_to_gather.update(dim_spec.axes)
-            # Use AllGatherOp.estimate_cost
-            return AllGatherOp.estimate_cost(
-                tensor_bytes // from_spec.total_shards,
-                mesh,
-                list(axes_to_gather)
-            )
+            
+            # Use AllGatherOp.estimate_cost logic directly
+            # Local bytes = Total / shards
+            total_shards = from_spec.total_shards
+            local_bytes = tensor_bytes // (total_shards or 1)
+            
+            # Recalculate gathering cost here or delegate? 
+            # Delegating is better but AllGatherOp.estimate_cost is static
+            return AllGatherOp.estimate_cost(local_bytes, mesh, list(axes_to_gather))
         
         # Compare dimension-by-dimension
         total_cost = 0.0
         
         if len(from_spec.dim_specs) != len(to_spec.dim_specs):
-            # Rank mismatch - can't reshard directly
+            # Rank mismatch implies reshape or error - infinite cost
             return float('inf')
         
         for from_dim, to_dim in zip(from_spec.dim_specs, to_spec.dim_specs):
@@ -1063,9 +980,14 @@ class ReshardOp(Operation):
                 from_shards = 1
                 for axis in from_dim.axes:
                     from_shards *= mesh.get_axis_size(axis)
-                local_bytes = tensor_bytes // from_shards
                 
-                total_cost += AllGatherOp.estimate_cost(local_bytes, mesh, list(removed_axes))
+                # Approximate local size involved in this dim's gather
+                # This is rough; precise calculation depends on other dims too.
+                # Assuming this dimension is fully sharded and others might be too.
+                # A safe upper bound is using global size scaled by this dim's shard factor.
+                local_bytes_dim = tensor_bytes // from_shards
+                
+                total_cost += AllGatherOp.estimate_cost(local_bytes_dim, mesh, list(removed_axes))
         
         return total_cost
     
@@ -1447,163 +1369,6 @@ class PMeanOp(CollectiveOperation):
         return None
 
 
-# Singleton instances
-shard_op = ShardOp()
-all_gather_op = AllGatherOp()
-all_reduce_op = AllReduceOp()
-reduce_scatter_op = ReduceScatterOp()
-ppermute_op = PPermuteOp()
-all_to_all_op = AllToAllOp()
-axis_index_op = AxisIndexOp()
-pmean_op = PMeanOp()
-
-
-# Public API functions
-def shard(x, mesh: DeviceMesh, dim_specs: List[DimSpec]):
-    """Shard a tensor according to the given mesh and dimension specs.
-    
-    Args:
-        x: Input tensor (replicated/unsharded)
-        mesh: Device mesh defining shard topology
-        dim_specs: List of DimSpec for each dimension
-        
-    Returns:
-        Sharded tensor with multiple internal TensorValues
-    """
-    return shard_op(x, mesh, dim_specs)
-
-
-def all_gather(sharded_tensor, axis: int):
-    """Gather all shards to produce a replicated tensor.
-    
-    Args:
-        sharded_tensor: Tensor with multiple shards
-        axis: Axis along which shards are split
-        
-    Returns:
-        Replicated tensor with gathered values
-    """
-    return all_gather_op(sharded_tensor, axis)
-
-
-def all_reduce(sharded_tensor):
-    """Sum-reduce across all shards.
-    
-    Note: MAX only supports sum reduction natively.
-    
-    Args:
-        sharded_tensor: Tensor with partial values per shard
-        
-    Returns:
-        Tensor with sum-reduced values (replicated across shards)
-    """
-    return all_reduce_op(sharded_tensor)
-
-
-def reduce_scatter(sharded_tensor, axis: int):
-    """Sum-reduce then scatter result across shards.
-    
-    Note: MAX only supports sum reduction natively.
-    
-    Args:
-        sharded_tensor: Tensor with values per shard
-        axis: Axis along which to scatter
-        
-    Returns:
-        Tensor with scattered reduced values
-    """
-    return reduce_scatter_op(sharded_tensor, axis=axis)
-
-
-def ppermute(sharded_tensor, permutation: List[tuple]):
-    """Point-to-point permutation collective.
-    
-    Each device sends its value to exactly one other device according to
-    a permutation table. Useful for ring-based algorithms, pipeline
-    parallelism, and halo exchange.
-    
-    Args:
-        sharded_tensor: Tensor with multiple shards
-        permutation: List of (source_idx, dest_idx) pairs specifying
-                     which device sends to which. Destinations without
-                     senders receive zeros.
-        
-    Returns:
-        Tensor with permuted values
-        
-    Example:
-        # Ring shift: device 0→1→2→3→0
-        perm = [(0, 1), (1, 2), (2, 3), (3, 0)]
-        y = ppermute(x, perm)
-    """
-    return ppermute_op(sharded_tensor, permutation=permutation)
-
-
-def all_to_all(sharded_tensor, split_axis: int, concat_axis: int, tiled: bool = True):
-    """All-to-all collective (distributed transpose).
-    
-    Each device splits its tensor along split_axis, sends parts to other
-    devices, receives from all, and concatenates along concat_axis. Useful
-    for expert routing (MoE), axis swapping, and distributed FFT.
-    
-    Note: Currently simulated using transfer_to. Will use native MAX
-    all_to_all when available for better performance.
-    
-    Args:
-        sharded_tensor: Tensor with multiple shards
-        split_axis: Axis along which to split each shard
-        concat_axis: Axis along which to concatenate received chunks
-        tiled: If True, concatenate; if False, stack (adds new dimension)
-        
-    Returns:
-        Tensor after all-to-all exchange
-        
-    Example:
-        # 4 devices, each has [4, 8], exchange along first axis
-        y = all_to_all(x, split_axis=0, concat_axis=0)
-    """
-    return all_to_all_op(sharded_tensor, split_axis=split_axis, concat_axis=concat_axis, tiled=tiled)
-
-
-def axis_index(mesh: "DeviceMesh", axis_name: str) -> List[TensorValue]:
-    """Return each device's position along a mesh axis.
-    
-    Essential for shard_map-style programming where devices need to
-    know their position for conditional logic.
-    
-    Args:
-        mesh: Device mesh
-        axis_name: Name of axis to get indices for
-        
-    Returns:
-        List of scalar TensorValues, one per device, containing 0, 1, 2, ...
-        
-    Example:
-        # 4 devices along axis 'i'
-        indices = axis_index(mesh, 'i')  # [0, 1, 2, 3]
-    """
-    return axis_index_op(mesh, axis_name)
-
-
-def pmean(sharded_tensor, axis_name: str = None):
-    """Compute mean across all shards.
-    
-    Equivalent to psum(x) / axis_size. Useful for averaging gradients
-    in data parallelism.
-    
-    Args:
-        sharded_tensor: Tensor with partial values per shard
-        axis_name: Name of mesh axis for size calculation (optional)
-        
-    Returns:
-        Tensor with mean values (replicated across shards)
-        
-    Example:
-        # Average gradients across data-parallel workers
-        avg_grad = pmean(grad_shard, 'dp')
-    """
-    return pmean_op(sharded_tensor, axis_name=axis_name)
-
 
 class GatherAllAxesOp(Operation):
     """Gather all sharded axes to produce a fully replicated tensor.
@@ -1759,9 +1524,148 @@ class GatherAllAxesOp(Operation):
         return Tensor(impl=impl)
 
 
-
-# Singleton for GatherAllAxesOp (defined before ReshardOp for ordering)
+# Singleton instances
+shard_op = ShardOp()
+all_gather_op = AllGatherOp()
+all_reduce_op = AllReduceOp()
+reduce_scatter_op = ReduceScatterOp()
+ppermute_op = PPermuteOp()
+all_to_all_op = AllToAllOp()
+axis_index_op = AxisIndexOp()
+pmean_op = PMeanOp()
 gather_all_axes_op = GatherAllAxesOp()
+reshard_op = ReshardOp()
+
+
+# Public API functions
+def shard(x, mesh: DeviceMesh, dim_specs: List[DimSpec], **kwargs):
+    """Shard a tensor according to the given mesh and dimension specs.
+    
+    Args:
+        x: Input tensor (replicated/unsharded)
+        mesh: Device mesh defining shard topology
+        dim_specs: List of DimSpec for each dimension
+        **kwargs: Internal arguments (e.g. _bypass_idempotency)
+        
+    Returns:
+        Sharded tensor with multiple internal TensorValues
+    """
+    return shard_op(x, mesh, dim_specs, **kwargs)
+
+
+def all_gather(sharded_tensor, axis: int, **kwargs):
+    """Gather all shards to produce a replicated tensor.
+    
+    Args:
+        sharded_tensor: Tensor with multiple shards
+        axis: Axis along which shards are split
+        **kwargs: Additional arguments for internal use
+        
+    Returns:
+        Replicated tensor with gathered values
+    """
+    return all_gather_op(sharded_tensor, axis, **kwargs)
+
+
+def all_reduce(sharded_tensor, **kwargs):
+    """Sum-reduce across all shards.
+    
+    Note: MAX only supports sum reduction natively.
+    
+    Args:
+        sharded_tensor: Tensor with partial values per shard
+        **kwargs: Additional arguments
+        
+    Returns:
+        Tensor with sum-reduced values (replicated across shards)
+    """
+    return all_reduce_op(sharded_tensor, **kwargs)
+
+
+def reduce_scatter(sharded_tensor, axis: int, **kwargs):
+    """Sum-reduce then scatter result across shards.
+    
+    Note: MAX only supports sum reduction natively.
+    
+    Args:
+        sharded_tensor: Tensor with values per shard
+        axis: Axis along which to scatter
+        **kwargs: Additional arguments
+        
+    Returns:
+        Tensor with scattered reduced values
+    """
+    return reduce_scatter_op(sharded_tensor, axis=axis, **kwargs)
+
+
+def ppermute(sharded_tensor, permutation: List[tuple]):
+    """Point-to-point permutation collective.
+    
+    Each device sends its value to exactly one other device according to
+    a permutation table. Useful for ring-based algorithms, pipeline
+    parallelism, and halo exchange.
+    
+    Args:
+        sharded_tensor: Tensor with multiple shards
+        permutation: List of (source_idx, dest_idx) pairs specifying
+                     which device sends to which. Destinations without
+                     senders receive zeros.
+        
+    Returns:
+        Tensor with permuted values
+    """
+    return ppermute_op(sharded_tensor, permutation=permutation)
+
+
+def all_to_all(sharded_tensor, split_axis: int, concat_axis: int, tiled: bool = True):
+    """All-to-all collective (distributed transpose).
+    
+    Each device splits its tensor along split_axis, sends parts to other
+    devices, receives from all, and concatenates along concat_axis. Useful
+    for expert routing (MoE), axis swapping, and distributed FFT.
+    
+    Args:
+        sharded_tensor: Tensor with multiple shards
+        split_axis: Axis along which to split each shard
+        concat_axis: Axis along which to concatenate received chunks
+        tiled: If True, concatenate; if False, stack (adds new dimension)
+        
+    Returns:
+        Tensor after all-to-all exchange
+    """
+    return all_to_all_op(sharded_tensor, split_axis=split_axis, concat_axis=concat_axis, tiled=tiled)
+
+
+def axis_index(mesh: "DeviceMesh", axis_name: str) -> List[TensorValue]:
+    """Return each device's position along a mesh axis.
+    
+    Essential for shard_map-style programming where devices need to
+    know their position for conditional logic.
+    
+    Args:
+        mesh: Device mesh
+        axis_name: Name of axis to get indices for
+        
+    Returns:
+        List of scalar TensorValues, one per device, containing 0, 1, 2, ...
+    """
+    return axis_index_op(mesh, axis_name)
+
+
+def pmean(sharded_tensor, axis_name: str = None):
+    """Compute mean across all shards.
+    
+    Equivalent to psum(x) / axis_size. Useful for averaging gradients
+    in data parallelism.
+    
+    Args:
+        sharded_tensor: Tensor with partial values per shard
+        axis_name: Name of mesh axis for size calculation (optional)
+        
+    Returns:
+        Tensor with mean values (replicated across shards)
+    """
+    return pmean_op(sharded_tensor, axis_name=axis_name)
 
 
 def gather_all_axes(sharded_tensor):
@@ -1776,49 +1680,17 @@ def gather_all_axes(sharded_tensor):
     return gather_all_axes_op(sharded_tensor)
 
 
-
-
-
-
-
-__all__ = [
-    # Op classes
-    "ShardOp",
-    "AllGatherOp", 
-    "AllReduceOp",
-    "ReduceScatterOp",
-    "PPermuteOp",
-    "AllToAllOp",
-    "AxisIndexOp",
-    "PMeanOp",
-    "GatherAllAxesOp",
-    "ReshardOp",
-    # Singletons
-    "shard_op",
-    "all_gather_op",
-    "all_reduce_op", 
-    "reduce_scatter_op",
-    "ppermute_op",
-    "all_to_all_op",
-    "axis_index_op",
-    "pmean_op",
-    "gather_all_axes_op",
-    "reshard_op",
-    # Public functions
-    "shard",
-    "shard_batch_dims",
-    "all_gather",
-    "all_reduce",
-    "reduce_scatter",
-    "ppermute",
-    "all_to_all",
-    "axis_index",
-    "pmean",
-    "pmean",
-    "gather_all_axes",
-    "reshard",
-    "reshard",
-]
+def reshard(tensor: "Tensor", mesh: "DeviceMesh", dim_specs: List["DimSpec"], replicated_axes: Optional[Set[str]] = None, **kwargs) -> "Tensor":
+    """Reshard tensor to target specs.
+    
+    Args:
+        tensor: Input tensor
+        mesh: Target device mesh
+        dim_specs: Target dimension specs
+        replicated_axes: Optional set of axes to replicate over
+        **kwargs: Internal arguments
+    """
+    return reshard_op(tensor, mesh, dim_specs, replicated_axes, **kwargs)
 
 
 def shard_batch_dims(
@@ -1844,7 +1716,6 @@ def shard_batch_dims(
         Tensor sharded on the batch dimension(s).
     """
     from ..sharding.spec import ShardingSpec, DimSpec
-    from ..sharding.spmd import reshard_tensor
     
     if tensor.batch_dims == 0:
         raise ValueError("Cannot shard batch dims of a tensor with no batch dimensions (not inside vmap?)")
@@ -1882,18 +1753,16 @@ def shard_batch_dims(
         new_specs[idx] = DimSpec([axis_name], is_open=True) # Open? Or Closed?
         # Usually internal vmap batching is "open" conceptually, but DimSpec is data layout.
         
-    target_spec = ShardingSpec(mesh, new_specs)
-    
-    # Reshard
-    # Use generic ReshardOp
-    return reshard(tensor, mesh, new_specs)
+    # Reshard using generic ReshardOp
+    return reshard_op(tensor, mesh, new_specs)
 
-reshard = ReshardOp()
-shard = shard_op
 
 __all__ = [
-    "CollectiveOperation",
-    "ShardOp", "AllGatherOp", "AllReduceOp", "ReduceScatterOp", "PPermuteOp", "AllToAllOp", "AxisIndexOp", "ReshardOp",
-    "shard", "all_gather", "all_reduce", "reduce_scatter", "ppermute", "all_to_all", "axis_index", "reshard",
+    # Op classes
+    "ShardOp", "AllGatherOp", "AllReduceOp", "ReduceScatterOp", "PPermuteOp", "AllToAllOp", "AxisIndexOp", "PMeanOp", "GatherAllAxesOp", "ReshardOp",
+    # Singletons
+    "shard_op", "all_gather_op", "all_reduce_op", "reduce_scatter_op", "ppermute_op", "all_to_all_op", "axis_index_op", "pmean_op", "gather_all_axes_op", "reshard_op",
+    # Public functions
+    "shard", "all_gather", "all_reduce", "reduce_scatter", "ppermute", "all_to_all", "axis_index", "pmean", "gather_all_axes", "reshard",
     "shard_batch_dims",
 ]
