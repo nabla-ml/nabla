@@ -228,6 +228,7 @@ class DimSpec:
     axes: List[str] = field(default_factory=list)
     is_open: bool = False  # Open vs Closed dimension (from Shardy spec)
     priority: int = 0      # 0=User/default (Strong), 1+=Lower priority
+    partial: bool = False  # If True, dimension holds partial sums
     
     def __post_init__(self):
         # Empty closed dims can't have non-zero priority (no effect per spec)
@@ -240,13 +241,14 @@ class DimSpec:
         """Format: {axes} or {axes, ?} with optional p<N> suffix."""
         if not self.axes:
             marker = "?" if self.is_open else ""
-            # Per spec: empty closed dim shouldn't show priority (and can't have non-zero)
             prio_str = f"p{self.priority}" if self.is_open and self.priority != 0 else ""
             return f"{{{marker}}}{prio_str}"
         
-        axes_str = ", ".join(f'"{a}"' for a in self.axes)
+        axes_str = ", ".join(f"'{a}'" for a in self.axes)
         open_marker = ", ?" if self.is_open else ""
-        # Priority 0 is default, only show non-zero priorities per spec convention
+        if not self.is_open:
+            open_marker = ""
+            
         prio_str = f"p{self.priority}" if self.priority != 0 else ""
         return f"{{{axes_str}{open_marker}}}{prio_str}"
     
@@ -266,7 +268,8 @@ class DimSpec:
         return DimSpec(
             axes=list(self.axes),
             is_open=self.is_open,
-            priority=self.priority
+            priority=self.priority,
+            partial=self.partial
         )
 
 
@@ -279,8 +282,9 @@ class ShardingSpec:
     - replicated_axes: Explicitly replicated axes (can't shard any dimension)
     """
     mesh: DeviceMesh
-    dim_specs: List[DimSpec]
+    dim_specs: List[DimSpec] = field(default_factory=list)
     replicated_axes: Set[str] = field(default_factory=set)
+    partial_sum_axes: Set[str] = field(default_factory=set) # Ghost sharding
 
     def __post_init__(self):
         """Validate: no duplicate axes, no explicit-replicated axes in dims."""
@@ -302,8 +306,17 @@ class ShardingSpec:
                 if axis in used_axes: 
                     raise ValueError(f"Axis '{axis}' used multiple times in sharding.")
                 used_axes.add(axis)
+
+        # Check: partial sum axes don't overlap with used axes
+        for axis in self.partial_sum_axes:
+            if axis in used_axes:
+                raise ValueError(f"Axis '{axis}' is both a dimension axis and a partial sum axis.")
+            if axis in self.replicated_axes:
+                raise ValueError(f"Axis '{axis}' is both explicitly replicated and a partial sum axis.")
+            used_axes.add(axis)
         
         # Check sub-axis overlap invariant
+        all_axes.extend(list(self.partial_sum_axes))
         validate_sub_axes_non_overlapping(all_axes)
         
         # Warn about non-maximal sub-axes (could be merged)
@@ -323,16 +336,28 @@ class ShardingSpec:
         rep_str = ""
         if self.replicated_axes:
             # Order replicated axes by mesh order (per Shardy spec)
-            ordered_rep = self._order_replicated_axes()
-            rep_str = ", replicated={" + ", ".join(f'"{a}"' for a in ordered_rep) + "}"
-        return f"sharding<@{self.mesh.name}, [{dims_str}]{rep_str}>"
+            ordered_rep = self._order_replicated_axes(self.replicated_axes)
+            rep_str = ", replicated={" + ", ".join(f"'{a}'" for a in ordered_rep) + "}"
+        
+        # Consolidate all partial axes: physical sharded partials + ghost partials
+        all_partial_axes = set(self.partial_sum_axes)
+        for dim in self.dim_specs:
+            if dim.partial:
+                all_partial_axes.update(dim.axes)
+        
+        partial_str = ""
+        if all_partial_axes:
+            ordered_partial = self._order_replicated_axes(all_partial_axes)
+            partial_str = ", partial={" + ", ".join(f"'{a}'" for a in ordered_partial) + "}"
+            
+        return f"sharding<@{self.mesh.name}, [{dims_str}]{rep_str}{partial_str}>"
     
-    def _order_replicated_axes(self) -> List[str]:
-        """Order replicated axes: mesh order, sub-axes by pre-size."""
+    def _order_replicated_axes(self, axes_set: Set[str]) -> List[str]:
+        """Order axes: mesh order, sub-axes by pre-size."""
         full_axes = []
         sub_axes_by_parent: Dict[str, List[Tuple[str, int, int]]] = {}  # parent -> [(axis_str, pre, size)]
         
-        for ax in self.replicated_axes:
+        for ax in axes_set:
             parsed = parse_sub_axis(ax)
             if parsed is None:
                 full_axes.append(ax)
@@ -368,6 +393,7 @@ class ShardingSpec:
         for dim in self.dim_specs:
             used.update(dim.axes)
         used.update(self.replicated_axes)
+        used.update(self.partial_sum_axes)
         
         implicit = set()
         for ax_name in self.mesh.axis_names:
@@ -376,8 +402,8 @@ class ShardingSpec:
         return implicit
     
     def is_fully_replicated(self) -> bool:
-        """Returns True if tensor is fully replicated (no dimension sharding)."""
-        return all(dim.is_replicated() for dim in self.dim_specs)
+        """Returns True if tensor is fully replicated (no dimension sharding AND not partial)."""
+        return all(dim.is_replicated() for dim in self.dim_specs) and not self.partial_sum_axes and not any(dim.partial for dim in self.dim_specs)
     
     @property
     def total_shards(self) -> int:
@@ -401,7 +427,8 @@ class ShardingSpec:
         return ShardingSpec(
             mesh=self.mesh,
             dim_specs=[d.clone() for d in self.dim_specs],
-            replicated_axes=set(self.replicated_axes)
+            replicated_axes=set(self.replicated_axes),
+            partial_sum_axes=set(self.partial_sum_axes)
         )
 
 
@@ -488,4 +515,4 @@ def needs_reshard(from_spec: Optional["ShardingSpec"], to_spec: Optional["Shardi
         return False
     if len(from_spec.dim_specs) != len(to_spec.dim_specs):
         return True
-    return any(f.axes != t.axes for f, t in zip(from_spec.dim_specs, to_spec.dim_specs))
+    return any(f.axes != t.axes or f.partial != t.partial for f, t in zip(from_spec.dim_specs, to_spec.dim_specs)) or (from_spec.partial_sum_axes != to_spec.partial_sum_axes)

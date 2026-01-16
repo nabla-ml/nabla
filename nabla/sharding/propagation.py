@@ -58,10 +58,12 @@ class FactorSharding:
         axes: Mesh axes assigned to this factor (major to minor order)
         priority: Priority level (0 = strongest/user-specified, higher = weaker)
         is_open: If True, can accept additional sharding; if False, fixed
+        partial: If True, factor holds partial sums
     """
     axes: List[str] = field(default_factory=list)
     priority: int = 999  # Default: weakest priority (unspecified)
     is_open: bool = True
+    partial: bool = False
     
     @property
     def is_explicit_replication(self) -> bool:
@@ -82,13 +84,15 @@ class FactorSharding:
         return FactorSharding(
             axes=list(self.axes),
             priority=self.priority,
-            is_open=self.is_open
+            is_open=self.is_open,
+            partial=self.partial
         )
     
     def __repr__(self) -> str:
         axes_str = ",".join(self.axes) if self.axes else "∅"
         status = "open" if self.is_open else ("repl" if self.is_explicit_replication else "closed")
-        return f"FactorSharding({axes_str}, p{self.priority}, {status})"
+        partial_str = "!" if self.partial else ""
+        return f"FactorSharding({axes_str}, p{self.priority}, {status}{partial_str})"
 
 
 @dataclass
@@ -113,6 +117,7 @@ class FactorShardingState:
         new_axes: List[str],
         new_priority: int,
         new_is_open: bool,
+        new_partial: bool,
         mesh: DeviceMesh,
         strategy: PropagationStrategy = None,
     ) -> None:
@@ -128,6 +133,10 @@ class FactorShardingState:
         has_existing = factor.has_sharding
         new_is_receptive = not has_new and new_is_open
         new_is_explicit_repl = not has_new and not new_is_open
+        
+        # Merging logic: 
+        # 1. Partial is OR'd: if any contributor is partial, result is partial
+        factor.partial = factor.partial or new_partial
         
         # Case 1: New is receptive -> don't change anything
         if new_is_receptive:
@@ -560,6 +569,7 @@ def _collect_to_factors(
                     axes_for_f,
                     dim_spec.priority,
                     dim_spec.is_open,
+                    dim_spec.partial,
                     mesh,
                     strategy
                 )
@@ -646,6 +656,7 @@ def _update_from_factors(
             proposed_axes = []
             proposed_prio = 999
             proposed_open = current_dim.is_open
+            proposed_partial = False
             has_factor_info = False
             
             for f in factors:
@@ -666,6 +677,7 @@ def _update_from_factors(
                     
                     proposed_axes.extend(valid_axes)
                     proposed_prio = min(proposed_prio, f_state.priority)
+                    proposed_partial = proposed_partial or f_state.partial
                     has_factor_info = True
             
             if not has_factor_info:
@@ -675,15 +687,16 @@ def _update_from_factors(
             
             should_update = _should_update_dim(
                 current_dim, proposed_axes, proposed_prio
-            )
+            ) or (proposed_partial != current_dim.partial)
             
             if should_update:
                 # Mark these axes as used BEFORE adding the dim spec
                 used_axes_in_tensor.update(proposed_axes)
                 new_dim_specs.append(DimSpec(
                     axes=proposed_axes,
-                    is_open=proposed_open,
-                    priority=proposed_prio
+                    is_open=current_dim.is_open, # Preserve current openness (e.g. if was OPEN, stay OPEN)
+                    priority=proposed_prio,
+                    partial=proposed_partial
                 ))
                 spec_dirty = True
             else:

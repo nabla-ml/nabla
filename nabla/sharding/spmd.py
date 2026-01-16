@@ -160,7 +160,20 @@ def infer_output_sharding(
         input_shapes.append(phys_shape_tuple)
     
     if not any(spec.dim_specs and any(d.axes for d in spec.dim_specs) for spec in input_specs):
-        return None, input_specs, False  # All inputs replicated
+        # Even if not sharded on dims, we might have partial sum axes to propagate
+        input_partial_axes = set()
+        for spec in input_specs:
+            input_partial_axes.update(spec.partial_sum_axes)
+        
+        if not input_partial_axes:
+            return None, input_specs, False
+        
+        # Create output spec with propagated partial sum axes
+        output_rank = op.infer_output_rank(input_shapes, **(kwargs or {}))
+        # FIXED: Use closed dimensions by default for inferred outputs
+        output_spec = ShardingSpec(mesh, [DimSpec([], is_open=False) for _ in range(output_rank)], 
+                                  partial_sum_axes=input_partial_axes)
+        return output_spec, input_specs, set()
     
     # Use rank inference instead of full shape inference
     try:
@@ -183,27 +196,68 @@ def infer_output_sharding(
             if any(d.axes for d in spec.dim_specs):
                 # Ensure rank match before inheriting
                 if len(spec.dim_specs) == output_rank:
-                    return spec.clone(), input_specs, False
+                    # Ensure inherited spec is closed
+                    cloned_spec = spec.clone()
+                    for dim_spec in cloned_spec.dim_specs:
+                        dim_spec.is_open = False
+                    return cloned_spec, input_specs, False
         return None, input_specs, False
     
-    # Create empty output spec based on rank
+    # Create empty output spec based on rank - MUST BE OPEN to receive propagation
     output_spec = ShardingSpec(mesh, [DimSpec([], is_open=True) for _ in range(output_rank)])
     
     # Run factor-based propagation - updates input_specs and output_spec in-place
     propagate_sharding(rule, input_specs, [output_spec])
     
-    # Check if any contracting factors are sharded (need AllReduce for partial results)
-    # Check if any contracting factors are sharded (need AllReduce for partial results)
-    needs_allreduce = _check_contracting_factors_sharded(rule, input_specs, output_spec)
+    # Propagate partial sum axes from inputs to output
+    # Any input partial sum axis is preserved in the output unless it's explicitly reduced/sharded
+    input_partial_axes = set()
+    for spec in input_specs:
+        if spec:
+            input_partial_axes.update(spec.partial_sum_axes)
+    output_spec.partial_sum_axes.update(input_partial_axes)
     
-    return output_spec, input_specs, needs_allreduce
+    # Check if any contracting factors are sharded (need AllReduce for partial results)
+    reduce_axes, ghost_axes = _check_contracting_factors_sharded(rule, input_specs, output_spec)
+    
+    # Add ghost axes (contracted sharding that didn't trigger AllReduce) to output spec
+    for ax in ghost_axes:
+        sharded_in_dim = False
+        for dim in output_spec.dim_specs:
+            if ax in dim.axes:
+                dim.partial = True
+                sharded_in_dim = True
+        
+        if not sharded_in_dim:
+            output_spec.partial_sum_axes.add(ax)
+
+    # FINAL CLEANUP: Ensure partial sum axes don't overlap with dimension axes
+    used_in_dims = set()
+    for dim in output_spec.dim_specs:
+        for ax in dim.axes:
+            used_in_dims.add(ax)
+            
+    # If a partial sum axis is now used in a dimension, mark that dimension partial 
+    # and remove from ghost sharding set.
+    for ax in list(output_spec.partial_sum_axes):
+        if ax in used_in_dims:
+            output_spec.partial_sum_axes.remove(ax)
+            for dim in output_spec.dim_specs:
+                if ax in dim.axes:
+                    dim.partial = True
+    
+    # Ensure all output dims are closed for concrete spec
+    for dim in output_spec.dim_specs:
+        dim.is_open = False
+        
+    return output_spec, input_specs, reduce_axes
 
 
 def _check_contracting_factors_sharded(
     rule: "OpShardingRule",
     input_specs: "List[ShardingSpec]",
     output_spec: Optional["ShardingSpec"],
-) -> "Set[str]":
+) -> "Tuple[Set[str], Set[str]]":
     """Check if contracting factors need AllReduce.
     
     AllReduce is needed ONLY when computing partial sums of the SAME output:
@@ -219,9 +273,10 @@ def _check_contracting_factors_sharded(
     """
     contracting_factors = rule.get_contracting_factors()
     if not contracting_factors:
-        return set()
+        return set(), set()
         
     reduce_axes = set()
+    ghost_axes = set()
     
     # Identify which axes are preserved in the output
     preserved_axes = set()
@@ -231,28 +286,33 @@ def _check_contracting_factors_sharded(
     
 
 
-    # Check each input spec to see if contracting factors are sharded
-    for t_idx, spec in enumerate(input_specs):
-        if t_idx >= len(rule.input_mappings):
+    # Map from sharded axis -> whether it's partial in at least one input
+    axis_partial_map: Dict[str, bool] = {}
+    # Map from sharded axis -> whether it's sharded on a contracting factor
+    contracted_axes = set()
+    
+    for input_idx, spec in enumerate(input_specs):
+        if not spec or input_idx >= len(rule.input_mappings):
             continue
-        mapping = rule.input_mappings[t_idx]
         
-        # Check each dimension of the input tensor
+        mapping = rule.input_mappings[input_idx]
+        
         for dim_idx, current_dim in enumerate(spec.dim_specs):
             factors = mapping.get(dim_idx, [])
-            
-            # If this dimension is sharded (has axes)
-            if current_dim.axes:
-                 # Check if any associated factor is contracting
-                 for f in factors:
-                     if f in contracting_factors:
-                         # Check if the axis is consumed by the contraction
-                         # or preserved in the output
-                         for ax in current_dim.axes:
-                             if ax not in preserved_axes:
-                                 reduce_axes.add(ax)
-                         
-    return reduce_axes
+            for f in factors:
+                if f in contracting_factors:
+                    for ax in current_dim.axes:
+                        if ax not in preserved_axes:
+                            contracted_axes.add(ax)
+                            axis_partial_map[ax] = axis_partial_map.get(ax, False) or current_dim.partial
+    
+    for ax in contracted_axes:
+        if axis_partial_map[ax]:
+            ghost_axes.add(ax)
+        else:
+            reduce_axes.add(ax)
+                          
+    return reduce_axes, ghost_axes
 
 
 
@@ -297,41 +357,6 @@ from .spec import needs_reshard
 # ============================================================================
 # SPMD Argument Extraction
 # ============================================================================
-
-# THE FOLLOWING FUNCTION SHOULD NOT EXIST!!!
-# def ensure_shard_values(tensor: "Tensor") -> list:
-#     """Ensure tensor has symbolic values, hydrating from storage if needed.
-    
-#     If a tensor is realized (has _storages but cleared _values), this creates
-#     new graph inputs for the storages and populates _values.
-#     """
-#     if tensor._impl._values:
-#         return tensor._impl._values
-        
-#     if tensor._impl._storages and len(tensor._impl._storages) > 0:
-#         from ..core.compute_graph import GRAPH
-#         from ..core.tensor import Tensor
-        
-#         # We must be in a graph context to add inputs
-#         try:
-#             # Check if we are in a graph context
-#             _ = GRAPH.graph
-            
-#             with GRAPH.graph:
-#                 new_values = []
-#                 for s in tensor._impl._storages:
-#                     # Wrap storage as Tensor to adapt to graph input
-#                     t = Tensor(storage=s)
-#                     new_values.append(t.__tensorvalue__())
-#                 tensor._impl._values = new_values
-#                 return new_values
-#         except LookupError:
-#             # Not in a graph context - return empty or handle gracefully?
-#             # Operations requiring values will fail anyway.
-#             pass
-            
-#     return []
-
 
 
 def get_shard_args(args: tuple, shard_idx: int, 
@@ -412,15 +437,41 @@ def reshard_tensor(tensor: "Tensor", from_spec: Optional["ShardingSpec"],
         to_axes = set(to_spec.dim_specs[dim].axes) if dim < len(to_spec.dim_specs) else set()
         
         # Need gather ONLY if removing axes that aren't preserved in the target
-        # If from_axes is a subset of to_axes, no gather needed (just extending sharding)
         axes_to_remove = from_axes - to_axes
+        
+        # Guard: Check if any axes being removed are Partial
+        # print(f"DEBUG: Reshard Dim {dim}: partial={from_spec.dim_specs[dim].partial}, axes={from_spec.dim_specs[dim].axes}")
+        if from_spec.dim_specs[dim].partial:
+            # If the dimension was partial, removing its sharding/axis means we are
+            # converting Partial Sums -> Replicated Values.
+            # This requires AllReduce, NOT AllGather.
+            from ..ops.communication import all_reduce
+            
+            # Check if target is also partial (not yet implemented fully, but if so, skip reduce)
+            target_is_partial = dim < len(to_spec.dim_specs) and to_spec.dim_specs[dim].partial
+            
+            if not target_is_partial:
+                # Insert AllReduce for proper summation
+                result = all_reduce(result)
+                # After AllReduce, the tensor is fully replicated (logically), so we continue
+                # with any further reshaping/resharding on the now-full-values.
+                continue
+
         if axes_to_remove:
             # This dimension has axes being removed, need to gather
             result = all_gather(result, axis=dim)
     
+    # Similar check for partial_sum_axes (ghost sharding)
+    # If we are removing ghost axes, it means we are realizing the sum -> AllReduce
+    for ghost_ax in from_spec.partial_sum_axes:
+        if ghost_ax not in to_spec.partial_sum_axes:
+            # Ghost axis removed -> MUST AllReduce
+            from ..ops.communication import all_reduce
+            result = all_reduce(result)
+
     # Apply new sharding (local slicing for new/extended axes)
     # Use _bypass_idempotency to prevent recursion back to reshard_tensor
-    result = shard_op(result, mesh, to_spec.dim_specs, _bypass_idempotency=True)
+    result = shard_op(result, mesh, to_spec.dim_specs, replicated_axes=to_spec.replicated_axes, _bypass_idempotency=True)
     
     return result
 
@@ -461,6 +512,9 @@ def create_sharded_output(results: List[Any], sharding: Optional["ShardingSpec"]
     # Cache metadata - compute GLOBAL shape from local + sharding for sharded outputs
     local_shape = tuple(first.type.shape)
     if sharding and not sharding.is_fully_replicated():
+        # If the tensor is Partial, the "global shape" logic might be different depending on semantics.
+        # But generally, partiality doesn't change the LOGICAL global shape, only values.
+        # So propagate standard global shape logic.
         global_shape = compute_global_shape(local_shape, sharding)
         impl.cached_shape = g.Shape(global_shape)  # Use cached_shape attribute
         impl.cached_dtype = first.type.dtype

@@ -237,14 +237,27 @@ class GraphPrinter:
         if not sharding:
             return ""
         
+        all_partial_axes = set()
+        if hasattr(sharding, 'partial_sum_axes'):
+            all_partial_axes.update(sharding.partial_sum_axes)
+        
         factors = []
         for dim in sharding.dim_specs:
+            if dim.partial:
+                all_partial_axes.update(dim.axes)
+            
             if not dim.axes:
                 factors.append("*")
             else:
                 factors.append(", ".join(dim.axes))
         
-        return f"(<{', '.join(factors)}>)"
+        partial_sum_str = ""
+        if all_partial_axes:
+            ordered_partial = sorted(list(all_partial_axes))
+            axes_joined = ", ".join(f"'{a}'" for a in ordered_partial)
+            partial_sum_str = f" | partial={{{axes_joined}}}"
+
+        return f"(<{', '.join(factors)}>{partial_sum_str})"
 
     def _format_full_info(self, node: TensorImpl) -> str:
         """Format: dtype[global](factors)(local=[local])"""
@@ -308,7 +321,11 @@ class GraphPrinter:
             # Format dim_specs as sharding notation
             elif k == 'dim_specs' and isinstance(v, (list, tuple)):
                 factors = []
+                all_p_axes = set()
                 for dim in v:
+                    if getattr(dim, "partial", False):
+                        all_p_axes.update(dim.axes)
+                    
                     if hasattr(dim, 'axes'):
                         if not dim.axes:
                             factors.append("*")
@@ -316,7 +333,13 @@ class GraphPrinter:
                             factors.append(", ".join(dim.axes))
                     else:
                         factors.append(str(dim))
-                parts.append(f"spec=<{', '.join(factors)}>")
+                
+                p_str = ""
+                if all_p_axes:
+                    ordered_p = sorted(list(all_p_axes))
+                    axes_joined = ", ".join(f"'{a}'" for a in ordered_p)
+                    p_str = f" | partial={{{axes_joined}}}"
+                parts.append(f"spec=<{', '.join(factors)}>{p_str}")
             # Skip redundant spec kwarg (already shown in output type)
             elif k == 'spec':
                 continue

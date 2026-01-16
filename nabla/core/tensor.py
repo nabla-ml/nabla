@@ -248,7 +248,7 @@ class Tensor(DLPackArray, HasTensorValue):
         from ..sharding.spec import ShardingSpec
         
         spec = ShardingSpec(mesh, dim_specs)
-        print(f"DEBUG: Setting sharding_constraint on TensorImpl {id(self._impl)}: {spec}")
+        # print(f"DEBUG: Setting sharding_constraint on TensorImpl {id(self._impl)}: {spec}")
         self._impl.sharding_constraint = spec
         return self
 

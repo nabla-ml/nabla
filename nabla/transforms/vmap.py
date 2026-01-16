@@ -284,7 +284,35 @@ def _batch_tensor(tensor: Tensor, axis: AxisSpec, batch_dim, spmd_axis_name: str
         # Move the last batch dim (at physical position old_batch_dims) to position 0
         if old_batch_dims > 0:
             t = p_ops.moveaxis(t, source=old_batch_dims, destination=0)
-        
+            
+        # Apply sharding to the new batch axis (now at physical position 0)
+        if spmd_axis_name is not None and mesh is not None:
+             from ..sharding.spec import DimSpec
+             
+             # The axis to shard is at physical position 0.
+             # We need to construct the full sharding spec for the tensor.
+             # The tensor 't' currently has:
+             # - physical batch dims: old_batch_dims + 1
+             # - logical dims: len(t.shape)
+             # Total physical rank: old_batch_dims + 1 + len(t.shape)
+             
+             physical_rank = old_batch_dims + 1 + len(t.shape)
+             dim_specs = [DimSpec([]) for _ in range(physical_rank)]
+             
+             # Inherit existing sharding from input tensor (shifted by 1)
+             # We must copy ALL specs (batch + logical) because broadcast preserves logical structure
+             if tensor._impl.sharding:
+                 for i in range(len(tensor._impl.sharding.dim_specs)):
+                     if i + 1 < len(dim_specs):
+                        dim_specs[i + 1] = tensor._impl.sharding.dim_specs[i].clone()
+             
+             # Set the new batch dimension (at index 0) to be sharded on spmd_axis_name
+             dim_specs[0] = DimSpec([spmd_axis_name])
+             
+             t = comm_ops.shard_op(t, mesh, dim_specs)
+             # print(f"DEBUG: _batch_tensor sharded t: {t} type: {type(t)}")
+             # if t is None:
+             #     print("DEBUG: shard_op returned None!")
     else:
         # Batched axis case: move LOGICAL axis to front of LOGICAL shape
         if axis != 0:

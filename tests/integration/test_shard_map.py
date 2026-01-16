@@ -9,68 +9,30 @@ from nabla.core.trace import trace
 from nabla import ops
 
 class TestShardMapRigorous(unittest.TestCase):
-    """Rigorous tests for shard_map verifying traces and execution."""
-
     def setUp(self):
-        # Universal mesh for tests
         self.mesh = DeviceMesh("test_mesh", (2, 2), ("dp", "tp"), devices=[0, 1, 2, 3])
-        print("\n" + "="*80)
-
-    def tearDown(self):
-        print("="*80 + "\n")
 
     def test_input_sharding_trace(self):
-        """Verify that input sharding constraints appear correctly in the trace."""
-        print("TEST: Input Sharding Trace Analysis")
-        print("-" * 60)
-        
-        # User function - just does computation
         def func(x):
-            y = x * 2
-            return y
+            return x * 2
 
-        # Wrap with shard_map: Input sharded on 'dp', output gets inferred sharding
         sharded_fn = shard_map(
             func, 
             self.mesh, 
-            in_specs={0: ShardingSpec(self.mesh, [DimSpec(["dp"]), DimSpec([])])},
-            out_specs=None
+            in_specs={0: ShardingSpec(self.mesh, [DimSpec(["dp"]), DimSpec([])])}
         )
 
-        # 1. Setup Input (Replicated)
         data = np.random.rand(4, 4).astype(np.float32)
         x = Tensor.from_dlpack(data)
-
-        # 2. Trace the EXECUTION of the sharded function
-        # This captures the replay ops
-        print("Capturing Execution Trace...")
         t = trace(sharded_fn, x)
-        print(t)
         
-        # 3. Analyze Trace
-        t_str = str(t)
-        # We expect a 'shard' op corresponding to the in_spec
-        # shard_map applies input sharding via shard() which records in trace
+        self.assertIn("shard", str(t))
+        self.assertIn("dp", str(t))
         
-        self.assertIn("shard", t_str)
-        # Verify the sharding spec appears in trace
-        self.assertIn("dp", t_str)
-        
-        # 4. Numerical Verification
-        print("Running Numerical Verification...")
         result = sharded_fn(x)
-        np_res = result.to_numpy()
-        expected = data * 2
-        np.testing.assert_allclose(np_res, expected)
-        print("✅ PASS: Numerical verification")
-
+        np.testing.assert_allclose(result.to_numpy(), data * 2)
 
     def test_io_constraints_sharding(self):
-        """Test Input/Output constraints and verify shapes in trace."""
-        print("TEST: I/O Constraints")
-        print("-" * 60)
-        
-        # In: Distributed on 'dp', Out: Distributed on 'tp'
         in_spec = ShardingSpec(self.mesh, [DimSpec(["dp"]), DimSpec([])])
         out_spec = ShardingSpec(self.mesh, [DimSpec([]), DimSpec(["tp"])])
 
@@ -80,90 +42,47 @@ class TestShardMapRigorous(unittest.TestCase):
         sharded_fn = shard_map(
             simple_add,
             self.mesh,
-            in_specs={0: in_spec, 1: in_spec}, # Both inputs distributed
-            out_specs={0: out_spec}            # Output distributes on different axis
+            in_specs={0: in_spec, 1: in_spec},
+            out_specs={0: out_spec}
         )
 
-        # Inputs
-        d1 = np.random.rand(4, 4).astype(np.float32)
-        d2 = np.random.rand(4, 4).astype(np.float32)
-        t1 = Tensor.from_dlpack(d1) # Start replicated
-        t2 = Tensor.from_dlpack(d2)
+        d1, d2 = np.random.rand(4, 4).astype(np.float32), np.random.rand(4, 4).astype(np.float32)
+        t1, t2 = Tensor.from_dlpack(d1), Tensor.from_dlpack(d2)
 
-        # Trace
-        print("Capturing Execution Trace...")
         t = trace(sharded_fn, t1, t2)
-        print(t)
-
-        # Analysis
-        # The trace should show:
-        # 1. Inputs being sharded (implicitly or explicitly via shard_map preamble)
-        # 2. Add op
-        # 3. Output being sharded to 'tp'
-        
-        # Run
         result = sharded_fn(t1, t2)
         
-        print(f"Result Sharding: {result.sharding}")
-        # Verify output spec
         self.assertEqual(result.sharding.dim_specs[1].axes, ["tp"])
-        
-        np_res = result.to_numpy()
-        expected = d1 + d2
-        np.testing.assert_allclose(np_res, expected, atol=1e-5)
-        print("✅ PASS: Result Verified")
+        np.testing.assert_allclose(result.to_numpy(), d1 + d2, atol=1e-5)
 
     def test_complex_graph_trace(self):
-        """Verify complex graph with mixed constraints."""
-        print("TEST: Complex Graph Trace")
-        print("-" * 60)
-
-        # x: [B, H], w1: [H, 4H], w2: [4H, H]
-        # Use in_specs to shard weights on 'tp' (Model Parallel)
         def complex_func(x, w1, w2):
-            h = x @ w1
-            h = h * 2.0
-            out = h @ w2
-            return out
+            h = (x @ w1) * 2.0
+            return h @ w2
 
-        # Shard w1 on output dimension (tp), w2 on input dimension (tp)
-        # This is tensor parallelism pattern
         sharded_fn = shard_map(
             complex_func,
             self.mesh,
             in_specs={
-                0: None,  # x: replicated
-                1: ShardingSpec(self.mesh, [DimSpec([]), DimSpec(["tp"])]),  # w1: [H, 4H/2]
-                2: ShardingSpec(self.mesh, [DimSpec(["tp"]), DimSpec([])]),  # w2: [4H/2, H]
+                0: None,
+                1: ShardingSpec(self.mesh, [DimSpec([]), DimSpec(["tp"])]),
+                2: ShardingSpec(self.mesh, [DimSpec(["tp"]), DimSpec([])]),
             },
-            out_specs={0: None}  # Output replicated
+            out_specs={0: None}
         )
         
         B, H = 4, 4
-        d_x = np.random.rand(B, H).astype(np.float32)
-        d_w1 = np.random.rand(H, 4*H).astype(np.float32)
-        d_w2 = np.random.rand(4*H, H).astype(np.float32)
+        d_x, d_w1, d_w2 = np.random.rand(B, H).astype(np.float32), np.random.rand(H, 4*H).astype(np.float32), np.random.rand(4*H, H).astype(np.float32)
+        t_x, t_w1, t_w2 = Tensor.from_dlpack(d_x), Tensor.from_dlpack(d_w1), Tensor.from_dlpack(d_w2)
         
-        t_x = Tensor.from_dlpack(d_x)
-        t_w1 = Tensor.from_dlpack(d_w1)
-        t_w2 = Tensor.from_dlpack(d_w2)
-        
-        print("Capturing Trace...")
         t = trace(sharded_fn, t_x, t_w1, t_w2)
-        print(t)
-        
-        # The trace should reveal the structure.
-        # We look for the 'shard' ops applied to weights via in_specs
-        t_str = str(t)
-        self.assertIn("shard", t_str)
-        # Verify tensor parallelism spec appears
-        self.assertIn("tp", t_str)
+        self.assertIn("shard", str(t))
+        self.assertIn("tp", str(t))
         
         result = sharded_fn(t_x, t_w1, t_w2)
-        res_np = result.to_numpy()
         expected = (d_x @ d_w1 * 2.0) @ d_w2
-        np.testing.assert_allclose(res_np, expected, atol=1e-4)
-        print("✅ PASS: Complex Graph Verified")
+        np.testing.assert_allclose(result.to_numpy(), expected, atol=1e-4)
 
 if __name__ == "__main__":
-    unittest.main(verbosity=2)
+    unittest.main()
+
