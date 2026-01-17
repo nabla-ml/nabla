@@ -11,7 +11,7 @@ We implement **Unified SPMD Execution** using **Factor-Based Propagation**.
 
 | Component | File | Description |
 | :--- | :--- | :--- |
-| **Specs** | **[`spec.py`](spec.py)** | `DeviceMesh`, `ShardingSpec`, `DimSpec`. Defines *how* data is split. |
+| **Specs** | **[`spec.py`](spec.py)** | `DeviceMesh`, `ShardingSpec`, `DimSpec`. Defines *how* data is split. Supports `P`/`PartitionSpec`. |
 | **Runtime** | **[`spmd.py`](spmd.py)** | `infer_output_sharding` (forward) and `reshard_inputs` (backward align). |
 | **Propagation** | **[`propagation.py`](propagation.py)** | `OpShardingRule`. Solves constraints via factor graphs (`i -> i`). |
 | **Optimizer** | **[`optimizer/`](optimizer/simple_solver.py)** | Cost-based solver to pick sharding for undefined ops. |

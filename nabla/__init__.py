@@ -138,8 +138,9 @@ from .sharding.spec import (
     ShardingSpec,
     compute_local_shape,
     get_num_shards,
+    P,
+    PartitionSpec,
 )
-from .sharding.partition_spec import P, PartitionSpec
 
 __all__ = [
     # Context

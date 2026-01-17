@@ -28,7 +28,7 @@ This file contains state definitions only and does not contain propagation algor
 import math
 import re
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import numpy as np
 
@@ -272,6 +272,20 @@ class DimSpec:
             partial=self.partial
         )
 
+    @staticmethod
+    def from_raw(raw: Any) -> 'DimSpec':
+        """Convert raw input (None, str, tuple, DimSpec) to DimSpec."""
+        if isinstance(raw, DimSpec):
+            return raw
+        if raw is None:
+            return DimSpec([])
+        if isinstance(raw, str):
+            return DimSpec([raw])
+        if isinstance(raw, (tuple, list)):
+            # Ensure elements are strings
+            return DimSpec([str(x) for x in raw])
+        raise ValueError(f"Invalid dimension spec input: {raw!r}. Expected None, str, tuple/list of str, or DimSpec.")
+
 
 @dataclass
 class ShardingSpec:
@@ -288,6 +302,10 @@ class ShardingSpec:
 
     def __post_init__(self):
         """Validate: no duplicate axes, no explicit-replicated axes in dims."""
+        # 1. Normalize dim_specs (handle JAX-like raw inputs)
+        if hasattr(self, "dim_specs") and self.dim_specs:
+             self.dim_specs = [DimSpec.from_raw(d) for d in self.dim_specs]
+
         used_axes = set()
         all_axes = []
         
@@ -516,3 +534,24 @@ def needs_reshard(from_spec: Optional["ShardingSpec"], to_spec: Optional["Shardi
     if len(from_spec.dim_specs) != len(to_spec.dim_specs):
         return True
     return any(f.axes != t.axes or f.partial != t.partial for f, t in zip(from_spec.dim_specs, to_spec.dim_specs)) or (from_spec.partial_sum_axes != to_spec.partial_sum_axes)
+
+
+# --- JAX-style PartitionSpec Helper ---
+
+class PartitionSpec(tuple):
+    """
+    JAX-compatible PartitionSpec.
+    
+    A tuple of axis names (or None/tuples) defining sharding for each dimension.
+    
+    Example:
+        >>> P("x", "y")        # Dim 0 on "x", Dim 1 on "y"
+        >>> P("x", None)       # Dim 0 on "x", Dim 1 replicated
+        >>> P(("x", "y"))      # Dim 0 on "x" then "y"
+    """
+    def __new__(cls, *args):
+        return super().__new__(cls, args)
+
+# Alias P for brevity
+P = PartitionSpec
+
