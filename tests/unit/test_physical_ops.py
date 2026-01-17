@@ -1,6 +1,8 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
+
 """Tests for physical operations - the foundation layer.
 
 Physical ops work on full physical shapes (no batch_dims awareness).

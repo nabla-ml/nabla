@@ -1,8 +1,7 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025 - Updated Operations Base Classes
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
-
-"""Base classes for all operations with automatic batch_dims propagation."""
 
 from __future__ import annotations
 
@@ -207,17 +206,6 @@ class Operation(ABC):
                 reduced_values = all_reduce_op.simulate_grouped_execution(
                     t.values, mesh, reduce_axes
                 )
-            
-            # Create new Tensor with reduced values (replicated output)
-            # Note: We assume full replication for now, but this might need refinement
-            # based on which axes were actually reduced.
-            # If we reduced over ALL axes in the mesh, it's fully replicated.
-            # If we reduced over a SUBSET (e.g. TP), it might still be sharded on others (e.g. DP).
-            
-            # Logic: Start with the current sharding spec of 't' (the partial result)
-            # The partial result 't' has "complex" sharding where reduced axes are technically 
-            # sharded but contain partial sums.
-            # The output should have those axes marked as replicated (empty set).
             
             current_spec = t._impl.sharding
             if current_spec:
@@ -427,7 +415,6 @@ class BinaryOperation(Operation):
         target_physical = batch_shape + target_logical
         
         # Optimize: Skip physical broadcast if specs match target
-        # Note: We must check if physical_global_shape matches target to be safe
         x_global = x._impl.physical_global_shape or x.local_shape
         y_global = y._impl.physical_global_shape or y.local_shape
         
@@ -578,15 +565,12 @@ class ReduceOperation(LogicalAxisOperation):
         out_mapping = {}
         
         if keepdims:
-            # Output has same rank, but reduced dims are size 1.
-            # We map reduced dims to empty factors -> enforced replication or contraction
             for i in range(rank):
                 if i in reduce_axes:
                     out_mapping[i] = [] # Reduced factor
                 else:
                     out_mapping[i] = [factors[i]]
         else:
-            # Output has lower rank. Reduced dims are skipped.
             out_idx = 0
             for i in range(rank):
                 if i not in reduce_axes:
@@ -641,15 +625,9 @@ class LogicalShapeOperation(Operation):
         batch_dims = x._impl.batch_dims
         
         if batch_dims > 0:
-            # For sharded tensors, use GLOBAL batch shape from physical_global_shape
-            # (not local batch_shape which is per-shard)
-            # This ensures consistency with infer_output_sharding.
             if x._impl.physical_global_shape is not None:
-                # Use computed global physical shape (includes batch dims)
                 global_batch_shape = tuple(int(d) for d in x._impl.physical_global_shape[:batch_dims])
             else:
-                # Fallback to local physical shape for unsharded tensors
-                # (For unsharded tensors, local physical == global physical)
                 global_phys = x.local_shape
                 global_batch_shape = tuple(int(d) for d in global_phys[:batch_dims])
             physical_shape = global_batch_shape + tuple(shape)

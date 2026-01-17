@@ -1,13 +1,7 @@
 # ===----------------------------------------------------------------------=== #
 # Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
-
-"""Simple Solver: Optimizes sharding strategies using propagation infrastructure.
-
-This solver integrates with the factor-based propagation system in propagation.py
-to enable bidirectional sharding flow. It uses cost heuristics to seed initial
-constraints, then propagates them through the graph.
-"""
 
 from __future__ import annotations
 
@@ -98,7 +92,6 @@ class SimpleSolver:
                     seeded_nodes[node_id] = seeding
         
         # Phase 3: FIXED-POINT propagation across entire graph
-        # Iterate until no changes, enabling true bidirectional flow
         MAX_ITERATIONS = 100
         for iteration in range(MAX_ITERATIONS):
             changed = False
@@ -208,9 +201,6 @@ class SimpleSolver:
                 num_elements *= d
             output_bytes = num_elements * 4
             
-            # Query AllReduceOp directly for communication cost
-            # This is the correct design: the solver knows "MP implies AllReduce"
-            # and queries the comm op directly for its cost
             mp_comm = AllReduceOp.estimate_cost(output_bytes, self.mesh, [axis_name])
             
             mp_cost = mp_compute + mp_comm

@@ -1,29 +1,7 @@
 # ===----------------------------------------------------------------------=== #
 # Nabla 2026
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
-
-"""
-Sharding Core: Physical and Representation Layers
-===============================================
-
-This module implements the fundamental data structures for the Sharding system:
-1.  **Physical Layer**: DeviceMesh for logical device organization.
-2.  **Representation Layer**: ShardingSpec and DimSpec for tensor sharding.
-
-This file contains state definitions only and does not contain propagation algorithms.
-"""
 
 import math
 import re
@@ -62,7 +40,6 @@ def validate_sub_axes_non_overlapping(axes: List[str]) -> None:
         
         # Check overlap with existing ranges
         for existing_start, existing_end, existing_axis in parent_ranges[parent]:
-            # Ranges overlap if not (end <= existing_start or start >= existing_end)
             if not (end <= existing_start or start >= existing_end):
                 raise ValueError(
                     f"Sub-axes overlap: '{axis}' and '{existing_axis}' "
@@ -92,7 +69,6 @@ def check_sub_axes_maximality(axes: List[str]) -> List[str]:
         for i in range(len(subs_sorted) - 1):
             pre1, size1, ax1 = subs_sorted[i]
             pre2, size2, ax2 = subs_sorted[i + 1]
-            # Adjacent if pre1 * size1 == pre2
             if pre1 * size1 == pre2:
                 merged_size = size1 * size2
                 warnings.append(
@@ -519,16 +495,12 @@ def compute_global_shape(
         for i in range(rank):
             dim_spec = sharding.dim_specs[i] if i < len(sharding.dim_specs) else None
             if not dim_spec or not dim_spec.axes or dim_spec.partial:
-                # Replicated or partial dimensions: global == local
                 global_shape.append(int(local_shape[i]))
             else:
-                # Sharded dimension: global = sum(local) / replicas
-                # This approach is robust to sub-axes and uneven sharding.
                 total_shards = dim_spec.get_total_shards(mesh)
                 num_total_devices = len(shard_shapes)
                 
                 if num_total_devices % total_shards != 0:
-                    # Should not happen with valid ShardingSpec
                     num_replicas = 1
                 else:
                     num_replicas = num_total_devices // total_shards

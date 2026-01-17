@@ -1,38 +1,7 @@
 # ===----------------------------------------------------------------------=== #
 # Nabla 2026
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
-
-"""Compile transform: PyTorch-style torch.compile for MAX graphs.
-
-Caches compiled MAX models keyed by input signatures (shapes, dtypes, static args).
-Avoids Python re-tracing on cache hits.
-
-Usage:
-    @compile
-    def mlp(x, w1, w2):
-        return (x @ w1).relu() @ w2
-    
-    mlp(x, w1, w2)   # Compiles
-    mlp(x2, w1, w2)  # Cache hit if same shapes/dtypes
-    
-    @compile(dynamic_dims={0: {0: "batch"}})
-    def batched(x, W):
-        return x @ W
-    
-    # Compiles once, handles any batch size
-"""
 
 from __future__ import annotations
 

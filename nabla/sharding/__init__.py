@@ -1,4 +1,7 @@
-"""Sharding infrastructure for distributed execution."""
+# ===----------------------------------------------------------------------=== #
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
+# ===----------------------------------------------------------------------=== #
 
 from .spec import DeviceMesh, ShardingSpec, DimSpec, compute_local_shape, get_num_shards, P, PartitionSpec
 from .propagation import OpShardingRule, OpShardingRuleTemplate, PropagationStrategy, OpPriority, FactorSharding

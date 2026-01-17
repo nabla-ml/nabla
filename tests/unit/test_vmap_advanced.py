@@ -1,6 +1,8 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
+
 """Advanced vmap tests - in_axes variations and edge cases.
 
 This file tests advanced vmap functionality:

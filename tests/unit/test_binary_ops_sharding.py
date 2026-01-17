@@ -1,16 +1,7 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
-"""Tests for sharding propagation in binary operations.
-
-This file specifically tests that binary operations:
-1. Properly propagate sharding when both inputs have the same sharding
-2. Handle mismatched sharding scenarios (implicit resharding)
-3. Work correctly with broadcast semantics + sharding
-
-These tests verify the elementwise_template and broadcast_template
-are correctly applied in binary operations.
-"""
 
 import pytest
 import numpy as np

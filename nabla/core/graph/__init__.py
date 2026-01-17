@@ -1,3 +1,8 @@
+# ===----------------------------------------------------------------------=== #
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
+# ===----------------------------------------------------------------------=== #
+
 from .engine import ComputeGraph, GRAPH, driver_tensor_type
 from .tracing import Trace, trace, OutputRefs, Trace
 from .utils import get_operations_topological, get_all_impls_topological, print_trace_graph, apply_to_operations

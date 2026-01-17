@@ -1,6 +1,8 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
+
 """Tests for communication operations - sharding primitives.
 
 This file tests all communication/collective operations:

@@ -1,3 +1,8 @@
+# ===----------------------------------------------------------------------=== #
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
+# ===----------------------------------------------------------------------=== #
+
 """Stress tests for sharding propagation on complex graphs.
 
 Tests transformer blocks, diamond patterns, and numerical equivalence

@@ -1,6 +1,8 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2026 - Advanced Nested Vmap & Sharding Tests
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
+
 """Rigorous testing of nested vmap compositions with mixed sharding strategies.
 
 This file tests:

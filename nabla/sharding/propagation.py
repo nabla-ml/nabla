@@ -1,29 +1,7 @@
 # ===----------------------------------------------------------------------=== #
 # Nabla 2026
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
-
-"""
-Sharding Propagation: Algorithms and Templates
-==============================================
-
-This module implements the logic for propagating sharding constraints.
-It provides:
-1.  **Rule System**: OpShardingRule and templates for defining operation semantics.
-2.  **Propagation Algorithm**: Core logic to propagate specs through a rule.
-3.  **Templates**: Factory functions for common operation rules (matmul, etc.).
-"""
 
 from dataclasses import dataclass, field
 from enum import IntEnum
@@ -332,10 +310,8 @@ class OpShardingRuleTemplate:
                 if len(factors) == 1:
                     f = factors[0]
                     if f in factor_sizes:
-                        # If conflict, we trust the first one or error? 
-                        # For sharding, we can just enforce consistency.
                         if factor_sizes[f] != dim_size:
-                            pass # In fully robust system we might error, but here be lenient
+                            pass
                     else:
                         factor_sizes[f] = dim_size
         
@@ -401,7 +377,6 @@ class OpShardingRuleTemplate:
         return OpShardingRule(self.input_mappings, self.output_mappings, factor_sizes)
     
     def to_einsum_notation(self) -> str:
-        # Re-use logic for consistency
         return OpShardingRule(self.input_mappings, self.output_mappings, {}).to_einsum_notation()
 
     @classmethod
@@ -451,10 +426,7 @@ class OpShardingRuleTemplate:
                 br = len(shape) - explicit
                 if batch_rank == 0: batch_rank = br
                 elif br != batch_rank:
-                     # Mismatch in batch rank? 
-                     # For broadcasting, usually max rank wins, or they align.
-                     # We take max for safety if broadcasting?
-                     batch_rank = max(batch_rank, br)
+                    batch_rank = max(batch_rank, br)
 
             input_mappings.append(parse_factors(s, shape, batch_rank))
             
@@ -603,11 +575,7 @@ def _should_update_dim(
                 if proposed_axes[:len(current.axes)] == current.axes:
                     return True
         
-        # CRITICAL: If current has axes but proposed is empty or shorter,
-        # this means factor resolution resulted in "common prefix" (conflict).
-        # We MUST update to enforce compatibility across all tensors.
         if current.axes and (not proposed_axes or len(proposed_axes) < len(current.axes)):
-            # Only enforce if proposed_axes is a prefix of current.axes
             if not proposed_axes or current.axes[:len(proposed_axes)] == proposed_axes:
                 return True
     
@@ -662,21 +630,12 @@ def _update_from_factors(
             for f in factors:
                 f_state = state.get(f)
                 if f_state is not None:
-                    # Filter out:
-                    # 1. Axes already used by earlier dimensions (CRITICAL FIX)
-                    # NOTE: We removed 'ax not in spec.replicated_axes' because for Open dims,
-                    # currently unused axes are listed as replicated but shouldn't be blocked.
                     valid_axes = [ax for ax in f_state.axes 
                                  if ax not in used_axes_in_tensor]
                     
-                    # NOTE: We DO NOT propagate local axis conflicts back to the global factor.
-                    # This allows different tensors to use the same axis on different factors.
-                    # E.g., for matmul h[m,k] @ W[k,n]: h can have 'stage' on m (dim0),
-                    # and W can have 'stage' on k (dim0). These are different factors, valid.
-                    # If we globally downgrade k just because h can't use it on dim1, we break W.
-                    
                     proposed_axes.extend(valid_axes)
                     proposed_prio = min(proposed_prio, f_state.priority)
+                    
                     proposed_partial = proposed_partial or f_state.partial
                     has_factor_info = True
             
@@ -694,7 +653,7 @@ def _update_from_factors(
                 used_axes_in_tensor.update(proposed_axes)
                 new_dim_specs.append(DimSpec(
                     axes=proposed_axes,
-                    is_open=current_dim.is_open, # Preserve current openness (e.g. if was OPEN, stay OPEN)
+                    is_open=current_dim.is_open,
                     priority=proposed_prio,
                     partial=proposed_partial
                 ))
@@ -736,8 +695,6 @@ def propagate_sharding(
     
     # Phase 3: Update (Phase 2 Resolve is implicit in Collect/Merge)
     changed = False
-    # Update Outputs first: allows output constraints/conflicts to propagate back to factors
-    # before we update inputs. Critical for implicit resharding logic.
     if _update_from_factors(output_specs, rule.output_mappings, state):
         changed = True
     if _update_from_factors(input_specs, rule.input_mappings, state):
@@ -792,13 +749,10 @@ def run_hierarchical_propagation_pass(
                     
                     # Propagate through all operations
                     for op, rule, input_specs, output_specs in operations_with_rules:
-                        # Filter by operation priority
-                        # (Note: operations should have op_priority attribute)
                         op_prio = getattr(op, 'op_priority', OpPriority.CONTRACTION)
                         if op_prio != op_priority:
                             continue
                         
-                        # Propagate with current user priority and strategy
                         changed = propagate_sharding(
                             rule, input_specs, output_specs,
                             strategy=strategy,

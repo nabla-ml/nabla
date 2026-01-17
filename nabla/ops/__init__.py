@@ -1,4 +1,8 @@
-"""Operations for tensor manipulation."""
+# ===----------------------------------------------------------------------=== #
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
+# ===----------------------------------------------------------------------=== #
+
 
 # Base classes
 from .operation import Operation, BinaryOperation, UnaryOperation, ReduceOperation, LogicalShapeOperation, LogicalAxisOperation, ensure_tensor

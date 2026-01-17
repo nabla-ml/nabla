@@ -1,6 +1,8 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
+
 """Tests for logical operations - no batch_dims, establishing baseline correctness.
 
 Logical ops work on tensors without batch_dims. This establishes that the

@@ -1,8 +1,7 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025 - Control Flow Operations
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
-
-"""Control flow operations (cond, while_loop, scan) wrapping MAX primitives."""
 
 from __future__ import annotations
 
@@ -196,43 +195,16 @@ class WhileLoopOp(Operation):
                       leaf_specs.append(None)
 
         # 4. Reshard Inputs?
-        # Enforce current specs. If input doesn't match its own spec? Check consistency?
-        # reshard_inputs expects a list of specs matching inputs.
-        # But `reshard_inputs` works on `args` tuple.
-        # Here `args` contains functions. we only care about `init_val`.
-        # We assume init_val is already consistent or will be resharded.
-        # We can run reshard_inputs on init_val structure.
-        
-        # Actually, `spmd.reshard_inputs` handles Pytree.
-        # But we need specs matching leaves.
-        # leaf_specs corresponds to pytree.tree_leaves(init_val).
-        # We can reconstruct structure?
-        # Or just skip explicit resharding since we derived specs FROM inputs.
-        # Unless we want to enforce some constraint?
-        
+
         # 5. Execute Loop
         num_shards = len(mesh.devices) if mesh else 1
         shard_results = []
         
         with GRAPH.graph:
             for shard_idx in range(num_shards):
-                # Slice init_val
-                # get_shard_args expects tuple of args.
-                # We want to slice init_val leaves.
-                # Use helper on init_val directly.
-                
-                # We need input_shardings list for init_val leaves.
-                # leaf_specs is exactly that.
-                
                 shard_init_val = spmd.get_shard_args(
                     init_val, shard_idx, leaf_specs, g, Tensor, pytree
                 )
-                
-                # Run maxpr
-                # maxpr signature: (cond_fn, body_fn, *init_shards)
-                # shard_init_val might be nested structure?
-                # get_shard_args returns structure mimicking input.
-                
                 res = self.maxpr(cond_fn, body_fn, shard_init_val) # Pass structure
                 shard_results.append(res)
                 
@@ -312,9 +284,6 @@ def while_loop(cond_fn: Callable, body_fn: Callable, init_val: Any) -> Any:
 # =============================================================================
 # Scan Operation - Minimal Implementation for PP
 # =============================================================================
-# NOTE: scan is complex and requires careful handling of sharding.
-# For MVP, we provide a basic implementation that works with explicit loops.
-# Full JAX-like scan with sharding will be implemented later.
 
 def scan(
     f: Callable, 

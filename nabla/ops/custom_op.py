@@ -1,8 +1,7 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025 - Mojo Custom Op Helper
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
-
-"""Helper utilities for invoking Mojo custom kernels."""
 
 import sys
 from pathlib import Path
@@ -65,7 +64,6 @@ def call_custom_kernel(
         resolved_paths.append(path_obj)
 
     # 1. Load the kernels into the graph context
-    # This is safe to call multiple times (idempotent-ish in MAX)
     GRAPH.graph._kernel_library.load_paths(GRAPH.graph._context, resolved_paths)
 
     # 2. Invoke the custom op
@@ -78,10 +76,7 @@ def call_custom_kernel(
     )
 
     # 3. Verify the operation
-    # This ensures the kernel signature matches the provided inputs/outputs
     if results:
-        # Get the operation from the first result value
-        # Note: We assume all results come from the same operation
         op_instance = results[0].to_mlir().owner
         GRAPH.graph._kernel_library.verify_custom_op(op_instance)
 

@@ -1,12 +1,7 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025 - Logical View Operations
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
-
-"""Logical view operations.
-
-These operations work on the LOGICAL shape (user's view).
-Integer arguments are translated by adding batch_dims offset.
-"""
 
 from __future__ import annotations
 
@@ -414,24 +409,13 @@ def swap_axes(x: Tensor, axis1: int, axis2: int) -> Tensor:
     return _swap_axes_op(x, axis1=axis1, axis2=axis2)
 
 def broadcast_to(x: Tensor, shape: tuple[int, ...]) -> Tensor:
-    # Numpy broadcast aligns from the right. If input has fewer dims than target,
-    # we need to unsqueeze to add the missing dimensions.
-    #
-    # For batched tensors: physical shape = (batch..., logical...)
-    # We insert the new dims AFTER the batch dims so broadcast aligns correctly.
-    # E.g., scalar with batch_dims=1, logical shape () -> broadcast to (8,)
-    #       physical (4,) -> unsqueeze at axis=1 -> (4, 1) -> broadcast to (4, 8)
-    #
-    # IMPORTANT: This must happen at Tensor level (not in maxpr) so that
-    # unsqueeze operations go through sharding propagation.
     in_logical_rank = len(x.shape)
     out_logical_rank = len(shape)
     
     if in_logical_rank < out_logical_rank:
         batch_dims = x._impl.batch_dims
-        # Insert dimensions after batch dims (at logical position 0, which is physical batch_dims)
         for _ in range(out_logical_rank - in_logical_rank):
-            x = unsqueeze(x, axis=0)  # Logical axis 0 -> physical axis batch_dims
+            x = unsqueeze(x, axis=0)
     
     return _broadcast_to_op(x, shape=shape)
 
@@ -484,12 +468,7 @@ class GatherOp(Operation):
         from max.dtype import DType
         
         if batch_dims > 0:
-            # Use gather_nd with batch_dims for batched gather
-            # gather_nd expects indices of shape (..., index_depth) where last dim indexes into data
-            # For 1D gather along a logical axis, we reshape indices to add a trailing dim
             indices_shape = list(indices.shape)
-            
-            # Reshape indices: (..., k) -> (..., k, 1) for 1D indexing
             new_shape = indices_shape + [1]
             indices = ops.reshape(indices, new_shape)
             
@@ -605,34 +584,15 @@ class ScatterOp(Operation):
     ) -> TensorValue:
         from max.dtype import DType
         
-        # Use scatter_nd which has more flexible index handling.
-        # scatter_nd expects indices of shape (..., index_depth) where index_depth
-        # is the number of dimensions to index into.
-        #
-        # For scatter along axis=0 into (8, 4) with 1D indices (2,) and updates (2, 4):
-        # - We reshape indices from (2,) to (2, 1) to indicate 1-dimension indexing
-        # - updates shape (2, 4) provides the values for each index
-        #
-        # For scatter along axis=1 into (4, 8) with 1D indices (3,) and updates (4, 3):
-        # - We need to expand indices to include all row indices
-        # - indices becomes shape (4, 3, 2) - for each (row, update_idx), give (row, col)
-        
         indices_shape = list(indices.shape)
         
         if axis == 0:
-            # Simple case: just add trailing dimension to indices
-            # indices (k,) -> (k, 1) for k updates along first axis
             new_indices_shape = indices_shape + [1]
             indices = ops.reshape(indices, new_indices_shape)
-            # Cast to int64 if needed (scatter_nd expects int64)
             if indices.dtype != DType.int64:
                 indices = ops.cast(indices, DType.int64)
             return ops.scatter_nd(x, updates, indices)
         else:
-            # For axis != 0, we need to construct full coordinate indices
-            # For axis=1, data (4, 8), indices (3,), updates (4, 3)
-            # We need indices of shape (4, 3, 2) where each (i, j, :) = (i, indices[j])
-            
             leading_dims = [int(d) for d in x.shape[:axis]]
             trailing_update_dims = [int(d) for d in indices_shape]
             full_shape = leading_dims + trailing_update_dims
@@ -641,18 +601,14 @@ class ScatterOp(Operation):
             
             # Add leading dimension coordinates
             for d, dim_size in enumerate(leading_dims):
-                # Create range for this dimension using ops.range
                 from max.graph import DeviceRef
                 coord = ops.range(0, dim_size, 1, dtype=DType.int64, device=DeviceRef.CPU())
-                # Reshape for broadcasting: insert 1s everywhere except position d
                 shape = [1] * len(full_shape)
                 shape[d] = dim_size
                 coord = ops.reshape(coord, shape)
-                # Broadcast to full_shape
                 coord = ops.broadcast_to(coord, full_shape)
                 coord_list.append(coord)
             
-            # Add the actual indices (for the scatter axis)
             idx = indices
             if idx.dtype != DType.int64:
                 idx = ops.cast(idx, DType.int64)

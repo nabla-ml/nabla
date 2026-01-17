@@ -1,6 +1,8 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
+
 """Comprehensive vmap + sharding tests with realistic patterns.
 
 This file tests the realistic use case of vmap with sharding where:

@@ -1,16 +1,7 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2026 - Communication Operations for Sharding
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
-
-"""Communication operations for distributed/sharded tensor execution.
-
-These operations handle data movement between shards:
-- ShardOp: Split a replicated tensor into shards
-- AllGatherOp: Gather all shards to produce replicated tensors  
-- AllReduceOp: Reduce across shards (sum, mean, etc.)
-- ReduceScatterOp: Reduce then scatter result across shards
-- ReshardOp: Generic resharding between different sharding specs
-"""
 
 from __future__ import annotations
 
@@ -969,9 +960,6 @@ class ReshardOp(Operation):
                     from_shards *= mesh.get_axis_size(axis)
                 
                 # Approximate local size involved in this dim's gather
-                # This is rough; precise calculation depends on other dims too.
-                # Assuming this dimension is fully sharded and others might be too.
-                # A safe upper bound is using global size scaled by this dim's shard factor.
                 local_bytes_dim = tensor_bytes // from_shards
                 
                 total_cost += AllGatherOp.estimate_cost(local_bytes_dim, mesh, list(removed_axes))
@@ -1041,10 +1029,6 @@ class ReshardOp(Operation):
         
         # 3. Check if reshard needed
         if not needs_reshard(current_spec, target_spec):
-            # Just return input (maybe update spec if None -> Replicated implicit)
-            # Or assume caller handles metadata update? 
-            # Ideally return tensor as-is if strictly no change.
-            # But ensure spec is set if it was None?
             if current_spec is None:
                 tensor._impl.sharding = target_spec
             return tensor
@@ -1456,12 +1440,7 @@ class GatherAllAxesOp(Operation):
                 
                 current_shard_descs = new_shard_descs
                 current_active_axes.remove(ax)
-                
-        # After processing all sharded axes, we should have 1 result (replicated)
-        # Or multiple if some axes were unused (replicated).
-        # If replicated axes exist in mesh, `current_shard_descs` has N copies.
-        # We just pick the first one.
-        
+
         return current_shard_descs[0][0]
 
     def __call__(self, sharded_tensor):

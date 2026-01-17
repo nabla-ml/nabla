@@ -1,24 +1,7 @@
 # ===----------------------------------------------------------------------=== #
 # Nabla 2026
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
-
-"""Multi-output operations for the nabla module.
-
-These operations demonstrate the pytree-based multi-output support,
-returning tuples, lists, or dicts of Tensors.
-"""
 
 from __future__ import annotations
 
@@ -43,10 +26,6 @@ class SplitOp(LogicalAxisOperation):
         return "split"
     
     def __call__(self, x: Tensor, **kwargs: Any) -> tuple[Tensor, ...]:
-        # Enforce replication on split axis to ensure correct global result semantics
-        # If we split a sharded axis without gathering, we get partial results 
-        # that don't match the global shape expectation of 'Replicated'.
-        
         from ..sharding.spec import DimSpec, ShardingSpec
         
         # 1. Determine physical split axis
@@ -357,8 +336,6 @@ class UnbindOp(LogicalAxisOperation):
         out_mapping = {i: [out_factors[i]] for i in range(len(out_factors))}
         
         # Determine number of outputs (N)
-        # Unbind returns 'axis_size' outputs.
-        # But sharding_rule might be called with concrete input_shapes containing integer dims.
         if output_shapes:
             count = len(output_shapes)
         else:

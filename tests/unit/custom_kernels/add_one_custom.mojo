@@ -1,3 +1,8 @@
+# ===----------------------------------------------------------------------=== #
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
+# ===----------------------------------------------------------------------=== #
+
 import compiler
 from runtime.asyncrt import DeviceContextPtr
 from tensor import InputTensor, OutputTensor, foreach

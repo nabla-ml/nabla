@@ -1,8 +1,7 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025 - Updated Reduction Operations
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
-
-"""Reduction ops using updated Operation base with auto batch_dims."""
 
 from __future__ import annotations
 
@@ -24,15 +23,11 @@ class ReduceSumOp(ReduceOperation):
     def maxpr(self, x: TensorValue, *, axis: int, keepdims: bool = False) -> TensorValue:
         return ops.sum(x, axis)
     
-    # compute_cost inherited from ReduceOperation: 1 FLOP per input element
-    # sharding_rule inherited from ReduceOperation
-    
     def infer_output_shape(self, input_shapes: list[tuple[int, ...]], **kwargs: Any) -> tuple[int, ...]:
         """Compute output shape for reduction."""
         axis = kwargs.get("axis", 0)
         keepdims = kwargs.get("keepdims", False)
         in_shape = input_shapes[0]
-        # Normalize negative axis
         if axis < 0:
             axis = len(in_shape) + axis
         if keepdims:
@@ -83,7 +78,6 @@ def reduce_sum(x: Tensor, *, axis: int, keepdims: bool = False) -> Tensor:
     result = _reduce_sum_op(x, axis=axis, keepdims=True)
     
     if not keepdims:
-        # Squeeze at Tensor level so sharding propagation handles it correctly
         result = squeeze(result, axis=axis)
     
     return result

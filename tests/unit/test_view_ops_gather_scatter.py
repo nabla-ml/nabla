@@ -1,6 +1,8 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
+
 """Tests for gather, scatter, concatenate, and stack operations.
 
 These operations are critical for Pipeline Parallelism and need thorough testing:

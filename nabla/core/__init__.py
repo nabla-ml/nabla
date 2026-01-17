@@ -1,4 +1,7 @@
-"""Core abstractions and runtime for the nabla module."""
+# ===----------------------------------------------------------------------=== #
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
+# ===----------------------------------------------------------------------=== #
 
 from .common import (
     defaults, default_device, default_dtype, defaults_like, _in_running_loop,

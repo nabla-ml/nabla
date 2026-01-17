@@ -1,8 +1,7 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025 - Updated Binary Operations
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
-
-"""Binary ops using updated Operation base with auto batch_dims."""
 
 from __future__ import annotations
 
@@ -134,11 +133,7 @@ class MatmulOp(Operation):
         return OpShardingRuleTemplate.parse("... m k, ... k n -> ... m n", input_shapes).instantiate(
             input_shapes, output_shapes
         )
-    
-    # NOTE: No custom _infer_output_sharding needed - the generic factor-based
-    # propagation handles matmul correctly via sharding_rule() above.
-
-
+        
 
 add = AddOp()
 mul = MulOp()

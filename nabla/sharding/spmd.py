@@ -1,7 +1,8 @@
-"""SPMD execution helpers for sharded tensors.
+# ===----------------------------------------------------------------------=== #
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
+# ===----------------------------------------------------------------------=== #
 
-Core utilities for detecting, slicing, aligning, and creating sharded tensors.
-"""
 from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any, Callable, List, Optional
@@ -32,9 +33,6 @@ def ensure_specs(args: tuple, mesh: Optional["DeviceMesh"]) -> tuple:
     For unsharded tensors, assigns a replicated spec (all dims have empty axes).
     This allows the unified SPMD dispatch to treat all tensors uniformly.
     """
-    # NABLA 2025: Removed in-place annotation to support functional purity.
-    # Downstream components (infer_output_sharding, reshard_inputs, get_shard_args)
-    # now robustly handle unsharded (None spec) tensors by treating them as replicated.
     return args
 
 
@@ -69,11 +67,8 @@ def reshard_inputs(
         
         current = x._impl.sharding
         
-        # If input is replicated/unsharded but required spec has sharded axes,
-        # we need to actually shard it to match
         if current is None or current.is_fully_replicated():
             if required is not None and not required.is_fully_replicated():
-                # Shard the unsharded tensor to match the required spec
                 from ..ops.communication import shard as shard_fn
                 return shard_fn(x, mesh, required.dim_specs)
             return x
@@ -130,29 +125,22 @@ def infer_output_sharding(
     for t in leaves:
         spec = t._impl.sharding
         
-        # Determine global physical shape (includes batch dims)
-        # We need physical shape (rank) to create correct default spec
         shape = t._impl.physical_global_shape
         if shape is None and (t._impl.sharding is None or t._impl.sharding.is_fully_replicated()):
             shape = t._impl.physical_shape
             
         if shape is None:
-             # Fallback: reconstruct physical shape from logical + batch_shape
-             batch_dims = t._impl.batch_dims
-             if batch_dims > 0 and t._impl.batch_shape is not None:
-                  # Prepend batch dims to logical shape
-                  batch_ints = tuple(dim_to_int(d) for d in t._impl.batch_shape)
-                  logical_ints = tuple(dim_to_int(d) for d in t.shape)
-                  phys_shape_tuple = batch_ints + logical_ints
-             else:
-                  # No batch dims or batch_shape unavailable - use logical as physical
-                  phys_shape_tuple = tuple(dim_to_int(d) for d in t.shape)
+            batch_dims = t._impl.batch_dims
+            if batch_dims > 0 and t._impl.batch_shape is not None:
+                batch_ints = tuple(dim_to_int(d) for d in t._impl.batch_shape)
+                logical_ints = tuple(dim_to_int(d) for d in t.shape)
+                phys_shape_tuple = batch_ints + logical_ints
+            else:
+                phys_shape_tuple = tuple(dim_to_int(d) for d in t.shape)
         else:
             phys_shape_tuple = tuple(dim_to_int(d) for d in shape)
         
         if spec is None:
-            # Create replicated spec for unsharded inputs (OPEN so they can receive sharding)
-            # Must use PHYSICAL rank
             rank = len(phys_shape_tuple)
             spec = ShardingSpec(mesh, [DimSpec([], is_open=True) for _ in range(rank)])
         input_specs.append(spec.clone())
@@ -167,9 +155,7 @@ def infer_output_sharding(
         if not input_partial_axes:
             return None, input_specs, False
         
-        # Create output spec with propagated partial sum axes
         output_rank = op.infer_output_rank(input_shapes, **(kwargs or {}))
-        # FIXED: Use closed dimensions by default for inferred outputs
         output_spec = ShardingSpec(mesh, [DimSpec([], is_open=False) for _ in range(output_rank)], 
                                   partial_sum_axes=input_partial_axes)
         return output_spec, input_specs, set()
@@ -183,19 +169,14 @@ def infer_output_sharding(
     # Get sharding rule from operation
     rule = None
     try:
-        # We pass output_shapes=None to indicate we don't have full shapes
-        # The template instantiation will rely on input shapes for factor sizing
         rule = op.sharding_rule(input_shapes, None, **(kwargs or {}))
     except (NotImplementedError, AttributeError):
         rule = None
         
     if rule is None:
-        # Fallback to elementwise-like behavior: inherit from first sharded
         for spec in input_specs:
             if any(d.axes for d in spec.dim_specs):
-                # Ensure rank match before inheriting
                 if len(spec.dim_specs) == output_rank:
-                    # Ensure inherited spec is closed
                     cloned_spec = spec.clone()
                     for dim_spec in cloned_spec.dim_specs:
                         dim_spec.is_open = False
@@ -209,7 +190,6 @@ def infer_output_sharding(
     propagate_sharding(rule, input_specs, [output_spec])
     
     # Propagate partial sum axes from inputs to output
-    # Any input partial sum axis is preserved in the output unless it's explicitly reduced/sharded
     input_partial_axes = set()
     for spec in input_specs:
         if spec:
@@ -236,8 +216,6 @@ def infer_output_sharding(
         for ax in dim.axes:
             used_in_dims.add(ax)
             
-    # If a partial sum axis is now used in a dimension, mark that dimension partial 
-    # and remove from ghost sharding set.
     for ax in list(output_spec.partial_sum_axes):
         if ax in used_in_dims:
             output_spec.partial_sum_axes.remove(ax)
@@ -282,12 +260,8 @@ def _check_contracting_factors_sharded(
     if output_spec:
         for ds in output_spec.dim_specs:
             preserved_axes.update(ds.axes)
-    
 
-
-    # Map from sharded axis -> whether it's partial in at least one input
     axis_partial_map: Dict[str, bool] = {}
-    # Map from sharded axis -> whether it's sharded on a contracting factor
     contracted_axes = set()
     
     for input_idx, spec in enumerate(input_specs):
@@ -314,18 +288,9 @@ def _check_contracting_factors_sharded(
     return reduce_axes, ghost_axes
 
 
-
-
-
-
-
-
 # ============================================================================
 # Shape & Slice Computation
 # ============================================================================
-
-
-
 
 def create_replicated_spec(mesh: "DeviceMesh", rank: int) -> "ShardingSpec":
     """Create a fully replicated sharding spec.
@@ -342,7 +307,6 @@ def create_replicated_spec(mesh: "DeviceMesh", rank: int) -> "ShardingSpec":
 
 
 from .spec import needs_reshard
-
 
 
 # ============================================================================
@@ -376,11 +340,9 @@ def get_shard_args(args: tuple, shard_idx: int,
             this_sharding = per_input_shardings[input_idx[0]]
         input_idx[0] += 1
         
-        # Hydrate if needed (realized tensor) then access values
         x.hydrate()
         vals = x.values
         
-        # Return the value for this shard
         if shard_idx < len(vals):
             return vals[shard_idx]
         return vals[0] if vals else x.__tensorvalue__()
@@ -427,41 +389,24 @@ def reshard_tensor(tensor: "Tensor", from_spec: Optional["ShardingSpec"],
         from_axes = set(from_spec.dim_specs[dim].axes) if dim < len(from_spec.dim_specs) else set()
         to_axes = set(to_spec.dim_specs[dim].axes) if dim < len(to_spec.dim_specs) else set()
         
-        # Need gather ONLY if removing axes that aren't preserved in the target
         axes_to_remove = from_axes - to_axes
         
-        # Guard: Check if any axes being removed are Partial
-        # print(f"DEBUG: Reshard Dim {dim}: partial={from_spec.dim_specs[dim].partial}, axes={from_spec.dim_specs[dim].axes}")
         if from_spec.dim_specs[dim].partial:
-            # If the dimension was partial, removing its sharding/axis means we are
-            # converting Partial Sums -> Replicated Values.
-            # This requires AllReduce, NOT AllGather.
             from ..ops.communication import all_reduce
-            
-            # Check if target is also partial (not yet implemented fully, but if so, skip reduce)
             target_is_partial = dim < len(to_spec.dim_specs) and to_spec.dim_specs[dim].partial
             
             if not target_is_partial:
-                # Insert AllReduce for proper summation
                 result = all_reduce(result)
-                # After AllReduce, the tensor is fully replicated (logically), so we continue
-                # with any further reshaping/resharding on the now-full-values.
                 continue
 
         if axes_to_remove:
-            # This dimension has axes being removed, need to gather
             result = all_gather(result, axis=dim)
     
-    # Similar check for partial_sum_axes (ghost sharding)
-    # If we are removing ghost axes, it means we are realizing the sum -> AllReduce
     for ghost_ax in from_spec.partial_sum_axes:
         if ghost_ax not in to_spec.partial_sum_axes:
-            # Ghost axis removed -> MUST AllReduce
             from ..ops.communication import all_reduce
             result = all_reduce(result)
 
-    # Apply new sharding (local slicing for new/extended axes)
-    # Use _bypass_idempotency to prevent recursion back to reshard_tensor
     result = shard_op(result, mesh, to_spec.dim_specs, replicated_axes=to_spec.replicated_axes, _bypass_idempotency=True)
     
     return result
@@ -489,18 +434,12 @@ def create_sharded_output(results: List[Any], sharding: Optional["ShardingSpec"]
     if not isinstance(first, (g.TensorValue, g.BufferValue)):
         return first
     
-    # Ensure we have a sharding spec when we have multiple values
-    # (replicated tensors still need a spec with empty axes for each dim)
     if sharding is None and len(results) > 1 and mesh is not None:
         from .spec import ShardingSpec, DimSpec
         rank = len(first.type.shape)
-        # Implicitly replicated tensors should be Open to allow modification during propagation
         sharding = ShardingSpec(mesh, [DimSpec([], is_open=True) for _ in range(rank)])
     
     impl = TensorImpl(values=results, traced=traced, batch_dims=batch_dims)
     impl.sharding = sharding
-    
-    # NABLA 2026 Refactor: Metadata is no longer cached.
-    # TensorImpl computes global shape dynamically from local shape + sharding.
     
     return Tensor(impl=impl)

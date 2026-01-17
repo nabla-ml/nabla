@@ -1,15 +1,7 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla 2025 - Physical Operations
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
-
-"""Physical operations working directly on the underlying tensor shape.
-
-These operations do NOT apply any translation logic.
-This includes:
-- View ops (moveaxis, physical unsqueeze/squeeze)
-- Reductions (sum/mean over physical axes)
-- Batch dimension management (modifying metadata)
-"""
 
 from __future__ import annotations
 
@@ -198,17 +190,7 @@ class BroadcastToPhysicalOp(Operation):
              raise ValueError("BroadcastToPhysicalOp requires 'shape' kwarg or output_shapes")
         
         in_rank = len(in_shape)
-        out_rank = len(out_shape)
-        
-        # Align ranks (left-pad input with 1s implicitly? No, physical op expects explicit shape?)
-        # BroadcastToPhysicalOp usually assumes ranks match or just broadcasting dims?
-        # ops.broadcast_to works if input is broadcastable.
-        
-        # For sharding, we map factors.
-        # We assume output rank >= input rank.
-        # Right alignment? 
-        # Numpy broadcasting: right align.
-        
+        out_rank = len(out_shape)        
         offset = out_rank - in_rank
         
         factors = [f"d{i}" for i in range(out_rank)]
@@ -222,13 +204,9 @@ class BroadcastToPhysicalOp(Operation):
             out_dim_size = out_shape[out_dim_idx]
             
             if in_dim_size == 1 and out_dim_size > 1:
-                # Broadcasting: Input dimension matches NOTHING (it's replicated/scalar wrt this factor)
-                # Output dimension maps to factor d_{i+offset}
-                in_mapping[i] = [] # Empty list = no factor constraints
+                in_mapping[i] = []
             else:
-                # Standard mapping (identity or 1->1)
                 in_mapping[i] = [factors[out_dim_idx]]
-                
                 
         return OpShardingRuleTemplate([in_mapping], [out_mapping]).instantiate(input_shapes, output_shapes)
 
