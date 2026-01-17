@@ -42,7 +42,7 @@ class MoveAxisOp(Operation):
         output_shapes: list[tuple[int, ...]],
         **kwargs: Any,
     ) -> Any:
-        from ..sharding.propagation import OpShardingRuleTemplate
+        from ..core.sharding.propagation import OpShardingRuleTemplate
         rank = len(input_shapes[0])
         source = kwargs.get("source")
         destination = kwargs.get("destination")
@@ -77,7 +77,7 @@ class UnsqueezePhysicalOp(Operation):
         output_shapes: list[tuple[int, ...]],
         **kwargs: Any,
     ) -> Any:
-        from ..sharding.propagation import OpShardingRuleTemplate
+        from ..core.sharding.propagation import OpShardingRuleTemplate
         rank = len(input_shapes[0])
         axis = kwargs.get("axis", 0)
         
@@ -109,7 +109,7 @@ class SqueezePhysicalOp(Operation):
         output_shapes: list[tuple[int, ...]],
         **kwargs: Any,
     ) -> Any:
-        from ..sharding.propagation import OpShardingRuleTemplate
+        from ..core.sharding.propagation import OpShardingRuleTemplate
         rank = len(input_shapes[0])
         axis = kwargs.get("axis", 0)
         
@@ -175,7 +175,7 @@ class BroadcastToPhysicalOp(Operation):
         **kwargs: Any,
     ) -> Any:
         # Custom broadcast rule: 1->N maps to [] -> [d], N->N maps to [d] -> [d]
-        from ..sharding.propagation import OpShardingRuleTemplate
+        from ..core.sharding.propagation import OpShardingRuleTemplate
         
         in_shape = input_shapes[0]
         
@@ -212,7 +212,7 @@ class BroadcastToPhysicalOp(Operation):
 
     def _transform_shard_kwargs(self, kwargs: dict, output_sharding: Any, shard_idx: int) -> dict:
         """Convert global target shape to local shape for each shard."""
-        from ..sharding.spec import compute_local_shape
+        from ..core.sharding.spec import compute_local_shape
         
         global_shape = kwargs.get('shape')
         if global_shape is None or output_sharding is None:
@@ -243,7 +243,7 @@ class ReduceSumPhysicalOp(Operation):
         **kwargs,
     ):
         """Reduce: (d0, d1, ...) -> (d0, 1, ...) with reduce_dim kept as size 1."""
-        from ..sharding.propagation import OpShardingRuleTemplate
+        from ..core.sharding.propagation import OpShardingRuleTemplate
         rank = len(input_shapes[0])
         axis = kwargs.get("axis", 0)
         
@@ -286,7 +286,7 @@ class MeanPhysicalOp(Operation):
         **kwargs,
     ):
         """Reduce: (d0, d1, ...) -> (d0, 1, ...) with reduce_dim kept as size 1."""
-        from ..sharding.propagation import OpShardingRuleTemplate
+        from ..core.sharding.propagation import OpShardingRuleTemplate
         rank = len(input_shapes[0])
         axis = kwargs.get("axis", 0)
         

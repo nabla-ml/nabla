@@ -24,7 +24,7 @@ import numpy as np
 import nabla
 from nabla import DeviceMesh, P
 from nabla.ops.communication import shard, all_gather, all_reduce, reshard
-from nabla.sharding.spec import DimSpec, ShardingSpec
+from nabla.core.sharding.spec import DimSpec, ShardingSpec
 
 from tests.conftest import (
     make_array, tensor_from_numpy, to_numpy,

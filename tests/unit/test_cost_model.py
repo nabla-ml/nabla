@@ -7,7 +7,7 @@
 
 import unittest
 
-from nabla.sharding.spec import DeviceMesh
+from nabla.core.sharding.spec import DeviceMesh
 from nabla.ops.communication import (
     AllReduceOp,
     AllGatherOp,
@@ -92,7 +92,7 @@ class TestCommunicationCostModel(unittest.TestCase):
 
     def test_resharding_cost_zero_for_shard_only(self):
         """Resharding from unsharded to sharded is free (just local slicing)."""
-        from nabla.sharding.spec import DimSpec, ShardingSpec
+        from nabla.core.sharding.spec import DimSpec, ShardingSpec
         
         to_spec = ShardingSpec(self.mesh, [DimSpec(["d"]), DimSpec([])])
         op = ReshardOp()
@@ -104,7 +104,7 @@ class TestCommunicationCostModel(unittest.TestCase):
 
     def test_resharding_cost_nonzero_for_gather(self):
         """Resharding from sharded to unsharded requires AllGather."""
-        from nabla.sharding.spec import DimSpec, ShardingSpec
+        from nabla.core.sharding.spec import DimSpec, ShardingSpec
         
         from_spec = ShardingSpec(self.mesh, [DimSpec(["d"]), DimSpec([])])
         op = ReshardOp()

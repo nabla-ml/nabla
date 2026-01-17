@@ -9,7 +9,7 @@ import numpy as np
 import nabla
 from nabla import DeviceMesh, P
 from nabla import add, sub, mul, div, matmul
-from nabla.sharding.spec import DimSpec, ShardingSpec
+from nabla.core.sharding.spec import DimSpec, ShardingSpec
 
 from tests.conftest import (
     make_array, make_positive_array, tensor_from_numpy, to_numpy,

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from ..common import pytree
 from ..common.pytree import tree_leaves, PyTreeDef
 from ..tensor.impl import TensorImpl
-from ...sharding.spec import compute_global_shape
+from ..sharding.spec import compute_global_shape
 
 if TYPE_CHECKING:
     from ..tensor.impl import TensorImpl

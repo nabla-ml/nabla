@@ -6,7 +6,7 @@
 import numpy as np
 import unittest
 from nabla import ops
-from nabla.sharding import DeviceMesh, DimSpec
+from nabla.core.sharding import DeviceMesh, DimSpec
 from nabla.core import trace
 from nabla.ops import communication
 from nabla.transforms.vmap import vmap

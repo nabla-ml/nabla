@@ -8,7 +8,7 @@ import numpy as np
 from nabla.core import Tensor
 from nabla.core import trace
 from nabla.transforms.shard_map import shard_map
-from nabla.sharding.spec import DeviceMesh, ShardingSpec, DimSpec
+from nabla.core.sharding.spec import DeviceMesh, ShardingSpec, DimSpec
 from nabla.ops import binary, view, reduction
 
 class TestShardMapComplex(unittest.TestCase):

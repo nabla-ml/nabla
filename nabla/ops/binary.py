@@ -129,7 +129,7 @@ class MatmulOp(Operation):
         k is the contracting factor (appears only in inputs).
         Also handles broadcast case where one input lacks batch dims.
         """
-        from ..sharding.propagation import OpShardingRuleTemplate
+        from ..core.sharding.propagation import OpShardingRuleTemplate
         return OpShardingRuleTemplate.parse("... m k, ... k n -> ... m n", input_shapes).instantiate(
             input_shapes, output_shapes
         )

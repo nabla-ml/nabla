@@ -19,10 +19,10 @@ from ..core import GRAPH
 
 if TYPE_CHECKING:
     from ..core.tensor import Tensor
-    from ..sharding.spec import DeviceMesh
+    from ..core.sharding.spec import DeviceMesh
 
 if TYPE_CHECKING:
-    from ..sharding.spec import DeviceMesh
+    from ..core.sharding.spec import DeviceMesh
 
 
 def _unwrap_tensor(x: Any) -> Any:
@@ -154,7 +154,7 @@ class WhileLoopOp(Operation):
         from ..core import TensorImpl
 
         from ..core import pytree
-        from ..sharding import spmd
+        from ..core.sharding import spmd
         from max import graph as g
 
         # 1. Collect inputs (init_val structure)
@@ -187,7 +187,7 @@ class WhileLoopOp(Operation):
                           # But if not sharded, batch_dims might be 0 or simulated.
                           # Use x.global_shape?
                           # Safest: Create replicated spec.
-                          from ..sharding.spmd import create_replicated_spec
+                          from ..core.sharding.spmd import create_replicated_spec
                           leaf_specs.append(create_replicated_spec(mesh, rank))
                       else:
                           leaf_specs.append(None)

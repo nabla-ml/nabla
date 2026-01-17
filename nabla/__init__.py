@@ -118,7 +118,7 @@ from .ops.reduction import reduce_sum, mean, ReduceSumOp, MeanOp
 from .ops.communication import shard, all_gather, all_reduce
 
 # Sharding infrastructure (core definitions)
-from .sharding.spec import (
+from .core.sharding.spec import (
     DeviceMesh,
     DimSpec,
     ShardingSpec,

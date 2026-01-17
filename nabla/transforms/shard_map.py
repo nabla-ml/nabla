@@ -15,8 +15,8 @@ from ..core import trace, Trace
 from ..ops.operation import Operation
 
 if TYPE_CHECKING:
-    from ..sharding.mesh import DeviceMesh
-    from ..sharding.spec import ShardingSpec
+    from ..core.sharding.mesh import DeviceMesh
+    from ..core.sharding.spec import ShardingSpec
 
 
 def shard_map(
@@ -49,8 +49,8 @@ def shard_map(
         traced = trace(func, *args, **kwargs)
 
         if auto_sharding:
-            from ..sharding.optimizer.simple_solver import SimpleSolver
-            from ..sharding.spec import ShardingSpec, DimSpec
+            from ..core.sharding.optimizer.simple_solver import SimpleSolver
+            from ..core.sharding.spec import ShardingSpec, DimSpec
             extractor = _ShardingGraphExtractor(traced, in_specs, out_specs, debug=debug)
             json_graph = extractor.extract()
             solver = SimpleSolver(mesh.shape, mesh.axis_names)
@@ -64,7 +64,7 @@ def shard_map(
                 if isinstance(x, Tensor):
                     spec = in_specs.get(i)
                     if spec:
-                        from ..sharding.spec import needs_reshard
+                        from ..core.sharding.spec import needs_reshard
                         if x._impl.sharding and needs_reshard(x._impl.sharding, spec):
                             import warnings
                             warnings.warn(

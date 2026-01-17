@@ -26,7 +26,7 @@ from nabla import (
     reduce_sum_physical, mean_physical,
     squeeze_physical, unsqueeze_physical, broadcast_to_physical,
 )
-from nabla.sharding.spec import DimSpec
+from nabla.core.sharding.spec import DimSpec
 
 from tests.conftest import (
     make_array, make_positive_array, tensor_from_numpy, to_numpy,

@@ -35,7 +35,7 @@ from nabla import (
     reshape, squeeze, unsqueeze, swap_axes, broadcast_to,
     matmul,
 )
-from nabla.sharding.spec import DimSpec
+from nabla.core.sharding.spec import DimSpec
 
 from tests.conftest import (
     make_array, make_positive_array, tensor_from_numpy, to_numpy,

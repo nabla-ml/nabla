@@ -5,7 +5,7 @@
 
 import unittest
 import numpy as np
-from nabla.sharding.spec import DeviceMesh, DimSpec, ShardingSpec, compute_global_shape
+from nabla.core.sharding.spec import DeviceMesh, DimSpec, ShardingSpec, compute_global_shape
 
 class TestShardingAggregation(unittest.TestCase):
     """Tests for global shape computation from shards (Aggregation mode)."""

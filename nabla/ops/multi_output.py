@@ -26,7 +26,7 @@ class SplitOp(LogicalAxisOperation):
         return "split"
     
     def __call__(self, x: Tensor, **kwargs: Any) -> tuple[Tensor, ...]:
-        from ..sharding.spec import DimSpec, ShardingSpec
+        from ..core.sharding.spec import DimSpec, ShardingSpec
         
         # 1. Determine physical split axis
         rank = len(x.shape)
@@ -124,7 +124,7 @@ class SplitOp(LogicalAxisOperation):
         The split axis changes size, so we must assign a new factor to it
         in the output to avoid size mismatch conflicts.
         """
-        from ..sharding.propagation import OpShardingRuleTemplate
+        from ..core.sharding.propagation import OpShardingRuleTemplate
         
         rank = len(input_shapes[0])
         axis = kwargs.get("axis", 0)
@@ -170,7 +170,7 @@ class ChunkOp(LogicalAxisOperation):
         return "chunk"
     def __call__(self, x: Tensor, **kwargs: Any) -> list[Tensor]:
         # Enforce replication on split axis (see SplitOp.__call__ for details)
-        from ..sharding.spec import DimSpec, ShardingSpec
+        from ..core.sharding.spec import DimSpec, ShardingSpec
         
         rank = len(x.shape)
         batch_dims = x._impl.batch_dims
@@ -234,7 +234,7 @@ class ChunkOp(LogicalAxisOperation):
         **kwargs,
     ):
         """Chunk preserves sharding on non-split dimensions."""
-        from ..sharding.propagation import OpShardingRuleTemplate
+        from ..core.sharding.propagation import OpShardingRuleTemplate
         
         rank = len(input_shapes[0])
         axis = kwargs.get("axis", 0)
@@ -324,7 +324,7 @@ class UnbindOp(LogicalAxisOperation):
         
         Outputs (N slices) all share the same sharding: factor at axis is gone.
         """
-        from ..sharding.propagation import OpShardingRuleTemplate
+        from ..core.sharding.propagation import OpShardingRuleTemplate
         rank = len(input_shapes[0])
         axis = kwargs.get("axis", 0)
         

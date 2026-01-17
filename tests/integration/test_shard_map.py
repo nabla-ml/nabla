@@ -6,7 +6,7 @@
 import unittest
 import numpy as np
 from nabla.core import Tensor
-from nabla.sharding.spec import DeviceMesh, DimSpec, ShardingSpec
+from nabla.core.sharding.spec import DeviceMesh, DimSpec, ShardingSpec
 from nabla.transforms.shard_map import shard_map
 from nabla.core import trace
 from nabla import ops

@@ -13,7 +13,7 @@ from max.graph import TensorValue, ops
 from .operation import Operation
 
 if TYPE_CHECKING:
-    from ..sharding.spec import DeviceMesh, DimSpec, ShardingSpec
+    from ..core.sharding.spec import DeviceMesh, DimSpec, ShardingSpec
 
 
 class CollectiveOperation(Operation):
@@ -66,7 +66,7 @@ class CollectiveOperation(Operation):
         self._setup_output_refs(output, (sharded_tensor,), kwargs, sharded_tensor._impl.traced)
         
         return output
-        
+
     def _should_proceed(self, tensor):
         """Check if operation should proceed (has sharding and potentially multiple shards)."""
         if not tensor._impl.sharding:
@@ -191,7 +191,7 @@ class ShardOp(Operation):
         **kwargs: Any,
     ) -> List[TensorValue]:
         """Create sharded TensorValues by slicing the input."""
-        from ..sharding.spec import ShardingSpec
+        from ..core.sharding.spec import ShardingSpec
 
         # Determine global shape
         global_shape = kwargs.pop('global_shape', None)
@@ -223,7 +223,7 @@ class ShardOp(Operation):
         return shard_values
 
     def _slice_for_device(self, x, global_shape, spec, shard_idx, mesh):
-        from ..sharding.spec import compute_local_shape
+        from ..core.sharding.spec import compute_local_shape
         from ..core.tensor import Tensor
         
         # Determine effective input value for this shard
@@ -324,7 +324,7 @@ class ShardOp(Operation):
         from ..core import Tensor
         from ..core import TensorImpl
         from ..core import GRAPH
-        from ..sharding.spec import ShardingSpec, needs_reshard
+        from ..core.sharding.spec import ShardingSpec, needs_reshard
         from max import graph as g
         
         target_spec = ShardingSpec(mesh, dim_specs, replicated_axes=replicated_axes or set())
@@ -338,7 +338,7 @@ class ShardOp(Operation):
             
             # Different sharding - need to reshard via all_gather + shard
             # This handles the case where input is sharded on 'dp' but we want 'tp'
-            from ..sharding.spmd import reshard_tensor
+            from ..core.sharding.spmd import reshard_tensor
             return reshard_tensor(x, x._impl.sharding, target_spec, mesh)
         
         # Standard path: input is unsharded, shard it according to spec
@@ -349,7 +349,7 @@ class ShardOp(Operation):
             # For sharded inputs, compute global from local + sharding
             local = x._impl.physical_local_shape(0)
             if local is not None and x._impl.sharding:
-                from ..sharding.spec import compute_global_shape
+                from ..core.sharding.spec import compute_global_shape
                 global_shape = compute_global_shape(tuple(local), x._impl.sharding)
             elif local is not None:
                 global_shape = tuple(int(d) for d in local)
@@ -391,7 +391,7 @@ class ShardOp(Operation):
     
     def _compute_global_from_local(self, local_shape, sharding):
         """Deprecated: use spmd.compute_global_shape."""
-        from ..sharding.spec import compute_global_shape
+        from ..core.sharding.spec import compute_global_shape
         return compute_global_shape(local_shape, sharding)
 
 
@@ -521,7 +521,7 @@ class AllGatherOp(CollectiveOperation):
         from ..core import Tensor
         from ..core import TensorImpl
         from ..core import GRAPH
-        from ..sharding.spec import ShardingSpec, DimSpec
+        from ..core.sharding.spec import ShardingSpec, DimSpec
         
         if (not sharded_tensor._impl._values and not sharded_tensor._impl._storages) or \
            (sharded_tensor._impl.sharding and sharded_tensor._impl.sharding.is_fully_replicated()):
@@ -544,7 +544,7 @@ class AllGatherOp(CollectiveOperation):
             # Physically gathered (single value) but logically sharded.
             # We just need to update the metadata to be replicated.
             # IMPORTANT: Compute the GLOBAL shape, not just copy local shape!
-            from ..sharding.spec import compute_global_shape
+            from ..core.sharding.spec import compute_global_shape
             from max.graph import Shape
             
             batch_dims = sharded_tensor._impl.batch_dims
@@ -583,7 +583,7 @@ class AllGatherOp(CollectiveOperation):
             )
         
         # Compute global shape from input: after gather on axis, that axis is replicated
-        from ..sharding.spec import compute_global_shape
+        from ..core.sharding.spec import compute_global_shape
         from max.graph import Shape
         
         local_shape = sharded_tensor._impl.physical_local_shape(0)
@@ -705,7 +705,7 @@ class AllReduceOp(CollectiveOperation):
     
     def _compute_output_spec(self, input_tensor, results, **kwargs):
         """Output is fully replicated."""
-        from ..sharding.spec import ShardingSpec, DimSpec
+        from ..core.sharding.spec import ShardingSpec, DimSpec
         mesh = input_tensor._impl.sharding.mesh if input_tensor._impl.sharding else None
         
         if mesh and results:
@@ -856,7 +856,7 @@ class ReduceScatterOp(CollectiveOperation):
     
     def _compute_output_spec(self, input_tensor, results, **kwargs):
         """Output sharding: the scatter axis becomes sharded."""
-        from ..sharding.spec import ShardingSpec, DimSpec
+        from ..core.sharding.spec import ShardingSpec, DimSpec
         
         mesh = input_tensor._impl.sharding.mesh if input_tensor._impl.sharding else None
         input_spec = input_tensor._impl.sharding
@@ -996,7 +996,7 @@ class ReshardOp(Operation):
             dim_specs: List of DimSpecs. Can be logical (len=rank) or physical (len=rank+batch_dims).
             replicated_axes: Optional set of axes to force replication on.
         """
-        from ..sharding.spec import ShardingSpec, DimSpec, needs_reshard
+        from ..core.sharding.spec import ShardingSpec, DimSpec, needs_reshard
         from ..core.tensor import Tensor
         
         # 1. Handle batch_dims (Logical -> Physical conversion)
@@ -1260,7 +1260,7 @@ class AxisIndexOp(Operation):
         from max.graph import DeviceRef
         from ..core.tensor import Tensor
         from ..core import TensorImpl
-        from ..sharding.spec import ShardingSpec, DimSpec
+        from ..core.sharding.spec import ShardingSpec, DimSpec
 
         results = []
         with GRAPH.graph:
@@ -1331,7 +1331,7 @@ class PMeanOp(CollectiveOperation):
     
     def _compute_output_spec(self, input_tensor, results, **kwargs):
         """Output is fully replicated."""
-        from ..sharding.spec import ShardingSpec, DimSpec
+        from ..core.sharding.spec import ShardingSpec, DimSpec
         mesh = input_tensor._impl.sharding.mesh if input_tensor._impl.sharding else None
         
         if mesh and results:
@@ -1455,7 +1455,7 @@ class GatherAllAxesOp(Operation):
         from ..core import Tensor
         from ..core import TensorImpl
         from ..core import GRAPH
-        from ..sharding.spec import ShardingSpec, DimSpec
+        from ..core.sharding.spec import ShardingSpec, DimSpec
         from max import graph as g
         
         if not sharded_tensor._impl.sharding:

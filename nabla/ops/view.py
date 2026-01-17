@@ -32,7 +32,7 @@ class UnsqueezeOp(LogicalAxisOperation):
         **kwargs,
     ):
         """Unsqueeze: insert new dimension at axis position."""
-        from ..sharding.propagation import OpShardingRuleTemplate
+        from ..core.sharding.propagation import OpShardingRuleTemplate
         in_rank = len(input_shapes[0])
         axis = kwargs.get("axis", 0)
         
@@ -68,7 +68,7 @@ class SqueezeOp(LogicalAxisOperation):
         **kwargs,
     ):
         """Squeeze: remove dimension at axis position."""
-        from ..sharding.propagation import OpShardingRuleTemplate
+        from ..core.sharding.propagation import OpShardingRuleTemplate
         in_rank = len(input_shapes[0])
         axis = kwargs.get("axis", 0)
         
@@ -104,7 +104,7 @@ class SwapAxesOp(LogicalAxisOperation):
         **kwargs,
     ):
         """SwapAxes: swap two dimensions."""
-        from ..sharding.propagation import OpShardingRuleTemplate
+        from ..core.sharding.propagation import OpShardingRuleTemplate
         in_rank = len(input_shapes[0])
         axis1 = kwargs.get("axis1", 0)
         axis2 = kwargs.get("axis2", 1)
@@ -153,7 +153,7 @@ class BroadcastToOp(LogicalShapeOperation):
         Uses shape-aware template to handle dimension expansion (size 1 -> N).
         Handles scalar inputs (rank 0) by treating them as fully replicated.
         """
-        from ..sharding.propagation import OpShardingRuleTemplate
+        from ..core.sharding.propagation import OpShardingRuleTemplate
         
         if not input_shapes:
             return None
@@ -211,7 +211,7 @@ class BroadcastToOp(LogicalShapeOperation):
 
     def _transform_shard_kwargs(self, kwargs: dict, output_sharding, shard_idx: int) -> dict:
         """Convert global target shape to local shape for each shard."""
-        from ..sharding.spec import compute_local_shape
+        from ..core.sharding.spec import compute_local_shape
         
         global_shape = kwargs.get('shape')
         if global_shape is None or output_sharding is None:
@@ -235,7 +235,7 @@ class ReshapeOp(LogicalShapeOperation):
         A smarter implementation could analyze the reshape to determine
         if sharded dimensions are actually affected.
         """
-        from ..sharding.spec import DimSpec, ShardingSpec
+        from ..core.sharding.spec import DimSpec, ShardingSpec
         
         spec = x._impl.sharding
         if spec:
@@ -274,7 +274,7 @@ class ReshapeOp(LogicalShapeOperation):
 
     def sharding_rule(self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]], **kwargs):
         """Create sharding rule for reshape using greedy factor matching."""
-        from ..sharding.propagation import OpShardingRuleTemplate
+        from ..core.sharding.propagation import OpShardingRuleTemplate
         from math import prod
         
         if not input_shapes: return None
@@ -360,7 +360,7 @@ class ReshapeOp(LogicalShapeOperation):
     
     def _transform_shard_kwargs(self, kwargs: dict, output_sharding, shard_idx: int) -> dict:
         """Convert global target shape to local shape for each shard."""
-        from ..sharding.spec import compute_local_shape
+        from ..core.sharding.spec import compute_local_shape
         
         global_shape = kwargs.get('shape')
         if global_shape is None or output_sharding is None:
@@ -490,7 +490,7 @@ class GatherOp(Operation):
         """Gather sharding rule: Data(d...), Indices(i...) 
         -> Output(d_prefix..., i..., d_suffix...).
         """
-        from ..sharding.propagation import OpShardingRuleTemplate
+        from ..core.sharding.propagation import OpShardingRuleTemplate
         
         if not input_shapes or len(input_shapes) < 2:
             return None
@@ -631,7 +631,7 @@ class ScatterOp(Operation):
     ):
         """Scatter sharding rule: Data(d...), Indices(i...), Updates(i..., d_suffix...) -> Data.
         """
-        from ..sharding.propagation import OpShardingRuleTemplate
+        from ..core.sharding.propagation import OpShardingRuleTemplate
         
         if not input_shapes or len(input_shapes) < 3:
             return None
@@ -733,7 +733,7 @@ class ConcatenateOp(LogicalAxisOperation):
         If inputs are sharded on 'x', output must be sharded on 'x'.
         The fact that input sizes sum to output size is handled by runtime, not propagation factors.
         """
-        from ..sharding.propagation import OpShardingRuleTemplate
+        from ..core.sharding.propagation import OpShardingRuleTemplate
         
         if not input_shapes:
             return None

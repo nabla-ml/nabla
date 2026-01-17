@@ -8,9 +8,9 @@ import math
 from typing import TYPE_CHECKING, Any, Callable, List, Optional
 
 if TYPE_CHECKING:
-    from ..core.tensor import Tensor
-    from ..sharding.spec import ShardingSpec
-    from ..sharding.mesh import DeviceMesh
+    from ..tensor import Tensor
+    from .spec import ShardingSpec
+    from .spec import DeviceMesh
 
 # ============================================================================
 # Detection & Extraction
@@ -19,8 +19,8 @@ if TYPE_CHECKING:
 
 def get_mesh_from_args(args: tuple) -> Optional["DeviceMesh"]:
     """Extract DeviceMesh from first tensor with sharding spec."""
-    from ..core.tensor import Tensor
-    from ..core import pytree
+    from ..tensor import Tensor
+    from .. import pytree
     for a in pytree.tree_leaves(args):
         if isinstance(a, Tensor) and a._impl.sharding:
             return a._impl.sharding.mesh
@@ -49,8 +49,8 @@ def reshard_inputs(
     if mesh is None or not required_specs:
         return args
     
-    from ..core.tensor import Tensor
-    from ..core import pytree
+    from ..tensor import Tensor
+    from .. import pytree
     
     leaves = [a for a in pytree.tree_leaves(args) if isinstance(a, Tensor)]
     if len(leaves) != len(required_specs):
@@ -69,7 +69,7 @@ def reshard_inputs(
         
         if current is None or current.is_fully_replicated():
             if required is not None and not required.is_fully_replicated():
-                from ..ops.communication import shard as shard_fn
+                from ...ops.communication import shard as shard_fn
                 return shard_fn(x, mesh, required.dim_specs)
             return x
             
@@ -102,10 +102,10 @@ def infer_output_sharding(
     if hasattr(op, "infer_sharding_spec"):
         return op.infer_sharding_spec(args, mesh, kwargs)
 
-    from ..core.tensor import Tensor
-    from ..core import pytree
-    from ..sharding.spec import ShardingSpec, DimSpec
-    from ..sharding.propagation import propagate_sharding
+    from ..tensor import Tensor
+    from .. import pytree
+    from .spec import ShardingSpec, DimSpec
+    from .propagation import propagate_sharding
     
     # Collect input specs and shapes
     leaves = [a for a in pytree.tree_leaves(args) if isinstance(a, Tensor)]
@@ -370,8 +370,8 @@ def reshard_tensor(tensor: "Tensor", from_spec: Optional["ShardingSpec"],
         <dp, *> -> <*, tp>: Gather dim 0, slice dim 1
         <dp, tp> -> <tp, dp>: Gather both, then reshard (axis swap)
     """
-    from ..ops.communication import all_gather, shard as shard_op
-    from ..sharding.spec import DimSpec
+    from ...ops.communication import all_gather, shard as shard_op
+    from .spec import DimSpec
     
     if mesh is None:
         return tensor
@@ -392,7 +392,7 @@ def reshard_tensor(tensor: "Tensor", from_spec: Optional["ShardingSpec"],
         axes_to_remove = from_axes - to_axes
         
         if from_spec.dim_specs[dim].partial:
-            from ..ops.communication import all_reduce
+            from ...ops.communication import all_reduce
             target_is_partial = dim < len(to_spec.dim_specs) and to_spec.dim_specs[dim].partial
             
             if not target_is_partial:
@@ -400,13 +400,15 @@ def reshard_tensor(tensor: "Tensor", from_spec: Optional["ShardingSpec"],
                 continue
 
         if axes_to_remove:
+            from ...ops.communication import all_gather
             result = all_gather(result, axis=dim)
     
     for ghost_ax in from_spec.partial_sum_axes:
         if ghost_ax not in to_spec.partial_sum_axes:
-            from ..ops.communication import all_reduce
+            from ...ops.communication import all_reduce
             result = all_reduce(result)
 
+    from ...ops.communication import shard as shard_op
     result = shard_op(result, mesh, to_spec.dim_specs, replicated_axes=to_spec.replicated_axes, _bypass_idempotency=True)
     
     return result
@@ -423,8 +425,8 @@ def create_sharded_output(results: List[Any], sharding: Optional["ShardingSpec"]
                           traced: bool, batch_dims: int,
                           mesh: Optional["DeviceMesh"] = None) -> "Tensor":
     """Build sharded Tensor from per-shard TensorValues."""
-    from ..core.tensor import Tensor
-    from ..core import TensorImpl
+    from ..tensor import Tensor
+    from ..tensor import TensorImpl
     from max import graph as g
     
     if not results:

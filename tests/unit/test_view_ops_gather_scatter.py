@@ -24,7 +24,7 @@ import nabla
 from nabla import vmap, DeviceMesh, P
 from nabla import gather, scatter, concatenate, stack
 from nabla import unsqueeze, squeeze, reshape
-from nabla.sharding.spec import DimSpec
+from nabla.core.sharding.spec import DimSpec
 
 from tests.conftest import (
     make_array, make_positive_array, tensor_from_numpy, to_numpy,

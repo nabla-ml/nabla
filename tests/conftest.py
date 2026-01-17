@@ -19,7 +19,7 @@ from typing import Callable
 
 import nabla
 from nabla import Tensor, DeviceMesh, P
-from nabla.sharding.spec import DimSpec
+from nabla.core.sharding.spec import DimSpec
 
 
 # =============================================================================

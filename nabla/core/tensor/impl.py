@@ -15,11 +15,11 @@ from max.dtype import DType
 
 if TYPE_CHECKING:
     from ...ops import Operation
-    from ...sharding import ShardingSpec
+    from ..sharding import ShardingSpec
     from ..graph.tracing import OutputRefs
     
     # Cyclic import prevention
-    from ...sharding.spec import compute_global_shape
+    from ..sharding.spec import compute_global_shape
 
 
 class TensorImpl:
@@ -183,7 +183,7 @@ class TensorImpl:
         
         shard_shapes = [tuple(int(d) for d in v.type.shape) for v in self._values] if self._values else None
 
-        from ...sharding.spec import compute_global_shape
+        from ..sharding.spec import compute_global_shape
         global_ints = compute_global_shape(tuple(int(d) for d in local), self.sharding, shard_shapes=shard_shapes)
         return graph.Shape(global_ints)
     

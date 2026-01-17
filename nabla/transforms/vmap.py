@@ -11,7 +11,7 @@ from typing import Any, TypeVar, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..core.tensor import Tensor
-    from ..sharding.mesh import DeviceMesh
+    from ..core.sharding.mesh import DeviceMesh
 
 # =============================================================================
 # Type Definitions
@@ -243,7 +243,7 @@ def _batch_tensor(tensor: Tensor, axis: AxisSpec, batch_dim, spmd_axis_name: str
             t = p_ops.moveaxis(t, source=old_batch_dims, destination=0)
             
         if spmd_axis_name is not None and mesh is not None:
-             from ..sharding.spec import DimSpec
+             from ..core.sharding.spec import DimSpec
              
              physical_rank = old_batch_dims + 1 + len(t.shape)
              dim_specs = [DimSpec([]) for _ in range(physical_rank)]
@@ -267,7 +267,7 @@ def _batch_tensor(tensor: Tensor, axis: AxisSpec, batch_dim, spmd_axis_name: str
             t = tensor
         
         if spmd_axis_name is not None and mesh is not None:
-            from ..sharding.spec import DimSpec
+            from ..core.sharding.spec import DimSpec
             
             logical_rank = len(t.shape)
             physical_rank = old_batch_dims + logical_rank

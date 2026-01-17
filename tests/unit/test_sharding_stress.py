@@ -12,8 +12,8 @@ between sharded and unsharded execution.
 import unittest
 import numpy as np
 
-from nabla.sharding.spec import DeviceMesh, DimSpec, ShardingSpec
-from nabla.sharding.propagation import OpShardingRuleTemplate
+from nabla.core.sharding.spec import DeviceMesh, DimSpec, ShardingSpec
+from nabla.core.sharding.propagation import OpShardingRuleTemplate
 
 
 class TestShardingStress(unittest.TestCase):

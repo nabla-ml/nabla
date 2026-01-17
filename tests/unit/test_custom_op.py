@@ -9,7 +9,7 @@ from pathlib import Path
 import nabla
 from nabla.ops.operation import UnaryOperation, ensure_tensor
 from nabla.ops.custom_op import call_custom_kernel
-from nabla.sharding.propagation import OpShardingRuleTemplate
+from nabla.core.sharding.propagation import OpShardingRuleTemplate
 from nabla.core import trace
 
 # Custom Op integration inheriting from UnaryOperation for standard dispatch/gradients

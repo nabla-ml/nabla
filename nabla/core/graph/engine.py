@@ -20,7 +20,7 @@ from max.graph.graph import _location
 
 if TYPE_CHECKING:
     from ..tensor.api import Tensor
-    from ...sharding import DeviceMesh
+    from ..sharding.mesh import DeviceMesh
     from ..tensor.impl import TensorImpl
 
 from ..common.context import _session
