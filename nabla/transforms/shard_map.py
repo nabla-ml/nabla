@@ -51,7 +51,7 @@ def shard_map(
 
         if auto_sharding:
             from .graph_extractor import ShardingGraphExtractor
-            from ..optimizer.simple_solver import SimpleSolver
+            from ..sharding.optimizer.simple_solver import SimpleSolver
             from ..sharding.spec import ShardingSpec, DimSpec
 
             # 1. Extract

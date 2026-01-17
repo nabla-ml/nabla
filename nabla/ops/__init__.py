@@ -40,6 +40,8 @@ from .communication import ShardOp, AllGatherOp, AllReduceOp, ReduceScatterOp
 # Note: _physical is internal only, not exported
 # Physical operations can be imported via: from nabla.ops._physical import ...
 
+from .custom_op import call_custom_kernel
+
 __all__ = [
     # Base classes
     "Operation",
@@ -76,5 +78,6 @@ __all__ = [
     # Communication (sharding)
     "shard", "all_gather", "all_reduce",
     "ShardOp", "AllGatherOp", "AllReduceOp", "ReduceScatterOp",
+    "call_custom_kernel",
 ]
 

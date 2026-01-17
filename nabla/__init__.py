@@ -128,6 +128,9 @@ from .transforms.compile import compile, CompiledFunction, CompilationStats
 # Reduction operations
 from .ops.reduction import reduce_sum, mean, ReduceSumOp, MeanOp
 
+# Sharding operations
+from .ops.communication import shard, all_gather, all_reduce
+
 # Sharding infrastructure (core definitions)
 from .sharding.spec import (
     DeviceMesh,
@@ -172,6 +175,10 @@ __all__ = [
     "mean",
     "ReduceSumOp",
     "MeanOp",
+    # Sharding operations
+    "shard",
+    "all_gather",
+    "all_reduce",
     # Unary operations
     "relu",
     "sigmoid",

@@ -8,7 +8,7 @@ from nabla.core.tensor import Tensor
 from nabla.sharding.spec import DeviceMesh, DimSpec, ShardingSpec
 from nabla.transforms.shard_map import shard_map
 from nabla.transforms.graph_extractor import ShardingGraphExtractor
-from nabla.optimizer.simple_solver import SimpleSolver
+from nabla.sharding.optimizer.simple_solver import SimpleSolver
 from nabla.core.trace import trace
 from nabla import ops
 
