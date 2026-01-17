@@ -12,10 +12,10 @@ constraints, then propagates them through the graph.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
-from ..sharding.spec import DeviceMesh, DimSpec, ShardingSpec
-from ..sharding.propagation import (
+from ..spec import DeviceMesh, DimSpec, ShardingSpec
+from ..propagation import (
     OpShardingRule,
     OpShardingRuleTemplate,
     propagate_sharding,
@@ -168,8 +168,9 @@ class SimpleSolver:
         communication costs belong to the communication operations themselves,
         not to the source operation (matmul).
         """
-        from ..ops.communication import AllReduceOp
-        from ..sharding.spec import ShardingSpec, DimSpec
+        from nabla.ops.communication import AllReduceOp
+        if TYPE_CHECKING:
+            from ..spec import ShardingSpec, DimSpec
         
         rule = node.get("sharding_rule")
         if not rule:

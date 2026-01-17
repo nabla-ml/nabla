@@ -1,125 +1,62 @@
-# Ops Module: The Operation ABC Pattern
+# Nabla Operations Library
 
-## Philosophy
+[← Back to Root](../CLAUDE.md)
 
-Operations are **singleton objects** inheriting from `Operation`. This enables:
-- Fast identity checks for autodiff graph walking
-- Memory efficiency (stateless, one instance per type)
-- Global rule registration (VJP/JVP/sharding)
+## The Operation Singleton
+Every tensor operation is a stateless singleton inheriting from **[`Operation`](operation.py)**.
 
----
+## Operation Categories
 
-## The Operation Hierarchy
+| Type | Base Class | Example | Auto-Behavior |
+| :--- | :--- | :--- | :--- |
+| **Unary** | **[`UnaryOperation`](unary.py)** | `abs`, `neg`, `exp` | Propagates sharding & batch dims 1:1. |
+| **Binary** | **[`BinaryOperation`](binary.py)** | `add`, `mul`, `max` | Auto-broadcasts shapes, batch dims, and sharding. |
+| **Reduction** | **[`ReduceOperation`](reduction.py)** | `sum`, `mean`, `max` | Handles axis logic & sharding reduction. |
+| **Creation** | **[`Operation`](creation.py)** | `ones`, `zeros`, `arange` | Handles device placement. |
+| **Custom** | **[`CustomOp`](custom_op.py)** | User-defined | Easier API for quick extensions. |
 
-### `Operation` (Base)
+## Developer Guide: Adding a New Op
 
-Defines: `name`, `maxpr()`, `communication_cost()`, optional `vjp_rule()`, `jvp_rule()`, `sharding_rule()`
-
-**The `__call__` method orchestrates everything**:
-1. Extract tensors from pytree inputs
-2. Check for sharded inputs → route to SPMD path
-3. Convert to TensorValue (MAX graph nodes)
-4. Call `maxpr()` to build graph
-5. Create TensorImpl for outputs
-6. Propagate metadata (batch_dims, traced, sharding)
-7. Create OutputRefs if tracing
-
-### Specialized ABCs
-
-| ABC | Purpose |
-|-----|---------|
-| `BinaryOperation` | Two inputs with batch-aware broadcasting |
-| `UnaryOperation` | Single input, no broadcasting |
-| `ReduceOperation` | Logical→physical axis translation |
-| `LogicalShapeOperation` | Shape ops respecting batch_dims |
-
----
-
-## Physical vs Logical Operations
-
-**Logical** (user-facing): Work with logical shapes, translate internally
-
-**Physical** (in `_physical.py`): Manipulate batch_dims counter, internal plumbing for vmap
-
-When tensor has `batch_dims=2`:
-- Physical: `(B1, B2, H, W)`
-- Logical: `(H, W)` (what user sees)
-
-User `reduce_sum(x, axis=0)` → physical_axis = batch_dims + 0 = 2
-
----
-
-## Batch Dims Propagation
-
-| Operation Type | Rule |
-|----------------|------|
-| Binary | `max(x.batch_dims, y.batch_dims)` |
-| Unary | Preserve input's batch_dims |
-| Reduction | Preserve (reduce over logical dims) |
-| View | Preserve (reshape logical portion) |
-
----
-
-## Sharding Integration
-
-### SPMD Path
-
-When `_has_sharded_inputs(args)` is True:
-1. `_get_mesh_from_args()` extracts DeviceMesh
-2. `_infer_output_sharding()` computes output spec
-3. `_call_spmd()` runs per-shard execution:
-   - Slice inputs per their sharding
-   - Call `maxpr()` on shard data
-   - Collect results into multi-value output
-
-### Operation Sharding Rules
-
-Override `sharding_rule()` for custom propagation:
+### 1. The Implementation
+Create a new class inheriting from the appropriate base in `nabla/ops/`.
 
 ```python
-def sharding_rule(self, input_shapes, output_shapes, **kwargs):
-    from nabla.sharding.propagation import matmul_template
-    return matmul_template(batch_dims=0).instantiate(
-        input_shapes, output_shapes
-    )
+from max.graph import TensorValue, ops
+from .operation import Operation
+from ..sharding.propagation import OpShardingRuleTemplate
+
+class MyOp(Operation):
+    @property
+    def name(self) -> str:
+        return "my_op"
+
+    # 1. logical execution (builds MAX graph)
+    def maxpr(self, x: TensorValue, y: TensorValue, **kwargs) -> TensorValue:
+        return ops.add(x, y) 
+    
+    # 2. physical propagation (defines sharding)
+    def sharding_rule(self, input_shapes, output_shapes, **kwargs):
+        # Example: elementwise preservation
+        return OpShardingRuleTemplate.parse("... i, ... i -> ... i").instantiate(
+            input_shapes, output_shapes
+        )
 ```
 
-Default: `elementwise_template` (all dims share factors)
+### 2. Registration
+Instantiate the singleton at the bottom of the file:
+```python
+my_op = MyOp()
+```
 
----
+### 3. Exposure
+Expose a functional API in `nabla/__init__.py` or `nabla/ops/__init__.py`:
+```python
+def my_op_fn(x, y):
+    return binary.my_op(x, y)
+```
 
-## Multi-Output Operations
-
-Multiple outputs share one `OutputRefs`:
-- Single operation, single VJP call
-- Each output has unique `output_idx`
-- Pytree integration for arbitrary return structures
-
----
-
-## Extension Points
-
-### Adding New Operation
-
-1. Subclass appropriate ABC
-2. Implement `name` property and `maxpr()`
-3. Optional: `vjp_rule()`, `jvp_rule()`, `sharding_rule()`
-4. Create singleton and public function
-
-Base class handles all metadata propagation automatically.
-
----
-
-## File Organization
-
-| File | Contents |
-|------|----------|
-| `operation.py` | Base classes, BinaryOperation |
-| `binary.py` | Add, sub, mul, matmul |
-| `unary.py` | Activations, math ops |
-| `creation.py` | zeros, ones, arange |
-| `reduction.py` | sum, mean (with axis) |
-| `view.py` | reshape, transpose |
-| `multi_output.py` | split, unbind |
-| `_physical.py` | vmap internals (not user-facing) |
-| `communication.py` | shard, collectives, **cost model logic** |
+## The Dispatch Loop
+When you call `x + y`, `Operation.__call__`:
+1.  **Infer**: Determines output sharding via `sharding_rule`.
+2.  **Reshard**: Aligns inputs to compatible layouts.
+3.  **Execute**: Runs `maxpr` to add nodes to the graph.
