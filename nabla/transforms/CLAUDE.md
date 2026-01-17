@@ -45,6 +45,12 @@ phys_fn = shard_map(
 2.  **Replay**: We re-execute the graph using physical tensors (Duals).
 3.  **Result**: A sharded execution plan without complex graph patching.
 
+### The Auto-Sharding Pipeline (Optional)
+If `auto_sharding=True`, we inject an intermediate optimization step:
+1.  **Extract**: `_ShardingGraphExtractor` (internal to `shard_map.py`) converts the logical trace to a device-agnostic JSON graph.
+2.  **Solve**: The `SimpleSolver` computes optimal sharding strategies (DP vs MP) based on op costs and mesh topology.
+3.  **Apply**: The solution is fed back into the **Replay** phase to auto-shard intermediate tensors.
+
 > **⚠️ CRITICAL**: Do NOT call `shard()` inside a `shard_map` function. Specify sharding via `in_specs`.
 
 ## 3. Compile (JIT)

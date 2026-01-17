@@ -123,6 +123,8 @@ from .core.pytree import (
 
 # Function transforms
 from .transforms.vmap import vmap
+
+from .transforms.shard_map import shard_map
 from .transforms.compile import compile, CompiledFunction, CompilationStats
 
 # Reduction operations
@@ -213,6 +215,7 @@ __all__ = [
     "mean_physical",
     # Transforms
     "vmap",
+    "shard_map",
     "compile",
     "CompiledFunction",
     "CompilationStats",

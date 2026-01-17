@@ -15,6 +15,7 @@ We implement **Unified SPMD Execution** using **Factor-Based Propagation**.
 | **Runtime** | **[`spmd.py`](spmd.py)** | `infer_output_sharding` (forward) and `reshard_inputs` (backward align). |
 | **Propagation** | **[`propagation.py`](propagation.py)** | `OpShardingRule`. Solves constraints via factor graphs (`i -> i`). |
 | **Optimizer** | **[`optimizer/`](optimizer/simple_solver.py)** | Cost-based solver to pick sharding for undefined ops. |
+| **Extractor** | **`shard_map.py`** | `_ShardingGraphExtractor`. Converts runtime trace to solver-compatible JSON. |
 
 ## The SPMD Pipeline
 For every operation `z = f(x, y)`:
