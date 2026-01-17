@@ -10,7 +10,7 @@ from typing import Any, List, Union
 
 from max.graph import DeviceRef, TensorValue, ops
 
-from nabla.core.compute_graph import GRAPH
+from nabla.core import GRAPH
 
 
 def call_custom_kernel(

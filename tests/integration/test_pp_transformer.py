@@ -2,7 +2,7 @@ import numpy as np
 import unittest
 from nabla import ops
 from nabla.sharding import DeviceMesh, DimSpec
-from nabla.core.trace import trace
+from nabla.core import trace
 from nabla.ops import communication
 from nabla.transforms.vmap import vmap
 

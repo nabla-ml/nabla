@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 import nabla
 from nabla import ops
-from nabla.core.trace import trace
+from nabla.core import trace
 from nabla.sharding.spec import DeviceMesh, DimSpec, ShardingSpec
 
 class TestShardingRigorous(unittest.TestCase):

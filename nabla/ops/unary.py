@@ -33,7 +33,7 @@ from max.graph import TensorValue, ops
 from .operation import UnaryOperation
 
 if TYPE_CHECKING:
-    from ..core.tensor import Tensor
+    from ..core import Tensor
 
 
 class ReluOp(UnaryOperation):

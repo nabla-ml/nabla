@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from max import graph
-    from ..core.tensor import Tensor
+    from ..core import Tensor
 
 
 def ensure_tensor(x: Any) -> "Tensor":
@@ -20,7 +20,7 @@ def ensure_tensor(x: Any) -> "Tensor":
     This should be called at the start of any operation that accepts
     multiple inputs to ensure all inputs are proper Tensors.
     """
-    from ..core.tensor import Tensor
+    from ..core import Tensor
     import numpy as np
     
     if isinstance(x, Tensor):
@@ -93,9 +93,9 @@ class Operation(ABC):
         Handles sharded and unsharded tensors uniformly via SPMD logic.
         Unsharded execution is treated as a special case with mesh=None (implicit 1-shard).
         """
-        from ..core.tensor import Tensor
-        from ..core.tensor_impl import TensorImpl
-        from ..core.compute_graph import GRAPH
+        from ..core import Tensor
+        from ..core import TensorImpl, GRAPH, Tensor
+
         from ..core import pytree
         from ..sharding import spmd
         from max import graph as g
@@ -186,12 +186,12 @@ class Operation(ABC):
 
     def _apply_auto_reduction(self, output: Any, mesh: "DeviceMesh", reduce_axes: set[str]) -> Any:
         """Apply automatic AllReduce to partial results if needed."""
-        from ..core.tensor import Tensor
+        from ..core import Tensor
         from ..core import pytree
         from .communication import all_reduce_op
         from ..sharding.spec import ShardingSpec, DimSpec
-        from ..core.tensor_impl import TensorImpl
-        from ..core.compute_graph import GRAPH
+        from ..core import TensorImpl, GRAPH, Tensor
+
 
         def apply_grouped_all_reduce(t):
             if not isinstance(t, Tensor):
@@ -251,7 +251,7 @@ class Operation(ABC):
     
     def _setup_output_refs(self, output: Any, args: tuple, kwargs: dict, traced: bool) -> None:
         """Set up OutputRefs for tracing support."""
-        from ..core.tensor import Tensor
+        from ..core import Tensor
         from ..core import pytree
         
         output_impls = [x._impl for x in pytree.tree_leaves(output) if isinstance(x, Tensor)]
@@ -260,7 +260,7 @@ class Operation(ABC):
             return
         
         import weakref
-        from ..core.tracing import OutputRefs
+        from ..core import OutputRefs
         
         _, output_tree_def = pytree.tree_flatten(output, is_leaf=pytree.is_tensor)
         weak_refs = tuple(weakref.ref(impl) for impl in output_impls)
@@ -286,7 +286,7 @@ class Operation(ABC):
     
     def _apply_jvp(self, args: tuple, output: Any) -> None:
         """Apply JVP rule to compute output tangents."""
-        from ..core.tensor import Tensor
+        from ..core import Tensor
         from ..core import pytree
         
         tangents = pytree.tree_map(

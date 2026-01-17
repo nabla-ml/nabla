@@ -35,7 +35,7 @@ from max.graph import DeviceRef, ShapeLike, TensorType, TensorValue, ops
 from max.graph.ops.constant import NestedArray, Number
 
 from .operation import Operation
-from ..core.context import defaults
+from ..core import defaults
 
 
 # =============================================================================

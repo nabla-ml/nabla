@@ -14,20 +14,72 @@
 # limitations under the License.
 # ===----------------------------------------------------------------------=== #
 
-"""Core Trace primitive for capturing and manipulating computation subgraphs."""
+"""Tracing infrastructure and visualization for computation graphs."""
 
 from __future__ import annotations
 
+import weakref
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable
 
-from .pytree import tree_leaves
-from . import pytree
-from .tensor import Tensor
-from .tensor_impl import TensorImpl
-from ..sharding.spmd import compute_global_shape
+from ..common import pytree
+from ..common.pytree import tree_leaves, PyTreeDef
+from ..tensor.impl import TensorImpl
+from ...sharding.spmd import compute_global_shape
 
 if TYPE_CHECKING:
-    from .tensor_impl import TensorImpl
+    from ..tensor.impl import TensorImpl
+    from ...ops import Operation
+
+
+@dataclass(frozen=True)
+class OutputRefs:
+    """Lightweight container for multi-output operation siblings.
+    
+    This struct is shared among all TensorImpls produced by the same operation call.
+    It serves as the single source of truth for operation metadata, eliminating
+    duplication across sibling outputs.
+    
+    Attributes:
+        _refs: Tuple of weak references to output TensorImpls.
+        tree_def: PyTreeDef describing the output structure.
+        op: The Operation object that produced these outputs.
+        op_args: Original positional arguments (Pytrees of inputs/static values).
+        op_kwargs: Original keyword arguments.
+    """
+    _refs: tuple[weakref.ref, ...]
+    tree_def: PyTreeDef
+    op: Operation
+    op_args: tuple[Any, ...]
+    op_kwargs: dict[str, Any] | None
+    
+    def __post_init__(self):
+        """Validate that refs and tree_def are consistent."""
+        if len(self._refs) != self.tree_def.num_leaves:
+            raise ValueError(
+                f"OutputRefs: ref count {len(self._refs)} doesn't match "
+                f"tree_def leaves {self.tree_def.num_leaves}"
+            )
+    
+    def get_alive_outputs(self) -> list[TensorImpl | None]:
+        """Get list of output TensorImpls, with None for dead/GC'd outputs.
+        
+        Returns:
+            List matching the flattened output structure. Contains None for
+            any outputs that have been garbage collected.
+        """
+        return [ref() for ref in self._refs]
+    
+    @property
+    def num_outputs(self) -> int:
+        """Number of outputs (including potentially dead ones)."""
+        return len(self._refs)
+    
+    def __repr__(self) -> str:
+        alive = sum(1 for ref in self._refs if ref() is not None)
+        op_name = self.op.name if hasattr(self.op, 'name') else str(self.op)
+        return f"OutputRefs(op={op_name}, outputs={self.num_outputs}, alive={alive})"
+
 
 # Communication operations that define context boundaries for printing
 COMM_OPS = {"shard", "all_gather", "all_reduce", "reduce_scatter", "gather_all_axes", "reshard", "ppermute", "all_to_all", "pmean"}
@@ -69,6 +121,7 @@ class Trace:
         
         # Flatten inputs to establish the boundary
         # We track input TENSORS, not refs, because inputs might not have output_refs (leaves)
+        from ..tensor.api import Tensor
         self._input_tensor_ids = {
             id(t._impl) for t in tree_leaves(inputs) if isinstance(t, Tensor)
         }
@@ -82,6 +135,7 @@ class Trace:
         nodes: list[OutputRefs] = []
         
         # Get all output tensors
+        from ..tensor.api import Tensor
         output_leaves = [
             t._impl for t in tree_leaves(self.outputs) if isinstance(t, Tensor)
         ]
@@ -132,6 +186,7 @@ class Trace:
         return GraphPrinter(self).to_string()
     
     def __repr__(self) -> str:
+        from ..tensor.api import Tensor
         n_inputs = len([t for t in tree_leaves(self.inputs) if isinstance(t, Tensor)])
         n_outputs = len([t for t in tree_leaves(self.outputs) if isinstance(t, Tensor)])
         n_nodes = len(self.nodes) if self._computed else "?"
@@ -154,6 +209,7 @@ def trace(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Trace:
         A Trace object with the computed graph nodes.
     """
     # Collect all input tensor leaves
+    from ..tensor.api import Tensor
     flat_args = tree_leaves(args)
     flat_kwargs = tree_leaves(kwargs)
     all_inputs = flat_args + flat_kwargs
@@ -357,6 +413,7 @@ class GraphPrinter:
         if not self.trace._computed:
             self.trace.compute()
         
+        from ..tensor.api import Tensor
         lines = []
         
         # 0. Collect Meshes
@@ -495,4 +552,4 @@ class GraphPrinter:
         return "\n".join(lines)
 
 
-__all__ = ["Trace", "trace"]
+__all__ = ["Trace", "trace", "OutputRefs"]

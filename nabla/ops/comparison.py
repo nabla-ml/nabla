@@ -13,7 +13,7 @@ from max.graph import TensorValue, ops
 from .operation import BinaryOperation
 
 if TYPE_CHECKING:
-    from ..core.tensor import Tensor
+    from ..core import Tensor
 
 
 class EqualOp(BinaryOperation):

@@ -48,8 +48,8 @@ from max import graph
 from max.graph import TensorType, DeviceRef
 from max.graph.dim import StaticDim, SymbolicDim, AlgebraicDim
 
-from ..core.compute_graph import GRAPH
-from ..core.pytree import tree_flatten, tree_unflatten
+from ..core import GRAPH
+from ..core import tree_flatten, tree_unflatten
 from ..core.tensor import Tensor
 
 T = TypeVar("T")

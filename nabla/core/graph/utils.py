@@ -21,7 +21,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
-    from .tensor_impl import TensorImpl
+    from ..tensor.impl import TensorImpl
 
 
 def get_operations_topological(outputs: list[TensorImpl]) -> list[tuple[object, list[TensorImpl]]]:

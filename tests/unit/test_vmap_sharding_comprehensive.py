@@ -36,7 +36,7 @@ from nabla import (
     matmul,
 )
 from nabla.ops.multi_output import split, chunk, unbind
-from nabla.core.trace import trace
+from nabla.core import trace
 
 from tests.conftest import (
     make_array, make_positive_array, tensor_from_numpy, to_numpy,

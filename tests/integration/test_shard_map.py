@@ -2,10 +2,10 @@
 
 import unittest
 import numpy as np
-from nabla.core.tensor import Tensor
+from nabla.core import Tensor
 from nabla.sharding.spec import DeviceMesh, DimSpec, ShardingSpec
 from nabla.transforms.shard_map import shard_map
-from nabla.core.trace import trace
+from nabla.core import trace
 from nabla import ops
 
 class TestShardMapRigorous(unittest.TestCase):

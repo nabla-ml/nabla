@@ -35,21 +35,18 @@ from max.graph.ops.constant import NestedArray, Number
 from max.graph.value import HasTensorValue
 
 # Import from new modules
-from .context import (
+# Import from new modules
+from ..common.context import (
     defaults,
     default_device,
     default_dtype,
     defaults_like,
     _in_running_loop,
 )
-from .tensor_impl import TensorImpl, get_topological_order, print_computation_graph
-from .compute_graph import GRAPH, driver_tensor_type
+from .impl import TensorImpl, get_topological_order, print_computation_graph
+from ..graph.engine import GRAPH, driver_tensor_type
 
-# Import ops modules
-from ..ops import binary as binary_ops
-from ..ops import unary as unary_ops
-from ..ops import reduction
-from ..ops import creation
+
 
 
 class Tensor(DLPackArray, HasTensorValue):
@@ -203,7 +200,7 @@ class Tensor(DLPackArray, HasTensorValue):
         automatically prepended for those dimensions because `dim_specs` refers
         to logical dimensions.
         """
-        from ..ops import communication as comm
+        from ...ops import communication as comm
         return comm.reshard(self, mesh, dim_specs, replicated_axes=replicated_axes)
     
     def with_sharding(
@@ -225,7 +222,7 @@ class Tensor(DLPackArray, HasTensorValue):
         Returns:
             New tensor with target sharding (resharded if necessary)
         """
-        from ..ops import communication as comm
+        from ...ops import communication as comm
         return comm.reshard(self, mesh, dim_specs, replicated_axes=replicated_axes)
 
     def with_sharding_constraint(
@@ -322,6 +319,7 @@ class Tensor(DLPackArray, HasTensorValue):
         dtype: DType | None = None,
         device: Device | None = None,
     ) -> Tensor:
+        from ...ops import creation
         return creation.constant(value, dtype=dtype, device=device)
 
     @classmethod
@@ -334,6 +332,7 @@ class Tensor(DLPackArray, HasTensorValue):
         device: Device | None = None,
         traced: bool = False,
     ) -> Tensor:
+        from ...ops import creation
         return creation.full(shape, value, dtype=dtype, device=device, traced=traced)
 
     @classmethod
@@ -345,6 +344,7 @@ class Tensor(DLPackArray, HasTensorValue):
         device: Device | None = None,
         traced: bool = False,
     ) -> Tensor:
+        from ...ops import creation
         return creation.zeros(shape, dtype=dtype, device=device, traced=traced)
 
     @classmethod
@@ -356,6 +356,7 @@ class Tensor(DLPackArray, HasTensorValue):
         device: Device | None = None,
         traced: bool = False,
     ) -> Tensor:
+        from ...ops import creation
         return creation.ones(shape, dtype=dtype, device=device, traced=traced)
 
     @classmethod
@@ -368,6 +369,7 @@ class Tensor(DLPackArray, HasTensorValue):
         dtype: DType | None = None,
         device: Device | None = None,
     ) -> Tensor:
+        from ...ops import creation
         return creation.arange(start, stop, step, dtype=dtype, device=device)
 
     @classmethod
@@ -380,6 +382,7 @@ class Tensor(DLPackArray, HasTensorValue):
         dtype: DType | None = None,
         device: Device | None = None,
     ) -> Tensor:
+        from ...ops import creation
         return creation.uniform(shape, low, high, dtype=dtype, device=device)
 
     @classmethod
@@ -392,6 +395,7 @@ class Tensor(DLPackArray, HasTensorValue):
         dtype: DType | None = None,
         device: Device | None = None,
     ) -> Tensor:
+        from ...ops import creation
         return creation.gaussian(shape, mean, std, dtype=dtype, device=device)
     
     # Alias for gaussian
@@ -515,9 +519,11 @@ class Tensor(DLPackArray, HasTensorValue):
     # ===== Reduction Operations =====
     
     def sum(self, axis: int = 0, keepdims: bool = False) -> Tensor:
+        from ...ops import reduction
         return reduction.reduce_sum(self, axis=axis, keepdims=keepdims)
         
     def mean(self, axis: int = 0, keepdims: bool = False) -> Tensor:
+        from ...ops import reduction
         return reduction.mean(self, axis=axis, keepdims=keepdims)
 
     # ===== Data access =====
@@ -531,7 +537,7 @@ class Tensor(DLPackArray, HasTensorValue):
     def __dlpack__(self, stream: int | None = None):
         # If sharded, gather first to present a single global tensor view
         if self._impl.is_sharded and self._impl.sharding and not self._impl.sharding.is_fully_replicated():
-            from ..ops.communication import gather_all_axes
+            from ...ops.communication import gather_all_axes
             gathered = gather_all_axes(self)
             gathered.realize()
             assert gathered.storage is not None
@@ -544,7 +550,7 @@ class Tensor(DLPackArray, HasTensorValue):
     def __dlpack_device__(self):
         # If sharded, gather first to present a single global tensor view
         if self._impl.is_sharded and self._impl.sharding and not self._impl.sharding.is_fully_replicated():
-            from ..ops.communication import gather_all_axes
+            from ...ops.communication import gather_all_axes
             gathered = gather_all_axes(self)
             gathered.realize()
             assert gathered.storage is not None
@@ -580,7 +586,7 @@ class Tensor(DLPackArray, HasTensorValue):
         """Convert tensor to numpy array, gathering shards if needed."""
         # If sharded, gather all shards first
         if self._impl.is_sharded and self._impl.sharding and not self._impl.sharding.is_fully_replicated():
-            from ..ops.communication import gather_all_axes
+            from ...ops.communication import gather_all_axes
             gathered = gather_all_axes(self)
             gathered.realize()
             return gathered.driver_tensor.to(CPU()).to_numpy()
@@ -598,12 +604,14 @@ class Tensor(DLPackArray, HasTensorValue):
     # ===== Unary Operators =====
 
     def __neg__(self) -> Tensor:
+        from ...ops import unary as unary_ops
         return unary_ops.neg(self)
         
     def __pos__(self) -> Tensor:
         return self
         
     def __abs__(self) -> Tensor:
+        from ...ops import unary as unary_ops
         return unary_ops.abs(self)
     
     def __invert__(self) -> Tensor:
@@ -613,33 +621,43 @@ class Tensor(DLPackArray, HasTensorValue):
     # ===== Operators using binary_ops =====
 
     def __add__(self, rhs: TensorValueLike) -> Tensor:
+        from ...ops import binary as binary_ops
         return binary_ops.add(self, _ensure_tensor(rhs, self))
 
     def __radd__(self, lhs: TensorValueLike) -> Tensor:
+        from ...ops import binary as binary_ops
         return binary_ops.add(_ensure_tensor(lhs, self), self)
 
     def __sub__(self, rhs: TensorValueLike) -> Tensor:
+        from ...ops import binary as binary_ops
         return binary_ops.sub(self, _ensure_tensor(rhs, self))
 
     def __rsub__(self, lhs: TensorValueLike) -> Tensor:
+        from ...ops import binary as binary_ops
         return binary_ops.sub(_ensure_tensor(lhs, self), self)
 
     def __mul__(self, rhs: TensorValueLike) -> Tensor:
+        from ...ops import binary as binary_ops
         return binary_ops.mul(self, _ensure_tensor(rhs, self))
 
     def __rmul__(self, lhs: TensorValueLike) -> Tensor:
+        from ...ops import binary as binary_ops
         return binary_ops.mul(_ensure_tensor(lhs, self), self)
 
     def __truediv__(self, rhs: TensorValueLike) -> Tensor:
+        from ...ops import binary as binary_ops
         return binary_ops.div(self, _ensure_tensor(rhs, self))
 
     def __rtruediv__(self, lhs: TensorValueLike) -> Tensor:
+        from ...ops import binary as binary_ops
         return binary_ops.div(_ensure_tensor(lhs, self), self)
 
     def __matmul__(self, rhs: TensorValueLike) -> Tensor:
+        from ...ops import binary as binary_ops
         return binary_ops.matmul(self, _ensure_tensor(rhs, self))
 
     def __rmatmul__(self, lhs: TensorValueLike) -> Tensor:
+        from ...ops import binary as binary_ops
         return binary_ops.matmul(_ensure_tensor(lhs, self), self)
 
 

@@ -24,7 +24,7 @@ graph LR
 
 | Module | Purpose | Key Entry Point |
 | :--- | :--- | :--- |
-| **[`core/`](core/CLAUDE.md)** | **Runtime Engine**. Manages state, graphs, and compilation. | [`compute_graph.py`](core/compute_graph.py) |
+| **[`core/`](core/CLAUDE.md)** | **Runtime Engine**. Manages state, graphs, and compilation. | [`graph/engine.py`](core/graph/engine.py) |
 | **[`ops/`](ops/CLAUDE.md)** | **Operation Library**. Defines the `Operation` ABC and dispatch logic. | [`operation.py`](ops/operation.py) |
 | **[`sharding/`](sharding/CLAUDE.md)** | **Distributed**. Factor-based propagation and specifications. | [`propagation.py`](sharding/propagation.py) |
 | **[`transforms/`](transforms/CLAUDE.md)** | **Function Transforms**. `vmap`, `compile`, and autodiff. | [`vmap.py`](transforms/vmap.py) |
@@ -32,7 +32,7 @@ graph LR
 ## Key Concepts
 
 ### 1. Dual-State Tensors
-Every [`Tensor`](core/tensor.py) is in one of two states:
+Every [`Tensor`](core/tensor/api.py) is in one of two states:
 -   **Unrealized (Traced)**: Holds a symbolic `max.graph.Value`.
 -   **Realized (Concrete)**: Holds a `max.driver.Tensor`.
 

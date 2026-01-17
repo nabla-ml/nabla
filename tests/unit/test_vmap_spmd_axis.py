@@ -19,7 +19,7 @@ import numpy as np
 import nabla
 from nabla import DeviceMesh, P, vmap
 from nabla import add, mul, relu, sigmoid, matmul, reduce_sum, mean
-from nabla.core.trace import trace
+from nabla.core import trace
 
 from tests.conftest import (
     make_array, tensor_from_numpy, to_numpy,

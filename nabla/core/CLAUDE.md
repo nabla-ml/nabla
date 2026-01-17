@@ -2,20 +2,20 @@
 
 [← Back to Root](../CLAUDE.md)
 
-## The Core Loop
-Nabla masquerades as an eager library but executes lazily.
+## Philosophy
+The `core` module is organized into semantic submodules to strictly separate concerns and avoid circular dependencies:
 
-1.  **Facade**: User interacts with [`Tensor`](tensor.py).
-2.  **Symbolic**: Operations build a MAX graph in the background via [`ComputeGraph`](compute_graph.py).
-3.  **Compilation**: Data access triggers JIT compilation and execution.
+*   **`tensor`**: High-level API (`Tensor`) and low-level state (`TensorImpl`).
+*   **`graph`**: The symbolic execution engine (`ComputeGraph`, `Trace`).
+*   **`common`**: Shared utilities (`Context`, `PyTree`) used by both.
 
 ## Key Components
 
 ### 1. Tensor vs TensorImpl
 We use the **Facade Pattern** to separate API from state.
 
--   **[`Tensor`](tensor.py)**: Immutable-ish wrapper. Handles API calls (`__add__`, `.shape`).
--   **[`TensorImpl`](tensor_impl.py)**: Mutable state container. Holds:
+-   **[`tensor/api.py`](tensor/api.py)** (`Tensor`): Immutable-ish wrapper. Handles API calls (`__add__`, `.shape`).
+-   **[`tensor/impl.py`](tensor/impl.py)** (`TensorImpl`): Mutable state container. Holds:
     -   `_values`: Symbolic MAX graph nodes (when unrealized).
     -   `_storages`: Concrete data (when realized).
     -   `output_refs`: Provenance for autodiff.
@@ -30,24 +30,33 @@ A tensor exists in one of two mutually exclusive states:
 | **Unrealized** | `_values` (Symbolic) | A node in the graph. No memory allocated on device. |
 | **Realized** | `_storages` (Concrete) | Actual data on device. Graph node is dropped to save memory. |
 
-**Transition**: `compute_graph.evaluate([tensors])` compiles the subgraph leading to the requested tensors and fills their `_storages`.
+**Transition**: `graph.engine.ComputeGraph.evaluate([tensors])` compiles the subgraph leading to the requested tensors and fills their `_storages`.
 
 ### 3. The Global Graph
-The singleton `GRAPH` in [`compute_graph.py`](compute_graph.py) captures all operations.
+The singleton `GRAPH` in [`graph/engine.py`](graph/engine.py) captures all operations.
 -   **No Context Managers**: The graph is always active.
 -   **Epoch Tracking**: We increment an epoch counter on every evaluation to detect side effects in strict mode.
 
 ### 4. Pytree Support
-Nabla supports JAX-like Pytrees (nested dicts/lists/tuples) natively.
--   **[`pytree.py`](pytree.py)**: Utilities for flattening/unflattening structures.
--   **Usage**: `vmap` and `compile` work over arbitrary nested structures, not just tensors.
+Nabla supports JAX-like Pytrees (nested dicts/lists/tuples) natively via [`common/pytree.py`](common/pytree.py).
 
 ## Source Map
 
+### `tensor/`
 | File | Purpose |
 | :--- | :--- |
-| [`compute_graph.py`](compute_graph.py) | **The Brain**. Manages the global MAX graph, compilation pipeline, and execution loop. |
-| [`tensor.py`](tensor.py) | **The API**. User-facing properties and operator overloading. |
-| [`tensor_impl.py`](tensor_impl.py) | **The State**. Internal metadata, memory management, and weakrefs. |
-| [`context.py`](context.py) | **Thread-local**. Default device and dtype management. |
-| [`trace.py`](trace.py) | **Provenance**. Infrastructure for autodiff and backwards pass walking. |
+| [`api.py`](tensor/api.py) | **The API**. `Tensor` class and operator overloading. |
+| [`impl.py`](tensor/impl.py) | **The State**. `TensorImpl` class, internal metadata, and weakrefs. |
+
+### `graph/`
+| File | Purpose |
+| :--- | :--- |
+| [`engine.py`](graph/engine.py) | **The Brain**. `ComputeGraph`, compilation pipeline, and execution loop. |
+| [`tracing.py`](graph/tracing.py) | **Provenance**. `Trace` object and `OutputRefs` for graph construction. |
+| [`utils.py`](graph/utils.py) | **Traversal**. Topological sort and graph visualization tools. |
+
+### `common/`
+| File | Purpose |
+| :--- | :--- |
+| [`context.py`](common/context.py) | **Thread-local**. Default device and dtype management. |
+| [`pytree.py`](common/pytree.py) | **Structure**. Utilities for flattening/unflattening nested containers. |

@@ -35,7 +35,7 @@ from max.dtype import DType
 from max.graph import TensorType
 
 if TYPE_CHECKING:
-    from .tensor import Tensor
+    from ..tensor.api import Tensor
 
 _SESSION: ContextVar[engine.api.InferenceSession] = ContextVar("_SESSION")
 _DEFAULT_DEVICE: ContextVar[Device] = ContextVar("_DEFAULT_DEVICE")

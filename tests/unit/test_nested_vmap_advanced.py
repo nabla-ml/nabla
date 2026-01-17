@@ -23,7 +23,7 @@ from nabla import (
     add, mul, sub, div, matmul, 
     relu, exp, reduce_sum,
 )
-from nabla.core.trace import trace
+from nabla.core import trace
 
 from tests.conftest import (
     make_array, tensor_from_numpy, to_numpy,

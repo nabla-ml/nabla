@@ -15,8 +15,8 @@ from max.graph import ops
 from .operation import Operation, ensure_tensor
 from ..core import pytree
 # from ..core.tensor import Tensor # Moved to local imports to avoid cycle
-from ..core.tensor_impl import TensorImpl
-from ..core.compute_graph import GRAPH
+from ..core import TensorImpl
+from ..core import GRAPH
 
 if TYPE_CHECKING:
     from ..core.tensor import Tensor
@@ -152,8 +152,8 @@ class WhileLoopOp(Operation):
     
     def __call__(self, cond_fn: Callable, body_fn: Callable, init_val: Any) -> Any:
         from ..core.tensor import Tensor
-        from ..core.tensor_impl import TensorImpl
-        from ..core.compute_graph import GRAPH
+        from ..core import TensorImpl
+
         from ..core import pytree
         from ..sharding import spmd
         from max import graph as g

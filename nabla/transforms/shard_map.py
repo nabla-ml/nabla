@@ -11,8 +11,8 @@ import json
 
 from ..core import pytree
 from ..core.tensor import Tensor
-from ..core.tensor_impl import TensorImpl
-from ..core.trace import trace, Trace
+from ..core import TensorImpl
+from ..core import trace, Trace
 from ..ops.operation import Operation
 
 if TYPE_CHECKING:

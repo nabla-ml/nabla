@@ -488,7 +488,7 @@ def create_sharded_output(results: List[Any], sharding: Optional["ShardingSpec"]
                           mesh: Optional["DeviceMesh"] = None) -> "Tensor":
     """Build sharded Tensor from per-shard TensorValues."""
     from ..core.tensor import Tensor
-    from ..core.tensor_impl import TensorImpl
+    from ..core import TensorImpl
     from max import graph as g
     
     if not results:

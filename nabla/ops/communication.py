@@ -38,9 +38,9 @@ class CollectiveOperation(Operation):
     """
     
     def __call__(self, sharded_tensor, **kwargs):
-        from ..core.tensor import Tensor
-        from ..core.tensor_impl import TensorImpl
-        from ..core.compute_graph import GRAPH
+        from ..core import Tensor
+        from ..core import TensorImpl
+        from ..core import GRAPH
         
         # 1. Validation and early exit
         if not self._should_proceed(sharded_tensor):
@@ -330,9 +330,9 @@ class ShardOp(Operation):
             _bypass_idempotency: Internal flag used by reshard_tensor to avoid
                                  recursion. Do not set directly.
         """
-        from ..core.tensor import Tensor
-        from ..core.tensor_impl import TensorImpl
-        from ..core.compute_graph import GRAPH
+        from ..core import Tensor
+        from ..core import TensorImpl
+        from ..core import GRAPH
         from ..sharding.spec import ShardingSpec, needs_reshard
         from max import graph as g
         
@@ -543,9 +543,9 @@ class AllGatherOp(CollectiveOperation):
         Returns:
             Replicated tensor with gathered values
         """
-        from ..core.tensor import Tensor
-        from ..core.tensor_impl import TensorImpl
-        from ..core.compute_graph import GRAPH
+        from ..core import Tensor
+        from ..core import TensorImpl
+        from ..core import GRAPH
         from ..sharding.spec import ShardingSpec, DimSpec
         
         if (not sharded_tensor._impl._values and not sharded_tensor._impl._storages) or \
@@ -1291,11 +1291,11 @@ class AxisIndexOp(Operation):
         Returns:
             Tensor (sharded/distributed) containing the index for each device.
         """
-        from ..core.compute_graph import GRAPH
+
         from max.dtype import DType
         from max.graph import DeviceRef
         from ..core.tensor import Tensor
-        from ..core.tensor_impl import TensorImpl
+        from ..core import TensorImpl
         from ..sharding.spec import ShardingSpec, DimSpec
 
         results = []
@@ -1493,9 +1493,9 @@ class GatherAllAxesOp(Operation):
         Returns:
             Replicated tensor with the full global data
         """
-        from ..core.tensor import Tensor
-        from ..core.tensor_impl import TensorImpl
-        from ..core.compute_graph import GRAPH
+        from ..core import Tensor
+        from ..core import TensorImpl
+        from ..core import GRAPH
         from ..sharding.spec import ShardingSpec, DimSpec
         from max import graph as g
         

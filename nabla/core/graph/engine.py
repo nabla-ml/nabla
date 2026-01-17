@@ -30,11 +30,11 @@ from max.graph import Value, ops
 from max.graph.graph import _location
 
 if TYPE_CHECKING:
-    from .tensor import Tensor
-    from .sharding import DeviceMesh
-    from .tensor_impl import TensorImpl
+    from ..tensor.api import Tensor
+    from ...sharding import DeviceMesh
+    from ..tensor.impl import TensorImpl
 
-from .context import _session
+from ..common.context import _session
 
 # =============================================================================
 # 1. Global State & Constants
@@ -51,7 +51,7 @@ DEBUG_LAZY_EVAL: bool = os.getenv("NABLA_DEBUG", "0") == "1"
 
 def seed() -> Tensor:
     """Returns the global random seed tensor, initializing if necessary."""
-    from .tensor import Tensor
+    from ..tensor.api import Tensor
     if (s := _SEED.get(None)) is None:
         s = driver.Tensor(ops.random.SeedType)
         s[0] = 0
@@ -178,8 +178,8 @@ class ComputeGraph:
         return_model: bool = False,
     ) -> Any:
         """Main entry point: Evaluates specific tensors and their dependencies."""
-        from .pytree import tree_leaves
-        from .tensor import Tensor
+        from ..common.pytree import tree_leaves
+        from ..tensor.api import Tensor
 
         sys.last_value = None
         sys.last_traceback = None

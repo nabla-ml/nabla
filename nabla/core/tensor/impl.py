@@ -25,9 +25,9 @@ from max.driver import Device
 from max.dtype import DType
 
 if TYPE_CHECKING:
-    from .ops import Operation
-    from .sharding import ShardingSpec
-    from .tracing import OutputRefs
+    from ...ops import Operation
+    from ...sharding import ShardingSpec
+    from ..graph.tracing import OutputRefs
 
 
 class TensorImpl:
@@ -202,7 +202,7 @@ class TensorImpl:
             return []
         
         # Flatten the pytree of op_args and extract TensorImpls
-        from . import pytree
+        from ..common import pytree
         return [
             arg for arg in pytree.tree_leaves(self.output_refs.op_args)
             if isinstance(arg, TensorImpl)

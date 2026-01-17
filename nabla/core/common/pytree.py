@@ -272,17 +272,17 @@ def tree_map(
 
 def traced(tree: Any) -> Any:
     """Mark all tensors in a pytree as traced (In-place)."""
-    from .tensor import Tensor
+    from ..tensor.api import Tensor
     return tree_map(lambda x: setattr(x._impl, 'traced', True) or x if isinstance(x, Tensor) else x, tree)
 
 def untraced(tree: Any) -> Any:
     """Mark all tensors in a pytree as untraced (In-place)."""
-    from .tensor import Tensor
+    from ..tensor.api import Tensor
     return tree_map(lambda x: setattr(x._impl, 'traced', False) or x if isinstance(x, Tensor) else x, tree)
 
 def with_batch_dims(tree: Any, delta: int) -> Any:
     """Adjust batch_dims on all tensors in a pytree (In-place)."""
-    from .tensor import Tensor
+    from ..tensor.api import Tensor
     def _adj(x: Any) -> Any:
         if isinstance(x, Tensor): x._impl.batch_dims += delta
         return x
@@ -290,11 +290,11 @@ def with_batch_dims(tree: Any, delta: int) -> Any:
 
 def tensor_leaves(tree: Any) -> list:
     """Get only Tensor leaves from a pytree."""
-    from .tensor import Tensor
+    from ..tensor.api import Tensor
     return [x for x in tree_leaves(tree) if isinstance(x, Tensor)]
 
 def is_tensor(obj: Any) -> bool:
-    from .tensor import Tensor
+    from ..tensor.api import Tensor
     return isinstance(obj, Tensor)
 
 def is_tensor_value(obj: Any) -> bool:

@@ -18,7 +18,7 @@
 """Experimental eager execution APIs for the MAX platform."""
 
 # Context managers and defaults
-from .core.context import (
+from .core import (
     defaults,
     default_device,
     default_dtype,
@@ -26,17 +26,17 @@ from .core.context import (
 )
 
 # Core tensor infrastructure
-from .core.tensor_impl import (
+from .core import (
     TensorImpl,
     get_topological_order,
     print_computation_graph,
 )
 
 # Compute graph
-from .core.compute_graph import GRAPH, driver_tensor_type
+from .core import GRAPH, driver_tensor_type
 
 # Main Tensor class
-from .core.tensor import Tensor
+from .core import Tensor
 
 # Operation base classes
 from .ops.operation import Operation, BinaryOperation, ReduceOperation, UnaryOperation
@@ -108,7 +108,7 @@ from .ops.creation import (
 )
 
 # Pytree utilities
-from .core.pytree import (
+from .core import (
     PyTreeDef,
     tensor_leaves,
     traced,

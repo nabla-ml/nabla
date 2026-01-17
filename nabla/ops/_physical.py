@@ -340,8 +340,8 @@ class MeanPhysicalOp(Operation):
 # =============================================================================
 
 def _copy_impl_with_batch_dims(x: "Tensor", new_batch_dims: int, op: "Operation" = None, kwargs: dict = None) -> "Tensor":
-    from ..core.tensor import Tensor
-    from ..core.tensor_impl import TensorImpl
+    from ..core import Tensor
+    from ..core import TensorImpl
     
     new_impl = TensorImpl(
         storages=x._impl._storages,

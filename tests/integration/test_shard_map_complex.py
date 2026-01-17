@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
-from nabla.core.tensor import Tensor
-from nabla.core.trace import trace
+from nabla.core import Tensor
+from nabla.core import trace
 from nabla.transforms.shard_map import shard_map
 from nabla.sharding.spec import DeviceMesh, ShardingSpec, DimSpec
 from nabla.ops import binary, view, reduction
