@@ -519,16 +519,25 @@ def compute_global_shape(
         for i in range(rank):
             dim_spec = sharding.dim_specs[i] if i < len(sharding.dim_specs) else None
             if not dim_spec or not dim_spec.axes or dim_spec.partial:
+                # Replicated or partial dimensions: global == local
                 global_shape.append(int(local_shape[i]))
             else:
-                sharded_axes = set(dim_spec.axes)
-                other_axes = [ax for ax in mesh.axis_names if ax not in sharded_axes]
-                dim_total = 0
-                for s_idx, s_shape in enumerate(shard_shapes):
-                    indices = mesh.get_axis_indices(s_idx)
-                    if all(indices[ax] == 0 for ax in other_axes):
-                        dim_total += int(s_shape[i])
-                global_shape.append(dim_total)
+                # Sharded dimension: global = sum(local) / replicas
+                # This approach is robust to sub-axes and uneven sharding.
+                total_shards = dim_spec.get_total_shards(mesh)
+                num_total_devices = len(shard_shapes)
+                
+                if num_total_devices % total_shards != 0:
+                    # Should not happen with valid ShardingSpec
+                    num_replicas = 1
+                else:
+                    num_replicas = num_total_devices // total_shards
+                
+                sum_local = sum(int(s_shape[i]) for s_shape in shard_shapes)
+                
+                # Integer division because shapes are integers
+                global_shape.append(sum_local // num_replicas)
+                
         return tuple(global_shape)
 
     # Mode 2: Prediction (Estimated Global Shape)
