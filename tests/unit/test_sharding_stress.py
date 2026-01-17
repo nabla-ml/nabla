@@ -224,9 +224,7 @@ class TestMemoryCostIntegration(unittest.TestCase):
     
     def test_memory_cost_exists_on_all_base_classes(self):
         """Verify memory_cost method is accessible on all base operation classes."""
-        from nabla.ops.operation import (
-            Operation, BinaryOperation, UnaryOperation, ReduceOperation
-        )
+        from nabla.ops.base import Operation, BinaryOperation, UnaryOperation, ReduceOperation
         
         # All should have memory_cost method
         for cls in [Operation, BinaryOperation, UnaryOperation, ReduceOperation]:

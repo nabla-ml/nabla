@@ -12,7 +12,7 @@ from max.dtype import DType
 from max.graph import DeviceRef, ShapeLike, TensorType, TensorValue, ops
 from max.graph.ops.constant import NestedArray, Number
 
-from .operation import Operation
+from .base import Operation
 from ..core import defaults
 
 

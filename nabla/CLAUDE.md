@@ -25,7 +25,7 @@ graph LR
 | Module | Purpose | Key Entry Point |
 | :--- | :--- | :--- |
 | **[`core/`](core/CLAUDE.md)** | **Runtime Engine**. Manages state, graphs, and compilation. | [`graph/engine.py`](core/graph/engine.py) |
-| **[`ops/`](ops/CLAUDE.md)** | **Operation Library**. Defines the `Operation` ABC and dispatch logic. | [`operation.py`](ops/operation.py) |
+| **[`ops/`](ops/CLAUDE.md)** | **Operation Library**. Defines the `Operation` ABC and dispatch logic. | [`base.py`](ops/base.py) |
 | **[`sharding/`](sharding/CLAUDE.md)** | **Distributed**. Factor-based propagation and specifications. | [`propagation.py`](sharding/propagation.py) |
 | **[`transforms/`](transforms/CLAUDE.md)** | **Function Transforms**. `vmap`, `compile`, and autodiff. | [`vmap.py`](transforms/vmap.py) |
 

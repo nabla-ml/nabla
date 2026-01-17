@@ -223,7 +223,7 @@ def _batch_tensor(tensor: Tensor, axis: AxisSpec, batch_dim, spmd_axis_name: str
         mesh: Optional device mesh for sharding the batch dimension.
     """
     from ..ops import view as l_ops
-    from ..ops import _physical as p_ops
+    from ..ops import view as p_ops
     from ..ops import communication as comm_ops
     from max.graph.dim import StaticDim
     
@@ -300,7 +300,7 @@ def _unbatch_tensor(tensor: Tensor, axis: AxisSpec, spmd_axis_name: str | None =
     all_gather automatically. The user can explicitly gather if needed.
     """
     from ..ops import view as l_ops
-    from ..ops import _physical as p_ops
+    from ..ops import view as p_ops
     
     current_batch_dims = tensor._impl.batch_dims
     

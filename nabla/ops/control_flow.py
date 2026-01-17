@@ -11,7 +11,7 @@ import functools
 from max import graph
 from max.graph import ops
 
-from .operation import Operation, ensure_tensor
+from .base import Operation, ensure_tensor
 from ..core import pytree
 # from ..core.tensor import Tensor # Moved to local imports to avoid cycle
 from ..core import TensorImpl
@@ -285,95 +285,117 @@ def while_loop(cond_fn: Callable, body_fn: Callable, init_val: Any) -> Any:
 # Scan Operation - Minimal Implementation for PP
 # =============================================================================
 
+class ScanOp(Operation):
+    @property
+    def name(self) -> str:
+        return "scan"
+
+    def maxpr(self, *args, **kwargs) -> Any:
+        raise NotImplementedError("ScanOp is currently a macro and does not map to a single MAX op.")
+
+    def __call__(
+        self,
+        f: Callable,
+        init: Any,
+        xs: Any,
+        length: int | None = None,
+        reverse: bool = False
+    ) -> tuple[Any, Any]:
+        """Scan implementation using loop unrolling (MVP).
+
+        IMPORTANT: This is a minimal implementation for Pipeline Parallelism.
+        For sharded tensors, ensure the scan dimension is NOT sharded.
+
+        Args:
+            f: Function (carry, x) -> (carry, y)
+            init: Initial carry value
+            xs: Inputs with leading dimension being scanned
+            length: Scan length (optional, inferred from xs)
+            reverse: If True, scan in reverse order
+
+        Returns:
+            (final_carry, stacked_outputs)
+        """
+        if reverse:
+            raise NotImplementedError("Reverse scan not implemented yet")
+
+        # 1. Infer length from xs
+        xs_flat = pytree.tree_leaves(xs)
+        if not xs_flat:
+            raise ValueError("scan requires non-empty xs")
+
+        first_x = xs_flat[0]
+        inferred_length = int(first_x.shape[0])
+
+        if length is not None and length != inferred_length:
+            raise ValueError(f"Explicit length {length} != inferred length {inferred_length}")
+        length = inferred_length
+
+        if length == 0:
+            raise NotImplementedError("Zero-length scan not implemented")
+
+        # 2. For MVP: Use Python loop instead of while_loop
+        # This is simpler and works correctly with sharding
+        # The performance cost is acceptable for PP demos
+        from ..ops import view
+
+        carry = init
+        ys_list = []
+
+        for i in range(length):
+            # Slice xs at index i using static slicing
+            def _slice_at_i(x):
+                # Use local_shape for size since slice_tensor operates on physical data
+                local_shape = x.local_shape
+                start = [i] + [0] * (x.rank - 1)
+                size = [1] + [int(d) for d in local_shape[1:]]
+                slc = view.slice_tensor(x, start=start, size=size)
+                return view.squeeze(slc, 0)
+
+            x_i = pytree.tree_map(_slice_at_i, xs)
+
+            # Apply user function
+            carry, y_i = f(carry, x_i)
+            ys_list.append(y_i)
+
+        # 3. Stack outputs along axis 0
+        def _stack_outputs(ys_leaves_list):
+            # ys_leaves_list is list of leaves across iterations
+            # Stack them to form (length, ...) tensor
+            return view.stack(ys_leaves_list, axis=0)
+
+        # Handle pytree structure of outputs
+        if ys_list:
+            # Get structure from first output
+            first_y_flat = pytree.tree_leaves(ys_list[0])
+            treedef = pytree.tree_structure(ys_list[0])
+            num_leaves = len(first_y_flat)
+
+            # Transpose: list of trees -> tree of lists
+            stacked_leaves = []
+            for leaf_idx in range(num_leaves):
+                leaves_for_this_idx = [pytree.tree_leaves(y)[leaf_idx] for y in ys_list]
+                stacked = _stack_outputs(leaves_for_this_idx)
+                stacked_leaves.append(stacked)
+
+            stacked_ys = pytree.tree_unflatten(treedef, stacked_leaves)
+        else:
+            stacked_ys = None
+
+        return carry, stacked_ys
+
+
+_scan_op = ScanOp()
+
+
 def scan(
-    f: Callable, 
-    init: Any, 
-    xs: Any, 
-    length: int | None = None, 
+    f: Callable,
+    init: Any,
+    xs: Any,
+    length: int | None = None,
     reverse: bool = False
 ) -> tuple[Any, Any]:
-    """Scan implementation using while_loop.
-    
-    IMPORTANT: This is a minimal implementation for Pipeline Parallelism.
-    For sharded tensors, ensure the scan dimension is NOT sharded.
-    
-    Args:
-        f: Function (carry, x) -> (carry, y)
-        init: Initial carry value
-        xs: Inputs with leading dimension being scanned
-        length: Scan length (optional, inferred from xs)
-        reverse: If True, scan in reverse order
-        
-    Returns:
-        (final_carry, stacked_outputs)
-    """
-    if reverse:
-        raise NotImplementedError("Reverse scan not implemented yet")
-    
-    # 1. Infer length from xs
-    xs_flat = pytree.tree_leaves(xs)
-    if not xs_flat:
-        raise ValueError("scan requires non-empty xs")
-    
-    first_x = xs_flat[0]
-    inferred_length = int(first_x.shape[0])
-    
-    if length is not None and length != inferred_length:
-        raise ValueError(f"Explicit length {length} != inferred length {inferred_length}")
-    length = inferred_length
-    
-    if length == 0:
-        raise NotImplementedError("Zero-length scan not implemented")
-    
-    # 2. For MVP: Use Python loop instead of while_loop
-    # This is simpler and works correctly with sharding
-    # The performance cost is acceptable for PP demos
-    from ..ops import view, creation
-    
-    carry = init
-    ys_list = []
-    
-    for i in range(length):
-        # Slice xs at index i using static slicing
-        def _slice_at_i(x):
-            # Use local_shape for size since slice_tensor operates on physical data
-            local_shape = x.local_shape
-            start = [i] + [0] * (x.rank - 1)
-            size = [1] + [int(d) for d in local_shape[1:]]
-            slc = view.slice_tensor(x, start=start, size=size)
-            return view.squeeze(slc, 0)
-        
-        x_i = pytree.tree_map(_slice_at_i, xs)
-        
-        # Apply user function
-        carry, y_i = f(carry, x_i)
-        ys_list.append(y_i)
-    
-    # 3. Stack outputs along axis 0
-    def _stack_outputs(ys_leaves_list):
-        # ys_leaves_list is list of leaves across iterations
-        # Stack them to form (length, ...) tensor
-        return view.stack(ys_leaves_list, axis=0)
-    
-    # Handle pytree structure of outputs
-    if ys_list:
-        # Get structure from first output
-        first_y_flat = pytree.tree_leaves(ys_list[0])
-        treedef = pytree.tree_structure(ys_list[0])
-        num_leaves = len(first_y_flat)
-        
-        # Transpose: list of trees -> tree of lists
-        stacked_leaves = []
-        for leaf_idx in range(num_leaves):
-            leaves_for_this_idx = [pytree.tree_leaves(y)[leaf_idx] for y in ys_list]
-            stacked = _stack_outputs(leaves_for_this_idx)
-            stacked_leaves.append(stacked)
-        
-        stacked_ys = pytree.tree_unflatten(treedef, stacked_leaves)
-    else:
-        stacked_ys = None
-    
-    return carry, stacked_ys
+    return _scan_op(f, init, xs, length=length, reverse=reverse)
 
 
 __all__ = ["where", "cond", "while_loop", "scan"]

@@ -9,7 +9,7 @@ from typing import Any, TYPE_CHECKING
 
 from max.graph import TensorValue, ops
 
-from .operation import BinaryOperation, Operation
+from .base import BinaryOperation, Operation
 
 if TYPE_CHECKING:
     from ..core.tensor import Tensor
@@ -93,7 +93,7 @@ class MatmulOp(Operation):
     def __call__(self, x: Tensor, y: Tensor) -> Tensor:
         from ..core.tensor import Tensor
         from . import view as view_ops
-        from .operation import ensure_tensor
+        from .base import ensure_tensor
         
         # Ensure both inputs are Tensors (converts scalars/arrays)
         x = ensure_tensor(x)

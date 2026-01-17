@@ -11,7 +11,7 @@ from typing import Any, TYPE_CHECKING
 
 from max.graph import TensorValue, ops
 
-from .operation import BinaryOperation
+from .base import BinaryOperation
 
 if TYPE_CHECKING:
     from ..core import Tensor

@@ -23,7 +23,7 @@ from .core import GRAPH, driver_tensor_type
 from .core import Tensor
 
 # Operation base classes
-from .ops.operation import Operation, BinaryOperation, ReduceOperation, UnaryOperation
+from .ops.base import Operation, BinaryOperation, ReduceOperation, UnaryOperation
 
 # View operations (for vmap support)
 from .ops.view import (
@@ -38,7 +38,7 @@ from .ops.view import (
     stack,
 )
 
-from .ops._physical import (
+from .ops.view import (
     moveaxis,
     incr_batch_dims,
     decr_batch_dims,
@@ -47,9 +47,8 @@ from .ops._physical import (
     unsqueeze_physical,
     squeeze_physical,
     broadcast_to_physical,
-    reduce_sum_physical,
-    mean_physical,
 )
+from .ops.reduction import reduce_sum_physical, mean_physical
 
 # Binary operations
 from .ops.binary import (

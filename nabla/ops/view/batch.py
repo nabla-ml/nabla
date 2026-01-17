@@ -1,0 +1,184 @@
+# ===----------------------------------------------------------------------=== #
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
+# ===----------------------------------------------------------------------=== #
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+from max.graph import TensorValue, ops
+
+from ..base import Operation
+
+if TYPE_CHECKING:
+    from ...core.tensor import Tensor
+
+
+# =============================================================================
+# Batch Management Ops (Explicit Metadata Modification)
+# =============================================================================
+
+def _copy_impl_with_batch_dims(x: "Tensor", new_batch_dims: int, op: "Operation" = None, kwargs: dict = None) -> "Tensor":
+    from ...core import Tensor
+    from ...core import TensorImpl
+    
+    new_impl = TensorImpl(
+        storages=x._impl._storages,
+        values=x._impl._values,
+        traced=x._impl.traced,
+        batch_dims=new_batch_dims,
+    )
+    # Sharding must be set after construction (not a constructor arg)
+    new_impl.sharding = x._impl.sharding
+
+    
+    output = Tensor(impl=new_impl)
+    
+    # Setup tracing refs if op provided
+    if op is not None and x._impl.traced:
+        op._setup_output_refs(output, (x,), kwargs or {}, True)
+    
+    return output
+
+
+class IncrBatchDimsOp(Operation):
+    @property
+    def name(self) -> str:
+        return "incr_batch_dims"
+    
+    def maxpr(self, x: TensorValue) -> TensorValue:
+        return x
+    
+    def __call__(self, x: Tensor) -> Tensor:
+        return _copy_impl_with_batch_dims(x, x._impl.batch_dims + 1, op=self, kwargs={})
+
+
+class DecrBatchDimsOp(Operation):
+    @property
+    def name(self) -> str:
+        return "decr_batch_dims"
+    
+    def maxpr(self, x: TensorValue) -> TensorValue:
+        return x
+    
+    def __call__(self, x: Tensor) -> Tensor:
+        if x._impl.batch_dims <= 0:
+            raise ValueError("Cannot decrement batch_dims below 0")
+        return _copy_impl_with_batch_dims(x, x._impl.batch_dims - 1, op=self, kwargs={})
+
+
+class MoveAxisToBatchDimsOp(Operation):
+    @property
+    def name(self) -> str:
+        return "move_axis_to_batch_dims"
+    
+    def maxpr(self, x: TensorValue, *, physical_axis: int) -> TensorValue:
+        rank = len(x.type.shape)
+        order = list(range(rank))
+        order.pop(physical_axis)
+        order.insert(0, physical_axis)
+        return ops.permute(x, tuple(order))
+    
+    def __call__(self, x: Tensor, *, axis: int) -> Tensor:
+        batch_dims = x._impl.batch_dims
+        logical_rank = len(x.shape)
+        
+        if axis < 0:
+            axis = logical_rank + axis
+        
+        physical_axis = batch_dims + axis
+        result = super().__call__(x, physical_axis=physical_axis)
+        return _copy_impl_with_batch_dims(result, batch_dims + 1)
+
+
+class MoveAxisFromBatchDimsOp(Operation):
+    @property
+    def name(self) -> str:
+        return "move_axis_from_batch_dims"
+    
+    def maxpr(self, x: TensorValue, *, physical_source: int, physical_destination: int) -> TensorValue:
+        rank = len(x.type.shape)
+        order = list(range(rank))
+        order.pop(physical_source)
+        order.insert(physical_destination, physical_source)
+        return ops.permute(x, tuple(order))
+    
+    def __call__(self, x: Tensor, *, batch_axis: int = 0, logical_destination: int = 0) -> Tensor:
+        current_batch_dims = x._impl.batch_dims
+        if current_batch_dims <= 0:
+            raise ValueError("No batch dims to move from")
+        
+        logical_rank = len(x.shape)
+        
+        if batch_axis < 0:
+            batch_axis = current_batch_dims + batch_axis
+        
+        physical_source = batch_axis
+        new_batch_dims = current_batch_dims - 1
+        new_logical_rank = logical_rank + 1
+        
+        if logical_destination < 0:
+            logical_destination = new_logical_rank + logical_destination
+        
+        physical_destination = new_batch_dims + logical_destination
+        
+        result = super().__call__(x, physical_source=physical_source, physical_destination=physical_destination)
+        return _copy_impl_with_batch_dims(result, new_batch_dims)
+
+
+class BroadcastBatchDimsOp(Operation):
+    @property
+    def name(self) -> str:
+        return "broadcast_batch_dims"
+    
+    def maxpr(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
+        return ops.broadcast_to(x, shape)
+    
+    def __call__(self, x: Tensor, *, batch_shape: tuple[int, ...]) -> Tensor:
+        logical_shape = tuple(x.shape)
+        physical_shape = tuple(batch_shape) + logical_shape
+        
+        result = super().__call__(x, shape=physical_shape)
+        return _copy_impl_with_batch_dims(result, len(batch_shape))
+
+
+# =============================================================================
+# Functions (Singleton instances)
+# =============================================================================
+
+_incr_batch_dims_op = IncrBatchDimsOp()
+_decr_batch_dims_op = DecrBatchDimsOp()
+_move_axis_to_batch_dims_op = MoveAxisToBatchDimsOp()
+_move_axis_from_batch_dims_op = MoveAxisFromBatchDimsOp()
+_broadcast_batch_dims_op = BroadcastBatchDimsOp()
+
+
+def incr_batch_dims(x: Tensor) -> Tensor:
+    return _incr_batch_dims_op(x)
+
+def decr_batch_dims(x: Tensor) -> Tensor:
+    return _decr_batch_dims_op(x)
+
+def move_axis_to_batch_dims(x: Tensor, axis: int) -> Tensor:
+    return _move_axis_to_batch_dims_op(x, axis=axis)
+
+def move_axis_from_batch_dims(x: Tensor, batch_axis: int = 0, logical_destination: int = 0) -> Tensor:
+    return _move_axis_from_batch_dims_op(x, batch_axis=batch_axis, logical_destination=logical_destination)
+
+def broadcast_batch_dims(x: Tensor, batch_shape: tuple[int, ...]) -> Tensor:
+    return _broadcast_batch_dims_op(x, batch_shape=batch_shape)
+
+
+__all__ = [
+    "IncrBatchDimsOp",
+    "DecrBatchDimsOp",
+    "MoveAxisToBatchDimsOp",
+    "MoveAxisFromBatchDimsOp", 
+    "BroadcastBatchDimsOp",
+    "incr_batch_dims",
+    "decr_batch_dims",
+    "move_axis_to_batch_dims",
+    "move_axis_from_batch_dims",
+    "broadcast_batch_dims",
+]

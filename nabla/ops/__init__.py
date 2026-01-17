@@ -5,7 +5,7 @@
 
 
 # Base classes
-from .operation import Operation, BinaryOperation, UnaryOperation, ReduceOperation, LogicalShapeOperation, LogicalAxisOperation, ensure_tensor
+from .base import Operation, BinaryOperation, UnaryOperation, ReduceOperation, LogicalShapeOperation, LogicalAxisOperation, ensure_tensor
 
 # Binary operations
 from .binary import add, mul, sub, div, matmul, AddOp, MulOp, SubOp, DivOp, MatmulOp

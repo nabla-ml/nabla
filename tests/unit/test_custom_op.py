@@ -7,7 +7,7 @@ import pytest
 import numpy as np
 from pathlib import Path
 import nabla
-from nabla.ops.operation import UnaryOperation, ensure_tensor
+from nabla.ops.base import UnaryOperation, ensure_tensor
 from nabla.ops.custom_op import call_custom_kernel
 from nabla.core.sharding.propagation import OpShardingRuleTemplate
 from nabla.core import trace

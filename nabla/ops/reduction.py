@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
-from .operation import ReduceOperation
+from .base import ReduceOperation, Operation
 
 if TYPE_CHECKING:
     from ..core.tensor import Tensor
@@ -99,4 +99,117 @@ def mean(x: Tensor, *, axis: int, keepdims: bool = False) -> Tensor:
     return s / count
 
 
-__all__ = ["ReduceSumOp", "reduce_sum", "MeanOp", "mean"]
+
+
+# =============================================================================
+# Physical Reduction Ops
+# =============================================================================
+
+class ReduceSumPhysicalOp(Operation):
+    @property
+    def name(self) -> str:
+        return "reduce_sum_physical"
+    
+    def maxpr(self, x: TensorValue, *, axis: int, keepdims: bool = False) -> TensorValue:
+        # maxpr must only have ONE MAX operation for sharding propagation to work correctly.
+        return ops.sum(x, axis=axis)
+    
+    def sharding_rule(
+        self,
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        **kwargs,
+    ):
+        """Reduce: (d0, d1, ...) -> (d0, 1, ...) with reduce_dim kept as size 1."""
+        from ..core.sharding.propagation import OpShardingRuleTemplate
+        rank = len(input_shapes[0])
+        axis = kwargs.get("axis", 0)
+        
+        factors = [f"d{i}" for i in range(rank)]
+        in_str = " ".join(factors)
+        
+        out_factors = list(factors)
+        if 0 <= axis < rank:
+            out_factors[axis] = "1"
+        out_str = " ".join(out_factors)
+        
+        return OpShardingRuleTemplate.parse(f"{in_str} -> {out_str}", input_shapes).instantiate(input_shapes, output_shapes)
+    
+    def infer_output_shape(self, input_shapes: list[tuple[int, ...]], **kwargs) -> tuple[int, ...]:
+        """Compute output shape for reduction."""
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+        in_shape = input_shapes[0]
+        if axis < 0:
+            axis = len(in_shape) + axis
+        if keepdims:
+            return tuple(1 if i == axis else d for i, d in enumerate(in_shape))
+        else:
+            return tuple(d for i, d in enumerate(in_shape) if i != axis)
+
+
+class MeanPhysicalOp(Operation):
+    @property
+    def name(self) -> str:
+        return "mean_physical"
+    
+    def maxpr(self, x: TensorValue, *, axis: int, keepdims: bool = False) -> TensorValue:
+        # maxpr must only have ONE MAX operation for sharding propagation to work correctly.
+        return ops.mean(x, axis=axis)
+    
+    def sharding_rule(
+        self,
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        **kwargs,
+    ):
+        """Reduce: (d0, d1, ...) -> (d0, 1, ...) with reduce_dim kept as size 1."""
+        from ..core.sharding.propagation import OpShardingRuleTemplate
+        rank = len(input_shapes[0])
+        axis = kwargs.get("axis", 0)
+        
+        factors = [f"d{i}" for i in range(rank)]
+        in_str = " ".join(factors)
+        
+        out_factors = list(factors)
+        if 0 <= axis < rank:
+            out_factors[axis] = "1"
+        out_str = " ".join(out_factors)
+        
+        return OpShardingRuleTemplate.parse(f"{in_str} -> {out_str}", input_shapes).instantiate(input_shapes, output_shapes)
+    
+    def infer_output_shape(self, input_shapes: list[tuple[int, ...]], **kwargs) -> tuple[int, ...]:
+        """Compute output shape for reduction."""
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+        in_shape = input_shapes[0]
+        if axis < 0:
+            axis = len(in_shape) + axis
+        if keepdims:
+            return tuple(1 if i == axis else d for i, d in enumerate(in_shape))
+        else:
+            return tuple(d for i, d in enumerate(in_shape) if i != axis)
+
+_reduce_sum_physical_op = ReduceSumPhysicalOp()
+_mean_physical_op = MeanPhysicalOp()
+from .view import SqueezePhysicalOp
+_squeeze_physical_op = SqueezePhysicalOp()
+
+def reduce_sum_physical(x: Tensor, axis: int, keepdims: bool = False) -> Tensor:
+    # maxpr always keeps dims; squeeze at Tensor level so sharding propagation handles it
+    result = _reduce_sum_physical_op(x, axis=axis, keepdims=True)
+    if not keepdims:
+        result = _squeeze_physical_op(result, axis=axis)
+    return result
+
+def mean_physical(x: Tensor, axis: int, keepdims: bool = False) -> Tensor:
+    # maxpr always keeps dims; squeeze at Tensor level so sharding propagation handles it
+    result = _mean_physical_op(x, axis=axis, keepdims=True)
+    if not keepdims:
+        result = _squeeze_physical_op(result, axis=axis)
+    return result
+
+__all__ = [
+    "ReduceSumOp", "reduce_sum", "MeanOp", "mean",
+    "ReduceSumPhysicalOp", "reduce_sum_physical", "MeanPhysicalOp", "mean_physical",
+]

@@ -9,7 +9,7 @@ from typing import Any, TYPE_CHECKING
 
 from max.graph import TensorValue, ops
 
-from .operation import UnaryOperation
+from .base import UnaryOperation
 
 if TYPE_CHECKING:
     from ..core import Tensor

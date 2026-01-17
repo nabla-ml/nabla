@@ -9,7 +9,7 @@ from typing import Any
 
 from max.graph import TensorValue, ops
 
-from .operation import Operation, LogicalAxisOperation
+from .base import Operation, LogicalAxisOperation
 
 
 class SplitOp(LogicalAxisOperation):

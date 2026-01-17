@@ -12,7 +12,7 @@ from ..core import pytree
 from ..core.tensor import Tensor
 from ..core import TensorImpl
 from ..core import trace, Trace
-from ..ops.operation import Operation
+from ..ops.base import Operation
 
 if TYPE_CHECKING:
     from ..core.sharding.mesh import DeviceMesh
