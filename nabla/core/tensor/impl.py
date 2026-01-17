@@ -28,6 +28,9 @@ if TYPE_CHECKING:
     from ...ops import Operation
     from ...sharding import ShardingSpec
     from ..graph.tracing import OutputRefs
+    
+    # Cyclic import prevention
+    from ...sharding.spec import compute_global_shape
 
 
 class TensorImpl:
@@ -56,7 +59,7 @@ class TensorImpl:
     """
     __slots__ = ('_values', '_storages', 'sharding', 'sharding_constraint', 'traced',
                  'tangent', 'cotangent', 'dual', 'batch_dims', 'output_refs', 'output_index', 
-                 'cached_shape', 'cached_dtype', 'cached_device', '__weakref__')
+                 '__weakref__')
     
     _values: list[graph.BufferValue | graph.TensorValue]
     _storages: list[driver.Tensor] | None
@@ -69,9 +72,7 @@ class TensorImpl:
     batch_dims: int
     output_refs: OutputRefs | None
     output_index: int
-    cached_shape: graph.Shape | None
-    cached_dtype: DType | None
-    cached_device: Device | None
+    output_index: int
     
     def __init__(
         self,
@@ -93,10 +94,7 @@ class TensorImpl:
         self.batch_dims = batch_dims
         self.output_refs = None
         self.output_index = 0
-        self.cached_shape = None
-        self.cached_dtype = None
-        self.cached_device = None
-    
+
     def _validate_sharding(self) -> None:
         """Validate consistency of shards and sharding spec."""
         n_vals = len(self._values)
@@ -153,8 +151,6 @@ class TensorImpl:
             return graph.Shape(self._storages[shard_idx].shape)
         if self._values and shard_idx < len(self._values):
             return self._values[shard_idx].type.shape
-        if self.cached_shape is not None:
-             return self.cached_shape
         return None
 
     def logical_local_shape(self, shard_idx: int = 0) -> graph.Shape | None:
@@ -177,17 +173,30 @@ class TensorImpl:
     @property
     def global_shape(self) -> graph.Shape | None:
         """Global logical shape (excludes batch dims)."""
-        if self.cached_shape is not None:
-            if self.batch_dims == 0: return self.cached_shape
-            return graph.Shape(self.cached_shape[self.batch_dims:])
-        return self.logical_shape
+        phys = self.physical_global_shape
+        if phys is None: return None
+        
+        if self.batch_dims > 0:
+            return graph.Shape(phys[self.batch_dims:])
+        return phys
     
     @property
     def physical_global_shape(self) -> graph.Shape | None:
         """Global physical shape (includes batch dims)."""
-        if self.cached_shape is not None:
-            return self.cached_shape
-        return self.physical_shape
+        # If not sharded, physical global = physical local
+        if not self.sharding:
+            return self.local_shape
+            
+        # Call into centralized logic in spec.py
+        # Pass all shard shapes (if available) to handle uneven sharding correctly
+        local = self.physical_shape
+        if local is None: return None
+        
+        shard_shapes = [tuple(int(d) for d in v.type.shape) for v in self._values] if self._values else None
+
+        from ...sharding.spec import compute_global_shape
+        global_ints = compute_global_shape(tuple(int(d) for d in local), self.sharding, shard_shapes=shard_shapes)
+        return graph.Shape(global_ints)
     
     @property
     def global_shape_ints(self) -> tuple[int, ...] | None:
@@ -213,12 +222,7 @@ class TensorImpl:
         shards_str = f", shards={self.num_shards}" if self.is_sharded else ""
         return f"TensorImpl(op={self.op_name}, traced={self.traced}, parents={len(self.parents)}, batch_dims={self.batch_dims}{shards_str})"
     
-    def cache_metadata(self, value: graph.TensorValue | graph.BufferValue) -> None:
-        tensor_type = value.type.as_tensor() if hasattr(value.type, 'as_tensor') else value.type
-        self.cached_shape = tensor_type.shape
-        self.cached_dtype = tensor_type.dtype
-        device = tensor_type.device
-        self.cached_device = device.to_device() if hasattr(device, 'to_device') else device
+
     
     def get_unrealized_shape(self) -> graph.Shape:
         if not self._values: raise RuntimeError("Internal error: _values missing")
@@ -230,13 +234,14 @@ class TensorImpl:
     
     def get_realized_shape(self) -> graph.Shape:
         if self._values: return self._values[0].type.shape
-        if self.cached_shape is not None: return self.cached_shape
         if self._storages: return graph.Shape(self._storages[0].shape)
+        if self.sharding:
+             # Try to compute if we have sharding but no values? Rare edge case.
+             pass
         raise RuntimeError("No shape source available")
     
     def get_realized_dtype(self) -> DType:
         if self._values: return self._values[0].type.dtype
-        if self.cached_dtype is not None: return self.cached_dtype
         if self._storages: return self._storages[0].dtype
         raise RuntimeError("No dtype source available")
 
@@ -251,7 +256,6 @@ class TensorImpl:
         try:
             return self.primary_value.dtype
         except RuntimeError:
-            if self.cached_dtype: return self.cached_dtype
             raise
 
     @property
@@ -260,7 +264,6 @@ class TensorImpl:
             device = self.primary_value.device
             return device if isinstance(device, Device) else device.to_device()
         except RuntimeError:
-            if self.cached_device: return self.cached_device
             raise
 
     # === Unified Logic Methods ===

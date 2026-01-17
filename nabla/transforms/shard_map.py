@@ -268,7 +268,7 @@ class _ShardingGraphExtractor:
             self.tensors.append({
                 "id": json_id,
                 "shape": shape_tuple,
-                "dtype": str(tensor_impl.cached_dtype) if tensor_impl.cached_dtype else "float32",
+                "dtype": str(tensor_impl.dtype) if tensor_impl.dtype else "float32",
                 "size_bytes": 0,  # Placeholder
                 "fixed_sharding": fixed_sharding
             })

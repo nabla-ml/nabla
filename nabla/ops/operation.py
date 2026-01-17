@@ -416,20 +416,20 @@ class BinaryOperation(Operation):
         x_batch_dims = x._impl.batch_dims
         y_batch_dims = y._impl.batch_dims
 
-        # Get GLOBAL batch shape from cached_shape (which stores global physical shape)
+        # Get GLOBAL batch shape from physical_global_shape
         if x_batch_dims >= y_batch_dims:
-            global_phys = x.global_shape or x.local_shape
+            global_phys = x._impl.physical_global_shape or x.local_shape
             batch_shape = tuple(int(d) for d in global_phys[:x_batch_dims])
         else:
-            global_phys = y.global_shape or y.local_shape
+            global_phys = y._impl.physical_global_shape or y.local_shape
             batch_shape = tuple(int(d) for d in global_phys[:y_batch_dims])
         
         target_physical = batch_shape + target_logical
         
         # Optimize: Skip physical broadcast if specs match target
-        # Note: We must check if cached_shape matches target to be safe
-        x_global = x.global_shape or x.local_shape
-        y_global = y.global_shape or y.local_shape
+        # Note: We must check if physical_global_shape matches target to be safe
+        x_global = x._impl.physical_global_shape or x.local_shape
+        y_global = y._impl.physical_global_shape or y.local_shape
         
         # We need to broadcast strict physical shapes including batch dims
         if tuple(int(d) for d in x_global) != target_physical:
@@ -641,12 +641,12 @@ class LogicalShapeOperation(Operation):
         batch_dims = x._impl.batch_dims
         
         if batch_dims > 0:
-            # For sharded tensors, use GLOBAL batch shape from cached_shape
+            # For sharded tensors, use GLOBAL batch shape from physical_global_shape
             # (not local batch_shape which is per-shard)
-            # This ensures consistency with infer_output_sharding which uses cached_shape
-            if x._impl.cached_shape is not None:
-                # Use cached global physical shape (includes batch dims)
-                global_batch_shape = tuple(int(d) for d in x._impl.cached_shape[:batch_dims])
+            # This ensures consistency with infer_output_sharding.
+            if x._impl.physical_global_shape is not None:
+                # Use computed global physical shape (includes batch dims)
+                global_batch_shape = tuple(int(d) for d in x._impl.physical_global_shape[:batch_dims])
             else:
                 # Fallback to local physical shape for unsharded tensors
                 # (For unsharded tensors, local physical == global physical)

@@ -211,6 +211,10 @@ class DeviceMesh:
         """Get all device IDs that have the given coordinate on the specified axis."""
         return [d for d in self.devices if self.get_coordinate(d, axis_name) == coordinate]
 
+    def get_axis_indices(self, device_id: int) -> Dict[str, int]:
+        """Get all axis coordinates for a given device."""
+        return {name: self.get_coordinate(device_id, name) for name in self.axis_names}
+
 
 # --- Representation Layer: Sharding Specification ---
 
@@ -338,17 +342,11 @@ class ShardingSpec:
         validate_sub_axes_non_overlapping(all_axes)
         
         # Warn about non-maximal sub-axes (could be merged)
-        # Note: In a production environment, this might log a warning
         check_sub_axes_maximality(all_axes)
     
     def __repr__(self) -> str:
         """
         String representation following Shardy spec grammar.
-        
-        From spec:
-            sharding<@mesh_name, dim_shardings, replicated=replicated_axes>
-        
-        Note: replicated={} is omitted when empty per spec convention.
         """
         dims_str = ", ".join(str(d) for d in self.dim_specs)
         rep_str = ""
@@ -403,9 +401,6 @@ class ShardingSpec:
     def get_implicitly_replicated_axes(self) -> Set[str]:
         """
         Get axes that are implicitly replicated (not used, not explicitly replicated).
-        
-        From spec:
-            "All axes that are not used to shard a dimension are implicitly replicated."
         """
         used = set()
         for dim in self.dim_specs:
@@ -420,7 +415,7 @@ class ShardingSpec:
         return implicit
     
     def is_fully_replicated(self) -> bool:
-        """Returns True if tensor is fully replicated (no dimension sharding AND not partial)."""
+        """Returns True if tensor is fully replicated."""
         return all(dim.is_replicated() for dim in self.dim_specs) and not self.partial_sum_axes and not any(dim.partial for dim in self.dim_specs)
     
     @property
@@ -455,27 +450,11 @@ def compute_local_shape(
     sharding: ShardingSpec,
     device_id: int,
 ) -> Tuple[int, ...]:
-    """Compute the local shard shape for a device.
-    
-    Args:
-        global_shape: The global tensor shape
-        sharding: The sharding specification
-        device_id: The device ID to compute shape for
-        
-    Returns:
-        The local shape on that device
-        
-    Example:
-        >>> mesh = DeviceMesh("m", (2,), ("x",))
-        >>> spec = ShardingSpec(mesh, [DimSpec(["x"]), DimSpec([])])
-        >>> compute_local_shape((8, 4), spec, device_id=0)
-        (4, 4)  # First half of dim 0
-    """
+    """Compute the local shard shape for a device."""
     if len(global_shape) != len(sharding.dim_specs):
         raise ValueError(
             f"Rank mismatch: global_shape has rank {len(global_shape)}, "
-            f"but sharding spec has {len(sharding.dim_specs)} dim specs. "
-            f"Ensure you are passing physical shape if sharding includes batch dims."
+            f"but sharding spec has {len(sharding.dim_specs)} dim specs."
         )
 
     local_shape = []
@@ -506,24 +485,60 @@ def compute_local_shape(
         
         # Handle padding
         length = max(0, real_end - start)
-        # In a real implementation we might need to handle padding
         local_shape.append(length)
 
     return tuple(local_shape)
 
 
 def get_num_shards(sharding: ShardingSpec) -> int:
-    """Get the total number of shards for this sharding spec.
-    
-    This equals the total number of devices in the mesh.
-    
-    Args:
-        sharding: The sharding specification
-        
-    Returns:
-        Number of shards (devices)
-    """
+    """Get the total number of shards for this sharding spec."""
     return len(sharding.mesh.devices)
+
+
+def compute_global_shape(
+    local_shape: Tuple[int, ...], 
+    sharding: Optional["ShardingSpec"],
+    shard_shapes: Optional[List[Tuple[int, ...]]] = None
+) -> Tuple[int, ...]:
+    """Compute global shape from local shape and sharding spec.
+    
+    This function handles two modes:
+    1. Aggregation (shard_shapes provided): Sums actual shards along sharded axes. 
+       This is the 'source of truth' for uneven sharding in simulation.
+    2. Prediction (only local_shape provided): Uses multiplication.
+    """
+    if not sharding or not local_shape:
+        return local_shape
+    
+    # Mode 1: Aggregation (Exact Global Shape from Shards)
+    if shard_shapes and len(shard_shapes) > 1 and sharding.mesh:
+        mesh = sharding.mesh
+        rank = len(local_shape)
+        global_shape = []
+        
+        for i in range(rank):
+            dim_spec = sharding.dim_specs[i] if i < len(sharding.dim_specs) else None
+            if not dim_spec or not dim_spec.axes or dim_spec.partial:
+                global_shape.append(int(local_shape[i]))
+            else:
+                sharded_axes = set(dim_spec.axes)
+                other_axes = [ax for ax in mesh.axis_names if ax not in sharded_axes]
+                dim_total = 0
+                for s_idx, s_shape in enumerate(shard_shapes):
+                    indices = mesh.get_axis_indices(s_idx)
+                    if all(indices[ax] == 0 for ax in other_axes):
+                        dim_total += int(s_shape[i])
+                global_shape.append(dim_total)
+        return tuple(global_shape)
+
+    # Mode 2: Prediction (Estimated Global Shape)
+    result = [int(d) for d in local_shape]
+    for i, dim_spec in enumerate(sharding.dim_specs[:len(result)]):
+        if dim_spec.axes and not dim_spec.partial:
+            result[i] *= dim_spec.get_total_shards(sharding.mesh)
+            
+    return tuple(result)
+
 
 def needs_reshard(from_spec: Optional["ShardingSpec"], to_spec: Optional["ShardingSpec"]) -> bool:
     """Check if specs differ requiring resharding."""
@@ -539,19 +554,9 @@ def needs_reshard(from_spec: Optional["ShardingSpec"], to_spec: Optional["Shardi
 # --- JAX-style PartitionSpec Helper ---
 
 class PartitionSpec(tuple):
-    """
-    JAX-compatible PartitionSpec.
-    
-    A tuple of axis names (or None/tuples) defining sharding for each dimension.
-    
-    Example:
-        >>> P("x", "y")        # Dim 0 on "x", Dim 1 on "y"
-        >>> P("x", None)       # Dim 0 on "x", Dim 1 replicated
-        >>> P(("x", "y"))      # Dim 0 on "x" then "y"
-    """
+    """JAX-compatible PartitionSpec."""
     def __new__(cls, *args):
         return super().__new__(cls, args)
 
 # Alias P for brevity
 P = PartitionSpec
-

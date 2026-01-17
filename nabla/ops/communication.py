@@ -66,8 +66,8 @@ class CollectiveOperation(Operation):
             batch_dims=sharded_tensor._impl.batch_dims,
         )
         impl.sharding = output_spec
-        # Preserve cached_shape from input (most collectives preserve global shape)
-        impl.cached_shape = sharded_tensor._impl.cached_shape
+        impl.sharding = output_spec
+        # NABLA 2026: Cached metadata removed. Global shape computed on demand.
         
         output = Tensor(impl=impl)
         
@@ -358,10 +358,8 @@ class ShardOp(Operation):
             # For sharded inputs, compute global from local + sharding
             local = x._impl.physical_local_shape(0)
             if local is not None and x._impl.sharding:
-                from ..sharding.spmd import compute_global_shape
+                from ..sharding.spec import compute_global_shape
                 global_shape = compute_global_shape(tuple(local), x._impl.sharding)
-            elif x._impl.cached_shape is not None:
-                global_shape = tuple(int(d) for d in x._impl.cached_shape)
             elif local is not None:
                 global_shape = tuple(int(d) for d in local)
         
@@ -389,21 +387,7 @@ class ShardOp(Operation):
         )
         impl.sharding = spec
         
-        # Cache GLOBAL shape from input, not local shard shape
-        # This is critical for sharding propagation to work correctly
-        if global_shape is not None:
-            impl.cached_shape = g.Shape(global_shape)
-        elif shard_values:
-            # Fallback: compute global from local shard shape
-            local_shape = shard_values[0].type.shape
-            impl.cached_shape = self._compute_global_from_local(local_shape, spec)
-        
-        # Cache dtype/device from first shard
-        if shard_values:
-            tensor_type = shard_values[0].type.as_tensor() if hasattr(shard_values[0].type, 'as_tensor') else shard_values[0].type
-            impl.cached_dtype = tensor_type.dtype
-            device = tensor_type.device
-            impl.cached_device = device.to_device() if hasattr(device, 'to_device') else device
+        # NABLA 2026: Cached metadata removed.
         
         output = Tensor(impl=impl)
         
@@ -416,7 +400,7 @@ class ShardOp(Operation):
     
     def _compute_global_from_local(self, local_shape, sharding):
         """Deprecated: use spmd.compute_global_shape."""
-        from ..sharding.spmd import compute_global_shape
+        from ..sharding.spec import compute_global_shape
         return compute_global_shape(local_shape, sharding)
 
 
@@ -569,7 +553,7 @@ class AllGatherOp(CollectiveOperation):
             # Physically gathered (single value) but logically sharded.
             # We just need to update the metadata to be replicated.
             # IMPORTANT: Compute the GLOBAL shape, not just copy local shape!
-            from ..sharding.spmd import compute_global_shape
+            from ..sharding.spec import compute_global_shape
             from max.graph import Shape
             
             batch_dims = sharded_tensor._impl.batch_dims
@@ -597,10 +581,7 @@ class AllGatherOp(CollectiveOperation):
                 batch_dims=batch_dims,
             )
             impl.sharding = replicated_spec
-            # Set GLOBAL shape as cached shape
-            impl.cached_shape = global_shape
-            impl.cached_dtype = sharded_tensor.dtype
-            impl.cached_device = sharded_tensor.device
+            # NABLA 2026: Cached metadata removed.
             
             return Tensor(impl=impl)
         
@@ -611,7 +592,7 @@ class AllGatherOp(CollectiveOperation):
             )
         
         # Compute global shape from input: after gather on axis, that axis is replicated
-        from ..sharding.spmd import compute_global_shape
+        from ..sharding.spec import compute_global_shape
         from max.graph import Shape
         
         local_shape = sharded_tensor._impl.physical_local_shape(0)
@@ -619,7 +600,8 @@ class AllGatherOp(CollectiveOperation):
             global_shape_tuple = compute_global_shape(tuple(local_shape), sharded_tensor._impl.sharding)
             global_shape = Shape(global_shape_tuple)
         else:
-            global_shape = sharded_tensor._impl.cached_shape
+             # Fallback if no local shape info
+             global_shape = None
         
         # Create output sharding spec: only the gathered dimension becomes replicated
         # Other dimensions keep their original sharding
@@ -636,16 +618,14 @@ class AllGatherOp(CollectiveOperation):
                     new_dim_specs.append(dim_spec)
             output_spec = ShardingSpec(mesh, new_dim_specs)
         
-        # Create output tensor with cached global shape
+        # Create output tensor with global shape info computed dynamically
         impl = TensorImpl(
             values=gathered,
             traced=sharded_tensor._impl.traced,
             batch_dims=sharded_tensor._impl.batch_dims,
         )
         impl.sharding = output_spec
-        impl.cached_shape = global_shape  # Set global shape!
-        impl.cached_dtype = sharded_tensor.dtype
-        impl.cached_device = sharded_tensor.device
+        # NABLA 2026: Cached metadata removed.
         output = Tensor(impl=impl)
         
         # Setup tracing refs for graph traversal

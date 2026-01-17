@@ -130,10 +130,9 @@ def infer_output_sharding(
     for t in leaves:
         spec = t._impl.sharding
         
-        # Determine global physical shape
-        # cached_shape is Global Physical if sharded, or local if unsharded (but local=global)
+        # Determine global physical shape (includes batch dims)
         # We need physical shape (rank) to create correct default spec
-        shape = t.global_shape
+        shape = t._impl.physical_global_shape
         if shape is None and (t._impl.sharding is None or t._impl.sharding.is_fully_replicated()):
             shape = t._impl.physical_shape
             
@@ -325,15 +324,7 @@ def _check_contracting_factors_sharded(
 # Shape & Slice Computation
 # ============================================================================
 
-def compute_global_shape(local_shape: tuple, sharding: "ShardingSpec") -> tuple:
-    """Multiply sharded dims by shard count to get global shape."""
-    if not sharding or not local_shape:
-        return local_shape
-    result = [int(d) for d in local_shape]  # Convert Dim to int
-    for i, spec in enumerate(sharding.dim_specs[:len(result)]):
-        if spec.axes:
-            result[i] *= spec.get_total_shards(sharding.mesh)
-    return tuple(result)
+
 
 
 def create_replicated_spec(mesh: "DeviceMesh", rank: int) -> "ShardingSpec":
@@ -509,16 +500,7 @@ def create_sharded_output(results: List[Any], sharding: Optional["ShardingSpec"]
     impl = TensorImpl(values=results, traced=traced, batch_dims=batch_dims)
     impl.sharding = sharding
     
-    # Cache metadata - compute GLOBAL shape from local + sharding for sharded outputs
-    local_shape = tuple(first.type.shape)
-    if sharding and not sharding.is_fully_replicated():
-        # If the tensor is Partial, the "global shape" logic might be different depending on semantics.
-        # But generally, partiality doesn't change the LOGICAL global shape, only values.
-        # So propagate standard global shape logic.
-        global_shape = compute_global_shape(local_shape, sharding)
-        impl.cached_shape = g.Shape(global_shape)  # Use cached_shape attribute
-        impl.cached_dtype = first.type.dtype
-    else:
-        impl.cache_metadata(first)
+    # NABLA 2026 Refactor: Metadata is no longer cached.
+    # TensorImpl computes global shape dynamically from local shape + sharding.
     
     return Tensor(impl=impl)

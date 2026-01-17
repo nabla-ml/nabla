@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from ..common import pytree
 from ..common.pytree import tree_leaves, PyTreeDef
 from ..tensor.impl import TensorImpl
-from ...sharding.spmd import compute_global_shape
+from ...sharding.spec import compute_global_shape
 
 if TYPE_CHECKING:
     from ..tensor.impl import TensorImpl
@@ -257,8 +257,8 @@ class GraphPrinter:
     def _format_type(self, node: TensorImpl) -> str:
         try:
             dtype = "?"
-            if hasattr(node, "cached_dtype") and node.cached_dtype:
-                dtype = str(node.cached_dtype)
+            if hasattr(node, "dtype") and node.dtype:
+                dtype = str(node.dtype)
             elif hasattr(node, "_storages") and node._storages:
                 dtype = str(node._storages[0].dtype)
             elif hasattr(node, "_values") and node._values:

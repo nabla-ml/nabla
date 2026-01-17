@@ -407,7 +407,7 @@ class Tensor(DLPackArray, HasTensorValue):
         gs = self._impl.global_shape
         if gs is not None:
             return gs
-        # Fallback for unrealized tensors without cached shape
+        # Fallback for unrealized tensors
         return graph.Shape(self._backing_value.shape)
     
     def shard_shape(self, shard_idx: int = 0) -> graph.Shape:
