@@ -28,8 +28,6 @@ from .core import (
 # Core tensor infrastructure
 from .core import (
     TensorImpl,
-    get_topological_order,
-    print_computation_graph,
 )
 
 # Compute graph
@@ -154,8 +152,6 @@ __all__ = [
     "Tensor",
     "TensorImpl",
     "GRAPH",
-    "get_topological_order",
-    "print_computation_graph",
     "driver_tensor_type",
     # Operations (base classes)
     "Operation",

@@ -43,7 +43,7 @@ from ..common.context import (
     defaults_like,
     _in_running_loop,
 )
-from .impl import TensorImpl, get_topological_order, print_computation_graph
+from .impl import TensorImpl
 from ..graph.engine import GRAPH, driver_tensor_type
 
 
@@ -139,10 +139,7 @@ class Tensor(DLPackArray, HasTensorValue):
 
     @property
     def _backing_value(self) -> driver.Tensor | graph.BufferValue | graph.TensorValue:
-        if self._impl._storages is not None and len(self._impl._storages) > 0:
-            return self._impl._storages[0]
-        assert self._impl._values and len(self._impl._values) > 0
-        return self._impl._values[0]
+        return self._impl.primary_value
 
     @property
     def traced(self) -> bool:
@@ -159,10 +156,7 @@ class Tensor(DLPackArray, HasTensorValue):
     
     @property
     def op_kwargs(self) -> dict[str, Any]:
-        """Keyword arguments passed to the operation that created this tensor.
-        
-        Useful in vjp_rule to access axis, keepdims, etc.
-        """
+        """Keyword arguments passed to the operation that created this tensor."""
         return self._impl.op_kwargs or {}
     
     def trace(self) -> Tensor:
@@ -260,11 +254,6 @@ class Tensor(DLPackArray, HasTensorValue):
 
     @property
     def is_sharded(self) -> bool:
-        """Whether this tensor is sharded across multiple devices.
-        
-        Returns:
-            True if tensor has a sharding specification.
-        """
         return self._impl.is_sharded
 
     @property
@@ -278,14 +267,8 @@ class Tensor(DLPackArray, HasTensorValue):
     
     @property
     def global_shape(self) -> graph.Shape | None:
-        """Global shape of this tensor (including batch dims).
-        
-        For sharded tensors, this is the full shape before sharding.
-        For unsharded tensors, this equals local_shape.
-        """
-        if self._impl.cached_shape is not None:
-            return self._impl.cached_shape
-        return self._impl.physical_shape
+        """Global logical shape (excludes batch dims)."""
+        return self._impl.physical_global_shape
 
     @property
     def physical_shape(self) -> graph.Shape | None:
@@ -411,7 +394,7 @@ class Tensor(DLPackArray, HasTensorValue):
 
     @property
     def rank(self) -> int:
-        return self._backing_value.rank
+        return self._impl.ndim
 
     @property
     def shape(self) -> graph.Shape:
@@ -425,8 +408,7 @@ class Tensor(DLPackArray, HasTensorValue):
         if gs is not None:
             return gs
         # Fallback for unrealized tensors without cached shape
-        shape = self._backing_value.shape
-        return shape if isinstance(shape, graph.Shape) else graph.Shape(shape)
+        return graph.Shape(self._backing_value.shape)
     
     def shard_shape(self, shard_idx: int = 0) -> graph.Shape:
         """Returns the shape of a specific shard.
@@ -444,12 +426,11 @@ class Tensor(DLPackArray, HasTensorValue):
 
     @property
     def dtype(self) -> DType:
-        return self._backing_value.dtype
+        return self._impl.dtype
 
     @property
     def device(self) -> Device:
-        device = self._backing_value.device
-        return device if isinstance(device, Device) else device.to_device()
+        return self._impl.device
 
     @property
     def driver_tensor(self) -> driver.Tensor:
@@ -492,28 +473,18 @@ class Tensor(DLPackArray, HasTensorValue):
     @property
     def _in_global_compute_graph(self) -> bool:
         from max import _core
-        if self._value is None:
-            return True
+        if self._value is None: return True
         mlir_value = self._value.to_mlir()
-        graph_op = mlir_value.owner.parent_op
-        return graph_op == _core.Operation._from_cmlir(GRAPH.graph._mlir_op)
+        return mlir_value.owner.parent_op == _core.Operation._from_cmlir(GRAPH.graph._mlir_op)
 
     # ===== Realization =====
 
     def realize(self) -> Tensor:
-        """Force immediate realization of the tensor (blocking).
-        
-        This blocks the main thread until the tensor's value is computed.
-        """
-        return self.realize()
-
-    def realize(self) -> Tensor:
-        if self.real:
-            return self
-        if not self._in_global_compute_graph:
-            raise TypeError("Can't realize symbolic tensors in graph compilation.")
-            
-        GRAPH.evaluate(self)
+        """Force immediate realization (blocking)."""
+        if not self.real:
+            if not self._in_global_compute_graph:
+                raise TypeError("Can't realize symbolic tensors.")
+            self._impl.realize()
         return self
 
     # ===== Reduction Operations =====
@@ -535,30 +506,10 @@ class Tensor(DLPackArray, HasTensorValue):
         return id(self)
 
     def __dlpack__(self, stream: int | None = None):
-        # If sharded, gather first to present a single global tensor view
-        if self._impl.is_sharded and self._impl.sharding and not self._impl.sharding.is_fully_replicated():
-            from ...ops.communication import gather_all_axes
-            gathered = gather_all_axes(self)
-            gathered.realize()
-            assert gathered.storage is not None
-            return gathered.storage.__dlpack__(stream=stream)
-            
-        self.realize()
-        assert self.storage is not None
-        return self.storage.__dlpack__(stream=stream)
+        return self._impl.to_dlpack(stream=stream)
 
     def __dlpack_device__(self):
-        # If sharded, gather first to present a single global tensor view
-        if self._impl.is_sharded and self._impl.sharding and not self._impl.sharding.is_fully_replicated():
-            from ...ops.communication import gather_all_axes
-            gathered = gather_all_axes(self)
-            gathered.realize()
-            assert gathered.storage is not None
-            return gathered.storage.__dlpack_device__()
-
-        self.realize()
-        assert self.storage is not None
-        return self.storage.__dlpack_device__()
+        return self._impl.to_dlpack_device()
 
     def __rich_repr__(self):
         yield "shape", self.shape
@@ -567,7 +518,7 @@ class Tensor(DLPackArray, HasTensorValue):
 
     def __repr__(self):
         if not self._in_global_compute_graph:
-            return repr(self)
+            return super().__repr__()
         self.realize()
         dt = self.driver_tensor.to(CPU())
         values = [dt[idx].item() for idx in dt._iterate_indices()]
@@ -579,21 +530,11 @@ class Tensor(DLPackArray, HasTensorValue):
     def item(self):
         if self.num_elements() != 1:
             raise TypeError("Only single-element tensors can be converted to Python scalars")
-        self.realize()
-        return self.driver_tensor.to(CPU()).item()
+        return self._impl.item()
     
     def to_numpy(self):
-        """Convert tensor to numpy array, gathering shards if needed."""
-        # If sharded, gather all shards first
-        if self._impl.is_sharded and self._impl.sharding and not self._impl.sharding.is_fully_replicated():
-            from ...ops.communication import gather_all_axes
-            gathered = gather_all_axes(self)
-            gathered.realize()
-            return gathered.driver_tensor.to(CPU()).to_numpy()
-        
-        # Standard path: realize and convert
-        self.realize()
-        return self.driver_tensor.to(CPU()).to_numpy()
+        """Convert tensor to numpy array."""
+        return self._impl.to_numpy()
 
     def num_elements(self) -> int:
         elts = 1
@@ -677,7 +618,4 @@ __all__ = [
     "default_device",
     "default_dtype",
     "defaults_like",
-    "get_topological_order",
-    "print_computation_graph",
-    "driver_tensor_type",
 ]
