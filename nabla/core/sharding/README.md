@@ -28,12 +28,12 @@ For every Operation `Z = f(X, Y)`:
 
 ## Component Map
 
-| File | Role | Key Concepts |
+| File | Role | Exported Symbols |
 | :--- | :--- | :--- |
-| [`spec.py`](spec.py) | **Data Structures**. | `DeviceMesh`, `DimSpec`, `ShardingSpec`, `compute_global_shape`, `needs_reshard` |
-| [`spmd.py`](spmd.py) | **Pipeline**. | `infer_output_sharding`, `reshard_inputs`, `get_shard_args`, `create_sharded_output` |
-| [`propagation.py`](propagation.py) | **Algorithm**. | `OpShardingRule`, `FactorSharding`, `propagate_sharding`, `run_hierarchical_propagation_pass` |
-| **[`optimizer/`](optimizer/)** | **Solver**. | `simple_solver.py` - ILP/Heuristic solver (`SimpleSolver`) for auto-sharding. |
+| [`spec.py`](spec.py) | **Data Structures** | **Classes**: `DeviceMesh`, `DimSpec`, `ShardingSpec`, `PartitionSpec` (alias `P`)<br>**Shape Helpers**: `compute_local_shape`, `compute_global_shape`, `get_num_shards`, `needs_reshard`<br>**Utils**: `parse_sub_axis` |
+| [`spmd.py`](spmd.py) | **Pipeline** | **Functions**: `infer_output_sharding`, `reshard_inputs`, `get_shard_args`, `create_sharded_output`, `reshard_tensor`, `ensure_specs`, `get_mesh_from_args`, `create_replicated_spec` |
+| [`propagation.py`](propagation.py) | **Algorithm** | **Classes**: `OpShardingRule`, `OpShardingRuleTemplate`, `FactorSharding`, `FactorShardingState`<br>**Enums**: `OpPriority`, `PropagationStrategy`<br>**Functions**: `propagate_sharding`, `run_hierarchical_propagation_pass` |
+| **[`optimizer/`](optimizer/)** | **Solver** | `simple_solver.py` - ILP/Heuristic solver (`SimpleSolver`) for auto-sharding. |
 
 ## Maintenance Guide
 > **Note to AI Agents**:

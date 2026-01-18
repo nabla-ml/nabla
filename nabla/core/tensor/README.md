@@ -1,6 +1,6 @@
 # Tensor System
 
-[← Back to Reference](../../README.md)
+[← Back to Reference](../../../README.md)
 
 ## Philosophy
 The Tensor system uses the **Facade Pattern** to strictly separate user-facing API from internal state. This allows a single opaque `Tensor` object to represent data that might be:
@@ -28,10 +28,10 @@ Tensors exist in a superposition of states. A `Tensor` usually starts as **Unrea
 
 ## Component Map
 
-| File | Role | Key Concepts |
+| File | Role | Exported Symbols |
 | :--- | :--- | :--- |
-| [`api.py`](api.py) | **The API**. | `Tensor` (Facade), `defaults`, `default_device`, `default_dtype` |
-| [`impl.py`](impl.py) | **The State**. | `TensorImpl`, `_storages`, `_values`, `sharding`, `global_shape` |
+| [`api.py`](api.py) | **The API** | **Classes**: `Tensor`<br>**Factory Methods**: `constant`, `full`, `zeros`, `ones`, `arange`, `uniform`, `gaussian`<br>**Key Properties**: `shape`, `dtype`, `device`, `sharded`, `local_shape`, `global_shape`<br>**Key Methods**: `numpy()`, `item()`, `realize()`, `shard()`, `with_sharding()`<br>**Re-exports**: `defaults`, `default_device`, `default_dtype`, `defaults_like` |
+| [`impl.py`](impl.py) | **The State** | **Classes**: `TensorImpl`<br>**Internal Properties**: `_values`, `_storages`, `sharding`, `traced`, `dual`, `batch_dims`, `output_refs`<br>**Methods**: `realize()`, `gather()`, `to_numpy()`, `physical_global_shape`, `logical_local_shape` |
 
 ## Maintenance Guide
 > **Note to AI Agents**:

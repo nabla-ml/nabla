@@ -23,9 +23,9 @@ Nabla implies a philosophy of **"Lazy-Eager" Execution** on top of a **Unified S
 
 | Module | Purpose | Documentation |
 | :--- | :--- | :--- |
-| **`core`** | **The Engine**. State, Graph, Sharding. | [**Read Docs**](core/README.md) |
-| **`ops`** | **The Logic**. Operation definitions. | [**Read Docs**](ops/README.md) |
-| **`transforms`** | **The Bridge**. `vmap`, `shard_map`, `compile`. | [**Read Docs**](transforms/README.md) |
+| **`core/`** | **The Engine**. Contains the `Tensor` state, `ComputeGraph` recorder, and the `Sharding` compiler. | [**Read Docs**](core/README.md) |
+| **`ops/`** | **The Logic**. Defines all mathematical operations (`Add`, `Matmul`), their gradients, and sharding rules. | [**Read Docs**](ops/README.md) |
+| **`transforms/`** | **The Bridge**. Functional transformations that alter execution: `vmap` (vectorize), `shard_map` (distribute), `compile` (optimize). | [**Read Docs**](transforms/README.md) |
 
 ## Maintenance Guide
 > **Note to AI Agents**:

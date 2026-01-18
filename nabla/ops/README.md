@@ -23,17 +23,20 @@ When you call `x + y`, `Operation.__call__` executes:
 
 ## Component Map
 
-| Submodule/File | Role | Key Concepts |
+| Submodule/File | Role | Exported Symbols |
 | :--- | :--- | :--- |
-| [`base.py`](base.py) | **The Interface**. | `Operation`, `BinaryOperation`, `LogicalAxisOperation`, `ReduceOperation` |
-| `dispatch.py` | **Dispatcher**. | `execute_operation` - Handles SPMD logic (sharding propagation + execution). |
-| **[`communication/`](communication/README.md)** | **Collectives**. | `all_reduce`, `shard`, `reshard`, `all_gather` |
-| **[`view/`](view/README.md)** | **Metadata**. | `reshape`, `transpose`, `squeeze`, `unsqueeze`, `broadcast_to` |
-| [`binary.py`](binary.py), [`unary.py`](unary.py) | **Elementwise**. | `add`, `mul`, `sin`, `exp`, `neg` |
-| [`reduction.py`](reduction.py) | **Reductions**. | `reduce_sum`, `mean` |
-| [`creation.py`](creation.py) | **Factories**. | `full`, `arange`, `triu`, `constant`, `zeros`, `ones` |
-| [`control_flow.py`](control_flow.py) | **Control Flow**. | `cond`, `while_loop` |
-| [`custom_op.py`](custom_op.py) | **Extension**. | Bindings for custom C++/MAX kernels. |
+| [`base.py`](base.py) | **The Interface** | **Classes**: `Operation`, `BinaryOperation`, `LogicalAxisOperation`, `ReduceOperation`, `LogicalShapeOperation`, `UnaryOperation` |
+| [`dispatch.py`](dispatch.py) | **Dispatcher** | **Internal**: `execute_operation` (Handles SPMD reasoning) |
+| **[`communication/`](communication/README.md)** | **Collectives** | `all_reduce`, `shard`, `reshard`, `all_gather`, `reduce_scatter` |
+| **[`view/`](view/README.md)** | **Metadata** | `reshape`, `transpose`, `squeeze`, `unsqueeze`, `broadcast_to`, `gather`, `scatter` |
+| [`binary.py`](binary.py) | **Math** | `add`, `mul`, `sub`, `div`, `matmul` |
+| [`unary.py`](unary.py) | **Elementwise** | `relu`, `sigmoid`, `tanh`, `exp`, `neg`, `softmax` |
+| [`reduction.py`](reduction.py) | **Reductions** | `reduce_sum`, `mean` |
+| [`comparison.py`](comparison.py) | **Logic** | `equal`, `not_equal`, `greater`, `greater_equal`, `less`, `less_equal` |
+| [`creation.py`](creation.py) | **Factories** | `full`, `arange`, `constant`, `zeros`, `ones`, `uniform`, `gaussian`, `normal` |
+| [`control_flow.py`](control_flow.py) | **Control Flow** | `where`, `cond`, `while_loop`, `scan` |
+| [`multi_output.py`](multi_output.py) | **Multi-Out** | `split`, `chunk`, `unbind`, `minmax` |
+| [`custom_op.py`](custom_op.py) | **Extension** | `call_custom_kernel` |
 
 ## Maintenance Guide
 > **Note to AI Agents**:

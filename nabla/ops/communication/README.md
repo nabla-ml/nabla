@@ -14,7 +14,7 @@ All comms inherit from `CollectiveOperation` in [`base.py`](base.py).
 3.  **Spec Update**: Computes the resulting `ShardingSpec` (e.g., `all_gather` removes a dim from the spec).
 
 ### Cost Modeling
-These ops implement `estimate_cost(...)`. This is used by the Auto-Sharding solver (in `shard_map`) to weigh the cost of transferring bytes vs recomputing.
+These ops implement `estimate_cost(...)`. This is used by the Auto-Sharding solver (in `optimizer`) to weigh the cost of transferring bytes vs recomputing.
 
 > [!NOTE] Design Decision: Explicit Comms
 > *   **Choice**: Comms are just Ops.
@@ -23,16 +23,17 @@ These ops implement `estimate_cost(...)`. This is used by the Auto-Sharding solv
 
 ## Component Map
 
-| File | Role | Key Concepts |
+| File | Role | Exported Symbols |
 | :--- | :--- | :--- |
-| [`base.py`](base.py) | **Base Class**. | `CollectiveOperation`, `estimate_cost` |
-| [`shard.py`](shard.py) | **Entry**. | `shard(x, mesh, spec)` - The primary way to introduce sharding. |
-| [`all_gather.py`](all_gather.py) | **Gather**. | `all_gather` - Collects data from all devices. |
-| [`all_reduce.py`](all_reduce.py) | **Reduce**. | `all_reduce` - Sums/Means data across devices. |
-| [`all_to_all.py`](all_to_all.py) | **Shuffle**. | `all_to_all` - Scatters and gathers data. |
-| [`reduce_scatter.py`](reduce_scatter.py) | **Scatter**. | `reduce_scatter` - Reduces and then scatters. |
-| [`reshard.py`](reshard.py) | **Compiler**. | `ReshardOp` - Automatic transition between specs. |
-| [`p_permute.py`](p_permute.py) | **Permute**. | `ppermute` - Peer-to-peer permutation. |
+| [`base.py`](base.py) | **Base Class** | **Classes**: `CollectiveOperation`<br>**Methods**: `estimate_cost`, `communication_cost` |
+| [`shard.py`](shard.py) | **Entry Point** | **Classes**: `ShardOp`<br>**Functions**: `shard` (Primary way to introduce sharding) |
+| [`reshard.py`](reshard.py) | **Transition** | **Classes**: `ReshardOp`<br>**Functions**: `reshard` (Smart transition between any two specs) |
+| [`all_reduce.py`](all_reduce.py) | **Reduce** | **Classes**: `AllReduceOp`, `PMeanOp`<br>**Functions**: `all_reduce`, `pmean` |
+| [`all_gather.py`](all_gather.py) | **Gather** | **Classes**: `AllGatherOp`, `GatherAllAxesOp`<br>**Functions**: `all_gather`, `gather_all_axes` |
+| [`reduce_scatter.py`](reduce_scatter.py) | **Scatter** | **Classes**: `ReduceScatterOp`<br>**Functions**: `reduce_scatter` |
+| [`all_to_all.py`](all_to_all.py) | **Shuffle** | **Classes**: `AllToAllOp`<br>**Functions**: `all_to_all` |
+| [`p_permute.py`](p_permute.py) | **Permute** | **Classes**: `PPermuteOp`<br>**Functions**: `ppermute` (Peer-to-peer cyclic shifts) |
+| [`axis_index.py`](axis_index.py) | **Metadata** | **Classes**: `AxisIndexOp`<br>**Functions**: `axis_index` (Get specialized index for each shard) |
 
 ## Maintenance Guide
 > **Note to AI Agents**:

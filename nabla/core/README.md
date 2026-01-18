@@ -19,12 +19,12 @@ The core follows a layered architecture:
 
 ## Component Map
 
-| Submodule | Purpose | Key File |
+| Submodule | Purpose | Exported Symbols (in `nabla.core`) |
 | :--- | :--- | :--- |
-| **[`tensor/`](tensor/README.md)** | **State**. The `Tensor` object and `TensorImpl`. | [`tensor/impl.py`](tensor/impl.py) |
-| **[`graph/`](graph/README.md)** | **Brain**. The `ComputeGraph` and compilation. | [`graph/engine.py`](graph/engine.py) |
-| **[`sharding/`](sharding/README.md)** | **Distribution**. SPMD progagation engine. | [`sharding/spmd.py`](sharding/spmd.py) |
-| **[`common/`](common/README.md)** | **Utils**. Pytree and Context contexts. | [`common/context.py`](common/context.py) |
+| **[`tensor/`](tensor/README.md)** | **State** | `Tensor`, `TensorImpl`, `OutputRefs` |
+| **[`graph/`](graph/README.md)** | **Brain** | `ComputeGraph`, `GRAPH`, `driver_tensor_type`, `Trace`, `trace`, `get_operations_topological`, `get_all_impls_topological`, `print_trace_graph`, `apply_to_operations` |
+| **[`sharding/`](sharding/README.md)** | **Distribution** | (Not directly re-exported via `core`, accessed via `nabla.core.sharding`) |
+| **[`common/`](common/README.md)** | **Utils** | `defaults`, `default_device`, `default_dtype`, `defaults_like`, `tree_map`, `tree_flatten`, `tree_unflatten`, `tree_leaves`, `tree_structure`, `PyTreeDef`, `tensor_leaves`, `traced`, `untraced`, `with_batch_dims` |
 
 ## Maintenance Guide
 > **Note to AI Agents**:

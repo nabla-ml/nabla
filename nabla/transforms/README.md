@@ -31,11 +31,11 @@ Just-In-Time compilation barrier.
 
 ## Component Map
 
-| File | Role | Key Concepts |
+| File | Role | Exported Symbols |
 | :--- | :--- | :--- |
-| [`shard_map.py`](shard_map.py) | **Distribution**. | `shard_map`, `_ShardingGraphExtractor` |
-| [`vmap.py`](vmap.py) | **Vectorization**. | `vmap`, `AxisSpec`, `_batch_tensor` |
-| [`compile.py`](compile.py) | **Optimization**. | `compile`, `CompiledFunction`, `CompilationStats` |
+| [`shard_map.py`](shard_map.py) | **Distribution** | **Functions**: `shard_map` |
+| [`vmap.py`](vmap.py) | **Vectorization** | **Functions**: `vmap`<br>**Classes**: `AxisSpec` (internal helper often used in docstrings) |
+| [`compile.py`](compile.py) | **JIT & Opt** | **Functions**: `compile`<br>**Classes**: `CompiledFunction`, `CompilationStats` |
 
 ## Maintenance Guide
 > **Note to AI Agents**:

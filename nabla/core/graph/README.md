@@ -1,6 +1,6 @@
 # Graph Engine & Tracing
 
-[← Back to Reference](../../README.md)
+[← Back to Reference](../../../README.md)
 
 ## Philosophy
 The Graph Engine is the "Brain" of Nabla. It is responsible for **capturing** user operations into a symbolic graph, **compiling** that graph into a Maxwell model, and **executing** it. It employs a **Lazy-Eager** strategy: the graph is always building (Lazy), but execution is triggered implicitly when data is inspected (Eager feel).
@@ -10,7 +10,8 @@ The Graph Engine is the "Brain" of Nabla. It is responsible for **capturing** us
 ### The Global Singleton
 We use a singleton `GRAPH` (`ComputeGraph`) to capture operations. There are no "graph contexts" for the user to manage.
 *   **Weak References**: The graph tracks unrealized tensors via `weakref.WeakValueDictionary`. If a user discards a tensor variable in Python, it is garbage collected, and the graph engine automatically drops the corresponding dead nodes before compilation.
-*   **Epochs**: We track an `_info_epoch` counter. Every time the graph is compiled/executed, the epoch increments. This helps invalidate staleness in strict-mode compilation.
+*   **Epochs**: We track an `_info_epoch` counter to invalidate staleness (internal mechanism).
+*   **Lazy Evaluation**: Operations are lazily added to the graph. `evaluate()` compiles and runs the subgraph needed to realize specific tensors.
 
 ### Tracing
 The `Trace` object captures a subgraph between specific input tensors and output tensors.
@@ -18,6 +19,7 @@ The `Trace` object captures a subgraph between specific input tensors and output
     *   `op`: The operation instance.
     *   `op_args`: The inputs to the op.
     *   `op_kwargs`: Configuration.
+    *   `_refs`: Weak references to output `TensorImpl`s.
 
 > [!NOTE] Design Decision: Singleton Graph
 > *   **Choice**: One global `ComputeGraph` instead of per-thread or explicit graph scopes.
@@ -26,11 +28,11 @@ The `Trace` object captures a subgraph between specific input tensors and output
 
 ## Component Map
 
-| File | Role | Key Concepts |
+| File | Role | Exported Symbols |
 | :--- | :--- | :--- |
-| [`engine.py`](engine.py) | **Execution Loop**. | `ComputeGraph`, `evaluate`, `_compile_and_execute` |
-| [`tracing.py`](tracing.py) | **Graph Structure**. | `Trace`, `OutputRefs`, `trace()`, `GraphPrinter` |
-| [`utils.py`](utils.py) | **Algorithms**. | Toposort, cycle detection. |
+| [`engine.py`](engine.py) | **Execution Loop** | **Classes**: `ComputeGraph`<br>**Singleton**: `GRAPH`<br>**Functions**: `seed`, `driver_tensor_type`<br>**Key Methods**: `add_input`, `add_unrealized`, `evaluate` |
+| [`tracing.py`](tracing.py) | **Graph Structure** | **Classes**: `Trace`, `OutputRefs`, `GraphPrinter`<br>**Functions**: `trace`<br>**Key Methods**: `Trace.compute`, `Trace.__str__` (visualization) |
+| [`utils.py`](utils.py) | **Algorithms** | **Functions**: `get_operations_topological`, `get_all_impls_topological`, `print_trace_graph`, `apply_to_operations` |
 
 ## Maintenance Guide
 > **Note to AI Agents**:

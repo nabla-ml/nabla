@@ -24,12 +24,12 @@ View operations manipulate tensor **metadata** (shape, strides) without copying 
 
 ## Component Map
 
-| File | Role | Key Concepts |
+| File | Role | Exported Symbols |
 | :--- | :--- | :--- |
-| [`shape.py`](shape.py) | **Shape Ops**. | `ReshapeOp`, `BroadcastToOp`, `ConcatenateOp` |
-| [`axes.py`](axes.py) | **Axis Ops**. | `transpose`, `squeeze`, `permute` |
-| [`batch.py`](batch.py) | **Batch Ops**. | `unsqueeze` (add 1s), batch-aware transforms. |
-| [`indexing.py`](indexing.py) | **Slicing**. | `__getitem__` logic, `slice`, `gather` (local). |
+| [`shape.py`](shape.py) | **Shape Transformation** | **Classes**: `ReshapeOp`, `BroadcastToOp`, `ConcatenateOp`, `SliceTensorOp`, `BroadcastToPhysicalOp`<br>**Functions**: `reshape`, `broadcast_to`, `concatenate`, `stack`, `slice_tensor`, `broadcast_to_physical` |
+| [`axes.py`](axes.py) | **Axis Manipulation** | **Classes**: `UnsqueezeOp`, `SqueezeOp`, `SwapAxesOp`, `MoveAxisOp`, `UnsqueezePhysicalOp`, `SqueezePhysicalOp`<br>**Functions**: `unsqueeze`, `squeeze`, `swap_axes`, `moveaxis`, `unsqueeze_physical`, `squeeze_physical` |
+| [`batch.py`](batch.py) | **Batch Dim Internals** | **Classes**: `IncrBatchDimsOp`, `DecrBatchDimsOp`, `MoveAxisToBatchDimsOp`, `MoveAxisFromBatchDimsOp`, `BroadcastBatchDimsOp`<br>**Functions**: `incr_batch_dims`, `decr_batch_dims`, `move_axis_to_batch_dims`, `move_axis_from_batch_dims`, `broadcast_batch_dims` |
+| [`indexing.py`](indexing.py) | **Indexing/Slicing** | **Classes**: `GatherOp`, `ScatterOp`<br>**Functions**: `gather`, `scatter` |
 
 ## Maintenance Guide
 > **Note to AI Agents**:

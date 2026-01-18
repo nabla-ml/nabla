@@ -24,9 +24,9 @@ It queries `AllReduceOp.estimate_cost()` to get realistic communication latency 
 
 ## Component Map
 
-| File | Role | Key Concepts |
+| File | Role | Exported Symbols |
 | :--- | :--- | :--- |
-| [`simple_solver.py`](simple_solver.py) | **The Solver**. | `SimpleSolver`, `_seed_matmul`, `_propagate_node`, `_export_solution` |
+| [`simple_solver.py`](simple_solver.py) | **The Solver** | **Classes**: `SimpleSolver`<br>**Methods**: `solve`, `_seed_matmul`, `_propagate_node` |
 
 ## Maintenance Guide
 > **Note to AI Agents**:
