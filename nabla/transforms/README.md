@@ -18,6 +18,12 @@ Auto-batches operations.
 *   **Prefix Semantics**: We forcefully push batch dimensions to the *front* of the physical shape.
 *   **Propagation**: When `vmap` sees a binary op, it unifies the batch dimensions of inputs (`max(rank(x), rank(y))`) and propagates them to the output.
 
+### 3. `compile` (JIT)
+Just-In-Time compilation barrier.
+*   **Graph Capture**: Traces the user function into a `ComputeGraph`.
+*   **Optimization**: Runs passes like Dead Code Elimination (DCE) and Common Subexpression Elimination (CSE).
+*   **Execution**: Compiles the graph to a MAX Mojo executable (or other backends) and caches it for subsequent calls.
+
 > [!NOTE] Design Decision: Physical Trace & Replay
 > *   **Choice**: `shard_map` traces logic, then replays physical ops.
 > *   **Why**: Cleanest separation. The user writes math; we swap the inputs for "Sharded Tensors" and run the exact same math ops, but the ops themselves are smart enough to emit communication code when they see sharded inputs.
@@ -29,8 +35,9 @@ Auto-batches operations.
 | :--- | :--- | :--- |
 | [`shard_map.py`](shard_map.py) | **Distribution**. | `shard_map`, `_ShardingGraphExtractor` |
 | [`vmap.py`](vmap.py) | **Vectorization**. | `vmap`, `BatchTracer` |
-| [`compile.py`](compile.py) | **Optimization**. | `compile`, `JIT` |
+| [`compile.py`](compile.py) | **Optimization**. | `compile`, `JIT`, `CompilerPass` |
 
 ## Maintenance Guide
-> **Note to AI Agents**: Update this file if you modify the trace/replay machinery.
-> This file must remain the source of truth for high-level architecture.
+> **Note to AI Agents**:
+> 1.  **Update Requirement**: You **MUST** update this file whenever you modify, restructure, or add ANY code in this module. Do not skip this step.
+> 2.  **Accuracy**: This file serves as the source of truth for the module's architecture. Ensure the Component Map and Philosophy sections remain accurate after your changes.

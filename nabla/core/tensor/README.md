@@ -34,5 +34,6 @@ Tensors exist in a superposition of states. A `Tensor` usually starts as **Unrea
 | [`impl.py`](impl.py) | **The State**. | `TensorImpl`, `_storages`, `_values`, `sharding` |
 
 ## Maintenance Guide
-> **Note to AI Agents**: Update this file if you modify the state management logic in `impl.py` or the public API in `api.py`.
-> This file must remain the source of truth for high-level architecture.
+> **Note to AI Agents**:
+> 1.  **Update Requirement**: You **MUST** update this file whenever you modify, restructure, or add ANY code in this module. Do not skip this step.
+> 2.  **Accuracy**: This file serves as the source of truth for the module's architecture. Ensure the Component Map and Philosophy sections remain accurate after your changes.

@@ -29,4 +29,10 @@ Nabla tests must verify the "Dual" nature of the framework:
 ## Guidance for New Tests
 When adding a new Operation:
 1.  **Logical Test**: Ensure it computes correctly on CPU/Single Device.
-2.  **Sharding Test**: Add a case in `test_auto_sharding.py` to verify it propagates factors correctly (e.g., `test_model_parallel_matmul` checks that `matmul` splits K correctly).
+2.  **Sharding Test**: Add a case in `test_auto_sharding.py` to verify it propagates factors correctly.
+3.  **Stress Test**: If the op involves complex communication, consider adding a case to `test_sharding_stress.py`.
+
+## Maintenance Guide
+> **Note to AI Agents**:
+> 1.  **Update Requirement**: You **MUST** update this file whenever you add new test categories, key test files, or change the testing strategy.
+> 2.  **Accuracy**: This file serves as the source of truth for the testing architecture.

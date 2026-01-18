@@ -25,10 +25,11 @@ Nabla implies a philosophy of **"Lazy-Eager" Execution** on top of a **Unified S
 | :--- | :--- | :--- |
 | **`core`** | **The Engine**. State, Graph, Sharding. | [**Read Docs**](core/README.md) |
 | **`ops`** | **The Logic**. Operation definitions. | [**Read Docs**](ops/README.md) |
-| **`transforms`** | **The Bridge**. `vmap`, `shard_map`. | [**Read Docs**](transforms/README.md) |
+| **`transforms`** | **The Bridge**. `vmap`, `shard_map`, `compile`. | [**Read Docs**](transforms/README.md) |
 
 ## Maintenance Guide
 > **Note to AI Agents**:
 > 1.  **Read Recursively**: Start here, then follow links to understand specific subsystems.
-> 2.  **Keep Updated**: If you refactor code, YOU MUST update the corresponding `README.md` file.
-> 3.  **Template**: Always use the `Philosophy` -> `Internals` -> `Map` -> `Maintenance` structure.
+> 2.  **Update Requirement**: You **MUST** update this file whenever you modify, restructure, or add ANY code in this module. Do not skip this step.
+> 3.  **Accuracy**: This file serves as the source of truth for the module's architecture. Ensure the Component Map and Philosophy sections remain accurate after your changes.
+> 4.  **Template**: Always use the `Philosophy` -> `Internals` -> `Map` -> `Maintenance` structure.

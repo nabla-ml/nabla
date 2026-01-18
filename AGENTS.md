@@ -19,7 +19,7 @@ The project is structured hierarchically to prevent circular dependencies.
 | **User** | **`nabla/`** | The public API surface. | [Read Here](nabla/README.md) |
 | **Logic** | **`nabla/ops/`** | Operation definitions and dispatch. | [Read Here](nabla/ops/README.md) |
 | **State** | **`nabla/core/`** | The engine: Tensors, Graphs, Sharding. | [Read Here](nabla/core/README.md) |
-| **Glue** | **`nabla/transforms/`** | Functional transforms (vmap/shard_map). | [Read Here](nabla/transforms/README.md) |
+| **Glue** | **`nabla/transforms/`** | Functional transforms (vmap/shard_map/compile). | [Read Here](nabla/transforms/README.md) |
 
 ## Testing Strategy
 We test both the "Logical" (single-device correctness) and "Physical" (distributed splitting) behaviors.
@@ -32,6 +32,7 @@ We test both the "Logical" (single-device correctness) and "Physical" (distribut
 
 ## Maintenance Guide
 > **Note to AI Agents**:
-> 1.  This is the Root Documentation. Use the links in the table above to navigate to specific sub-systems.
-> 2.  **Standards**: All `README.md` files must follow the [Template: Philosophy -> Architecture -> Map -> Maintenance].
-> 3.  **Updates**: If you create a new module, you MUST create a corresponding `README.md`.
+> 1.  **Scope**: This is the Root Documentation for AI Agents. Use the links in the table above to guide your exploration.
+> 2.  **Update Requirement**: You **MUST** update this file whenever you modify the high-level project structure, add top-level modules, or change the "Philosophy".
+> 3.  **Standards**: All `README.md` files must strictly follow the [Template: Philosophy -> Architecture -> Map -> Maintenance].
+> 4.  **Creation**: If you create a new module, you **MUST** create a corresponding `README.md` immediately.

@@ -28,8 +28,14 @@ When you call `x + y`, `Operation.__call__` executes:
 | [`base.py`](base.py) | **The Interface**. | `Operation`, `UnaryOperation`, `BinaryOperation` |
 | **[`communication/`](communication/README.md)** | **Collectives**. | `all_reduce`, `shard` |
 | **[`view/`](view/README.md)** | **Metadata**. | `reshape`, `transpose` |
-| `binary.py`, `unary.py` | **Logical Ops**. | `add`, `mul`, `sin`, `exp` |
+| [`binary.py`](binary.py), [`unary.py`](unary.py) | **Elementwise**. | `add`, `mul`, `sin`, `exp` |
+| [`reduction.py`](reduction.py) | **Reductions**. | `sum`, `mean`, `max` |
+| [`creation.py`](creation.py) | **Factories**. | `full`, `arange`, `triu` |
+| [`control_flow.py`](control_flow.py) | **Control Flow**. | `cond`, `while_loop` |
+| [`custom_op.py`](custom_op.py) | **Extension**. | Bindings for custom C++/MAX kernels. |
+| [`dispatch.py`](dispatch.py) | **Dispatcher**. | Logic for selecting ops based on inputs. |
 
 ## Maintenance Guide
-> **Note to AI Agents**: Update this file if you change the `Operation` base class or add new op categories.
-> This file must remain the source of truth for high-level architecture.
+> **Note to AI Agents**:
+> 1.  **Update Requirement**: You **MUST** update this file whenever you modify, restructure, or add ANY code in this module. Do not skip this step.
+> 2.  **Accuracy**: This file serves as the source of truth for the module's architecture. Ensure the Component Map and Philosophy sections remain accurate after your changes.

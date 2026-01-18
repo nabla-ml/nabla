@@ -29,7 +29,12 @@ These ops implement `estimate_cost(...)`. This is used by the Auto-Sharding solv
 | [`shard.py`](shard.py) | **Entry**. | `shard(x, mesh, spec)` - The primary way to introduce sharding. |
 | [`all_gather.py`](all_gather.py) | **Gather**. | `all_gather` - Collects data from all devices. |
 | [`all_reduce.py`](all_reduce.py) | **Reduce**. | `all_reduce` - Sums/Means data across devices. |
+| [`all_to_all.py`](all_to_all.py) | **Shuffle**. | `all_to_all` - Scatters and gathers data. |
+| [`reduce_scatter.py`](reduce_scatter.py) | **Scatter**. | `reduce_scatter` - Reduces and then scatters. |
+| [`reshard.py`](reshard.py) | **Compiler**. | `ReshardOp` - Automatic transition between specs. |
+| [`p_permute.py`](p_permute.py) | **Permute**. | `ppermute` - Peer-to-peer permutation. |
 
 ## Maintenance Guide
-> **Note to AI Agents**: Update this file if you add new collective intrinsics.
-> This file must remain the source of truth for high-level architecture.
+> **Note to AI Agents**:
+> 1.  **Update Requirement**: You **MUST** update this file whenever you modify, restructure, or add ANY code in this module. Do not skip this step.
+> 2.  **Accuracy**: This file serves as the source of truth for the module's architecture. Ensure the Component Map and Philosophy sections remain accurate after your changes.
