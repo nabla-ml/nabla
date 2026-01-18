@@ -1,4 +1,8 @@
-# Nabla Architecture
+---
+trigger: always_on
+---
+
+Mandatory context/summary to get started with the Nabla codebase:
 
 > **CRITICAL**: Always activate the virtual environment first:
 > `source venv/bin/activate`
