@@ -1,5 +1,12 @@
 # Nabla Architecture
 
+> [!IMPORTANT] Project Status: Foundation Phase
+> Nabla is fundamentally a **Training Framework**. However, we are currently in the **Foundation Phase**, focused exclusively on:
+> 1.  **Forward (Sharded) Execution**: Ensuring the distributed compiler works perfectly.
+> 2.  **Core Building Blocks**: Making the core engines and transforms (`vmap`, `shard_map`, `compile`, etc.) reliable.
+>
+> We are currently prioritizing **Depth and Reliability** of the core system over **Breadth**. Features like extensive operator support, high-level NN modules, and syntactic sugar are explicitly deferred.
+
 ## Philosophy
 Nabla implies a philosophy of **"Lazy-Eager" Execution** on top of a **Unified SPMD Runtime**.
 *   **Lazy-Eager**: Code looks eager (like PyTorch), but is lazily traced into a graph and compiled just-in-time when you access data.
