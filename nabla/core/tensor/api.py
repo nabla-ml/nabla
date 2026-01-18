@@ -429,7 +429,7 @@ class Tensor(DLPackArray, HasTensorValue):
 
     @property
     def real(self) -> bool:
-        return self._real
+        return self._impl.is_realized
 
     @real.setter
     def real(self, real: bool) -> None:

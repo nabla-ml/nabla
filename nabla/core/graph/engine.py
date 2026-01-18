@@ -179,8 +179,8 @@ class ComputeGraph:
         targets: list[Tensor] = []
         
         def add_target(t: Tensor) -> None:
-            if id(t) not in seen:
-                seen.add(id(t))
+            if id(t._impl) not in seen:
+                seen.add(id(t._impl))
                 targets.append(t)
         
         # Add explicit outputs first (in order)
@@ -239,8 +239,8 @@ class ComputeGraph:
             self.graph.output(ops.random._peek_seed(), *all_values)
         
         if DEBUG_LAZY_EVAL:
-            print("[LAZY EVAL] MAX Graph MLIR:")
-            print(self.graph._module.operation)
+            print("[LAZY EVAL] MAX Graph:")
+            print(self.graph)
             print("=" * 70)
         
         return self._compile_and_execute_with_map(unrealized, value_map, return_model)
