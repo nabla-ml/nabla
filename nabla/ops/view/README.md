@@ -1,11 +1,11 @@
 # View Operations
 
-[← Back to Ops Hub](../AGENTS.md)
+[← Back to Ops Hub](../README.md)
 
-## 🧠 Philosophy
+## Philosophy
 View operations manipulate tensor **metadata** (shape, strides) without copying or moving the underlying data. In a distributed context, they must define how **logical** dimension changes map to **physical** sharding constraints.
 
-## 🏗️ Architecture & Internals
+## Architecture & Internals
 
 ### Logical vs Physical View
 *   **Logical**: User sees `reshape(1024) -> (32, 32)`.
@@ -22,13 +22,13 @@ View operations manipulate tensor **metadata** (shape, strides) without copying 
 > *   **Why**: Correctness first. Arbitrary reshapes on distributed data can lead to extremely complex "strided sharding" layouts that are hard to support in kernels.
 > *   **Trade-off**: Performance hit on distributed reshapes (requires network traffic).
 
-## 🗺️ Component Map
+## Component Map
 
 | File | Role | Key Concepts |
 | :--- | :--- | :--- |
 | [`shape.py`](shape.py) | **Shape Ops**. | `ReshapeOp`, `BroadcastToOp`, `ConcatenateOp` |
 | [`axes.py`](axes.py) | **Axis Ops**. | `transpose`, `squeeze`, `permute` |
 
-## 🤖 Maintenance Guide
+## Maintenance Guide
 > **Note to AI Agents**: Update this file if you add new shape manipulation operations.
 > This file must remain the source of truth for high-level architecture.

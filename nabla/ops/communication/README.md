@@ -1,11 +1,11 @@
 # Communication Operations
 
-[← Back to Ops Hub](../AGENTS.md)
+[← Back to Ops Hub](../README.md)
 
-## 🧠 Philosophy
+## Philosophy
 Communication operations are explicit instructions to move data across the mesh. In Nabla, these are treated as regular `Operation`s that take a `Tensor`, perform a collective (via MAX/NCCL), and return a `Tensor` with a new `ShardingSpec`.
 
-## 🏗️ Architecture & Internals
+## Architecture & Internals
 
 ### The Collective Base
 All comms inherit from `CollectiveOperation` in [`base.py`](base.py).
@@ -21,7 +21,7 @@ These ops implement `estimate_cost(...)`. This is used by the Auto-Sharding solv
 > *   **Why**: Allows them to be traced, optimized, and inspected in the standard graph. Auto-sharding is just "inserting comm ops" into the graph.
 > *   **Trade-off**: Users can shoot themselves in the foot by manually sharding incorrectly if they bypass the auto-spmd engine.
 
-## 🗺️ Component Map
+## Component Map
 
 | File | Role | Key Concepts |
 | :--- | :--- | :--- |
@@ -30,6 +30,6 @@ These ops implement `estimate_cost(...)`. This is used by the Auto-Sharding solv
 | [`all_gather.py`](all_gather.py) | **Gather**. | `all_gather` - Collects data from all devices. |
 | [`all_reduce.py`](all_reduce.py) | **Reduce**. | `all_reduce` - Sums/Means data across devices. |
 
-## 🤖 Maintenance Guide
+## Maintenance Guide
 > **Note to AI Agents**: Update this file if you add new collective intrinsics.
 > This file must remain the source of truth for high-level architecture.

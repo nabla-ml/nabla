@@ -1,11 +1,11 @@
 # Common Core Utilities
 
-[← Back to Reference](../../AGENTS.md)
+[← Back to Reference](../../README.md)
 
-## 🧠 Philosophy
+## Philosophy
 The `common` module provides the foundational infrastructure used across the entire library. It handles global state (context) and structural data manipulation (pytrees). It is designed to be **stateless logic** (pytree) and **thread-local state** (context) to avoid side effects in the graph engine.
 
-## 🏗️ Architecture & Internals
+## Architecture & Internals
 
 ### Pytree
 Nabla uses a **JAX-compatible Pytree system**. A pytree is a tree of Python containers (list, tuple, dict) where the leaves are Tensors (or other data).
@@ -23,13 +23,13 @@ We use `contextvars` to manage global defaults (DEVICE, DTYPE) in a thread-safe 
 > *   **Why**: Zero dependencies. Allows us to define our own "nodes" (like `TensorImpl`) without interfering with JAX if the user mixes them.
 > *   **Trade-off**: Maintenance burden of complex structural matching logic.
 
-## 🗺️ Component Map
+## Component Map
 
 | File | Role | Key Concepts |
 | :--- | :--- | :--- |
 | [`context.py`](context.py) | **Global State**. | `_DEFAULT_DEVICE`, `_DEFAULT_DTYPE`, `defaults_like()` |
 | [`pytree.py`](pytree.py) | **Structure**. | `tree_map`, `tree_flatten`, `PyTreeDef` |
 
-## 🤖 Maintenance Guide
+## Maintenance Guide
 > **Note to AI Agents**: Update this file if you modify `context.py` or `pytree.py`.
 > This file must remain the source of truth for high-level architecture.

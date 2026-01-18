@@ -1,11 +1,11 @@
 # Core Internals
 
-[← Back to Root](../AGENTS.md)
+[← Back to Root](../README.md)
 
-## 🧠 Philosophy
+## Philosophy
 The `core` module contains the engines that drive Nabla: State Management, Graph Compilation, and Distributed Execution. It is organized into semantic submodules to strictly separate concerns and avoid circular dependencies.
 
-## 🏗️ Architecture & Internals
+## Architecture & Internals
 The core follows a layered architecture:
 1.  **Bottom (Common)**: Shared utilities (`pytree`, `context`) used by everyone.
 2.  **State (Tensor)**: The data containers (`TensorImpl`) that hold values and metadata.
@@ -17,15 +17,15 @@ The core follows a layered architecture:
 > *   **Why**: Circular dependencies are the death of large Python projects.
 > *   **Trade-off**: Sometimes requires "forward references" or delayed imports (e.g., `Tensor` knowing about `ShardingSpec` but not the `propagate` logic).
 
-## 🗺️ Component Map
+## Component Map
 
 | Submodule | Purpose | Key File |
 | :--- | :--- | :--- |
-| **[`tensor/`](tensor/AGENTS.md)** | **State**. The `Tensor` object and `TensorImpl`. | [`tensor/impl.py`](tensor/impl.py) |
-| **[`graph/`](graph/AGENTS.md)** | **Brain**. The `ComputeGraph` and compilation. | [`graph/engine.py`](graph/engine.py) |
-| **[`sharding/`](sharding/AGENTS.md)** | **Distribution**. SPMD progagation engine. | [`sharding/spmd.py`](sharding/spmd.py) |
-| **[`common/`](common/AGENTS.md)** | **Utils**. Pytree and Context contexts. | [`common/context.py`](common/context.py) |
+| **[`tensor/`](tensor/README.md)** | **State**. The `Tensor` object and `TensorImpl`. | [`tensor/impl.py`](tensor/impl.py) |
+| **[`graph/`](graph/README.md)** | **Brain**. The `ComputeGraph` and compilation. | [`graph/engine.py`](graph/engine.py) |
+| **[`sharding/`](sharding/README.md)** | **Distribution**. SPMD progagation engine. | [`sharding/spmd.py`](sharding/spmd.py) |
+| **[`common/`](common/README.md)** | **Utils**. Pytree and Context contexts. | [`common/context.py`](common/context.py) |
 
-## 🤖 Maintenance Guide
+## Maintenance Guide
 > **Note to AI Agents**: Update this file if you add new submodules to `core`.
 > This file must remain the source of truth for high-level architecture.

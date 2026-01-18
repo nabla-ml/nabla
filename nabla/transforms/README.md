@@ -1,11 +1,11 @@
 # Function Transforms
 
-[← Back to Root](../AGENTS.md)
+[← Back to Root](../README.md)
 
-## 🧠 Philosophy
+## Philosophy
 Transforms wrap a user function to alter its execution semantics. They are the bridge between "Logical Code" (what the user writes) and "Physical Execution" (what runs on hardware).
 
-## 🏗️ Architecture & Internals
+## Architecture & Internals
 
 ### 1. `shard_map` (Distribution)
 Allows writing single-device code and running it on a mesh.
@@ -23,7 +23,7 @@ Auto-batches operations.
 > *   **Why**: Cleanest separation. The user writes math; we swap the inputs for "Sharded Tensors" and run the exact same math ops, but the ops themselves are smart enough to emit communication code when they see sharded inputs.
 > *   **Trade-off**: Requires every Op to support sharded inputs.
 
-## 🗺️ Component Map
+## Component Map
 
 | File | Role | Key Concepts |
 | :--- | :--- | :--- |
@@ -31,6 +31,6 @@ Auto-batches operations.
 | [`vmap.py`](vmap.py) | **Vectorization**. | `vmap`, `BatchTracer` |
 | [`compile.py`](compile.py) | **Optimization**. | `compile`, `JIT` |
 
-## 🤖 Maintenance Guide
+## Maintenance Guide
 > **Note to AI Agents**: Update this file if you modify the trace/replay machinery.
 > This file must remain the source of truth for high-level architecture.

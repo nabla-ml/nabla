@@ -1,11 +1,11 @@
 # Graph Engine & Tracing
 
-[← Back to Reference](../../AGENTS.md)
+[← Back to Reference](../../README.md)
 
-## 🧠 Philosophy
+## Philosophy
 The Graph Engine is the "Brain" of Nabla. It is responsible for **capturing** user operations into a symbolic graph, **compiling** that graph into a Maxwell model, and **executing** it. It employs a **Lazy-Eager** strategy: the graph is always building (Lazy), but execution is triggered implicitly when data is inspected (Eager feel).
 
-## 🏗️ Architecture & Internals
+## Architecture & Internals
 
 ### The Global Singleton
 We use a singleton `GRAPH` (`ComputeGraph`) to capture operations. There are no "graph contexts" for the user to manage.
@@ -24,7 +24,7 @@ The `Trace` object captures a subgraph between specific input tensors and output
 > *   **Why**: Maximizes distinct "PyTorch-like" feel. Users never accidentally define ops "outside" a graph.
 > *   **Trade-off**: Harder to support multi-threaded graph construction (requires strictly thread-local value stacks if we go parallel).
 
-## 🗺️ Component Map
+## Component Map
 
 | File | Role | Key Concepts |
 | :--- | :--- | :--- |
@@ -32,6 +32,6 @@ The `Trace` object captures a subgraph between specific input tensors and output
 | [`tracing.py`](tracing.py) | **Graph Structure**. | `Trace`, `OutputRefs`, `trace()`, `GraphPrinter` |
 | [`utils.py`](utils.py) | **Algorithms**. | Toposort, cycle detection. |
 
-## 🤖 Maintenance Guide
+## Maintenance Guide
 > **Note to AI Agents**: Update this file if you modify the evaluation loop or the tracing structures.
 > This file must remain the source of truth for high-level architecture.

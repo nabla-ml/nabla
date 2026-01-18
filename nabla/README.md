@@ -1,11 +1,11 @@
 # Nabla Architecture
 
-## 🧠 Philosophy
+## Philosophy
 Nabla implies a philosophy of **"Lazy-Eager" Execution** on top of a **Unified SPMD Runtime**.
 *   **Lazy-Eager**: Code looks eager (like PyTorch), but is lazily traced into a graph and compiled just-in-time when you access data.
 *   **Unified SPMD**: You write code for a single device. We use a compiler pass (Sharding Propagation) to automatically parallelize it across a cluster of TPUs/GPUs.
 
-## 🏗️ Architecture & Internals
+## Architecture & Internals
 
 ### The Lifecycle
 1.  **Interact**: User manipulates `Tensor` objects (pointers to graph nodes).
@@ -19,16 +19,16 @@ Nabla implies a philosophy of **"Lazy-Eager" Execution** on top of a **Unified S
 > *   **Why**: Allows us to reuse the same graph engine for both single-device and distributed execution. Scalable.
 > *   **Trade-off**: Complexity in the `shard_map` trace-and-replay engine.
 
-## 🗺️ Module Map
+## Module Map
 
 | Module | Purpose | Documentation |
 | :--- | :--- | :--- |
-| **`core`** | **The Engine**. State, Graph, Sharding. | [**Read Docs**](core/AGENTS.md) |
-| **`ops`** | **The Logic**. Operation definitions. | [**Read Docs**](ops/AGENTS.md) |
-| **`transforms`** | **The Bridge**. `vmap`, `shard_map`. | [**Read Docs**](transforms/AGENTS.md) |
+| **`core`** | **The Engine**. State, Graph, Sharding. | [**Read Docs**](core/README.md) |
+| **`ops`** | **The Logic**. Operation definitions. | [**Read Docs**](ops/README.md) |
+| **`transforms`** | **The Bridge**. `vmap`, `shard_map`. | [**Read Docs**](transforms/README.md) |
 
-## 🤖 Maintenance Guide
+## Maintenance Guide
 > **Note to AI Agents**:
 > 1.  **Read Recursively**: Start here, then follow links to understand specific subsystems.
-> 2.  **Keep Updated**: If you refactor code, YOU MUST update the corresponding `AGENTS.md` file.
+> 2.  **Keep Updated**: If you refactor code, YOU MUST update the corresponding `README.md` file.
 > 3.  **Template**: Always use the `Philosophy` -> `Internals` -> `Map` -> `Maintenance` structure.
