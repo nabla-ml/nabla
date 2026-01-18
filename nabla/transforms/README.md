@@ -34,8 +34,8 @@ Just-In-Time compilation barrier.
 | File | Role | Key Concepts |
 | :--- | :--- | :--- |
 | [`shard_map.py`](shard_map.py) | **Distribution**. | `shard_map`, `_ShardingGraphExtractor` |
-| [`vmap.py`](vmap.py) | **Vectorization**. | `vmap`, `BatchTracer` |
-| [`compile.py`](compile.py) | **Optimization**. | `compile`, `JIT`, `CompilerPass` |
+| [`vmap.py`](vmap.py) | **Vectorization**. | `vmap`, `AxisSpec`, `_batch_tensor` |
+| [`compile.py`](compile.py) | **Optimization**. | `compile`, `CompiledFunction`, `CompilationStats` |
 
 ## Maintenance Guide
 > **Note to AI Agents**:

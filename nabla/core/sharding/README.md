@@ -30,10 +30,10 @@ For every Operation `Z = f(X, Y)`:
 
 | File | Role | Key Concepts |
 | :--- | :--- | :--- |
-| [`spec.py`](spec.py) | **Data Structures**. | `ShardingSpec`, `DeviceMesh`, `DimSpec` |
-| [`spmd.py`](spmd.py) | **Pipeline**. | `infer_output_sharding`, `reshard_inputs` |
-| [`propagation.py`](propagation.py) | **Algorithm**. | `OpShardingRule`, `FactorSharding`, `propagate_sharding` |
-| **[`optimizer/`](optimizer/)** | **Solver**. | `simple_solver.py` - ILP/Heuristic solver for auto-sharding. |
+| [`spec.py`](spec.py) | **Data Structures**. | `DeviceMesh`, `DimSpec`, `ShardingSpec`, `compute_global_shape`, `needs_reshard` |
+| [`spmd.py`](spmd.py) | **Pipeline**. | `infer_output_sharding`, `reshard_inputs`, `get_shard_args`, `create_sharded_output` |
+| [`propagation.py`](propagation.py) | **Algorithm**. | `OpShardingRule`, `FactorSharding`, `propagate_sharding`, `run_hierarchical_propagation_pass` |
+| **[`optimizer/`](optimizer/)** | **Solver**. | `simple_solver.py` - ILP/Heuristic solver (`SimpleSolver`) for auto-sharding. |
 
 ## Maintenance Guide
 > **Note to AI Agents**:

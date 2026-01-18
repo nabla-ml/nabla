@@ -25,15 +25,15 @@ When you call `x + y`, `Operation.__call__` executes:
 
 | Submodule/File | Role | Key Concepts |
 | :--- | :--- | :--- |
-| [`base.py`](base.py) | **The Interface**. | `Operation`, `UnaryOperation`, `BinaryOperation` |
-| **[`communication/`](communication/README.md)** | **Collectives**. | `all_reduce`, `shard` |
-| **[`view/`](view/README.md)** | **Metadata**. | `reshape`, `transpose` |
-| [`binary.py`](binary.py), [`unary.py`](unary.py) | **Elementwise**. | `add`, `mul`, `sin`, `exp` |
-| [`reduction.py`](reduction.py) | **Reductions**. | `sum`, `mean`, `max` |
-| [`creation.py`](creation.py) | **Factories**. | `full`, `arange`, `triu` |
+| [`base.py`](base.py) | **The Interface**. | `Operation`, `BinaryOperation`, `LogicalAxisOperation`, `ReduceOperation` |
+| `dispatch.py` | **Dispatcher**. | `execute_operation` - Handles SPMD logic (sharding propagation + execution). |
+| **[`communication/`](communication/README.md)** | **Collectives**. | `all_reduce`, `shard`, `reshard`, `all_gather` |
+| **[`view/`](view/README.md)** | **Metadata**. | `reshape`, `transpose`, `squeeze`, `unsqueeze`, `broadcast_to` |
+| [`binary.py`](binary.py), [`unary.py`](unary.py) | **Elementwise**. | `add`, `mul`, `sin`, `exp`, `neg` |
+| [`reduction.py`](reduction.py) | **Reductions**. | `reduce_sum`, `mean` |
+| [`creation.py`](creation.py) | **Factories**. | `full`, `arange`, `triu`, `constant`, `zeros`, `ones` |
 | [`control_flow.py`](control_flow.py) | **Control Flow**. | `cond`, `while_loop` |
 | [`custom_op.py`](custom_op.py) | **Extension**. | Bindings for custom C++/MAX kernels. |
-| [`dispatch.py`](dispatch.py) | **Dispatcher**. | Logic for selecting ops based on inputs. |
 
 ## Maintenance Guide
 > **Note to AI Agents**:

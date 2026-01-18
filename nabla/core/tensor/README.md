@@ -30,8 +30,8 @@ Tensors exist in a superposition of states. A `Tensor` usually starts as **Unrea
 
 | File | Role | Key Concepts |
 | :--- | :--- | :--- |
-| [`api.py`](api.py) | **The API**. | `Tensor`, `__add__`, `realize()`, `numpy()` |
-| [`impl.py`](impl.py) | **The State**. | `TensorImpl`, `_storages`, `_values`, `sharding` |
+| [`api.py`](api.py) | **The API**. | `Tensor` (Facade), `defaults`, `default_device`, `default_dtype` |
+| [`impl.py`](impl.py) | **The State**. | `TensorImpl`, `_storages`, `_values`, `sharding`, `global_shape` |
 
 ## Maintenance Guide
 > **Note to AI Agents**:
