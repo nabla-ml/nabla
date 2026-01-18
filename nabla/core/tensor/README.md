@@ -13,8 +13,8 @@ The Tensor system uses the **Facade Pattern** to strictly separate user-facing A
 ### The Dual-Object Model
 *   **`Tensor` (API)**: Immutable-ish wrapper. Implements operator overloading (`__add__`), shape access, and NumPy compatibility. It holds a reference to `TensorImpl`.
 *   **`TensorImpl` (State)**: The heavy lifter. It contains:
-    *   `_values`: Symbolic graph nodes (for lazy execution).
-    *   `_storages`: Concrete data (for eager/realized execution).
+    *   `_values`: List of symbolic graph nodes (one per shard, for lazy execution).
+    *   `_storages`: List of concrete data blocks (one per shard, for eager/realized execution).
     *   `output_refs`: Provenance (what op created this?).
     *   `sharding`: The distributed layout.
 
