@@ -36,10 +36,10 @@ def execute_operation(op: "Operation", *args: Any, **kwargs: Any) -> Any:
     def collect_metadata(x: Any) -> Any:
         nonlocal any_traced, any_has_tangent, max_batch_dims, any_sharded
         if isinstance(x, Tensor):
-            any_traced = any_traced or x._impl.traced
-            any_has_tangent = any_has_tangent or (x._impl.tangent is not None)
-            max_batch_dims = max(max_batch_dims, x._impl.batch_dims)
-            any_sharded = any_sharded or x._impl.is_sharded
+            any_traced = any_traced or x.traced
+            any_has_tangent = any_has_tangent or (x.tangent is not None)
+            max_batch_dims = max(max_batch_dims, x.batch_dims)
+            any_sharded = any_sharded or x.is_sharded
         return x
     
     pytree.tree_map(collect_metadata, args)
@@ -128,7 +128,7 @@ def _apply_auto_reduction(op: "Operation", output: Any, mesh: "DeviceMesh", redu
         
         # Hydrate values if needed and check we have values to reduce
         t.hydrate()
-        if not t._impl._values:  # Check raw after hydrate
+        if not t._values:  # Check raw after hydrate
             return t
         
         # Apply graph-level grouped all-reduce
@@ -137,7 +137,7 @@ def _apply_auto_reduction(op: "Operation", output: Any, mesh: "DeviceMesh", redu
                 t.values, mesh, reduce_axes
             )
         
-        current_spec = t._impl.sharding
+        current_spec = t.sharding
         if current_spec:
             new_dim_specs = []
             for ds in current_spec.dim_specs:
@@ -172,7 +172,7 @@ def _apply_jvp(op: "Operation", args: tuple, output: Any) -> None:
     from ..core import pytree
     
     tangents = pytree.tree_map(
-        lambda x: Tensor(impl=x._impl.tangent) if isinstance(x, Tensor) and x._impl.tangent else None,
+        lambda x: Tensor(impl=x.tangent) if isinstance(x, Tensor) and x.tangent else None,
         args
     )
     output_tangent = op.jvp_rule(args, tangents, output)

@@ -145,17 +145,17 @@ class AllGatherOp(CollectiveOperation):
         from ...core import GRAPH
         from ...core.sharding.spec import ShardingSpec, DimSpec
         
-        if (not sharded_tensor._impl._values and not sharded_tensor._impl._storages) or \
-           (sharded_tensor._impl.sharding and sharded_tensor._impl.sharding.is_fully_replicated()):
+        if (not sharded_tensor._values and not sharded_tensor._storages) or \
+           (sharded_tensor.sharding and sharded_tensor.sharding.is_fully_replicated()):
             return sharded_tensor  # Already replicated or no data
             
         # Get mesh and sharded axis info from input sharding
-        mesh = sharded_tensor._impl.sharding.mesh if sharded_tensor._impl.sharding else None
+        mesh = sharded_tensor.sharding.mesh if sharded_tensor.sharding else None
         sharded_axis_name = None
         
-        if sharded_tensor._impl.sharding:
+        if sharded_tensor.sharding:
             # Find which mesh axis this tensor dimension is sharded on
-            sharding = sharded_tensor._impl.sharding
+            sharding = sharded_tensor.sharding
             if axis < len(sharding.dim_specs) and sharding.dim_specs[axis].axes:
                 sharded_axis_name = sharding.dim_specs[axis].axes[0]
         
@@ -169,16 +169,16 @@ class AllGatherOp(CollectiveOperation):
             from ...core.sharding.spec import compute_global_shape
             from max.graph import Shape
             
-            batch_dims = sharded_tensor._impl.batch_dims
+            batch_dims = sharded_tensor.batch_dims
             
             # Get local physical shape
-            local_shape = sharded_tensor._impl.physical_local_shape(0)
+            local_shape = sharded_tensor.physical_local_shape(0)
             if local_shape is None:
                 local_shape = sharded_tensor.shape  # Fallback
             
             # Compute global shape from local shape and current sharding
-            if sharded_tensor._impl.sharding and local_shape is not None:
-                global_shape_tuple = compute_global_shape(tuple(local_shape), sharded_tensor._impl.sharding)
+            if sharded_tensor.sharding and local_shape is not None:
+                global_shape_tuple = compute_global_shape(tuple(local_shape), sharded_tensor.sharding)
                 global_shape = Shape(global_shape_tuple)
             else:
                 global_shape = local_shape
@@ -188,9 +188,9 @@ class AllGatherOp(CollectiveOperation):
             replicated_spec = ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)]) if mesh else None
             
             impl = TensorImpl(
-                storages=sharded_tensor._impl._storages,  # Copy storages!
-                values=sharded_tensor._impl._values,  # Keep raw for passthrough
-                traced=sharded_tensor._impl.traced,
+                storages=sharded_tensor._storages,  # Copy storages!
+                values=sharded_tensor._values,  # Keep raw for passthrough
+                traced=sharded_tensor.traced,
                 batch_dims=batch_dims,
             )
             impl.sharding = replicated_spec
@@ -208,9 +208,9 @@ class AllGatherOp(CollectiveOperation):
         from ...core.sharding.spec import compute_global_shape
         from max.graph import Shape
         
-        local_shape = sharded_tensor._impl.physical_local_shape(0)
-        if sharded_tensor._impl.sharding and local_shape is not None:
-            global_shape_tuple = compute_global_shape(tuple(local_shape), sharded_tensor._impl.sharding)
+        local_shape = sharded_tensor.physical_local_shape(0)
+        if sharded_tensor.sharding and local_shape is not None:
+            global_shape_tuple = compute_global_shape(tuple(local_shape), sharded_tensor.sharding)
             global_shape = Shape(global_shape_tuple)
         else:
              # Fallback if no local shape info
@@ -219,8 +219,8 @@ class AllGatherOp(CollectiveOperation):
         # Create output sharding spec: only the gathered dimension becomes replicated
         # Other dimensions keep their original sharding
         output_spec = None
-        if mesh and sharded_tensor._impl.sharding:
-            input_spec = sharded_tensor._impl.sharding
+        if mesh and sharded_tensor.sharding:
+            input_spec = sharded_tensor.sharding
             new_dim_specs = []
             for dim_idx, dim_spec in enumerate(input_spec.dim_specs):
                 if dim_idx == axis:
@@ -234,15 +234,15 @@ class AllGatherOp(CollectiveOperation):
         # Create output tensor with global shape info computed dynamically
         impl = TensorImpl(
             values=gathered,
-            traced=sharded_tensor._impl.traced,
-            batch_dims=sharded_tensor._impl.batch_dims,
+            traced=sharded_tensor.traced,
+            batch_dims=sharded_tensor.batch_dims,
         )
         impl.sharding = output_spec
         # NABLA 2026: Cached metadata removed.
         output = Tensor(impl=impl)
         
         # Setup tracing refs for graph traversal
-        self._setup_output_refs(output, (sharded_tensor,), {'axis': axis}, sharded_tensor._impl.traced)
+        self._setup_output_refs(output, (sharded_tensor,), {'axis': axis}, sharded_tensor.traced)
         
         return output
 
@@ -364,10 +364,10 @@ class GatherAllAxesOp(Operation):
         from ...core.sharding.spec import ShardingSpec, DimSpec
         from max import graph as g
         
-        if not sharded_tensor._impl.sharding:
+        if not sharded_tensor.sharding:
             return sharded_tensor  # No sharding info
         
-        spec = sharded_tensor._impl.sharding
+        spec = sharded_tensor.sharding
         mesh = spec.mesh
         
         if spec.is_fully_replicated():
@@ -389,8 +389,8 @@ class GatherAllAxesOp(Operation):
         
         impl = TensorImpl(
             values=[global_tensor],
-            traced=sharded_tensor._impl.traced,
-            batch_dims=sharded_tensor._impl.batch_dims,
+            traced=sharded_tensor.traced,
+            batch_dims=sharded_tensor.batch_dims,
         )
         impl.sharding = replicated_spec
         return Tensor(impl=impl)

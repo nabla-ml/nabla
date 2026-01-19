@@ -102,7 +102,7 @@ class TestNestedVmapAdvanced:
         # Batch -> dp (from outer vmap)
         # Time -> Replicated (or not sharded)
         # Features -> tp (propagated from shard(tp))
-        spec = result._impl.sharding
+        spec = result.sharding
         assert spec is not None
         assert "dp" in spec.dim_specs[0].axes
         assert "tp" in spec.dim_specs[2].axes
@@ -197,7 +197,7 @@ class TestNestedVmapAdvanced:
         # Batch logic: Axis 0 (Batch) must have 'dp'
         # Heads: Axis 1. Not sharded explicitly.
         # S, S: Axes 2, 3. Matmul output (AllReduced) -> Replicated.
-        spec = result_nabla._impl.sharding
+        spec = result_nabla.sharding
         assert "dp" in spec.dim_specs[0].axes
         # Check inner dims are replicated (or at least not 'tp')
         # Actually 'tp' was reduced out.
@@ -281,7 +281,7 @@ class TestNestedVmapAdvanced:
         # Batch: dp
         # Seq: Rep
         # Dout: Rep (AllReduced)
-        spec = res_nabla._impl.sharding
+        spec = res_nabla.sharding
         assert "dp" in spec.dim_specs[0].axes
 
 
@@ -337,7 +337,7 @@ class TestNestedViewAndReduction:
         assert_allclose(result, expected)
         
         # Verify Sharding
-        spec = result._impl.sharding
+        spec = result.sharding
         # Batch (axis 0) MUST be on dp
         assert "dp" in spec.dim_specs[0].axes
         # C (axis 3) should be Replicated (because ReshapeOp un-shards logical)
@@ -377,7 +377,7 @@ class TestNestedViewAndReduction:
         assert_allclose(result, expected, rtol=1e-4)
         
         # Verify Batch sharding is preserved
-        spec = result._impl.sharding
+        spec = result.sharding
         assert "dp" in spec.dim_specs[0].axes
 
     def test_stress_complex_chain(self, mesh_3d_2x4x2):
@@ -449,7 +449,7 @@ class TestNestedViewAndReduction:
         assert_shape(result, (B, S, Dout // 2))
         assert_allclose(result, expected, rtol=1e-4)
         
-        spec = result._impl.sharding
+        spec = result.sharding
         assert "dp" in spec.dim_specs[0].axes
         assert "pp" in spec.dim_specs[1].axes
 
@@ -547,7 +547,7 @@ class TestReviewStress:
         assert_allclose(result, expected)
         
         # Verify Sharding
-        spec = result._impl.sharding
+        spec = result.sharding
         # Batch dims B, T must be dp, pp
         # Check dim_specs[0] ('dp') and dim_specs[1] ('pp')
         # Note: vmap might permute them physically, but sharding spec should track.

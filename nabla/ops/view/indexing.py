@@ -29,8 +29,8 @@ class GatherOp(Operation):
     
     def __call__(self, x: "Tensor", indices: "Tensor", *, axis: int = 0) -> "Tensor":
         """Call gather with logical axis translation."""
-        data_batch_dims = x._impl.batch_dims
-        indices_batch_dims = indices._impl.batch_dims
+        data_batch_dims = x.batch_dims
+        indices_batch_dims = indices.batch_dims
         logical_ndim = len(x.shape)
         
         # Translate logical axis to physical axis
@@ -120,7 +120,7 @@ class ScatterOp(Operation):
         axis: int = 0
     ) -> "Tensor":
         """Call scatter with logical axis translation."""
-        batch_dims = x._impl.batch_dims
+        batch_dims = x.batch_dims
         logical_ndim = len(x.shape)
         
         # Translate logical axis to physical axis

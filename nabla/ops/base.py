@@ -244,22 +244,22 @@ class BinaryOperation(Operation):
             y = view_ops.broadcast_to(y, target_logical)
         
         # Step 2: Broadcast PHYSICAL shapes (batch dims) - use GLOBAL shapes
-        x_batch_dims = x._impl.batch_dims
-        y_batch_dims = y._impl.batch_dims
+        x_batch_dims = x.batch_dims
+        y_batch_dims = y.batch_dims
 
         # Get GLOBAL batch shape from physical_global_shape
         if x_batch_dims >= y_batch_dims:
-            global_phys = x._impl.physical_global_shape or x.local_shape
+            global_phys = x.physical_global_shape or x.local_shape
             batch_shape = tuple(int(d) for d in global_phys[:x_batch_dims])
         else:
-            global_phys = y._impl.physical_global_shape or y.local_shape
+            global_phys = y.physical_global_shape or y.local_shape
             batch_shape = tuple(int(d) for d in global_phys[:y_batch_dims])
         
         target_physical = batch_shape + target_logical
         
         # Optimize: Skip physical broadcast if specs match target
-        x_global = x._impl.physical_global_shape or x.local_shape
-        y_global = y._impl.physical_global_shape or y.local_shape
+        x_global = x.physical_global_shape or x.local_shape
+        y_global = y.physical_global_shape or y.local_shape
         
         # We need to broadcast strict physical shapes including batch dims
         if tuple(int(d) for d in x_global) != target_physical:
@@ -304,7 +304,7 @@ class LogicalAxisOperation(Operation):
     axis_arg_names: set[str] = {'axis', 'dim'}
     
     def __call__(self, x: Tensor, **kwargs: Any) -> Tensor:
-        batch_dims = x._impl.batch_dims
+        batch_dims = x.batch_dims
         logical_ndim = len(x.shape)
         
         translated = {}
@@ -460,11 +460,11 @@ class LogicalShapeOperation(Operation):
     """
     
     def __call__(self, x: Tensor, *, shape: tuple[int, ...]) -> Tensor:
-        batch_dims = x._impl.batch_dims
+        batch_dims = x.batch_dims
         
         if batch_dims > 0:
-            if x._impl.physical_global_shape is not None:
-                global_batch_shape = tuple(int(d) for d in x._impl.physical_global_shape[:batch_dims])
+            if x.physical_global_shape is not None:
+                global_batch_shape = tuple(int(d) for d in x.physical_global_shape[:batch_dims])
             else:
                 global_phys = x.local_shape
                 global_batch_shape = tuple(int(d) for d in global_phys[:batch_dims])

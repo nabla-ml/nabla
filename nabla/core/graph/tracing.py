@@ -211,7 +211,7 @@ def trace(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Trace:
     original_traced: dict[int, bool] = {}
     for t in input_tensors:
         original_traced[id(t)] = t.traced
-        t._impl.traced = True
+        t.traced = True
     
     try:
         # Execute function
@@ -225,7 +225,7 @@ def trace(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Trace:
         # Restore original traced state
         for t in input_tensors:
             if id(t) in original_traced:
-                t._impl.traced = original_traced[id(t)]
+                t.traced = original_traced[id(t)]
 
 
 

@@ -273,7 +273,7 @@ def with_batch_dims(tree: Any, delta: int) -> Any:
     """Adjust batch_dims on all tensors in a pytree (In-place)."""
     from ..tensor.api import Tensor
     def _adj(x: Any) -> Any:
-        if isinstance(x, Tensor): x._impl.batch_dims += delta
+        if isinstance(x, Tensor): x.batch_dims += delta
         return x
     return tree_map(_adj, tree)
 

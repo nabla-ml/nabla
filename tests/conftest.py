@@ -84,13 +84,13 @@ def assert_dtype(result: Tensor, expected_dtype):
 
 def assert_batch_dims(result: Tensor, expected: int):
     """Assert tensor batch_dims matches expected."""
-    actual = result._impl.batch_dims
+    actual = result.batch_dims
     assert actual == expected, f"batch_dims mismatch: got {actual}, expected {expected}"
 
 
 def assert_is_sharded(result: Tensor, expected: bool = True):
     """Assert tensor is/isn't sharded."""
-    actual = result._impl.is_sharded
+    actual = result.is_sharded
     assert actual == expected, f"is_sharded mismatch: got {actual}, expected {expected}"
 
 

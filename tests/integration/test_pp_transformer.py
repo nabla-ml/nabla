@@ -40,7 +40,7 @@ def get_pipeline_perm(mesh):
 
 def full_pipeline_step(x, weights):
     y = vmap(transformer_layer, in_axes=(0, 0), out_axes=0)(x, weights)
-    mesh = y._impl.sharding.mesh if hasattr(y, '_impl') and y._impl.sharding else None
+    mesh = y.sharding.mesh if hasattr(y, '_impl') and y.sharding else None
     if mesh:
         perm = get_pipeline_perm(mesh)
         if perm:

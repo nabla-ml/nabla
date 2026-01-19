@@ -65,10 +65,10 @@ def shard_map(
                     spec = in_specs.get(i)
                     if spec:
                         from ..core.sharding.spec import needs_reshard
-                        if x._impl.sharding and needs_reshard(x._impl.sharding, spec):
+                        if x.sharding and needs_reshard(x.sharding, spec):
                             import warnings
                             warnings.warn(
-                                f"shard_map input {i} is already sharded with {x._impl.sharding} "
+                                f"shard_map input {i} is already sharded with {x.sharding} "
                                 f"but in_spec wants {spec}. Using existing sharding. "
                                 f"To force a specific sharding, pass an unsharded tensor.",
                                 UserWarning
@@ -118,8 +118,8 @@ def shard_map(
                     flat_check, _ = pytree.tree_flatten(dual_args)
                     input_shardings = []
                     for d in flat_check:
-                        if isinstance(d, Tensor) and hasattr(d, '_impl') and d._impl.sharding:
-                            input_shardings.append(str(d._impl.sharding))
+                        if isinstance(d, Tensor) and hasattr(d, '_impl') and d.sharding:
+                            input_shardings.append(str(d.sharding))
                         else:
                             input_shardings.append("unsharded")
                     print(f"[shard_map] Node {node_idx} [{refs.op.name}] INPUT shardings: {input_shardings}")
@@ -132,8 +132,8 @@ def shard_map(
                     flat_res_check = [x for x in pytree.tree_leaves(result) if isinstance(x, Tensor)]
                     output_shardings = []
                     for r in flat_res_check:
-                        if hasattr(r, '_impl') and r._impl.sharding:
-                            output_shardings.append(str(r._impl.sharding))
+                        if hasattr(r, '_impl') and r.sharding:
+                            output_shardings.append(str(r.sharding))
                         else:
                             output_shardings.append("unsharded")
                     print(f"[shard_map] Node {node_idx} [{refs.op.name}] OUTPUT shardings (eager): {output_shardings}")

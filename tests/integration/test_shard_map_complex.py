@@ -85,7 +85,7 @@ class TestShardMapComplex(unittest.TestCase):
         sharded_fn = shard_map(lambda x: x, self.mesh, in_specs, out_specs)
         
         res = sharded_fn(x)
-        self.assertEqual(res._impl.sharding.dim_specs[0].axes, ["x"])
+        self.assertEqual(res.sharding.dim_specs[0].axes, ["x"])
         np.testing.assert_allclose(res.to_numpy(), x_np)
 
 if __name__ == "__main__":

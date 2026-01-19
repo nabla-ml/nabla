@@ -22,8 +22,8 @@ def get_mesh_from_args(args: tuple) -> Optional["DeviceMesh"]:
     from ..tensor import Tensor
     from .. import pytree
     for a in pytree.tree_leaves(args):
-        if isinstance(a, Tensor) and a._impl.sharding:
-            return a._impl.sharding.mesh
+        if isinstance(a, Tensor) and a.sharding:
+            return a.sharding.mesh
     return None
 
 
@@ -65,7 +65,7 @@ def reshard_inputs(
         if required is None:
             return x
         
-        current = x._impl.sharding
+        current = x.sharding
         
         if current is None or current.is_fully_replicated():
             if required is not None and not required.is_fully_replicated():
@@ -123,16 +123,16 @@ def infer_output_sharding(
     input_specs = []
     input_shapes = []
     for t in leaves:
-        spec = t._impl.sharding
+        spec = t.sharding
         
-        shape = t._impl.physical_global_shape
-        if shape is None and (t._impl.sharding is None or t._impl.sharding.is_fully_replicated()):
-            shape = t._impl.physical_shape
+        shape = t.physical_global_shape
+        if shape is None and (t.sharding is None or t.sharding.is_fully_replicated()):
+            shape = t.physical_shape
             
         if shape is None:
-            batch_dims = t._impl.batch_dims
-            if batch_dims > 0 and t._impl.batch_shape is not None:
-                batch_ints = tuple(dim_to_int(d) for d in t._impl.batch_shape)
+            batch_dims = t.batch_dims
+            if batch_dims > 0 and t.batch_shape is not None:
+                batch_ints = tuple(dim_to_int(d) for d in t.batch_shape)
                 logical_ints = tuple(dim_to_int(d) for d in t.shape)
                 phys_shape_tuple = batch_ints + logical_ints
             else:

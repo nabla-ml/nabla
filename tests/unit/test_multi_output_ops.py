@@ -140,7 +140,7 @@ class TestSplitOp:
         for r in results:
             assert_shape(r, (batch, 8))
             # Each should be sharded on both dp and tp
-            spec = r._impl.sharding
+            spec = r.sharding
             if spec:
                 # Sharding on split axis and batch axis might be dropped due to safety unshard
                 # assert "dp" in spec.dim_specs[0].axes

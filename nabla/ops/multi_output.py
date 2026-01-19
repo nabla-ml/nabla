@@ -30,7 +30,7 @@ class SplitOp(LogicalAxisOperation):
         
         # 1. Determine physical split axis
         rank = len(x.shape)
-        batch_dims = x._impl.batch_dims
+        batch_dims = x.batch_dims
         axis = kwargs.get("axis", 0)
         
         if axis < 0:
@@ -39,7 +39,7 @@ class SplitOp(LogicalAxisOperation):
         phys_axis = batch_dims + axis
         
         # 2. Check if input is sharded on this axis
-        spec = x._impl.sharding
+        spec = x.sharding
         if spec and phys_axis < len(spec.dim_specs):
             ds = spec.dim_specs[phys_axis]
             if ds.axes:  # Check if sharded (non-empty axes)
@@ -173,7 +173,7 @@ class ChunkOp(LogicalAxisOperation):
         from ..core.sharding.spec import DimSpec, ShardingSpec
         
         rank = len(x.shape)
-        batch_dims = x._impl.batch_dims
+        batch_dims = x.batch_dims
         axis = kwargs.get("axis", 0)
         
         if axis < 0:
@@ -181,7 +181,7 @@ class ChunkOp(LogicalAxisOperation):
         
         phys_axis = batch_dims + axis
         
-        spec = x._impl.sharding
+        spec = x.sharding
         if spec and phys_axis < len(spec.dim_specs):
             ds = spec.dim_specs[phys_axis]
             if ds.axes:  # Check if sharded (non-empty axes)

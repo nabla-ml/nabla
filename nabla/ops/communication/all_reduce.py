@@ -53,14 +53,14 @@ class AllReduceOp(CollectiveOperation):
         """Check if all_reduce should proceed."""
         # Check both values and storages for multi-shard tensors
         has_multiple_shards = (
-            (tensor._impl._values and len(tensor._impl._values) > 1) or
-            (tensor._impl._storages and len(tensor._impl._storages) > 1)
+            (tensor._values and len(tensor._values) > 1) or
+            (tensor._storages and len(tensor._storages) > 1)
         )
         if not has_multiple_shards:
             return False
         
         # IDEMPOTENCY: If tensor is already fully replicated, skip reduction
-        if tensor._impl.sharding and tensor._impl.sharding.is_fully_replicated():
+        if tensor.sharding and tensor.sharding.is_fully_replicated():
             return False
         
         return True
@@ -98,7 +98,7 @@ class AllReduceOp(CollectiveOperation):
     def _compute_output_spec(self, input_tensor, results, **kwargs):
         """Output is fully replicated."""
         from ...core.sharding.spec import ShardingSpec, DimSpec
-        mesh = input_tensor._impl.sharding.mesh if input_tensor._impl.sharding else None
+        mesh = input_tensor.sharding.mesh if input_tensor.sharding else None
         
         if mesh and results:
             rank = len(results[0].type.shape)
@@ -191,7 +191,7 @@ class PMeanOp(CollectiveOperation):
     def _compute_output_spec(self, input_tensor, results, **kwargs):
         """Output is fully replicated."""
         from ...core.sharding.spec import ShardingSpec, DimSpec
-        mesh = input_tensor._impl.sharding.mesh if input_tensor._impl.sharding else None
+        mesh = input_tensor.sharding.mesh if input_tensor.sharding else None
         
         if mesh and results:
             rank = len(results[0].type.shape)

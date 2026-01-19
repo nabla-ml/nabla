@@ -115,9 +115,9 @@ class ReshapeOp(LogicalShapeOperation):
         """
         from ...core.sharding.spec import DimSpec, ShardingSpec
         
-        spec = x._impl.sharding
+        spec = x.sharding
         if spec:
-            batch_dims = x._impl.batch_dims
+            batch_dims = x.batch_dims
             logical_rank = len(x.shape)
             
             # Check if any logical dimension is sharded
@@ -266,7 +266,7 @@ class ConcatenateOp(LogicalAxisOperation):
             raise ValueError("concatenate expects at least one tensor")
         
         first = tensors[0]
-        batch_dims = first._impl.batch_dims
+        batch_dims = first.batch_dims
         
         if axis < 0:
             axis += len(first.shape)

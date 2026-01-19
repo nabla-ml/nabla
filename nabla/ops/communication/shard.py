@@ -37,7 +37,7 @@ class ShardOp(Operation):
     def infer_sharding_spec(self, args, mesh, kwargs):
         spec = kwargs['spec']
         # Return input sharding to allow partial reuse/identity
-        input_spec = args[0]._impl.sharding
+        input_spec = args[0].sharding
         return spec, [input_spec], False
     
     def maxpr(
@@ -91,7 +91,7 @@ class ShardOp(Operation):
         if isinstance(x, Tensor):
             # Hydrate values if needed (realized tensor)
             x.hydrate()
-            vals = x._impl._values  # Use raw after hydrate for indexing
+            vals = x._values  # Use raw after hydrate for indexing
             
             if vals:
                 # Eager mode: extract underlying value(s)
@@ -100,8 +100,8 @@ class ShardOp(Operation):
                     effective_x = vals[shard_idx]
                     
                     # If input had sharding, we must compute its global offset 
-                    if x._impl.sharding:
-                        for d, dim_spec in enumerate(x._impl.sharding.dim_specs):
+                    if x.sharding:
+                        for d, dim_spec in enumerate(x.sharding.dim_specs):
                             # Calculate global offset for this dimension on this shard
                             offset = 0
                             shard_pos = 0
@@ -188,15 +188,15 @@ class ShardOp(Operation):
         
         # IDEMPOTENCY CHECK: If input is already correctly sharded, return identity
         # Skip this check when called from reshard_tensor to avoid recursion
-        if not _bypass_idempotency and isinstance(x, Tensor) and x._impl.sharding:
-            if not needs_reshard(x._impl.sharding, target_spec):
+        if not _bypass_idempotency and isinstance(x, Tensor) and x.sharding:
+            if not needs_reshard(x.sharding, target_spec):
                 # Already correctly sharded - return identity (no-op)
                 return x
             
             # Different sharding - need to reshard via all_gather + shard
             # This handles the case where input is sharded on 'dp' but we want 'tp'
             from ...core.sharding.spmd import reshard_tensor
-            return reshard_tensor(x, x._impl.sharding, target_spec, mesh)
+            return reshard_tensor(x, x.sharding, target_spec, mesh)
         
         # Standard path: input is unsharded, shard it according to spec
         
@@ -204,10 +204,10 @@ class ShardOp(Operation):
         global_shape = None
         if isinstance(x, Tensor):
             # For sharded inputs, compute global from local + sharding
-            local = x._impl.physical_local_shape(0)
-            if local is not None and x._impl.sharding:
+            local = x.physical_local_shape(0)
+            if local is not None and x.sharding:
                 from ...core.sharding.spec import compute_global_shape
-                global_shape = compute_global_shape(tuple(local), x._impl.sharding)
+                global_shape = compute_global_shape(tuple(local), x.sharding)
             elif local is not None:
                 global_shape = tuple(int(d) for d in local)
         
@@ -218,7 +218,7 @@ class ShardOp(Operation):
         with GRAPH.graph:
             # Convert input to TensorValue (lazy) or keep as Tensor (eager simulation)
             x_input = x
-            if isinstance(x, Tensor) and not x._impl._values:
+            if isinstance(x, Tensor) and not x._values:
                  # No values even after hydrate - use TensorValue
                  x_input = g.TensorValue(x)
             
@@ -230,8 +230,8 @@ class ShardOp(Operation):
         spec = ShardingSpec(mesh, dim_specs, replicated_axes=replicated_axes or set())
         impl = TensorImpl(
             values=shard_values,
-            traced=x._impl.traced if isinstance(x, Tensor) else False,
-            batch_dims=x._impl.batch_dims if isinstance(x, Tensor) else 0,
+            traced=x.traced if isinstance(x, Tensor) else False,
+            batch_dims=x.batch_dims if isinstance(x, Tensor) else 0,
         )
         impl.sharding = spec
         
@@ -240,7 +240,7 @@ class ShardOp(Operation):
         output = Tensor(impl=impl)
         
         # Setup tracing refs for graph traversal
-        traced = x._impl.traced if isinstance(x, Tensor) else False
+        traced = x.traced if isinstance(x, Tensor) else False
         self._setup_output_refs(output, (x,), {'mesh': mesh, 'dim_specs': dim_specs}, traced)
         
         return output

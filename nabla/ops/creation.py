@@ -204,7 +204,7 @@ def full(
     dtype, device = defaults(dtype, device)
     t = _full_op(shape, value, dtype, device)
     if traced:
-        t._impl.traced = True
+        t.traced = True
     return t
 
 
@@ -229,7 +229,7 @@ def zeros(
     dtype, device = defaults(dtype, device)
     t = _zeros_op(shape, dtype, device)
     if traced:
-        t._impl.traced = True
+        t.traced = True
     return t
 
 
@@ -254,7 +254,7 @@ def ones(
     dtype, device = defaults(dtype, device)
     t = _ones_op(shape, dtype, device)
     if traced:
-        t._impl.traced = True
+        t.traced = True
     return t
 
 

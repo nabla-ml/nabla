@@ -29,14 +29,14 @@ def _unwrap_tensor(x: Any) -> Any:
     """Unwrap Tensor to TensorValue for MAX ops."""
     from ..core.tensor import Tensor
     if isinstance(x, Tensor):
-        if not x._impl._values:
+        if not x._values:
              # Ensure realized or lazy value exists
              # For control flow inside maxpr, we expect _values to be populated (shards)
              pass
         # Return the first value if it's a list (implicit single shard or replicated)
         # TODO: Handle multi-shard control flow properly (requires vector control flow or pmap)
-        if hasattr(x, '_impl') and x._impl._values:
-             return x._impl._values[0] 
+        if hasattr(x, '_impl') and x._values:
+             return x._values[0] 
         return x
     return x
 
@@ -163,9 +163,9 @@ class WhileLoopOp(Operation):
         
         # Collect metadata from init_val
         leaves = pytree.tree_leaves(init_val)
-        any_traced = any(x._impl.traced for x in leaves if isinstance(x, Tensor))
-        max_batch_dims = max((x._impl.batch_dims for x in leaves if isinstance(x, Tensor)), default=0)
-        any_sharded = any(x._impl.is_sharded for x in leaves if isinstance(x, Tensor))
+        any_traced = any(x.traced for x in leaves if isinstance(x, Tensor))
+        max_batch_dims = max((x.batch_dims for x in leaves if isinstance(x, Tensor)), default=0)
+        any_sharded = any(x.is_sharded for x in leaves if isinstance(x, Tensor))
         
         # 2. Determine execution mode
         mesh = spmd.get_mesh_from_args(leaves) if any_sharded else None
@@ -175,15 +175,15 @@ class WhileLoopOp(Operation):
         # We need per-leaf specs.
         leaf_specs = []
         for x in leaves:
-            if isinstance(x, Tensor) and x._impl.sharding:
-                 leaf_specs.append(x._impl.sharding)
+            if isinstance(x, Tensor) and x.sharding:
+                 leaf_specs.append(x.sharding)
             else:
                  # If mesh exists, default to Replicated Open
                  if mesh:
                       rank = len(x.shape) if isinstance(x, Tensor) else 0
                       # Use PHYSICAL rank? 
                       if isinstance(x, Tensor):
-                          rank = len(x.shape) + x._impl.batch_dims # Physical rank?
+                          rank = len(x.shape) + x.batch_dims # Physical rank?
                           # But if not sharded, batch_dims might be 0 or simulated.
                           # Use x.global_shape?
                           # Safest: Create replicated spec.
@@ -244,7 +244,7 @@ class WhileLoopOp(Operation):
         
         from ..core.tensor import Tensor
         def wrap(x): return Tensor(value=x)
-        def unwrap(x): return x._impl._values[0] if isinstance(x, Tensor) else x
+        def unwrap(x): return x._values[0] if isinstance(x, Tensor) else x
         
         def max_cond_fn(*args_flat):
             args_struct = pytree.tree_unflatten(pytree.tree_structure(init_val_shard), args_flat)

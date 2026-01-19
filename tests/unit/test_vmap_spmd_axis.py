@@ -73,8 +73,8 @@ class TestSpmdAxisNameBasic:
         
         # Verify batch dimension is sharded on spmd_axis
         # Note: after vmap, batch_dims = 0, so physical shape = logical shape
-        if result._impl.sharding:
-            spec = result._impl.sharding
+        if result.sharding:
+            spec = result.sharding
             # The first physical dimension should be sharded on spmd_axis
             assert spmd_axis in spec.dim_specs[0].axes, \
                 f"Expected batch dim sharded on {spmd_axis}, got {spec.dim_specs[0]}"
@@ -101,8 +101,8 @@ class TestSpmdAxisNameBasic:
         assert_allclose(result, expected)
         
         # Verify sharding
-        if result._impl.sharding:
-            assert spmd_axis in result._impl.sharding.dim_specs[0].axes
+        if result.sharding:
+            assert spmd_axis in result.sharding.dim_specs[0].axes
     
     @pytest.mark.parametrize("mesh_shape,mesh_axes,spmd_axis", [
         ((2,), ("dp",), "dp"),
@@ -127,8 +127,8 @@ class TestSpmdAxisNameBasic:
         assert_allclose(result, expected, rtol=1e-4)
         
         # First dim should be sharded on spmd_axis
-        if result._impl.sharding:
-            assert spmd_axis in result._impl.sharding.dim_specs[0].axes
+        if result.sharding:
+            assert spmd_axis in result.sharding.dim_specs[0].axes
     
     def test_spmd_asymmetric_mesh(self, mesh_2x4):
         """vmap with spmd_axis_name on asymmetric mesh."""
@@ -144,8 +144,8 @@ class TestSpmdAxisNameBasic:
         assert_allclose(result, expected)
         
         # Verify sharded on dp
-        if result._impl.sharding:
-            assert "dp" in result._impl.sharding.dim_specs[0].axes
+        if result.sharding:
+            assert "dp" in result.sharding.dim_specs[0].axes
 
 
 # =============================================================================
@@ -197,7 +197,7 @@ class TestSpmdAxisWithLogicalSharding:
         assert_allclose(result, expected)
         
         # CRITICAL VERIFICATION: Both axes should be sharded
-        spec = result._impl.sharding
+        spec = result.sharding
         assert spec is not None, "Result should have sharding"
         
         # Physical dim 0 (batch) sharded on dp
@@ -233,7 +233,7 @@ class TestSpmdAxisWithLogicalSharding:
         assert_allclose(result, expected)
         
         # Verify both axes
-        spec = result._impl.sharding
+        spec = result.sharding
         assert "dp" in spec.dim_specs[0].axes
         assert "tp" in spec.dim_specs[1].axes
     
@@ -262,7 +262,7 @@ class TestSpmdAxisWithLogicalSharding:
         assert_allclose(result, expected, rtol=1e-4)
         
         # Verify: batch on dp, output features on tp
-        spec = result._impl.sharding
+        spec = result.sharding
         assert "dp" in spec.dim_specs[0].axes  # Batch
         assert "tp" in spec.dim_specs[2].axes  # Output features (N)
     
@@ -310,7 +310,7 @@ class TestSpmdAxisWithLogicalSharding:
         assert_allclose(result, expected, rtol=1e-4)
         
         # Verify batch sharded on dp
-        spec = result._impl.sharding
+        spec = result.sharding
         assert "dp" in spec.dim_specs[0].axes
     
     def test_spmd_plus_logical_reduction(self, mesh_2x4):
@@ -350,7 +350,7 @@ class TestSpmdAxisWithLogicalSharding:
         assert_allclose(result, expected)
         
         # Result is 1D, batch dim should be sharded on dp
-        spec = result._impl.sharding
+        spec = result.sharding
         if spec:
             assert "dp" in spec.dim_specs[0].axes
     
@@ -374,7 +374,7 @@ class TestSpmdAxisWithLogicalSharding:
         assert_allclose(result, expected)
         
         # Verify sharding on both dp and tp
-        spec = result._impl.sharding
+        spec = result.sharding
         assert "dp" in spec.dim_specs[0].axes
         assert "tp" in spec.dim_specs[1].axes
 
@@ -409,7 +409,7 @@ class TestSpmdAxisNestedVmap:
         assert_allclose(result, expected)
         
         # Outer batch should be sharded on dp
-        spec = result._impl.sharding
+        spec = result.sharding
         if spec:
             assert "dp" in spec.dim_specs[0].axes
     
@@ -438,7 +438,7 @@ class TestSpmdAxisNestedVmap:
         assert_allclose(result, expected)
         
         # Verify both shardings
-        spec = result._impl.sharding
+        spec = result.sharding
         assert "dp" in spec.dim_specs[0].axes  # Outer batch
         assert "tp" in spec.dim_specs[2].axes  # Features
     
@@ -467,7 +467,7 @@ class TestSpmdAxisNestedVmap:
         assert_allclose(result, expected)
         
         # All three axes should be sharded
-        spec = result._impl.sharding
+        spec = result.sharding
         assert "dp" in spec.dim_specs[0].axes  # Outer batch
         assert "pp" in spec.dim_specs[1].axes  # Inner batch
         assert "tp" in spec.dim_specs[2].axes  # Features

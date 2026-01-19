@@ -24,19 +24,19 @@ def _copy_impl_with_batch_dims(x: "Tensor", new_batch_dims: int, op: "Operation"
     from ...core import TensorImpl
     
     new_impl = TensorImpl(
-        storages=x._impl._storages,
-        values=x._impl._values,
-        traced=x._impl.traced,
+        storages=x._storages,
+        values=x._values,
+        traced=x.traced,
         batch_dims=new_batch_dims,
     )
     # Sharding must be set after construction (not a constructor arg)
-    new_impl.sharding = x._impl.sharding
+    new_impl.sharding = x.sharding
 
     
     output = Tensor(impl=new_impl)
     
     # Setup tracing refs if op provided
-    if op is not None and x._impl.traced:
+    if op is not None and x.traced:
         op._setup_output_refs(output, (x,), kwargs or {}, True)
     
     return output
@@ -51,7 +51,7 @@ class IncrBatchDimsOp(Operation):
         return x
     
     def __call__(self, x: Tensor) -> Tensor:
-        return _copy_impl_with_batch_dims(x, x._impl.batch_dims + 1, op=self, kwargs={})
+        return _copy_impl_with_batch_dims(x, x.batch_dims + 1, op=self, kwargs={})
 
 
 class DecrBatchDimsOp(Operation):
@@ -63,9 +63,9 @@ class DecrBatchDimsOp(Operation):
         return x
     
     def __call__(self, x: Tensor) -> Tensor:
-        if x._impl.batch_dims <= 0:
+        if x.batch_dims <= 0:
             raise ValueError("Cannot decrement batch_dims below 0")
-        return _copy_impl_with_batch_dims(x, x._impl.batch_dims - 1, op=self, kwargs={})
+        return _copy_impl_with_batch_dims(x, x.batch_dims - 1, op=self, kwargs={})
 
 
 class MoveAxisToBatchDimsOp(Operation):
@@ -81,7 +81,7 @@ class MoveAxisToBatchDimsOp(Operation):
         return ops.permute(x, tuple(order))
     
     def __call__(self, x: Tensor, *, axis: int) -> Tensor:
-        batch_dims = x._impl.batch_dims
+        batch_dims = x.batch_dims
         logical_rank = len(x.shape)
         
         if axis < 0:
@@ -105,7 +105,7 @@ class MoveAxisFromBatchDimsOp(Operation):
         return ops.permute(x, tuple(order))
     
     def __call__(self, x: Tensor, *, batch_axis: int = 0, logical_destination: int = 0) -> Tensor:
-        current_batch_dims = x._impl.batch_dims
+        current_batch_dims = x.batch_dims
         if current_batch_dims <= 0:
             raise ValueError("No batch dims to move from")
         

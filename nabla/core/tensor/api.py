@@ -97,6 +97,14 @@ class Tensor(DLPackArray, HasTensorValue):
             self._impl._values = [value]
 
     @property
+    def _values(self) -> list[graph.BufferValue | graph.TensorValue]:
+         return self._impl._values
+
+    @_values.setter
+    def _values(self, value: list[graph.BufferValue | graph.TensorValue]) -> None:
+         self._impl._values = value
+
+    @property
     def values(self) -> list[graph.TensorValue]:
         """Get all graph values as TensorValues.
         
@@ -142,6 +150,10 @@ class Tensor(DLPackArray, HasTensorValue):
     def batch_dims(self) -> int:
         """Number of batch dimensions (prefix of physical shape, used by vmap)."""
         return self._impl.batch_dims
+    
+    @batch_dims.setter
+    def batch_dims(self, value: int) -> None:
+        self._impl.batch_dims = value
     
     @property
     def op_kwargs(self) -> dict[str, Any]:
@@ -240,10 +252,36 @@ class Tensor(DLPackArray, HasTensorValue):
             ShardingSpec object if sharded, else None.
         """
         return self._impl.sharding
+    
+    @sharding.setter
+    def sharding(self, value: Any) -> None:
+        self._impl.sharding = value
 
     @property
     def is_sharded(self) -> bool:
         return self._impl.is_sharded
+
+    @property
+    def is_realized(self) -> bool:
+        return self._impl.is_realized
+
+    @property
+    def tangent(self) -> TensorImpl | None:
+        return self._impl.tangent
+
+    @tangent.setter
+    def tangent(self, value: TensorImpl | None) -> None:
+        self._impl.tangent = value
+    
+    @property
+    def batch_shape(self) -> graph.Shape | None:
+         return self._impl.batch_shape
+
+    def physical_local_shape(self, shard_idx: int = 0) -> graph.Shape | None:
+        return self._impl.physical_local_shape(shard_idx)
+
+    def logical_local_shape(self, shard_idx: int = 0) -> graph.Shape | None:
+        return self._impl.logical_local_shape(shard_idx)
 
     @property
     def local_shape(self) -> graph.Shape | None:
@@ -257,6 +295,11 @@ class Tensor(DLPackArray, HasTensorValue):
     @property
     def global_shape(self) -> graph.Shape | None:
         """Global logical shape (excludes batch dims)."""
+        return self._impl.physical_global_shape
+
+    @property
+    def physical_global_shape(self) -> graph.Shape | None:
+        """Alias for global_shape to support refactoring."""
         return self._impl.physical_global_shape
 
     @property

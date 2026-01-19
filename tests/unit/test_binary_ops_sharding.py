@@ -350,11 +350,11 @@ class TestShardingPropagationVerification:
         result = add(a, b)
         
         # Verify result is sharded
-        assert result._impl.is_sharded
-        assert result._impl.sharding is not None
+        assert result.is_sharded
+        assert result.sharding is not None
         
         # Verify sharding spec: axis 0 should be sharded on "dp"
-        sharding = result._impl.sharding
+        sharding = result.sharding
         assert len(sharding.dim_specs) >= 2
         
         # The first dimension should have the dp axis
@@ -374,8 +374,8 @@ class TestShardingPropagationVerification:
         result = mul(a_sharded, b_sharded)
         
         # Verify result sharding
-        assert result._impl.is_sharded
-        sharding = result._impl.sharding
+        assert result.is_sharded
+        sharding = result.sharding
         
         # Both axes should be sharded
         assert sharding.dim_specs[0].axes  # First axis has sharding

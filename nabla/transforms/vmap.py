@@ -227,7 +227,7 @@ def _batch_tensor(tensor: Tensor, axis: AxisSpec, batch_dim, spmd_axis_name: str
     from ..ops import communication as comm_ops
     from max.graph.dim import StaticDim
     
-    old_batch_dims = tensor._impl.batch_dims
+    old_batch_dims = tensor.batch_dims
     
     if axis is None:
         t = l_ops.unsqueeze(tensor, axis=0)
@@ -248,10 +248,10 @@ def _batch_tensor(tensor: Tensor, axis: AxisSpec, batch_dim, spmd_axis_name: str
              physical_rank = old_batch_dims + 1 + len(t.shape)
              dim_specs = [DimSpec([]) for _ in range(physical_rank)]
              
-             if tensor._impl.sharding:
-                 for i in range(len(tensor._impl.sharding.dim_specs)):
+             if tensor.sharding:
+                 for i in range(len(tensor.sharding.dim_specs)):
                      if i + 1 < len(dim_specs):
-                        dim_specs[i + 1] = tensor._impl.sharding.dim_specs[i].clone()
+                        dim_specs[i + 1] = tensor.sharding.dim_specs[i].clone()
              
              dim_specs[0] = DimSpec([spmd_axis_name])
              
@@ -274,9 +274,9 @@ def _batch_tensor(tensor: Tensor, axis: AxisSpec, batch_dim, spmd_axis_name: str
             
             dim_specs = [DimSpec([]) for _ in range(physical_rank)]
             
-            if t._impl.sharding:
-                for i in range(min(old_batch_dims, len(t._impl.sharding.dim_specs))):
-                    dim_specs[i] = t._impl.sharding.dim_specs[i].clone()
+            if t.sharding:
+                for i in range(min(old_batch_dims, len(t.sharding.dim_specs))):
+                    dim_specs[i] = t.sharding.dim_specs[i].clone()
             
             dim_specs[old_batch_dims] = DimSpec([spmd_axis_name])
             
@@ -302,7 +302,7 @@ def _unbatch_tensor(tensor: Tensor, axis: AxisSpec, spmd_axis_name: str | None =
     from ..ops import view as l_ops
     from ..ops import view as p_ops
     
-    current_batch_dims = tensor._impl.batch_dims
+    current_batch_dims = tensor.batch_dims
     
     if current_batch_dims > 1:
         t = p_ops.moveaxis(tensor, source=0, destination=current_batch_dims - 1)
@@ -315,7 +315,7 @@ def _unbatch_tensor(tensor: Tensor, axis: AxisSpec, spmd_axis_name: str | None =
         return l_ops.squeeze(t, axis=0)
     
     if axis != 0:
-        new_batch_dims = t._impl.batch_dims
+        new_batch_dims = t.batch_dims
         logical_rank = len(t.shape)
         
         norm_axis = axis if axis >= 0 else logical_rank + axis

@@ -121,8 +121,8 @@ class ReduceScatterOp(CollectiveOperation):
         """Output sharding: the scatter axis becomes sharded."""
         from ...core.sharding.spec import ShardingSpec, DimSpec
         
-        mesh = input_tensor._impl.sharding.mesh if input_tensor._impl.sharding else None
-        input_spec = input_tensor._impl.sharding
+        mesh = input_tensor.sharding.mesh if input_tensor.sharding else None
+        input_spec = input_tensor.sharding
         
         if mesh and input_spec:
             # Create new spec where the scatter axis is sharded

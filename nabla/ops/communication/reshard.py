@@ -140,7 +140,7 @@ class ReshardOp(Operation):
         
         # 1. Handle batch_dims (Logical -> Physical conversion)
         # If tensor has batch_dims, we might need to prepend replicated specs
-        batch_dims = tensor._impl.batch_dims
+        batch_dims = tensor.batch_dims
         current_rank = len(tensor.shape) # Logical rank
         
         if batch_dims > 0:
@@ -150,8 +150,8 @@ class ReshardOp(Operation):
                 batch_specs = [DimSpec([], is_open=True) for _ in range(batch_dims)]
                 
                 # Inherit existing batch specs if possible
-                if tensor._impl.sharding:
-                    current_s = tensor._impl.sharding
+                if tensor.sharding:
+                    current_s = tensor.sharding
                     if len(current_s.dim_specs) >= batch_dims:
                          for i in range(batch_dims):
                              batch_specs[i] = current_s.dim_specs[i].clone()
@@ -164,12 +164,12 @@ class ReshardOp(Operation):
         
         # 2. Construct Target Spec
         target_spec = ShardingSpec(mesh, dim_specs, replicated_axes=replicated_axes or set())
-        current_spec = tensor._impl.sharding
+        current_spec = tensor.sharding
         
         # 3. Check if reshard needed
         if not needs_reshard(current_spec, target_spec):
             if current_spec is None:
-                tensor._impl.sharding = target_spec
+                tensor.sharding = target_spec
             return tensor
 
         # 4. Perform Resharding with SMART per-dimension logic

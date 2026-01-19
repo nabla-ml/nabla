@@ -52,7 +52,7 @@ class TestShardOp:
         assert_allclose(result, np_x)
         
         # Verify sharding spec
-        spec = result._impl.sharding
+        spec = result.sharding
         assert spec.dim_specs[0].axes == ["dp"]
         assert spec.dim_specs[1].axes == []
     
@@ -80,7 +80,7 @@ class TestShardOp:
         assert_is_sharded(result, True)
         assert_allclose(result, np_x)
         
-        spec = result._impl.sharding
+        spec = result.sharding
         assert "dp" in spec.dim_specs[0].axes
         assert "tp" in spec.dim_specs[1].axes
     
@@ -112,7 +112,7 @@ class TestShardOp:
         assert_is_sharded(result, True)
         assert_allclose(result, np_x)
         
-        spec = result._impl.sharding
+        spec = result.sharding
         assert "dp" in spec.dim_specs[0].axes
         assert "tp" in spec.dim_specs[1].axes
         assert "pp" in spec.dim_specs[2].axes
@@ -129,7 +129,7 @@ class TestShardOp:
         assert_is_sharded(result, True)  # Has mesh but fully replicated
         assert_allclose(result, np_x)
         
-        spec = result._impl.sharding
+        spec = result.sharding
         assert spec.is_fully_replicated()
     
     def test_shard_numerical_values(self, mesh_1d_2):
@@ -141,8 +141,8 @@ class TestShardOp:
         result = x.shard(mesh_1d_2, [DimSpec(["dp"]), DimSpec([])])
         
         # Get the shards
-        assert result._impl.is_sharded
-        assert len(result._impl._values) == 2  # 2 shards for 2 devices
+        assert result.is_sharded
+        assert len(result._values) == 2  # 2 shards for 2 devices
         
         # Verify numerical correctness
         assert_allclose(result, np_x)
@@ -170,7 +170,7 @@ class TestAllGatherOp:
         assert_allclose(result, np_x)
         
         # Result should be fully replicated
-        spec = result._impl.sharding
+        spec = result.sharding
         assert spec is None or spec.is_fully_replicated()
     
     def test_all_gather_2d_asymmetric(self, mesh_2x4):
@@ -191,7 +191,7 @@ class TestAllGatherOp:
         assert_allclose(result, np_x)
         
         # Axis 1 should now be replicated (tp gathered)
-        spec = result._impl.sharding
+        spec = result.sharding
         if spec and len(spec.dim_specs) > 1:
             assert "tp" not in spec.dim_specs[1].axes
     
@@ -301,7 +301,7 @@ class TestReshardOp:
         assert_allclose(result, np_x)
         
         # Verify new sharding
-        spec = result._impl.sharding
+        spec = result.sharding
         assert spec.dim_specs[0].axes == []
         assert "tp" in spec.dim_specs[1].axes
     
@@ -319,7 +319,7 @@ class TestReshardOp:
         assert_shape(result, (8, 4))
         assert_allclose(result, np_x)
         
-        spec = result._impl.sharding
+        spec = result.sharding
         assert spec.is_fully_replicated()
     
     def test_reshard_between_different_patterns(self, mesh_2x4):

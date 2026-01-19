@@ -37,7 +37,7 @@ class CollectiveOperation(Operation):
         if not self._should_proceed(sharded_tensor):
             return sharded_tensor
             
-        mesh = sharded_tensor._impl.sharding.mesh if sharded_tensor._impl.sharding else None
+        mesh = sharded_tensor.sharding.mesh if sharded_tensor.sharding else None
         
         # Hydrate values from storages if needed
         sharded_tensor.hydrate()
@@ -53,8 +53,8 @@ class CollectiveOperation(Operation):
         
         impl = TensorImpl(
             values=result_values,
-            traced=sharded_tensor._impl.traced,
-            batch_dims=sharded_tensor._impl.batch_dims,
+            traced=sharded_tensor.traced,
+            batch_dims=sharded_tensor.batch_dims,
         )
         impl.sharding = output_spec
         # NABLA 2026: Cached metadata removed. Global shape computed on demand.
@@ -62,23 +62,23 @@ class CollectiveOperation(Operation):
         output = Tensor(impl=impl)
         
         # 4. Tracing setup
-        self._setup_output_refs(output, (sharded_tensor,), kwargs, sharded_tensor._impl.traced)
+        self._setup_output_refs(output, (sharded_tensor,), kwargs, sharded_tensor.traced)
         
         return output
 
     def _should_proceed(self, tensor):
         """Check if operation should proceed (has sharding and potentially multiple shards)."""
-        if not tensor._impl.sharding:
+        if not tensor.sharding:
             return False
         # If has storages/values, check if > 1 (distributed/sharded) or if we need to enforce algo
-        if (tensor._impl._values and len(tensor._impl._values) > 1) or \
-           (tensor._impl._storages and len(tensor._impl._storages) > 1):
+        if (tensor._values and len(tensor._values) > 1) or \
+           (tensor._storages and len(tensor._storages) > 1):
             return True
         return False
         
     def _compute_output_spec(self, input_tensor, results, **kwargs):
         """Compute output sharding spec. Default: preserve input spec."""
-        return input_tensor._impl.sharding
+        return input_tensor.sharding
 
     def communication_cost(
         self, 
