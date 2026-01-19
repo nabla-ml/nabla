@@ -21,7 +21,7 @@ def execute_operation(op: "Operation", *args: Any, **kwargs: Any) -> Any:
     Unsharded execution is treated as a special case with mesh=None (implicit 1-shard).
     """
     from ..core import Tensor
-    from ..core import TensorImpl, GRAPH, Tensor
+    from ..core import GRAPH, Tensor
 
     from ..core import pytree
     from ..core.sharding import spmd
@@ -119,7 +119,7 @@ def _apply_auto_reduction(op: "Operation", output: Any, mesh: "DeviceMesh", redu
     from ..core import pytree
     from .communication import all_reduce_op
     from ..core.sharding.spec import ShardingSpec, DimSpec
-    from ..core import TensorImpl, GRAPH, Tensor
+    from ..core import GRAPH, Tensor
 
 
     def apply_grouped_all_reduce(t):

@@ -141,7 +141,6 @@ class AllGatherOp(CollectiveOperation):
             Replicated tensor with gathered values
         """
         from ...core import Tensor
-        from ...core import TensorImpl
         from ...core import GRAPH
         from ...core.sharding.spec import ShardingSpec, DimSpec
         
@@ -187,16 +186,16 @@ class AllGatherOp(CollectiveOperation):
             rank = len(global_shape) if global_shape else len(sharded_tensor.shape)
             replicated_spec = ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)]) if mesh else None
             
-            impl = TensorImpl(
+            tensor = Tensor._create_unsafe(
                 storages=sharded_tensor._storages,  # Copy storages!
                 values=sharded_tensor._values,  # Keep raw for passthrough
                 traced=sharded_tensor.traced,
                 batch_dims=batch_dims,
             )
-            impl.sharding = replicated_spec
+            tensor.sharding = replicated_spec
             # NABLA 2026: Cached metadata removed.
             
-            return Tensor(impl=impl)
+            return tensor
         
         with GRAPH.graph:
             gathered = self.maxpr(
@@ -232,14 +231,13 @@ class AllGatherOp(CollectiveOperation):
             output_spec = ShardingSpec(mesh, new_dim_specs)
         
         # Create output tensor with global shape info computed dynamically
-        impl = TensorImpl(
+        output = Tensor._create_unsafe(
             values=gathered,
             traced=sharded_tensor.traced,
             batch_dims=sharded_tensor.batch_dims,
         )
-        impl.sharding = output_spec
+        output.sharding = output_spec
         # NABLA 2026: Cached metadata removed.
-        output = Tensor(impl=impl)
         
         # Setup tracing refs for graph traversal
         self._setup_output_refs(output, (sharded_tensor,), {'axis': axis}, sharded_tensor.traced)
@@ -359,7 +357,6 @@ class GatherAllAxesOp(Operation):
             Replicated tensor with the full global data
         """
         from ...core import Tensor
-        from ...core import TensorImpl
         from ...core import GRAPH
         from ...core.sharding.spec import ShardingSpec, DimSpec
         from max import graph as g
@@ -387,13 +384,13 @@ class GatherAllAxesOp(Operation):
         rank = len(global_tensor.type.shape)
         replicated_spec = ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)])
         
-        impl = TensorImpl(
+        tensor = Tensor._create_unsafe(
             values=[global_tensor],
             traced=sharded_tensor.traced,
             batch_dims=sharded_tensor.batch_dims,
         )
-        impl.sharding = replicated_spec
-        return Tensor(impl=impl)
+        tensor.sharding = replicated_spec
+        return tensor
 
 
 # Singleton instances

@@ -426,7 +426,6 @@ def create_sharded_output(results: List[Any], sharding: Optional["ShardingSpec"]
                           mesh: Optional["DeviceMesh"] = None) -> "Tensor":
     """Build sharded Tensor from per-shard TensorValues."""
     from ..tensor import Tensor
-    from ..tensor import TensorImpl
     from max import graph as g
     
     if not results:
@@ -441,7 +440,11 @@ def create_sharded_output(results: List[Any], sharding: Optional["ShardingSpec"]
         rank = len(first.type.shape)
         sharding = ShardingSpec(mesh, [DimSpec([], is_open=True) for _ in range(rank)])
     
-    impl = TensorImpl(values=results, traced=traced, batch_dims=batch_dims)
-    impl.sharding = sharding
+    output = Tensor._create_unsafe(
+        values=results,
+        traced=traced,
+        batch_dims=batch_dims,
+    )
+    output.sharding = sharding
     
-    return Tensor(impl=impl)
+    return output

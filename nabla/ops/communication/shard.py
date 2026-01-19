@@ -179,7 +179,6 @@ class ShardOp(Operation):
                                  recursion. Do not set directly.
         """
         from ...core import Tensor
-        from ...core import TensorImpl
         from ...core import GRAPH
         from ...core.sharding.spec import ShardingSpec, needs_reshard
         from max import graph as g
@@ -228,16 +227,14 @@ class ShardOp(Operation):
         
         # Create output tensor with multiple values
         spec = ShardingSpec(mesh, dim_specs, replicated_axes=replicated_axes or set())
-        impl = TensorImpl(
+        output = Tensor._create_unsafe(
             values=shard_values,
             traced=x.traced if isinstance(x, Tensor) else False,
             batch_dims=x.batch_dims if isinstance(x, Tensor) else 0,
         )
-        impl.sharding = spec
+        output.sharding = spec
         
         # NABLA 2026: Cached metadata removed.
-        
-        output = Tensor(impl=impl)
         
         # Setup tracing refs for graph traversal
         traced = x.traced if isinstance(x, Tensor) else False

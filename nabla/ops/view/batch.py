@@ -21,19 +21,15 @@ if TYPE_CHECKING:
 
 def _copy_impl_with_batch_dims(x: "Tensor", new_batch_dims: int, op: "Operation" = None, kwargs: dict = None) -> "Tensor":
     from ...core import Tensor
-    from ...core import TensorImpl
     
-    new_impl = TensorImpl(
+    output = Tensor._create_unsafe(
         storages=x._storages,
         values=x._values,
         traced=x.traced,
         batch_dims=new_batch_dims,
     )
     # Sharding must be set after construction (not a constructor arg)
-    new_impl.sharding = x.sharding
-
-    
-    output = Tensor(impl=new_impl)
+    output.sharding = x.sharding
     
     # Setup tracing refs if op provided
     if op is not None and x.traced:

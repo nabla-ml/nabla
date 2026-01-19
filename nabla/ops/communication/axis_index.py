@@ -60,7 +60,6 @@ class AxisIndexOp(Operation):
             Tensor (sharded/distributed) containing the index for each device.
         """
         from ...core import Tensor
-        from ...core import TensorImpl
         from ...core import GRAPH
         from ...core.sharding.spec import ShardingSpec, DimSpec
         from max.dtype import DType
@@ -84,13 +83,13 @@ class AxisIndexOp(Operation):
         # Shape: (axis_size,)
         spec = ShardingSpec(mesh, [DimSpec([axis_name])])
         
-        impl = TensorImpl(
+        output = Tensor._create_unsafe(
             values=results,
             traced=False,
             batch_dims=0,
             sharding=spec
         )
-        return Tensor(impl=impl)
+        return output
 
 
 # Singleton instance

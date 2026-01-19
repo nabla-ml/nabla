@@ -319,6 +319,15 @@ class Tensor(DLPackArray, HasTensorValue):
         if not isinstance(value, (graph.TensorValue, graph.BufferValue)):
             raise TypeError(f"{value=} must be a tensor or buffer value")
         return cls(value=value)
+        
+    @classmethod
+    def _create_unsafe(cls, **kwargs: Any) -> Tensor:
+        """Internal factory to create a Tensor directly from TensorImpl arguments.
+        
+        This is used by internal operations to avoid importing TensorImpl directly.
+        Usage: Tensor._create_unsafe(values=..., traced=...)
+        """
+        return cls(impl=TensorImpl(**kwargs))
 
     @classmethod
     def from_dlpack(cls, array: DLPackArray) -> Tensor:
@@ -510,13 +519,28 @@ class Tensor(DLPackArray, HasTensorValue):
         return mlir_value.owner.parent_op == _core.Operation._from_cmlir(GRAPH.graph._mlir_op)
 
     # ===== Realization =====
+    
+    def gather(self) -> Tensor:
+        """Gather shards into a single global tensor if needed (lazy)."""
+        if self._impl.is_sharded and self._impl.sharding and not self._impl.sharding.is_fully_replicated():
+            from ...ops.communication import gather_all_axes
+            # Wrapper needed for op
+            gathered = gather_all_axes(self)
+            return gathered
+        return self
 
     def realize(self) -> Tensor:
         """Force immediate realization (blocking)."""
         if not self.real:
             if not self._in_global_compute_graph:
                 raise TypeError("Can't realize symbolic tensors.")
-            self._impl.realize()
+            
+            # Logic moved from TensorImpl.realize()
+            if self._impl.is_realized:
+                return self
+            from ..graph.engine import GRAPH
+            GRAPH.evaluate(self)
+            
         return self
 
     # ===== Reduction Operations =====
@@ -538,10 +562,20 @@ class Tensor(DLPackArray, HasTensorValue):
         return id(self)
 
     def __dlpack__(self, stream: int | None = None):
-        return self._impl.to_dlpack(stream=stream)
+        """Unified DLPack export."""
+        t = self.gather()
+        t.realize()
+        if not t._impl._storages:
+             raise RuntimeError("Failed to realize tensor for DLPack export")
+        return t._impl._storages[0].__dlpack__(stream=stream)
 
     def __dlpack_device__(self):
-        return self._impl.to_dlpack_device()
+        """Unified DLPack device export."""
+        t = self.gather()
+        t.realize()
+        if not t._impl._storages:
+             raise RuntimeError("Failed to realize tensor for DLPack device export")
+        return t._impl._storages[0].__dlpack_device__()
 
     def __rich_repr__(self):
         yield "shape", self.shape
@@ -562,11 +596,20 @@ class Tensor(DLPackArray, HasTensorValue):
     def item(self):
         if self.num_elements() != 1:
             raise TypeError("Only single-element tensors can be converted to Python scalars")
-        return self._impl.item()
+        """Unified item access."""
+        t = self.gather()
+        t.realize()
+        if not t._impl._storages:
+             raise RuntimeError("Failed to realize tensor for item access")
+        return t._impl._storages[0].to(CPU()).item()
     
     def to_numpy(self):
         """Convert tensor to numpy array."""
-        return self._impl.to_numpy()
+        t = self.gather()
+        t.realize()
+        if not t._impl._storages:
+             raise RuntimeError("Failed to realize tensor for NumPy export")
+        return t._impl._storages[0].to(CPU()).to_numpy()
 
     def num_elements(self) -> int:
         elts = 1

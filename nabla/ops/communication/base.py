@@ -30,7 +30,6 @@ class CollectiveOperation(Operation):
     
     def __call__(self, sharded_tensor, **kwargs):
         from ...core import Tensor
-        from ...core import TensorImpl
         from ...core import GRAPH
         
         # 1. Validation and early exit
@@ -51,15 +50,13 @@ class CollectiveOperation(Operation):
         # 3. Output wrapping
         output_spec = self._compute_output_spec(sharded_tensor, result_values, **kwargs)
         
-        impl = TensorImpl(
+        output = Tensor._create_unsafe(
             values=result_values,
             traced=sharded_tensor.traced,
             batch_dims=sharded_tensor.batch_dims,
         )
-        impl.sharding = output_spec
+        output.sharding = output_spec
         # NABLA 2026: Cached metadata removed. Global shape computed on demand.
-        
-        output = Tensor(impl=impl)
         
         # 4. Tracing setup
         self._setup_output_refs(output, (sharded_tensor,), kwargs, sharded_tensor.traced)
