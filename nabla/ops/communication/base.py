@@ -32,11 +32,10 @@ class CollectiveOperation(Operation):
             
         mesh = sharded_tensor.sharding.mesh if sharded_tensor.sharding else None
         
-        # Hydrate values from storages if needed
-        sharded_tensor.hydrate()
-        
         # 2. Execution in graph context
         with GRAPH.graph:
+            # Hydrate values from storages if needed
+            sharded_tensor.hydrate()
             # Filter kwargs for maxpr
             maxpr_kwargs = {k: v for k, v in kwargs.items() if k not in ('mesh', 'reduce_axes')}
             result_values = self.maxpr(sharded_tensor.values, mesh=mesh, **maxpr_kwargs)

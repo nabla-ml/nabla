@@ -151,43 +151,44 @@ class AllGatherOp(CollectiveOperation):
                 sharded_axis_name = sharding.dim_specs[axis].axes[0]
         
         # Hydrate values from storages if needed (realized tensor)
-        sharded_tensor.hydrate()
+        with GRAPH.graph:
+            sharded_tensor.hydrate()
             
-        if len(sharded_tensor.values) <= 1:
-            # Physically gathered (single value) but logically sharded.
-            # We just need to update the metadata to be replicated.
-            # IMPORTANT: Compute the GLOBAL shape, not just copy local shape!
-            from ...core.sharding.spec import compute_global_shape
-            from max.graph import Shape
-            
-            batch_dims = sharded_tensor.batch_dims
-            
-            # Get local physical shape
-            local_shape = sharded_tensor.physical_local_shape(0)
-            if local_shape is None:
-                local_shape = sharded_tensor.shape  # Fallback
-            
-            # Compute global shape from local shape and current sharding
-            if sharded_tensor.sharding and local_shape is not None:
-                global_shape_tuple = compute_global_shape(tuple(local_shape), sharded_tensor.sharding)
-                global_shape = Shape(global_shape_tuple)
-            else:
-                global_shape = local_shape
-            
-            # Create replicated output sharding spec with correct rank
-            rank = len(global_shape) if global_shape else len(sharded_tensor.shape)
-            replicated_spec = ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)]) if mesh else None
-            
-            tensor = Tensor._create_unsafe(
-                storages=sharded_tensor._storages,  # Copy storages!
-                values=sharded_tensor._values,  # Keep raw for passthrough
-                traced=sharded_tensor.traced,
-                batch_dims=batch_dims,
-            )
-            tensor.sharding = replicated_spec
-            # NABLA 2026: Cached metadata removed.
-            
-            return tensor
+            if len(sharded_tensor.values) <= 1:
+                # Physically gathered (single value) but logically sharded.
+                # We just need to update the metadata to be replicated.
+                # IMPORTANT: Compute the GLOBAL shape, not just copy local shape!
+                from ...core.sharding.spec import compute_global_shape
+                from max.graph import Shape
+                
+                batch_dims = sharded_tensor.batch_dims
+                
+                # Get local physical shape
+                local_shape = sharded_tensor.physical_local_shape(0)
+                if local_shape is None:
+                    local_shape = sharded_tensor.shape  # Fallback
+                
+                # Compute global shape from local shape and current sharding
+                if sharded_tensor.sharding and local_shape is not None:
+                    global_shape_tuple = compute_global_shape(tuple(local_shape), sharded_tensor.sharding)
+                    global_shape = Shape(global_shape_tuple)
+                else:
+                    global_shape = local_shape
+                
+                # Create replicated output sharding spec with correct rank
+                rank = len(global_shape) if global_shape else len(sharded_tensor.shape)
+                replicated_spec = ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)]) if mesh else None
+                
+                tensor = Tensor._create_unsafe(
+                    storages=sharded_tensor._storages,  # Copy storages!
+                    values=sharded_tensor._values,  # Keep raw for passthrough
+                    traced=sharded_tensor.traced,
+                    batch_dims=batch_dims,
+                )
+                tensor.sharding = replicated_spec
+                # NABLA 2026: Cached metadata removed.
+                
+                return tensor
         
         with GRAPH.graph:
             gathered = self.maxpr(

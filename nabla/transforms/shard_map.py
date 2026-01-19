@@ -37,7 +37,15 @@ def shard_map(
         return x
 
     def wrapper(*args: Any, **kwargs: Any) -> Any:
-        traced = trace(func, *args, **kwargs)
+        # Pre-apply in_specs to arguments for tracing, so ops see sharding
+        logical_args = list(args)
+        for i, val in enumerate(logical_args):
+            if isinstance(val, Tensor) and i in in_specs:
+                spec = in_specs[i]
+                if spec is not None:
+                    logical_args[i] = val.shard(mesh, spec.dim_specs)
+        
+        traced = trace(func, *logical_args, **kwargs)
 
         if auto_sharding:
             from ..core.sharding.optimizer.simple_solver import SimpleSolver
@@ -65,8 +73,10 @@ def shard_map(
                                 UserWarning
                             )
                             x.dual = x
-                        else:
+                        elif spec is not None:
                             x.dual = x.shard(mesh, spec.dim_specs)
+                        else:
+                            x.dual = x
                     else:
                         x.dual = x
 
@@ -155,7 +165,7 @@ def shard_map(
             if out_specs:
                 flat_outs, tree = pytree.tree_flatten(res)
                 for i, val in enumerate(flat_outs):
-                    if i in out_specs and isinstance(val, Tensor) and out_specs[i]:
+                    if i in out_specs and isinstance(val, Tensor) and out_specs[i] is not None:
                         flat_outs[i] = val.shard(mesh, out_specs[i].dim_specs)
                 res = pytree.tree_unflatten(tree, flat_outs)
             

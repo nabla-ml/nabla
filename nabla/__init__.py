@@ -68,11 +68,15 @@ from .ops.unary import (
     tanh,
     exp,
     neg,
+    abs,
+    softmax,
     ReluOp,
     SigmoidOp,
     TanhOp,
     ExpOp,
     NegOp,
+    AbsOp,
+    SoftmaxOp,
 )
 
 # Creation operations (including random)
@@ -166,11 +170,15 @@ __all__ = [
     "tanh",
     "exp",
     "neg",
+    "abs",
+    "softmax",
     "ReluOp",
     "SigmoidOp",
     "TanhOp",
     "ExpOp",
     "NegOp",
+    "AbsOp",
+    "SoftmaxOp",
     # View operations
     "unsqueeze",
     "squeeze",

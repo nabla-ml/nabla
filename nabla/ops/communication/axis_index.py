@@ -71,8 +71,8 @@ class AxisIndexOp(Operation):
             values=results,
             traced=False,
             batch_dims=0,
-            sharding=spec
         )
+        output.sharding = spec
         return output
 
 
