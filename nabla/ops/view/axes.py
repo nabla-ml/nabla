@@ -31,20 +31,16 @@ class UnsqueezeOp(LogicalAxisOperation):
         output_shapes: list[tuple[int, ...]],
         **kwargs,
     ):
-        """Unsqueeze: insert new dimension at axis position."""
         from ...core.sharding.propagation import OpShardingRuleTemplate
-        in_rank = len(input_shapes[0])
-        axis = kwargs.get("axis", 0)
-        
-        # Input: d0, d1, ...
-        factors = [f"d{i}" for i in range(in_rank)]
+        factors = [f"d{i}" for i in range(len(input_shapes[0]))]
         in_str = " ".join(factors)
         
-        # Output: insert "new_dim" at axis
+        # Insert "new_dim"
+        axis = kwargs.get("axis", 0)
         out_factors = list(factors)
         out_factors.insert(axis, "new_dim")
         out_str = " ".join(out_factors)
-                 
+        
         return OpShardingRuleTemplate.parse(f"{in_str} -> {out_str}", input_shapes).instantiate(input_shapes, output_shapes)
     
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
@@ -67,20 +63,16 @@ class SqueezeOp(LogicalAxisOperation):
         output_shapes: list[tuple[int, ...]],
         **kwargs,
     ):
-        """Squeeze: remove dimension at axis position."""
         from ...core.sharding.propagation import OpShardingRuleTemplate
-        in_rank = len(input_shapes[0])
-        axis = kwargs.get("axis", 0)
-        
-        # Input: d0, ...
-        factors = [f"d{i}" for i in range(in_rank)]
+        factors = [f"d{i}" for i in range(len(input_shapes[0]))]
         in_str = " ".join(factors)
         
-        # Output: remove factor at axis
+        # Remove factor at axis
+        axis = kwargs.get("axis", 0)
         out_factors = list(factors)
         out_factors.pop(axis)
         out_str = " ".join(out_factors)
-        
+
         return OpShardingRuleTemplate.parse(f"{in_str} -> {out_str}", input_shapes).instantiate(input_shapes, output_shapes)
     
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
@@ -103,19 +95,19 @@ class SwapAxesOp(LogicalAxisOperation):
         output_shapes: list[tuple[int, ...]],
         **kwargs,
     ):
-        """SwapAxes: swap two dimensions."""
         from ...core.sharding.propagation import OpShardingRuleTemplate
-        in_rank = len(input_shapes[0])
+        rank = len(input_shapes[0])
         axis1 = kwargs.get("axis1", 0)
         axis2 = kwargs.get("axis2", 1)
+        if axis1 < 0: axis1 += rank
+        if axis2 < 0: axis2 += rank
         
-        factors = [f"d{i}" for i in range(in_rank)]
+        factors = [f"d{i}" for i in range(rank)]
         in_str = " ".join(factors)
         
-        # Output: swap factors
-        out_factors = list(factors)
-        out_factors[axis1], out_factors[axis2] = out_factors[axis2], out_factors[axis1]
-        out_str = " ".join(out_factors)
+        # Swap
+        factors[axis1], factors[axis2] = factors[axis2], factors[axis1]
+        out_str = " ".join(factors)
         
         return OpShardingRuleTemplate.parse(f"{in_str} -> {out_str}", input_shapes).instantiate(input_shapes, output_shapes)
     

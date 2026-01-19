@@ -85,11 +85,11 @@ class DeviceMesh:
     """Logical multi-dimensional view of devices: @name = <["axis1"=size1, ...]>.
     
     Args:
-        name: Name of the mesh
-        shape: Shape of the mesh (e.g., (2, 4) for 2x4 grid)
-        axis_names: Names for each axis (e.g., ("x", "y"))
-        devices: Logical device IDs (default: sequential 0..N-1)
-        device_refs: Physical device references (default: all CPU)
+        name: Name of the mesh.
+        shape: Shape of the mesh (e.g., (2, 4)).
+        axis_names: Names for each axis (e.g., ("x", "y")).
+        devices: Logical device IDs.
+        device_refs: Physical device references.
     """
     
     def __init__(self, name: str, shape: Tuple[int, ...], axis_names: Tuple[str, ...], 
@@ -196,14 +196,13 @@ class DeviceMesh:
 
 @dataclass
 class DimSpec:
-    """
-    Per-dimension sharding specification.
+    """Per-dimension sharding specification.
     
-    - axes: Axis names that shard this dim (major to minor order)
-    - is_open: If True, can be further sharded; if False (closed), sharding is fixed
-    - priority: Lower = stronger (0 is default/strongest)
-    
-    Examples: {"x"} (closed), {"x", ?} (open), {"x"}p1 (priority 1)
+    Attributes:
+        axes: Sharding axes (major to minor).
+        is_open: If True, can accept more sharding.
+        priority: 0=Strongest, 1+=Weaker.
+        partial: If True, holds partial sums.
     """
     axes: List[str] = field(default_factory=list)
     is_open: bool = False  # Open vs Closed dimension (from Shardy spec)
@@ -233,11 +232,11 @@ class DimSpec:
         return f"{{{axes_str}{open_marker}}}{prio_str}"
     
     def is_replicated(self) -> bool:
-        """Returns True if this dimension is fully replicated (no sharding axes)."""
+        """True if fully replicated (no axes)."""
         return len(self.axes) == 0
     
     def get_total_shards(self, mesh: 'DeviceMesh') -> int:
-        """Calculate total number of shards for this dimension."""
+        """Total shards for this dimension."""
         total = 1
         for axis in self.axes:
             total *= mesh.get_axis_size(axis)
@@ -269,11 +268,13 @@ class DimSpec:
 
 @dataclass
 class ShardingSpec:
-    """
-    Complete tensor sharding: sharding<@mesh, [dim_shardings], replicated={axes}>.
+    """Complete tensor sharding: sharding<@mesh, [dim_shardings], replicated={axes}>.
     
-    - dim_specs: Per-dimension specs (must match tensor rank)
-    - replicated_axes: Explicitly replicated axes (can't shard any dimension)
+    Attributes:
+        mesh: target DeviceMesh.
+        dim_specs: Per-dimension specs.
+        replicated_axes: Explicitly replicated axes.
+        partial_sum_axes: Ghost partial axes.
     """
     mesh: DeviceMesh
     dim_specs: List[DimSpec] = field(default_factory=list)
@@ -321,9 +322,7 @@ class ShardingSpec:
         check_sub_axes_maximality(all_axes)
     
     def __repr__(self) -> str:
-        """
-        String representation following Shardy spec grammar.
-        """
+        """String representation following Shardy spec grammar."""
         dims_str = ", ".join(str(d) for d in self.dim_specs)
         rep_str = ""
         if self.replicated_axes:
@@ -375,9 +374,7 @@ class ShardingSpec:
         return result
     
     def get_implicitly_replicated_axes(self) -> Set[str]:
-        """
-        Get axes that are implicitly replicated (not used, not explicitly replicated).
-        """
+        """Get axes not used in sharding or explicitly replicated."""
         used = set()
         for dim in self.dim_specs:
             used.update(dim.axes)
@@ -391,12 +388,12 @@ class ShardingSpec:
         return implicit
     
     def is_fully_replicated(self) -> bool:
-        """Returns True if tensor is fully replicated."""
+        """True if tensor is fully replicated."""
         return all(dim.is_replicated() for dim in self.dim_specs) and not self.partial_sum_axes and not any(dim.partial for dim in self.dim_specs)
     
     @property
     def total_shards(self) -> int:
-        """Get total number of shards across all dimensions."""
+        """Total number of shards across all dimensions."""
         total = 1
         for dim_spec in self.dim_specs:
             for axis in dim_spec.axes:

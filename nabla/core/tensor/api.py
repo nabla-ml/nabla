@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
-"""Provides experimental tensor operations with eager execution capabilities."""
+"""Experimental tensor operations with eager execution."""
 
 from __future__ import annotations
 
@@ -23,8 +23,6 @@ from max.graph import ShapeLike, TensorType, TensorValueLike, ops
 from max.graph.ops.constant import NestedArray, Number
 from max.graph.value import HasTensorValue
 
-# Import from new modules
-# Import from new modules
 from ..common.context import (
     defaults,
     default_device,
@@ -39,7 +37,7 @@ from ..graph.engine import GRAPH, driver_tensor_type
 
 
 class Tensor(DLPackArray, HasTensorValue):
-    """A multi-dimensional array with eager execution and automatic compilation."""
+    """Multi-dimensional array with eager execution and automatic compilation."""
 
     _impl: TensorImpl
     _real: bool = False
@@ -62,6 +60,7 @@ class Tensor(DLPackArray, HasTensorValue):
 
     # ===== Properties delegating to _impl =====
     
+    # Properties delegating to _impl
     @property
     def _storages(self) -> list[driver.Tensor] | None:
         return self._impl._storages
@@ -106,16 +105,10 @@ class Tensor(DLPackArray, HasTensorValue):
 
     @property
     def values(self) -> list[graph.TensorValue]:
-        """Get all graph values as TensorValues.
-        
-        Raises RuntimeError if values are empty - call hydrate() first for realized tensors.
-        """
+        """Get all graph values as TensorValues; error if empty."""
         if not self._impl._values:
             if self._impl._storages:
-                raise RuntimeError(
-                    "Tensor has storages but no values. Call tensor.hydrate() first "
-                    "to populate values from storages."
-                )
+                raise RuntimeError("Tensor has storages but no values. Call hydrate() first.")
             raise RuntimeError("Tensor has no values.")
         
         # Convert BufferValues to TensorValues
@@ -125,11 +118,7 @@ class Tensor(DLPackArray, HasTensorValue):
         ]
     
     def hydrate(self) -> "Tensor":
-        """Populate values from storages for realized tensors.
-        
-        Call this before accessing values on a tensor that was realized.
-        Returns self for chaining.
-        """
+        """Populate values from storages for realized tensors."""
         if not self._impl._values and self._impl._storages:
             GRAPH.add_input(self)
         return self
@@ -148,7 +137,7 @@ class Tensor(DLPackArray, HasTensorValue):
     
     @property
     def batch_dims(self) -> int:
-        """Number of batch dimensions (prefix of physical shape, used by vmap)."""
+        """Number of batch dimensions."""
         return self._impl.batch_dims
     
     @batch_dims.setter
@@ -157,7 +146,7 @@ class Tensor(DLPackArray, HasTensorValue):
     
     @property
     def op_kwargs(self) -> dict[str, Any]:
-        """Keyword arguments passed to the operation that created this tensor."""
+        """Kwargs passed to the creating operation."""
         return self._impl.op_kwargs or {}
     
     def trace(self) -> Tensor:
@@ -167,14 +156,13 @@ class Tensor(DLPackArray, HasTensorValue):
 
     @property
     def dual(self) -> Tensor | None:
-        """Get the dual (sharded/physical) tensor associated with this tensor."""
+        """Get the dual (sharded/physical) tensor."""
         if self._impl.dual is not None:
             return Tensor(impl=self._impl.dual)
         return None
 
     @dual.setter
     def dual(self, value: Tensor | None) -> None:
-        """Set the dual (sharded/physical) associated with this tensor."""
         if value is None:
             self._impl.dual = None
         else:
@@ -186,15 +174,7 @@ class Tensor(DLPackArray, HasTensorValue):
         dim_specs: list[Any],
         replicated_axes: set[str] | None = None,
     ) -> Tensor:
-        """Shard this tensor across a device mesh.
-        
-        This handles both initial sharding of replicated tensors AND resharding
-        of already sharded tensors.
-        
-        If the tensor has batch_dims (e.g. inside vmap), replicated specs are
-        automatically prepended for those dimensions because `dim_specs` refers
-        to logical dimensions.
-        """
+        """Shard this tensor across a device mesh, handling resharding and vmap batch dims."""
         from ...ops import communication as comm
         return comm.reshard(self, mesh, dim_specs, replicated_axes=replicated_axes)
     
@@ -204,19 +184,7 @@ class Tensor(DLPackArray, HasTensorValue):
         dim_specs: list[Any],
         replicated_axes: set[str] | None = None,
     ) -> Tensor:
-        """Apply sharding constraint, resharding if needed.
-        
-        This is the explicit way to set output sharding. If the tensor's current
-        sharding differs from the target, it will be resharded automatically.
-        
-        Args:
-            mesh: DeviceMesh to shard across
-            dim_specs: List of DimSpec for each dimension
-            replicated_axes: Axes to explicitly replicate (optional)
-            
-        Returns:
-            New tensor with target sharding (resharded if necessary)
-        """
+        """Apply sharding constraint, resharding if needed."""
         from ...ops import communication as comm
         return comm.reshard(self, mesh, dim_specs, replicated_axes=replicated_axes)
 
@@ -224,33 +192,18 @@ class Tensor(DLPackArray, HasTensorValue):
         self,
         mesh: Any,
         dim_specs: list[Any],
+        replicated_axes: set[str] | None = None, # Note: Added to match implementation if needed, checking code
     ) -> Tensor:
-        """Apply sharding constraint for global optimization.
-        
-        This sets a constraint that the GlobalShardingOptimizer will try to satisfy.
-        It does NOT immediately reshard the tensor.
-        
-        Args:
-            mesh: DeviceMesh to constrain to
-            dim_specs: List of DimSpec for each dimension
-        
-        Returns:
-            Self (for chaining)
-        """
+        """Apply sharding constraint for global optimization; no immediate resharding."""
         from ..sharding.spec import ShardingSpec
         
         spec = ShardingSpec(mesh, dim_specs)
-        # print(f"DEBUG: Setting sharding_constraint on TensorImpl {id(self._impl)}: {spec}")
         self._impl.sharding_constraint = spec
         return self
 
     @property
     def sharding(self) -> Any | None:
-        """Get the current sharding specification of the tensor.
-        
-        Returns:
-            ShardingSpec object if sharded, else None.
-        """
+        """Get the current sharding specification."""
         return self._impl.sharding
     
     @sharding.setter
@@ -285,11 +238,7 @@ class Tensor(DLPackArray, HasTensorValue):
 
     @property
     def local_shape(self) -> graph.Shape | None:
-        """Local shape of this tensor (including batch dims).
-        
-        For sharded tensors, this is the shape of shard 0.
-        For unsharded tensors, this equals global_shape.
-        """
+        """Local shape of this tensor (shard 0), including batch dims."""
         return self._impl.physical_shape
     
     @property
@@ -299,17 +248,12 @@ class Tensor(DLPackArray, HasTensorValue):
 
     @property
     def physical_global_shape(self) -> graph.Shape | None:
-        """Alias for global_shape to support refactoring."""
+        """Alias for global_shape."""
         return self._impl.physical_global_shape
 
     @property
     def physical_shape(self) -> graph.Shape | None:
-        """DEPRECATED: Use local_shape instead.
-        
-        Physical shape of shard 0 (including batch dims at prefix).
-        For sharded tensors, this is the LOCAL shard shape.
-        For unsharded tensors, this equals the full shape.
-        """
+        """DEPRECATED: Use local_shape instead."""
         return self._impl.physical_shape
 
     # ===== Factory methods =====
@@ -322,11 +266,7 @@ class Tensor(DLPackArray, HasTensorValue):
         
     @classmethod
     def _create_unsafe(cls, **kwargs: Any) -> Tensor:
-        """Internal factory to create a Tensor directly from TensorImpl arguments.
-        
-        This is used by internal operations to avoid importing TensorImpl directly.
-        Usage: Tensor._create_unsafe(values=..., traced=...)
-        """
+        """Internal factory to create Tensor directly from TensorImpl args."""
         return cls(impl=TensorImpl(**kwargs))
 
     @classmethod
@@ -439,11 +379,7 @@ class Tensor(DLPackArray, HasTensorValue):
 
     @property
     def shape(self) -> graph.Shape:
-        """Returns the global logical shape of the tensor (excludes batch dims).
-        
-        For sharded tensors, this returns the full tensor shape (not shard shape).
-        Use local_shape to get the physical shape including batch dims.
-        """
+        """Returns the global logical shape of the tensor (excludes batch dims)."""
         # Use _impl.global_shape which properly excludes batch dims
         gs = self._impl.global_shape
         if gs is not None:
@@ -452,14 +388,7 @@ class Tensor(DLPackArray, HasTensorValue):
         return graph.Shape(self._backing_value.shape)
     
     def shard_shape(self, shard_idx: int = 0) -> graph.Shape:
-        """Returns the shape of a specific shard.
-        
-        Args:
-            shard_idx: Index of the shard (default: 0)
-            
-        Returns:
-            Shape of the specified shard. For unsharded tensors, equals shape.
-        """
+        """Returns the shape of a specific shard."""
         local = self._impl.logical_local_shape(shard_idx)
         if local is not None:
             return graph.Shape(local)

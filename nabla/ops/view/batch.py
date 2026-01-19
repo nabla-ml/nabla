@@ -15,9 +15,7 @@ if TYPE_CHECKING:
     from ...core.tensor import Tensor
 
 
-# =============================================================================
 # Batch Management Ops (Explicit Metadata Modification)
-# =============================================================================
 
 def _copy_impl_with_batch_dims(x: "Tensor", new_batch_dims: int, op: "Operation" = None, kwargs: dict = None) -> "Tensor":
     from ...core import Tensor

@@ -17,14 +17,7 @@ if TYPE_CHECKING:
 
 
 class AxisIndexOp(Operation):
-    """Return the device's position along a mesh axis.
-    
-    This is essential for shard_map-style programming where each device
-    needs to know its position for conditional logic.
-    
-    Example:
-        idx = axis_index('i')  # Returns 0, 1, 2, 3 on 4 devices
-    """
+    """Return the device's position along a mesh axis."""
     
     @property
     def name(self) -> str:
@@ -36,16 +29,7 @@ class AxisIndexOp(Operation):
         axis_name: str,
         shard_idx: int,
     ) -> TensorValue:
-        """Return this device's index along the specified axis.
-        
-        Args:
-            mesh: Device mesh
-            axis_name: Name of axis to get index for
-            shard_idx: Current shard index
-            
-        Returns:
-            Scalar TensorValue with the axis index
-        """
+        """Return this device's index along the specified axis."""
         coord = mesh.get_coordinate(shard_idx, axis_name)
         return ops.constant(coord, mesh.device_refs[shard_idx].dtype if hasattr(mesh.device_refs[shard_idx], 'dtype') else None)
     
@@ -97,16 +81,5 @@ axis_index_op = AxisIndexOp()
 
 # Public API
 def axis_index(mesh: "DeviceMesh", axis_name: str):
-    """Return each device's position along a mesh axis.
-    
-    Essential for shard_map-style programming where devices need to
-    know their position for conditional logic.
-    
-    Args:
-        mesh: Device mesh
-        axis_name: Name of axis to get indices for
-        
-    Returns:
-        List of scalar TensorValues, one per device, containing 0, 1, 2, ...
-    """
+    """Return each device's position along a mesh axis."""
     return axis_index_op(mesh, axis_name)

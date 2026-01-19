@@ -20,13 +20,7 @@ class AllToAllOp(CollectiveOperation):
     """All-to-all collective (distributed transpose).
     
     Each device splits its tensor along split_axis, sends parts to other devices,
-    receives from all, and concatenates along concat_axis. This is useful for
-    expert routing (MoE), axis swapping, and distributed FFT.
-    
-    Example:
-        # 4 devices, each has [4, N], after all_to_all each has [4, N] but
-        # with data transposed across devices
-        y = all_to_all(x, split_axis=0, concat_axis=0)
+    receives from all, and concatenates along concat_axis.
     """
     
     @property
@@ -41,18 +35,7 @@ class AllToAllOp(CollectiveOperation):
         mesh: "DeviceMesh" = None,
         tiled: bool = True,
     ) -> List[TensorValue]:
-        """All-to-all: distributed transpose of tensor blocks.
-        
-        Args:
-            shard_values: List of TensorValues, one per device
-            split_axis: Axis along which to split each shard
-            concat_axis: Axis along which to concatenate received chunks
-            mesh: Device mesh for distributed execution
-            tiled: If True, concatenate; if False, stack (adds new dim)
-            
-        Returns:
-            List of TensorValues after all-to-all exchange
-        """
+        """All-to-all: distributed transpose of tensor blocks."""
         num_devices = len(shard_values)
         
         if num_devices <= 1:
@@ -109,19 +92,5 @@ all_to_all_op = AllToAllOp()
 
 # Public API
 def all_to_all(sharded_tensor, split_axis: int, concat_axis: int, tiled: bool = True):
-    """All-to-all collective (distributed transpose).
-    
-    Each device splits its tensor along split_axis, sends parts to other
-    devices, receives from all, and concatenates along concat_axis. Useful
-    for expert routing (MoE), axis swapping, and distributed FFT.
-    
-    Args:
-        sharded_tensor: Tensor with multiple shards
-        split_axis: Axis along which to split each shard
-        concat_axis: Axis along which to concatenate received chunks
-        tiled: If True, concatenate; if False, stack (adds new dimension)
-        
-    Returns:
-        Tensor after all-to-all exchange
-    """
+    """All-to-all collective (distributed transpose)."""
     return all_to_all_op(sharded_tensor, split_axis=split_axis, concat_axis=concat_axis, tiled=tiled)

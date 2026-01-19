@@ -33,8 +33,7 @@ def _unwrap_tensor(x: Any) -> Any:
              # Ensure realized or lazy value exists
              # For control flow inside maxpr, we expect _values to be populated (shards)
              pass
-        # Return the first value if it's a list (implicit single shard or replicated)
-        # TODO: Handle multi-shard control flow properly (requires vector control flow or pmap)
+         # Return the first value if it's a list (implicit single shard or replicated)
         if hasattr(x, '_impl') and x._values:
              return x._values[0] 
         return x
@@ -51,11 +50,7 @@ def _wrap_tensor(x: Any, like: Tensor | None = None) -> Tensor:
 
 
 class WhereOp(Operation):
-    """Element-wise conditional selection: where(cond, x, y).
-    
-    For each element: output[i] = x[i] if cond[i] else y[i]
-    All inputs must be broadcast-compatible.
-    """
+    """Element-wise conditional selection: where(cond, x, y)."""
     
     @property
     def name(self) -> str:
@@ -93,13 +88,7 @@ class CondOp(Operation):
         return super().__call__(pred, true_fn, false_fn, *operands)
 
     def infer_sharding_spec(self, args: tuple, mesh: "DeviceMesh", kwargs: dict = None):
-        """Cond: Output sharding is determined by operands/branches.
-        
-        For now, we enforce that outputs inherit sharding from operands if they match structure.
-        Ideally we would trace true_fn/false_fn.
-        """
-        # Args: pred, true_fn, false_fn, *operands
-        # We assume result matches operands sharding? Not necessarily.
+        """Cond: Output sharding is determined by operands/branches."""
         # Fallback to default propagation (inherit from first sharded input) is risky if pred is sharded.
         return None, [], False
         
@@ -171,7 +160,6 @@ class WhileLoopOp(Operation):
         
         # 3. Setup Specs
         # WhileLoop Invariant: Output Spec == Input Spec
-        # We need per-leaf specs.
         leaf_specs = []
         for x in leaves:
             if isinstance(x, Tensor) and x.sharding:
@@ -234,7 +222,7 @@ class WhileLoopOp(Operation):
         return pytree.tree_unflatten(treedef, output_leaves)
 
     def infer_sharding_spec(self, args: tuple, mesh: "DeviceMesh", kwargs: dict = None):
-        """Unused by custom __call__ but kept for interface compliance."""
+        """Unused by custom __call__."""
         return None, [], False
 
 
@@ -302,9 +290,6 @@ class ScanOp(Operation):
     ) -> tuple[Any, Any]:
         """Scan implementation using loop unrolling (MVP).
 
-        IMPORTANT: This is a minimal implementation for Pipeline Parallelism.
-        For sharded tensors, ensure the scan dimension is NOT sharded.
-
         Args:
             f: Function (carry, x) -> (carry, y)
             init: Initial carry value
@@ -335,7 +320,6 @@ class ScanOp(Operation):
 
         # 2. For MVP: Use Python loop instead of while_loop
         # This is simpler and works correctly with sharding
-        # The performance cost is acceptable for PP demos
         from ..ops import view
 
         carry = init

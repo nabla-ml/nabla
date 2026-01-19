@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
-"""Graph traversal utilities for traced computation graphs."""
+"""Graph traversal utilities."""
 
 from __future__ import annotations
 
@@ -13,20 +13,9 @@ if TYPE_CHECKING:
     from ..tensor.impl import TensorImpl
 
 
+
 def get_operations_topological(outputs: list[TensorImpl]) -> list[tuple[object, list[TensorImpl]]]:
-    """Get operations in reverse topological order (outputs first, inputs last).
-    
-    This properly handles multi-output operations by deduplicating via OutputRefs.
-    Each operation appears exactly once, even if it has multiple outputs.
-    
-    Args:
-        outputs: List of output TensorImpls to traverse from.
-        
-    Returns:
-        List of (operation_id, output_impls) tuples in reverse topological order.
-        The operation_id is `id(output_refs)` which uniquely identifies an op call.
-        output_impls is the list of ALL outputs (alive) from that operation.
-    """
+    """Get operations in reverse topological order (outputs first)."""
     visited_ops: set[int] = set()  # Track visited operations via id(output_refs)
     visited_impls: set[int] = set()  # Track visited TensorImpls
     result: list[tuple[object, list[TensorImpl]]] = []
@@ -64,18 +53,9 @@ def get_operations_topological(outputs: list[TensorImpl]) -> list[tuple[object, 
     return result
 
 
+
 def get_all_impls_topological(outputs: list[TensorImpl]) -> list[TensorImpl]:
-    """Get all TensorImpls in forward topological order (inputs first, outputs last).
-    
-    Unlike get_operations_topological, this returns individual TensorImpls,
-    not grouped by operation. Useful for general graph traversal.
-    
-    Args:
-        outputs: List of output TensorImpls to traverse from.
-        
-    Returns:
-        List of TensorImpls in topological order (dependencies before dependents).
-    """
+    """Get all TensorImpls in forward topological order."""
     visited: set[int] = set()
     result: list[TensorImpl] = []
     
@@ -98,12 +78,7 @@ def get_all_impls_topological(outputs: list[TensorImpl]) -> list[TensorImpl]:
 
 
 def print_trace_graph(outputs: list[TensorImpl], show_siblings: bool = True) -> None:
-    """Print a human-readable representation of the traced computation graph.
-    
-    Args:
-        outputs: List of output TensorImpls to start from.
-        show_siblings: If True, show all outputs of multi-output operations.
-    """
+    """Print the traced computation graph."""
     ops = get_operations_topological(outputs)
     
     print(f"Computation Graph ({len(ops)} operations):")
@@ -127,19 +102,12 @@ def print_trace_graph(outputs: list[TensorImpl], show_siblings: bool = True) -> 
     print("-" * 60)
 
 
+
 def apply_to_operations(
     outputs: list[TensorImpl],
     fn: Callable[[object, list[TensorImpl]], None]
 ) -> None:
-    """Apply a function to each operation in reverse topological order.
-    
-    Useful for VJP backward pass where you process operations from outputs to inputs.
-    
-    Args:
-        outputs: Starting points for traversal.
-        fn: Function to apply to each operation.
-            Receives (operation_id, output_impls) for each op.
-    """
+    """Apply a function to each operation in reverse topological order."""
     ops = get_operations_topological(outputs)
     for op_id, op_outputs in ops:
         fn(op_id, op_outputs)

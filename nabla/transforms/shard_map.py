@@ -26,16 +26,7 @@ def shard_map(
     auto_sharding: bool = False,
     debug: bool = False,
 ) -> Callable[..., Any]:
-    """Execute a function with automatic sharding propagation and execution.
-
-    Args:
-        func: The function to transform.
-        mesh: The device mesh to use.
-        in_specs: Input sharding constraints (index -> spec).
-        out_specs: Output sharding constraints (index -> spec).
-        auto_sharding: If True, uses a solver to find optimal sharding constraints.
-        debug: If True, prints detailed debug info during extraction and solving.
-    """
+    """Execute a function with automatic sharding propagation and execution."""
 
     def _resolve_dual(x: Any) -> Any:
         from ..core import TensorImpl
@@ -185,7 +176,7 @@ def shard_map(
 
 
 class _ShardingGraphExtractor:
-    """Extracts a JSON graph representation from a logical trace for sharding optimization."""
+    """Extracts a JSON graph representation from a logical trace."""
 
     def __init__(self, trace: Trace, in_specs: Dict[int, Any], out_specs: Optional[Dict[int, Any]] = None, debug: bool = False):
         self.trace = trace

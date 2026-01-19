@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
-"""Tracing infrastructure and visualization for computation graphs."""
+"""Tracing infrastructure and visualization."""
 
 from __future__ import annotations
 
@@ -25,15 +25,11 @@ if TYPE_CHECKING:
 class OutputRefs:
     """Lightweight container for multi-output operation siblings.
     
-    This struct is shared among all TensorImpls produced by the same operation call.
-    It serves as the single source of truth for operation metadata, eliminating
-    duplication across sibling outputs.
-    
     Attributes:
-        _refs: Tuple of weak references to output TensorImpls.
-        tree_def: PyTreeDef describing the output structure.
-        op: The Operation object that produced these outputs.
-        op_args: Original positional arguments (Pytrees of inputs/static values).
+        _refs: Weak references to output TensorImpls.
+        tree_def: PyTreeDef for output structure.
+        op: Producing Operation.
+        op_args: Original input arguments.
         op_kwargs: Original keyword arguments.
     """
     _refs: tuple[weakref.ref, ...]
@@ -51,12 +47,7 @@ class OutputRefs:
             )
     
     def get_alive_outputs(self) -> list[TensorImpl | None]:
-        """Get list of output TensorImpls, with None for dead/GC'd outputs.
-        
-        Returns:
-            List matching the flattened output structure. Contains None for
-            any outputs that have been garbage collected.
-        """
+        """Get output TensorImpls (None if GC'd)."""
         return [ref() for ref in self._refs]
     
     @property
@@ -87,19 +78,10 @@ C_BATCH = "\033[90m"      # Dark gray - batch dimensions
 class Trace:
     """Represents a captured computation subgraph.
     
-    A Trace allows viewing and manipulating the computation graph between
-    a set of input tensors (boundary) and output tensors.
-    
-    Use the `trace()` function to create traces - it handles all the setup.
-    
     Attributes:
-        inputs: The original input pytree structure.
-        outputs: The original output pytree structure.
-        nodes: Topologically sorted list of unique TensorImpls in the subgraph.
-        
-    Example:
-        >>> t = trace(my_function, input_tensor)
-        >>> print(t)  # Pretty-printed computation graph
+        inputs: Input pytree structure.
+        outputs: Output pytree structure.
+        nodes: Topological list of OutputRefs.
     """
     
     def __init__(self, inputs: Any, outputs: Any):
@@ -116,7 +98,7 @@ class Trace:
         }
         
     def compute(self) -> None:
-        """Compute the topological ordering of the subgraph (list of OutputRefs)."""
+        """Compute subgraph topology."""
         if self._computed:
             return
             
@@ -169,7 +151,7 @@ class Trace:
         self._computed = True
         
     def __str__(self) -> str:
-        """Pretty-print the trace using the GraphPrinter."""
+        """Pretty-print the trace."""
         if not self._computed:
             self.compute()
         return GraphPrinter(self).to_string()
@@ -183,20 +165,7 @@ class Trace:
 
 
 def trace(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Trace:
-    """Trace a function's computation graph.
-    
-    This is the main entry point for debugging and inspecting computation graphs.
-    It marks input tensors as traced, executes the function, and captures the
-    resulting computation graph.
-    
-    Args:
-        fn: The function to trace.
-        *args: Positional arguments (pytrees) passed to the function.
-        **kwargs: Keyword arguments (pytrees) passed to the function.
-        
-    Returns:
-        A Trace object with the computed graph nodes.
-    """
+    """Trace a function's computation graph."""
     # Collect all input tensor leaves
     from ..tensor.api import Tensor
     flat_args = tree_leaves(args)
@@ -230,7 +199,7 @@ def trace(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Trace:
 
 
 class GraphPrinter:
-    """Visualizes a Trace with a block-based, rich format."""
+    """Visualizes a Trace."""
 
     def __init__(self, trace: Trace):
         self.trace = trace

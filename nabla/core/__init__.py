@@ -46,7 +46,6 @@ __all__ = [
     "get_all_impls_topological",
     "print_trace_graph",
     "apply_to_operations",
-    "apply_to_operations",
     # TensorImpl utilities
     "Trace",
     "trace",

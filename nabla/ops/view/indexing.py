@@ -16,12 +16,7 @@ if TYPE_CHECKING:
 
 
 class GatherOp(Operation):
-    """Gather elements from data tensor along an axis using indices.
-    
-    For axis=0: data[i0, i1, ...] with indices[k0, k1, ...] gives
-    output[k0, k1, ..., i1, ...] where the axis dimension is replaced
-    by the indices dimensions.
-    """
+    """Gather elements from data tensor along an axis using indices."""
     
     @property
     def name(self) -> str:
@@ -69,9 +64,7 @@ class GatherOp(Operation):
         output_shapes: list[tuple[int, ...]],
         **kwargs,
     ):
-        """Gather sharding rule: Data(d...), Indices(i...) 
-        -> Output(d_prefix..., i..., d_suffix...).
-        """
+        """Gather sharding rule: Data(d...), Indices(i...) -> Output(d_prefix..., i..., d_suffix...)."""
         from ...core.sharding.propagation import OpShardingRuleTemplate
         
         if not input_shapes or len(input_shapes) < 2:
@@ -101,11 +94,7 @@ class GatherOp(Operation):
 
 
 class ScatterOp(Operation):
-    """Scatter updates into data tensor at indices along an axis.
-    
-    For axis=0: data[indices[k], ...] = updates[k, ...]
-    Output has same shape as input data.
-    """
+    """Scatter updates into data tensor at indices along an axis."""
     
     @property
     def name(self) -> str:

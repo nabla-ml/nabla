@@ -20,11 +20,11 @@ from ..propagation import (
 class SimpleSolver:
     """Solver that uses factor-based propagation with cost-based seeding.
     
-    The solver works in three phases:
-    1. Parse: Convert JSON graph into ShardingSpec objects
-    2. Seed: Apply cost-based heuristics to set initial constraints (e.g., matmul DP/MP)
-    3. Propagate: Use bidirectional propagation to flow constraints to all tensors
-    4. Export: Convert propagated specs to node-centric solution JSON
+    Phases:
+    1. Parse: JSON -> ShardingSpec
+    2. Seed: Cost-based heuristics (e.g. Matmul DP vs MP)
+    3. Propagate: Bidirectional flow
+    4. Export: Specs -> JSON
     """
 
     def __init__(self, mesh_shape: Tuple[int, ...], axis_names: Tuple[str, ...]):
@@ -46,19 +46,7 @@ class SimpleSolver:
         return total
 
     def solve(self, json_graph: str, debug: bool = False) -> Dict[str, Any]:
-        """Solve for optimal sharding specs using propagation.
-        
-        Returns:
-            Node-centric solution dict:
-            {
-                "nodes": {
-                    "node_id": {
-                        "inputs": { "0": {"dims": [...], "replicated": []} },
-                        "outputs": { "0": {"dims": [...], "replicated": []} }
-                    }
-                }
-            }
-        """
+        """Solve for optimal sharding specs using propagation."""
         if debug:
             print("\n[AutoSharding] Starting Propagation-Based Solver...")
 
@@ -150,17 +138,7 @@ class SimpleSolver:
         tensor_specs: Dict[int, ShardingSpec],
         debug: bool = False
     ) -> Optional[Dict]:
-        """Cost-based seeding for matmul: choose DP vs MP.
-        
-        Uses communication cost model for accurate DP vs MP tradeoffs:
-        - DP (Data Parallel): Split M dimension, no AllReduce needed
-        - MP (Model Parallel): Split K dimension, requires AllReduce on output
-        
-        The solver directly queries AllReduceOp.estimate_cost() to compute
-        the communication overhead for MP. This is the correct design because
-        communication costs belong to the communication operations themselves,
-        not to the source operation (matmul).
-        """
+        """Cost-based seeding for matmul: choose DP vs MP."""
         from nabla.ops.communication import AllReduceOp
         if TYPE_CHECKING:
             from ..spec import ShardingSpec, DimSpec
@@ -256,11 +234,7 @@ class SimpleSolver:
         tensor_specs: Dict[int, ShardingSpec],
         debug: bool = False
     ) -> bool:
-        """Propagate sharding through a single node using factor-based propagation.
-        
-        Returns:
-            True if any specs were modified, False otherwise.
-        """
+        """Propagate sharding through a single node (returns True if changed)."""
         rule_info = node.get("sharding_rule")
         if not rule_info or "equation" not in rule_info:
             return False

@@ -32,10 +32,6 @@ class ReduceScatterOp(CollectiveOperation):
         input_specs: list["ShardingSpec"] = None,
         output_specs: list["ShardingSpec"] = None,
     ) -> float:
-        """Estimate ReduceScatter cost."""
-        # Input is full size (before scatter).
-        # Same cost formula as AllGather (symetric) or (N-1)/N * Size
-        
         if not axes:
             return 0.0
             
@@ -56,18 +52,7 @@ class ReduceScatterOp(CollectiveOperation):
         axis: int,
         mesh: "DeviceMesh" = None,
     ) -> List[TensorValue]:
-        """Sum-reduce across shards then scatter the result.
-        
-        Note: MAX only supports sum reduction natively.
-        
-        Args:
-            shard_values: List of shard TensorValues
-            axis: Axis along which to scatter the reduced result
-            mesh: Device mesh (needed for distributed execution)
-            
-        Returns:
-            List of scattered TensorValues
-        """
+        """Sum-reduce across shards then scatter the result."""
         # DISTRIBUTED: Compose allreduce + scatter
         if mesh and mesh.is_distributed:
             from max.graph.ops.allreduce import sum as allreduce_sum
@@ -151,13 +136,5 @@ def reduce_scatter(sharded_tensor, axis: int, **kwargs):
     """Sum-reduce then scatter result across shards.
     
     Note: MAX only supports sum reduction natively.
-    
-    Args:
-        sharded_tensor: Tensor with values per shard
-        axis: Axis along which to scatter
-        **kwargs: Additional arguments
-        
-    Returns:
-        Tensor with scattered reduced values
     """
     return reduce_scatter_op(sharded_tensor, axis=axis, **kwargs)

@@ -18,17 +18,7 @@ if TYPE_CHECKING:
 
 
 class ShardOp(Operation):
-    """Split a replicated tensor into multiple sharded TensorValues.
-    
-    This operation takes a single TensorValue and produces a list of TensorValues,
-    one per shard. Each shard contains a slice of the original tensor according
-    to the sharding specification.
-    
-    Example:
-        x: TensorValue shape (4, 8)
-        spec: shard dim 0 on mesh axis "x" with 2 devices
-        result: [TensorValue (2, 8), TensorValue (2, 8)]
-    """
+    """Split a replicated tensor into multiple sharded TensorValues."""
     
     @property
     def name(self) -> str:
@@ -167,16 +157,8 @@ class ShardOp(Operation):
     def __call__(self, x, mesh: DeviceMesh, dim_specs: List[DimSpec], replicated_axes: Optional[Set[str]] = None, _bypass_idempotency: bool = False):
         """Shard a tensor according to the given specification.
         
-        This operation is IDEMPOTENT: if the tensor is already sharded with the
-        target spec, it returns the input unchanged (identity). If the tensor
-        has a different sharding, it performs proper resharding.
-        
-        This enables internal shard() calls inside shard_map functions to work
-        correctly without causing double-execution.
-        
-        Args:
-            _bypass_idempotency: Internal flag used by reshard_tensor to avoid
-                                 recursion. Do not set directly.
+        IDEMPOTENT: if the tensor is already sharded with the target spec,
+        returns identity to avoid double-execution in shard_map.
         """
         from ...core import Tensor
         from ...core import GRAPH
@@ -254,15 +236,5 @@ shard_op = ShardOp()
 
 # Public API
 def shard(x, mesh: DeviceMesh, dim_specs: List[DimSpec], **kwargs):
-    """Shard a tensor according to the given mesh and dimension specs.
-    
-    Args:
-        x: Input tensor (replicated/unsharded)
-        mesh: Device mesh defining shard topology
-        dim_specs: List of DimSpec for each dimension
-        **kwargs: Internal arguments (e.g. _bypass_idempotency)
-        
-    Returns:
-        Sharded tensor with multiple internal TensorValues
-    """
+    """Shard a tensor according to the given mesh and dimension specs."""
     return shard_op(x, mesh, dim_specs, **kwargs)

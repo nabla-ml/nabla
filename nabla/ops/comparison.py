@@ -53,7 +53,7 @@ class GreaterEqualOp(BinaryOperation):
         return ops.greater_equal(args[0], args[1])
 
 
-# Implement Less/LessEqual via Greater swap to avoid missing primitives
+# Implement Less/LessEqual via Greater swap
 class LessOp(BinaryOperation):
     @property
     def name(self) -> str:

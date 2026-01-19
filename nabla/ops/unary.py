@@ -15,11 +15,9 @@ if TYPE_CHECKING:
     from ..core import Tensor
 
 
+
 class ReluOp(UnaryOperation):
-    """Rectified Linear Unit (ReLU) activation.
-    
-    relu(x) = max(0, x)
-    """
+    """Rectified Linear Unit (ReLU) activation: max(0, x)."""
     
     @property
     def name(self) -> str:
@@ -31,10 +29,7 @@ class ReluOp(UnaryOperation):
 
 
 class SigmoidOp(UnaryOperation):
-    """Sigmoid activation function.
-    
-    sigmoid(x) = 1 / (1 + exp(-x))
-    """
+    """Sigmoid activation function: 1 / (1 + exp(-x))."""
     
     @property
     def name(self) -> str:
@@ -55,10 +50,7 @@ class SigmoidOp(UnaryOperation):
 
 
 class TanhOp(UnaryOperation):
-    """Hyperbolic tangent activation.
-    
-    tanh(x) = (exp(x) - exp(-x)) / (exp(x) + exp(-x))
-    """
+    """Hyperbolic tangent activation."""
     
     @property
     def name(self) -> str:
@@ -79,10 +71,7 @@ class TanhOp(UnaryOperation):
 
 
 class ExpOp(UnaryOperation):
-    """Exponential function.
-    
-    exp(x) = e^x
-    """
+    """Exponential function: e^x."""
     
     @property
     def name(self) -> str:
@@ -94,10 +83,7 @@ class ExpOp(UnaryOperation):
 
 
 class NegOp(UnaryOperation):
-    """Negation.
-    
-    neg(x) = -x
-    """
+    """Negation: -x."""
     
     @property
     def name(self) -> str:
@@ -109,10 +95,7 @@ class NegOp(UnaryOperation):
 
 
 class AbsOp(UnaryOperation):
-    """Absolute value.
-    
-    abs(x) = |x|
-    """
+    """Absolute value: |x|."""
     
     @property
     def name(self) -> str:
@@ -124,10 +107,7 @@ class AbsOp(UnaryOperation):
 
 
 class SoftmaxOp(UnaryOperation):
-    """Softmax activation function.
-    
-    softmax(x, axis) = exp(x) / sum(exp(x), axis)
-    """
+    """Softmax activation function: exp(x) / sum(exp(x))."""
     
     @property
     def name(self) -> str:

@@ -25,9 +25,7 @@ if TYPE_CHECKING:
 
 from ..common.context import _session
 
-# =============================================================================
-# 1. Global State & Constants
-# =============================================================================
+# Global State & Constants
 
 _GRAPH_EPOCH: int = 0
 _SEED: ContextVar[Tensor] = ContextVar("_SEED")
@@ -39,7 +37,7 @@ import os
 DEBUG_LAZY_EVAL: bool = os.getenv("NABLA_DEBUG", "0") == "1"
 
 def seed() -> Tensor:
-    """Returns the global random seed tensor, initializing if necessary."""
+    """Returns the global random seed tensor."""
     from ..tensor.api import Tensor
     if (s := _SEED.get(None)) is None:
         s = driver.Tensor(ops.random.SeedType)
@@ -51,9 +49,7 @@ def driver_tensor_type(t: driver.Tensor) -> graph.TensorType:
     """Converts a driver tensor to a TensorType."""
     return graph.TensorType(t.dtype, t.shape, graph.DeviceRef.from_device(t.device))
 
-# =============================================================================
-# 2. Graph Algorithms (Static Helpers)
-# =============================================================================
+# Graph Algorithms
 
 
 
@@ -80,9 +76,7 @@ def _remove_unused_arguments(g: graph.Graph) -> None:
             [builtin.StringAttr(f"input{i}") for i in range(len(g.inputs))]
         )
 
-# =============================================================================
-# 3. The Compute Engine
-# =============================================================================
+# The Compute Engine
 
 
 class ComputeGraph:
@@ -102,7 +96,7 @@ class ComputeGraph:
         self._reset(context, seed)
 
     def _reset(self, context: mlir.Context | None, seed: int) -> None:
-        """Resets the internal graph state for a new compilation cycle."""
+        """Resets the internal graph state."""
         self.context = context or mlir.Context()
         self.sources = {}
         self.unrealized = weakref.WeakValueDictionary()
@@ -113,12 +107,7 @@ class ComputeGraph:
     # --- Public API ---
 
     def add_input(self, tensor: Tensor) -> None:
-        """Registers a realized tensor's storages as graph inputs.
-        
-        Handles both single-value and multi-shard tensors uniformly.
-        All storages become graph inputs, and corresponding TensorValues
-        are stored back in the tensor impl.
-        """
+        """Registers a realized tensor's storages as graph inputs."""
         storages = tensor._impl._storages
         if not storages:
             raise TypeError("Only realized tensors may be graph inputs.")
@@ -159,6 +148,7 @@ class ComputeGraph:
     def add_unrealized(self, tensor: Tensor) -> None:
         """Registers a tensor as pending computation."""
         self.unrealized[id(tensor)] = tensor
+
 
     def evaluate(
         self, 
@@ -203,10 +193,7 @@ class ComputeGraph:
     # --- Execution Strategies ---
 
     def _evaluate_normal(self, unrealized: list[Tensor], return_model: bool) -> Any:
-        """Standard compilation path handling both single-device and eager-sharded execution.
-        
-        Handles both regular tensors (single value) and sharded tensors (multiple values).
-        """
+        """Standard compilation path handling both single-device and eager-sharded execution."""
         
         if DEBUG_LAZY_EVAL:
             print("=" * 70)
@@ -253,11 +240,7 @@ class ComputeGraph:
         value_map: list[tuple[Tensor, int | None]], 
         return_model: bool
     ) -> Any:
-        """Compiles and executes with sharded tensor support.
-        
-        Uses value_map to correctly store results back into tensors,
-        handling both single-value and multi-shard tensors.
-        """
+        """Compiles and executes with sharded tensor support."""
         # 1. Optimizations
         try:
             module = _core.Operation._from_cmlir(self.graph._module.operation)

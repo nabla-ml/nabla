@@ -24,7 +24,7 @@ class ReshardOp(Operation):
     
     Reshards a tensor from its current sharding (or replication) to a new target
     sharding specification. Handles both logical to physical spec conversion
-    (for batch_dims) and the actual data movement (gather + shard).
+    and data movement.
     """
     
     @property
@@ -106,15 +106,7 @@ class ReshardOp(Operation):
         return total_cost
     
     def maxpr(self, *args, **kwargs):
-        """ReshardOp is a composite operation that orchestrates other ops.
-        
-        It doesn't have its own maxpr because resharding is implemented as:
-        1. all_gather (if currently sharded) -> get global tensor
-        2. shard_op -> apply new sharding
-        
-        This pattern is similar to JAX's reshard which also compiles to
-        a sequence of collectives rather than a single primitive.
-        """
+        """ReshardOp is a composite operation. Use __call__ instead."""
         raise NotImplementedError(
             "ReshardOp is a composite operation. "
             "Use __call__ which orchestrates all_gather + shard_op."
@@ -127,14 +119,7 @@ class ReshardOp(Operation):
         dim_specs: List["DimSpec"],
         replicated_axes: Optional[Set[str]] = None,
     ) -> "Tensor":
-        """Reshard tensor to target specs.
-        
-        Args:
-            tensor: Input tensor
-            mesh: Target device mesh
-            dim_specs: List of DimSpecs. Can be logical (len=rank) or physical (len=rank+batch_dims).
-            replicated_axes: Optional set of axes to force replication on.
-        """
+        """Reshard tensor to target specs."""
         from ...core.sharding.spec import ShardingSpec, DimSpec, needs_reshard
         from ...core.tensor import Tensor
         
@@ -197,13 +182,5 @@ reshard_op = ReshardOp()
 
 # Public API
 def reshard(tensor: "Tensor", mesh: "DeviceMesh", dim_specs: List["DimSpec"], replicated_axes: Optional[Set[str]] = None, **kwargs) -> "Tensor":
-    """Reshard tensor to target specs.
-    
-    Args:
-        tensor: Input tensor
-        mesh: Target device mesh
-        dim_specs: Target dimension specs
-        replicated_axes: Optional set of axes to replicate over
-        **kwargs: Internal arguments
-    """
+    """Reshard tensor to target specs."""
     return reshard_op(tensor, mesh, dim_specs, replicated_axes, **kwargs)

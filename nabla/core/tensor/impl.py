@@ -23,28 +23,17 @@ if TYPE_CHECKING:
 
 
 class TensorImpl:
-    """Complete computation graph node containing all tensor internals.
-    
-    TensorImpl holds both the actual data storage and the autograd graph
-    structure. When `traced=True`, parent references are accessible via
-    the shared OutputRefs instance.
+    """Graph node containing tensor data and autograd structure.
     
     Attributes:
-        _values: List of graph values for lazy execution (one per shard).
-        _storages: List of realized driver.Tensors (one per shard), or None if unrealized.
-        sharding: Sharding specification (None = unsharded, single shard).
-        traced: Whether this node is part of a traced computation graph.
-        tangent: Tangent TensorImpl for JVP (forward-mode autodiff).
-        cotangent: Cotangent TensorImpl for VJP (reverse-mode autodiff).
-        batch_dims: Number of batch dimensions (always prefix of physical shape).
-        output_refs: Shared OutputRefs instance (holds op, op_args, op_kwargs).
-        output_index: Position among sibling outputs (0-indexed).
-    
-    Properties:
-        parents: List of parent TensorImpls (derived from output_refs.op_args).
-        op: The operation that created this tensor (from output_refs).
-        op_name: Name of the operation (from output_refs).
-        dual: Reference to the dual (sharded) TensorImpl for replay/transformations.
+        _values: Graph values for lazy execution (one per shard).
+        _storages: Realized driver.Tensors (one per shard).
+        sharding: Sharding specification.
+        traced: Whether this node is traced.
+        tangent: Tangent for JVP.
+        cotangent: Cotangent for VJP.
+        batch_dims: Number of batch dimensions.
+        output_refs: Provenance for autograd.
     """
     __slots__ = ('_values', '_storages', 'sharding', 'sharding_constraint', 'traced',
                  'tangent', 'cotangent', 'dual', 'batch_dims', 'output_refs', 'output_index', 
@@ -125,7 +114,7 @@ class TensorImpl:
     
     @property
     def parents(self) -> list[TensorImpl]:
-        """Get parent TensorImpls from op_args."""
+        """Get parent TensorImpls."""
         if self.output_refs is None: return []
         from ..common import pytree
         return [arg for arg in pytree.tree_leaves(self.output_refs.op_args) if isinstance(arg, TensorImpl)]

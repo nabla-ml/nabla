@@ -36,9 +36,6 @@ from .ops.view import (
     scatter,
     concatenate,
     stack,
-)
-
-from .ops.view import (
     moveaxis,
     incr_batch_dims,
     decr_batch_dims,

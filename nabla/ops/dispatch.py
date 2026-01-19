@@ -18,7 +18,6 @@ def execute_operation(op: "Operation", *args: Any, **kwargs: Any) -> Any:
     """Unified dispatch for all operations.
     
     Handles sharded and unsharded tensors uniformly via SPMD logic.
-    Unsharded execution is treated as a special case with mesh=None (implicit 1-shard).
     """
     from ..core import Tensor
     from ..core import GRAPH, Tensor

@@ -14,11 +14,7 @@ if TYPE_CHECKING:
 
 
 def ensure_tensor(x: Any) -> "Tensor":
-    """Convert scalar (int/float) or array-like to Tensor.
-    
-    This should be called at the start of any operation that accepts
-    multiple inputs to ensure all inputs are proper Tensors.
-    """
+    """Convert scalar or array-like to Tensor."""
     from ..core import Tensor
     import numpy as np
     
@@ -33,7 +29,7 @@ def ensure_tensor(x: Any) -> "Tensor":
 class Operation(ABC):
     """Base class for all operations.
     
-    Auto-propagates batch_dims = max(all input batch_dims) to all outputs.
+    Auto-propagates batch_dims.
     """
     
     @property
@@ -47,16 +43,7 @@ class Operation(ABC):
         ...
     
     def compute_cost(self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]) -> float:
-        """Estimate compute cost (FLOPs) for this operation.
-        
-        Override in subclasses to provide accurate FLOP estimates.
-        Communication costs are NOT included here - they are computed from
-        the CollectiveOperations (AllReduce, AllGather, etc.) that get
-        inserted by the SPMD execution based on factor propagation.
-        
-        Returns:
-            Estimated FLOPs. Default is 0.0 (negligible compute).
-        """
+        """Estimate compute cost (FLOPs)."""
         return 0.0
     
     def memory_cost(
@@ -65,19 +52,7 @@ class Operation(ABC):
         output_shapes: list[tuple[int, ...]], 
         dtype_bytes: int = 4
     ) -> int:
-        """Estimate memory usage (bytes) for output tensors.
-        
-        Used by the solver for memory-aware sharding decisions. This estimates
-        the memory required to store the operation's output tensors.
-        
-        Args:
-            input_shapes: Shapes of input tensors
-            output_shapes: Shapes of output tensors
-            dtype_bytes: Bytes per element (default 4 for float32)
-        
-        Returns:
-            Total bytes for all output tensors.
-        """
+        """Estimate memory usage (bytes) for output tensors."""
         total = 0
         for shape in output_shapes:
             elements = 1
@@ -97,31 +72,12 @@ class Operation(ABC):
         output_sharding: Any, 
         shard_idx: int
     ) -> dict:
-        """Transform kwargs for per-shard maxpr execution.
-        
-        Override this in operations that have shape/target kwargs that need
-        to be converted from GLOBAL to LOCAL for sharded execution.
-        
-        Examples:
-            - ReshapeOp: converts 'shape' from global to local based on output_sharding
-            - BroadcastToOp: converts 'shape' from global to local
-        
-        Args:
-            kwargs: Original kwargs passed to __call__
-            output_sharding: Inferred output ShardingSpec (or None if replicated)
-            shard_idx: Current shard index being processed
-            
-        Returns:
-            kwargs suitable for this shard's maxpr call
-        """
+        """Transform kwargs for per-shard maxpr execution."""
         # Default: pass kwargs unchanged (works for elementwise, reduce, etc.)
         return kwargs
 
     def infer_output_rank(self, input_shapes: tuple[tuple[int, ...], ...], **kwargs) -> int:
-        """Infer output rank from input shapes.
-        
-        Default implementation assumes element-wise operation (output rank equals input rank).
-        """
+        """Infer output rank from input shapes."""
         if not input_shapes:
             return 0
         return len(input_shapes[0])
@@ -132,10 +88,7 @@ class Operation(ABC):
         output_shapes: list[tuple[int, ...]],
         **kwargs,
     ):
-        """Default sharding rule: elementwise for same-rank ops.
-        
-        All inputs and output share the same factors (d0, d1, ...).
-        """
+        """Default sharding rule: elementwise for same-rank ops."""
         from ..core.sharding.propagation import OpShardingRuleTemplate
         
         n_inputs = len(input_shapes)
@@ -208,10 +161,7 @@ class Operation(ABC):
 # ===----------------------------------------------------------------------=== #
 
 class BinaryOperation(Operation):
-    """Base for binary element-wise ops with batch_dims-aware broadcasting.
-    
-    Provides default compute_cost: 1 FLOP per output element (elementwise).
-    """
+    """Base for binary element-wise ops with batch_dims-aware broadcasting."""
     
     def compute_cost(self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]) -> float:
         """Elementwise binary op: 1 FLOP per output element."""
@@ -293,8 +243,7 @@ class BinaryOperation(Operation):
 class LogicalAxisOperation(Operation):
     """Base for ops that take LOGICAL axis/axes kwargs.
     
-    Translates ALL integer kwargs by batch_dims offset.
-    Works for: unsqueeze, squeeze, transpose, reduce_sum, etc.
+    Translates integer kwargs by batch_dims offset.
     """
     
     # True for unsqueeze (uses ndim+1 for negative axis normalization)
@@ -348,14 +297,8 @@ class LogicalAxisOperation(Operation):
         )
 
 
-# Proper ABC for reduction operations with reduce sharding rule
 class ReduceOperation(LogicalAxisOperation):
-    """Base for reduction operations (sum, mean, max, min, etc.).
-    
-    Inherits axis translation from LogicalAxisOperation.
-    Provides reduce sharding rule: reduced dim gets no factor.
-    Provides default compute_cost: 1 FLOP per input element.
-    """
+    """Base for reduction operations (sum, mean, max, min, etc.)."""
     
     def compute_cost(self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]) -> float:
         """Reduction: 1 FLOP per input element (for summing/comparing)."""
@@ -372,11 +315,7 @@ class ReduceOperation(LogicalAxisOperation):
         output_shapes: list[tuple[int, ...]],
         **kwargs,
     ):
-        """Reduction: reduce dims are removed or sized 1.
-        
-        If keepdims=True, reduced dim becomes size 1 but retains a factor.
-        If keepdims=False, reduced dim is removed from output string.
-        """
+        """Reduction: reduce dims are removed or sized 1."""
         from ..core.sharding.propagation import OpShardingRuleTemplate
         
         if not input_shapes:
@@ -437,10 +376,7 @@ class ReduceOperation(LogicalAxisOperation):
 
 
 class UnaryOperation(Operation):
-    """Base for unary element-wise operations.
-    
-    Provides default compute_cost: 1 FLOP per element.
-    """
+    """Base for unary element-wise operations."""
     
     def compute_cost(self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]) -> float:
         """Unary elementwise op: 1 FLOP per element by default."""
@@ -453,11 +389,7 @@ class UnaryOperation(Operation):
 
 
 class LogicalShapeOperation(Operation):
-    """Base for ops that take LOGICAL shape kwargs.
-    
-    Prepends batch_shape to the shape kwarg.
-    Works for: reshape, broadcast_to, etc.
-    """
+    """Base for ops that take LOGICAL shape kwargs."""
     
     def __call__(self, x: Tensor, *, shape: tuple[int, ...]) -> Tensor:
         batch_dims = x.batch_dims

@@ -22,8 +22,7 @@ class BroadcastToOp(LogicalShapeOperation):
         return "broadcast_to"
     
     def maxpr(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
-        # Simple same-rank broadcast. Any unsqueezing should happen at the Tensor level
-        # (in the broadcast_to function) so sharding propagation can handle it.
+        # Simple same-rank broadcast. Any unsqueezing happens at Tensor level.
         return ops.broadcast_to(x, shape)
     
     def sharding_rule(
@@ -32,11 +31,7 @@ class BroadcastToOp(LogicalShapeOperation):
         output_shapes: list[tuple[int, ...]],
         **kwargs,
     ):
-        """Broadcast: input dims align to output SUFFIX (numpy semantics).
-        
-        Uses shape-aware template to handle dimension expansion (size 1 -> N).
-        Handles scalar inputs (rank 0) by treating them as fully replicated.
-        """
+        """Broadcast: input dims align to output SUFFIX (numpy semantics)."""
         from ...core.sharding.propagation import OpShardingRuleTemplate
         
         if not input_shapes:
@@ -110,8 +105,7 @@ class ReshapeOp(LogicalShapeOperation):
     def __call__(self, x: "Tensor", *, shape: tuple[int, ...]) -> "Tensor":
         """Reshape with conservative sharding safety.
         
-        If ANY logical dimension is sharded, we gather the entire tensor
-        before reshaping. This is conservative but always correct.
+        If ANY logical dimension is sharded, we gather the entire tensor.
         """
         from ...core.sharding.spec import DimSpec, ShardingSpec
         
@@ -251,11 +245,7 @@ class SliceTensorOp(Operation):
 
 
 class ConcatenateOp(LogicalAxisOperation):
-    """Concatenate tensors along an axis.
-    
-    All input tensors must have same shape except along concat axis.
-    The concat axis dimension is summed.
-    """
+    """Concatenate tensors along an axis."""
     
     @property
     def name(self) -> str:

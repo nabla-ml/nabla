@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
-"""Context managers and default settings for eager execution."""
+"""Context managers and default settings."""
 
 from __future__ import annotations
 
@@ -80,26 +80,26 @@ def _default_device() -> Device:
 def defaults(
     dtype: DType | None = None, device: Device | None = None
 ) -> tuple[DType, Device]:
-    """Gets the default dtype and device for tensor creation."""
+    """Get default dtype and device for tensor creation."""
     device = device or _default_device()
     return (dtype or _default_dtype(device)), device
 
 
 def default_device(device: Device | graph.DeviceRef):  # noqa: ANN201
-    """Context manager for setting the default device for tensor creation."""
+    """Context manager setting default device."""
     if isinstance(device, graph.DeviceRef):
         device = device.to_device()
     return contextvar_context(_DEFAULT_DEVICE, device)
 
 
 def default_dtype(dtype: DType):  # noqa: ANN201
-    """Context manager for setting the default dtype for tensor creation."""
+    """Context manager setting default dtype."""
     return contextvar_context(_DEFAULT_DTYPE, dtype)
 
 
 @contextlib.contextmanager
 def defaults_like(like: Tensor | TensorType) -> Generator[None]:
-    """Context manager setting the default dtype and device for tensor creation."""
+    """Context manager setting default dtype and device from template."""
     with default_dtype(like.dtype), default_device(like.device):
         yield
 
@@ -107,7 +107,7 @@ def defaults_like(like: Tensor | TensorType) -> Generator[None]:
 _GLOBAL_SESSION: engine.api.InferenceSession | None = None
 
 def _session() -> engine.api.InferenceSession:
-    """A single global inference session for compiling and running kernels."""
+    """Global inference session singleton."""
     if session := _SESSION.get(None):
         return session
 
@@ -126,7 +126,7 @@ def _session() -> engine.api.InferenceSession:
 
 
 def _in_running_loop() -> bool:
-    """Check whether the caller is inside a running event loop."""
+    """Check if inside a running event loop."""
     try:
         asyncio.get_running_loop()
     except RuntimeError:

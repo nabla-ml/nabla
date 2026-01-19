@@ -59,12 +59,7 @@ class MatmulOp(Operation):
         return "matmul"
     
     def compute_cost(self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]) -> float:
-        """Estimate FLOPs for matmul: 2 * M * N * K.
-        
-        Communication costs (e.g., AllReduce for MP) are not included here.
-        They are computed from the AllReduceOp that gets inserted by SPMD
-        execution when contracting dimensions are sharded.
-        """
+        """Estimate FLOPs for matmul: 2 * M * N * K."""
         # Standard case: A[..., M, K], B[..., K, N] -> C[..., M, N]
         if not input_shapes or len(input_shapes) < 2:
             return 0.0
@@ -124,11 +119,7 @@ class MatmulOp(Operation):
         input_shapes: list[tuple[int, ...]],
         output_shapes: list[tuple[int, ...]],
     ) -> Any:
-        """Matmul: (batch..., m, k) @ (batch..., k, n) -> (batch..., m, n).
-        
-        k is the contracting factor (appears only in inputs).
-        Also handles broadcast case where one input lacks batch dims.
-        """
+        """Matmul: (batch..., m, k) @ (batch..., k, n) -> (batch..., m, n)."""
         from ..core.sharding.propagation import OpShardingRuleTemplate
         return OpShardingRuleTemplate.parse("... m k, ... k n -> ... m n", input_shapes).instantiate(
             input_shapes, output_shapes

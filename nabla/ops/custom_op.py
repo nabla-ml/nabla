@@ -20,21 +20,18 @@ def call_custom_kernel(
     device: None | DeviceRef = None,
     **kwargs: Any,
 ) -> Union[TensorValue, List[TensorValue]]:
-    """
-    Helper to invoke a custom Mojo kernel, handling library loading automatically.
+    """Helper to invoke a custom Mojo kernel, handling library loading automatically.
 
     Args:
         func_name: The name of the registered Mojo kernel (e.g. @register("name")).
         kernel_path: Path(s) to the kernel source file or directory.
-                     If a relative path is string, it is resolved relative to the CALLER's file.
-        values: Input TensorValue(s). Can be a single value or a list.
-        out_types: Expected output type(s). Can be a single type or a list.
-        device: Device to run on. Defaults to CPU.
+        values: Input TensorValue(s).
+        out_types: Expected output type(s).
+        device: Device to run on (default: CPU).
         **kwargs: Additional arguments passed to ops.custom.
 
     Returns:
-        Result TensorValue(s). Returns a single value if out_types was a single value,
-        otherwise returns a list.
+        Result TensorValue(s).
     """
     if device is None:
         device = DeviceRef.CPU()

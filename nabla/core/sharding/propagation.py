@@ -29,14 +29,13 @@ class PropagationStrategy(IntEnum):
 
 @dataclass
 class FactorSharding:
-    """
-    Sharding state for a single factor during propagation.
+    """Sharding state for a single factor during propagation.
     
     Attributes:
-        axes: Mesh axes assigned to this factor (major to minor order)
-        priority: Priority level (0 = strongest/user-specified, higher = weaker)
-        is_open: If True, can accept additional sharding; if False, fixed
-        partial: If True, factor holds partial sums
+        axes: Assigned mesh axes (major-to-minor).
+        priority: 0=Strongest, 999=Weakest.
+        is_open: If True, can accept more sharding.
+        partial: If True, factor holds partial sums.
     """
     axes: List[str] = field(default_factory=list)
     priority: int = 999  # Default: weakest priority (unspecified)
@@ -99,9 +98,7 @@ class FactorShardingState:
         mesh: DeviceMesh,
         strategy: PropagationStrategy = None,
     ) -> None:
-        """
-        Merge new sharding information into a factor using Shardy conflict resolution semantics.
-        """
+        """Merge new sharding information with Shardy conflict resolution."""
         if strategy is None:
             strategy = PropagationStrategy.BASIC
             
@@ -207,9 +204,7 @@ class FactorShardingState:
 
 @dataclass
 class OpShardingRule:
-    """
-    Einsum-like factor mapping defining how shardings propagate through an operation.
-    """
+    """Einsum-like factor mapping for sharding propagation."""
     input_mappings: List[Dict[int, List[str]]]  
     output_mappings: List[Dict[int, List[str]]] 
     factor_sizes: Dict[str, int]
@@ -234,12 +229,7 @@ class OpShardingRule:
         return results
     
     def get_contracting_factors(self) -> Set[str]:
-        """Return factors that appear only in inputs (not in outputs).
-        
-        These are "contracting" factors (like k in matmul A[m,k] @ B[k,n] -> C[m,n]).
-        When sharded, operations on contracting factors produce partial results
-        that require AllReduce to combine.
-        """
+        """Return factors that appear only in inputs (contracting)."""
         input_factors = set()
         for mapping in self.input_mappings:
             for factors in mapping.values():
@@ -253,13 +243,7 @@ class OpShardingRule:
         return input_factors - output_factors
     
     def to_einsum_notation(self) -> str:
-        """Convert to einsum-like notation string.
-        
-        Outputs space-separated format: "m k, k n -> m n"
-        - Single factors: just the factor name
-        - Multiple factors on one dim: grouped with parentheses
-        - Empty mapping: "1" (for reduced/broadcast dimensions)
-        """
+        """Convert to einsum-like string "m k, k n -> m n"."""
         def mapping_to_str(mapping: Dict[int, List[str]]) -> str:
             if not mapping:
                 return "1"
@@ -381,10 +365,7 @@ class OpShardingRuleTemplate:
 
     @classmethod
     def parse(cls, equation: str, input_shapes: Optional[List[Tuple[int, ...]]] = None) -> "OpShardingRuleTemplate":
-        """Create template from einsum string (e.g. 'mk,kn->mn').
-        
-        Supports '...' for broadcasting batch dimensions.
-        """
+        """Create template from einsum string (e.g. 'mk,kn->mn')."""
         lhs, rhs = equation.split('->')
         input_strs = [s.strip() for s in lhs.split(',')]
         output_strs = [s.strip() for s in rhs.split(',')]
@@ -552,15 +533,7 @@ def _should_update_dim(
     proposed_axes: List[str],
     proposed_priority: int,
 ) -> bool:
-    """Determine if a dimension should be updated based on Shardy semantics.
-    
-    Key cases:
-    - Stronger priority always wins
-    - Equal priority: 
-      - If current is open, can receive new sharding
-      - If proposed is the "common prefix" from conflict resolution,
-        we MUST update to enforce consistency (even for closed dims)
-    """
+    """Determine if a dimension should be updated based on conflicts."""
     # Case 1: Stronger priority always wins
     if proposed_priority < current.priority:
         return True
@@ -594,12 +567,7 @@ def _update_from_factors(
     mappings: List[Dict[int, List[str]]],
     state: FactorShardingState,
 ) -> bool:
-    """Phase 3: Project factor shardings back to dimension shardings (UPDATE).
-    
-    IMPORTANT: Tracks axes used across ALL dimensions of a tensor to prevent
-    the same axis from being assigned to multiple dimensions (which is invalid).
-    If a conflict arises, later dimensions get the axis stripped (replicated).
-    """
+    """Phase 3: Project factor shardings back to dimension shardings (UPDATE)."""
     did_change = False
     
     for t_idx, spec in enumerate(specs):
@@ -679,10 +647,7 @@ def propagate_sharding(
     strategy: PropagationStrategy = PropagationStrategy.BASIC,
     max_priority: Optional[int] = None,
 ) -> bool:
-    """
-    Propagate shardings between inputs/outputs using the factor-based algorithm.
-    Returns True if any spec was modified.
-    """
+    """Propagate shardings between inputs/outputs. Returns True if changed."""
     if not input_specs and not output_specs:
         return False
     
@@ -708,28 +673,7 @@ def run_hierarchical_propagation_pass(
     max_user_priority: int = 10,
     max_iterations: int = 100,
 ) -> int:
-    """Run hierarchical sharding propagation following XLA Shardy's nested loop structure.
-    
-    This implements the complete propagation hierarchy:
-    1. User priorities (p0, p1, p2, ...)
-    2. Operation priorities (PASSTHROUGH, CONTRACTION, REDUCTION, COMMUNICATION)
-    3. Propagation strategies (AGGRESSIVE, BASIC)
-    
-    Args:
-        operations_with_rules: List of (op, rule, input_specs, output_specs) tuples
-        max_user_priority: Maximum user priority to propagate (default: 10)
-        max_iterations: Max iterations per nested loop to prevent infinite loops
-        
-    Returns:
-        Total number of changes made across all iterations
-    
-    Example:
-        # operations_with_rules = [
-        #     (matmul_op, matmul_rule, [a_spec, b_spec], [c_spec]),
-        #     (add_op, add_rule, [c_spec, d_spec], [e_spec]),
-        # ]
-        # changes = run_hierarchical_propagation_pass(operations_with_rules)
-    """
+    """Run hierarchical sharding propagation (User -> Op Priority -> Strategy)."""
     total_changes = 0
     
     # Outer loop: User priorities (p0, p1, p2, ...)

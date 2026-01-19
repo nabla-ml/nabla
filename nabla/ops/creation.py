@@ -17,7 +17,7 @@ from ..core import defaults
 
 
 class ConstantOp(Operation):
-    """Create a tensor from a constant value (number, array, nested list)."""
+    """Create a tensor from a constant value."""
     
     @property
     def name(self) -> str:
@@ -170,12 +170,7 @@ def constant(
     """Create a tensor from a constant value.
     
     Args:
-        value: A number, numpy array, or nested list/tuple of numbers.
-        dtype: Data type (default: float32).
-        device: Device to create tensor on (default: CPU).
-        
-    Returns:
-        A Tensor containing the constant value.
+        value: Scalar, array, or nested sequence.
     """
     dtype, device = defaults(dtype, device)
     return _constant_op(value, dtype, device)
@@ -189,18 +184,7 @@ def full(
     device: Device | None = None,
     traced: bool = False,
 ):
-    """Create a tensor filled with a constant value.
-    
-    Args:
-        shape: Shape of the tensor.
-        value: Value to fill the tensor with.
-        dtype: Data type (default: float32).
-        device: Device to create tensor on (default: CPU).
-        traced: Whether to enable tracing for autograd.
-        
-    Returns:
-        A Tensor filled with the specified value.
-    """
+    """Create a tensor filled with a constant value."""
     dtype, device = defaults(dtype, device)
     t = _full_op(shape, value, dtype, device)
     if traced:
@@ -215,17 +199,7 @@ def zeros(
     device: Device | None = None,
     traced: bool = False,
 ):
-    """Create a tensor filled with zeros.
-    
-    Args:
-        shape: Shape of the tensor.
-        dtype: Data type (default: float32).
-        device: Device to create tensor on (default: CPU).
-        traced: Whether to enable tracing for autograd.
-        
-    Returns:
-        A Tensor filled with zeros.
-    """
+    """Create a tensor filled with zeros."""
     dtype, device = defaults(dtype, device)
     t = _zeros_op(shape, dtype, device)
     if traced:
@@ -240,17 +214,7 @@ def ones(
     device: Device | None = None,
     traced: bool = False,
 ):
-    """Create a tensor filled with ones.
-    
-    Args:
-        shape: Shape of the tensor.
-        dtype: Data type (default: float32).
-        device: Device to create tensor on (default: CPU).
-        traced: Whether to enable tracing for autograd.
-        
-    Returns:
-        A Tensor filled with ones.
-    """
+    """Create a tensor filled with ones."""
     dtype, device = defaults(dtype, device)
     t = _ones_op(shape, dtype, device)
     if traced:
@@ -266,18 +230,7 @@ def arange(
     dtype: DType | None = None,
     device: Device | None = None,
 ):
-    """Create a tensor with evenly spaced values.
-    
-    Args:
-        start: Start of interval (or stop if stop is None).
-        stop: End of interval.
-        step: Spacing between values.
-        dtype: Data type (default: float32).
-        device: Device to create tensor on (default: CPU).
-        
-    Returns:
-        A 1-D Tensor with evenly spaced values.
-    """
+    """Create a tensor with evenly spaced values."""
     dtype, device = defaults(dtype, device)
     if stop is None:
         start, stop = 0, start
@@ -292,18 +245,7 @@ def uniform(
     dtype: DType | None = None,
     device: Device | None = None,
 ):
-    """Create a tensor with uniform random values.
-    
-    Args:
-        shape: Shape of the tensor.
-        low: Lower bound of the uniform distribution.
-        high: Upper bound of the uniform distribution.
-        dtype: Data type (default: float32).
-        device: Device to create tensor on (default: CPU).
-        
-    Returns:
-        A Tensor with values uniformly distributed in [low, high).
-    """
+    """Create a tensor with uniform random values."""
     dtype, device = defaults(dtype, device)
     return _uniform_op(shape, low, high, dtype, device)
 
@@ -316,18 +258,7 @@ def gaussian(
     dtype: DType | None = None,
     device: Device | None = None,
 ):
-    """Create a tensor with Gaussian (normal) random values.
-    
-    Args:
-        shape: Shape of the tensor.
-        mean: Mean of the Gaussian distribution.
-        std: Standard deviation of the Gaussian distribution.
-        dtype: Data type (default: float32).
-        device: Device to create tensor on (default: CPU).
-        
-    Returns:
-        A Tensor with values from a Gaussian distribution.
-    """
+    """Create a tensor with Gaussian (normal) random values."""
     dtype, device = defaults(dtype, device)
     return _gaussian_op(shape, mean, std, dtype, device)
 

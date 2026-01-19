@@ -20,13 +20,7 @@ class PPermuteOp(CollectiveOperation):
     """Point-to-point permutation collective.
     
     Each device sends its value to exactly one other device according to a
-    permutation table. This is useful for ring-based algorithms, pipeline
-    parallelism, and halo exchange.
-    
-    Example:
-        # Ring shift: device 0→1→2→3→0
-        perm = [(0, 1), (1, 2), (2, 3), (3, 0)]
-        y = ppermute(x, perm)
+    permutation table.
     """
     
     @property
@@ -39,16 +33,7 @@ class PPermuteOp(CollectiveOperation):
         permutation: List[tuple],
         mesh: "DeviceMesh" = None,
     ) -> List[TensorValue]:
-        """Permute values between devices according to permutation.
-        
-        Args:
-            shard_values: List of TensorValues, one per device
-            permutation: List of (source_idx, dest_idx) pairs
-            mesh: Device mesh for distributed execution
-            
-        Returns:
-            List of TensorValues after permutation (zeros for missing dests)
-        """
+        """Permute values between devices according to permutation."""
         num_devices = len(shard_values)
         
         # Build reverse map: dest -> src
@@ -86,19 +71,5 @@ ppermute_op = PPermuteOp()
 
 # Public API
 def ppermute(sharded_tensor, permutation: List[tuple]):
-    """Point-to-point permutation collective.
-    
-    Each device sends its value to exactly one other device according to
-    a permutation table. Useful for ring-based algorithms, pipeline
-    parallelism, and halo exchange.
-    
-    Args:
-        sharded_tensor: Tensor with multiple shards
-        permutation: List of (source_idx, dest_idx) pairs specifying
-                     which device sends to which. Destinations without
-                     senders receive zeros.
-        
-    Returns:
-        Tensor with permuted values
-    """
+    """Point-to-point permutation collective."""
     return ppermute_op(sharded_tensor, permutation=permutation)

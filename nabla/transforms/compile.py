@@ -24,9 +24,7 @@ from ..core.tensor import Tensor
 T = TypeVar("T")
 
 
-# =============================================================================
-# Data Classes
-# =============================================================================
+
 
 @dataclass
 class CompilationStats:
@@ -68,9 +66,7 @@ class _CachedModel:
     output_static_values: list[Any]
 
 
-# =============================================================================
-# CompiledFunction
-# =============================================================================
+
 
 class CompiledFunction(Generic[T]):
     """A compiled function with caching."""
@@ -101,9 +97,7 @@ class CompiledFunction(Generic[T]):
     def clear_cache(self) -> None:
         self._cache.clear()
     
-    # -------------------------------------------------------------------------
-    # Main Entry Point
-    # -------------------------------------------------------------------------
+
     
     def __call__(self, *args: Any, **kwargs: Any) -> T:
         # Extract tensors and build cache key
@@ -119,9 +113,7 @@ class CompiledFunction(Generic[T]):
         # Cache miss → trace, compile, cache
         return self._trace_and_compile(args, kwargs, flat, treedef, tensor_idx, key)
     
-    # -------------------------------------------------------------------------
-    # Input Processing
-    # -------------------------------------------------------------------------
+
     
     def _extract_inputs(
         self, flat: list[Any]
@@ -172,9 +164,7 @@ class CompiledFunction(Generic[T]):
             for i in range(len(dims))
         ])
     
-    # -------------------------------------------------------------------------
-    # Tracing and Compilation
-    # -------------------------------------------------------------------------
+
     
     def _trace_and_compile(
         self,
@@ -293,9 +283,7 @@ class CompiledFunction(Generic[T]):
         warnings.warn(f"{self.__name__} has side effects. Falling back.", stacklevel=2)
         return self.__wrapped__(*args, **kwargs)
     
-    # -------------------------------------------------------------------------
-    # Cache Management and Execution
-    # -------------------------------------------------------------------------
+
     
     def _add_to_cache(self, key: _CacheKey, cached: _CachedModel, t0: float) -> None:
         """Add to cache with LRU eviction."""
@@ -336,9 +324,7 @@ class CompiledFunction(Generic[T]):
         return f"<CompiledFunction {self.__name__} cache_size={len(self._cache)}>"
 
 
-# =============================================================================
-# Helpers
-# =============================================================================
+
 
 def _shape_signature(shape: graph.Shape) -> tuple:
     """Convert Shape to hashable tuple: StaticDim→int, SymbolicDim→'$name'."""
@@ -358,9 +344,7 @@ def _shape_signature(shape: graph.Shape) -> tuple:
     return tuple(result)
 
 
-# =============================================================================
-# Public API
-# =============================================================================
+
 
 def compile(
     fn: Callable[..., T] | None = None,

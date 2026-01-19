@@ -131,15 +131,7 @@ class AllGatherOp(CollectiveOperation):
         return results
     
     def __call__(self, sharded_tensor, axis: int, **kwargs):
-        """Gather all shards to produce a replicated tensor.
-        
-        Args:
-            sharded_tensor: Tensor with multiple shards
-            axis: Axis along which shards are split
-            
-        Returns:
-            Replicated tensor with gathered values
-        """
+        """Gather all shards to produce a replicated tensor."""
         from ...core import Tensor
         from ...core import GRAPH
         from ...core.sharding.spec import ShardingSpec, DimSpec
@@ -264,11 +256,8 @@ class GatherAllAxesOp(Operation):
         """Reconstruct the global tensor from potentially multi-dimensional shards.
         
         Algorithm (hierarchical concatenation):
-        1. For each sharded tensor dimension (reverse order):
-           a. Group shards by coordinates on ALL mesh axes EXCEPT the one being merged
-           b. Within each group, sort by coordinate on the merge axis
-           c. Concatenate group members along the tensor dimension
-        2. After processing all sharded dimensions, one global tensor remains
+        1. For each sharded tensor dimension: Group shards by coordinates on ALL mesh axes EXCEPT the one being merged.
+        2. Within each group, sort by coordinate on the merge axis and concatenate.
         """
         # from max.graph import ops (already imported globally)
         
@@ -348,14 +337,7 @@ class GatherAllAxesOp(Operation):
         return current_shard_descs[0][0]
 
     def __call__(self, sharded_tensor):
-        """Gather all sharded axes to produce a replicated tensor.
-        
-        Args:
-            sharded_tensor: Tensor with any sharding configuration
-            
-        Returns:
-            Replicated tensor with the full global data
-        """
+        """Gather all sharded axes to produce a replicated tensor."""
         from ...core import Tensor
         from ...core import GRAPH
         from ...core.sharding.spec import ShardingSpec, DimSpec
@@ -399,26 +381,10 @@ gather_all_axes_op = GatherAllAxesOp()
 
 # Public API functions
 def all_gather(sharded_tensor, axis: int, **kwargs):
-    """Gather all shards to produce a replicated tensor.
-    
-    Args:
-        sharded_tensor: Tensor with multiple shards
-        axis: Axis along which shards are split
-        **kwargs: Additional arguments for internal use
-        
-    Returns:
-        Replicated tensor with gathered values
-    """
+    """Gather all shards to produce a replicated tensor."""
     return all_gather_op(sharded_tensor, axis, **kwargs)
 
 
 def gather_all_axes(sharded_tensor):
-    """Gather all sharded axes to produce a fully replicated tensor.
-    
-    Args:
-        sharded_tensor: Tensor with any sharding configuration
-        
-    Returns:
-        Replicated tensor with the full global data
-    """
+    """Gather all sharded axes to produce a fully replicated tensor."""
     return gather_all_axes_op(sharded_tensor)

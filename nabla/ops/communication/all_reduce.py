@@ -146,11 +146,7 @@ class AllReduceOp(CollectiveOperation):
 
 
 class PMeanOp(CollectiveOperation):
-    """Compute mean across all shards (psum / axis_size).
-    
-    This is a convenience wrapper that combines psum with division
-    by the number of devices.
-    """
+    """Compute mean across all shards (psum / axis_size)."""
     
     @property
     def name(self) -> str:
@@ -162,16 +158,7 @@ class PMeanOp(CollectiveOperation):
         mesh: "DeviceMesh" = None,
         axis_name: str = None,
     ) -> List[TensorValue]:
-        """Compute mean across shards.
-        
-        Args:
-            shard_values: List of shard TensorValues
-            mesh: Device mesh
-            axis_name: Name of axis to reduce along (for size calculation)
-            
-        Returns:
-            List of mean TensorValues (all identical)
-        """
+        """Compute mean across shards."""
         # First do psum
         reduced = all_reduce_op.maxpr(shard_values, mesh=mesh)
         
@@ -208,13 +195,6 @@ def all_reduce(sharded_tensor, **kwargs):
     """Sum-reduce across all shards.
     
     Note: MAX only supports sum reduction natively.
-    
-    Args:
-        sharded_tensor: Tensor with partial values per shard
-        **kwargs: Additional arguments
-        
-    Returns:
-        Tensor with sum-reduced values (replicated across shards)
     """
     return all_reduce_op(sharded_tensor, **kwargs)
 
@@ -222,14 +202,6 @@ def all_reduce(sharded_tensor, **kwargs):
 def pmean(sharded_tensor, axis_name: str = None):
     """Compute mean across all shards.
     
-    Equivalent to psum(x) / axis_size. Useful for averaging gradients
-    in data parallelism.
-    
-    Args:
-        sharded_tensor: Tensor with partial values per shard
-        axis_name: Name of mesh axis for size calculation (optional)
-        
-    Returns:
-        Tensor with mean values (replicated across shards)
+    Equivalent to psum(x) / axis_size.
     """
     return pmean_op(sharded_tensor, axis_name=axis_name)

@@ -19,13 +19,7 @@ if TYPE_CHECKING:
 class CollectiveOperation(Operation):
     """Base class for collective communication operations.
     
-    Reduces boilerplate for operations that:
-    1. Take a sharded/replicated tensor as input
-    2. Hydrate its values
-    3. Perform a MAX graph operation (maxpr)
-    4. Return a new Tensor with updated sharding spec
-    
-    Also provides unified cost modeling infrastructure.
+    Handles value hydration, graph execution (maxpr), and output wrapping/sharding update.
     """
     
     def __call__(self, sharded_tensor, **kwargs):
@@ -85,11 +79,7 @@ class CollectiveOperation(Operation):
         output_shapes: list[tuple[int, ...]],
         mesh: "DeviceMesh"
     ) -> float:
-        """Unified communication cost estimation.
-        
-        Delegates to self.estimate_cost() which must be implemented by subclasses.
-        Calculates basic tensor size metrics to pass to estimate_cost.
-        """
+        """Unified communication cost estimation."""
         if not input_shapes:
             return 0.0
             
@@ -119,29 +109,11 @@ class CollectiveOperation(Operation):
         input_specs: list["ShardingSpec"] = None,
         output_specs: list["ShardingSpec"] = None,
     ) -> float:
-        """Estimate cost of the collective operation.
-        
-        Args:
-            size_bytes: Total size of the tensor in bytes
-            mesh: Device mesh
-            axes: Relevant mesh axes for this operation
-            input_specs: Input sharding specs (optional context)
-            output_specs: Output sharding specs (optional context)
-        """
+        """Estimate cost of the collective operation."""
         return 0.0
 
     def _group_shards_by_axes(self, shard_values, mesh, group_by_axes):
-        """Group shards by coordinates on specific axes.
-        
-        Args:
-            shard_values: List of shard values (one per device)
-            mesh: Device mesh
-            group_by_axes: List/set of axis names to use for grouping. 
-                           Devices with same coords on these axes will be in same group.
-        
-        Returns:
-            Dict mapping coord_tuple -> list of (shard_idx, value)
-        """
+        """Group shards by coordinates on specific axes."""
         groups = {}
         for shard_idx, val in enumerate(shard_values):
             # Build key from coords on grouping axes

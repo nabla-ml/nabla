@@ -13,18 +13,14 @@ if TYPE_CHECKING:
     from ..core.tensor import Tensor
     from ..core.sharding.mesh import DeviceMesh
 
-# =============================================================================
-# Type Definitions
-# =============================================================================
+
 
 AxisSpec = Union[int, None, dict[str, "AxisSpec"], list["AxisSpec"], tuple["AxisSpec", ...]]
 
 T = TypeVar("T")
 
 
-# =============================================================================
-# Axis Specification Utilities
-# =============================================================================
+
 
 def _is_leaf(obj: Any) -> bool:
     """Check if obj is a leaf (non-container) in axis specification context."""
@@ -65,9 +61,7 @@ def _broadcast_to_args(spec: AxisSpec, n: int) -> tuple[AxisSpec, ...]:
     raise TypeError(f"Invalid axis specification type: {type(spec).__name__}")
 
 
-# =============================================================================
-# Prefix Pytree Operations
-# =============================================================================
+
 
 def _map_prefix(
     fn: Callable[..., T],
@@ -145,9 +139,7 @@ def _collect_from_prefix(
     return results
 
 
-# =============================================================================
-# Batch Size Validation
-# =============================================================================
+
 
 def _get_batch_size(tensor: Tensor, axis: AxisSpec):
     """Get batch dimension for a single tensor/axis pair.
@@ -204,24 +196,10 @@ def _validate_batch_sizes(args: tuple, in_axes: tuple[AxisSpec, ...], axis_size:
     return first
 
 
-# =============================================================================
-# Batching Primitives
-# =============================================================================
+
 
 def _batch_tensor(tensor: Tensor, axis: AxisSpec, batch_dim, spmd_axis_name: str | None, mesh: "DeviceMesh | None") -> Tensor:
-    """Prepare tensor for batched execution by moving axis to batch_dims.
-    
-    The key insight: after adding/moving an axis to batch_dims, we need to 
-    ensure it ends up at physical position 0 (the outermost batch position).
-    This is critical for nested vmap to work correctly.
-    
-    Args:
-        tensor: Input tensor
-        axis: Axis specification (None for broadcast, int for batched axis)
-        batch_dim: Dim object (StaticDim or SymbolicDim) for the batch dimension
-        spmd_axis_name: Optional mesh axis name to shard the batch dimension on.
-        mesh: Optional device mesh for sharding the batch dimension.
-    """
+    """Prepare tensor for batched execution by moving axis to batch_dims."""
     from ..ops import view as l_ops
     from ..ops import view as p_ops
     from ..ops import communication as comm_ops
@@ -293,11 +271,8 @@ def _batch_tensor(tensor: Tensor, axis: AxisSpec, batch_dim, spmd_axis_name: str
 def _unbatch_tensor(tensor: Tensor, axis: AxisSpec, spmd_axis_name: str | None = None, mesh: "DeviceMesh | None" = None) -> Tensor:
     """Restore tensor after batched execution by moving batch_dims to axis.
     
-    The reverse of _batch_tensor: moves the outermost batch dim (position 0)
-    back to its original logical position.
-    
     Note: spmd_axis_name sharding is PRESERVED on the output axis - we don't
-    all_gather automatically. The user can explicitly gather if needed.
+    all_gather automatically.
     """
     from ..ops import view as l_ops
     from ..ops import view as p_ops
@@ -327,9 +302,7 @@ def _unbatch_tensor(tensor: Tensor, axis: AxisSpec, spmd_axis_name: str | None =
     return t
 
 
-# =============================================================================
-# Main Transform: vmap
-# =============================================================================
+
 
 def vmap(
     func: Callable[..., T] | None = None,
@@ -344,49 +317,6 @@ def vmap(
     Creates a function that maps `func` over axes of its inputs, similar to
     JAX's vmap. Uses the nabla module's batch_dims mechanism for transparent
     vectorization without explicit loops.
-    
-    Args:
-        func: Function to vectorize. If None, returns a decorator.
-        in_axes: Axis specification for inputs:
-            - int: Same axis for all inputs (default 0)
-            - None: Broadcast all inputs (don't map)
-            - tuple/list: Per-argument specification
-            Each element can be a scalar (broadcasts to tensor leaves) or
-            a pytree matching the argument's structure.
-        out_axes: Axis specification for outputs (same format as in_axes).
-        axis_size: Optional explicit batch size. Required when all in_axes
-            are None (pure broadcast). If provided with batched inputs,
-            must match the inferred batch size.
-        spmd_axis_name: Optional mesh axis name to shard the batch dimension on.
-        mesh: Device mesh for SPMD sharding. Required when spmd_axis_name is set.
-    
-    Returns:
-        Vectorized function.
-    
-    Examples:
-        >>> # Basic usage - maps over axis 0
-        >>> @vmap
-        ... def square(x): return x * x
-        >>> square(Tensor.arange(0, 5))
-        
-        >>> # Batched + broadcast inputs
-        >>> vmap(add, in_axes=(0, None))(batched_x, scalar_y)
-        
-        >>> # Different input/output axes
-        >>> vmap(fn, in_axes=1, out_axes=2)(x)
-        
-        >>> # Pytree inputs with per-leaf axes
-        >>> vmap(process, in_axes={'w': 0, 'b': None})(params)
-        
-        >>> # Pure broadcast with explicit axis_size
-        >>> vmap(fn, in_axes=None, axis_size=10)(scalar)
-        
-        >>> # Nested vmap
-        >>> vmap(vmap(fn))(x_with_two_batch_dims)
-        
-        >>> # Sharded data parallel execution
-        >>> @vmap(spmd_axis_name="data")
-        >>> def forward(x): ...
     """
     if func is None:
         return lambda f: vmap(f, in_axes=in_axes, out_axes=out_axes, axis_size=axis_size, spmd_axis_name=spmd_axis_name, mesh=mesh)

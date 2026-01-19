@@ -28,11 +28,7 @@ def get_mesh_from_args(args: tuple) -> Optional["DeviceMesh"]:
 
 
 def ensure_specs(args: tuple, mesh: Optional["DeviceMesh"]) -> tuple:
-    """Ensure all tensors have explicit sharding specs.
-    
-    For unsharded tensors, assigns a replicated spec (all dims have empty axes).
-    This allows the unified SPMD dispatch to treat all tensors uniformly.
-    """
+    """Ensure all tensors have explicit sharding specs (replicated if default)."""
     return args
 
 
@@ -41,11 +37,7 @@ def reshard_inputs(
     required_specs: "List[Optional[ShardingSpec]]", 
     mesh: Optional["DeviceMesh"]
 ) -> tuple:
-    """Pre-operation resharding: align inputs to their required specs.
-    
-    For each tensor input, compares its current sharding to the required sharding
-    from propagation. If they differ, inserts communication ops.
-    """
+    """Pre-operation resharding: align inputs to required propagation specs."""
     if mesh is None or not required_specs:
         return args
     
@@ -86,14 +78,10 @@ def infer_output_sharding(
     mesh: "DeviceMesh",
     kwargs: dict = None,
 ) -> "Tuple[Optional[ShardingSpec], List[Optional[ShardingSpec]], bool]":
-    """Infer output AND per-input shardings using factor-based propagation.
-    
-    Uses the operation's sharding_rule() to get factor mappings, then calls
-    propagate_sharding() to compute shardings. Input specs are updated in-place
-    by propagation and returned for per-input slicing.
+    """Infer output/input shardings via factor propagation.
     
     Returns:
-        Tuple of (output_sharding, input_shardings, needs_allreduce)
+        (output_sharding, input_shardings, needs_allreduce)
     """
     if mesh is None:
         return None, [], False
@@ -235,19 +223,7 @@ def _check_contracting_factors_sharded(
     input_specs: "List[ShardingSpec]",
     output_spec: Optional["ShardingSpec"],
 ) -> "Tuple[Set[str], Set[str]]":
-    """Check if contracting factors need AllReduce.
-    
-    AllReduce is needed ONLY when computing partial sums of the SAME output:
-    Returns set of mesh axis names that require AllReduce.
-    
-    Logic:
-    - Identify contracting factors (inputs only).
-    - If a contracting factor is sharded on axis X...
-    - AND axis X is NOT used in the output sharding...
-    - THEN we need AllReduce on X (aggregating partial results).
-    - IF axis X IS used in the output, it implies independent local computation
-      (e.g. diagonal/local attention), so No AllReduce.
-    """
+    """Check if contracting factors need AllReduce (sharded input, not in output)."""
     contracting_factors = rule.get_contracting_factors()
     if not contracting_factors:
         return set(), set()
@@ -293,15 +269,7 @@ def _check_contracting_factors_sharded(
 # ============================================================================
 
 def create_replicated_spec(mesh: "DeviceMesh", rank: int) -> "ShardingSpec":
-    """Create a fully replicated sharding spec.
-    
-    Args:
-        mesh: Device mesh
-        rank: Tensor rank (number of dimensions)
-        
-    Returns:
-        ShardingSpec with all dimensions replicated (empty axes)
-    """
+    """Create a fully replicated sharding spec."""
     from .spec import ShardingSpec, DimSpec
     return ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)])
 
@@ -317,16 +285,7 @@ from .spec import needs_reshard
 def get_shard_args(args: tuple, shard_idx: int, 
                    per_input_shardings: "List[Optional[ShardingSpec]]",
                    g: Any, Tensor: type, pytree: Any) -> tuple:
-    """Get per-shard TensorValues, slicing each input according to its OWN sharding.
-    
-    Args:
-        args: Input arguments (may contain Tensors)
-        shard_idx: Index of the shard to extract
-        per_input_shardings: List of ShardingSpecs, one per input tensor
-        g: graph module
-        Tensor: Tensor class
-        pytree: pytree module
-    """
+    """Get per-shard TensorValues, slicing each input according to its sharding."""
     # Use list for closure mutation
     input_idx = [0]
     
@@ -357,19 +316,7 @@ def get_shard_args(args: tuple, shard_idx: int,
 
 def reshard_tensor(tensor: "Tensor", from_spec: Optional["ShardingSpec"],
                    to_spec: Optional["ShardingSpec"], mesh: "DeviceMesh") -> "Tensor":
-    """Reshard tensor from one sharding spec to another with MINIMAL communication.
-    
-    Smart resharding strategy:
-    - Only gather dimensions where axes are being REMOVED (not extended)
-    - If new sharding is an extension (e.g., <dp> -> <dp, tp>), no gather needed
-    - If new sharding is completely different (e.g., <dp> -> <tp>), gather then shard
-    
-    Examples:
-        <*, *> -> <dp, tp>: Just slice (no gather)
-        <dp, *> -> <dp, tp>: Just slice dim 1 (no gather on dim 0!)
-        <dp, *> -> <*, tp>: Gather dim 0, slice dim 1
-        <dp, tp> -> <tp, dp>: Gather both, then reshard (axis swap)
-    """
+    """Reshard tensor with minimal communication (smart slicing/gathering)."""
     from ...ops.communication import all_gather, shard as shard_op
     from .spec import DimSpec
     
