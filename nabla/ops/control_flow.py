@@ -14,7 +14,7 @@ from max.graph import ops
 from .base import Operation, ensure_tensor
 from ..core import pytree
 # from ..core.tensor import Tensor # Moved to local imports to avoid cycle
-# from ..core import TensorImpl
+
 from ..core import GRAPH
 
 if TYPE_CHECKING:

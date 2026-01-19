@@ -10,7 +10,6 @@ import json
 
 from ..core import pytree
 from ..core.tensor import Tensor
-from ..core import TensorImpl
 from ..core import trace, Trace
 from ..ops.base import Operation
 
@@ -39,6 +38,7 @@ def shard_map(
     """
 
     def _resolve_dual(x: Any) -> Any:
+        from ..core import TensorImpl
         if isinstance(x, Tensor):
             return x.dual if x.dual is not None else x
         if isinstance(x, TensorImpl):
@@ -196,10 +196,10 @@ class _ShardingGraphExtractor:
         self.tensors: List[Dict[str, Any]] = []
         self.nodes: List[Dict[str, Any]] = []
         self.tensor_id_map: Dict[int, int] = {}
-        self.id_to_tensor_impl: Dict[int, TensorImpl] = {}
+        self.id_to_tensor_impl: Dict[int, "TensorImpl"] = {}
         self.next_tensor_id = 0
 
-    def _get_or_create_tensor_id(self, tensor_impl: TensorImpl) -> int:
+    def _get_or_create_tensor_id(self, tensor_impl: "TensorImpl") -> int:
         if id(tensor_impl) not in self.tensor_id_map:
             json_id = self.next_tensor_id
             self.next_tensor_id += 1
@@ -254,6 +254,7 @@ class _ShardingGraphExtractor:
             input_shapes = []
             
             def collect_inputs(x):
+                from ..core import TensorImpl
                 if isinstance(x, Tensor):
                     input_ids.append(self._get_or_create_tensor_id(x._impl))
                     input_shapes.append(tuple(int(d) for d in x.shape))
