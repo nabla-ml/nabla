@@ -7,33 +7,31 @@
 
 from __future__ import annotations
 
-
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 try:
     from rich.pretty import pretty_repr
 except ImportError:
+
     def pretty_repr(obj, **kwargs):
         return repr(obj)
+
 
 from max import driver, graph
 from max.driver import CPU, Device, DLPackArray
 from max.dtype import DType
-from max.graph import ShapeLike, TensorType, TensorValueLike, ops
+from max.graph import ShapeLike, TensorValueLike, ops
 from max.graph.ops.constant import NestedArray, Number
 from max.graph.value import HasTensorValue
 
 from ..common.context import (
-    defaults,
     default_device,
     default_dtype,
+    defaults,
     defaults_like,
-    _in_running_loop,
 )
+from ..graph.engine import DEBUG_LAZY_EVAL, GRAPH, driver_tensor_type
 from .impl import TensorImpl
-from ..graph.engine import GRAPH, driver_tensor_type, DEBUG_LAZY_EVAL
-
-
 
 
 class Tensor(DLPackArray, HasTensorValue):
@@ -55,49 +53,47 @@ class Tensor(DLPackArray, HasTensorValue):
         else:
             assert storage is not None or value is not None
             self._impl = TensorImpl(storages=storage, values=value, traced=traced)
-        
-        # Initialize epoch for new tensors or just-created impls
+
         if self._impl._values and self._impl.values_epoch == -1:
             self._impl.values_epoch = GRAPH.epoch
-            
+
         self.real = self._impl.is_realized
 
-    # ===== Properties delegating to _impl =====
-    
-    # Properties delegating to _impl
     @property
     def _storages(self) -> list[driver.Tensor] | None:
         return self._impl._storages
-    
+
     @_storages.setter
     def _storages(self, value: list[driver.Tensor] | None) -> None:
         self._impl._storages = value
-    
+
     @property
     def storage(self) -> driver.Tensor | None:
         if self._impl._storages and len(self._impl._storages) > 0:
             return self._impl._storages[0]
         return None
-    
+
     @storage.setter
     def storage(self, value: driver.Tensor | None) -> None:
         if value is None:
             self._impl._storages = None
         else:
             self._impl._storages = [value]
-    
+
     @property
     def _value(self) -> graph.BufferValue | graph.TensorValue | None:
         if self._impl._values and len(self._impl._values) > 0:
             if self._impl.values_epoch != GRAPH.epoch:
                 if DEBUG_LAZY_EVAL:
-                    print(f"[LAZY DEBUG] Clearing stale _value for tensor {id(self)} "
-                          f"(epoch: {self._impl.values_epoch} != {GRAPH.epoch})")
+                    print(
+                        f"[LAZY DEBUG] Clearing stale _value for tensor {id(self)} "
+                        f"(epoch: {self._impl.values_epoch} != {GRAPH.epoch})"
+                    )
                 self._impl._values = []
                 return None
             return self._impl._values[0]
         return None
-    
+
     @_value.setter
     def _value(self, value: graph.BufferValue | graph.TensorValue | None) -> None:
         if value is None:
@@ -108,43 +104,48 @@ class Tensor(DLPackArray, HasTensorValue):
 
     @property
     def _values(self) -> list[graph.BufferValue | graph.TensorValue]:
-         if self._impl.values_epoch != GRAPH.epoch:
-             if DEBUG_LAZY_EVAL:
-                 print(f"[LAZY DEBUG] Clearing stale _values for tensor {id(self)} "
-                       f"(epoch: {self._impl.values_epoch} != {GRAPH.epoch})")
-             self._impl._values = []
-         return self._impl._values
+        if self._impl.values_epoch != GRAPH.epoch:
+            if DEBUG_LAZY_EVAL:
+                print(
+                    f"[LAZY DEBUG] Clearing stale _values for tensor {id(self)} "
+                    f"(epoch: {self._impl.values_epoch} != {GRAPH.epoch})"
+                )
+            self._impl._values = []
+        return self._impl._values
 
     @_values.setter
     def _values(self, value: list[graph.BufferValue | graph.TensorValue]) -> None:
-         self._impl._values = value
-         self._impl.values_epoch = GRAPH.epoch
+        self._impl._values = value
+        self._impl.values_epoch = GRAPH.epoch
 
     @property
     def values(self) -> list[graph.TensorValue]:
         """Get all graph values as TensorValues; error if empty."""
-        # Check staleness
+
         if self._impl.values_epoch != GRAPH.epoch:
             if DEBUG_LAZY_EVAL:
-                print(f"[LAZY DEBUG] Clearing stale values for tensor {id(self)} "
-                      f"(epoch: {self._impl.values_epoch} != {GRAPH.epoch})")
+                print(
+                    f"[LAZY DEBUG] Clearing stale values for tensor {id(self)} "
+                    f"(epoch: {self._impl.values_epoch} != {GRAPH.epoch})"
+                )
             self._impl._values = []
-            
+
         if not self._impl._values:
             if self._impl._storages:
-                 # Auto-hydrate if we have storages but no values in this epoch
-                 self.hydrate()
-                 
+
+                self.hydrate()
+
             if not self._impl._values:
-                 raise RuntimeError(f"Tensor {id(self)} has no values (epoch={GRAPH.epoch}, impl_epoch={self._impl.values_epoch}).")
-        
-        # Convert BufferValues to TensorValues
+                raise RuntimeError(
+                    f"Tensor {id(self)} has no values (epoch={GRAPH.epoch}, impl_epoch={self._impl.values_epoch})."
+                )
+
         return [
-            v[...] if isinstance(v, graph.BufferValue) else v 
+            v[...] if isinstance(v, graph.BufferValue) else v
             for v in self._impl._values
         ]
-    
-    def hydrate(self) -> "Tensor":
+
+    def hydrate(self) -> Tensor:
         """Populate values from storages for realized tensors."""
         if not self._impl._values and self._impl._storages:
             GRAPH.add_input(self)
@@ -157,25 +158,25 @@ class Tensor(DLPackArray, HasTensorValue):
     @property
     def traced(self) -> bool:
         return self._impl.traced
-    
+
     @traced.setter
     def traced(self, value: bool) -> None:
         self._impl.traced = value
-    
+
     @property
     def batch_dims(self) -> int:
         """Number of batch dimensions."""
         return self._impl.batch_dims
-    
+
     @batch_dims.setter
     def batch_dims(self, value: int) -> None:
         self._impl.batch_dims = value
-    
+
     @property
     def op_kwargs(self) -> dict[str, Any]:
         """Kwargs passed to the creating operation."""
         return self._impl.op_kwargs or {}
-    
+
     def trace(self) -> Tensor:
         """Enable tracing on this tensor for autograd."""
         self._impl.traced = True
@@ -194,7 +195,7 @@ class Tensor(DLPackArray, HasTensorValue):
             self._impl.dual = None
         else:
             self._impl.dual = value._impl
-    
+
     def shard(
         self,
         mesh: Any,
@@ -203,8 +204,9 @@ class Tensor(DLPackArray, HasTensorValue):
     ) -> Tensor:
         """Shard this tensor across a device mesh, handling resharding and vmap batch dims."""
         from ...ops import communication as comm
+
         return comm.reshard(self, mesh, dim_specs, replicated_axes=replicated_axes)
-    
+
     def with_sharding(
         self,
         mesh: Any,
@@ -213,17 +215,18 @@ class Tensor(DLPackArray, HasTensorValue):
     ) -> Tensor:
         """Apply sharding constraint, resharding if needed."""
         from ...ops import communication as comm
+
         return comm.reshard(self, mesh, dim_specs, replicated_axes=replicated_axes)
 
     def with_sharding_constraint(
         self,
         mesh: Any,
         dim_specs: list[Any],
-        replicated_axes: set[str] | None = None, # Note: Added to match implementation if needed, checking code
+        replicated_axes: set[str] | None = None,
     ) -> Tensor:
         """Apply sharding constraint for global optimization; no immediate resharding."""
         from ..sharding.spec import ShardingSpec
-        
+
         spec = ShardingSpec(mesh, dim_specs)
         self._impl.sharding_constraint = spec
         return self
@@ -232,7 +235,7 @@ class Tensor(DLPackArray, HasTensorValue):
     def sharding(self) -> Any | None:
         """Get the current sharding specification."""
         return self._impl.sharding
-    
+
     @sharding.setter
     def sharding(self, value: Any) -> None:
         self._impl.sharding = value
@@ -252,10 +255,10 @@ class Tensor(DLPackArray, HasTensorValue):
     @tangent.setter
     def tangent(self, value: TensorImpl | None) -> None:
         self._impl.tangent = value
-    
+
     @property
     def batch_shape(self) -> graph.Shape | None:
-         return self._impl.batch_shape
+        return self._impl.batch_shape
 
     def physical_local_shape(self, shard_idx: int = 0) -> graph.Shape | None:
         return self._impl.physical_local_shape(shard_idx)
@@ -267,7 +270,7 @@ class Tensor(DLPackArray, HasTensorValue):
     def local_shape(self) -> graph.Shape | None:
         """Local shape of this tensor (shard 0), including batch dims."""
         return self._impl.physical_shape
-    
+
     @property
     def global_shape(self) -> graph.Shape | None:
         """Global logical shape (excludes batch dims)."""
@@ -283,14 +286,12 @@ class Tensor(DLPackArray, HasTensorValue):
         """DEPRECATED: Use local_shape instead."""
         return self._impl.physical_shape
 
-    # ===== Factory methods =====
-
     @classmethod
     def from_graph_value(cls, value: graph.Value) -> Tensor:
         if not isinstance(value, (graph.TensorValue, graph.BufferValue)):
             raise TypeError(f"{value=} must be a tensor or buffer value")
         return cls(value=value)
-        
+
     @classmethod
     def _create_unsafe(cls, **kwargs: Any) -> Tensor:
         """Internal factory to create Tensor directly from TensorImpl args."""
@@ -311,6 +312,7 @@ class Tensor(DLPackArray, HasTensorValue):
         device: Device | None = None,
     ) -> Tensor:
         from ...ops import creation
+
         return creation.constant(value, dtype=dtype, device=device)
 
     @classmethod
@@ -324,6 +326,7 @@ class Tensor(DLPackArray, HasTensorValue):
         traced: bool = False,
     ) -> Tensor:
         from ...ops import creation
+
         return creation.full(shape, value, dtype=dtype, device=device, traced=traced)
 
     @classmethod
@@ -336,6 +339,7 @@ class Tensor(DLPackArray, HasTensorValue):
         traced: bool = False,
     ) -> Tensor:
         from ...ops import creation
+
         return creation.zeros(shape, dtype=dtype, device=device, traced=traced)
 
     @classmethod
@@ -348,6 +352,7 @@ class Tensor(DLPackArray, HasTensorValue):
         traced: bool = False,
     ) -> Tensor:
         from ...ops import creation
+
         return creation.ones(shape, dtype=dtype, device=device, traced=traced)
 
     @classmethod
@@ -361,6 +366,7 @@ class Tensor(DLPackArray, HasTensorValue):
         device: Device | None = None,
     ) -> Tensor:
         from ...ops import creation
+
         return creation.arange(start, stop, step, dtype=dtype, device=device)
 
     @classmethod
@@ -374,6 +380,7 @@ class Tensor(DLPackArray, HasTensorValue):
         device: Device | None = None,
     ) -> Tensor:
         from ...ops import creation
+
         return creation.uniform(shape, low, high, dtype=dtype, device=device)
 
     @classmethod
@@ -387,17 +394,19 @@ class Tensor(DLPackArray, HasTensorValue):
         device: Device | None = None,
     ) -> Tensor:
         from ...ops import creation
-        return creation.gaussian(shape, mean, std, dtype=dtype, device=device)
-    
-    # Alias for gaussian
-    normal = gaussian
 
-    # ===== Properties =====
+        return creation.gaussian(shape, mean, std, dtype=dtype, device=device)
+
+    normal = gaussian
 
     @property
     def type(self) -> graph.TensorType:
         value = self._backing_value
-        t = driver_tensor_type(value) if isinstance(value, driver.Tensor) else value.type
+        t = (
+            driver_tensor_type(value)
+            if isinstance(value, driver.Tensor)
+            else value.type
+        )
         return t.as_tensor() if isinstance(t, graph.BufferType) else t
 
     @property
@@ -407,19 +416,19 @@ class Tensor(DLPackArray, HasTensorValue):
     @property
     def shape(self) -> graph.Shape:
         """Returns the global logical shape of the tensor (excludes batch dims)."""
-        # Use _impl.global_shape which properly excludes batch dims
+
         gs = self._impl.global_shape
         if gs is not None:
             return gs
-        # Fallback for unrealized tensors
+
         return graph.Shape(self._backing_value.shape)
-    
+
     def shard_shape(self, shard_idx: int = 0) -> graph.Shape:
         """Returns the shape of a specific shard."""
         local = self._impl.logical_local_shape(shard_idx)
         if local is not None:
             return graph.Shape(local)
-        return self.shape  # Fallback to global
+        return self.shape
 
     @property
     def dtype(self) -> DType:
@@ -445,8 +454,6 @@ class Tensor(DLPackArray, HasTensorValue):
             GRAPH.add_unrealized(self)
         self._real = real
 
-    # ===== Graph integration =====
-
     def __tensorvalue__(self) -> graph.TensorValue:
         if self._value is None:
             GRAPH.add_input(self)
@@ -470,17 +477,23 @@ class Tensor(DLPackArray, HasTensorValue):
     @property
     def _in_global_compute_graph(self) -> bool:
         from max import _core
-        if self._value is None: return True
-        mlir_value = self._value.to_mlir()
-        return mlir_value.owner.parent_op == _core.Operation._from_cmlir(GRAPH.graph._mlir_op)
 
-    # ===== Realization =====
-    
+        if self._value is None:
+            return True
+        mlir_value = self._value.to_mlir()
+        return mlir_value.owner.parent_op == _core.Operation._from_cmlir(
+            GRAPH.graph._mlir_op
+        )
+
     def gather(self) -> Tensor:
         """Gather shards into a single global tensor if needed (lazy)."""
-        if self._impl.is_sharded and self._impl.sharding and not self._impl.sharding.is_fully_replicated():
+        if (
+            self._impl.is_sharded
+            and self._impl.sharding
+            and not self._impl.sharding.is_fully_replicated()
+        ):
             from ...ops.communication import gather_all_axes
-            # Wrapper needed for op
+
             gathered = gather_all_axes(self)
             return gathered
         return self
@@ -490,26 +503,24 @@ class Tensor(DLPackArray, HasTensorValue):
         if not self.real:
             if not self._in_global_compute_graph:
                 raise TypeError("Can't realize symbolic tensors.")
-            
-            # Logic moved from TensorImpl.realize()
+
             if self._impl.is_realized:
                 return self
             from ..graph.engine import GRAPH
+
             GRAPH.evaluate(self)
-            
+
         return self
 
-    # ===== Reduction Operations =====
-    
     def sum(self, axis: int = 0, keepdims: bool = False) -> Tensor:
         from ...ops import reduction
+
         return reduction.reduce_sum(self, axis=axis, keepdims=keepdims)
-        
+
     def mean(self, axis: int = 0, keepdims: bool = False) -> Tensor:
         from ...ops import reduction
-        return reduction.mean(self, axis=axis, keepdims=keepdims)
 
-    # ===== Data access =====
+        return reduction.mean(self, axis=axis, keepdims=keepdims)
 
     def __bool__(self) -> bool:
         return bool(self.item())
@@ -522,7 +533,7 @@ class Tensor(DLPackArray, HasTensorValue):
         t = self.gather()
         t.realize()
         if not t._impl._storages:
-             raise RuntimeError("Failed to realize tensor for DLPack export")
+            raise RuntimeError("Failed to realize tensor for DLPack export")
         return t._impl._storages[0].__dlpack__(stream=stream)
 
     def __dlpack_device__(self):
@@ -530,7 +541,7 @@ class Tensor(DLPackArray, HasTensorValue):
         t = self.gather()
         t.realize()
         if not t._impl._storages:
-             raise RuntimeError("Failed to realize tensor for DLPack device export")
+            raise RuntimeError("Failed to realize tensor for DLPack device export")
         return t._impl._storages[0].__dlpack_device__()
 
     def __rich_repr__(self):
@@ -551,23 +562,24 @@ class Tensor(DLPackArray, HasTensorValue):
 
     def item(self):
         if self.num_elements() != 1:
-            raise TypeError("Only single-element tensors can be converted to Python scalars")
+            raise TypeError(
+                "Only single-element tensors can be converted to Python scalars"
+            )
         """Unified item access."""
         t = self.gather()
         t.realize()
         if not t._impl._storages:
-             raise RuntimeError("Failed to realize tensor for item access")
+            raise RuntimeError("Failed to realize tensor for item access")
         return t._impl._storages[0].to(CPU()).item()
-    
+
     def to_numpy(self):
         """Convert tensor to numpy array."""
         t = self.gather()
         t.realize()
         if not t._impl._storages:
-             raise RuntimeError("Failed to realize tensor for NumPy export")
+            raise RuntimeError("Failed to realize tensor for NumPy export")
         return t._impl._storages[0].to(CPU()).to_numpy()
-    
-    # Common alias
+
     numpy = to_numpy
 
     def num_elements(self) -> int:
@@ -576,63 +588,71 @@ class Tensor(DLPackArray, HasTensorValue):
             elts *= int(dim)
         return elts
 
-    # ===== Unary Operators =====
-
     def __neg__(self) -> Tensor:
         from ...ops import unary as unary_ops
+
         return unary_ops.neg(self)
-        
+
     def __pos__(self) -> Tensor:
         return self
-        
+
     def __abs__(self) -> Tensor:
         from ...ops import unary as unary_ops
-        return unary_ops.abs(self)
-    
-    def __invert__(self) -> Tensor:
-        # TODO: Implement bitwise not op
-        raise NotImplementedError("Bitwise NOT not yet implemented")
 
-    # ===== Operators using binary_ops =====
+        return unary_ops.abs(self)
+
+    def __invert__(self) -> Tensor:
+
+        raise NotImplementedError("Bitwise NOT not yet implemented")
 
     def __add__(self, rhs: TensorValueLike) -> Tensor:
         from ...ops import binary as binary_ops
+
         return binary_ops.add(self, _ensure_tensor(rhs, self))
 
     def __radd__(self, lhs: TensorValueLike) -> Tensor:
         from ...ops import binary as binary_ops
+
         return binary_ops.add(_ensure_tensor(lhs, self), self)
 
     def __sub__(self, rhs: TensorValueLike) -> Tensor:
         from ...ops import binary as binary_ops
+
         return binary_ops.sub(self, _ensure_tensor(rhs, self))
 
     def __rsub__(self, lhs: TensorValueLike) -> Tensor:
         from ...ops import binary as binary_ops
+
         return binary_ops.sub(_ensure_tensor(lhs, self), self)
 
     def __mul__(self, rhs: TensorValueLike) -> Tensor:
         from ...ops import binary as binary_ops
+
         return binary_ops.mul(self, _ensure_tensor(rhs, self))
 
     def __rmul__(self, lhs: TensorValueLike) -> Tensor:
         from ...ops import binary as binary_ops
+
         return binary_ops.mul(_ensure_tensor(lhs, self), self)
 
     def __truediv__(self, rhs: TensorValueLike) -> Tensor:
         from ...ops import binary as binary_ops
+
         return binary_ops.div(self, _ensure_tensor(rhs, self))
 
     def __rtruediv__(self, lhs: TensorValueLike) -> Tensor:
         from ...ops import binary as binary_ops
+
         return binary_ops.div(_ensure_tensor(lhs, self), self)
 
     def __matmul__(self, rhs: TensorValueLike) -> Tensor:
         from ...ops import binary as binary_ops
+
         return binary_ops.matmul(self, _ensure_tensor(rhs, self))
 
     def __rmatmul__(self, lhs: TensorValueLike) -> Tensor:
         from ...ops import binary as binary_ops
+
         return binary_ops.matmul(_ensure_tensor(lhs, self), self)
 
 
@@ -643,7 +663,6 @@ def _ensure_tensor(value: TensorValueLike, like: Tensor) -> Tensor:
     return Tensor.constant(value, dtype=like.dtype, device=like.device)
 
 
-# Re-export for backwards compatibility
 __all__ = [
     "Tensor",
     "TensorImpl",

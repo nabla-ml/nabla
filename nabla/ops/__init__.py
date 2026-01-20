@@ -3,51 +3,105 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
-
-# Base classes
-from .base import Operation, BinaryOperation, UnaryOperation, ReduceOperation, LogicalShapeOperation, LogicalAxisOperation, ensure_tensor
-
-# Binary operations
-from .binary import add, mul, sub, div, matmul, AddOp, MulOp, SubOp, DivOp, MatmulOp
-
-# Unary operations
-from .unary import relu, sigmoid, tanh, exp, neg, softmax, ReluOp, SigmoidOp, TanhOp, ExpOp, NegOp
-
-# Creation operations
-from .creation import constant, full, zeros, ones, arange, uniform, gaussian, normal
-from .creation import ConstantOp, FullOp, ZerosOp, OnesOp, ArangeOp, UniformOp, GaussianOp
-
-# Comparison operations
-from .comparison import equal, not_equal, greater, greater_equal, less, less_equal
-from .comparison import EqualOp, NotEqualOp, GreaterOp, GreaterEqualOp, LessOp, LessEqualOp
-
-# Control Flow operations
-from .control_flow import where, cond, while_loop, scan
-from .control_flow import WhereOp, CondOp, WhileLoopOp
-
-# Reduction operations
-from .reduction import reduce_sum, mean, ReduceSumOp, MeanOp
-
-# View operations (logical)
-from .view import unsqueeze, squeeze, swap_axes, broadcast_to, reshape, slice_tensor, gather, scatter, stack, concatenate
-from .view import UnsqueezeOp, SqueezeOp, SwapAxesOp, BroadcastToOp, ReshapeOp, SliceTensorOp, GatherOp, ScatterOp, ConcatenateOp
-
-
-# Multi-output operations
-from .multi_output import split, chunk, unbind, minmax
-from .multi_output import SplitOp, ChunkOp, UnbindOp, MinMaxOp
-
-# Communication operations (sharding)
-from .communication import shard, all_gather, all_reduce
-from .communication import ShardOp, AllGatherOp, AllReduceOp, ReduceScatterOp
-
-# Note: _physical is internal only, not exported
-# Physical operations can be imported via: from nabla.ops._physical import ...
-
+from .base import (
+    BinaryOperation,
+    LogicalAxisOperation,
+    LogicalShapeOperation,
+    Operation,
+    ReduceOperation,
+    UnaryOperation,
+    ensure_tensor,
+)
+from .binary import AddOp, DivOp, MatmulOp, MulOp, SubOp, add, div, matmul, mul, sub
+from .communication import (
+    AllGatherOp,
+    AllReduceOp,
+    ReduceScatterOp,
+    ShardOp,
+    all_gather,
+    all_reduce,
+    shard,
+)
+from .comparison import (
+    EqualOp,
+    GreaterEqualOp,
+    GreaterOp,
+    LessEqualOp,
+    LessOp,
+    NotEqualOp,
+    equal,
+    greater,
+    greater_equal,
+    less,
+    less_equal,
+    not_equal,
+)
+from .control_flow import CondOp, WhereOp, WhileLoopOp, cond, scan, where, while_loop
+from .creation import (
+    ArangeOp,
+    ConstantOp,
+    FullOp,
+    GaussianOp,
+    OnesOp,
+    UniformOp,
+    ZerosOp,
+    arange,
+    constant,
+    full,
+    gaussian,
+    normal,
+    ones,
+    uniform,
+    zeros,
+)
 from .custom_op import call_custom_kernel
+from .multi_output import (
+    ChunkOp,
+    MinMaxOp,
+    SplitOp,
+    UnbindOp,
+    chunk,
+    minmax,
+    split,
+    unbind,
+)
+from .reduction import MeanOp, ReduceSumOp, mean, reduce_sum
+from .unary import (
+    ExpOp,
+    NegOp,
+    ReluOp,
+    SigmoidOp,
+    TanhOp,
+    exp,
+    neg,
+    relu,
+    sigmoid,
+    softmax,
+    tanh,
+)
+from .view import (
+    BroadcastToOp,
+    ConcatenateOp,
+    GatherOp,
+    ReshapeOp,
+    ScatterOp,
+    SliceTensorOp,
+    SqueezeOp,
+    SwapAxesOp,
+    UnsqueezeOp,
+    broadcast_to,
+    concatenate,
+    gather,
+    reshape,
+    scatter,
+    slice_tensor,
+    squeeze,
+    stack,
+    swap_axes,
+    unsqueeze,
+)
 
 __all__ = [
-    # Base classes
     "Operation",
     "BinaryOperation",
     "UnaryOperation",
@@ -55,33 +109,98 @@ __all__ = [
     "LogicalShapeOperation",
     "LogicalAxisOperation",
     "ensure_tensor",
-    # Binary
-    "add", "mul", "sub", "div", "matmul",
-    "AddOp", "MulOp", "SubOp", "DivOp", "MatmulOp",
-    # Unary
-    "relu", "sigmoid", "tanh", "exp", "neg", "softmax",
-    "ReluOp", "SigmoidOp", "TanhOp", "ExpOp", "NegOp",
-    # Creation
-    "constant", "full", "zeros", "ones", "arange", "uniform", "gaussian", "normal",
-    "ConstantOp", "FullOp", "ZerosOp", "OnesOp", "ArangeOp", "UniformOp", "GaussianOp",
-    # Comparison
-    "equal", "not_equal", "greater", "greater_equal", "less", "less_equal",
-    "EqualOp", "NotEqualOp", "GreaterOp", "GreaterEqualOp", "LessOp", "LessEqualOp",
-    # Control Flow
-    "where", "cond", "while_loop", "scan",
-    "WhereOp", "CondOp", "WhileLoopOp",
-    # Reduction
-    "reduce_sum", "mean",
-    "ReduceSumOp", "MeanOp",
-    # View (logical)
-    "unsqueeze", "squeeze", "swap_axes", "broadcast_to", "reshape", "slice_tensor", "gather", "scatter", "stack", "concatenate",
-    "UnsqueezeOp", "SqueezeOp", "SwapAxesOp", "BroadcastToOp", "ReshapeOp", "SliceTensorOp", "GatherOp", "ScatterOp", "ConcatenateOp",
-    # Multi-output
-    "split", "chunk", "unbind", "minmax",
-    "SplitOp", "ChunkOp", "UnbindOp", "MinMaxOp",
-    # Communication (sharding)
-    "shard", "all_gather", "all_reduce",
-    "ShardOp", "AllGatherOp", "AllReduceOp", "ReduceScatterOp",
+    "add",
+    "mul",
+    "sub",
+    "div",
+    "matmul",
+    "AddOp",
+    "MulOp",
+    "SubOp",
+    "DivOp",
+    "MatmulOp",
+    "relu",
+    "sigmoid",
+    "tanh",
+    "exp",
+    "neg",
+    "softmax",
+    "ReluOp",
+    "SigmoidOp",
+    "TanhOp",
+    "ExpOp",
+    "NegOp",
+    "constant",
+    "full",
+    "zeros",
+    "ones",
+    "arange",
+    "uniform",
+    "gaussian",
+    "normal",
+    "ConstantOp",
+    "FullOp",
+    "ZerosOp",
+    "OnesOp",
+    "ArangeOp",
+    "UniformOp",
+    "GaussianOp",
+    "equal",
+    "not_equal",
+    "greater",
+    "greater_equal",
+    "less",
+    "less_equal",
+    "EqualOp",
+    "NotEqualOp",
+    "GreaterOp",
+    "GreaterEqualOp",
+    "LessOp",
+    "LessEqualOp",
+    "where",
+    "cond",
+    "while_loop",
+    "scan",
+    "WhereOp",
+    "CondOp",
+    "WhileLoopOp",
+    "reduce_sum",
+    "mean",
+    "ReduceSumOp",
+    "MeanOp",
+    "unsqueeze",
+    "squeeze",
+    "swap_axes",
+    "broadcast_to",
+    "reshape",
+    "slice_tensor",
+    "gather",
+    "scatter",
+    "stack",
+    "concatenate",
+    "UnsqueezeOp",
+    "SqueezeOp",
+    "SwapAxesOp",
+    "BroadcastToOp",
+    "ReshapeOp",
+    "SliceTensorOp",
+    "GatherOp",
+    "ScatterOp",
+    "ConcatenateOp",
+    "split",
+    "chunk",
+    "unbind",
+    "minmax",
+    "SplitOp",
+    "ChunkOp",
+    "UnbindOp",
+    "MinMaxOp",
+    "shard",
+    "all_gather",
+    "all_reduce",
+    "ShardOp",
+    "AllGatherOp",
+    "AllReduceOp",
+    "ReduceScatterOp",
     "call_custom_kernel",
 ]
-

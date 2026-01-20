@@ -6,13 +6,12 @@
 import math
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Optional
 
 import numpy as np
 
-# --- Helper Functions for Axis Parsing ---
 
-def parse_sub_axis(axis_name: str) -> Optional[Tuple[str, int, int]]:
+def parse_sub_axis(axis_name: str) -> tuple[str, int, int] | None:
     """Parse 'axis:(pre_size)size' -> (parent, pre_size, size), or None if not a sub-axis."""
     if ":" not in axis_name:
         return None
@@ -22,38 +21,37 @@ def parse_sub_axis(axis_name: str) -> Optional[Tuple[str, int, int]]:
     return match.group(1), int(match.group(2)), int(match.group(3))
 
 
-def validate_sub_axes_non_overlapping(axes: List[str]) -> None:
+def validate_sub_axes_non_overlapping(axes: list[str]) -> None:
     """Validate that sub-axes of the same parent don't overlap."""
-    parent_ranges: Dict[str, List[Tuple[int, int, str]]] = {}
-    
+    parent_ranges: dict[str, list[tuple[int, int, str]]] = {}
+
     for axis in axes:
         parsed = parse_sub_axis(axis)
         if parsed is None:
             continue
         parent, pre_size, size = parsed
-        # Range covered: [pre_size, pre_size * size)
+
         start = pre_size
         end = pre_size * size
-        
+
         if parent not in parent_ranges:
             parent_ranges[parent] = []
-        
-        # Check overlap with existing ranges
+
         for existing_start, existing_end, existing_axis in parent_ranges[parent]:
             if not (end <= existing_start or start >= existing_end):
                 raise ValueError(
                     f"Sub-axes overlap: '{axis}' and '{existing_axis}' "
                     f"(ranges [{start}, {end}) and [{existing_start}, {existing_end}))"
                 )
-        
+
         parent_ranges[parent].append((start, end, axis))
 
 
-def check_sub_axes_maximality(axes: List[str]) -> List[str]:
+def check_sub_axes_maximality(axes: list[str]) -> list[str]:
     """Return warnings for adjacent sub-axes that could be merged."""
     warnings = []
-    parent_sub_axes: Dict[str, List[Tuple[int, int, str]]] = {}
-    
+    parent_sub_axes: dict[str, list[tuple[int, int, str]]] = {}
+
     for axis in axes:
         parsed = parse_sub_axis(axis)
         if parsed is None:
@@ -62,9 +60,9 @@ def check_sub_axes_maximality(axes: List[str]) -> List[str]:
         if parent not in parent_sub_axes:
             parent_sub_axes[parent] = []
         parent_sub_axes[parent].append((pre_size, size, axis))
-    
+
     for parent, subs in parent_sub_axes.items():
-        # Sort by pre_size (major to minor order)
+
         subs_sorted = sorted(subs, key=lambda x: x[0])
         for i in range(len(subs_sorted) - 1):
             pre1, size1, ax1 = subs_sorted[i]
@@ -75,15 +73,13 @@ def check_sub_axes_maximality(axes: List[str]) -> List[str]:
                     f"Adjacent sub-axes '{ax1}' and '{ax2}' could be merged "
                     f"into '{parent}:({pre1}){merged_size}'"
                 )
-    
+
     return warnings
 
 
-# --- Physical Layer: Device Mesh ---
-
 class DeviceMesh:
     """Logical multi-dimensional view of devices: @name = <["axis1"=size1, ...]>.
-    
+
     Args:
         name: Name of the mesh.
         shape: Shape of the mesh (e.g., (2, 4)).
@@ -91,168 +87,180 @@ class DeviceMesh:
         devices: Logical device IDs.
         device_refs: Physical device references.
     """
-    
-    def __init__(self, name: str, shape: Tuple[int, ...], axis_names: Tuple[str, ...], 
-                 devices: List[int] = None, device_refs: List = None,
-                 bandwidth: float = 1.0):
+
+    def __init__(
+        self,
+        name: str,
+        shape: tuple[int, ...],
+        axis_names: tuple[str, ...],
+        devices: list[int] = None,
+        device_refs: list = None,
+        bandwidth: float = 1.0,
+    ):
         self.name = name
         self.shape = shape
         self.axis_names = axis_names
-        self.bandwidth = bandwidth  # Normalized bandwidth for cost modeling
-        
-        # Default to sequential device IDs if not specified
+        self.bandwidth = bandwidth
+
         total_devices = int(np.prod(shape))
         if devices is None:
             devices = list(range(total_devices))
         self.devices = devices
-        
+
         if total_devices != len(devices):
             raise ValueError(
                 f"Mesh shape {shape} requires {total_devices} devices, "
                 f"but got {len(devices)}"
             )
-        
-        # Physical device references (for distributed execution)
+
         if device_refs is None:
             from max.graph import DeviceRef
+
             device_refs = [DeviceRef.CPU() for _ in range(total_devices)]
         self.device_refs = device_refs
-        
-        # Lookup table for axis name -> index
+
         self.axis_lookup = {name: i for i, name in enumerate(axis_names)}
-        
-        # Compute strides for coordinate calculation (row-major order)
+
         self.phys_strides = [1] * len(shape)
         for i in range(len(shape) - 2, -1, -1):
-            self.phys_strides[i] = shape[i+1] * self.phys_strides[i+1]
+            self.phys_strides[i] = shape[i + 1] * self.phys_strides[i + 1]
 
     @property
     def is_distributed(self) -> bool:
         """Check if mesh has unique device refs (true distributed vs simulated)."""
-        return self.device_refs is not None and len(set(self.device_refs)) == len(self.device_refs)
-    
+        return self.device_refs is not None and len(set(self.device_refs)) == len(
+            self.device_refs
+        )
+
     def __repr__(self) -> str:
-        axes_str = ", ".join(f'"{n}"={s}' for n, s in zip(self.axis_names, self.shape))
+        axes_str = ", ".join(
+            f'"{n}"={s}' for n, s in zip(self.axis_names, self.shape, strict=False)
+        )
         return f"@{self.name} = <[{axes_str}]>"
 
     def get_axis_size(self, axis_name: str) -> int:
         """Get size of an axis. For sub-axes 'x:(m)k', returns k."""
         parsed = parse_sub_axis(axis_name)
         if parsed:
-            return parsed[2]  # Return the size k
-        
+            return parsed[2]
+
         if axis_name not in self.axis_lookup:
-            raise ValueError(f"Unknown axis: {axis_name} (available: {self.axis_names})")
+            raise ValueError(
+                f"Unknown axis: {axis_name} (available: {self.axis_names})"
+            )
         return self.shape[self.axis_lookup[axis_name]]
 
     def get_coordinate(self, device_id: int, axis_name: str) -> int:
         """Get coordinate of device along axis. Handles sub-axes 'x:(m)k'."""
-        # Handle Sub-Axes
+
         parsed = parse_sub_axis(axis_name)
         if parsed:
             parent_name, pre_size, size = parsed
             parent_coord = self.get_coordinate(device_id, parent_name)
             parent_total = self.get_axis_size(parent_name)
-            
+
             if pre_size * size == 0:
-                raise ValueError(f"Invalid sub-axis sizes: pre_size={pre_size}, size={size}")
+                raise ValueError(
+                    f"Invalid sub-axis sizes: pre_size={pre_size}, size={size}"
+                )
             if parent_total % (pre_size * size) != 0:
                 raise ValueError(
                     f"Sub-axis {axis_name} invalid: parent size {parent_total} "
                     f"not divisible by pre_size*size = {pre_size * size}"
                 )
-            
+
             post_size = parent_total // (pre_size * size)
             return (parent_coord // post_size) % size
 
-        # Handle Full Axes
         if axis_name not in self.axis_lookup:
             raise ValueError(f"Unknown axis: {axis_name}")
 
-        if device_id not in self.devices: 
+        if device_id not in self.devices:
             raise ValueError(f"Device {device_id} not in mesh {self.name}")
-            
+
         flat_idx = self.devices.index(device_id)
-        
-        # Convert flat index to n-dimensional coordinates
+
         coords = []
         rem = flat_idx
         for stride in self.phys_strides:
             coords.append(rem // stride)
             rem %= stride
-            
-        return coords[self.axis_lookup[axis_name]]
-    
-    def get_devices_on_axis_slice(self, axis_name: str, coordinate: int) -> List[int]:
-        """Get all device IDs that have the given coordinate on the specified axis."""
-        return [d for d in self.devices if self.get_coordinate(d, axis_name) == coordinate]
 
-    def get_axis_indices(self, device_id: int) -> Dict[str, int]:
+        return coords[self.axis_lookup[axis_name]]
+
+    def get_devices_on_axis_slice(self, axis_name: str, coordinate: int) -> list[int]:
+        """Get all device IDs that have the given coordinate on the specified axis."""
+        return [
+            d for d in self.devices if self.get_coordinate(d, axis_name) == coordinate
+        ]
+
+    def get_axis_indices(self, device_id: int) -> dict[str, int]:
         """Get all axis coordinates for a given device."""
         return {name: self.get_coordinate(device_id, name) for name in self.axis_names}
 
 
-# --- Representation Layer: Sharding Specification ---
-
 @dataclass
 class DimSpec:
     """Per-dimension sharding specification.
-    
+
     Attributes:
         axes: Sharding axes (major to minor).
         is_open: If True, can accept more sharding.
         priority: 0=Strongest, 1+=Weaker.
         partial: If True, holds partial sums.
     """
-    axes: List[str] = field(default_factory=list)
-    is_open: bool = False  # Open vs Closed dimension (from Shardy spec)
-    priority: int = 0      # 0=User/default (Strong), 1+=Lower priority
-    partial: bool = False  # If True, dimension holds partial sums
-    
+
+    axes: list[str] = field(default_factory=list)
+    is_open: bool = False
+    priority: int = 0
+    partial: bool = False
+
     def __post_init__(self):
-        # Empty closed dims can't have non-zero priority (no effect per spec)
+
         if not self.axes and not self.is_open and self.priority != 0:
             raise ValueError(
                 f"Empty closed dimension {{}} cannot have non-zero priority (got p{self.priority})"
             )
-    
+
     def __repr__(self) -> str:
         """Format: {axes} or {axes, ?} with optional p<N> suffix."""
         if not self.axes:
             marker = "?" if self.is_open else ""
-            prio_str = f"p{self.priority}" if self.is_open and self.priority != 0 else ""
+            prio_str = (
+                f"p{self.priority}" if self.is_open and self.priority != 0 else ""
+            )
             return f"{{{marker}}}{prio_str}"
-        
+
         axes_str = ", ".join(f"'{a}'" for a in self.axes)
         open_marker = ", ?" if self.is_open else ""
         if not self.is_open:
             open_marker = ""
-            
+
         prio_str = f"p{self.priority}" if self.priority != 0 else ""
         return f"{{{axes_str}{open_marker}}}{prio_str}"
-    
+
     def is_replicated(self) -> bool:
         """True if fully replicated (no axes)."""
         return len(self.axes) == 0
-    
-    def get_total_shards(self, mesh: 'DeviceMesh') -> int:
+
+    def get_total_shards(self, mesh: "DeviceMesh") -> int:
         """Total shards for this dimension."""
         total = 1
         for axis in self.axes:
             total *= mesh.get_axis_size(axis)
         return total
-    
-    def clone(self) -> 'DimSpec':
+
+    def clone(self) -> "DimSpec":
         """Create a deep copy of this DimSpec."""
         return DimSpec(
             axes=list(self.axes),
             is_open=self.is_open,
             priority=self.priority,
-            partial=self.partial
+            partial=self.partial,
         )
 
     @staticmethod
-    def from_raw(raw: Any) -> 'DimSpec':
+    def from_raw(raw: Any) -> "DimSpec":
         """Convert raw input (None, str, tuple, DimSpec) to DimSpec."""
         if isinstance(raw, DimSpec):
             return raw
@@ -261,93 +269,96 @@ class DimSpec:
         if isinstance(raw, str):
             return DimSpec([raw])
         if isinstance(raw, (tuple, list)):
-            # Ensure elements are strings
+
             return DimSpec([str(x) for x in raw])
-        raise ValueError(f"Invalid dimension spec input: {raw!r}. Expected None, str, tuple/list of str, or DimSpec.")
+        raise ValueError(
+            f"Invalid dimension spec input: {raw!r}. Expected None, str, tuple/list of str, or DimSpec."
+        )
 
 
 @dataclass
 class ShardingSpec:
     """Complete tensor sharding: sharding<@mesh, [dim_shardings], replicated={axes}>.
-    
+
     Attributes:
         mesh: target DeviceMesh.
         dim_specs: Per-dimension specs.
         replicated_axes: Explicitly replicated axes.
         partial_sum_axes: Ghost partial axes.
     """
+
     mesh: DeviceMesh
-    dim_specs: List[DimSpec] = field(default_factory=list)
-    replicated_axes: Set[str] = field(default_factory=set)
-    partial_sum_axes: Set[str] = field(default_factory=set) # Ghost sharding
+    dim_specs: list[DimSpec] = field(default_factory=list)
+    replicated_axes: set[str] = field(default_factory=set)
+    partial_sum_axes: set[str] = field(default_factory=set)
 
     def __post_init__(self):
         """Validate: no duplicate axes, no explicit-replicated axes in dims."""
-        # 1. Normalize dim_specs (handle JAX-like raw inputs)
+
         if hasattr(self, "dim_specs") and self.dim_specs:
-             self.dim_specs = [DimSpec.from_raw(d) for d in self.dim_specs]
+            self.dim_specs = [DimSpec.from_raw(d) for d in self.dim_specs]
 
         used_axes = set()
         all_axes = []
-        
+
         for dim_idx, dim in enumerate(self.dim_specs):
             for axis in dim.axes:
-                # Check: axis not in explicitly replicated set
+
                 if axis in self.replicated_axes:
                     raise ValueError(
                         f"Axis '{axis}' is explicitly replicated but assigned to dimension {dim_idx}."
                     )
-                
-                # Collect for duplicate/overlap checking
+
                 all_axes.append(axis)
-                
-                # Simple duplicate check (exact match)
-                if axis in used_axes: 
+
+                if axis in used_axes:
                     raise ValueError(f"Axis '{axis}' used multiple times in sharding.")
                 used_axes.add(axis)
 
-        # Check: partial sum axes don't overlap with used axes
         for axis in self.partial_sum_axes:
             if axis in used_axes:
-                raise ValueError(f"Axis '{axis}' is both a dimension axis and a partial sum axis.")
+                raise ValueError(
+                    f"Axis '{axis}' is both a dimension axis and a partial sum axis."
+                )
             if axis in self.replicated_axes:
-                raise ValueError(f"Axis '{axis}' is both explicitly replicated and a partial sum axis.")
+                raise ValueError(
+                    f"Axis '{axis}' is both explicitly replicated and a partial sum axis."
+                )
             used_axes.add(axis)
-        
-        # Check sub-axis overlap invariant
+
         all_axes.extend(list(self.partial_sum_axes))
         validate_sub_axes_non_overlapping(all_axes)
-        
-        # Warn about non-maximal sub-axes (could be merged)
+
         check_sub_axes_maximality(all_axes)
-    
+
     def __repr__(self) -> str:
         """String representation following Shardy spec grammar."""
         dims_str = ", ".join(str(d) for d in self.dim_specs)
         rep_str = ""
         if self.replicated_axes:
-            # Order replicated axes by mesh order (per Shardy spec)
+
             ordered_rep = self._order_replicated_axes(self.replicated_axes)
             rep_str = ", replicated={" + ", ".join(f"'{a}'" for a in ordered_rep) + "}"
-        
-        # Consolidate all partial axes: physical sharded partials + ghost partials
+
         all_partial_axes = set(self.partial_sum_axes)
         for dim in self.dim_specs:
             if dim.partial:
                 all_partial_axes.update(dim.axes)
-        
+
         partial_str = ""
         if all_partial_axes:
             ordered_partial = self._order_replicated_axes(all_partial_axes)
-            partial_str = ", partial={" + ", ".join(f"'{a}'" for a in ordered_partial) + "}"
-            
+            partial_str = (
+                ", partial={" + ", ".join(f"'{a}'" for a in ordered_partial) + "}"
+            )
+
         return f"sharding<@{self.mesh.name}, [{dims_str}]{rep_str}{partial_str}>"
-    
-    def _order_replicated_axes(self, axes_set: Set[str]) -> List[str]:
+
+    def _order_replicated_axes(self, axes_set: set[str]) -> list[str]:
         """Order axes: mesh order, sub-axes by pre-size."""
         full_axes = []
-        sub_axes_by_parent: Dict[str, List[Tuple[str, int, int]]] = {}  # parent -> [(axis_str, pre, size)]
-        
+        sub_axes_by_parent: dict[str, list[tuple[str, int, int]]] = {}
+
         for ax in axes_set:
             parsed = parse_sub_axis(ax)
             if parsed is None:
@@ -357,40 +368,42 @@ class ShardingSpec:
                 if parent not in sub_axes_by_parent:
                     sub_axes_by_parent[parent] = []
                 sub_axes_by_parent[parent].append((ax, pre_size, size))
-        
+
         result = []
-        
-        # Process in mesh axis order
+
         for ax_name in self.mesh.axis_names:
-            # Add full axis if present
+
             if ax_name in full_axes:
                 result.append(ax_name)
-            
-            # Add sub-axes for this parent, sorted by pre-size (ascending)
+
             if ax_name in sub_axes_by_parent:
                 sorted_subs = sorted(sub_axes_by_parent[ax_name], key=lambda x: x[1])
                 result.extend(ax_str for ax_str, _, _ in sorted_subs)
-        
+
         return result
-    
-    def get_implicitly_replicated_axes(self) -> Set[str]:
+
+    def get_implicitly_replicated_axes(self) -> set[str]:
         """Get axes not used in sharding or explicitly replicated."""
         used = set()
         for dim in self.dim_specs:
             used.update(dim.axes)
         used.update(self.replicated_axes)
         used.update(self.partial_sum_axes)
-        
+
         implicit = set()
         for ax_name in self.mesh.axis_names:
             if ax_name not in used:
                 implicit.add(ax_name)
         return implicit
-    
+
     def is_fully_replicated(self) -> bool:
         """True if tensor is fully replicated."""
-        return all(dim.is_replicated() for dim in self.dim_specs) and not self.partial_sum_axes and not any(dim.partial for dim in self.dim_specs)
-    
+        return (
+            all(dim.is_replicated() for dim in self.dim_specs)
+            and not self.partial_sum_axes
+            and not any(dim.partial for dim in self.dim_specs)
+        )
+
     @property
     def total_shards(self) -> int:
         """Total number of shards across all dimensions."""
@@ -399,30 +412,30 @@ class ShardingSpec:
             for axis in dim_spec.axes:
                 total *= self.mesh.get_axis_size(axis)
         return total
-    
+
     def get_max_priority(self) -> int:
         """Get the maximum (lowest urgency) priority used in this spec."""
         return max((d.priority for d in self.dim_specs), default=0)
-    
+
     def get_min_priority(self) -> int:
         """Get the minimum (highest urgency) priority used in this spec."""
         return min((d.priority for d in self.dim_specs), default=0)
-    
-    def clone(self) -> 'ShardingSpec':
+
+    def clone(self) -> "ShardingSpec":
         """Create a deep copy of this ShardingSpec."""
         return ShardingSpec(
             mesh=self.mesh,
             dim_specs=[d.clone() for d in self.dim_specs],
             replicated_axes=set(self.replicated_axes),
-            partial_sum_axes=set(self.partial_sum_axes)
+            partial_sum_axes=set(self.partial_sum_axes),
         )
 
 
 def compute_local_shape(
-    global_shape: Tuple[int, ...],
+    global_shape: tuple[int, ...],
     sharding: ShardingSpec,
     device_id: int,
-) -> Tuple[int, ...]:
+) -> tuple[int, ...]:
     """Compute the local shard shape for a device."""
     if len(global_shape) != len(sharding.dim_specs):
         raise ValueError(
@@ -434,29 +447,25 @@ def compute_local_shape(
     for dim_idx in range(len(global_shape)):
         dim_spec = sharding.dim_specs[dim_idx]
         global_len = int(global_shape[dim_idx])
-        
-        # Fully replicated dimension
+
         if not dim_spec.axes:
             local_shape.append(global_len)
             continue
 
-        # Calculate shard index from major-to-minor axis coordinates
         total_shards = 1
         my_shard_index = 0
-        
+
         for axis_name in dim_spec.axes:
             size = sharding.mesh.get_axis_size(axis_name)
             coord = sharding.mesh.get_coordinate(device_id, axis_name)
             my_shard_index = (my_shard_index * size) + coord
             total_shards *= size
-        
-        # Compute chunk boundaries (ceiling division for uneven splits)
+
         chunk_size = math.ceil(global_len / total_shards)
         start = my_shard_index * chunk_size
         theoretical_end = start + chunk_size
         real_end = min(theoretical_end, global_len)
-        
-        # Handle padding
+
         length = max(0, real_end - start)
         local_shape.append(length)
 
@@ -469,26 +478,25 @@ def get_num_shards(sharding: ShardingSpec) -> int:
 
 
 def compute_global_shape(
-    local_shape: Tuple[int, ...], 
+    local_shape: tuple[int, ...],
     sharding: Optional["ShardingSpec"],
-    shard_shapes: Optional[List[Tuple[int, ...]]] = None
-) -> Tuple[int, ...]:
+    shard_shapes: list[tuple[int, ...]] | None = None,
+) -> tuple[int, ...]:
     """Compute global shape from local shape and sharding spec.
-    
+
     This function handles two modes:
-    1. Aggregation (shard_shapes provided): Sums actual shards along sharded axes. 
+    1. Aggregation (shard_shapes provided): Sums actual shards along sharded axes.
        This is the 'source of truth' for uneven sharding in simulation.
     2. Prediction (only local_shape provided): Uses multiplication.
     """
     if not sharding or not local_shape:
         return local_shape
-    
-    # Mode 1: Aggregation (Exact Global Shape from Shards)
+
     if shard_shapes and len(shard_shapes) > 1 and sharding.mesh:
         mesh = sharding.mesh
         rank = len(local_shape)
         global_shape = []
-        
+
         for i in range(rank):
             dim_spec = sharding.dim_specs[i] if i < len(sharding.dim_specs) else None
             if not dim_spec or not dim_spec.axes or dim_spec.partial:
@@ -496,29 +504,29 @@ def compute_global_shape(
             else:
                 total_shards = dim_spec.get_total_shards(mesh)
                 num_total_devices = len(shard_shapes)
-                
+
                 if num_total_devices % total_shards != 0:
                     num_replicas = 1
                 else:
                     num_replicas = num_total_devices // total_shards
-                
+
                 sum_local = sum(int(s_shape[i]) for s_shape in shard_shapes)
-                
-                # Integer division because shapes are integers
+
                 global_shape.append(sum_local // num_replicas)
-                
+
         return tuple(global_shape)
 
-    # Mode 2: Prediction (Estimated Global Shape)
     result = [int(d) for d in local_shape]
-    for i, dim_spec in enumerate(sharding.dim_specs[:len(result)]):
+    for i, dim_spec in enumerate(sharding.dim_specs[: len(result)]):
         if dim_spec.axes and not dim_spec.partial:
             result[i] *= dim_spec.get_total_shards(sharding.mesh)
-            
+
     return tuple(result)
 
 
-def needs_reshard(from_spec: Optional["ShardingSpec"], to_spec: Optional["ShardingSpec"]) -> bool:
+def needs_reshard(
+    from_spec: Optional["ShardingSpec"], to_spec: Optional["ShardingSpec"]
+) -> bool:
     """Check if specs differ requiring resharding."""
     if (from_spec is None) != (to_spec is None):
         return True
@@ -526,15 +534,17 @@ def needs_reshard(from_spec: Optional["ShardingSpec"], to_spec: Optional["Shardi
         return False
     if len(from_spec.dim_specs) != len(to_spec.dim_specs):
         return True
-    return any(f.axes != t.axes or f.partial != t.partial for f, t in zip(from_spec.dim_specs, to_spec.dim_specs)) or (from_spec.partial_sum_axes != to_spec.partial_sum_axes)
+    return any(
+        f.axes != t.axes or f.partial != t.partial
+        for f, t in zip(from_spec.dim_specs, to_spec.dim_specs, strict=False)
+    ) or (from_spec.partial_sum_axes != to_spec.partial_sum_axes)
 
-
-# --- JAX-style PartitionSpec Helper ---
 
 class PartitionSpec(tuple):
     """JAX-compatible PartitionSpec."""
+
     def __new__(cls, *args):
         return super().__new__(cls, args)
 
-# Alias P for brevity
+
 P = PartitionSpec

@@ -3,113 +3,16 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
-# Context managers and defaults
 from .core import (
-    defaults,
+    GRAPH,
+    PyTreeDef,
+    Tensor,
+    TensorImpl,
     default_device,
     default_dtype,
+    defaults,
     defaults_like,
-)
-
-# Core tensor infrastructure
-from .core import (
-    TensorImpl,
-)
-
-# Compute graph
-from .core import GRAPH, driver_tensor_type
-
-# Main Tensor class
-from .core import Tensor
-
-# Operation base classes
-from .ops.base import Operation, BinaryOperation, ReduceOperation, UnaryOperation
-
-# View operations (for vmap support)
-from .ops.view import (
-    unsqueeze,
-    squeeze,
-    swap_axes,
-    broadcast_to,
-    reshape,
-    gather,
-    scatter,
-    concatenate,
-    stack,
-    moveaxis,
-    incr_batch_dims,
-    decr_batch_dims,
-    move_axis_to_batch_dims,
-    move_axis_from_batch_dims,
-    unsqueeze_physical,
-    squeeze_physical,
-    broadcast_to_physical,
-)
-from .ops.reduction import reduce_sum_physical, mean_physical
-
-# Binary operations
-from .ops.binary import (
-    add,
-    mul,
-    sub, 
-    div,
-    matmul,
-    AddOp,
-    MulOp,
-    SubOp,
-    DivOp,
-    MatmulOp,
-)
-
-# Unary operations
-from .ops.unary import (
-    relu,
-    sigmoid,
-    tanh,
-    exp,
-    neg,
-    abs,
-    softmax,
-    ReluOp,
-    SigmoidOp,
-    TanhOp,
-    ExpOp,
-    NegOp,
-    AbsOp,
-    AbsOp,
-)
-
-# Comparison operations
-from .ops.comparison import (
-    equal,
-    not_equal,
-    greater,
-    greater_equal,
-    less,
-    less_equal,
-    EqualOp,
-    NotEqualOp,
-    GreaterOp,
-    GreaterEqualOp,
-    LessOp,
-    LessEqualOp,
-)
-
-# Creation operations (including random)
-from .ops.creation import (
-    constant,
-    full,
-    zeros,
-    ones,
-    arange,
-    uniform,
-    gaussian,
-    normal,
-)
-
-# Pytree utilities
-from .core import (
-    PyTreeDef,
+    driver_tensor_type,
     tensor_leaves,
     traced,
     tree_flatten,
@@ -120,74 +23,136 @@ from .core import (
     untraced,
     with_batch_dims,
 )
-
-# Function transforms
-from .transforms.vmap import vmap
-
-from .transforms.shard_map import shard_map
-from .transforms.compile import compile, CompiledFunction, CompilationStats
-
-# Reduction operations
-from .ops.reduction import (
-    reduce_sum, mean, reduce_max, reduce_min,
-    ReduceSumOp, MeanOp, ReduceMaxOp, ReduceMinOp,
-)
-
-# Sharding operations
-from .ops.communication import shard, all_gather, all_reduce
-
-# Control Flow
-from .ops.control_flow import (
-    where,
-    cond,
-    while_loop,
-    scan,
-    WhereOp,
-    CondOp,
-    WhileLoopOp,
-    ScanOp,
-)
-
-# Multi-output operations
-from .ops.multi_output import (
-    split,
-    chunk,
-    unbind,
-    minmax,
-    SplitOp,
-    ChunkOp,
-    UnbindOp,
-    MinMaxOp,
-)
-
-# Sharding infrastructure (core definitions)
 from .core.sharding.spec import (
     DeviceMesh,
     DimSpec,
+    P,
+    PartitionSpec,
     ShardingSpec,
     compute_local_shape,
     get_num_shards,
-    P,
-    PartitionSpec,
 )
+from .ops.base import BinaryOperation, Operation, ReduceOperation, UnaryOperation
+from .ops.binary import (
+    AddOp,
+    DivOp,
+    MatmulOp,
+    MulOp,
+    SubOp,
+    add,
+    div,
+    matmul,
+    mul,
+    sub,
+)
+from .ops.communication import all_gather, all_reduce, shard
+from .ops.comparison import (
+    EqualOp,
+    GreaterEqualOp,
+    GreaterOp,
+    LessEqualOp,
+    LessOp,
+    NotEqualOp,
+    equal,
+    greater,
+    greater_equal,
+    less,
+    less_equal,
+    not_equal,
+)
+from .ops.control_flow import (
+    CondOp,
+    ScanOp,
+    WhereOp,
+    WhileLoopOp,
+    cond,
+    scan,
+    where,
+    while_loop,
+)
+from .ops.creation import (
+    arange,
+    constant,
+    full,
+    gaussian,
+    normal,
+    ones,
+    uniform,
+    zeros,
+)
+from .ops.multi_output import (
+    ChunkOp,
+    MinMaxOp,
+    SplitOp,
+    UnbindOp,
+    chunk,
+    minmax,
+    split,
+    unbind,
+)
+from .ops.reduction import (
+    MeanOp,
+    ReduceMaxOp,
+    ReduceMinOp,
+    ReduceSumOp,
+    mean,
+    mean_physical,
+    reduce_max,
+    reduce_min,
+    reduce_sum,
+    reduce_sum_physical,
+)
+from .ops.unary import (
+    AbsOp,
+    ExpOp,
+    NegOp,
+    ReluOp,
+    SigmoidOp,
+    TanhOp,
+    abs,
+    exp,
+    neg,
+    relu,
+    sigmoid,
+    softmax,
+    tanh,
+)
+from .ops.view import (
+    broadcast_to,
+    broadcast_to_physical,
+    concatenate,
+    decr_batch_dims,
+    gather,
+    incr_batch_dims,
+    move_axis_from_batch_dims,
+    move_axis_to_batch_dims,
+    moveaxis,
+    reshape,
+    scatter,
+    squeeze,
+    squeeze_physical,
+    stack,
+    swap_axes,
+    unsqueeze,
+    unsqueeze_physical,
+)
+from .transforms.compile import CompilationStats, CompiledFunction, compile
+from .transforms.shard_map import shard_map
+from .transforms.vmap import vmap
 
 __all__ = [
-    # Context
     "defaults",
-    "default_device", 
+    "default_device",
     "default_dtype",
     "defaults_like",
-    # Core
     "Tensor",
     "TensorImpl",
     "GRAPH",
     "driver_tensor_type",
-    # Operations (base classes)
     "Operation",
     "BinaryOperation",
     "ReduceOperation",
     "UnaryOperation",
-    # Binary operations
     "add",
     "mul",
     "sub",
@@ -198,7 +163,6 @@ __all__ = [
     "SubOp",
     "DivOp",
     "MatmulOp",
-    # Reduction operations
     "ReduceSumOp",
     "MeanOp",
     "ReduceMaxOp",
@@ -208,11 +172,9 @@ __all__ = [
     "reduce_max",
     "reduce_min",
     "mean",
-    # Sharding operations
     "shard",
     "all_gather",
     "all_reduce",
-    # Control Flow
     "where",
     "cond",
     "while_loop",
@@ -221,7 +183,6 @@ __all__ = [
     "CondOp",
     "WhileLoopOp",
     "ScanOp",
-    # Multi-output operations
     "split",
     "chunk",
     "unbind",
@@ -230,7 +191,6 @@ __all__ = [
     "ChunkOp",
     "UnbindOp",
     "MinMaxOp",
-    # Comparison operations
     "equal",
     "not_equal",
     "greater",
@@ -243,7 +203,6 @@ __all__ = [
     "GreaterEqualOp",
     "LessOp",
     "LessEqualOp",
-    # Unary operations
     "relu",
     "sigmoid",
     "tanh",
@@ -258,7 +217,6 @@ __all__ = [
     "NegOp",
     "AbsOp",
     "AbsOp",
-    # View operations
     "unsqueeze",
     "squeeze",
     "swap_axes",
@@ -266,7 +224,7 @@ __all__ = [
     "broadcast_to",
     "reshape",
     "gather",
-    "scatter", 
+    "scatter",
     "concatenate",
     "stack",
     "incr_batch_dims",
@@ -278,13 +236,11 @@ __all__ = [
     "broadcast_to_physical",
     "reduce_sum_physical",
     "mean_physical",
-    # Transforms
     "vmap",
     "shard_map",
     "compile",
     "CompiledFunction",
     "CompilationStats",
-    # Pytree
     "PyTreeDef",
     "tensor_leaves",
     "traced",
@@ -295,7 +251,6 @@ __all__ = [
     "tree_unflatten",
     "untraced",
     "with_batch_dims",
-    # Creation (including random)
     "constant",
     "full",
     "zeros",
@@ -304,7 +259,6 @@ __all__ = [
     "uniform",
     "gaussian",
     "normal",
-    # Sharding
     "DeviceMesh",
     "DimSpec",
     "ShardingSpec",
@@ -312,7 +266,6 @@ __all__ = [
     "PartitionSpec",
     "compute_local_shape",
     "get_num_shards",
-    # Debug
     "xpr",
     "capture_trace",
 ]

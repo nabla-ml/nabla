@@ -5,24 +5,22 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from max.driver import Device
 from max.dtype import DType
 from max.graph import DeviceRef, ShapeLike, TensorType, TensorValue, ops
 from max.graph.ops.constant import NestedArray, Number
 
-from .base import Operation
 from ..core import defaults
+from .base import Operation
 
 
 class ConstantOp(Operation):
     """Create a tensor from a constant value."""
-    
+
     @property
     def name(self) -> str:
         return "constant"
-    
+
     def maxpr(
         self,
         value: NestedArray | Number,
@@ -34,11 +32,11 @@ class ConstantOp(Operation):
 
 class FullOp(Operation):
     """Create a tensor filled with a constant value."""
-    
+
     @property
     def name(self) -> str:
         return "full"
-    
+
     def maxpr(
         self,
         shape: ShapeLike,
@@ -52,11 +50,11 @@ class FullOp(Operation):
 
 class ZerosOp(Operation):
     """Create a tensor filled with zeros."""
-    
+
     @property
     def name(self) -> str:
         return "zeros"
-    
+
     def maxpr(
         self,
         shape: ShapeLike,
@@ -69,11 +67,11 @@ class ZerosOp(Operation):
 
 class OnesOp(Operation):
     """Create a tensor filled with ones."""
-    
+
     @property
     def name(self) -> str:
         return "ones"
-    
+
     def maxpr(
         self,
         shape: ShapeLike,
@@ -86,11 +84,11 @@ class OnesOp(Operation):
 
 class ArangeOp(Operation):
     """Create a tensor with evenly spaced values."""
-    
+
     @property
     def name(self) -> str:
         return "arange"
-    
+
     def maxpr(
         self,
         start: int,
@@ -104,11 +102,11 @@ class ArangeOp(Operation):
 
 class UniformOp(Operation):
     """Create a tensor with uniform random values."""
-    
+
     @property
     def name(self) -> str:
         return "uniform"
-    
+
     def maxpr(
         self,
         shape: ShapeLike,
@@ -123,11 +121,11 @@ class UniformOp(Operation):
 
 class GaussianOp(Operation):
     """Create a tensor with Gaussian (normal) random values."""
-    
+
     @property
     def name(self) -> str:
         return "gaussian"
-    
+
     def maxpr(
         self,
         shape: ShapeLike,
@@ -138,7 +136,6 @@ class GaussianOp(Operation):
     ) -> TensorValue:
         tensor_type = TensorType(dtype, shape, device=DeviceRef.from_device(device))
         return ops.random.gaussian(tensor_type, mean=mean, std=std)
-
 
 
 _constant_op = ConstantOp()
@@ -157,7 +154,7 @@ def constant(
     device: Device | None = None,
 ):
     """Create a tensor from a constant value.
-    
+
     Args:
         value: Scalar, array, or nested sequence.
     """
@@ -252,20 +249,17 @@ def gaussian(
     return _gaussian_op(shape, mean, std, dtype, device)
 
 
-# Alias for gaussian
 normal = gaussian
 
 
 __all__ = [
-    # Op classes
     "ConstantOp",
     "FullOp",
-    "ZerosOp", 
+    "ZerosOp",
     "OnesOp",
     "ArangeOp",
     "UniformOp",
     "GaussianOp",
-    # Public functions
     "constant",
     "full",
     "zeros",

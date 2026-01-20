@@ -7,21 +7,21 @@
 
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
 from .base import BinaryOperation
 
 if TYPE_CHECKING:
-    from ..core import Tensor
+    pass
 
 
 class EqualOp(BinaryOperation):
     @property
     def name(self) -> str:
         return "equal"
-    
+
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.equal(args[0], args[1])
 
@@ -30,7 +30,7 @@ class NotEqualOp(BinaryOperation):
     @property
     def name(self) -> str:
         return "not_equal"
-    
+
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.not_equal(args[0], args[1])
 
@@ -39,7 +39,7 @@ class GreaterOp(BinaryOperation):
     @property
     def name(self) -> str:
         return "greater"
-    
+
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.greater(args[0], args[1])
 
@@ -48,7 +48,7 @@ class GreaterEqualOp(BinaryOperation):
     @property
     def name(self) -> str:
         return "greater_equal"
-    
+
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.greater_equal(args[0], args[1])
 
@@ -57,15 +57,16 @@ class LessOp(BinaryOperation):
     @property
     def name(self) -> str:
         return "less"
-    
+
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.greater(args[1], args[0])
+
 
 class LessEqualOp(BinaryOperation):
     @property
     def name(self) -> str:
         return "less_equal"
-    
+
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.greater_equal(args[1], args[0])
 
@@ -77,6 +78,4 @@ greater_equal = GreaterEqualOp()
 less = LessOp()
 less_equal = LessEqualOp()
 
-__all__ = [
-    "equal", "not_equal", "greater", "greater_equal", "less", "less_equal"
-]
+__all__ = ["equal", "not_equal", "greater", "greater_equal", "less", "less_equal"]

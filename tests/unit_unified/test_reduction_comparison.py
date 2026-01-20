@@ -1,30 +1,40 @@
-
 # ===----------------------------------------------------------------------=== #
-# Unified Test: Reduction & Comparison
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
-import pytest
-import nabla as nb
-import jax.numpy as jnp
 from functools import partial
 
+import jax.numpy as jnp
+import pytest
+
+import nabla as nb
+
 from .common import (
-    Operation, OpConfig, standard_get_args, run_test_with_consistency_check,
-    get_sharding_configs, DeviceMesh
+    OpConfig,
+    Operation,
+    run_test_with_consistency_check,
+    standard_get_args,
 )
 
-# REDUCTION
 OPS_RED = {}
 OPS_RED["reduce_sum"] = Operation(
-    "reduce_sum", "REDUCTION", nb.reduce_sum, jnp.sum,
-    [OpConfig("Axis1", ranks=(2,), params={"axis": 1})], standard_get_args
+    "reduce_sum",
+    "REDUCTION",
+    nb.reduce_sum,
+    jnp.sum,
+    [OpConfig("Axis1", ranks=(2,), params={"axis": 1})],
+    standard_get_args,
 )
 OPS_RED["mean"] = Operation(
-    "mean", "REDUCTION", nb.mean, jnp.mean,
-    [OpConfig("Axis1", ranks=(2,), params={"axis": 1})], standard_get_args
+    "mean",
+    "REDUCTION",
+    nb.mean,
+    jnp.mean,
+    [OpConfig("Axis1", ranks=(2,), params={"axis": 1})],
+    standard_get_args,
 )
 
-# COMPARISON
 OPS_CMP = {}
 for name, nb_fn, jax_fn in [
     ("equal", nb.equal, jnp.equal),
@@ -35,8 +45,12 @@ for name, nb_fn, jax_fn in [
     ("less_equal", nb.less_equal, jnp.less_equal),
 ]:
     OPS_CMP[name] = Operation(
-        name, "COMPARISON", nb_fn, jax_fn,
-        [OpConfig("Rank2", ranks=(2, 2))], standard_get_args
+        name,
+        "COMPARISON",
+        nb_fn,
+        jax_fn,
+        [OpConfig("Rank2", ranks=(2, 2))],
+        standard_get_args,
     )
 
 
@@ -45,15 +59,13 @@ def test_reduction_base(op_name):
     op = OPS_RED[op_name]
     config = op.configs[0]
     (args_nb, _), (args_jax, kwargs_jax) = op.get_args(config)
-    # Mapping params: nabla args vs jax kwargs?
-    # Helper standard_get_args returns params for both.
-    
-    # Nabla reductions usually take axis as kwarg too?
-    # nb.reduce_sum(x, axis=...)
+
     nb_fn = partial(op.nabla_fn, **config.params)
     jax_fn = partial(op.jax_fn, **config.params)
-    
-    run_test_with_consistency_check(f"{op_name}_Base", lambda: nb_fn(*args_nb), lambda: jax_fn(*args_jax))
+
+    run_test_with_consistency_check(
+        f"{op_name}_Base", lambda: nb_fn(*args_nb), lambda: jax_fn(*args_jax)
+    )
 
 
 @pytest.mark.parametrize("op_name", OPS_CMP.keys())
@@ -61,9 +73,7 @@ def test_comparison_base(op_name):
     op = OPS_CMP[op_name]
     config = op.configs[0]
     (args_nb, _), (args_jax, _) = op.get_args(config)
-    
+
     run_test_with_consistency_check(
-        f"{op_name}_Base", 
-        lambda: op.nabla_fn(*args_nb), 
-        lambda: op.jax_fn(*args_jax)
+        f"{op_name}_Base", lambda: op.nabla_fn(*args_nb), lambda: op.jax_fn(*args_jax)
     )

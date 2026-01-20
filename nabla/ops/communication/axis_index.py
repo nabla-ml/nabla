@@ -5,8 +5,7 @@
 
 from __future__ import annotations
 
-import math
-from typing import TYPE_CHECKING, Any, List
+from typing import TYPE_CHECKING
 
 from max.graph import TensorValue, ops
 
@@ -18,38 +17,43 @@ if TYPE_CHECKING:
 
 class AxisIndexOp(Operation):
     """Return the device's position along a mesh axis."""
-    
+
     @property
     def name(self) -> str:
         return "axis_index"
-    
+
     def maxpr(
         self,
-        mesh: "DeviceMesh",
+        mesh: DeviceMesh,
         axis_name: str,
         shard_idx: int,
     ) -> TensorValue:
         """Return this device's index along the specified axis."""
         coord = mesh.get_coordinate(shard_idx, axis_name)
-        return ops.constant(coord, mesh.device_refs[shard_idx].dtype if hasattr(mesh.device_refs[shard_idx], 'dtype') else None)
-    
-    def __call__(self, mesh: "DeviceMesh", axis_name: str):
+        return ops.constant(
+            coord,
+            (
+                mesh.device_refs[shard_idx].dtype
+                if hasattr(mesh.device_refs[shard_idx], "dtype")
+                else None
+            ),
+        )
+
+    def __call__(self, mesh: DeviceMesh, axis_name: str):
         """Get axis indices for all devices.
-        
+
         Args:
             mesh: Device mesh
             axis_name: Name of axis to get indices for
-            
+
         Returns:
             Tensor (sharded/distributed) containing the index for each device.
         """
-        from ...core import Tensor
-        from ...core import GRAPH
-        from ...core.sharding.spec import ShardingSpec, DimSpec
         from max.dtype import DType
-        # No DeviceRef in max.graph, it's typically in max.driver or inferred. Using int here for simplicity.
-        # But we need to specify device placement if using ops.constant
-        
+
+        from ...core import GRAPH, Tensor
+        from ...core.sharding.spec import DimSpec, ShardingSpec
+
         results = []
         with GRAPH.graph:
             for shard_idx in range(len(mesh.devices)):
@@ -58,9 +62,9 @@ class AxisIndexOp(Operation):
                 val = ops.constant(coord, DType.int32, device)
                 val = ops.reshape(val, (1,))
                 results.append(val)
-        
+
         spec = ShardingSpec(mesh, [DimSpec([axis_name])])
-        
+
         output = Tensor._create_unsafe(
             values=results,
             traced=False,
@@ -69,8 +73,10 @@ class AxisIndexOp(Operation):
         output.sharding = spec
         return output
 
+
 axis_index_op = AxisIndexOp()
 
-def axis_index(mesh: "DeviceMesh", axis_name: str):
+
+def axis_index(mesh: DeviceMesh, axis_name: str):
     """Return each device's position along a mesh axis."""
     return axis_index_op(mesh, axis_name)

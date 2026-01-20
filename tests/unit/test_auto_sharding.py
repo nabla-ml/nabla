@@ -3,39 +3,37 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
-import unittest
 import json
+import unittest
+
 import numpy as np
 
-from nabla.core import Tensor
-from nabla.core.sharding.spec import DeviceMesh, DimSpec, ShardingSpec
-from nabla.transforms.shard_map import shard_map
-from nabla.transforms.shard_map import _ShardingGraphExtractor as ShardingGraphExtractor
+from nabla.core import Tensor, trace
 from nabla.core.sharding.optimizer.simple_solver import SimpleSolver
-from nabla.core import trace
-from nabla import ops
+from nabla.core.sharding.spec import DeviceMesh
+from nabla.transforms.shard_map import _ShardingGraphExtractor as ShardingGraphExtractor
+from nabla.transforms.shard_map import shard_map
+
 
 class TestAutoSharding(unittest.TestCase):
     """Tests for Automated Sharding System."""
 
     def setUp(self):
-        # 4 devices
+
         self.mesh = DeviceMesh("test_mesh", (4,), ("d",), devices=[0, 1, 2, 3])
 
     def test_graph_extraction(self):
         """Verify Graph Extractor produces valid JSON."""
         print("\nTEST: Graph Extraction")
-        
+
         def func(a, b):
             return a @ b
 
         a = Tensor.from_dlpack(np.random.rand(128, 128).astype(np.float32))
         b = Tensor.from_dlpack(np.random.rand(128, 128).astype(np.float32))
 
-        # Trace
         t = trace(func, a, b)
-        
-        # Extract
+
         extractor = ShardingGraphExtractor(t, in_specs={}, out_specs={})
         json_str = extractor.extract()
         data = json.loads(json_str)
@@ -46,459 +44,461 @@ class TestAutoSharding(unittest.TestCase):
         self.assertIn("nodes", data)
         self.assertEqual(len(data["nodes"]), 1)
         self.assertEqual(data["nodes"][0]["op_name"], "matmul")
-        
-        # Verify cost model
+
         flops = data["nodes"][0]["compute_stats"]["flops"]
-        # 2 * 128^3 = 4194304
+
         self.assertEqual(flops, 2 * 128 * 128 * 128)
 
     def test_simple_solver_logic(self):
         """Verify Solver logic for choosing DP vs MP with propagation-based solver."""
         print("\nTEST: Solver Logic (Propagation-Based)")
-        
+
         solver = SimpleSolver(self.mesh.shape, self.mesh.axis_names)
-        
-        # Case 1: Prefer DP (M divisible by 4, Low Comm)
-        # Mock Graph JSON with equation for propagation
+
         graph_dp = {
             "tensors": [
-                {"id": 0, "shape": [1024, 1024]}, # A
-                {"id": 1, "shape": [1024, 1024]}, # B (Replicated)
-                {"id": 2, "shape": [1024, 1024]}  # C
+                {"id": 0, "shape": [1024, 1024]},
+                {"id": 1, "shape": [1024, 1024]},
+                {"id": 2, "shape": [1024, 1024]},
             ],
             "nodes": [
                 {
-                    "id": 0, "op_name": "matmul",
-                    "inputs": [0, 1], "outputs": [2],
+                    "id": 0,
+                    "op_name": "matmul",
+                    "inputs": [0, 1],
+                    "outputs": [2],
                     "sharding_rule": {
                         "equation": "m k, k n -> m n",
-                        "factor_sizes": {"m": 1024, "k": 1024, "n": 1024}
+                        "factor_sizes": {"m": 1024, "k": 1024, "n": 1024},
                     },
-                    "compute_stats": {"flops": 2e9}
+                    "compute_stats": {"flops": 2e9},
                 }
-            ]
+            ],
         }
-        
+
         sol_dp = solver.solve(json.dumps(graph_dp), debug=True)
         print("DP Solution:", json.dumps(sol_dp, indent=2))
-        
-        # NEW FORMAT: Node-centric solution
-        # Check node "0" has correct output sharding (Split M = dim 0)
+
         self.assertIn("nodes", sol_dp)
         self.assertIn("0", sol_dp["nodes"])
         node_sol = sol_dp["nodes"]["0"]
-        
-        # Output should be sharded on dim 0 ("d") for DP
+
         self.assertIn("outputs", node_sol)
         self.assertIn("0", node_sol["outputs"])
         out_dims = node_sol["outputs"]["0"]["dims"]
-        self.assertEqual(out_dims[0], ["d"])  # Split M (dim 0)
-        
-        # Input A should also be sharded on dim 0
+        self.assertEqual(out_dims[0], ["d"])
+
         self.assertIn("inputs", node_sol)
         self.assertIn("0", node_sol["inputs"])
         in_a_dims = node_sol["inputs"]["0"]["dims"]
-        self.assertEqual(in_a_dims[0], ["d"])  # Split M (dim 0)
-        
-        # Case 2: Prefer MP (M small/indivisible, K large)
+        self.assertEqual(in_a_dims[0], ["d"])
+
         graph_mp = {
             "tensors": [
-                {"id": 0, "shape": [3, 4096]}, 
+                {"id": 0, "shape": [3, 4096]},
                 {"id": 1, "shape": [4096, 1024]},
-                {"id": 2, "shape": [3, 1024]} 
+                {"id": 2, "shape": [3, 1024]},
             ],
             "nodes": [
                 {
-                    "id": 0, "op_name": "matmul",
-                    "inputs": [0, 1], "outputs": [2],
+                    "id": 0,
+                    "op_name": "matmul",
+                    "inputs": [0, 1],
+                    "outputs": [2],
                     "sharding_rule": {
                         "equation": "m k, k n -> m n",
-                        "factor_sizes": {"m": 3, "k": 4096, "n": 1024}
+                        "factor_sizes": {"m": 3, "k": 4096, "n": 1024},
                     },
-                    "compute_stats": {"flops": 2e9}
+                    "compute_stats": {"flops": 2e9},
                 }
-            ]
+            ],
         }
-        
+
         sol_mp = solver.solve(json.dumps(graph_mp), debug=True)
         print("MP Solution:", json.dumps(sol_mp, indent=2))
-        
-        # For MP: Input A (dim 1 = K), Input B (dim 0 = K) sharded
+
         node_sol_mp = sol_mp["nodes"]["0"]
-        
-        # Input 0 (A): [m, k] -> split dim 1 ("d")
+
         in_a_dims_mp = node_sol_mp["inputs"]["0"]["dims"]
-        self.assertEqual(in_a_dims_mp[1], ["d"])  # Split K (dim 1)
-        
-        # Input 1 (B): [k, n] -> split dim 0 ("d")
+        self.assertEqual(in_a_dims_mp[1], ["d"])
+
         in_b_dims_mp = node_sol_mp["inputs"]["1"]["dims"]
-        self.assertEqual(in_b_dims_mp[0], ["d"])  # Split K (dim 0)
-        
-        # Output 2 (C): Replicated (None sharding on both dims)
+        self.assertEqual(in_b_dims_mp[0], ["d"])
+
         out_dims_mp = node_sol_mp["outputs"]["0"]["dims"]
         self.assertEqual(out_dims_mp, [None, None])
 
     def test_solver_bidirectional_propagation(self):
         """Verify that constraints propagate bidirectionally through the graph.
-        
+
         This tests the key feature: output constraints should propagate back to inputs.
         """
         print("\nTEST: Bidirectional Propagation")
-        
+
         solver = SimpleSolver(self.mesh.shape, self.mesh.axis_names)
-        
-        # Graph: A -> matmul -> B -> add -> C
-        # If we fix output C's sharding, it should propagate back through add to B,
-        # then through matmul to A.
+
         graph = {
             "tensors": [
-                {"id": 0, "shape": [1024, 1024]},  # A
-                {"id": 1, "shape": [1024, 1024]},  # weight
-                {"id": 2, "shape": [1024, 1024]},  # B = A @ weight
-                {"id": 3, "shape": [1024, 1024]},  # bias
-                {"id": 4, "shape": [1024, 1024], "fixed_sharding": {"dims": [["d"], None], "replicated": []}}  # C (fixed!)
+                {"id": 0, "shape": [1024, 1024]},
+                {"id": 1, "shape": [1024, 1024]},
+                {"id": 2, "shape": [1024, 1024]},
+                {"id": 3, "shape": [1024, 1024]},
+                {
+                    "id": 4,
+                    "shape": [1024, 1024],
+                    "fixed_sharding": {"dims": [["d"], None], "replicated": []},
+                },
             ],
             "nodes": [
                 {
-                    "id": 0, "op_name": "matmul",
-                    "inputs": [0, 1], "outputs": [2],
+                    "id": 0,
+                    "op_name": "matmul",
+                    "inputs": [0, 1],
+                    "outputs": [2],
                     "sharding_rule": {
                         "equation": "m k, k n -> m n",
-                        "factor_sizes": {"m": 1024, "k": 1024, "n": 1024}
+                        "factor_sizes": {"m": 1024, "k": 1024, "n": 1024},
                     },
-                    "compute_stats": {"flops": 2e9}
+                    "compute_stats": {"flops": 2e9},
                 },
                 {
-                    "id": 1, "op_name": "add",
-                    "inputs": [2, 3], "outputs": [4],
+                    "id": 1,
+                    "op_name": "add",
+                    "inputs": [2, 3],
+                    "outputs": [4],
                     "sharding_rule": {
                         "equation": "m n, m n -> m n",
-                        "factor_sizes": {"m": 1024, "n": 1024}
+                        "factor_sizes": {"m": 1024, "n": 1024},
                     },
-                    "compute_stats": {"flops": 1e6}
-                }
-            ]
+                    "compute_stats": {"flops": 1e6},
+                },
+            ],
         }
-        
+
         sol = solver.solve(json.dumps(graph), debug=True)
         print("Bidirectional Solution:", json.dumps(sol, indent=2))
-        
-        # The output C is fixed to be sharded on dim 0.
-        # This should propagate back:
-        # - add's output (4) is fixed -> add's inputs (2, 3) should get sharded on dim 0
-        # - matmul's output (2) sharded on dim 0 -> matmul should prefer DP (split M)
-        
-        # Check output of matmul (node 0) has dim 0 sharded
+
         matmul_out = sol["nodes"]["0"]["outputs"]["0"]["dims"]
-        # Expectation: dim 0 sharded due to downstream constraint propagation
-        # Note: This verifies bidirectional flow is working
-        self.assertIsNotNone(matmul_out[0])  # Should have some sharding
+
+        self.assertIsNotNone(matmul_out[0])
 
     def test_integration_e2e(self):
         """Verify shard_map(auto_sharding=True) executes and produces correct results."""
         print("\nTEST: E2E Auto Sharding")
-        
+
         def func(a, b):
             return a @ b
-            
-        # Large enough to trigger DP (1024x1024)
+
         M, K, N = 128, 128, 128
-        
+
         sharded_fn = shard_map(
             func,
             self.mesh,
-            in_specs={0: None, 1: None}, # Inputs start replicated
+            in_specs={0: None, 1: None},
             out_specs=None,
             auto_sharding=True,
-            debug=True
+            debug=True,
         )
-        
+
         np.random.seed(42)
         a_np = np.random.rand(M, K).astype(np.float32)
         b_np = np.random.rand(K, N).astype(np.float32)
         a = Tensor.from_dlpack(a_np)
         b = Tensor.from_dlpack(b_np)
-        
-        # Execute with auto-sharding
+
         result = sharded_fn(a, b)
-        
-        # Verify numerical correctness against NumPy
+
         expected = a_np @ b_np
         result_np = result.to_numpy()
-        
-        np.testing.assert_allclose(result_np, expected, rtol=1e-5, atol=1e-5,
-            err_msg="Auto-sharded matmul produced incorrect results")
-        
+
+        np.testing.assert_allclose(
+            result_np,
+            expected,
+            rtol=1e-5,
+            atol=1e-5,
+            err_msg="Auto-sharded matmul produced incorrect results",
+        )
+
         print("✅ E2E test passed: Auto-sharded result matches expected!")
 
     def test_run_e2e(self):
-         self.test_integration_e2e()
+        self.test_integration_e2e()
 
     def test_multi_op_chain(self):
         """Test auto-sharding with a chain of operations: matmul -> add -> reduce.
-        
+
         This verifies that:
         1. Sharding propagates correctly through multiple ops
         2. Factor-based propagation handles different op types
         3. Communication ops are inserted where needed
         """
         print("\nTEST: Multi-Op Chain Auto-Sharding")
-        
+
         def mlp_layer(x, w, b):
-            # Matmul -> Add bias -> ReduceSum
+
             h = x @ w
             h = h + b
             return h.sum(axis=-1, keepdims=True)
-        
+
         M, K, N = 128, 64, 32
-        
+
         sharded_fn = shard_map(
             mlp_layer,
             self.mesh,
             in_specs={0: None, 1: None, 2: None},
             out_specs=None,
             auto_sharding=True,
-            debug=True
+            debug=True,
         )
-        
+
         np.random.seed(123)
         x_np = np.random.rand(M, K).astype(np.float32)
         w_np = np.random.rand(K, N).astype(np.float32)
         b_np = np.random.rand(N).astype(np.float32)
-        
+
         x = Tensor.from_dlpack(x_np)
         w = Tensor.from_dlpack(w_np)
         b = Tensor.from_dlpack(b_np)
-        
+
         result = sharded_fn(x, w, b)
-        
-        # NumPy reference
+
         expected = (x_np @ w_np + b_np).sum(axis=-1, keepdims=True)
         result_np = result.to_numpy()
-        
-        np.testing.assert_allclose(result_np, expected, rtol=1e-4, atol=1e-4,
-            err_msg="Multi-op chain produced incorrect results")
-        
+
+        np.testing.assert_allclose(
+            result_np,
+            expected,
+            rtol=1e-4,
+            atol=1e-4,
+            err_msg="Multi-op chain produced incorrect results",
+        )
+
         print("✅ Multi-op chain test passed!")
 
     def test_propagation_debug_output(self):
         """Verify debug output shows propagation iterations."""
         print("\nTEST: Propagation Debug Output")
-        
+
         solver = SimpleSolver(self.mesh.shape, self.mesh.axis_names)
-        
-        # Two-node graph to force propagation across nodes
+
         graph = {
             "tensors": [
-                {"id": 0, "shape": [1024, 1024]},  # x
-                {"id": 1, "shape": [1024, 1024]},  # w
-                {"id": 2, "shape": [1024, 1024]},  # h = x @ w
-                {"id": 3, "shape": [1024, 1024]},  # b
-                {"id": 4, "shape": [1024, 1024]},  # out = h + b
+                {"id": 0, "shape": [1024, 1024]},
+                {"id": 1, "shape": [1024, 1024]},
+                {"id": 2, "shape": [1024, 1024]},
+                {"id": 3, "shape": [1024, 1024]},
+                {"id": 4, "shape": [1024, 1024]},
             ],
             "nodes": [
                 {
-                    "id": 0, "op_name": "matmul",
-                    "inputs": [0, 1], "outputs": [2],
+                    "id": 0,
+                    "op_name": "matmul",
+                    "inputs": [0, 1],
+                    "outputs": [2],
                     "sharding_rule": {
                         "equation": "m k, k n -> m n",
-                        "factor_sizes": {"m": 1024, "k": 1024, "n": 1024}
+                        "factor_sizes": {"m": 1024, "k": 1024, "n": 1024},
                     },
-                    "compute_stats": {"flops": 2e9}
+                    "compute_stats": {"flops": 2e9},
                 },
                 {
-                    "id": 1, "op_name": "add",
-                    "inputs": [2, 3], "outputs": [4],
+                    "id": 1,
+                    "op_name": "add",
+                    "inputs": [2, 3],
+                    "outputs": [4],
                     "sharding_rule": {
                         "equation": "m n, m n -> m n",
-                        "factor_sizes": {"m": 1024, "n": 1024}
+                        "factor_sizes": {"m": 1024, "n": 1024},
                     },
-                    "compute_stats": {"flops": 1e6}
-                }
-            ]
+                    "compute_stats": {"flops": 1e6},
+                },
+            ],
         }
-        
+
         import io
         import sys
-        
-        # Capture debug output
+
         old_stdout = sys.stdout
         sys.stdout = captured = io.StringIO()
-        
+
         solution = solver.solve(json.dumps(graph), debug=True)
-        
+
         sys.stdout = old_stdout
         debug_output = captured.getvalue()
-        
+
         print("Debug output:", debug_output[:500])
-        
-        # Verify propagation happened
+
         self.assertIn("Propagation iteration", debug_output)
         self.assertIn("Fixed-point reached", debug_output)
-        
-        # Verify solution has entries for both nodes
+
         self.assertIn("0", solution["nodes"])
         self.assertIn("1", solution["nodes"])
-        
+
         print("✅ Propagation debug output verified!")
 
     def test_transformer_block(self):
         """Test auto-sharding with a larger transformer-like graph (8+ operations).
-        
+
         This verifies:
         1. Sharding propagates correctly through many operations
         2. Solver converges within reasonable iterations
         3. Numerical output matches NumPy reference
         """
         print("\nTEST: Transformer Block (8+ ops)")
-        
+
         def transformer_block(x, w_qkv, w_o, w_ff1, w_ff2):
-            # Simplified attention: x @ w_qkv gives Q,K,V concatenated
-            # We use a simpler version without softmax for now
-            qkv = x @ w_qkv  # [batch, seq, 3*dim]
-            
-            # Simplified: just project back (no real attention)
-            attn_out = qkv @ w_o  # [batch, seq, dim]
-            
-            # Residual connection
+
+            qkv = x @ w_qkv
+
+            attn_out = qkv @ w_o
+
             h = x + attn_out
-            
-            # FFN
-            ff = h @ w_ff1  # [batch, seq, ff_dim]
-            ff_out = ff @ w_ff2  # [batch, seq, dim]
-            
-            # Final residual
+
+            ff = h @ w_ff1
+            ff_out = ff @ w_ff2
+
             return h + ff_out
-        
-        # Shapes: batch=64, seq=32, dim=64, ff_dim=128
+
         batch, seq, dim, ff_dim = 64, 32, 64, 128
-        
+
         sharded_fn = shard_map(
             transformer_block,
             self.mesh,
             in_specs={0: None, 1: None, 2: None, 3: None, 4: None},
             out_specs=None,
             auto_sharding=True,
-            debug=True
+            debug=True,
         )
-        
+
         np.random.seed(42)
         x_np = np.random.rand(batch, seq, dim).astype(np.float32)
-        w_qkv_np = np.random.rand(dim, 3*dim).astype(np.float32)
-        w_o_np = np.random.rand(3*dim, dim).astype(np.float32)
+        w_qkv_np = np.random.rand(dim, 3 * dim).astype(np.float32)
+        w_o_np = np.random.rand(3 * dim, dim).astype(np.float32)
         w_ff1_np = np.random.rand(dim, ff_dim).astype(np.float32)
         w_ff2_np = np.random.rand(ff_dim, dim).astype(np.float32)
-        
+
         x = Tensor.from_dlpack(x_np)
         w_qkv = Tensor.from_dlpack(w_qkv_np)
         w_o = Tensor.from_dlpack(w_o_np)
         w_ff1 = Tensor.from_dlpack(w_ff1_np)
         w_ff2 = Tensor.from_dlpack(w_ff2_np)
-        
+
         result = sharded_fn(x, w_qkv, w_o, w_ff1, w_ff2)
-        
-        # NumPy reference
+
         qkv = x_np @ w_qkv_np
         attn_out = qkv @ w_o_np
         h = x_np + attn_out
         ff = h @ w_ff1_np
         ff_out = ff @ w_ff2_np
         expected = h + ff_out
-        
+
         result_np = result.to_numpy()
-        np.testing.assert_allclose(result_np, expected, rtol=1e-4, atol=1e-4,
-            err_msg="Transformer block produced incorrect results")
-        
+        np.testing.assert_allclose(
+            result_np,
+            expected,
+            rtol=1e-4,
+            atol=1e-4,
+            err_msg="Transformer block produced incorrect results",
+        )
+
         print("✅ Transformer block test passed!")
 
     def test_model_parallel_matmul(self):
         """Test Model Parallel (MP) sharding when M is small/indivisible.
-        
+
         Verifies:
         1. Solver chooses to shard K dimension when M cannot be sharded
         2. Proper AllReduce is inserted for partial results
         """
         print("\nTEST: Model Parallel Matmul (Split K)")
-        
-        # M=3 is not divisible by 4 devices, forcing MP (split K)
+
         M, K, N = 3, 256, 64
-        
+
         def mp_matmul(a, b):
             return a @ b
-        
+
         sharded_fn = shard_map(
             mp_matmul,
             self.mesh,
             in_specs={0: None, 1: None},
             out_specs=None,
             auto_sharding=True,
-            debug=True
+            debug=True,
         )
-        
+
         np.random.seed(99)
         a_np = np.random.rand(M, K).astype(np.float32)
         b_np = np.random.rand(K, N).astype(np.float32)
-        
+
         a = Tensor.from_dlpack(a_np)
         b = Tensor.from_dlpack(b_np)
-        
+
         result = sharded_fn(a, b)
-        
-        # NumPy reference
+
         expected = a_np @ b_np
         result_np = result.to_numpy()
-        
-        np.testing.assert_allclose(result_np, expected, rtol=1e-4, atol=1e-4,
-            err_msg="MP matmul produced incorrect results")
-        
+
+        np.testing.assert_allclose(
+            result_np,
+            expected,
+            rtol=1e-4,
+            atol=1e-4,
+            err_msg="MP matmul produced incorrect results",
+        )
+
         print("✅ Model Parallel matmul test passed!")
 
     def test_diamond_pattern(self):
         """Test fork/join (diamond) pattern where one tensor feeds multiple ops.
-        
+
         Verifies:
         1. Sharding propagates correctly through forks
         2. Fixed-point converges for diamond patterns
         """
         print("\nTEST: Diamond Pattern (Fork/Join)")
-        
+
         def diamond(x, w):
-            h = x @ w  # Fork point
-            branch1 = h + 1.0  # Branch 1
-            branch2 = h * 2.0  # Branch 2
-            return branch1 + branch2  # Join point
-        
+            h = x @ w
+            branch1 = h + 1.0
+            branch2 = h * 2.0
+            return branch1 + branch2
+
         M, K, N = 128, 64, 32
-        
+
         sharded_fn = shard_map(
             diamond,
             self.mesh,
             in_specs={0: None, 1: None},
             out_specs=None,
             auto_sharding=True,
-            debug=True
+            debug=True,
         )
-        
+
         np.random.seed(123)
         x_np = np.random.rand(M, K).astype(np.float32)
         w_np = np.random.rand(K, N).astype(np.float32)
-        
+
         x = Tensor.from_dlpack(x_np)
         w = Tensor.from_dlpack(w_np)
-        
+
         result = sharded_fn(x, w)
-        
-        # NumPy reference
+
         h = x_np @ w_np
         branch1 = h + 1.0
         branch2 = h * 2.0
         expected = branch1 + branch2
-        
+
         result_np = result.to_numpy()
-        np.testing.assert_allclose(result_np, expected, rtol=1e-4, atol=1e-4,
-            err_msg="Diamond pattern produced incorrect results")
-        
+        np.testing.assert_allclose(
+            result_np,
+            expected,
+            rtol=1e-4,
+            atol=1e-4,
+            err_msg="Diamond pattern produced incorrect results",
+        )
+
         print("✅ Diamond pattern test passed!")
+
 
 if __name__ == "__main__":
     unittest.main()

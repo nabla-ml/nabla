@@ -13,18 +13,12 @@ Test Hierarchy:
 """
 
 
-import pytest
 import numpy as np
-from typing import Callable
+import pytest
 
-import nabla
-from nabla import Tensor, DeviceMesh, P
+from nabla import DeviceMesh, Tensor
 from nabla.core.sharding.spec import DimSpec
 
-
-# =============================================================================
-# Array Creation Helpers
-# =============================================================================
 
 def make_array(*shape: int, seed: int = 42, dtype=np.float32) -> np.ndarray:
     """Create a deterministic random array."""
@@ -45,7 +39,7 @@ def tensor_from_numpy(arr: np.ndarray) -> Tensor:
 
 def to_numpy(t: Tensor) -> np.ndarray:
     """Extract numpy array from Tensor.
-    
+
     Uses Tensor.to_numpy() which handles:
     - Realization of lazy tensors
     - Gathering of sharded tensors
@@ -54,11 +48,9 @@ def to_numpy(t: Tensor) -> np.ndarray:
     return t.to_numpy()
 
 
-# =============================================================================
-# Assertion Helpers
-# =============================================================================
-
-def assert_allclose(result: Tensor, expected: np.ndarray, rtol: float = 1e-5, atol: float = 1e-6):
+def assert_allclose(
+    result: Tensor, expected: np.ndarray, rtol: float = 1e-5, atol: float = 1e-6
+):
     """Assert tensor values match expected numpy array."""
     actual = to_numpy(result)
     np.testing.assert_allclose(actual, expected, rtol=rtol, atol=atol)
@@ -67,19 +59,25 @@ def assert_allclose(result: Tensor, expected: np.ndarray, rtol: float = 1e-5, at
 def assert_shape(result: Tensor, expected_shape: tuple):
     """Assert tensor.shape matches expected (logical shape)."""
     actual = tuple(int(d) for d in result.shape)
-    assert actual == expected_shape, f"Shape mismatch: got {actual}, expected {expected_shape}"
+    assert (
+        actual == expected_shape
+    ), f"Shape mismatch: got {actual}, expected {expected_shape}"
 
 
 def assert_physical_shape(result: Tensor, expected_shape: tuple):
     """Assert tensor's physical shape (global_shape) matches expected."""
     actual = result.global_shape or result.local_shape
     actual = tuple(int(d) for d in actual)
-    assert actual == expected_shape, f"Physical shape mismatch: got {actual}, expected {expected_shape}"
+    assert (
+        actual == expected_shape
+    ), f"Physical shape mismatch: got {actual}, expected {expected_shape}"
 
 
 def assert_dtype(result: Tensor, expected_dtype):
     """Assert tensor dtype matches expected."""
-    assert result.dtype == expected_dtype, f"Dtype mismatch: got {result.dtype}, expected {expected_dtype}"
+    assert (
+        result.dtype == expected_dtype
+    ), f"Dtype mismatch: got {result.dtype}, expected {expected_dtype}"
 
 
 def assert_batch_dims(result: Tensor, expected: int):
@@ -93,12 +91,6 @@ def assert_is_sharded(result: Tensor, expected: bool = True):
     actual = result.is_sharded
     assert actual == expected, f"is_sharded mismatch: got {actual}, expected {expected}"
 
-
-# =============================================================================
-# Mesh Fixtures
-# =============================================================================
-
-# --- 1D Meshes ---
 
 @pytest.fixture
 def mesh_1d():
@@ -117,8 +109,6 @@ def mesh_1d_8():
     """1D mesh with 8 devices named 'dp'."""
     return DeviceMesh("mesh_1d_8", (8,), ("dp",))
 
-
-# --- 2D Meshes ---
 
 @pytest.fixture
 def mesh_2d():
@@ -144,8 +134,6 @@ def mesh_2d_1x4():
     return DeviceMesh("mesh_2d_1x4", (1, 4), ("dp", "tp"))
 
 
-# --- Asymmetric 2D Meshes (critical for proper testing) ---
-
 @pytest.fixture
 def mesh_2x4():
     """Asymmetric 2D mesh with shape (2, 4)."""
@@ -164,8 +152,6 @@ def mesh_3x2():
     return DeviceMesh("mesh_3x2", (3, 2), ("dp", "tp"))
 
 
-# --- 3D Meshes ---
-
 @pytest.fixture
 def mesh_3d():
     """3D mesh with shape (2, 2, 2) named ('dp', 'tp', 'pp')."""
@@ -178,7 +164,7 @@ def mesh_3d_2x2x4():
     return DeviceMesh("mesh_3d_2x2x4", (2, 2, 4), ("dp", "tp", "pp"))
 
 
-@pytest.fixture 
+@pytest.fixture
 def mesh_3d_4x2x2():
     """3D mesh with shape (4, 2, 2) named ('dp', 'tp', 'pp')."""
     return DeviceMesh("mesh_3d_4x2x2", (4, 2, 2), ("dp", "tp", "pp"))
@@ -196,13 +182,11 @@ def mesh_3d_2x2x4():
     return DeviceMesh("mesh_3d_2x2x4", (2, 2, 4), ("dp", "tp", "pp"))
 
 
-# =============================================================================
-# Sharding Helpers
-# =============================================================================
-
-def shard_on_axis(tensor: Tensor, mesh: DeviceMesh, axis: int, mesh_axis: int = 0) -> Tensor:
+def shard_on_axis(
+    tensor: Tensor, mesh: DeviceMesh, axis: int, mesh_axis: int = 0
+) -> Tensor:
     """Shard tensor on a specific axis using specified mesh dimension.
-    
+
     Args:
         tensor: The tensor to shard
         mesh: The device mesh
@@ -210,16 +194,18 @@ def shard_on_axis(tensor: Tensor, mesh: DeviceMesh, axis: int, mesh_axis: int = 
         mesh_axis: Which mesh axis to use for sharding (default 0 = first axis name)
     """
     rank = len(tensor.shape)
-    # Default to open specs so they can accept further sharding (e.g. broadcasting)
+
     specs = [DimSpec([], is_open=True) for _ in range(rank)]
-    # The sharded axis is fixed (closed) unless explicitly opened (sharding constraint)
+
     specs[axis] = DimSpec([mesh.axis_names[mesh_axis]], is_open=False)
     return tensor.shard(mesh, specs)
 
 
-def shard_on_axes(tensor: Tensor, mesh: DeviceMesh, axis_mapping: dict[int, int]) -> Tensor:
+def shard_on_axes(
+    tensor: Tensor, mesh: DeviceMesh, axis_mapping: dict[int, int]
+) -> Tensor:
     """Shard tensor on multiple axes with specific mesh axis mapping.
-    
+
     Args:
         tensor: The tensor to shard
         mesh: The device mesh
@@ -228,7 +214,7 @@ def shard_on_axes(tensor: Tensor, mesh: DeviceMesh, axis_mapping: dict[int, int]
                            tensor axis 1 on mesh axis 1
     """
     rank = len(tensor.shape)
-    # Default to open specs
+
     specs = [DimSpec([], is_open=True) for _ in range(rank)]
     for tensor_axis, mesh_axis in axis_mapping.items():
         specs[tensor_axis] = DimSpec([mesh.axis_names[mesh_axis]], is_open=False)
@@ -238,6 +224,6 @@ def shard_on_axes(tensor: Tensor, mesh: DeviceMesh, axis_mapping: dict[int, int]
 def replicated(tensor: Tensor, mesh: DeviceMesh) -> Tensor:
     """Create a fully replicated sharded tensor (open to sharding propagation)."""
     rank = len(tensor.shape)
-    # Replicated starts with no axes but should be Open to allow it to match sharded inputs
+
     specs = [DimSpec([], is_open=True) for _ in range(rank)]
     return tensor.shard(mesh, specs)

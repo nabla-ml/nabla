@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
-from .vmap import vmap
+from .compile import CompilationStats, CompiledFunction, compile
 from .shard_map import shard_map
-from .compile import compile, CompiledFunction, CompilationStats
+from .vmap import vmap
 
 __all__ = ["vmap", "shard_map", "compile", "CompiledFunction", "CompilationStats"]

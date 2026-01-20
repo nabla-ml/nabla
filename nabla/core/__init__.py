@@ -4,29 +4,45 @@
 # ===----------------------------------------------------------------------=== #
 
 from .common import (
-    defaults, default_device, default_dtype, defaults_like, _in_running_loop,
-    tree_map, tree_flatten, tree_unflatten, tree_leaves, tree_structure, PyTreeDef, 
-    tensor_leaves, traced, untraced, with_batch_dims,
-    pytree  # Re-export module
+    PyTreeDef,
+    _in_running_loop,
+    default_device,
+    default_dtype,
+    defaults,
+    defaults_like,
+    pytree,
+    tensor_leaves,
+    traced,
+    tree_flatten,
+    tree_leaves,
+    tree_map,
+    tree_structure,
+    tree_unflatten,
+    untraced,
+    with_batch_dims,
+)
+from .graph import (
+    GRAPH,
+    ComputeGraph,
+    OutputRefs,
+    Trace,
+    apply_to_operations,
+    driver_tensor_type,
+    get_all_impls_topological,
+    get_operations_topological,
+    print_trace_graph,
+    trace,
 )
 from .tensor import Tensor, TensorImpl
-from .graph import (
-    ComputeGraph, GRAPH, driver_tensor_type,
-    get_operations_topological, get_all_impls_topological, print_trace_graph, apply_to_operations,
-    OutputRefs, Trace, trace
-)
 
 __all__ = [
-    # Tensor
     "Tensor",
     "TensorImpl",
     "OutputRefs",
-    # Context
     "defaults",
     "default_device",
     "default_dtype",
     "defaults_like",
-    # Pytree
     "tree_map",
     "tree_flatten",
     "tree_unflatten",
@@ -37,16 +53,13 @@ __all__ = [
     "traced",
     "untraced",
     "with_batch_dims",
-    # Compute graph
     "ComputeGraph",
     "GRAPH",
     "driver_tensor_type",
-
     "get_operations_topological",
     "get_all_impls_topological",
     "print_trace_graph",
     "apply_to_operations",
-    # TensorImpl utilities
     "Trace",
     "trace",
 ]

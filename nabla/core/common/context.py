@@ -34,7 +34,7 @@ T = TypeVar("T")
 
 
 @contextlib.contextmanager
-def contextvar_context(var: ContextVar[T], value: T):  # noqa: ANN201
+def contextvar_context(var: ContextVar[T], value: T):
     token = var.set(value)
     try:
         yield
@@ -57,7 +57,7 @@ def _get_device_specs() -> list[driver.DeviceSpec]:
     global _DEVICE_SPECS_CACHE
     if _DEVICE_SPECS_CACHE is None:
         _DEVICE_SPECS_CACHE = driver.scan_available_devices()
-        # Ensure CPU is always available
+
         if (cpu := driver.DeviceSpec.cpu()) not in _DEVICE_SPECS_CACHE:
             _DEVICE_SPECS_CACHE.append(cpu)
     return _DEVICE_SPECS_CACHE
@@ -85,14 +85,14 @@ def defaults(
     return (dtype or _default_dtype(device)), device
 
 
-def default_device(device: Device | graph.DeviceRef):  # noqa: ANN201
+def default_device(device: Device | graph.DeviceRef):
     """Context manager setting default device."""
     if isinstance(device, graph.DeviceRef):
         device = device.to_device()
     return contextvar_context(_DEFAULT_DEVICE, device)
 
 
-def default_dtype(dtype: DType):  # noqa: ANN201
+def default_dtype(dtype: DType):
     """Context manager setting default dtype."""
     return contextvar_context(_DEFAULT_DTYPE, dtype)
 
@@ -106,6 +106,7 @@ def defaults_like(like: Tensor | TensorType) -> Generator[None]:
 
 _GLOBAL_SESSION: engine.api.InferenceSession | None = None
 
+
 def _session() -> engine.api.InferenceSession:
     """Global inference session singleton."""
     if session := _SESSION.get(None):
@@ -118,7 +119,7 @@ def _session() -> engine.api.InferenceSession:
 
     device_specs = _get_device_specs()
     devices = driver.load_devices(device_specs)
-    
+
     session = engine.api.InferenceSession(devices=devices)
     _GLOBAL_SESSION = session
     _SESSION.set(session)

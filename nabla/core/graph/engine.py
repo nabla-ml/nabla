@@ -11,7 +11,7 @@ import gc
 import sys
 import weakref
 from contextvars import ContextVar
-from typing import TYPE_CHECKING, Any, Iterable
+from typing import TYPE_CHECKING, Any
 
 from max import _core, driver, graph, mlir
 from max._core.dialects import builtin, kgen, mo
@@ -20,38 +20,31 @@ from max.graph.graph import _location
 
 if TYPE_CHECKING:
     from ..tensor.api import Tensor
-    from ..sharding.mesh import DeviceMesh
-    from ..tensor.impl import TensorImpl
 
 from ..common.context import _session
-
-# Global State & Constants
 
 _GRAPH_EPOCH: int = 0
 _SEED: ContextVar[Tensor] = ContextVar("_SEED")
 
 import os
 
-# Debug flag for lazy evaluation - prints graph outputs before compilation
-# Set NABLA_DEBUG=1 to enable
 DEBUG_LAZY_EVAL: bool = os.getenv("NABLA_DEBUG", "0") == "1"
+
 
 def seed() -> Tensor:
     """Returns the global random seed tensor."""
     from ..tensor.api import Tensor
+
     if (s := _SEED.get(None)) is None:
         s = driver.Tensor(ops.random.SeedType)
         s[0] = 0
         _SEED.set(Tensor(storage=s))
     return _SEED.get()
 
+
 def driver_tensor_type(t: driver.Tensor) -> graph.TensorType:
     """Converts a driver tensor to a TensorType."""
     return graph.TensorType(t.dtype, t.shape, graph.DeviceRef.from_device(t.device))
-
-# Graph Algorithms
-
-
 
 
 def _remove_unused_arguments(g: graph.Graph) -> None:
@@ -76,18 +69,14 @@ def _remove_unused_arguments(g: graph.Graph) -> None:
             [builtin.StringAttr(f"input{i}") for i in range(len(g.inputs))]
         )
 
-# The Compute Engine
-
 
 class ComputeGraph:
     """Manages the DAG of operations, lazy evaluation, and compilation."""
 
     graph: graph.Graph
-    sources: dict[_core.Value[Any], driver.Tensor]  # Maps buffer values to their storages
+    sources: dict[_core.Value[Any], driver.Tensor]
     unrealized: weakref.WeakValueDictionary[int, Tensor]
     epoch: int
-
-    # --- Lifecycle ---
 
     def __init__(self, context: mlir.Context | None = None, seed: int = 0):
         global _GRAPH_EPOCH
@@ -104,8 +93,6 @@ class ComputeGraph:
         with self.graph:
             ops.random.set_seed(seed)
 
-    # --- Public API ---
-
     def add_input(self, tensor: Tensor) -> None:
         """Registers a realized tensor's storages as graph inputs."""
         storages = tensor._impl._storages
@@ -115,33 +102,31 @@ class ComputeGraph:
         op = _core.Operation._from_cmlir(self.graph._mlir_op)
         assert isinstance(op, mo.GraphOp)
         block = op.regions[0].front
-        
+
         tensor_values = []
         for storage in storages:
             with self.graph:
                 tensor_type = graph.TensorType(
-                    storage.dtype, storage.shape,
-                    graph.DeviceRef.from_device(storage.device)
+                    storage.dtype,
+                    storage.shape,
+                    graph.DeviceRef.from_device(storage.device),
                 )
                 typ = tensor_type.as_buffer().to_mlir()
-                
-                # Update MLIR function signature
+
                 inputs = op.function_type.inputs
                 op.function_type = builtin.FunctionType([*inputs, typ])
-                
+
                 buffer_val = graph.BufferValue.from_mlir(
                     block.add_argument(typ, _location())
                 )
                 tensor_values.append(buffer_val)
-            
-            # Register source for execution
+
             self.sources[buffer_val._mlir_value] = storage
-        
-        # Store values back - single value or list
+
         if len(tensor_values) == 1:
             tensor._value = tensor_values[0]
         else:
-            # For multi-shard: store all values, convert buffers to tensor values
+
             with self.graph:
                 tensor._impl._values = [bv[...] for bv in tensor_values]
                 tensor._impl.values_epoch = self.epoch
@@ -150,11 +135,10 @@ class ComputeGraph:
         """Registers a tensor as pending computation."""
         self.unrealized[id(tensor)] = tensor
 
-
     def evaluate(
-        self, 
-        tensor: Tensor, 
-        *extra_outputs: Any, 
+        self,
+        tensor: Tensor,
+        *extra_outputs: Any,
         return_model: bool = False,
     ) -> Any:
         """Main entry point: Evaluates specific tensors and their dependencies."""
@@ -165,16 +149,14 @@ class ComputeGraph:
         sys.last_traceback = None
         gc.collect()
 
-        # Gather all targets, preserving order of explicitly requested outputs
         seen: set[int] = set()
         targets: list[Tensor] = []
-        
+
         def add_target(t: Tensor) -> None:
             if id(t._impl) not in seen:
                 seen.add(id(t._impl))
                 targets.append(t)
-        
-        # Add explicit outputs first (in order)
+
         add_target(tensor)
         for out in extra_outputs:
             if isinstance(out, Tensor):
@@ -183,81 +165,77 @@ class ComputeGraph:
                 for leaf in tree_leaves(out):
                     if isinstance(leaf, Tensor):
                         add_target(leaf)
-        
-        # Add any other unrealized tensors
+
         for t in self.unrealized.values():
             add_target(t)
-        
-        # Select Strategy
-        return self._evaluate_normal(targets, return_model=return_model)
 
-    # --- Execution Strategies ---
+        return self._evaluate_normal(targets, return_model=return_model)
 
     def _evaluate_normal(self, unrealized: list[Tensor], return_model: bool) -> Any:
         """Standard compilation path handling both single-device and eager-sharded execution."""
-        
+
         if DEBUG_LAZY_EVAL:
             print("=" * 70)
-            print(f"[LAZY EVAL] Epoch {self.epoch} - Setting {len(unrealized)} output(s):")
+            print(
+                f"[LAZY EVAL] Epoch {self.epoch} - Setting {len(unrealized)} output(s):"
+            )
             for i, t in enumerate(unrealized):
                 op_name = t._impl.op_name if t._impl.output_refs else "<leaf>"
                 num_shards = len(t._impl._values) if t._impl._values else 1
                 print(f"  [{i}] id={id(t)} op={op_name} shards={num_shards}")
             print("-" * 70)
-        
-        # Collect all output values - for sharded tensors, collect ALL shard values
-        # Also build index mapping for result storage
-        # Also build index mapping for result storage
+
         all_values = []
-        value_map = []  # List of (tensor, shard_idx) or (tensor, None) for single-value
-        
+        value_map = []
+
         with self.graph:
             for t in unrealized:
-                # Check for staleness logic
+
                 if t._impl.values_epoch != self.epoch:
                     if DEBUG_LAZY_EVAL:
-                        print(f"[LAZY DEBUG] Clearing stale values for target tensor {id(t)} "
-                              f"(epoch: {t._impl.values_epoch} != {self.epoch})")
+                        print(
+                            f"[LAZY DEBUG] Clearing stale values for target tensor {id(t)} "
+                            f"(epoch: {t._impl.values_epoch} != {self.epoch})"
+                        )
                     t._impl._values = []
-                
-                # Hydrate if needed (realized but values cleared/missing)
+
                 if not t._impl._values and t._impl.is_realized:
                     self.add_input(t)
-                
+
                 values = t._impl._values
                 if not values:
-                     # This can happen if we try to evaluate a stale symbolic tensor
-                     raise RuntimeError(f"Attempting to evaluate tensor {id(t)} with no values/storage")
-                     
+
+                    raise RuntimeError(
+                        f"Attempting to evaluate tensor {id(t)} with no values/storage"
+                    )
+
                 if values and len(values) > 1:
-                    # Sharded tensor: output all shards
+
                     for shard_idx, val in enumerate(values):
                         all_values.append(val)
                         value_map.append((t, shard_idx))
                 else:
-                    # Single-value tensor
+
                     all_values.append(values[0])
                     value_map.append((t, None))
-            
+
             self.graph.output(ops.random._peek_seed(), *all_values)
-        
+
         if DEBUG_LAZY_EVAL:
             print("[LAZY EVAL] MAX Graph:")
             print(self.graph)
             print("=" * 70)
-        
+
         return self._compile_and_execute_with_map(unrealized, value_map, return_model)
 
-    # --- Low-Level Execution Mechanics ---
-
     def _compile_and_execute_with_map(
-        self, 
-        unrealized: list[Tensor], 
-        value_map: list[tuple[Tensor, int | None]], 
-        return_model: bool
+        self,
+        unrealized: list[Tensor],
+        value_map: list[tuple[Tensor, int | None]],
+        return_model: bool,
     ) -> Any:
         """Compiles and executes with sharded tensor support."""
-        # 1. Optimizations
+
         try:
             module = _core.Operation._from_cmlir(self.graph._module.operation)
             _core.lower(module, [builtin.passes.RemoveDeadValues()])
@@ -267,7 +245,6 @@ class ComputeGraph:
                 print(f"[LAZY EVAL ERROR] Optimization failed: {e}")
             raise
 
-        # 2. Execution
         try:
             inputs = [self.sources[inp._mlir_value] for inp in self.graph.inputs]
             model = _session().load(self.graph)
@@ -281,35 +258,32 @@ class ComputeGraph:
                 print("=" * 70)
             raise RuntimeError(f"Failed to compile/execute graph: {e}") from e
 
-        # 3. Storage using value_map - group results by tensor
-        tensor_results: dict[int, list] = {}  # id(tensor) -> list of results
+        tensor_results: dict[int, list] = {}
         for (tensor, shard_idx), result in zip(value_map, results, strict=True):
             tid = id(tensor)
             if tid not in tensor_results:
                 tensor_results[tid] = []
             tensor_results[tid].append((shard_idx, result))
-        
-        # Store results into tensors
+
         for t in unrealized:
             tid = id(t)
             if tid in tensor_results:
                 shard_results = tensor_results[tid]
                 if len(shard_results) > 1:
-                    # Multiple shards - sort by shard_idx and store all
+
                     shard_results.sort(key=lambda x: x[0] if x[0] is not None else 0)
                     t._impl._storages = [r for _, r in shard_results]
                     t._impl._values = []
                 else:
-                    # Single result
+
                     _, storage = shard_results[0]
                     t.storage = storage
                     t._value = None
                 t.real = True
-        
+
         result = (model, inputs) if return_model else None
         self._finalize_evaluation(seed_value=seed_val.item())
         return result
-
 
     def _store_results(self, unrealized: list[Tensor], results: list) -> None:
         """Populates tensors with execution results."""
@@ -327,9 +301,8 @@ class ComputeGraph:
         global _GRAPH_EPOCH
         _GRAPH_EPOCH += 1
         self.epoch = _GRAPH_EPOCH
-        
-        # Force new context creation to avoid pollution/segfaults
+
         self._reset(None, seed_value)
 
-# Global Singleton
+
 GRAPH = ComputeGraph()

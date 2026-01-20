@@ -3,9 +3,14 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
-from .engine import ComputeGraph, GRAPH, driver_tensor_type
-from .tracing import Trace, trace, OutputRefs, Trace
-from .utils import get_operations_topological, get_all_impls_topological, print_trace_graph, apply_to_operations
+from .engine import GRAPH, ComputeGraph, driver_tensor_type
+from .tracing import OutputRefs, Trace, trace
+from .utils import (
+    apply_to_operations,
+    get_all_impls_topological,
+    get_operations_topological,
+    print_trace_graph,
+)
 
 __all__ = [
     "ComputeGraph",
@@ -13,9 +18,9 @@ __all__ = [
     "driver_tensor_type",
     "Trace",
     "trace",
-    "OutputRefs", 
+    "OutputRefs",
     "get_operations_topological",
     "get_all_impls_topological",
     "print_trace_graph",
-    "apply_to_operations"
+    "apply_to_operations",
 ]

@@ -3,9 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
-import sys
 from pathlib import Path
-from typing import Any, List, Union
+from typing import Any, Union
 
 from max.graph import DeviceRef, TensorValue, ops
 
@@ -14,12 +13,12 @@ from nabla.core import GRAPH
 
 def call_custom_kernel(
     func_name: str,
-    kernel_path: Union[str, Path, List[Union[str, Path]]],
-    values: Union[TensorValue, List[TensorValue]],
-    out_types: Union[Any, List[Any]],
+    kernel_path: Union[str, Path, list[Union[str, Path]]],
+    values: Union[TensorValue, list[TensorValue]],
+    out_types: Union[Any, list[Any]],
     device: None | DeviceRef = None,
     **kwargs: Any,
-) -> Union[TensorValue, List[TensorValue]]:
+) -> Union[TensorValue, list[TensorValue]]:
     """Helper to invoke a custom Mojo kernel, handling library loading automatically.
 
     Args:
@@ -50,7 +49,7 @@ def call_custom_kernel(
     else:
         out_types_list = out_types
 
-    resolved_paths: List[Path] = []
+    resolved_paths: list[Path] = []
     for p in kernel_path:
         path_obj = Path(p).resolve()
         resolved_paths.append(path_obj)
@@ -61,7 +60,7 @@ def call_custom_kernel(
         device=device,
         values=values_list,
         out_types=out_types_list,
-        **kwargs
+        **kwargs,
     )
 
     if results:
