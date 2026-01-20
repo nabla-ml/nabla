@@ -79,6 +79,22 @@ from .ops.unary import (
     SoftmaxOp,
 )
 
+# Comparison operations
+from .ops.comparison import (
+    equal,
+    not_equal,
+    greater,
+    greater_equal,
+    less,
+    less_equal,
+    EqualOp,
+    NotEqualOp,
+    GreaterOp,
+    GreaterEqualOp,
+    LessOp,
+    LessEqualOp,
+)
+
 # Creation operations (including random)
 from .ops.creation import (
     constant,
@@ -116,6 +132,30 @@ from .ops.reduction import reduce_sum, mean, ReduceSumOp, MeanOp
 
 # Sharding operations
 from .ops.communication import shard, all_gather, all_reduce
+
+# Control Flow
+from .ops.control_flow import (
+    where,
+    cond,
+    while_loop,
+    scan,
+    WhereOp,
+    CondOp,
+    WhileLoopOp,
+    ScanOp,
+)
+
+# Multi-output operations
+from .ops.multi_output import (
+    split,
+    chunk,
+    unbind,
+    minmax,
+    SplitOp,
+    ChunkOp,
+    UnbindOp,
+    MinMaxOp,
+)
 
 # Sharding infrastructure (core definitions)
 from .core.sharding.spec import (
@@ -164,6 +204,37 @@ __all__ = [
     "shard",
     "all_gather",
     "all_reduce",
+    # Control Flow
+    "where",
+    "cond",
+    "while_loop",
+    "scan",
+    "WhereOp",
+    "CondOp",
+    "WhileLoopOp",
+    "ScanOp",
+    # Multi-output operations
+    "split",
+    "chunk",
+    "unbind",
+    "minmax",
+    "SplitOp",
+    "ChunkOp",
+    "UnbindOp",
+    "MinMaxOp",
+    # Comparison operations
+    "equal",
+    "not_equal",
+    "greater",
+    "greater_equal",
+    "less",
+    "less_equal",
+    "EqualOp",
+    "NotEqualOp",
+    "GreaterOp",
+    "GreaterEqualOp",
+    "LessOp",
+    "LessEqualOp",
     # Unary operations
     "relu",
     "sigmoid",

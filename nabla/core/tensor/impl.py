@@ -37,7 +37,7 @@ class TensorImpl:
     """
     __slots__ = ('_values', '_storages', 'sharding', 'sharding_constraint', 'traced',
                  'tangent', 'cotangent', 'dual', 'batch_dims', 'output_refs', 'output_index', 
-                 '__weakref__')
+                 'values_epoch', '__weakref__')
     
     _values: list[graph.BufferValue | graph.TensorValue]
     _storages: list[driver.Tensor] | None
@@ -72,6 +72,7 @@ class TensorImpl:
         self.batch_dims = batch_dims
         self.output_refs = None
         self.output_index = 0
+        self.values_epoch = -1
 
     def _validate_sharding(self) -> None:
         """Validate consistency of shards and sharding spec."""

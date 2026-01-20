@@ -144,6 +144,7 @@ class ComputeGraph:
             # For multi-shard: store all values, convert buffers to tensor values
             with self.graph:
                 tensor._impl._values = [bv[...] for bv in tensor_values]
+                tensor._impl.values_epoch = self.epoch
 
     def add_unrealized(self, tensor: Tensor) -> None:
         """Registers a tensor as pending computation."""
@@ -212,7 +213,22 @@ class ComputeGraph:
         
         with self.graph:
             for t in unrealized:
+                # Check for staleness logic
+                if t._impl.values_epoch != self.epoch:
+                    if DEBUG_LAZY_EVAL:
+                        print(f"[LAZY DEBUG] Clearing stale values for target tensor {id(t)} "
+                              f"(epoch: {t._impl.values_epoch} != {self.epoch})")
+                    t._impl._values = []
+                
+                # Hydrate if needed (realized but values cleared/missing)
+                if not t._impl._values and t._impl.is_realized:
+                    self.add_input(t)
+                
                 values = t._impl._values
+                if not values:
+                     # This can happen if we try to evaluate a stale symbolic tensor
+                     raise RuntimeError(f"Attempting to evaluate tensor {id(t)} with no values/storage")
+                     
                 if values and len(values) > 1:
                     # Sharded tensor: output all shards
                     for shard_idx, val in enumerate(values):
@@ -220,7 +236,7 @@ class ComputeGraph:
                         value_map.append((t, shard_idx))
                 else:
                     # Single-value tensor
-                    all_values.append(graph.TensorValue(t))
+                    all_values.append(values[0])
                     value_map.append((t, None))
             
             self.graph.output(ops.random._peek_seed(), *all_values)
@@ -308,6 +324,10 @@ class ComputeGraph:
 
     def _finalize_evaluation(self, seed_value: int) -> None:
         """Prepares the graph for the next epoch."""
+        global _GRAPH_EPOCH
+        _GRAPH_EPOCH += 1
+        self.epoch = _GRAPH_EPOCH
+        
         # Force new context creation to avoid pollution/segfaults
         self._reset(None, seed_value)
 

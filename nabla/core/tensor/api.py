@@ -31,7 +31,7 @@ from ..common.context import (
     _in_running_loop,
 )
 from .impl import TensorImpl
-from ..graph.engine import GRAPH, driver_tensor_type
+from ..graph.engine import GRAPH, driver_tensor_type, DEBUG_LAZY_EVAL
 
 
 
@@ -56,6 +56,10 @@ class Tensor(DLPackArray, HasTensorValue):
             assert storage is not None or value is not None
             self._impl = TensorImpl(storages=storage, values=value, traced=traced)
         
+        # Initialize epoch for new tensors or just-created impls
+        if self._impl._values and self._impl.values_epoch == -1:
+            self._impl.values_epoch = GRAPH.epoch
+            
         self.real = self._impl.is_realized
 
     # ===== Properties delegating to _impl =====
@@ -85,6 +89,12 @@ class Tensor(DLPackArray, HasTensorValue):
     @property
     def _value(self) -> graph.BufferValue | graph.TensorValue | None:
         if self._impl._values and len(self._impl._values) > 0:
+            if self._impl.values_epoch != GRAPH.epoch:
+                if DEBUG_LAZY_EVAL:
+                    print(f"[LAZY DEBUG] Clearing stale _value for tensor {id(self)} "
+                          f"(epoch: {self._impl.values_epoch} != {GRAPH.epoch})")
+                self._impl._values = []
+                return None
             return self._impl._values[0]
         return None
     
@@ -94,22 +104,39 @@ class Tensor(DLPackArray, HasTensorValue):
             self._impl._values = []
         else:
             self._impl._values = [value]
+        self._impl.values_epoch = GRAPH.epoch
 
     @property
     def _values(self) -> list[graph.BufferValue | graph.TensorValue]:
+         if self._impl.values_epoch != GRAPH.epoch:
+             if DEBUG_LAZY_EVAL:
+                 print(f"[LAZY DEBUG] Clearing stale _values for tensor {id(self)} "
+                       f"(epoch: {self._impl.values_epoch} != {GRAPH.epoch})")
+             self._impl._values = []
          return self._impl._values
 
     @_values.setter
     def _values(self, value: list[graph.BufferValue | graph.TensorValue]) -> None:
          self._impl._values = value
+         self._impl.values_epoch = GRAPH.epoch
 
     @property
     def values(self) -> list[graph.TensorValue]:
         """Get all graph values as TensorValues; error if empty."""
+        # Check staleness
+        if self._impl.values_epoch != GRAPH.epoch:
+            if DEBUG_LAZY_EVAL:
+                print(f"[LAZY DEBUG] Clearing stale values for tensor {id(self)} "
+                      f"(epoch: {self._impl.values_epoch} != {GRAPH.epoch})")
+            self._impl._values = []
+            
         if not self._impl._values:
             if self._impl._storages:
-                raise RuntimeError("Tensor has storages but no values. Call hydrate() first.")
-            raise RuntimeError("Tensor has no values.")
+                 # Auto-hydrate if we have storages but no values in this epoch
+                 self.hydrate()
+                 
+            if not self._impl._values:
+                 raise RuntimeError(f"Tensor {id(self)} has no values (epoch={GRAPH.epoch}, impl_epoch={self._impl.values_epoch}).")
         
         # Convert BufferValues to TensorValues
         return [
@@ -539,6 +566,9 @@ class Tensor(DLPackArray, HasTensorValue):
         if not t._impl._storages:
              raise RuntimeError("Failed to realize tensor for NumPy export")
         return t._impl._storages[0].to(CPU()).to_numpy()
+    
+    # Common alias
+    numpy = to_numpy
 
     def num_elements(self) -> int:
         elts = 1
