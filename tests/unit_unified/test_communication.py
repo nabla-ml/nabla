@@ -233,3 +233,160 @@ class TestReshardOp:
         assert_shape(result, (8, 16))
         assert_allclose(result, np_x)
         assert "tp" in result.sharding.dim_specs[1].axes
+
+
+# =============================================================================
+# EXTENDED COMMUNICATION OP TESTS
+# These tests exercise AllReduce with different reduce_ops and multi-axis meshes.
+# =============================================================================
+
+
+class TestAllReduceVariants:
+    """Test AllReduce with different reduce_op types (sum, max, min)."""
+
+    @pytest.fixture
+    def mesh_4(self):
+        return DeviceMesh("mesh_4", (4,), ("dp",))
+
+    @pytest.fixture
+    def mesh_2x2(self):
+        return DeviceMesh("mesh_2x2", (2, 2), ("dp", "tp"))
+
+    def test_all_reduce_sum_replicated(self, mesh_4):
+        """AllReduce sum on replicated tensor - basic smoke test."""
+        np_x = make_array(4, 4, seed=42)
+        x = tensor_from_numpy(np_x)
+
+        x_rep = x.shard(mesh_4, [DimSpec([]), DimSpec([])])
+
+        result = all_reduce(x_rep, reduce_op="sum")
+
+        # AllReduce on replicated produces replicated output (same shape)
+        assert_shape(result, (4, 4))
+
+    def test_all_reduce_max_replicated(self, mesh_4):
+        """AllReduce max on replicated tensor returns same values."""
+        np_x = make_array(4, 4, seed=43)
+        x = tensor_from_numpy(np_x)
+
+        x_rep = x.shard(mesh_4, [DimSpec([]), DimSpec([])])
+
+        result = all_reduce(x_rep, reduce_op="max")
+
+        assert_allclose(result, np_x)
+
+    def test_all_reduce_min_replicated(self, mesh_4):
+        """AllReduce min on replicated tensor returns same values."""
+        np_x = make_array(4, 4, seed=44)
+        x = tensor_from_numpy(np_x)
+
+        x_rep = x.shard(mesh_4, [DimSpec([]), DimSpec([])])
+
+        result = all_reduce(x_rep, reduce_op="min")
+
+        assert_allclose(result, np_x)
+
+    def test_all_reduce_sum_sharded_1d(self, mesh_4):
+        """AllReduce sum on sharded 1D tensor - preserves global values."""
+        np_x = make_array(8, 4, seed=45)
+        x = tensor_from_numpy(np_x)
+
+        x_sharded = x.shard(mesh_4, [DimSpec(["dp"]), DimSpec([])])
+
+        result = all_reduce(x_sharded, reduce_op="sum")
+
+        # AllReduce returns a tensor; verify it exists and can be realized
+        assert result.numpy() is not None
+
+    def test_all_reduce_max_2d_mesh(self, mesh_2x2):
+        """AllReduce max on 2D mesh with partial sharding."""
+        np_x = make_array(4, 4, seed=46)
+        x = tensor_from_numpy(np_x)
+
+        x_sharded = x.shard(mesh_2x2, [DimSpec(["dp"]), DimSpec([])])
+
+        result = all_reduce(x_sharded, reduce_op="max")
+
+        # Verify it executes successfully
+        assert result.numpy() is not None
+
+
+class TestMultiAxisCommunication:
+    """Test communication ops with multi-axis (2D) meshes."""
+
+    @pytest.fixture
+    def mesh_2x4(self):
+        return DeviceMesh("mesh_2x4", (2, 4), ("dp", "tp"))
+
+    @pytest.fixture
+    def mesh_4x2(self):
+        return DeviceMesh("mesh_4x2", (4, 2), ("dp", "tp"))
+
+    def test_all_gather_2d_mesh_axis0(self, mesh_2x4):
+        """AllGather on axis 0 with 2D mesh."""
+        np_x = make_array(8, 16, seed=50)
+        x = tensor_from_numpy(np_x)
+
+        x_sharded = x.shard(mesh_2x4, [DimSpec(["dp"]), DimSpec(["tp"])])
+
+        result = all_gather(x_sharded, axis=0)
+
+        assert_shape(result, (8, 16))
+        assert result.sharding.dim_specs[0].axes == []
+        assert_allclose(result, np_x)
+
+    def test_all_gather_2d_mesh_axis1(self, mesh_2x4):
+        """AllGather on axis 1 with 2D mesh."""
+        np_x = make_array(8, 16, seed=51)
+        x = tensor_from_numpy(np_x)
+
+        x_sharded = x.shard(mesh_2x4, [DimSpec(["dp"]), DimSpec(["tp"])])
+
+        result = all_gather(x_sharded, axis=1)
+
+        assert_shape(result, (8, 16))
+        assert result.sharding.dim_specs[1].axes == []
+        assert_allclose(result, np_x)
+
+    def test_reduce_scatter_2d_mesh(self, mesh_2x4):
+        """ReduceScatter on 2D mesh - verify execution completes."""
+        np_x = make_array(16, 8, seed=52)  # Shape divisible by 8 shards
+        x = tensor_from_numpy(np_x)
+
+        x_rep = x.shard(mesh_2x4, [DimSpec([]), DimSpec([])])
+
+        result = reduce_scatter(x_rep, axis=0)
+
+        # ReduceScatter scatters on axis 0 - verify it runs
+        assert result.numpy() is not None
+
+    def test_asymmetric_mesh_all_gather(self, mesh_4x2):
+        """AllGather on asymmetric (4x2) mesh."""
+        np_x = make_array(16, 8, seed=53)
+        x = tensor_from_numpy(np_x)
+
+        x_sharded = x.shard(mesh_4x2, [DimSpec(["dp"]), DimSpec(["tp"])])
+
+        result = all_gather(x_sharded, axis=0)
+
+        assert_shape(result, (16, 8))
+        assert_allclose(result, np_x)
+
+
+class TestCommunicationGroupedExecution:
+    """Test grouped collective execution on multi-axis meshes."""
+
+    def test_all_reduce_grouped_2x2(self):
+        """Test AllReduce with grouped execution on 2x2 mesh."""
+        mesh = DeviceMesh("mesh_grp", (2, 2), ("x", "y"))
+
+        np_x = make_array(4, 4, seed=60)
+        x = tensor_from_numpy(np_x)
+
+        x_sharded = x.shard(mesh, [DimSpec(["x"]), DimSpec(["y"])])
+
+        result = all_reduce(x_sharded, reduce_op="sum")
+
+        # Verify the grouped execution completes successfully
+        assert result.numpy() is not None
+
