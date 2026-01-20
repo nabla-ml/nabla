@@ -109,8 +109,8 @@ def test_unary_level1_sharding(op_name):
                 args[0] = args[0].with_sharding(spec.mesh, spec.dim_specs) # Fake apply or use shard()
             return nb_fn(*args)
             
-    if op_name == "softmax":
-        pytest.skip("Known bug: Softmax sharding uses per-shard normalization instead of global")
+    # if op_name == "softmax":
+    #     pytest.skip("Deferred: Softmax components being tested first")
 
     run_test_with_consistency_check(
             f"{op_name}_Shard_{i}",

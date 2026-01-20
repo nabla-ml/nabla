@@ -117,8 +117,8 @@ def jax_slice_tensor_wrapper(x, start, size):
 OPS["slice_tensor"] = Operation(
     "slice_tensor", "VIEW", slice_tensor, jax_slice_tensor_wrapper,
     [
-        OpConfig("Slice_Basic", ranks=(2,), params={"start": (0, 0), "size": (1, 1)}, supports_vmap=False),
-        OpConfig("Slice_Mid", ranks=(2,), primal_shapes=((4, 4),), params={"start": (1, 1), "size": (2, 2)}, supports_vmap=False),
+        OpConfig("Slice_Basic", ranks=(2,), params={"start": (0, 0), "size": (1, 1)}, supports_vmap=False, supports_sharding=False),
+        OpConfig("Slice_Mid", ranks=(2,), primal_shapes=((4, 4),), params={"start": (1, 1), "size": (2, 2)}, supports_vmap=False, supports_sharding=False),
     ],
     standard_get_args
 )

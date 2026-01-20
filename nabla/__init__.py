@@ -76,7 +76,7 @@ from .ops.unary import (
     ExpOp,
     NegOp,
     AbsOp,
-    SoftmaxOp,
+    AbsOp,
 )
 
 # Comparison operations
@@ -128,7 +128,10 @@ from .transforms.shard_map import shard_map
 from .transforms.compile import compile, CompiledFunction, CompilationStats
 
 # Reduction operations
-from .ops.reduction import reduce_sum, mean, ReduceSumOp, MeanOp
+from .ops.reduction import (
+    reduce_sum, mean, reduce_max, reduce_min,
+    ReduceSumOp, MeanOp, ReduceMaxOp, ReduceMinOp,
+)
 
 # Sharding operations
 from .ops.communication import shard, all_gather, all_reduce
@@ -196,10 +199,15 @@ __all__ = [
     "DivOp",
     "MatmulOp",
     # Reduction operations
-    "reduce_sum",
-    "mean",
     "ReduceSumOp",
     "MeanOp",
+    "ReduceMaxOp",
+    "ReduceMaxOp",
+    "ReduceMinOp",
+    "reduce_sum",
+    "reduce_max",
+    "reduce_min",
+    "mean",
     # Sharding operations
     "shard",
     "all_gather",
@@ -249,7 +257,7 @@ __all__ = [
     "ExpOp",
     "NegOp",
     "AbsOp",
-    "SoftmaxOp",
+    "AbsOp",
     # View operations
     "unsqueeze",
     "squeeze",

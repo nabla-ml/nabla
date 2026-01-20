@@ -40,11 +40,7 @@ class ReshardOp(Operation):
         mesh: "DeviceMesh"
     ) -> float:
         """Estimate cost of resharding."""
-        # ReshardOp maps input_specs[0] -> output_specs[0] or explicit target
-        
         from_spec = input_specs[0] if input_specs else None
-        
-        # Ideally output_specs[0] is the target.
         to_spec = output_specs[0] if output_specs else None
         
         if not input_shapes:
@@ -70,35 +66,27 @@ class ReshardOp(Operation):
             for dim_spec in from_spec.dim_specs:
                 axes_to_gather.update(dim_spec.axes)
             
-            # Use AllGatherOp.estimate_cost logic directly
-            # Local bytes = Total / shards
             total_shards = from_spec.total_shards
             local_bytes = tensor_bytes // (total_shards or 1)
             
-            # Recalculate gathering cost here or delegate? 
-            # Delegating is better but AllGatherOp.estimate_cost is static
             return AllGatherOp.estimate_cost(local_bytes, mesh, list(axes_to_gather))
         
         # Compare dimension-by-dimension
         total_cost = 0.0
         
         if len(from_spec.dim_specs) != len(to_spec.dim_specs):
-            # Rank mismatch implies reshape or error - infinite cost
             return float('inf')
         
         for from_dim, to_dim in zip(from_spec.dim_specs, to_spec.dim_specs):
             from_axes = set(from_dim.axes)
             to_axes = set(to_dim.axes)
             
-            # Axes being removed need AllGather
             removed_axes = from_axes - to_axes
             if removed_axes:
-                # Estimate local shard size for this dimension
                 from_shards = 1
                 for axis in from_dim.axes:
                     from_shards *= mesh.get_axis_size(axis)
                 
-                # Approximate local size involved in this dim's gather
                 local_bytes_dim = tensor_bytes // from_shards
                 
                 total_cost += AllGatherOp.estimate_cost(local_bytes_dim, mesh, list(removed_axes))
@@ -124,17 +112,13 @@ class ReshardOp(Operation):
         from ...core.tensor import Tensor
         
         # 1. Handle batch_dims (Logical -> Physical conversion)
-        # If tensor has batch_dims, we might need to prepend replicated specs
         batch_dims = tensor.batch_dims
         current_rank = len(tensor.shape) # Logical rank
         
         if batch_dims > 0:
-            # Check provided specs length
             if len(dim_specs) == current_rank:
-                # User provided logical specs. Prepend replicated batch specs.
                 batch_specs = [DimSpec([], is_open=True) for _ in range(batch_dims)]
                 
-                # Inherit existing batch specs if possible
                 if tensor.sharding:
                     current_s = tensor.sharding
                     if len(current_s.dim_specs) >= batch_dims:
@@ -143,9 +127,7 @@ class ReshardOp(Operation):
                              
                 dim_specs = batch_specs + list(dim_specs)
             elif len(dim_specs) != (current_rank + batch_dims):
-                 # Length mismatch - neither logical nor physical?
-                 # Let validation downstream handle it or warn?
-                 pass
+                pass
         
         # 2. Construct Target Spec
         target_spec = ShardingSpec(mesh, dim_specs, replicated_axes=replicated_axes or set())
@@ -158,29 +140,23 @@ class ReshardOp(Operation):
             return tensor
 
         # 4. Perform Resharding with SMART per-dimension logic
-        # Only gather dimensions where axes are being REMOVED (not extended)
         result = tensor
         if current_spec:
             for dim in range(len(current_spec.dim_specs)):
                 from_axes = set(current_spec.dim_specs[dim].axes) if dim < len(current_spec.dim_specs) else set()
                 to_axes = set(target_spec.dim_specs[dim].axes) if dim < len(target_spec.dim_specs) else set()
                 
-                # Only gather if removing axes that aren't preserved in target
-                # If from_axes is subset of to_axes, no gather needed (just extending)
                 axes_to_remove = from_axes - to_axes
                 if axes_to_remove:
                     result = all_gather(result, axis=dim)
         
-        # Shard to target using module-level shard_op (efficient)
         result = shard_op(result, mesh, target_spec.dim_specs, replicated_axes=target_spec.replicated_axes)
         
         return result
 
 
-# Singleton instance
 reshard_op = ReshardOp()
 
-# Public API
 def reshard(tensor: "Tensor", mesh: "DeviceMesh", dim_specs: List["DimSpec"], replicated_axes: Optional[Set[str]] = None, **kwargs) -> "Tensor":
     """Reshard tensor to target specs."""
     return reshard_op(tensor, mesh, dim_specs, replicated_axes, **kwargs)

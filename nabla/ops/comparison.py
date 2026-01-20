@@ -53,14 +53,12 @@ class GreaterEqualOp(BinaryOperation):
         return ops.greater_equal(args[0], args[1])
 
 
-# Implement Less/LessEqual via Greater swap
 class LessOp(BinaryOperation):
     @property
     def name(self) -> str:
         return "less"
     
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
-        # less(a, b) -> greater(b, a)
         return ops.greater(args[1], args[0])
 
 class LessEqualOp(BinaryOperation):
@@ -69,7 +67,6 @@ class LessEqualOp(BinaryOperation):
         return "less_equal"
     
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
-        # less_equal(a, b) -> greater_equal(b, a)
         return ops.greater_equal(args[1], args[0])
 
 

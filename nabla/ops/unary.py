@@ -9,7 +9,7 @@ from typing import Any, TYPE_CHECKING
 
 from max.graph import TensorValue, ops
 
-from .base import UnaryOperation
+from .base import UnaryOperation, LogicalAxisOperation
 
 if TYPE_CHECKING:
     from ..core import Tensor
@@ -106,7 +106,7 @@ class AbsOp(UnaryOperation):
         return ops.abs(x)
 
 
-class SoftmaxOp(UnaryOperation):
+class _SoftmaxNativeOp(LogicalAxisOperation, UnaryOperation):
     """Softmax activation function: exp(x) / sum(exp(x))."""
     
     @property
@@ -138,7 +138,35 @@ tanh = TanhOp()
 exp = ExpOp()
 neg = NegOp()
 abs = AbsOp()
-softmax = SoftmaxOp()
+_softmax_native = _SoftmaxNativeOp()
+
+
+def softmax(x: Tensor, axis: int = -1) -> Tensor:
+    """A composition of existing nabla ops"""
+    from ..ops.reduction import reduce_max, reduce_sum
+    from ..ops.binary import sub, div
+    from ..ops.unary import exp
+    
+    is_axis_sharded = False
+    if x.sharding:
+        rank = len(x.shape)
+        if axis < 0:
+            axis += rank
+        
+        phys_axis = x.batch_dims + axis
+        if phys_axis < len(x.sharding.dim_specs):
+            spec = x.sharding.dim_specs[phys_axis]
+            if spec.axes:
+                is_axis_sharded = True
+    
+    if is_axis_sharded:
+        max_val = reduce_max(x, axis=axis, keepdims=True)
+        shifted = sub(x, max_val)   
+        exp_val = exp(shifted)
+        sum_val = reduce_sum(exp_val, axis=axis, keepdims=True)
+        return div(exp_val, sum_val)
+        
+    return _softmax_native(x, axis=axis)
 
 
 __all__ = [
@@ -148,7 +176,6 @@ __all__ = [
     "ExpOp",
     "NegOp",
     "AbsOp",
-    "SoftmaxOp",
     "relu",
     "sigmoid",
     "tanh",

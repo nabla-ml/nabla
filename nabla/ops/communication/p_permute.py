@@ -66,10 +66,8 @@ class PPermuteOp(CollectiveOperation):
         return results
 
 
-# Singleton instance
 ppermute_op = PPermuteOp()
 
-# Public API
 def ppermute(sharded_tensor, permutation: List[tuple]):
     """Point-to-point permutation collective."""
     return ppermute_op(sharded_tensor, permutation=permutation)

@@ -127,9 +127,10 @@ class TestVmapShardingReduction:
     """Test vmap(reduction) with sharded inputs."""
     
     @pytest.mark.parametrize("mesh_name,mesh_shape,mesh_axes", MESH_CONFIGS[:2])
+    # @pytest.mark.xfail(reason="Known bug: double-counting in vmap+sharding reduction") # Fixed by correcting mesh config
     def test_reduce_sum_sharded_axis(self, mesh_name, mesh_shape, mesh_axes):
         """vmap(reduce_sum) reducing over sharded dimension (needs AllReduce)."""
-        pytest.skip("Pending investigation: suspected double-counting issue in vmap+sharding simulation")
+        # pytest.skip("Pending investigation: suspected double-counting issue in vmap+sharding simulation")
         batch = 4
         mesh = DeviceMesh(f"mesh_reduce_{mesh_name}", mesh_shape, mesh_axes)
         

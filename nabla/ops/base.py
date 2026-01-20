@@ -37,10 +37,14 @@ class Operation(ABC):
     def name(self) -> str:
         ...
     
-    @abstractmethod
     def maxpr(self, *args: graph.TensorValue, **kwargs: Any) -> Any:
         """Returns TensorValue or pytree of TensorValues."""
         ...
+        
+    @property
+    def collective_reduce_type(self) -> str:
+        """Type of reduction to use for cross-shard communication (sum, max, min, prod)."""
+        return "sum"
     
     def compute_cost(self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]) -> float:
         """Estimate compute cost (FLOPs)."""

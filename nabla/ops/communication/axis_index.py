@@ -54,17 +54,11 @@ class AxisIndexOp(Operation):
         with GRAPH.graph:
             for shard_idx in range(len(mesh.devices)):
                 coord = mesh.get_coordinate(shard_idx, axis_name)
-                # Use device ref from mesh, or default to CPU
                 device = mesh.device_refs[shard_idx] if mesh.device_refs else None
-                # Constant needs explicit device if distributed?
-                # MAX ops.constant usually takes (value, dtype, device)
                 val = ops.constant(coord, DType.int32, device)
-                # Reshape to (1,) to match sharded 1D tensor logic
                 val = ops.reshape(val, (1,))
                 results.append(val)
         
-        # Result is a 1D tensor [0, 1, 2...] sharded on axis_name
-        # Shape: (axis_size,)
         spec = ShardingSpec(mesh, [DimSpec([axis_name])])
         
         output = Tensor._create_unsafe(
@@ -75,11 +69,8 @@ class AxisIndexOp(Operation):
         output.sharding = spec
         return output
 
-
-# Singleton instance
 axis_index_op = AxisIndexOp()
 
-# Public API
 def axis_index(mesh: "DeviceMesh", axis_name: str):
     """Return each device's position along a mesh axis."""
     return axis_index_op(mesh, axis_name)

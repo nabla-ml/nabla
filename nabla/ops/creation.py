@@ -102,10 +102,6 @@ class ArangeOp(Operation):
         return ops.range(start, stop, step, dtype=dtype, device=device)
 
 
-# =============================================================================
-# Random creation ops
-# =============================================================================
-
 class UniformOp(Operation):
     """Create a tensor with uniform random values."""
     
@@ -144,9 +140,6 @@ class GaussianOp(Operation):
         return ops.random.gaussian(tensor_type, mean=mean, std=std)
 
 
-# =============================================================================
-# Singleton instances
-# =============================================================================
 
 _constant_op = ConstantOp()
 _full_op = FullOp()
@@ -156,10 +149,6 @@ _arange_op = ArangeOp()
 _uniform_op = UniformOp()
 _gaussian_op = GaussianOp()
 
-
-# =============================================================================
-# Public API functions
-# =============================================================================
 
 def constant(
     value: NestedArray | Number,

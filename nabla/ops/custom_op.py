@@ -39,13 +39,10 @@ def call_custom_kernel(
     if not isinstance(kernel_path, list):
         kernel_path = [kernel_path]
 
-    # Normalize inputs to list
     if isinstance(values, TensorValue):
         values_list = [values]
     else:
         values_list = values
-
-    # Normalize out_types to list and track if we need to unwrap
     unwrap_result = False
     if not isinstance(out_types, list):
         out_types_list = [out_types]
@@ -55,15 +52,10 @@ def call_custom_kernel(
 
     resolved_paths: List[Path] = []
     for p in kernel_path:
-        # Standard resolution: consistent with Python file handling
-        # If absolute, used as is. If relative, relative to CWD.
         path_obj = Path(p).resolve()
         resolved_paths.append(path_obj)
-
-    # 1. Load the kernels into the graph context
     GRAPH.graph._kernel_library.load_paths(GRAPH.graph._context, resolved_paths)
 
-    # 2. Invoke the custom op
     results = ops.custom(
         name=func_name,
         device=device,
@@ -72,7 +64,6 @@ def call_custom_kernel(
         **kwargs
     )
 
-    # 3. Verify the operation
     if results:
         op_instance = results[0].to_mlir().owner
         GRAPH.graph._kernel_library.verify_custom_op(op_instance)

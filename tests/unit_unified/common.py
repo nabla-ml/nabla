@@ -22,11 +22,11 @@ SEED = 42
 
 # Mesh configurations for comprehensive sharding tests
 MESH_CONFIGS = [
-    ("1x2", (1, 2), ("x",)),
-    ("2x1", (2, 1), ("x",)),
+    ("1x2", (1, 2), ("x", "y")),
+    ("2x1", (2, 1), ("x", "y")),
     ("2x2", (2, 2), ("x", "y")),
-    ("1x4", (1, 4), ("x",)),
-    ("4x1", (4, 1), ("x",)),
+    ("1x4", (1, 4), ("x", "y")),
+    ("4x1", (4, 1), ("x", "y")),
 ]
 
 # ============================================================================
@@ -381,11 +381,29 @@ def run_sharding_check(test_name, op, config, args_nb, kw_nb):
         if isinstance(res, nb.Tensor) and res.sharding is not None:
             # If inputs were sharded and output has sharding, verify mesh matches
             assert res.sharding.mesh == mesh, "Result mesh mismatch"
+            
+            # Optional strict check if config or caller provided expectations
+            # For now, we just ensure it didn't crash and returned valid metadata.
 
     except Exception as e:
-        # Sharding can fail legitimately for some op/config combos (e.g. slice with
-        # indices that go out of bounds after sharding). Skip instead of fail.
-        pytest.skip(f"[{test_name}] Sharding check skipped: {e}")
+        # Sharding can fail legitimately for some op/config combos
+        # pytest.skip(f"[{test_name}] Sharding check skipped: {e}")
+        # Allow failing proper
+        raise e
+
+def assert_spec(tensor: nb.Tensor, expected_dims: tuple[tuple[str, ...], ...]):
+    """Assert tensor's sharding spec matches expected dimensions."""
+    if tensor.sharding is None:
+        assert expected_dims is None, "Expected sharding spec but got None"
+        return
+        
+    actual_dims = tuple(tuple(ds.axes) for ds in tensor.sharding.dim_specs)
+    # Normalize empty tuples
+    actual_dims = tuple(tuple(a for a in d) for d in actual_dims)
+    expected_dims = tuple(tuple(a for a in d) for d in expected_dims)
+    
+    assert actual_dims == expected_dims, f"Sharding spec mismatch: got {actual_dims}, expected {expected_dims}"
+
 
 # ============================================================================
 # EXTRA HELPERS FOR PHYSICAL OPS

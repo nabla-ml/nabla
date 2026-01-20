@@ -13,7 +13,6 @@ from max.graph import ops
 
 from .base import Operation, ensure_tensor
 from ..core import pytree
-# from ..core.tensor import Tensor # Moved to local imports to avoid cycle
 
 from ..core import GRAPH
 
@@ -30,23 +29,18 @@ def _unwrap_tensor(x: Any) -> Any:
     from ..core.tensor import Tensor
     if isinstance(x, Tensor):
         if not x._values:
-             # Ensure realized or lazy value exists
-             # For control flow inside maxpr, we expect _values to be populated (shards)
-             pass
-         # Return the first value if it's a list (implicit single shard or replicated)
+            pass
         if hasattr(x, '_impl') and x._values:
-             return x._values[0] 
+            return x._values[0] 
         return x
     return x
 
 def _wrap_tensor(x: Any, like: Tensor | None = None) -> Tensor:
     """Wrap TensorValue from MAX op back to Tensor."""
     if isinstance(x, (graph.TensorValue, graph.BufferValue)):
-         # In eager/simulation mode, we wrapp result in a new Tensor
-         # sharding etc will be inferred or set later
-         from ..core.tensor import Tensor
-         return Tensor(values=[x])
-    return x # Already wrapped or other type
+        from ..core.tensor import Tensor
+        return Tensor(values=[x])
+    return x
 
 
 class WhereOp(Operation):
@@ -63,10 +57,6 @@ class WhereOp(Operation):
         y: graph.TensorValue
     ) -> graph.TensorValue:
         return ops.where(condition, x, y)
-    
-    # sharding_rule inherited from Operation (elementwise)
-
-
 
 
 class CondOp(Operation):
@@ -89,11 +79,9 @@ class CondOp(Operation):
 
     def infer_sharding_spec(self, args: tuple, mesh: "DeviceMesh", kwargs: dict = None):
         """Cond: Output sharding is determined by operands/branches."""
-        # Fallback to default propagation (inherit from first sharded input) is risky if pred is sharded.
         return None, [], False
         
     def maxpr(self, pred_shard, true_fn, false_fn, *operand_shards):
-        # Helper to trace function and get return types
         def wrapped_fn(fn, input_tensors):
             return fn(*input_tensors)
             
@@ -108,7 +96,6 @@ class CondOp(Operation):
             res = false_fn(*wrapped_operand_shards)
             return pytree.tree_map(_unwrap_tensor, res)
             
-        # Determine out_types by tracing true_fn in a scratch graph
         from max.graph import Graph
         out_types = []
         with Graph("scratch"):
@@ -145,35 +132,24 @@ class WhileLoopOp(Operation):
         from ..core.sharding import spmd
         from max import graph as g
 
-        # 1. Collect inputs (init_val structure)
-        # cond_fn, body_fn are callables, not Tensors. init_val is the data.
-        args = (cond_fn, body_fn, init_val) # For consistency with maxpr structure
+        args = (cond_fn, body_fn, init_val)
         
-        # Collect metadata from init_val
         leaves = pytree.tree_leaves(init_val)
         any_traced = any(x.traced for x in leaves if isinstance(x, Tensor))
         max_batch_dims = max((x.batch_dims for x in leaves if isinstance(x, Tensor)), default=0)
         any_sharded = any(x.is_sharded for x in leaves if isinstance(x, Tensor))
         
-        # 2. Determine execution mode
         mesh = spmd.get_mesh_from_args(leaves) if any_sharded else None
         
-        # 3. Setup Specs
-        # WhileLoop Invariant: Output Spec == Input Spec
         leaf_specs = []
         for x in leaves:
             if isinstance(x, Tensor) and x.sharding:
                  leaf_specs.append(x.sharding)
             else:
-                 # If mesh exists, default to Replicated Open
                  if mesh:
                       rank = len(x.shape) if isinstance(x, Tensor) else 0
-                      # Use PHYSICAL rank? 
                       if isinstance(x, Tensor):
-                          rank = len(x.shape) + x.batch_dims # Physical rank?
-                          # But if not sharded, batch_dims might be 0 or simulated.
-                          # Use x.global_shape?
-                          # Safest: Create replicated spec.
+                          rank = len(x.shape) + x.batch_dims
                           from ..core.sharding.spmd import create_replicated_spec
                           leaf_specs.append(create_replicated_spec(mesh, rank))
                       else:
@@ -181,9 +157,6 @@ class WhileLoopOp(Operation):
                  else:
                       leaf_specs.append(None)
 
-        # 4. Reshard Inputs?
-
-        # 5. Execute Loop
         num_shards = len(mesh.devices) if mesh else 1
         shard_results = []
         
@@ -192,22 +165,18 @@ class WhileLoopOp(Operation):
                 shard_init_val = spmd.get_shard_args(
                     init_val, shard_idx, leaf_specs, g, Tensor, pytree
                 )
-                res = self.maxpr(cond_fn, body_fn, shard_init_val) # Pass structure
+                res = self.maxpr(cond_fn, body_fn, shard_init_val)
                 shard_results.append(res)
                 
-        # 6. Reconstruct Outputs (per leaf)
         if not shard_results:
-             return None
+            return None
              
-        # Result structure should match init_val
-        # Flatten results
         flat_results_per_shard = [pytree.tree_leaves(res) for res in shard_results]
         treedef = pytree.tree_structure(shard_results[0])
         num_leaves = len(flat_results_per_shard[0])
         
         if num_leaves != len(leaf_specs):
-             # Should match if body_fn preserves structure (required by while_loop)
-             pass
+            pass
              
         output_leaves = []
         for i in range(num_leaves):
@@ -250,27 +219,6 @@ class WhileLoopOp(Operation):
         
         return pytree.tree_unflatten(pytree.tree_structure(init_val_shard), res_flat)
 
-
-# Singletons
-_where_op = WhereOp()
-_cond_op = CondOp()
-_while_loop_op = WhileLoopOp()
-
-# Public API
-
-def where(condition: Tensor, x: Tensor, y: Tensor) -> Tensor:
-    return _where_op(condition, x, y)
-
-def cond(pred: Tensor, true_fn: Callable, false_fn: Callable, *operands: Any) -> Any:
-    return _cond_op(pred, true_fn, false_fn, *operands)
-
-def while_loop(cond_fn: Callable, body_fn: Callable, init_val: Any) -> Any:
-    return _while_loop_op(cond_fn, body_fn, init_val)
-
-
-# =============================================================================
-# Scan Operation - Minimal Implementation for PP
-# =============================================================================
 
 class ScanOp(Operation):
     @property
@@ -368,8 +316,20 @@ class ScanOp(Operation):
         return carry, stacked_ys
 
 
+_where_op = WhereOp()
+_cond_op = CondOp()
+_while_loop_op = WhileLoopOp()
 _scan_op = ScanOp()
 
+
+def where(condition: Tensor, x: Tensor, y: Tensor) -> Tensor:
+    return _where_op(condition, x, y)
+
+def cond(pred: Tensor, true_fn: Callable, false_fn: Callable, *operands: Any) -> Any:
+    return _cond_op(pred, true_fn, false_fn, *operands)
+
+def while_loop(cond_fn: Callable, body_fn: Callable, init_val: Any) -> Any:
+    return _while_loop_op(cond_fn, body_fn, init_val)
 
 def scan(
     f: Callable,

@@ -69,14 +69,15 @@ class AllReduceOp(CollectiveOperation):
         self,
         shard_values: List[TensorValue],
         mesh: "DeviceMesh" = None,
+        reduce_op: str = "sum",
     ) -> List[TensorValue]:
-        """Sum-reduce across all shards (AllReduce)."""
+        """Reduce across all shards (AllReduce)."""
         if not shard_values:
             return []
         
         # DISTRIBUTED: Use native MAX allreduce
         if mesh and mesh.is_distributed:
-            from max.graph.ops.allreduce import sum as allreduce_sum
+            from max.graph.ops import allreduce
             from max.graph.type import BufferType
             from max.dtype import DType
             
@@ -85,12 +86,28 @@ class AllReduceOp(CollectiveOperation):
                 ops.buffer_create(BufferType(DType.int64, (1,), dev))
                 for dev in mesh.device_refs
             ]
-            return allreduce_sum(shard_values, signal_buffers)
+            
+            # Dispatch to appropriate reduction op
+            if hasattr(allreduce, reduce_op):
+                reduce_fn = getattr(allreduce, reduce_op)
+                return reduce_fn(shard_values, signal_buffers)
+            else:
+                # Fallback or error? defaulting to sum risks correctness.
+                raise ValueError(f"Distributed all_reduce not implemented for op: {reduce_op}")
         
-        # SIMULATED: Sum using loop-based fallback
+        # SIMULATED: Reduction using loop-based fallback
         result = shard_values[0]
         for sv in shard_values[1:]:
-            result = ops.add(result, sv)
+            if reduce_op == "sum":
+                result = ops.add(result, sv)
+            elif reduce_op == "max":
+                result = ops.max(result, sv)
+            elif reduce_op == "min":
+                result = ops.min(result, sv)
+            elif reduce_op == "prod":
+                result = ops.mul(result, sv)
+            else:
+                raise ValueError(f"Unknown reduction op: {reduce_op}")
         
         # All shards get the same reduced value
         return [result] * len(shard_values)
@@ -110,6 +127,7 @@ class AllReduceOp(CollectiveOperation):
         shard_results: List[TensorValue], 
         mesh: "DeviceMesh", 
         reduce_axes: "Set[str]",
+        reduce_op: str = "sum",
     ) -> List[TensorValue]:
         """Simulate grouped AllReduce execution for SPMD verification."""
         if not reduce_axes:
@@ -120,7 +138,7 @@ class AllReduceOp(CollectiveOperation):
         # Check if we're reducing over all axes (simple case)
         all_axes = set(mesh.axis_names)
         if all_axes.issubset(reduce_axes):
-            return self.maxpr(shard_results, mesh=mesh)
+            return self.maxpr(shard_results, mesh=mesh, reduce_op=reduce_op)
             
         # Group by axes NOT in reduce_axes (we reduce WITHIN these groups)
         group_axes = [ax for ax in all_axes if ax not in reduce_axes]
@@ -134,7 +152,7 @@ class AllReduceOp(CollectiveOperation):
             group_shards = [val for _, val in group_members]
             
             if len(group_shards) > 1:
-                curr_reduced = self.maxpr(group_shards, mesh=mesh)
+                curr_reduced = self.maxpr(group_shards, mesh=mesh, reduce_op=reduce_op)
             else:
                 curr_reduced = [group_shards[0]]
                 

@@ -110,28 +110,33 @@ class ReduceScatterOp(CollectiveOperation):
         input_spec = input_tensor.sharding
         
         if mesh and input_spec:
-            # Create new spec where the scatter axis is sharded
-            # Note: This is a simplification. Real logic would depend on which mesh axis we scattered over.
-            # But currently ReduceScatterOp takes an int axis, implying we scatter over the *shards*.
-            # If the shards correspond to a mesh axis, we should mark it.
-            # For now, we logic similar to original implementation which assumed appending new dim specs.
-            
             # Use scattered results to check rank
             rank = len(results[0].type.shape) if results else 0
             new_dim_specs = []
+            
+            mesh_axes = mesh.axis_names
+            target_mesh_axis = mesh_axes[0] if mesh_axes else "unknown"
+
+            rank = len(results[0].type.shape)
+            kwargs_axis = kwargs.get('axis', 0)
+
             for d in range(rank):
-                if d < len(input_spec.dim_specs):
-                    new_dim_specs.append(input_spec.dim_specs[d])
+                # Copy existing specific dim spec if not the target axis
+                # But wait, input might be replicated.
+                input_d_spec = input_spec.dim_specs[d] if d < len(input_spec.dim_specs) else None
+                
+                if d == kwargs_axis:
+                    current_axes = sorted(list(set(input_d_spec.axes if input_d_spec else []) | {target_mesh_axis}))
+                    new_dim_specs.append(DimSpec(current_axes))
                 else:
-                    new_dim_specs.append(DimSpec([]))
+                    new_dim_specs.append(input_d_spec if input_d_spec else DimSpec([]))
+                    
             return ShardingSpec(mesh, new_dim_specs)
             
         return None
 
-# Singleton instances
 reduce_scatter_op = ReduceScatterOp()
 
-# Public API functions
 def reduce_scatter(sharded_tensor, axis: int, **kwargs):
     """Sum-reduce then scatter result across shards.
     

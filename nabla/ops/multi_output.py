@@ -37,14 +37,12 @@ class SplitOp(LogicalAxisOperation):
         
         phys_axis = batch_dims + axis
         
-        # 2. Check if input is sharded on this axis
         spec = x.sharding
         if spec and phys_axis < len(spec.dim_specs):
             ds = spec.dim_specs[phys_axis]
-            if ds.axes:  # Check if sharded (non-empty axes)
-                # 3. Reshard to remove sharding on this axis (AllGather)
+            if ds.axes:
                 new_dim_specs = list(spec.dim_specs)
-                new_dim_specs[phys_axis] = DimSpec([]) # Replicated
+                new_dim_specs[phys_axis] = DimSpec([])
                 
                 x = x.with_sharding(spec.mesh, new_dim_specs)
         
@@ -58,7 +56,6 @@ class SplitOp(LogicalAxisOperation):
         axis: int = 0
     ) -> tuple[TensorValue, ...]:
         """Split tensor into num_splits equal parts along axis."""
-        # Get axis size and compute chunk sizes
         shape = list(x.type.shape)
         axis_size = int(shape[axis])
         
@@ -70,7 +67,6 @@ class SplitOp(LogicalAxisOperation):
         chunk_size = axis_size // num_splits
         split_sizes = [chunk_size] * num_splits
         
-        # Use MAX's native split which returns list[TensorValue]
         result_list = ops.split(x, split_sizes, axis)
         return tuple(result_list)
 
@@ -92,10 +88,8 @@ class SplitOp(LogicalAxisOperation):
         axis = kwargs.get("axis", 0)
         if axis < 0: axis += rank
         
-        # Input factors: a, b, c...
         in_factors = [chr(97 + i) for i in range(rank)]
         
-        # Output factors: change split axis to 'z'
         out_factors = list(in_factors)
         out_factors[axis] = 'z'
         
@@ -113,7 +107,7 @@ class SplitOp(LogicalAxisOperation):
         ).instantiate(input_shapes, output_shapes)
     
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
-        return len(input_shapes[0])  # Same rank as input
+        return len(input_shapes[0])
 
 
 class ChunkOp(LogicalAxisOperation):
@@ -130,7 +124,6 @@ class ChunkOp(LogicalAxisOperation):
     def name(self) -> str:
         return "chunk"
     def __call__(self, x: Tensor, **kwargs: Any) -> list[Tensor]:
-        # Enforce replication on split axis (see SplitOp.__call__ for details)
         from ..core.sharding.spec import DimSpec, ShardingSpec
         
         rank = len(x.shape)
@@ -145,10 +138,9 @@ class ChunkOp(LogicalAxisOperation):
         spec = x.sharding
         if spec and phys_axis < len(spec.dim_specs):
             ds = spec.dim_specs[phys_axis]
-            if ds.axes:  # Check if sharded (non-empty axes)
-                # 3. Reshard to remove sharding on this axis (AllGather)
+            if ds.axes:
                 new_dim_specs = list(spec.dim_specs)
-                new_dim_specs[phys_axis] = DimSpec([]) # Replicated
+                new_dim_specs[phys_axis] = DimSpec([])
                 
                 x = x.with_sharding(spec.mesh, new_dim_specs)
         
@@ -165,7 +157,6 @@ class ChunkOp(LogicalAxisOperation):
         shape = list(x.type.shape)
         axis_size = int(shape[axis])
         
-        # Numpy-style splitting (distribute remainder)
         div = axis_size // chunks
         rem = axis_size % chunks
         
@@ -192,10 +183,8 @@ class ChunkOp(LogicalAxisOperation):
         axis = kwargs.get("axis", 0)
         if axis < 0: axis += rank
         
-        # Input factors: a, b, c...
         in_factors = [chr(97 + i) for i in range(rank)]
         
-        # Output factors: change split axis to 'z'
         out_factors = list(in_factors)
         out_factors[axis] = 'z'
         
@@ -205,9 +194,6 @@ class ChunkOp(LogicalAxisOperation):
         if output_shapes is not None:
             count = len(output_shapes)
         else:
-            # Calculate expected number of chunks based on logic
-            # input_shapes[0] is (d0, d1, ...)
-            # sharding_rule might see abstract shapes? No, concrete integers in input_shapes.
             chunks = kwargs.get("chunks", 1)
             dim_size = input_shapes[0][axis]
             
@@ -249,11 +235,9 @@ class UnbindOp(LogicalAxisOperation):
         shape = list(x.type.shape)
         axis_size = int(shape[axis])
         
-        # Split into individual slices of size 1
         split_sizes = [1] * axis_size
         sliced = ops.split(x, split_sizes, axis)
         
-        # Squeeze out the axis dimension from each slice
         results = [ops.squeeze(s, axis) for s in sliced]
         return tuple(results)
     
@@ -274,11 +258,9 @@ class UnbindOp(LogicalAxisOperation):
         factors = [f"d{i}" for i in range(rank)]
         in_mapping = {i: [factors[i]] for i in range(rank)}
         
-        # Remove factor at axis
         out_factors = [factors[i] for i in range(rank) if i != axis]
         out_mapping = {i: [out_factors[i]] for i in range(len(out_factors))}
         
-        # Determine number of outputs (N)
         if output_shapes:
             count = len(output_shapes)
         else:
@@ -287,7 +269,7 @@ class UnbindOp(LogicalAxisOperation):
         return OpShardingRuleTemplate([in_mapping], [out_mapping] * count).instantiate(input_shapes, output_shapes)
     
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
-        return len(input_shapes[0]) - 1  # One dimension removed
+        return len(input_shapes[0]) - 1
 
 
 class MinMaxOp(Operation):
@@ -310,8 +292,6 @@ class MinMaxOp(Operation):
             'max': ops.max(x),
         }
 
-
-# ===== Singleton instances exposed as functions =====
 
 split = SplitOp()
 chunk = ChunkOp()

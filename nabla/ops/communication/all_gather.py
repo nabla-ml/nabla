@@ -35,10 +35,6 @@ class AllGatherOp(CollectiveOperation):
         output_specs: list["ShardingSpec"] = None,
     ) -> float:
         """Estimate AllGather cost."""
-        # For AllGather, size_bytes usually represents the output (full) size.
-        # But we need to know the LOCAL shard size for bandwidth calc.
-        # Approximation: if input_specs provided, use explicit shard info.
-        
         if not axes:
             return 0.0
             
@@ -49,12 +45,9 @@ class AllGatherOp(CollectiveOperation):
         if n_devices <= 1:
             return 0.0
             
-        # If size_bytes is total size, local is size_bytes / n_devices
         local_bytes = size_bytes // n_devices
         
         bandwidth = getattr(mesh, 'bandwidth', 1.0)
-        # Cost = (N-1)/N * TotalSize / Bandwidth
-        # Or: (N-1) * LocalSize / Bandwidth
         cost = (n_devices - 1) / n_devices * size_bytes / bandwidth
         return cost
     
@@ -97,7 +90,6 @@ class AllGatherOp(CollectiveOperation):
         
         if not other_axes:
             # 1D mesh: simple case - gather all
-            # Group by coordinate on the sharded axis to ensure correct ordering
             unique_shards = []
             seen_coords = set()
             for shard_idx, val in enumerate(shard_values):
@@ -155,9 +147,6 @@ class AllGatherOp(CollectiveOperation):
             sharded_tensor.hydrate()
             
             if len(sharded_tensor.values) <= 1:
-                # Physically gathered (single value) but logically sharded.
-                # We just need to update the metadata to be replicated.
-                # IMPORTANT: Compute the GLOBAL shape, not just copy local shape!
                 from ...core.sharding.spec import compute_global_shape
                 from max.graph import Shape
                 
@@ -260,9 +249,6 @@ class GatherAllAxesOp(Operation):
         1. For each sharded tensor dimension: Group shards by coordinates on ALL mesh axes EXCEPT the one being merged.
         2. Within each group, sort by coordinate on the merge axis and concatenate.
         """
-        # from max.graph import ops (already imported globally)
-        
-        # If duplicated/replicated, any shard is the global tensor
         if source_spec.is_fully_replicated():
             return shard_values[0]
 
@@ -317,7 +303,6 @@ class GatherAllAxesOp(Operation):
                     members.sort(key=lambda x: x[0])
                     
                     # Filter unique coords (handle replication)
-                    # If multiple devices have same coord on `ax` and same Key, they are replicas.
                     unique_chunks = []
                     seen_coords = set()
                     
@@ -351,7 +336,7 @@ class GatherAllAxesOp(Operation):
         mesh = spec.mesh
         
         if spec.is_fully_replicated():
-            return sharded_tensor  # Already replicated
+            return sharded_tensor
         
         # Hydrate values from storages if needed (realized tensor)
         sharded_tensor.hydrate()
@@ -376,11 +361,9 @@ class GatherAllAxesOp(Operation):
         return tensor
 
 
-# Singleton instances
 all_gather_op = AllGatherOp()
 gather_all_axes_op = GatherAllAxesOp()
 
-# Public API functions
 def all_gather(sharded_tensor, axis: int, **kwargs):
     """Gather all shards to produce a replicated tensor."""
     return all_gather_op(sharded_tensor, axis, **kwargs)

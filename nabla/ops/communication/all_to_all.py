@@ -87,6 +87,47 @@ class AllToAllOp(CollectiveOperation):
         return results
 
 
+        
+    def _compute_output_spec(self, input_tensor, results, **kwargs):
+        """Output sharding: Swap sharding from split_axis to concat_axis is implied?
+        Actually:
+        Input sharded on concat_axis (usually).
+        split_axis is split => becomes sharded.
+        concat_axis is concated => becomes replicated.
+        
+        So we swap the specs of split_axis and concat_axis? 
+        Or rather:
+        spec[split_axis] += sharded_mesh_axis
+        spec[concat_axis] -= sharded_mesh_axis
+        """
+        from ...core.sharding.spec import ShardingSpec, DimSpec
+        
+        mesh = input_tensor.sharding.mesh if input_tensor.sharding else None
+        input_spec = input_tensor.sharding
+        
+        if mesh and input_spec:
+            split_axis = kwargs.get('split_axis', 0)
+            concat_axis = kwargs.get('concat_axis', 0)
+            
+            # Deep copy specs to modify
+            new_dim_specs = [
+                DimSpec(list(ds.axes), is_open=ds.is_open) for ds in input_spec.dim_specs
+            ]
+
+            # Simple heuristic: Move axes from concat_axis to split_axis.
+            source_axes = new_dim_specs[concat_axis].axes
+            target_axes = new_dim_specs[split_axis].axes
+            
+            # Check if source has axes to move
+            if source_axes:
+                 # Move all axes from concat (source) to split (target)
+                 moved_axes = list(source_axes)
+                 new_dim_specs[concat_axis] = DimSpec([], is_open=True) # Now fully replicated/concatenated
+                 new_dim_specs[split_axis] = DimSpec(sorted(list(set(target_axes) | set(moved_axes))))
+            
+            return ShardingSpec(mesh, new_dim_specs)
+
+        return None
 # Singleton instance
 all_to_all_op = AllToAllOp()
 

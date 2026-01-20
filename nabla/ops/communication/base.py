@@ -34,9 +34,7 @@ class CollectiveOperation(Operation):
         
         # 2. Execution in graph context
         with GRAPH.graph:
-            # Hydrate values from storages if needed
             sharded_tensor.hydrate()
-            # Filter kwargs for maxpr
             maxpr_kwargs = {k: v for k, v in kwargs.items() if k not in ('mesh', 'reduce_axes')}
             result_values = self.maxpr(sharded_tensor.values, mesh=mesh, **maxpr_kwargs)
             
@@ -49,7 +47,6 @@ class CollectiveOperation(Operation):
             batch_dims=sharded_tensor.batch_dims,
         )
         output.sharding = output_spec
-        # NABLA 2026: Cached metadata removed. Global shape computed on demand.
         
         # 4. Tracing setup
         self._setup_output_refs(output, (sharded_tensor,), kwargs, sharded_tensor.traced)
@@ -60,7 +57,6 @@ class CollectiveOperation(Operation):
         """Check if operation should proceed (has sharding and potentially multiple shards)."""
         if not tensor.sharding:
             return False
-        # If has storages/values, check if > 1 (distributed/sharded) or if we need to enforce algo
         if (tensor._values and len(tensor._values) > 1) or \
            (tensor._storages and len(tensor._storages) > 1):
             return True
@@ -83,17 +79,14 @@ class CollectiveOperation(Operation):
             return 0.0
             
         # Calculate tensor size in bytes
-        # Assumes float32 (4 bytes) by default
         num_elements = 1
         for d in input_shapes[0]:
             num_elements *= d
         size_bytes = num_elements * 4
         
         # Extract axes info if possible
-        # This is heuristics-based as specific op logic differs
         axes = []
         if input_specs and input_specs[0]:
-            # Collect all sharded axes from input
             for dim_spec in input_specs[0].dim_specs:
                 axes.extend(dim_spec.axes)
         
@@ -115,7 +108,6 @@ class CollectiveOperation(Operation):
         """Group shards by coordinates on specific axes."""
         groups = {}
         for shard_idx, val in enumerate(shard_values):
-            # Build key from coords on grouping axes
             key_parts = []
             for axis_name in group_by_axes:
                 key_parts.append(mesh.get_coordinate(shard_idx, axis_name))

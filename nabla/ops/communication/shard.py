@@ -26,7 +26,6 @@ class ShardOp(Operation):
     
     def infer_sharding_spec(self, args, mesh, kwargs):
         spec = kwargs['spec']
-        # Return input sharding to allow partial reuse/identity
         input_spec = args[0].sharding
         return spec, [input_spec], False
     
@@ -40,20 +39,16 @@ class ShardOp(Operation):
         """Create sharded TensorValues by slicing the input."""
         from ...core.sharding.spec import ShardingSpec
 
-        # Determine global shape
         global_shape = kwargs.pop('global_shape', None)
         if global_shape is None:
-            # Fallback: compute from x.type.shape (only correct for unsharded inputs)
             global_shape = tuple(int(d) for d in x.type.shape)
         
         spec = ShardingSpec(mesh, dim_specs)
         
-        # DISTRIBUTED SPMD MODE (called per-shard internally by Operation.__call__)
         if "shard_idx" in kwargs:
              shard_idx = kwargs["shard_idx"]
              return self._slice_for_device(x, global_shape, spec, shard_idx, mesh)
         
-        # SIMULATION MODE (manual loop)
         return self._simulate_shard_execution(x, global_shape, spec, mesh)
 
     def _simulate_shard_execution(self, x, global_shape, spec, mesh):
@@ -73,26 +68,19 @@ class ShardOp(Operation):
         from ...core.sharding.spec import compute_local_shape
         from ...core.tensor import Tensor
         
-        # Determine effective input value for this shard
         effective_x = x
         input_shard_offset = [0] * len(global_shape)
         
-        # Handle Tensor input (Simulation Mode)
         if isinstance(x, Tensor):
-            # Hydrate values if needed (realized tensor)
             x.hydrate()
-            vals = x._values  # Use raw after hydrate for indexing
+            vals = x._values
             
             if vals:
-                # Eager mode: extract underlying value(s)
                 if len(vals) > shard_idx:
-                    # Input is sharded/distributed, pick corresponding shard
                     effective_x = vals[shard_idx]
                     
-                    # If input had sharding, we must compute its global offset 
                     if x.sharding:
                         for d, dim_spec in enumerate(x.sharding.dim_specs):
-                            # Calculate global offset for this dimension on this shard
                             offset = 0
                             shard_pos = 0
                             total_shards = 1
@@ -102,28 +90,22 @@ class ShardOp(Operation):
                                 shard_pos = (shard_pos * size) + coord
                                 total_shards *= size
                             
-                            # Assuming uniform chunking (standard SPMD)
                             dim_global_len = int(global_shape[d])
                             chunk_size = math.ceil(dim_global_len / total_shards)
                             input_shard_offset[d] = shard_pos * chunk_size
                 else:
-                    # Input is unsharded/replicated (single value), broadcast it
                     effective_x = vals[0]
 
-        # Target local shape for this device
         target_local_shape = compute_local_shape(global_shape, spec, shard_idx)
         
         slices = []
         for d, (t_len, g_len) in enumerate(zip(target_local_shape, global_shape)):
-            # Use effective input (local shard) shape
             inp_len = int(effective_x.type.shape[d])
             
             if inp_len == t_len:
-                # Identity slice (input matches target)
                 slices.append(slice(0, t_len))
                 continue
             
-            # Compute slice range in GLOBAL coordinates
             dim_spec = spec.dim_specs[d]
             total_shards = 1
             my_shard_pos = 0
@@ -139,14 +121,9 @@ class ShardOp(Operation):
             
             end_global = min(start_global + chunk_size, g_len)
             
-            # Map GLOBAL coordinates to LOCAL input coordinates
-            # local_start = global_start - input_shard_offset
-            # Clip to valid input range [0, inp_len]
-            
             start_local = start_global - input_shard_offset[d]
             end_local = end_global - input_shard_offset[d]
             
-            # Ensure indices are valid for local input
             start_local = max(0, min(start_local, inp_len))
             end_local = max(0, min(end_local, inp_len))
             
@@ -167,24 +144,15 @@ class ShardOp(Operation):
         
         target_spec = ShardingSpec(mesh, dim_specs, replicated_axes=replicated_axes or set())
         
-        # IDEMPOTENCY CHECK: If input is already correctly sharded, return identity
-        # Skip this check when called from reshard_tensor to avoid recursion
         if not _bypass_idempotency and isinstance(x, Tensor) and x.sharding:
             if not needs_reshard(x.sharding, target_spec):
-                # Already correctly sharded - return identity (no-op)
                 return x
             
-            # Different sharding - need to reshard via all_gather + shard
-            # This handles the case where input is sharded on 'dp' but we want 'tp'
             from ...core.sharding.spmd import reshard_tensor
             return reshard_tensor(x, x.sharding, target_spec, mesh)
         
-        # Standard path: input is unsharded, shard it according to spec
-        
-        # Compute global shape BEFORE sharding (from input tensor's local + sharding)
         global_shape = None
         if isinstance(x, Tensor):
-            # For sharded inputs, compute global from local + sharding
             local = x.physical_local_shape(0)
             if local is not None and x.sharding:
                 from ...core.sharding.spec import compute_global_shape
@@ -192,22 +160,16 @@ class ShardOp(Operation):
             elif local is not None:
                 global_shape = tuple(int(d) for d in local)
         
-        # Hydrate values from storages if needed (MUST be before graph context)
         if isinstance(x, Tensor):
             x.hydrate()
         
         with GRAPH.graph:
-            # Convert input to TensorValue (lazy) or keep as Tensor (eager simulation)
             x_input = x
             if isinstance(x, Tensor) and not x._values:
-                 # No values even after hydrate - use TensorValue
-                 x_input = g.TensorValue(x)
+                x_input = g.TensorValue(x)
             
-            # Execute shard operation with global_shape
-            # maxpr and _slice_for_device will handle picking the correct shard and slicing it
             shard_values = self.maxpr(x_input, mesh, dim_specs, global_shape=global_shape)
         
-        # Create output tensor with multiple values
         spec = ShardingSpec(mesh, dim_specs, replicated_axes=replicated_axes or set())
         output = Tensor._create_unsafe(
             values=shard_values,
@@ -216,9 +178,6 @@ class ShardOp(Operation):
         )
         output.sharding = spec
         
-        # NABLA 2026: Cached metadata removed.
-        
-        # Setup tracing refs for graph traversal
         traced = x.traced if isinstance(x, Tensor) else False
         self._setup_output_refs(output, (x,), {'mesh': mesh, 'dim_specs': dim_specs}, traced)
         
@@ -231,10 +190,8 @@ class ShardOp(Operation):
         return compute_global_shape(local_shape, sharding)
 
 
-# Singleton instance
 shard_op = ShardOp()
 
-# Public API
 def shard(x, mesh: DeviceMesh, dim_specs: List[DimSpec], **kwargs):
     """Shard a tensor according to the given mesh and dimension specs."""
     return shard_op(x, mesh, dim_specs, **kwargs)

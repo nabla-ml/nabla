@@ -11,7 +11,7 @@ from .base import Operation, BinaryOperation, UnaryOperation, ReduceOperation, L
 from .binary import add, mul, sub, div, matmul, AddOp, MulOp, SubOp, DivOp, MatmulOp
 
 # Unary operations
-from .unary import relu, sigmoid, tanh, exp, neg, softmax, ReluOp, SigmoidOp, TanhOp, ExpOp, NegOp, SoftmaxOp
+from .unary import relu, sigmoid, tanh, exp, neg, softmax, ReluOp, SigmoidOp, TanhOp, ExpOp, NegOp
 
 # Creation operations
 from .creation import constant, full, zeros, ones, arange, uniform, gaussian, normal
@@ -60,7 +60,7 @@ __all__ = [
     "AddOp", "MulOp", "SubOp", "DivOp", "MatmulOp",
     # Unary
     "relu", "sigmoid", "tanh", "exp", "neg", "softmax",
-    "ReluOp", "SigmoidOp", "TanhOp", "ExpOp", "NegOp", "SoftmaxOp",
+    "ReluOp", "SigmoidOp", "TanhOp", "ExpOp", "NegOp",
     # Creation
     "constant", "full", "zeros", "ones", "arange", "uniform", "gaussian", "normal",
     "ConstantOp", "FullOp", "ZerosOp", "OnesOp", "ArangeOp", "UniformOp", "GaussianOp",

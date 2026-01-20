@@ -4,8 +4,6 @@
 # ===----------------------------------------------------------------------=== #
 
 from __future__ import annotations
-
-import functools
 from typing import TYPE_CHECKING, Any, Tuple, List, Optional, Dict
 
 if TYPE_CHECKING:
@@ -26,7 +24,6 @@ def execute_operation(op: "Operation", *args: Any, **kwargs: Any) -> Any:
     from ..core.sharding import spmd
     from max import graph as g
     
-    # 1. Collect metadata from inputs
     any_traced = False
     any_has_tangent = False
     max_batch_dims = 0
@@ -43,25 +40,17 @@ def execute_operation(op: "Operation", *args: Any, **kwargs: Any) -> Any:
     
     pytree.tree_map(collect_metadata, args)
     
-    # 2. Determine execution mode (Implicit)
     mesh = spmd.get_mesh_from_args(args) if any_sharded else None
     
-    # 3. Setup for execution (Common)
-    # Ensure proper specifications (Pass-through if mesh is None)
     args = spmd.ensure_specs(args, mesh)
-    
-    # Infer sharding (Returns None/[]/False if mesh is None)
-    # Infer sharding (Returns None/[]/False if mesh is None)
     output_sharding, input_shardings, reduce_axes = spmd.infer_output_sharding(
         op, args, mesh, kwargs or {}
     )
 
-    # Eagerly reshard inputs (Pass-through if mesh is None)
     args = spmd.reshard_inputs(args, input_shardings, mesh)
     
     num_shards = len(mesh.devices) if mesh else 1
     
-    # 4. Execute operation (Common Loop)
     with GRAPH.graph:
         shard_results = []
         for shard_idx in range(num_shards):
@@ -75,11 +64,9 @@ def execute_operation(op: "Operation", *args: Any, **kwargs: Any) -> Any:
                 shard_kwargs = {}
             shard_results.append(op.maxpr(*shard_args, **shard_kwargs))
     
-    # 5. Create output tensors (Unified & Pytree-aware)
     if not shard_results:
-        return None # Should not happen
+        return None
         
-    # Reconstruct output structure from first result
     flat_results_per_shard = [pytree.tree_leaves(res) for res in shard_results]
     treedef = pytree.tree_structure(shard_results[0])
     num_leaves = len(flat_results_per_shard[0])
@@ -97,12 +84,8 @@ def execute_operation(op: "Operation", *args: Any, **kwargs: Any) -> Any:
         
     output = pytree.tree_unflatten(treedef, output_leaves)
     
-    # 7. Common post-processing - set up refs for the main op output
-    # This must happen before all_reduce modifies the output
     op._setup_output_refs(output, args, kwargs, any_traced)
     
-    
-    # 8. AllReduce partial results if contracting dimension was sharded
     if reduce_axes and mesh:
         output = _apply_auto_reduction(op, output, mesh, reduce_axes)
     
@@ -125,15 +108,13 @@ def _apply_auto_reduction(op: "Operation", output: Any, mesh: "DeviceMesh", redu
         if not isinstance(t, Tensor):
             return t
         
-        # Hydrate values if needed and check we have values to reduce
         t.hydrate()
-        if not t._values:  # Check raw after hydrate
+        if not t._values: 
             return t
         
-        # Apply graph-level grouped all-reduce
         with GRAPH.graph:
             reduced_values = all_reduce_op.simulate_grouped_execution(
-                t.values, mesh, reduce_axes
+                t.values, mesh, reduce_axes, reduce_op=op.collective_reduce_type
             )
         
         current_spec = t.sharding
@@ -145,18 +126,14 @@ def _apply_auto_reduction(op: "Operation", output: Any, mesh: "DeviceMesh", redu
                 new_dim_specs.append(DimSpec(new_axes))
             new_spec = ShardingSpec(mesh, new_dim_specs)
         else:
-            # Fallback to full replication if no spec (shouldn't happen)
             rank = len(t.shape)
             new_spec = ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)])
 
-        # Create new Tensor with reduced values
-        # Use shared helper to ensure correct global shape metadata and initialization
         from ..core.sharding import spmd
         reduced_tensor = spmd.create_sharded_output(
             reduced_values, new_spec, t.traced, t.batch_dims, mesh
         )
         
-        # Setup tracing refs so ALL_REDUCE appears in trace
         trace_kwargs = {'mesh': mesh, 'reduce_axes': list(reduce_axes)}
         all_reduce_op._setup_output_refs(reduced_tensor, (t,), trace_kwargs, t.traced)
         
