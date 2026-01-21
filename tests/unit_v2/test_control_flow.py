@@ -25,7 +25,7 @@ from . common import (
     DeviceMesh,
 )
 
-from tests.conftest import (
+from .common import (
     assert_allclose,
     assert_shape,
     make_jax_array,

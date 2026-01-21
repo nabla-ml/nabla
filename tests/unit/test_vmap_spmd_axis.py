@@ -20,7 +20,7 @@ import pytest
 
 from nabla import DeviceMesh, P, add, matmul, reduce_sum, relu, vmap
 from nabla.core import trace
-from tests.conftest import (
+from .conftest import (
     assert_allclose,
     assert_shape,
     make_array,

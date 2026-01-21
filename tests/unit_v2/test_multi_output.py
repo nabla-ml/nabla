@@ -97,7 +97,7 @@ def test_multi_output_ops(op_name, config_idx):
 # COMPREHENSIVE MULTI-OUTPUT SHARDING AND VMAP TESTS
 # =============================================================================
 
-from tests.conftest import (
+from .common import (
     assert_allclose,
     assert_is_sharded,
     assert_shape,

@@ -27,12 +27,10 @@ from .common import (
 )
 
 
-@pytest.fixture
-def mesh_1d():
-    return DeviceMesh("mesh_1d", (4,), ("dp",))
 
 
-from tests.conftest import (
+
+from .common import (
     assert_allclose,
     assert_shape,
     make_jax_array,

@@ -15,9 +15,8 @@ import pytest
 from max.dtype import DType
 
 import nabla as nb
-from nabla import vmap
+from nabla import vmap, Tensor
 from nabla.core.sharding.spec import DeviceMesh, DimSpec, ShardingSpec
-from tests.conftest import tensor_from_jax, to_jax
 
 nb.DType = DType
 SEED = 42
@@ -29,6 +28,93 @@ MESH_CONFIGS = [
     ("1x4", (1, 4), ("x", "y")),
     ("4x1", (4, 1), ("x", "y")),
 ]
+
+
+def make_jax_array(*shape: int, seed: int = 42, dtype=jnp.float32) -> jax.Array:
+    """Create a deterministic random JAX array."""
+    key = jax.random.PRNGKey(seed)
+    return jax.random.normal(key, shape, dtype=dtype)
+
+
+def make_positive_jax_array(*shape: int, seed: int = 42, dtype=jnp.float32) -> jax.Array:
+    """Create a deterministic positive random JAX array."""
+    key = jax.random.PRNGKey(seed)
+    return jnp.abs(jax.random.normal(key, shape, dtype=dtype)) + 0.1
+
+
+def tensor_from_jax(arr: jax.Array) -> Tensor:
+    """Create a nabla Tensor from a JAX array using Zero-Copy DLPack."""
+    arr.block_until_ready()
+    return Tensor.from_dlpack(arr)
+
+
+def to_jax(t: Tensor) -> jax.Array:
+    """Convert Nabla Tensor to JAX array using Zero-Copy DLPack."""
+    return jnp.from_dlpack(t)
+
+
+def assert_allclose(
+    result: Tensor, expected: jax.Array, rtol: float = 1e-5, atol: float = 1e-6
+):
+    """Assert tensor values match expected JAX array using DLPack conversion."""
+    actual_jax = to_jax(result)
+    import numpy as np
+    np.testing.assert_allclose(actual_jax, expected, rtol=rtol, atol=atol)
+
+
+def assert_dtype(result: Tensor, expected_dtype):
+    """Assert tensor dtype matches expected."""
+    assert (
+        result.dtype == expected_dtype
+    ), f"Dtype mismatch: got {result.dtype}, expected {expected_dtype}"
+
+
+def assert_batch_dims(result: Tensor, expected: int):
+    """Assert tensor batch_dims matches expected."""
+    actual = result.batch_dims
+    assert actual == expected, f"batch_dims mismatch: got {actual}, expected {expected}"
+
+
+def assert_shape(result: Tensor, expected_shape: tuple):
+    """Assert tensor.shape matches expected (logical shape)."""
+    actual = tuple(int(d) for d in result.shape)
+    assert (
+        actual == expected_shape
+    ), f"Shape mismatch: got {actual}, expected {expected_shape}"
+
+
+def assert_physical_shape(result: Tensor, expected_shape: tuple):
+    """Assert tensor's physical shape (global_shape) matches expected."""
+    actual = result.global_shape or result.local_shape
+    actual = tuple(int(d) for d in actual)
+    assert (
+        actual == expected_shape
+    ), f"Physical shape mismatch: got {actual}, expected {expected_shape}"
+
+
+def assert_is_sharded(result: Tensor, expected: bool = True):
+    """Assert tensor is/isn't sharded."""
+    actual = result.is_sharded
+    assert actual == expected, f"is_sharded mismatch: got {actual}, expected {expected}"
+
+
+def shard_on_axis(
+    tensor: Tensor, mesh: DeviceMesh, axis: int, mesh_axis: int = 0
+) -> Tensor:
+    """Shard tensor on a specific axis using specified mesh dimension."""
+    rank = len(tensor.shape)
+
+    specs = [DimSpec([], is_open=True) for _ in range(rank)]
+
+    specs[axis] = DimSpec([mesh.axis_names[mesh_axis]], is_open=False)
+    return tensor.shard(mesh, specs)
+
+
+def replicated(tensor: Tensor, mesh: DeviceMesh) -> Tensor:
+    """Create a fully replicated sharded tensor."""
+    rank = len(tensor.shape)
+    specs = [DimSpec([], is_open=True) for _ in range(rank)]
+    return tensor.shard(mesh, specs)
 
 
 @dataclass
@@ -383,46 +469,7 @@ def assert_spec(tensor: nb.Tensor, expected_dims: tuple[tuple[str, ...], ...]):
     ), f"Sharding spec mismatch: got {actual_dims}, expected {expected_dims}"
 
 
-def shard_on_axis(
-    tensor: nb.Tensor, mesh: DeviceMesh, axis: int, mesh_axis: int = 0
-) -> nb.Tensor:
-    """Shard tensor on a specific axis using specified mesh dimension."""
-    rank = len(tensor.shape)
 
-    specs = [DimSpec([], is_open=True) for _ in range(rank)]
-
-    specs[axis] = DimSpec([mesh.axis_names[mesh_axis]], is_open=False)
-    return tensor.shard(mesh, specs)
-
-
-def replicated(tensor: nb.Tensor, mesh: DeviceMesh) -> nb.Tensor:
-    """Create a fully replicated sharded tensor."""
-    rank = len(tensor.shape)
-    specs = [DimSpec([], is_open=True) for _ in range(rank)]
-    return tensor.shard(mesh, specs)
-
-
-def assert_shape(result: nb.Tensor, expected_shape: tuple):
-    """Assert tensor.shape matches expected (logical shape)."""
-    actual = tuple(int(d) for d in result.shape)
-    assert (
-        actual == expected_shape
-    ), f"Shape mismatch: got {actual}, expected {expected_shape}"
-
-
-def assert_physical_shape(result: nb.Tensor, expected_shape: tuple):
-    """Assert tensor's physical shape (global_shape) matches expected."""
-    actual = result.global_shape or result.local_shape
-    actual = tuple(int(d) for d in actual)
-    assert (
-        actual == expected_shape
-    ), f"Physical shape mismatch: got {actual}, expected {expected_shape}"
-
-
-def assert_is_sharded(result: nb.Tensor, expected: bool = True):
-    """Assert tensor is/isn't sharded."""
-    actual = result.is_sharded
-    assert actual == expected, f"is_sharded mismatch: got {actual}, expected {expected}"
 
 
 def run_unified_test(op: Operation, config: OpConfig, suffix: str = ""):

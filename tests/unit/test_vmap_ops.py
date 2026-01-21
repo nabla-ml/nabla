@@ -43,7 +43,7 @@ from nabla import (
     unsqueeze,
     vmap,
 )
-from tests.conftest import (
+from .conftest import (
     assert_allclose,
     assert_shape,
     make_array,

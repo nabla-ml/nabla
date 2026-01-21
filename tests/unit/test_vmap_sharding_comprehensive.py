@@ -52,7 +52,7 @@ from nabla import (
 )
 from nabla.core import trace
 from nabla.ops.multi_output import chunk, split
-from tests.conftest import (
+from .conftest import (
     assert_allclose,
     assert_is_sharded,
     assert_shape,

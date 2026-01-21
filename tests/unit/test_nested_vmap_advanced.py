@@ -30,7 +30,7 @@ from nabla import (
     vmap,
 )
 from nabla.core import trace
-from tests.conftest import (
+from .conftest import (
     assert_allclose,
     assert_shape,
     make_array,

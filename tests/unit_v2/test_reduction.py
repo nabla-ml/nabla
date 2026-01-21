@@ -157,7 +157,7 @@ import jax.numpy as jnp
 from nabla.core.sharding.spec import DimSpec
 
 
-from tests.conftest import (
+from .common import (
     assert_allclose,
     make_jax_array,
     tensor_from_jax,

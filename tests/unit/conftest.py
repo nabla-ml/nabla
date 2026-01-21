@@ -21,6 +21,31 @@ import pytest
 from nabla import DeviceMesh, Tensor
 from nabla.core.sharding.spec import DimSpec
 
+def make_array(*shape: int, seed: int = 42):
+    """Create a deterministic random tensor (Numpy-backed)."""
+    import numpy as np
+    np.random.seed(seed)
+    return np.random.randn(*shape).astype(np.float32)
+
+
+def make_positive_array(*shape: int, seed: int = 42):
+    """Create a deterministic positive random tensor (Numpy-backed)."""
+    import numpy as np
+    np.random.seed(seed)
+    return np.abs(np.random.randn(*shape).astype(np.float32)) + 0.1
+
+
+def tensor_from_numpy(arr) -> Tensor:
+    """Create a nabla Tensor from a numpy array."""
+    return Tensor.constant(arr)
+
+
+def to_numpy(t: Tensor):
+    """Convert Nabla Tensor to numpy array."""
+    return t.numpy()
+
+
+
 
 def make_jax_array(*shape: int, seed: int = 42, dtype=jnp.float32) -> jax.Array:
     """Create a deterministic random JAX array."""
@@ -50,12 +75,17 @@ def to_jax(t: Tensor) -> jax.Array:
     return jnp.from_dlpack(t)
 
 def assert_allclose(
-    result: Tensor, expected: jax.Array, rtol: float = 1e-5, atol: float = 1e-6
+    result: Tensor, expected, rtol: float = 1e-5, atol: float = 1e-6
 ):
-    """Assert tensor values match expected JAX array using DLPack conversion."""
-    actual_jax = to_jax(result)
+    """Assert tensor values match expected array (numpy or jax)."""
+    if hasattr(result, "numpy"):
+        actual = result.numpy()
+    else:
+        actual = result
+
     import numpy as np
-    np.testing.assert_allclose(actual_jax, expected, rtol=rtol, atol=atol)
+    np.testing.assert_allclose(actual, expected, rtol=rtol, atol=atol)
+
 
 
 def assert_shape(result: Tensor, expected_shape: tuple):

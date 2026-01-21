@@ -17,6 +17,7 @@ from .common import (
     get_test_data_for_shapes,
     run_test_with_consistency_check,
     standard_get_args,
+    SEED,
 )
 
 
@@ -38,7 +39,7 @@ def get_indexing_args(config: OpConfig):
     key = jax.random.PRNGKey(SEED)
     idx_jax = jax.random.randint(key, idx_shape, 0, limit, dtype="int32")
 
-    idx_nb = nb.Tensor.from_dlpack(jax.dlpack.to_dlpack(idx_jax))
+    idx_nb = tensor_from_jax(idx_jax)
     # Note: we use int32 usually for indices, but let's stick to what we created
 
     inputs_nb = [x_nb, idx_nb]
@@ -56,7 +57,7 @@ def get_where_args(config: OpConfig):
     shapes = config.primal_shapes
     key = jax.random.PRNGKey(SEED)
     c_jax = jax.random.choice(key, jnp.array([True, False]), shape=shapes[0])
-    c_nb = nb.Tensor.from_dlpack(jax.dlpack.to_dlpack(c_jax))
+    c_nb = tensor_from_jax(c_jax)
 
     data_nb, data_jax = get_test_data_for_shapes(shapes[1:], config)
 
@@ -135,7 +136,7 @@ def test_misc_base(op_name):
 # COMPREHENSIVE GATHER/SCATTER TESTS WITH SHARDING AND VMAP
 # =============================================================================
 
-from tests.conftest import (
+from .common import (
     assert_allclose,
     assert_is_sharded,
     assert_shape,

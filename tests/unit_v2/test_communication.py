@@ -30,21 +30,14 @@ OPS = {}
 
 
 import jax.numpy as jnp
-from tests.conftest import (
+from .common import (
     assert_allclose,
     make_jax_array,
     tensor_from_jax,
 )
 
 
-@pytest.fixture
-def mesh_1d():
-    return DeviceMesh("mesh_1d", (4,), ("dp",))
 
-
-@pytest.fixture
-def mesh_2x4():
-    return DeviceMesh("mesh_2x4", (2, 4), ("dp", "tp"))
 
 
 OPS["all_reduce_sum"] = Operation(

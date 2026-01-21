@@ -28,7 +28,7 @@ from nabla import (
     squeeze_physical,
     unsqueeze_physical,
 )
-from tests.conftest import (
+from .conftest import (
     assert_allclose,
     assert_is_sharded,
     assert_physical_shape,

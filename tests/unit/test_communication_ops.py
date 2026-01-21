@@ -21,7 +21,7 @@ All ops are tested with:
 
 from nabla.core.sharding.spec import DimSpec
 from nabla.ops.communication import all_gather, all_reduce, reshard
-from tests.conftest import (
+from .conftest import (
     assert_allclose,
     assert_is_sharded,
     assert_shape,
