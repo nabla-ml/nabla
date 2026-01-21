@@ -9,13 +9,15 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-import numpy as np
+import jax.dlpack
+import numpy as np  # Kept for np.prod compatibility if needed, or replace with math
 import pytest
 from max.dtype import DType
 
 import nabla as nb
 from nabla import vmap
 from nabla.core.sharding.spec import DeviceMesh, DimSpec, ShardingSpec
+from tests.conftest import tensor_from_jax, to_jax
 
 nb.DType = DType
 SEED = 42
@@ -138,42 +140,38 @@ def get_shape_for_rank(rank: int) -> tuple[int, ...]:
 
 
 def get_test_data_for_shapes(shapes, config: OpConfig):
-    np.random.seed(SEED)
+    # np.random.seed(SEED) # No longer needed, using JAX keys
     nabla_primals = []
     jax_primals = []
+    key = jax.random.PRNGKey(SEED)
 
     for i, shape in enumerate(shapes):
+        key, subkey = jax.random.split(key)
         num_elements = int(np.prod(shape)) if shape else 1
 
         if config.input_dtype == "bool":
-            jax_base = jax.numpy.arange(num_elements)
-            nb_base_reshaped = nb.reshape(nb.arange(num_elements), shape)
-            nb_val, jax_val = (
-                (
-                    nb.equal(nb_base_reshaped % 2, 0),
-                    (jax_base.reshape(shape) % 2 == 0),
-                )
-                if shape
-                else (nb.constant(True, dtype=nb.DType.bool), jnp.array(True))
-            )
+            jax_base = jnp.arange(num_elements)
+            # Create boolean mask
+            jax_val = (jax_base.reshape(shape) % 2 == 0) if shape else jnp.array(True)
+            
+            # Create Nabla Tensor from JAX array via DLPack
+            nb_val = tensor_from_jax(jax_val)
         else:
             if not shape:
                 base_val = 2.5 if config.domain_positive else 1.5
-                nb_val, jax_val = (
-                    nb.constant(base_val, dtype=nb.DType.float32),
-                    jnp.array(base_val, dtype="float32"),
-                )
+                jax_val = jnp.array(base_val, dtype="float32")
+                nb_val = tensor_from_jax(jax_val)
             else:
-                nb_base = nb.arange(num_elements, dtype=nb.DType.float32)
-                jax_base = jax.numpy.arange(num_elements, dtype="float32")
+                # Use JAX arange
+                jax_base = jnp.arange(num_elements, dtype="float32")
 
                 offset = 1.0 if config.domain_positive else float(i + 1)
-                nb_val = nb.reshape(nb_base + offset, shape)
                 jax_val = (jax_base + offset).reshape(shape)
 
                 if not config.use_stable_floats:
-                    nb_val *= 0.1
                     jax_val *= 0.1
+                
+                nb_val = tensor_from_jax(jax_val)
 
         nabla_primals.append(nb_val)
         jax_primals.append(jax_val)
@@ -196,15 +194,17 @@ def compare_nested_structures(nb_res, jax_res, path="", tolerance=1e-4):
     """Recursively compare arbitrary nested structures (tuples, lists, dicts)."""
 
     if hasattr(nb_res, "numpy"):
-        nb_val = nb_res.numpy()
-        jax_val = np.array(jax_res)
+        # Convert Nabla Tensor to JAX array via DLPack
+        nb_val_jax = to_jax(nb_res)
+        jax_val = jnp.array(jax_res) # Ensure expected is JAX array
 
-        if nb_val.shape != jax_val.shape:
+        if nb_val_jax.shape != jax_val.shape:
+             pass
 
-            pass
-
+        # Use np.testing.assert_allclose which handles JAX arrays nicely
+        # or implement custom JAX assert if strictly needed, but this is standard practice
         np.testing.assert_allclose(
-            nb_val,
+            nb_val_jax,
             jax_val,
             rtol=tolerance,
             atol=tolerance,

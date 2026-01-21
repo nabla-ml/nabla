@@ -151,29 +151,24 @@ def test_reduction_sharding_variance(op_name, mesh_cfg):
 # when reducing over a sharded axis.
 # =============================================================================
 
-import numpy as np
+import jax
+import jax.numpy as jnp
 
 from nabla.core.sharding.spec import DimSpec
 
 
-def make_array(*shape: int, seed: int = 42) -> np.ndarray:
-    rng = np.random.default_rng(seed)
-    return rng.standard_normal(shape).astype(np.float32)
-
-
-def tensor_from_numpy(arr: np.ndarray) -> nb.Tensor:
-    return nb.Tensor.from_dlpack(arr)
-
-
-def assert_allclose(result: nb.Tensor, expected: np.ndarray, rtol: float = 1e-4):
-    np.testing.assert_allclose(result.numpy(), expected, rtol=rtol, atol=1e-5)
+from tests.conftest import (
+    assert_allclose,
+    make_jax_array,
+    tensor_from_jax,
+)
 
 
 REDUCTION_OPS = {
-    "sum": (nb.reduce_sum, np.sum),
-    "mean": (nb.mean, np.mean),
-    "max": (nb.reduce_max, np.max),
-    "min": (nb.reduce_min, np.min),
+    "sum": (nb.reduce_sum, jnp.sum),
+    "mean": (nb.mean, jnp.mean),
+    "max": (nb.reduce_max, jnp.max),
+    "min": (nb.reduce_min, jnp.min),
 }
 
 # Minimal configs for cross-shard tests (fast execution)
@@ -194,13 +189,13 @@ class TestCrossShardReductions:
         rows, cols = 8, 4
         mesh = DeviceMesh(f"mesh_{op_name}_{mesh_name}", mesh_shape, mesh_axes)
 
-        np_x = make_array(rows, cols, seed=42)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(rows, cols, seed=42)
+        x = tensor_from_jax(jax_x)
 
         x_sharded = x.shard(mesh, [DimSpec(["x"]), DimSpec([])])
 
         result = nb_fn(x_sharded, axis=0, keepdims=False)
-        expected = np_fn(np_x, axis=0)
+        expected = np_fn(jax_x, axis=0)
 
         assert tuple(int(d) for d in result.shape) == (cols,)
         assert_allclose(result, expected)
@@ -213,13 +208,13 @@ class TestCrossShardReductions:
         rows, cols = 4, 8
         mesh = DeviceMesh(f"mesh_{op_name}_{mesh_name}", mesh_shape, mesh_axes)
 
-        np_x = make_array(rows, cols, seed=123)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(rows, cols, seed=123)
+        x = tensor_from_jax(jax_x)
 
         x_sharded = x.shard(mesh, [DimSpec([]), DimSpec(["y"])])
 
         result = nb_fn(x_sharded, axis=1, keepdims=False)
-        expected = np_fn(np_x, axis=1)
+        expected = np_fn(jax_x, axis=1)
 
         assert tuple(int(d) for d in result.shape) == (rows,)
         assert_allclose(result, expected)
@@ -230,13 +225,13 @@ class TestCrossShardReductions:
         nb_fn, np_fn = REDUCTION_OPS[op_name]
         mesh = DeviceMesh("mesh_keepdims", (2, 2), ("x", "y"))
 
-        np_x = make_array(8, 4, seed=99)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(8, 4, seed=99)
+        x = tensor_from_jax(jax_x)
 
         x_sharded = x.shard(mesh, [DimSpec(["x"]), DimSpec([])])
 
         result = nb_fn(x_sharded, axis=0, keepdims=True)
-        expected = np_fn(np_x, axis=0, keepdims=True)
+        expected = np_fn(jax_x, axis=0, keepdims=True)
 
         assert tuple(int(d) for d in result.shape) == (1, 4)
         assert_allclose(result, expected)
@@ -251,14 +246,14 @@ class TestMultiAxisShardedReductions:
         nb_fn, np_fn = REDUCTION_OPS[op_name]
         mesh = DeviceMesh("mesh_2axis", (2, 2), ("x", "y"))
 
-        np_x = make_array(8, 8, seed=55)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(8, 8, seed=55)
+        x = tensor_from_jax(jax_x)
 
         # Shard on both dimensions
         x_sharded = x.shard(mesh, [DimSpec(["x"]), DimSpec(["y"])])
 
         result = nb_fn(x_sharded, axis=0, keepdims=False)
-        expected = np_fn(np_x, axis=0)
+        expected = np_fn(jax_x, axis=0)
 
         assert tuple(int(d) for d in result.shape) == (8,)
         assert_allclose(result, expected)
@@ -269,13 +264,13 @@ class TestMultiAxisShardedReductions:
         nb_fn, np_fn = REDUCTION_OPS[op_name]
         mesh = DeviceMesh("mesh_2axis_ax1", (2, 2), ("x", "y"))
 
-        np_x = make_array(8, 8, seed=77)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(8, 8, seed=77)
+        x = tensor_from_jax(jax_x)
 
         x_sharded = x.shard(mesh, [DimSpec(["x"]), DimSpec(["y"])])
 
         result = nb_fn(x_sharded, axis=1, keepdims=False)
-        expected = np_fn(np_x, axis=1)
+        expected = np_fn(jax_x, axis=1)
 
         assert tuple(int(d) for d in result.shape) == (8,)
         assert_allclose(result, expected)
@@ -285,13 +280,13 @@ class TestMultiAxisShardedReductions:
         """Test reduction on asymmetric 2D mesh with both axes sharded."""
         mesh = DeviceMesh(f"mesh_{mesh_name}", mesh_shape, mesh_axes)
 
-        np_x = make_array(8, 16, seed=88)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(8, 16, seed=88)
+        x = tensor_from_jax(jax_x)
 
         x_sharded = x.shard(mesh, [DimSpec(["x"]), DimSpec(["y"])])
 
         result = nb.reduce_sum(x_sharded, axis=0, keepdims=False)
-        expected = np.sum(np_x, axis=0)
+        expected = jnp.sum(jax_x, axis=0)
 
         assert tuple(int(d) for d in result.shape) == (16,)
         assert_allclose(result, expected)
@@ -306,13 +301,13 @@ class TestNegativeAxisReductions:
         nb_fn, np_fn = REDUCTION_OPS[op_name]
         mesh = DeviceMesh("mesh_neg1", (2, 2), ("x", "y"))
 
-        np_x = make_array(4, 8, seed=101)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(4, 8, seed=101)
+        x = tensor_from_jax(jax_x)
 
         x_sharded = x.shard(mesh, [DimSpec([]), DimSpec(["y"])])
 
         result = nb_fn(x_sharded, axis=-1, keepdims=False)
-        expected = np_fn(np_x, axis=-1)
+        expected = np_fn(jax_x, axis=-1)
 
         assert tuple(int(d) for d in result.shape) == (4,)
         assert_allclose(result, expected)
@@ -323,13 +318,13 @@ class TestNegativeAxisReductions:
         nb_fn, np_fn = REDUCTION_OPS[op_name]
         mesh = DeviceMesh("mesh_neg2", (2,), ("x",))
 
-        np_x = make_array(4, 8, 4, seed=102)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(4, 8, 4, seed=102)
+        x = tensor_from_jax(jax_x)
 
         x_sharded = x.shard(mesh, [DimSpec([]), DimSpec(["x"]), DimSpec([])])
 
         result = nb_fn(x_sharded, axis=-2, keepdims=False)
-        expected = np_fn(np_x, axis=-2)
+        expected = np_fn(jax_x, axis=-2)
 
         assert tuple(int(d) for d in result.shape) == (4, 4)
         assert_allclose(result, expected)
@@ -349,11 +344,11 @@ class TestVmapShardedReductions:
             x_sharded = x.shard(mesh, [DimSpec(["y"])])
             return nb_fn(x_sharded, axis=0)
 
-        np_x = make_array(batch, features, seed=200)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(batch, features, seed=200)
+        x = tensor_from_jax(jax_x)
 
         result = nb.vmap(f)(x)
-        expected = np_fn(np_x, axis=1)
+        expected = np_fn(jax_x, axis=1)
 
         assert tuple(int(d) for d in result.shape) == (batch,)
         assert_allclose(result, expected)
@@ -369,11 +364,11 @@ class TestVmapShardedReductions:
             x_sharded = x.shard(mesh, [DimSpec(["tp"])])
             return nb_fn(x_sharded, axis=0, keepdims=True)
 
-        np_x = make_array(batch, features, seed=201)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(batch, features, seed=201)
+        x = tensor_from_jax(jax_x)
 
         result = nb.vmap(f)(x)
-        expected = np_fn(np_x, axis=1, keepdims=True)
+        expected = np_fn(jax_x, axis=1, keepdims=True)
 
         assert tuple(int(d) for d in result.shape) == (batch, 1)
         assert_allclose(result, expected)
@@ -388,11 +383,12 @@ class TestVmapShardedReductions:
             s = nb.reduce_sum(x_sharded, axis=0, keepdims=False)
             return nb.reduce_max(s, axis=0, keepdims=False)
 
-        np_x = make_array(batch, 4, 8, seed=300)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(batch, 4, 8, seed=300)
+        x = tensor_from_jax(jax_x)
 
         result = nb.vmap(f)(x)
-        expected = np.max(np.sum(np_x, axis=1), axis=1)
+        result = nb.vmap(f)(x)
+        expected = jnp.max(jnp.sum(jax_x, axis=1), axis=1)
 
         assert tuple(int(d) for d in result.shape) == (batch,)
         assert_allclose(result, expected)

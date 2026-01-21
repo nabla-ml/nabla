@@ -5,8 +5,8 @@
 
 from functools import partial
 
+import jax
 import jax.numpy as jnp
-import numpy as np
 import pytest
 
 import nabla as nb
@@ -34,10 +34,12 @@ def get_indexing_args(config: OpConfig):
 
     limit = shapes[0][config.params.get("axis", 0)]
     idx_shape = shapes[1]
-    idx_np = np.random.randint(0, limit, size=idx_shape)
+    # Use JAX random for indices
+    key = jax.random.PRNGKey(SEED)
+    idx_jax = jax.random.randint(key, idx_shape, 0, limit, dtype="int32")
 
-    idx_nb = nb.constant(idx_np, dtype=nb.DType.int64)
-    idx_jax = jnp.array(idx_np, dtype="int64")
+    idx_nb = nb.Tensor.from_dlpack(jax.dlpack.to_dlpack(idx_jax))
+    # Note: we use int32 usually for indices, but let's stick to what we created
 
     inputs_nb = [x_nb, idx_nb]
     inputs_jax = [x_jax, idx_jax]
@@ -52,9 +54,9 @@ def get_indexing_args(config: OpConfig):
 
 def get_where_args(config: OpConfig):
     shapes = config.primal_shapes
-    c_np = np.random.choice([True, False], size=shapes[0])
-    c_nb = nb.constant(c_np, dtype=nb.DType.bool)
-    c_jax = jnp.array(c_np)
+    key = jax.random.PRNGKey(SEED)
+    c_jax = jax.random.choice(key, jnp.array([True, False]), shape=shapes[0])
+    c_nb = nb.Tensor.from_dlpack(jax.dlpack.to_dlpack(c_jax))
 
     data_nb, data_jax = get_test_data_for_shapes(shapes[1:], config)
 
@@ -137,10 +139,10 @@ from tests.conftest import (
     assert_allclose,
     assert_is_sharded,
     assert_shape,
-    make_array,
+    make_jax_array,
     replicated,
     shard_on_axis,
-    tensor_from_numpy,
+    tensor_from_jax,
 )
 
 
@@ -149,30 +151,30 @@ class TestGatherSharding:
 
     def test_gather_replicated(self, mesh_1d):
         """Gather from replicated tensor."""
-        np_data = make_array(8, 4, seed=42)
-        np_indices = np.array([1, 5], dtype=np.int32)
+        jax_data = make_jax_array(8, 4, seed=42)
+        jax_indices = jnp.array([1, 5], dtype=jnp.int32)
 
-        data = tensor_from_numpy(np_data)
+        data = tensor_from_jax(jax_data)
         data_repl = replicated(data, mesh_1d)
-        indices = tensor_from_numpy(np_indices)
+        indices = tensor_from_jax(jax_indices)
 
         result = nb.gather(data_repl, indices, axis=0)
-        expected = np_data[np_indices, :]
+        expected = jax_data[jax_indices, :]
 
         assert_shape(result, (2, 4))
         assert_allclose(result, expected)
 
     def test_gather_sharded_non_gather_axis(self, mesh_1d):
         """Gather from tensor sharded on non-gather axis."""
-        np_data = make_array(8, 4, seed=42)
-        np_indices = np.array([0, 3, 7], dtype=np.int32)
+        jax_data = make_jax_array(8, 4, seed=42)
+        jax_indices = jnp.array([0, 3, 7], dtype=jnp.int32)
 
-        data = tensor_from_numpy(np_data)
+        data = tensor_from_jax(jax_data)
         data_sharded = shard_on_axis(data, mesh_1d, axis=1)
-        indices = tensor_from_numpy(np_indices)
+        indices = tensor_from_jax(jax_indices)
 
         result = nb.gather(data_sharded, indices, axis=0)
-        expected = np_data[np_indices, :]
+        expected = jax_data[jax_indices, :]
 
         assert_shape(result, (3, 4))
         assert_is_sharded(result, True)
@@ -180,28 +182,28 @@ class TestGatherSharding:
 
     def test_gather_3d_middle_axis(self, mesh_1d):
         """Gather from 3D tensor along middle axis."""
-        np_data = make_array(4, 8, 6, seed=42)
-        np_indices = np.array([0, 3, 7], dtype=np.int32)
+        jax_data = make_jax_array(4, 8, 6, seed=42)
+        jax_indices = jnp.array([0, 3, 7], dtype=jnp.int32)
 
-        data = tensor_from_numpy(np_data)
-        indices = tensor_from_numpy(np_indices)
+        data = tensor_from_jax(jax_data)
+        indices = tensor_from_jax(jax_indices)
 
         result = nb.gather(data, indices, axis=1)
-        expected = np_data[:, np_indices, :]
+        expected = jax_data[:, jax_indices, :]
 
         assert_shape(result, (4, 3, 6))
         assert_allclose(result, expected)
 
     def test_gather_negative_axis(self, mesh_1d):
         """Gather with negative axis."""
-        np_data = make_array(4, 8, seed=42)
-        np_indices = np.array([1, 3, 5], dtype=np.int32)
+        jax_data = make_jax_array(4, 8, seed=42)
+        jax_indices = jnp.array([1, 3, 5], dtype=jnp.int32)
 
-        data = tensor_from_numpy(np_data)
-        indices = tensor_from_numpy(np_indices)
+        data = tensor_from_jax(jax_data)
+        indices = tensor_from_jax(jax_indices)
 
         result = nb.gather(data, indices, axis=-1)
-        expected = np_data[:, np_indices]
+        expected = jax_data[:, jax_indices]
 
         assert_shape(result, (4, 3))
         assert_allclose(result, expected)
@@ -213,17 +215,17 @@ class TestGatherVmap:
     @pytest.mark.parametrize("batch_size", [2, 4])
     def test_vmap_gather_axis0(self, batch_size):
         """Vmap over gather with batch in data."""
-        np_data = make_array(batch_size, 8, 4, seed=42)
-        np_indices = np.array([0, 3, 7], dtype=np.int32)
+        jax_data = make_jax_array(batch_size, 8, 4, seed=42)
+        jax_indices = jnp.array([0, 3, 7], dtype=jnp.int32)
 
-        data = tensor_from_numpy(np_data)
-        indices = tensor_from_numpy(np_indices)
+        data = tensor_from_jax(jax_data)
+        indices = tensor_from_jax(jax_indices)
 
         def fn(x):
             return nb.gather(x, indices, axis=0)
 
         result = nb.vmap(fn)(data)
-        expected = np_data[:, np_indices, :]
+        expected = jax_data[:, jax_indices, :]
 
         assert_shape(result, (batch_size, 3, 4))
         assert_allclose(result, expected)
@@ -231,20 +233,20 @@ class TestGatherVmap:
     @pytest.mark.parametrize("batch_size", [2, 4])
     def test_vmap_gather_batched_indices(self, batch_size):
         """Vmap with both data and indices batched."""
-        np_data = make_array(batch_size, 8, seed=42)
-        np_indices = np.array(
-            [[0, 1, 2], [3, 4, 5], [6, 7, 0], [1, 2, 3]][:batch_size], dtype=np.int32
+        jax_data = make_jax_array(batch_size, 8, seed=42)
+        jax_indices = jnp.array(
+            [[0, 1, 2], [3, 4, 5], [6, 7, 0], [1, 2, 3]][:batch_size], dtype=jnp.int32
         )
 
-        data = tensor_from_numpy(np_data)
-        indices = tensor_from_numpy(np_indices)
+        data = tensor_from_jax(jax_data)
+        indices = tensor_from_jax(jax_indices)
 
         def fn(x, idx):
             return nb.gather(x, idx, axis=0)
 
         result = nb.vmap(fn)(data, indices)
 
-        expected = np.array([np_data[i, np_indices[i]] for i in range(batch_size)])
+        expected = jnp.array([jax_data[i, jax_indices[i]] for i in range(batch_size)])
 
         assert_shape(result, (batch_size, 3))
         assert_allclose(result, expected)
@@ -255,56 +257,53 @@ class TestScatterSharding:
 
     def test_scatter_replicated(self, mesh_1d):
         """Scatter into replicated tensor."""
-        np_data = make_array(8, 4, seed=42)
-        np_indices = np.array([2, 5], dtype=np.int32)
-        np_updates = make_array(2, 4, seed=43)
+        jax_data = make_jax_array(8, 4, seed=42)
+        jax_indices = jnp.array([2, 5], dtype=jnp.int32)
+        jax_updates = make_jax_array(2, 4, seed=43)
 
-        data = tensor_from_numpy(np_data)
+        data = tensor_from_jax(jax_data)
         data_repl = replicated(data, mesh_1d)
-        indices = tensor_from_numpy(np_indices)
-        updates = tensor_from_numpy(np_updates)
+        indices = tensor_from_jax(jax_indices)
+        updates = tensor_from_jax(jax_updates)
 
         result = nb.scatter(data_repl, indices, updates, axis=0)
 
-        expected = np_data.copy()
-        expected[np_indices, :] = np_updates
+        expected = jax_data.at[jax_indices].set(jax_updates)
 
         assert_shape(result, (8, 4))
         assert_allclose(result, expected)
 
     def test_scatter_2d_axis1(self, mesh_1d):
         """Scatter into 2D tensor along axis 1."""
-        np_data = make_array(4, 8, seed=42)
-        np_indices = np.array([1, 5, 7], dtype=np.int32)
-        np_updates = make_array(4, 3, seed=43)
+        jax_data = make_jax_array(4, 8, seed=42)
+        jax_indices = jnp.array([1, 5, 7], dtype=jnp.int32)
+        jax_updates = make_jax_array(4, 3, seed=43)
 
-        data = tensor_from_numpy(np_data)
-        indices = tensor_from_numpy(np_indices)
-        updates = tensor_from_numpy(np_updates)
+        data = tensor_from_jax(jax_data)
+        indices = tensor_from_jax(jax_indices)
+        updates = tensor_from_jax(jax_updates)
 
         result = nb.scatter(data, indices, updates, axis=1)
 
-        expected = np_data.copy()
-        expected[:, np_indices] = np_updates
+        expected = jax_data.at[:, jax_indices].set(jax_updates)
 
         assert_shape(result, (4, 8))
         assert_allclose(result, expected)
 
     def test_scatter_sharded_non_scatter_axis(self, mesh_1d):
         """Scatter with tensor sharded on non-scatter axis."""
-        np_data = make_array(8, 4, seed=42)
-        np_indices = np.array([1, 3], dtype=np.int32)
-        np_updates = make_array(2, 4, seed=43)
+        jax_data = make_jax_array(8, 4, seed=42)
+        jax_indices = jnp.array([1, 3], dtype=jnp.int32)
+        jax_updates = make_jax_array(2, 4, seed=43)
 
-        data = tensor_from_numpy(np_data)
+        data = tensor_from_jax(jax_data)
         data_sharded = shard_on_axis(data, mesh_1d, axis=1)
-        indices = tensor_from_numpy(np_indices)
-        updates = tensor_from_numpy(np_updates)
+        indices = tensor_from_jax(jax_indices)
+        updates = tensor_from_jax(jax_updates)
 
         result = nb.scatter(data_sharded, indices, updates, axis=0)
 
-        expected = np_data.copy()
-        expected[np_indices, :] = np_updates
+        expected = jax_data.at[jax_indices].set(jax_updates)
 
         assert_shape(result, (8, 4))
         assert_is_sharded(result, True)
@@ -316,31 +315,31 @@ class TestGatherScatterRoundTrip:
 
     def test_gather_scatter_identity(self):
         """Gather then scatter back to same positions."""
-        np_data = make_array(8, 4, seed=42)
-        np_indices = np.array([1, 3, 5], dtype=np.int32)
+        jax_data = make_jax_array(8, 4, seed=42)
+        jax_indices = jnp.array([1, 3, 5], dtype=jnp.int32)
 
-        data = tensor_from_numpy(np_data)
-        indices = tensor_from_numpy(np_indices)
+        data = tensor_from_jax(jax_data)
+        indices = tensor_from_jax(jax_indices)
 
         gathered = nb.gather(data, indices, axis=0)
 
-        buffer = tensor_from_numpy(np.zeros((8, 4), dtype=np.float32))
+        buffer = tensor_from_jax(jnp.zeros((8, 4), dtype=jnp.float32))
         result = nb.scatter(buffer, indices, gathered, axis=0)
 
-        expected = np.zeros((8, 4), dtype=np.float32)
-        expected[np_indices, :] = np_data[np_indices, :]
+        expected = jnp.zeros((8, 4), dtype="float32")
+        expected = expected.at[jax_indices].set(jax_data[jax_indices, :])
 
         assert_shape(result, (8, 4))
         assert_allclose(result, expected)
 
     def test_gather_scatter_with_sharding(self, mesh_1d):
         """Gather-scatter round trip with sharding."""
-        np_data = make_array(8, 4, seed=42)
-        np_indices = np.array([0, 2, 6], dtype=np.int32)
+        jax_data = make_jax_array(8, 4, seed=42)
+        jax_indices = jnp.array([0, 2, 6], dtype=jnp.int32)
 
-        data = tensor_from_numpy(np_data)
+        data = tensor_from_jax(jax_data)
         data_sharded = shard_on_axis(data, mesh_1d, axis=1)
-        indices = tensor_from_numpy(np_indices)
+        indices = tensor_from_jax(jax_indices)
 
         gathered = nb.gather(data_sharded, indices, axis=0)
 
@@ -348,8 +347,8 @@ class TestGatherScatterRoundTrip:
         buffer_sharded = shard_on_axis(buffer, mesh_1d, axis=1)
         result = nb.scatter(buffer_sharded, indices, gathered, axis=0)
 
-        expected = np.zeros((8, 4), dtype=np.float32)
-        expected[np_indices, :] = np_data[np_indices, :]
+        expected = jnp.zeros((8, 4), dtype=jnp.float32)
+        expected = expected.at[jax_indices].set(jax_data[jax_indices, :])
 
         assert_shape(result, (8, 4))
         assert_allclose(result, expected)

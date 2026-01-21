@@ -13,47 +13,49 @@ Test Hierarchy:
 """
 
 
-import numpy as np
+import jax
+import jax.numpy as jnp
+import jax.numpy as jnp
 import pytest
 
 from nabla import DeviceMesh, Tensor
 from nabla.core.sharding.spec import DimSpec
 
 
-def make_array(*shape: int, seed: int = 42, dtype=np.float32) -> np.ndarray:
-    """Create a deterministic random array."""
-    rng = np.random.default_rng(seed)
-    return rng.standard_normal(shape).astype(dtype)
+def make_jax_array(*shape: int, seed: int = 42, dtype=jnp.float32) -> jax.Array:
+    """Create a deterministic random JAX array."""
+    key = jax.random.PRNGKey(seed)
+    # Generate random data on the default JAX device
+    return jax.random.normal(key, shape, dtype=dtype)
 
 
-def make_positive_array(*shape: int, seed: int = 42, dtype=np.float32) -> np.ndarray:
-    """Create a deterministic positive random array (for ops needing positive inputs)."""
-    rng = np.random.default_rng(seed)
-    return np.abs(rng.standard_normal(shape)).astype(dtype) + 0.1
+def make_positive_jax_array(*shape: int, seed: int = 42, dtype=jnp.float32) -> jax.Array:
+    """Create a deterministic positive random JAX array."""
+    key = jax.random.PRNGKey(seed)
+    return jnp.abs(jax.random.normal(key, shape, dtype=dtype)) + 0.1
 
 
-def tensor_from_numpy(arr: np.ndarray) -> Tensor:
-    """Create a nabla Tensor from numpy array."""
+def tensor_from_jax(arr: jax.Array) -> Tensor:
+    """Create a nabla Tensor from a JAX array using Zero-Copy DLPack."""
+    # Ensure array is ready
+    arr.block_until_ready()
+    # Use standard __dlpack__ method as jax.dlpack.to_dlpack is removed
     return Tensor.from_dlpack(arr)
 
 
-def to_numpy(t: Tensor) -> np.ndarray:
-    """Extract numpy array from Tensor.
-
-    Uses Tensor.to_numpy() which handles:
-    - Realization of lazy tensors
-    - Gathering of sharded tensors
-    - Proper device transfer to CPU
-    """
-    return t.to_numpy()
-
+def to_jax(t: Tensor) -> jax.Array:
+    """Convert Nabla Tensor to JAX array using Zero-Copy DLPack."""
+    # Use jax.numpy.from_dlpack as jax.dlpack.from_dlpack is removed
+    # Note: jnp.from_dlpack expects an object with __dlpack__ method or a capsule
+    return jnp.from_dlpack(t)
 
 def assert_allclose(
-    result: Tensor, expected: np.ndarray, rtol: float = 1e-5, atol: float = 1e-6
+    result: Tensor, expected: jax.Array, rtol: float = 1e-5, atol: float = 1e-6
 ):
-    """Assert tensor values match expected numpy array."""
-    actual = to_numpy(result)
-    np.testing.assert_allclose(actual, expected, rtol=rtol, atol=atol)
+    """Assert tensor values match expected JAX array using DLPack conversion."""
+    actual_jax = to_jax(result)
+    import numpy as np
+    np.testing.assert_allclose(actual_jax, expected, rtol=rtol, atol=atol)
 
 
 def assert_shape(result: Tensor, expected_shape: tuple):

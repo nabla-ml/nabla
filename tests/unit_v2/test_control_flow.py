@@ -12,7 +12,8 @@ Tests for where, cond, while_loop, and scan operations:
 4. Edge cases (nested conditions, sharded loop state)
 """
 
-import numpy as np
+import jax
+import jax.numpy as jnp
 import pytest
 
 import nabla as nb
@@ -27,10 +28,10 @@ from . common import (
 from tests.conftest import (
     assert_allclose,
     assert_shape,
-    make_array,
+    make_jax_array,
     replicated,
     shard_on_axis,
-    tensor_from_numpy,
+    tensor_from_jax,
 )
 
 
@@ -39,51 +40,53 @@ class TestWhereOp:
 
     def test_where_basic(self):
         """Basic where without sharding."""
-        cond_np = np.array([True, False, True, False], dtype=bool)
-        x_np = make_array(4, seed=42)
-        y_np = make_array(4, seed=43)
+        cond_jax = jnp.array([True, False, True, False], dtype=bool)
+        jax_x = make_jax_array(4, seed=42)
+        jax_y = make_jax_array(4, seed=43)
 
-        cond_t = tensor_from_numpy(cond_np)
-        x = tensor_from_numpy(x_np)
-        y = tensor_from_numpy(y_np)
+        cond_t = tensor_from_jax(cond_jax)
+        x = tensor_from_jax(jax_x)
+        y = tensor_from_jax(jax_y)
 
         result = where(cond_t, x, y)
-        expected = np.where(cond_np, x_np, y_np)
+        expected = jnp.where(cond_jax, jax_x, jax_y)
 
         assert_shape(result, (4,))
         assert_allclose(result, expected)
 
     def test_where_2d(self):
         """Where on 2D tensors."""
-        cond_np = np.random.choice([True, False], size=(4, 8))
-        x_np = make_array(4, 8, seed=42)
-        y_np = make_array(4, 8, seed=43)
+        key = jax.random.PRNGKey(100)
+        cond_jax = jax.random.choice(key, jnp.array([True, False]), shape=(4, 8))
+        jax_x = make_jax_array(4, 8, seed=42)
+        jax_y = make_jax_array(4, 8, seed=43)
 
-        cond_t = tensor_from_numpy(cond_np)
-        x = tensor_from_numpy(x_np)
-        y = tensor_from_numpy(y_np)
+        cond_t = tensor_from_jax(cond_jax)
+        x = tensor_from_jax(jax_x)
+        y = tensor_from_jax(jax_y)
 
         result = where(cond_t, x, y)
-        expected = np.where(cond_np, x_np, y_np)
+        expected = jnp.where(cond_jax, jax_x, jax_y)
 
         assert_shape(result, (4, 8))
         assert_allclose(result, expected)
 
     def test_where_sharded_inputs(self, mesh_1d):
         """Where with sharded x and y tensors."""
-        cond_np = np.random.choice([True, False], size=(8, 4))
-        x_np = make_array(8, 4, seed=42)
-        y_np = make_array(8, 4, seed=43)
+        key = jax.random.PRNGKey(101)
+        cond_jax = jax.random.choice(key, jnp.array([True, False]), shape=(8, 4))
+        jax_x = make_jax_array(8, 4, seed=42)
+        jax_y = make_jax_array(8, 4, seed=43)
 
-        cond_t = tensor_from_numpy(cond_np)
-        x = tensor_from_numpy(x_np)
-        y = tensor_from_numpy(y_np)
+        cond_t = tensor_from_jax(cond_jax)
+        x = tensor_from_jax(jax_x)
+        y = tensor_from_jax(jax_y)
 
         x_sharded = shard_on_axis(x, mesh_1d, axis=0)
         y_sharded = shard_on_axis(y, mesh_1d, axis=0)
 
         result = where(cond_t, x_sharded, y_sharded)
-        expected = np.where(cond_np, x_np, y_np)
+        expected = jnp.where(cond_jax, jax_x, jax_y)
 
         assert_shape(result, (8, 4))
         assert_allclose(result, expected)
@@ -91,19 +94,20 @@ class TestWhereOp:
     @pytest.mark.parametrize("batch_size", [2, 4])
     def test_where_vmap(self, batch_size):
         """vmap(where) with batched inputs."""
-        cond_np = np.random.choice([True, False], size=(batch_size, 8))
-        x_np = make_array(batch_size, 8, seed=42)
-        y_np = make_array(batch_size, 8, seed=43)
+        key = jax.random.PRNGKey(102)
+        cond_jax = jax.random.choice(key, jnp.array([True, False]), shape=(batch_size, 8))
+        jax_x = make_jax_array(batch_size, 8, seed=42)
+        jax_y = make_jax_array(batch_size, 8, seed=43)
 
-        cond_t = tensor_from_numpy(cond_np)
-        x = tensor_from_numpy(x_np)
-        y = tensor_from_numpy(y_np)
+        cond_t = tensor_from_jax(cond_jax)
+        x = tensor_from_jax(jax_x)
+        y = tensor_from_jax(jax_y)
 
         def fn(c, x_val, y_val):
             return where(c, x_val, y_val)
 
         result = nb.vmap(fn)(cond_t, x, y)
-        expected = np.where(cond_np, x_np, y_np)
+        expected = jnp.where(cond_jax, jax_x, jax_y)
 
         assert_shape(result, (batch_size, 8))
         assert_allclose(result, expected)
@@ -121,13 +125,13 @@ class TestCondOp:
         def false_fn(x):
             return x - 1.0
 
-        x_np = np.array(5.0, dtype=np.float32)
-        x = tensor_from_numpy(x_np)
+        jax_x = jnp.array(5.0, dtype=jnp.float32)
+        x = tensor_from_jax(jax_x)
 
         pred = nb.constant(True, dtype=nb.DType.bool)
         result = cond(pred, true_fn, false_fn, x)
 
-        assert_allclose(result, np.array(6.0, dtype=np.float32))
+        assert_allclose(result, jnp.array(6.0, dtype=jnp.float32))
 
     def test_cond_basic_false(self):
         """Cond with false predicate."""
@@ -138,13 +142,13 @@ class TestCondOp:
         def false_fn(x):
             return x - 1.0
 
-        x_np = np.array(5.0, dtype=np.float32)
-        x = tensor_from_numpy(x_np)
+        jax_x = jnp.array(5.0, dtype=jnp.float32)
+        x = tensor_from_jax(jax_x)
 
         pred = nb.constant(False, dtype=nb.DType.bool)
         result = cond(pred, true_fn, false_fn, x)
 
-        assert_allclose(result, np.array(4.0, dtype=np.float32))
+        assert_allclose(result, jnp.array(4.0, dtype=jnp.float32))
 
     def test_cond_pytree_output(self):
         """Cond returning tuple (pytree)."""
@@ -155,16 +159,16 @@ class TestCondOp:
         def false_fn(x):
             return (x, x - 1.0)
 
-        x_np = np.array(5.0, dtype=np.float32)
-        x = tensor_from_numpy(x_np)
+        jax_x = jnp.array(5.0, dtype=jnp.float32)
+        x = tensor_from_jax(jax_x)
 
         pred = nb.constant(True, dtype=nb.DType.bool)
         result = cond(pred, true_fn, false_fn, x)
 
         assert isinstance(result, tuple)
         assert len(result) == 2
-        assert_allclose(result[0], np.array(5.0, dtype=np.float32))
-        assert_allclose(result[1], np.array(6.0, dtype=np.float32))
+        assert_allclose(result[0], jnp.array(5.0, dtype=jnp.float32))
+        assert_allclose(result[1], jnp.array(6.0, dtype=jnp.float32))
 
     def test_cond_sharding_in_branch(self, mesh_1d):
         """Cond with sharding applied inside branch."""
@@ -176,13 +180,13 @@ class TestCondOp:
         def false_fn(x):
             return nb.reduce_sum(x, axis=0)
 
-        x_np = make_array(8, 4, seed=42)
-        x = tensor_from_numpy(x_np)
+        jax_x = make_jax_array(8, 4, seed=42)
+        x = tensor_from_jax(jax_x)
 
         pred = nb.constant(True, dtype=nb.DType.bool)
         result = cond(pred, true_fn, false_fn, x)
 
-        expected = np.sum(x_np, axis=0)
+        expected = jnp.sum(jax_x, axis=0)
         assert_shape(result, (4,))
         assert_allclose(result, expected)
         """Cond with sharding applied inside branch."""
@@ -194,13 +198,13 @@ class TestCondOp:
         def false_fn(x):
             return nb.reduce_sum(x, axis=0)
 
-        x_np = make_array(8, 4, seed=42)
-        x = tensor_from_numpy(x_np)
+        jax_x = make_jax_array(8, 4, seed=42)
+        x = tensor_from_jax(jax_x)
 
         pred = nb.constant(True, dtype=nb.DType.bool)
         result = cond(pred, true_fn, false_fn, x)
 
-        expected = np.sum(x_np, axis=0)
+        expected = jnp.sum(jax_x, axis=0)
         assert_shape(result, (4,))
         assert_allclose(result, expected)
 
@@ -221,7 +225,7 @@ class TestWhileLoopOp:
         i_init = nb.constant(0, dtype=nb.DType.int32)
         result = while_loop(cond_fn, body_fn, i_init)
 
-        assert_allclose(result, np.array(10, dtype=np.int32))
+        assert_allclose(result, jnp.array(10, dtype=jnp.int32))
 
     def test_while_loop_accumulator(self):
         """While loop with accumulator (sum 1+2+...+10)."""
@@ -238,8 +242,8 @@ class TestWhileLoopOp:
         init_state = (nb.constant(1, dtype=nb.DType.int32), nb.constant(0, dtype=nb.DType.int32))
         result_i, result_acc = while_loop(cond_fn, body_fn, init_state)
 
-        assert_allclose(result_i, np.array(11, dtype=np.int32))
-        assert_allclose(result_acc, np.array(55, dtype=np.int32))
+        assert_allclose(result_i, jnp.array(11, dtype=jnp.int32))
+        assert_allclose(result_acc, jnp.array(55, dtype=jnp.int32))
 
     def test_while_loop_sharded_state(self, mesh_1d):
         """While loop with sharded loop-carried state."""
@@ -253,15 +257,15 @@ class TestWhileLoopOp:
             i, x = state
             return (i + 1, x + 1.0)
 
-        x_np = make_array(8, 4, seed=42)
-        x = tensor_from_numpy(x_np)
+        jax_x = make_jax_array(8, 4, seed=42)
+        x = tensor_from_jax(jax_x)
         x_sharded = shard_on_axis(x, mesh_1d, axis=0)
 
         init_state = (nb.constant(0, dtype=nb.DType.int32), x_sharded)
         result_i, result_x = while_loop(cond_fn, body_fn, init_state)
 
-        expected_x = x_np + 5.0
-        assert_allclose(result_i, np.array(5, dtype=np.int32))
+        expected_x = jax_x + 5.0
+        assert_allclose(result_i, jnp.array(5, dtype=jnp.int32))
         assert_shape(result_x, (8, 4))
         assert_allclose(result_x, expected_x)
 
@@ -276,16 +280,16 @@ class TestScanOp:
             new_carry = carry + x
             return new_carry, new_carry
 
-        xs_np = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32)
-        xs = tensor_from_numpy(xs_np)
+        jax_xs = jnp.array([1.0, 2.0, 3.0, 4.0], dtype=jnp.float32)
+        xs = tensor_from_jax(jax_xs)
         init = nb.constant(0.0, dtype=nb.DType.float32)
 
         final_carry, ys = scan(f, init, xs)
 
         expected_carry = 10.0
-        expected_ys = np.array([1.0, 3.0, 6.0, 10.0], dtype=np.float32)
+        expected_ys = jnp.array([1.0, 3.0, 6.0, 10.0], dtype=jnp.float32)
 
-        assert_allclose(final_carry, np.array(expected_carry, dtype=np.float32))
+        assert_allclose(final_carry, jnp.array(expected_carry, dtype=jnp.float32))
         assert_shape(ys, (4,))
         assert_allclose(ys, expected_ys)
 
@@ -296,15 +300,15 @@ class TestScanOp:
             new_carry = carry * x
             return new_carry, new_carry
 
-        xs_np = np.array([2.0, 3.0, 4.0], dtype=np.float32)
-        xs = tensor_from_numpy(xs_np)
+        jax_xs = jnp.array([2.0, 3.0, 4.0], dtype=jnp.float32)
+        xs = tensor_from_jax(jax_xs)
         init = nb.constant(1.0, dtype=nb.DType.float32)
 
         final_carry, ys = scan(f, init, xs)
 
-        expected_ys = np.array([2.0, 6.0, 24.0], dtype=np.float32)
+        expected_ys = jnp.array([2.0, 6.0, 24.0], dtype=jnp.float32)
 
-        assert_allclose(final_carry, np.array(24.0, dtype=np.float32))
+        assert_allclose(final_carry, jnp.array(24.0, dtype=jnp.float32))
         assert_allclose(ys, expected_ys)
 
     def test_scan_2d_input(self):
@@ -315,14 +319,14 @@ class TestScanOp:
             s = carry + x  # Element-wise add
             return s, s
 
-        xs_np = make_array(4, 8, seed=42)
-        xs = tensor_from_numpy(xs_np)
+        jax_xs = make_jax_array(4, 8, seed=42)
+        xs = tensor_from_jax(jax_xs)
         init = nb.zeros((8,))
 
         final_carry, ys = scan(f, init, xs)
 
         # Expected: cumulative sum of rows
-        expected_final = np.sum(xs_np, axis=0)
+        expected_final = jnp.sum(jax_xs, axis=0)
         assert_shape(final_carry, (8,))
         assert_shape(ys, (4, 8))
         assert_allclose(final_carry, expected_final, rtol=1e-4)
@@ -334,8 +338,8 @@ class TestScanOp:
             new_carry = carry + x
             return new_carry, new_carry
 
-        xs_np = make_array(8, 4, seed=42)
-        xs = tensor_from_numpy(xs_np)
+        jax_xs = make_jax_array(8, 4, seed=42)
+        xs = tensor_from_jax(jax_xs)
         xs_sharded = shard_on_axis(xs, mesh_1d, axis=1)
 
         init = nb.zeros((4,))
@@ -343,7 +347,7 @@ class TestScanOp:
 
         final_carry, ys = scan(f, init_sharded, xs_sharded)
 
-        expected_final = np.sum(xs_np, axis=0)
+        expected_final = jnp.sum(jax_xs, axis=0)
         assert_shape(final_carry, (4,))
         assert_shape(ys, (8, 4))
         assert_allclose(final_carry, expected_final, rtol=1e-4)
@@ -358,16 +362,16 @@ class TestScanOp:
             new_total = total + x
             return (new_count, new_total), new_total
 
-        xs_np = make_array(batch_size, seed=42)
-        xs = tensor_from_numpy(xs_np)
+        jax_xs = make_jax_array(batch_size, seed=42)
+        xs = tensor_from_jax(jax_xs)
 
         init_count = nb.constant(0, dtype=nb.DType.int32)
         init_total = nb.constant(0.0, dtype=nb.DType.float32)
 
         (final_count, final_total), ys = scan(f, (init_count, init_total), xs)
 
-        expected_total = np.sum(xs_np)
-        assert_allclose(final_count, np.array(batch_size, dtype=np.int32))
+        expected_total = jnp.sum(jax_xs)
+        assert_allclose(final_count, jnp.array(batch_size, dtype=jnp.int32))
         assert_allclose(final_total, expected_total, rtol=1e-4)
         assert_shape(ys, (batch_size,))
 
@@ -384,16 +388,16 @@ class TestControlFlowEdgeCases:
         def false_fn(x, y):
             return x - y
 
-        x_np = np.array(10.0, dtype=np.float32)
-        y_np = np.array(3.0, dtype=np.float32)
+        jax_x = jnp.array(10.0, dtype=jnp.float32)
+        jax_y = jnp.array(3.0, dtype=jnp.float32)
 
-        x = tensor_from_numpy(x_np)
-        y = tensor_from_numpy(y_np)
+        x = tensor_from_jax(jax_x)
+        y = tensor_from_jax(jax_y)
 
         pred = nb.constant(True, dtype=nb.DType.bool)
         result = cond(pred, true_fn, false_fn, x, y)
 
-        assert_allclose(result, np.array(13.0, dtype=np.float32))
+        assert_allclose(result, jnp.array(13.0, dtype=jnp.float32))
 
     def test_while_loop_early_exit(self):
         """While loop with early exit condition."""
@@ -411,8 +415,8 @@ class TestControlFlowEdgeCases:
         init_state = (nb.constant(0, dtype=nb.DType.int32), nb.constant(0.0, dtype=nb.DType.float32))
         result_i, result_val = while_loop(cond_fn, body_fn, init_state)
 
-        assert_allclose(result_i, np.array(10, dtype=np.int32))
-        assert_allclose(result_val, np.array(50.0, dtype=np.float32))
+        assert_allclose(result_i, jnp.array(10, dtype=jnp.int32))
+        assert_allclose(result_val, jnp.array(50.0, dtype=jnp.float32))
 
 
 __all__ = [

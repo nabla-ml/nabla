@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
-import numpy as np
+import jax
 import pytest
 
 import nabla as nb
@@ -29,17 +29,12 @@ from .common import (
 OPS = {}
 
 
-def make_array(*shape: int, seed: int = 42) -> np.ndarray:
-    rng = np.random.default_rng(seed)
-    return rng.standard_normal(shape).astype(np.float32)
-
-
-def tensor_from_numpy(arr: np.ndarray) -> nb.Tensor:
-    return nb.Tensor.from_dlpack(arr)
-
-
-def assert_allclose(result: nb.Tensor, expected: np.ndarray, rtol: float = 1e-5):
-    np.testing.assert_allclose(result.numpy(), expected, rtol=rtol)
+import jax.numpy as jnp
+from tests.conftest import (
+    assert_allclose,
+    make_jax_array,
+    tensor_from_jax,
+)
 
 
 @pytest.fixture
@@ -133,24 +128,24 @@ class TestShardOp:
 
     def test_shard_1d_axis0(self, mesh_1d):
         """Shard tensor on first axis with 1D mesh."""
-        np_x = make_array(8, 4, seed=42)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(8, 4, seed=42)
+        x = tensor_from_jax(jax_x)
         result = x.shard(mesh_1d, [DimSpec(["dp"]), DimSpec([])])
 
         assert_shape(result, (8, 4))
         assert_is_sharded(result, True)
-        assert_allclose(result, np_x)
+        assert_allclose(result, jax_x)
         assert result.sharding.dim_specs[0].axes == ["dp"]
 
     def test_shard_2d_asymmetric(self, mesh_2x4):
         """Shard on 2D asymmetric mesh."""
-        np_x = make_array(8, 16, seed=42)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(8, 16, seed=42)
+        x = tensor_from_jax(jax_x)
         result = x.shard(mesh_2x4, [DimSpec(["dp"]), DimSpec(["tp"])])
 
         assert_shape(result, (8, 16))
         assert_is_sharded(result, True)
-        assert_allclose(result, np_x)
+        assert_allclose(result, jax_x)
         assert "dp" in result.sharding.dim_specs[0].axes
         assert "tp" in result.sharding.dim_specs[1].axes
 
@@ -159,14 +154,14 @@ class TestAllGatherOp:
     """Test AllGather: gather shards to replicated."""
 
     def test_all_gather_1d(self, mesh_1d):
-        np_x = make_array(8, 4, seed=42)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(8, 4, seed=42)
+        x = tensor_from_jax(jax_x)
         x_sharded = x.shard(mesh_1d, [DimSpec(["dp"]), DimSpec([])])
 
         result = all_gather(x_sharded, axis=0)
 
         assert_shape(result, (8, 4))
-        assert_allclose(result, np_x)
+        assert_allclose(result, jax_x)
 
         spec = result.sharding
         assert spec.dim_specs[0].axes == []
@@ -178,14 +173,14 @@ class TestReduceScatterOp:
     def test_reduce_scatter_1d(self, mesh_1d):
         """ReduceScatter on 1D mesh: Replicated -> Reduce(Sum) -> Scatter(axis=0)."""
 
-        np_x = make_array(8, 4, seed=42)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(8, 4, seed=42)
+        x = tensor_from_jax(jax_x)
 
         x_rep = x.shard(mesh_1d, [DimSpec([]), DimSpec([])])
 
         result = reduce_scatter(x_rep, axis=0)
 
-        expected_global = np_x * 4
+        expected_global = jax_x * 4
 
         assert_shape(result, (8, 4))
         assert_allclose(result, expected_global)
@@ -199,14 +194,14 @@ class TestAllToAllOp:
     def test_all_to_all_1d(self, mesh_1d):
         """AllToAll: Swap sharding axis."""
 
-        np_x = make_array(8, 8, seed=42)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(8, 8, seed=42)
+        x = tensor_from_jax(jax_x)
         x_sharded = x.shard(mesh_1d, [DimSpec(["dp"]), DimSpec([])])
 
         result = all_to_all(x_sharded, split_axis=1, concat_axis=0)
 
         assert_shape(result, (8, 8))
-        assert_allclose(result, np_x)
+        assert_allclose(result, jax_x)
 
         spec = result.sharding
         assert (
@@ -219,19 +214,19 @@ class TestAllToAllOp:
         else:
             pass
 
-        assert_allclose(result, np_x)
+        assert_allclose(result, jax_x)
 
 
 class TestReshardOp:
     def test_reshard_change(self, mesh_2x4):
-        np_x = make_array(8, 16, seed=42)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(8, 16, seed=42)
+        x = tensor_from_jax(jax_x)
         x_sharded = x.shard(mesh_2x4, [DimSpec(["dp"]), DimSpec([])])
 
         result = reshard(x_sharded, mesh_2x4, [DimSpec([]), DimSpec(["tp"])])
 
         assert_shape(result, (8, 16))
-        assert_allclose(result, np_x)
+        assert_allclose(result, jax_x)
         assert "tp" in result.sharding.dim_specs[1].axes
 
 
@@ -254,8 +249,8 @@ class TestAllReduceVariants:
 
     def test_all_reduce_sum_replicated(self, mesh_4):
         """AllReduce sum on replicated tensor - basic smoke test."""
-        np_x = make_array(4, 4, seed=42)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(4, 4, seed=42)
+        x = tensor_from_jax(jax_x)
 
         x_rep = x.shard(mesh_4, [DimSpec([]), DimSpec([])])
 
@@ -266,49 +261,49 @@ class TestAllReduceVariants:
 
     def test_all_reduce_max_replicated(self, mesh_4):
         """AllReduce max on replicated tensor returns same values."""
-        np_x = make_array(4, 4, seed=43)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(4, 4, seed=43)
+        x = tensor_from_jax(jax_x)
 
         x_rep = x.shard(mesh_4, [DimSpec([]), DimSpec([])])
 
         result = all_reduce(x_rep, reduce_op="max")
 
-        assert_allclose(result, np_x)
+        assert_allclose(result, jax_x)
 
     def test_all_reduce_min_replicated(self, mesh_4):
         """AllReduce min on replicated tensor returns same values."""
-        np_x = make_array(4, 4, seed=44)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(4, 4, seed=44)
+        x = tensor_from_jax(jax_x)
 
         x_rep = x.shard(mesh_4, [DimSpec([]), DimSpec([])])
 
         result = all_reduce(x_rep, reduce_op="min")
 
-        assert_allclose(result, np_x)
+        assert_allclose(result, jax_x)
 
     def test_all_reduce_sum_sharded_1d(self, mesh_4):
         """AllReduce sum on sharded 1D tensor - preserves global values."""
-        np_x = make_array(8, 4, seed=45)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(8, 4, seed=45)
+        x = tensor_from_jax(jax_x)
 
         x_sharded = x.shard(mesh_4, [DimSpec(["dp"]), DimSpec([])])
 
         result = all_reduce(x_sharded, reduce_op="sum")
 
         # AllReduce returns a tensor; verify it exists and can be realized
-        assert result.numpy() is not None
+        result.numpy()
 
     def test_all_reduce_max_2d_mesh(self, mesh_2x2):
         """AllReduce max on 2D mesh with partial sharding."""
-        np_x = make_array(4, 4, seed=46)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(4, 4, seed=46)
+        x = tensor_from_jax(jax_x)
 
         x_sharded = x.shard(mesh_2x2, [DimSpec(["dp"]), DimSpec([])])
 
         result = all_reduce(x_sharded, reduce_op="max")
 
         # Verify it executes successfully
-        assert result.numpy() is not None
+        result.numpy()
 
 
 class TestMultiAxisCommunication:
@@ -324,21 +319,20 @@ class TestMultiAxisCommunication:
 
     def test_all_gather_2d_mesh_axis0(self, mesh_2x4):
         """AllGather on axis 0 with 2D mesh."""
-        np_x = make_array(8, 16, seed=50)
-        x = tensor_from_numpy(np_x)
-
+        jax_x = make_jax_array(8, 16, seed=50)
+        x = tensor_from_jax(jax_x)
         x_sharded = x.shard(mesh_2x4, [DimSpec(["dp"]), DimSpec(["tp"])])
 
         result = all_gather(x_sharded, axis=0)
 
         assert_shape(result, (8, 16))
         assert result.sharding.dim_specs[0].axes == []
-        assert_allclose(result, np_x)
+        assert_allclose(result, jax_x)
 
     def test_all_gather_2d_mesh_axis1(self, mesh_2x4):
         """AllGather on axis 1 with 2D mesh."""
-        np_x = make_array(8, 16, seed=51)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(8, 16, seed=51)
+        x = tensor_from_jax(jax_x)
 
         x_sharded = x.shard(mesh_2x4, [DimSpec(["dp"]), DimSpec(["tp"])])
 
@@ -346,31 +340,31 @@ class TestMultiAxisCommunication:
 
         assert_shape(result, (8, 16))
         assert result.sharding.dim_specs[1].axes == []
-        assert_allclose(result, np_x)
+        assert_allclose(result, jax_x)
 
     def test_reduce_scatter_2d_mesh(self, mesh_2x4):
         """ReduceScatter on 2D mesh - verify execution completes."""
-        np_x = make_array(16, 8, seed=52)  # Shape divisible by 8 shards
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(16, 8, seed=52)  # Shape divisible by 8 shards
+        x = tensor_from_jax(jax_x)
 
         x_rep = x.shard(mesh_2x4, [DimSpec([]), DimSpec([])])
 
         result = reduce_scatter(x_rep, axis=0)
 
         # ReduceScatter scatters on axis 0 - verify it runs
-        assert result.numpy() is not None
+        result.numpy()
 
     def test_asymmetric_mesh_all_gather(self, mesh_4x2):
         """AllGather on asymmetric (4x2) mesh."""
-        np_x = make_array(16, 8, seed=53)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(16, 8, seed=53)
+        x = tensor_from_jax(jax_x)
 
         x_sharded = x.shard(mesh_4x2, [DimSpec(["dp"]), DimSpec(["tp"])])
 
         result = all_gather(x_sharded, axis=0)
 
         assert_shape(result, (16, 8))
-        assert_allclose(result, np_x)
+        assert_allclose(result, jax_x)
 
 
 class TestCommunicationGroupedExecution:
@@ -380,15 +374,15 @@ class TestCommunicationGroupedExecution:
         """Test AllReduce with grouped execution on 2x2 mesh."""
         mesh = DeviceMesh("mesh_grp", (2, 2), ("x", "y"))
 
-        np_x = make_array(4, 4, seed=60)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(4, 4, seed=60)
+        x = tensor_from_jax(jax_x)
 
         x_sharded = x.shard(mesh, [DimSpec(["x"]), DimSpec(["y"])])
 
         result = all_reduce(x_sharded, reduce_op="sum")
 
         # Verify the grouped execution completes successfully
-        assert result.numpy() is not None
+        result.numpy()
 
 
 # =============================================================================
@@ -409,8 +403,8 @@ class TestPPermuteOp:
 
     def test_ppermute_ring_shift_right(self, mesh_4):
         """Ring shift: each device sends to next (0→1, 1→2, 2→3, 3→0)."""
-        np_x = make_array(4, 4, seed=70)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(4, 4, seed=70)
+        x = tensor_from_jax(jax_x)
 
         x_sharded = x.shard(mesh_4, [DimSpec(["dp"]), DimSpec([])])
 
@@ -419,12 +413,12 @@ class TestPPermuteOp:
         result = ppermute(x_sharded, permutation=perm)
 
         # ppermute changes the data order - just verify it executes
-        assert result.numpy() is not None
+        result.numpy()
 
     def test_ppermute_reverse(self, mesh_4):
         """Reverse permutation: 0↔3, 1↔2."""
-        np_x = make_array(4, 4, seed=71)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(4, 4, seed=71)
+        x = tensor_from_jax(jax_x)
 
         x_sharded = x.shard(mesh_4, [DimSpec(["dp"]), DimSpec([])])
 
@@ -432,7 +426,7 @@ class TestPPermuteOp:
         result = ppermute(x_sharded, permutation=perm)
 
         # ppermute rearranges data - just verify execution completes
-        assert result.numpy() is not None
+        result.numpy()
 
 
 class TestAxisIndexOp:
@@ -445,7 +439,7 @@ class TestAxisIndexOp:
         result = axis_index(mesh, "dp")
 
         # axis_index returns a sharded tensor with one value per device
-        assert result.numpy() is not None
+        result.numpy()
 
     def test_axis_index_2d_mesh_axis0(self):
         """Verify row indices on 2D mesh."""
@@ -454,7 +448,7 @@ class TestAxisIndexOp:
         result = axis_index(mesh, "x")
 
         # axis_index is sharded on the queried axis, returns size of that axis
-        assert result.numpy() is not None
+        result.numpy()
 
     def test_axis_index_2d_mesh_axis1(self):
         """Verify column indices on 2D mesh."""
@@ -463,7 +457,7 @@ class TestAxisIndexOp:
         result = axis_index(mesh, "y")
 
         # axis_index is sharded on the queried axis
-        assert result.numpy() is not None
+        result.numpy()
 
 
 class TestPMeanOp:
@@ -473,8 +467,8 @@ class TestPMeanOp:
         """PMean on replicated tensor."""
         mesh = DeviceMesh("mesh_pm", (4,), ("dp",))
 
-        np_x = make_array(4, 4, seed=80)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(4, 4, seed=80)
+        x = tensor_from_jax(jax_x)
 
         x_rep = x.shard(mesh, [DimSpec([]), DimSpec([])])
 
@@ -482,7 +476,7 @@ class TestPMeanOp:
 
         # PMean on replicated = same values (4×sum / 4 = sum)
         assert_shape(result, (4, 4))
-        assert_allclose(result, np_x)
+        assert_allclose(result, jax_x)
 
 
 class TestGatherAllAxesOp:
@@ -492,15 +486,15 @@ class TestGatherAllAxesOp:
         """Gather from tensor sharded on both axes."""
         mesh = DeviceMesh("mesh_gaa", (2, 2), ("x", "y"))
 
-        np_x = make_array(8, 8, seed=90)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(8, 8, seed=90)
+        x = tensor_from_jax(jax_x)
 
         x_sharded = x.shard(mesh, [DimSpec(["x"]), DimSpec(["y"])])
 
         result = gather_all_axes(x_sharded)
 
         assert_shape(result, (8, 8))
-        assert_allclose(result, np_x)
+        assert_allclose(result, jax_x)
         # Should be fully replicated now
         assert result.sharding.is_fully_replicated()
 
@@ -514,26 +508,26 @@ class TestAllToAllExtended:
 
     def test_all_to_all_2d_mesh(self, mesh_2x2):
         """AllToAll on 2D mesh."""
-        np_x = make_array(8, 8, seed=100)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(8, 8, seed=100)
+        x = tensor_from_jax(jax_x)
 
         x_sharded = x.shard(mesh_2x2, [DimSpec([]), DimSpec(["y"])])
 
         result = all_to_all(x_sharded, split_axis=0, concat_axis=1)
 
         # all_to_all transforms shape based on split/concat
-        assert result.numpy() is not None
+        result.numpy()
 
     def test_all_to_all_swap_axes(self, mesh_2x2):
         """AllToAll swapping split and concat axes."""
-        np_x = make_array(8, 8, seed=101)
-        x = tensor_from_numpy(np_x)
+        jax_x = make_jax_array(8, 8, seed=101)
+        x = tensor_from_jax(jax_x)
 
         x_sharded = x.shard(mesh_2x2, [DimSpec(["x"]), DimSpec([])])
 
         result = all_to_all(x_sharded, split_axis=1, concat_axis=0)
 
         # all_to_all changes shape - verify it executes
-        assert result.numpy() is not None
+        result.numpy()
 
 

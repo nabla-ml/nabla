@@ -5,13 +5,19 @@
 
 """Test vmap with sharding - realistic patterns from production ML workloads."""
 
-import numpy as np
+import jax
+import jax.numpy as jnp
 import pytest
 
 import nabla as nb
 from nabla.core.sharding.spec import DeviceMesh, P
 
 from .common import MESH_CONFIGS
+from tests.conftest import (
+    assert_allclose,
+    make_jax_array,
+    tensor_from_jax,
+)
 
 
 class TestVmapShardingUnary:
@@ -27,14 +33,14 @@ class TestVmapShardingUnary:
             x_sharded = x.shard(mesh, P(mesh_axes[-1]))
             return nb.relu(x_sharded)
 
-        np_x = np.random.randn(batch, features).astype(np.float32)
-        x = nb.Tensor.from_dlpack(np_x)
+        np_x = jax.random.normal(jax.random.PRNGKey(42), (batch, features), dtype=jnp.float32)
+        x = tensor_from_jax(np_x)
 
         result = nb.vmap(f)(x)
-        expected = np.maximum(np_x, 0)
+        expected = jnp.maximum(np_x, 0)
 
         assert tuple(int(d) for d in result.shape) == (batch, features)
-        np.testing.assert_allclose(result.numpy(), expected, rtol=1e-5)
+        assert_allclose(result, expected)
 
 
 class TestVmapShardingBinary:
@@ -50,17 +56,17 @@ class TestVmapShardingBinary:
             bias_sharded = bias.shard(mesh, P(mesh_axes[-1]))
             return nb.add(x, bias_sharded)
 
-        np_x = np.random.randn(batch, hidden).astype(np.float32)
-        np_bias = np.random.randn(hidden).astype(np.float32)
+        np_x = jax.random.normal(jax.random.PRNGKey(43), (batch, hidden), dtype=jnp.float32)
+        np_bias = jax.random.normal(jax.random.PRNGKey(44), (hidden,), dtype=jnp.float32)
 
-        x = nb.Tensor.from_dlpack(np_x)
-        bias = nb.Tensor.from_dlpack(np_bias)
+        x = tensor_from_jax(np_x)
+        bias = tensor_from_jax(np_bias)
 
         result = nb.vmap(f, in_axes=(0, None))(x, bias)
         expected = np_x + np_bias
 
         assert tuple(int(d) for d in result.shape) == (batch, hidden)
-        np.testing.assert_allclose(result.numpy(), expected, rtol=1e-5)
+        assert_allclose(result, expected)
 
 
 class TestVmapShardingMatmul:
@@ -75,17 +81,17 @@ class TestVmapShardingMatmul:
             w_sharded = w.shard(mesh, P(None, "tp"))
             return nb.matmul(x, w_sharded)
 
-        np_x = np.random.randn(batch, in_feat).astype(np.float32)
-        np_w = np.random.randn(in_feat, out_feat).astype(np.float32)
+        np_x = jax.random.normal(jax.random.PRNGKey(45), (batch, in_feat), dtype=jnp.float32)
+        np_w = jax.random.normal(jax.random.PRNGKey(46), (in_feat, out_feat), dtype=jnp.float32)
 
-        x = nb.Tensor.from_dlpack(np_x)
-        w = nb.Tensor.from_dlpack(np_w)
+        x = tensor_from_jax(np_x)
+        w = tensor_from_jax(np_w)
 
         result = nb.vmap(f, in_axes=(0, None))(x, w)
         expected = np_x @ np_w
 
         assert tuple(int(d) for d in result.shape) == (batch, out_feat)
-        np.testing.assert_allclose(result.numpy(), expected, rtol=1e-4)
+        assert_allclose(result, expected, rtol=1e-4)
 
     def test_row_parallel(self):
         """Row-parallel matmul: shard contracting dimension (needs AllReduce)."""
@@ -97,17 +103,17 @@ class TestVmapShardingMatmul:
             w_sharded = w.shard(mesh, P("tp", None))
             return nb.matmul(x_sharded, w_sharded)
 
-        np_x = np.random.randn(batch, in_feat).astype(np.float32)
-        np_w = np.random.randn(in_feat, out_feat).astype(np.float32)
+        np_x = jax.random.normal(jax.random.PRNGKey(47), (batch, in_feat), dtype=jnp.float32)
+        np_w = jax.random.normal(jax.random.PRNGKey(48), (in_feat, out_feat), dtype=jnp.float32)
 
-        x = nb.Tensor.from_dlpack(np_x)
-        w = nb.Tensor.from_dlpack(np_w)
+        x = tensor_from_jax(np_x)
+        w = tensor_from_jax(np_w)
 
         result = nb.vmap(f, in_axes=(0, None))(x, w)
         expected = np_x @ np_w
 
         assert tuple(int(d) for d in result.shape) == (batch, out_feat)
-        np.testing.assert_allclose(result.numpy(), expected, rtol=1e-4)
+        assert_allclose(result, expected, rtol=1e-4)
 
 
 class TestVmapShardingReduction:
@@ -124,14 +130,14 @@ class TestVmapShardingReduction:
             x_sharded = x.shard(mesh, P(mesh_axes[-1]))
             return nb.reduce_sum(x_sharded, axis=0)
 
-        np_x = np.random.randn(batch, 16).astype(np.float32)
-        x = nb.Tensor.from_dlpack(np_x)
+        np_x = jax.random.normal(jax.random.PRNGKey(49), (batch, 16), dtype=jnp.float32)
+        x = tensor_from_jax(np_x)
 
         result = nb.vmap(f)(x)
-        expected = np.sum(np_x, axis=1)
+        expected = jnp.sum(np_x, axis=1)
 
         assert tuple(int(d) for d in result.shape) == (batch,)
-        np.testing.assert_allclose(result.numpy(), expected, rtol=1e-5)
+        assert_allclose(result, expected, rtol=1e-5)
 
 
 class TestVmapShardingComposite:
@@ -157,21 +163,21 @@ class TestVmapShardingComposite:
 
             return out
 
-        np_x = np.random.randn(batch, hidden).astype(np.float32) * 0.1
-        np_w1 = np.random.randn(hidden, ffn).astype(np.float32) * 0.1
-        np_w2 = np.random.randn(ffn, hidden).astype(np.float32) * 0.1
-        np_b1 = np.random.randn(ffn).astype(np.float32) * 0.1
+        np_x = jax.random.normal(jax.random.PRNGKey(50), (batch, hidden), dtype=jnp.float32) * 0.1
+        np_w1 = jax.random.normal(jax.random.PRNGKey(51), (hidden, ffn), dtype=jnp.float32) * 0.1
+        np_w2 = jax.random.normal(jax.random.PRNGKey(52), (ffn, hidden), dtype=jnp.float32) * 0.1
+        np_b1 = jax.random.normal(jax.random.PRNGKey(53), (ffn,), dtype=jnp.float32) * 0.1
 
-        x = nb.Tensor.from_dlpack(np_x)
-        w1 = nb.Tensor.from_dlpack(np_w1)
-        w2 = nb.Tensor.from_dlpack(np_w2)
-        b1 = nb.Tensor.from_dlpack(np_b1)
+        x = tensor_from_jax(np_x)
+        w1 = tensor_from_jax(np_w1)
+        w2 = tensor_from_jax(np_w2)
+        b1 = tensor_from_jax(np_b1)
 
         result = nb.vmap(mlp, in_axes=(0, None, None, None))(x, w1, w2, b1)
 
         h1 = np_x @ np_w1 + np_b1
-        h1 = np.maximum(h1, 0)
+        h1 = jnp.maximum(h1, 0)
         expected = h1 @ np_w2
 
         assert tuple(int(d) for d in result.shape) == (batch, hidden)
-        np.testing.assert_allclose(result.numpy(), expected, rtol=1e-4)
+        assert_allclose(result, expected, rtol=1e-4)
