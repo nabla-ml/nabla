@@ -45,7 +45,7 @@ def contextvar_context(var: ContextVar[T], value: T):
 def _default_dtype(device: Device) -> DType:
     if dtype := _DEFAULT_DTYPE.get(None):
         return dtype
-    return DType.float32 if isinstance(device, CPU) else DType.bfloat16
+    return DType.float32  # Always use float32 as default
 
 
 _DEVICE_SPECS_CACHE: list[driver.DeviceSpec] | None = None

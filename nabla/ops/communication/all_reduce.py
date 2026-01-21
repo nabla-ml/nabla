@@ -71,25 +71,56 @@ class AllReduceOp(CollectiveOperation):
         if not shard_values:
             return []
 
-        if mesh and mesh.is_distributed:
+        # Implementation Note: MAX's native allreduce.sum() has issues on this hardware.
+        # We implement a robust all_reduce using allgather + local reduction.
+        if mesh and mesh.is_distributed and len(shard_values) > 1:
             from max.dtype import DType
-            from max.graph.ops import allreduce
+            from max.graph.ops.allgather import allgather as max_allgather
             from max.graph.type import BufferType
-
+            
+            # Signal buffer must be uint8 and large enough (>49KB) to avoid errors
+            BUFFER_SIZE = 65536
             signal_buffers = [
-                ops.buffer_create(BufferType(DType.int64, (1,), dev))
+                ops.buffer_create(BufferType(DType.uint8, (BUFFER_SIZE,), dev))
                 for dev in mesh.device_refs
             ]
+            
+            # allgather returns list of gathered tensors, one per device
+            # Each contains all data concatenated
+            gathered = max_allgather(shard_values, signal_buffers, axis=0)
+            
+            # Now split each gathered tensor back into chunks and reduce
+            result_values = []
+            chunk_size = shard_values[0].type.shape[0]
+            
+            for gathered_tensor in gathered:
+                # Split the gathered tensor into N chunks
+                chunks = []
+                for i in range(len(shard_values)):
+                    start = i * chunk_size
+                    end = (i + 1) * chunk_size
+                    chunk = gathered_tensor[start:end]
+                    chunks.append(chunk)
+                
+                # Reduce all chunks locally
+                reduced = chunks[0]
+                for chunk in chunks[1:]:
+                    if reduce_op == "sum":
+                        reduced = ops.add(reduced, chunk)
+                    elif reduce_op == "max":
+                        reduced = ops.max(reduced, chunk)
+                    elif reduce_op == "min":
+                        reduced = ops.min(reduced, chunk)
+                    elif reduce_op == "prod":
+                        reduced = ops.mul(reduced, chunk)
+                    else:
+                        raise ValueError(f"Unknown reduction op: {reduce_op}")
+                
+                result_values.append(reduced)
+            
+            return result_values
 
-            if hasattr(allreduce, reduce_op):
-                reduce_fn = getattr(allreduce, reduce_op)
-                return reduce_fn(shard_values, signal_buffers)
-            else:
-
-                raise ValueError(
-                    f"Distributed all_reduce not implemented for op: {reduce_op}"
-                )
-
+        # Simulation mode and single-device fallback
         result = shard_values[0]
         for sv in shard_values[1:]:
             if reduce_op == "sum":
