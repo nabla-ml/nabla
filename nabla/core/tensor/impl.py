@@ -159,12 +159,21 @@ class TensorImpl:
     def is_leaf(self) -> bool:
         return len(self.parents) == 0
 
+    def _get_valid_values(self):
+        from ..graph.engine import GRAPH
+
+        if self.values_epoch != GRAPH.epoch:
+            return []
+        return self._values
+
     def physical_local_shape(self, shard_idx: int = 0) -> graph.Shape | None:
         """Storage shape for a specific shard (includes batch dims)."""
         if self._storages and shard_idx < len(self._storages):
             return graph.Shape(self._storages[shard_idx].shape)
-        if self._values and shard_idx < len(self._values):
-            return self._values[shard_idx].type.shape
+        
+        values = self._get_valid_values()
+        if values and shard_idx < len(values):
+            return values[shard_idx].type.shape
         return None
 
     def logical_local_shape(self, shard_idx: int = 0) -> graph.Shape | None:
@@ -206,11 +215,15 @@ class TensorImpl:
         if local is None:
             return None
 
+        values = self._get_valid_values()
         shard_shapes = (
-            [tuple(int(d) for d in v.type.shape) for v in self._values]
-            if self._values
+            [tuple(int(d) for d in v.type.shape) for v in values]
+            if values
             else None
         )
+
+        if shard_shapes is None and self._storages:
+             shard_shapes = [tuple(int(d) for d in s.shape) for s in self._storages]
 
         from ..sharding.spec import compute_global_shape
 
@@ -245,18 +258,21 @@ class TensorImpl:
         return f"TensorImpl(op={self.op_name}, traced={self.traced}, parents={len(self.parents)}, batch_dims={self.batch_dims}{shards_str})"
 
     def get_unrealized_shape(self) -> graph.Shape:
-        if not self._values:
+        values = self._get_valid_values()
+        if not values:
             raise RuntimeError("Internal error: _values missing")
-        return self._values[0].type.shape
+        return values[0].type.shape
 
     def get_unrealized_dtype(self) -> DType:
-        if not self._values:
+        values = self._get_valid_values()
+        if not values:
             raise RuntimeError("Internal error: _values missing")
-        return self._values[0].type.dtype
+        return values[0].type.dtype
 
     def get_realized_shape(self) -> graph.Shape:
-        if self._values:
-            return self._values[0].type.shape
+        values = self._get_valid_values()
+        if values:
+            return values[0].type.shape
         if self._storages:
             return graph.Shape(self._storages[0].shape)
         if self.sharding:
@@ -265,8 +281,9 @@ class TensorImpl:
         raise RuntimeError("No shape source available")
 
     def get_realized_dtype(self) -> DType:
-        if self._values:
-            return self._values[0].type.dtype
+        values = self._get_valid_values()
+        if values:
+            return values[0].type.dtype
         if self._storages:
             return self._storages[0].dtype
         raise RuntimeError("No dtype source available")
@@ -275,8 +292,10 @@ class TensorImpl:
     def primary_value(self) -> driver.Tensor | graph.BufferValue | graph.TensorValue:
         if self._storages:
             return self._storages[0]
-        if self._values:
-            return self._values[0]
+        
+        values = self._get_valid_values()
+        if values:
+            return values[0]
         raise RuntimeError("Tensor has no storage and no values")
 
     @property

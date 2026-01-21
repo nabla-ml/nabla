@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
-from .base import BinaryOperation
+from .base import BinaryOperation, Operation
 
 if TYPE_CHECKING:
     pass
@@ -71,11 +71,44 @@ class LessEqualOp(BinaryOperation):
         return ops.greater_equal(args[1], args[0])
 
 
+class LogicalAndOp(BinaryOperation):
+    @property
+    def name(self) -> str:
+        return "logical_and"
+
+    def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
+        return ops.logical_and(args[0], args[1])
+
+
+class LogicalOrOp(BinaryOperation):
+    @property
+    def name(self) -> str:
+        return "logical_or"
+
+    def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
+        return ops.logical_or(args[0], args[1])
+
+
+class LogicalNotOp(Operation):
+    @property
+    def name(self) -> str:
+        return "logical_not"
+
+    def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+        return ops.logical_not(x)
+
+
 equal = EqualOp()
 not_equal = NotEqualOp()
 greater = GreaterOp()
 greater_equal = GreaterEqualOp()
 less = LessOp()
 less_equal = LessEqualOp()
+logical_and = LogicalAndOp()
+logical_or = LogicalOrOp()
+logical_not = LogicalNotOp()
 
-__all__ = ["equal", "not_equal", "greater", "greater_equal", "less", "less_equal"]
+__all__ = [
+    "equal", "not_equal", "greater", "greater_equal", "less", "less_equal",
+    "logical_and", "logical_or", "logical_not",
+]

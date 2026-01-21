@@ -272,6 +272,22 @@ class MinMaxOp(Operation):
     def name(self) -> str:
         return "minmax"
 
+    def __call__(self, x: Tensor, **kwargs: Any) -> dict[str, Tensor]:
+        """Compute global min and max by reducing all axes."""
+        from ..ops.reduction import reduce_min, reduce_max
+        
+        # Reduce along all axes to get scalar
+        result_min = x
+        result_max = x
+        for axis in reversed(range(len(x.shape))):
+            result_min = reduce_min(result_min, axis=axis, keepdims=False)
+            result_max = reduce_max(result_max, axis=axis, keepdims=False)
+        
+        return {
+            "min": result_min,
+            "max": result_max,
+        }
+    
     def maxpr(self, x: TensorValue, **kwargs: Any) -> dict[str, TensorValue]:
         """Compute min and max simultaneously."""
         return {

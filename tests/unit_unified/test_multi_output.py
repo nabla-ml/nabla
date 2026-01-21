@@ -4,6 +4,7 @@
 # ===----------------------------------------------------------------------=== #
 
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 import nabla as nb
@@ -90,3 +91,281 @@ def test_multi_output_ops(op_name, config_idx):
         return
     config = op.configs[config_idx]
     run_unified_test(op, config)
+
+
+# =============================================================================
+# COMPREHENSIVE MULTI-OUTPUT SHARDING AND VMAP TESTS
+# =============================================================================
+
+from tests.conftest import (
+    assert_allclose,
+    assert_is_sharded,
+    assert_shape,
+    make_array,
+    replicated,
+    shard_on_axis,
+    tensor_from_numpy,
+)
+
+
+class TestSplitSharding:
+    """Test split operation with sharding."""
+
+    def test_split_sharded_non_split_axis(self, mesh_1d):
+        """Split with sharding on non-split axis."""
+        np_x = make_array(16, 8, seed=42)
+        x = tensor_from_numpy(np_x)
+
+        x_sharded = shard_on_axis(x, mesh_1d, axis=0)
+
+        results = nb.split(x_sharded, num_splits=2, axis=1)
+        expected = np.split(np_x, 2, axis=1)
+
+        assert len(results) == 2
+        for r, e in zip(results, expected, strict=False):
+            assert_shape(r, (16, 4))
+            assert_allclose(r, e)
+            assert_is_sharded(r, True)
+
+    def test_split_sharded_split_axis(self, mesh_1d):
+        """Split with sharding on the split axis itself."""
+        np_x = make_array(16, 8, seed=42)
+        x = tensor_from_numpy(np_x)
+
+        x_sharded = shard_on_axis(x, mesh_1d, axis=0)
+
+        results = nb.split(x_sharded, num_splits=2, axis=0)
+        expected = np.split(np_x, 2, axis=0)
+
+        assert len(results) == 2
+        for r, e in zip(results, expected, strict=False):
+            assert_shape(r, (8, 8))
+            assert_allclose(r, e)
+
+    def test_split_multi_axis_mesh(self, mesh_2x4):
+        """Split on 2D mesh with sharding on both axes."""
+        np_x = make_array(16, 16, seed=42)
+        x = tensor_from_numpy(np_x)
+
+        mesh = mesh_2x4
+        from nabla.core.sharding.spec import DimSpec
+
+        x_sharded = x.shard(mesh, [DimSpec(["dp"]), DimSpec(["tp"])])
+
+        results = nb.split(x_sharded, num_splits=4, axis=0)
+
+        assert len(results) == 4
+        for r in results:
+            assert_shape(r, (4, 16))
+            assert_is_sharded(r, True)
+
+
+class TestChunkSharding:
+    """Test chunk operation with sharding."""
+
+    def test_chunk_sharded(self, mesh_1d):
+        """Chunk with sharding."""
+        np_x = make_array(12, 8, seed=42)
+        x = tensor_from_numpy(np_x)
+
+        x_sharded = shard_on_axis(x, mesh_1d, axis=0)
+
+        results = nb.chunk(x_sharded, chunks=3, axis=0)
+        expected = np.array_split(np_x, 3, axis=0)
+
+        assert len(results) == 3
+        for r, e in zip(results, expected, strict=False):
+            assert_allclose(r, e)
+
+    def test_chunk_uneven_division(self, mesh_1d):
+        """Chunk with uneven division on sharded tensor."""
+        np_x = make_array(10, 8, seed=42)
+        x = tensor_from_numpy(np_x)
+
+        x_sharded = shard_on_axis(x, mesh_1d, axis=1)
+
+        results = nb.chunk(x_sharded, chunks=3, axis=0)
+        expected = np.array_split(np_x, 3, axis=0)
+
+        assert len(results) == 3
+        for r, e in zip(results, expected, strict=False):
+            assert_allclose(r, e)
+            assert_is_sharded(r, True)
+
+
+class TestUnbindSharding:
+    """Test unbind operation with sharding."""
+
+    def test_unbind_sharded(self, mesh_1d):
+        """Unbind with sharding."""
+        np_x = make_array(4, 8, seed=42)
+        x = tensor_from_numpy(np_x)
+
+        x_sharded = shard_on_axis(x, mesh_1d, axis=1)
+
+        results = nb.unbind(x_sharded, axis=0)
+
+        assert len(results) == 4
+        for i, r in enumerate(results):
+            assert_shape(r, (8,))
+            assert_allclose(r, np_x[i])
+            assert_is_sharded(r, True)
+
+    def test_unbind_3d_sharded_middle_axis(self, mesh_1d):
+        """Unbind 3D tensor with sharding on non-unbind axis."""
+        np_x = make_array(4, 2, 8, seed=42)
+        x = tensor_from_numpy(np_x)
+
+        x_sharded = shard_on_axis(x, mesh_1d, axis=1)
+
+        # Shard on axis 1, unbind on axis 0 (different axes)  
+        results = nb.unbind(x_sharded, axis=0)
+
+        assert len(results) == 4
+        for i, r in enumerate(results):
+            print(f"DEBUG: result[{i}] shape={tuple(int(d) for d in r.shape)}, expected=(2, 8)")
+            assert_shape(r, (2, 8))  # Unbinding axis 0 from (4,2,8) gives (2,8)
+            assert_allclose(r, np_x[i, :, :])
+            assert_is_sharded(r, True)  # Preserves sharding from axis 1
+
+
+class TestMinMaxOp:
+    """Test minmax operation (dict output)."""
+
+    def test_minmax_basic(self):
+        """Basic minmax without sharding."""
+        np_x = make_array(8, 4, seed=42)
+        x = tensor_from_numpy(np_x)
+
+        result = nb.minmax(x)
+
+        assert isinstance(result, dict)
+        assert "min" in result
+        assert "max" in result
+
+        assert_allclose(result["min"], np.min(np_x))
+        assert_allclose(result["max"], np.max(np_x))
+
+    def test_minmax_sharded(self, mesh_1d):
+        """Minmax with sharded input."""
+        np_x = make_array(8, 4, seed=42)
+        x = tensor_from_numpy(np_x)
+
+        x_sharded = shard_on_axis(x, mesh_1d, axis=0)
+
+        result = nb.minmax(x_sharded)
+
+        assert isinstance(result, dict)
+        assert_allclose(result["min"], np.min(np_x))
+        assert_allclose(result["max"], np.max(np_x))
+
+
+class TestVmapMultiOutput:
+    """Test vmap with multi-output operations."""
+
+    def test_vmap_split(self):
+        """Split inside vmap."""
+        batch = 4
+        np_x = make_array(batch, 16, seed=42)
+        x = tensor_from_numpy(np_x)
+
+        def f(row):
+            return nb.split(row, num_splits=2, axis=0)
+
+        results = nb.vmap(f)(x)
+
+        assert len(results) == 2
+        for r in results:
+            assert_shape(r, (batch, 8))
+
+        expected_parts = np.split(np_x, 2, axis=1)
+        for r, e in zip(results, expected_parts, strict=False):
+            assert_allclose(r, e)
+
+    def test_vmap_chunk(self):
+        """Chunk inside vmap."""
+        batch = 4
+        np_x = make_array(batch, 10, seed=42)
+        x = tensor_from_numpy(np_x)
+
+        def f(row):
+            return nb.chunk(row, chunks=3, axis=0)
+
+        results = nb.vmap(f)(x)
+
+        assert len(results) == 3
+        expected_parts = [np.array_split(np_x, 3, axis=1)[i] for i in range(3)]
+        for r, e in zip(results, expected_parts, strict=False):
+            assert_allclose(r, e)
+
+    def test_vmap_unbind(self):
+        """Unbind inside vmap."""
+        batch = 4
+        np_x = make_array(batch, 3, 8, seed=42)
+        x = tensor_from_numpy(np_x)
+
+        def f(batch_x):
+            return nb.unbind(batch_x, axis=0)
+
+        results = nb.vmap(f)(x)
+
+        assert len(results) == 3
+        for i, r in enumerate(results):
+            assert_shape(r, (batch, 8))
+            assert_allclose(r, np_x[:, i, :])
+
+    def test_vmap_split_with_sharding(self, mesh_2x4):
+        """Split inside vmap with spmd_axis_name + logical sharding."""
+        batch = 8
+        mesh = mesh_2x4
+
+        np_x = make_array(batch, 16, seed=42)
+        x = tensor_from_numpy(np_x)
+
+        @nb.vmap(spmd_axis_name="dp")
+        def f(row):
+            row_sharded = shard_on_axis(row, mesh, axis=0, mesh_axis=1)
+            return nb.split(row_sharded, num_splits=2, axis=0)
+
+        results = f(x)
+
+        assert len(results) == 2
+        for r in results:
+            assert_shape(r, (batch, 8))
+
+
+class TestMultiOutputEdgeCases:
+    """Test edge cases for multi-output ops."""
+
+    def test_split_single_part(self):
+        """Split into single part (essentially a no-op)."""
+        np_x = make_array(8, 4, seed=42)
+        x = tensor_from_numpy(np_x)
+
+        results = nb.split(x, num_splits=1, axis=0)
+
+        assert len(results) == 1
+        assert_allclose(results[0], np_x)
+
+    def test_chunk_more_chunks_than_elements(self):
+        """Chunk with more chunks than elements."""
+        np_x = make_array(2, 4, seed=42)
+        x = tensor_from_numpy(np_x)
+
+        results = nb.chunk(x, chunks=5, axis=0)
+
+        assert len(results) == 2
+        for i, r in enumerate(results):
+            assert_allclose(r, np_x[i : i + 1])
+
+    def test_unbind_single_element(self):
+        """Unbind along dimension of size 1."""
+        np_x = make_array(1, 8, seed=42)
+        x = tensor_from_numpy(np_x)
+
+        results = nb.unbind(x, axis=0)
+
+        assert len(results) == 1
+        assert_shape(results[0], (8,))
+        assert_allclose(results[0], np_x[0])
+
