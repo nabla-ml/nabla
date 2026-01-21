@@ -114,9 +114,20 @@ class DeviceMesh:
             )
 
         if device_refs is None:
+            from max.driver import accelerator_count, Accelerator
             from max.graph import DeviceRef
-
-            device_refs = [DeviceRef.CPU() for _ in range(total_devices)]
+            
+            # Try to use actual GPUs if available, otherwise simulate on CPU
+            gpu_count = accelerator_count()
+            if gpu_count >= total_devices:
+                # Use real GPUs - create DeviceRefs for actual GPU devices
+                device_refs = [
+                    DeviceRef.from_device(Accelerator(i)) 
+                    for i in range(total_devices)
+                ]
+            else:
+                # Simulation mode - all on CPU
+                device_refs = [DeviceRef.CPU() for _ in range(total_devices)]
         self.device_refs = device_refs
 
         self.axis_lookup = {name: i for i, name in enumerate(axis_names)}

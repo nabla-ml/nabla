@@ -63,8 +63,10 @@ class AllGatherOp(CollectiveOperation):
             from max.graph.ops.allgather import allgather as max_allgather
             from max.graph.type import BufferType
 
+            # Signal buffer must be uint8 and large enough (>49KB) to avoid errors
+            BUFFER_SIZE = 65536
             signal_buffers = [
-                ops.buffer_create(BufferType(DType.int64, (1,), dev))
+                ops.buffer_create(BufferType(DType.uint8, (BUFFER_SIZE,), dev))
                 for dev in mesh.device_refs
             ]
             return max_allgather(shard_values, signal_buffers, axis=axis)
@@ -245,6 +247,7 @@ class GatherAllAxesOp(Operation):
         self,
         shard_values: list[TensorValue],
         source_spec: ShardingSpec,
+        mesh: DeviceMesh = None,
     ) -> TensorValue:
         """Reconstruct the global tensor from potentially multi-dimensional shards.
 
@@ -311,6 +314,14 @@ class GatherAllAxesOp(Operation):
                             unique_chunks.append(m[1])
                             seen_coords.add(coord)
 
+                    # Transfer all chunks to the first chunk's device before concatenating
+                    if mesh and mesh.is_distributed and len(unique_chunks) > 1:
+                        target_device = unique_chunks[0].device
+                        unique_chunks = [
+                            ops.transfer_to(chunk, target_device) 
+                            for chunk in unique_chunks
+                        ]
+                    
                     merged = ops.concat(unique_chunks, axis=d)
 
                     new_shard_descs.append((merged, members[0][2]))
@@ -342,7 +353,7 @@ class GatherAllAxesOp(Operation):
             return sharded_tensor
 
         with GRAPH.graph:
-            global_tensor = self.maxpr(shard_values, spec)
+            global_tensor = self.maxpr(shard_values, spec, mesh)
 
         rank = len(global_tensor.type.shape)
         replicated_spec = ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)])

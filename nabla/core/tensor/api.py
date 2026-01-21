@@ -512,6 +512,32 @@ class Tensor(DLPackArray, HasTensorValue):
 
         return self
 
+    def cpu(self) -> Tensor:
+        """Move tensor to CPU, gathering shards if needed.
+        
+        For sharded tensors, this first gathers all shards to a single device,
+        then transfers to CPU. For unsharded tensors, it returns self if already
+        on CPU, otherwise creates a new tensor on CPU.
+        
+        Returns:
+            Tensor on CPU with all data gathered.
+        """
+        from max.driver import CPU as CPUDevice
+        
+        # If already on CPU and not sharded, return as-is
+        if not self.is_sharded and str(self.device).startswith("Device(type=cpu"):
+            return self
+        
+        # If sharded, gather first
+        t = self.gather() if self.is_sharded else self
+        
+        # Realize to ensure we have storage
+        t.realize()
+        
+        # Create new tensor on CPU using numpy as intermediate
+        data = t.to_numpy()  # This already moves to CPU
+        return Tensor.from_dlpack(data)
+
     def sum(self, axis: int = 0, keepdims: bool = False) -> Tensor:
         from ...ops import reduction
 
