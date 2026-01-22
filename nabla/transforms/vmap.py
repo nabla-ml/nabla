@@ -9,7 +9,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, TypeVar, Union
 
 if TYPE_CHECKING:
-    from ..core.sharding.mesh import DeviceMesh
+    from ..core.sharding import DeviceMesh
     from ..core.tensor import Tensor
 
 

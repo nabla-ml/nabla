@@ -10,11 +10,11 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from ..core import Trace, pytree, trace
-from ..core.tensor import Tensor
+from ..core.tensor import Tensor, TensorImpl
 from ..ops.base import Operation
 
 if TYPE_CHECKING:
-    from ..core.sharding.mesh import DeviceMesh
+    from ..core.sharding import DeviceMesh
     from ..core.sharding.spec import ShardingSpec
 
 
