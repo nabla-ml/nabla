@@ -99,6 +99,43 @@ class BroadcastToOp(LogicalShapeOperation):
         )
         return {**kwargs, "shape": local_shape}
 
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for broadcast_to: sum over broadcasted dimensions."""
+        if isinstance(primals, tuple):
+            x = primals[0]
+        else:
+            x = primals
+        from ...ops.reduction import reduce_sum
+        
+        input_shape = tuple(x.shape)
+        output_shape = tuple(cotangent.shape)
+        
+        # Sum over new/broadcasted dimensions
+        result = cotangent
+        input_rank = len(input_shape)
+        output_rank = len(output_shape)
+        
+        # Sum over leading new dimensions
+        for _ in range(output_rank - input_rank):
+            result = reduce_sum(result, axis=0, keepdims=False)
+        
+        # Sum over dimensions that were size 1 and got broadcast
+        for i, (in_dim, out_dim) in enumerate(zip(input_shape, result.shape)):
+            if in_dim == 1 and out_dim > 1:
+                result = reduce_sum(result, axis=i, keepdims=True)
+        
+        return result
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP for broadcast_to: broadcast the tangent."""
+        if isinstance(tangents, tuple):
+            t = tangents[0]
+        else:
+            t = tangents
+        # Get target shape from output
+        target_shape = tuple(output.shape)
+        return broadcast_to(t, target_shape)
+
 
 class ReshapeOp(LogicalShapeOperation):
     @property
@@ -230,6 +267,23 @@ class ReshapeOp(LogicalShapeOperation):
             global_shape, output_sharding, device_id=shard_idx
         )
         return {**kwargs, "shape": local_shape}
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for reshape: reshape cotangent back to input shape."""
+        if isinstance(primals, tuple):
+            x = primals[0]
+        else:
+            x = primals
+        return reshape(cotangent, tuple(x.shape))
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP for reshape: reshape tangent to output shape."""
+        if isinstance(tangents, tuple):
+            t = tangents[0]
+        else:
+            t = tangents
+        target_shape = tuple(output.shape)
+        return reshape(t, target_shape)
 
 
 class SliceTensorOp(Operation):

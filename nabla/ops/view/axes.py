@@ -48,6 +48,23 @@ class UnsqueezeOp(LogicalAxisOperation):
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
         return len(input_shapes[0]) + 1
 
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for unsqueeze: squeeze the cotangent."""
+        # Need to determine which axis was unsqueezed
+        # For now, we can squeeze at axis 0 as default
+        from . import squeeze
+        # In practice, we'd need to know the axis from context
+        return squeeze(cotangent, axis=0)
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP for unsqueeze: unsqueeze the tangent."""
+        if isinstance(tangents, tuple):
+            t = tangents[0]
+        else:
+            t = tangents
+        from . import unsqueeze
+        return unsqueeze(t, axis=0)
+
 
 class SqueezeOp(LogicalAxisOperation):
     axis_offset_for_insert = False
@@ -81,6 +98,20 @@ class SqueezeOp(LogicalAxisOperation):
 
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
         return len(input_shapes[0]) - 1
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for squeeze: unsqueeze the cotangent."""
+        from . import unsqueeze
+        return unsqueeze(cotangent, axis=0)
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP for squeeze: squeeze the tangent."""
+        if isinstance(tangents, tuple):
+            t = tangents[0]
+        else:
+            t = tangents
+        from . import squeeze
+        return squeeze(t, axis=0)
 
 
 class SwapAxesOp(LogicalAxisOperation):

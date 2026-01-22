@@ -23,6 +23,21 @@ class AddOp(BinaryOperation):
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.add(args[0], args[1])
 
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for addition: ∂(x+y)/∂x = 1, ∂(x+y)/∂y = 1."""
+        from ..core import Tensor
+        if isinstance(primals, tuple):
+            # Return (cotangent, cotangent) for both inputs
+            return (cotangent, cotangent)
+        return cotangent
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP for addition: tangent_x + tangent_y."""
+        if isinstance(tangents, tuple) and len(tangents) == 2:
+            from . import add
+            return add(tangents[0], tangents[1])
+        return tangents
+
 
 class MulOp(BinaryOperation):
     @property
@@ -31,6 +46,24 @@ class MulOp(BinaryOperation):
 
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.mul(args[0], args[1])
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for multiplication: ∂(x*y)/∂x = y, ∂(x*y)/∂y = x."""
+        if isinstance(primals, tuple) and len(primals) == 2:
+            x, y = primals
+            from . import mul
+            # ∂L/∂x = ∂L/∂out * y, ∂L/∂y = ∂L/∂out * x
+            return (mul(cotangent, y), mul(cotangent, x))
+        return cotangent
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP for multiplication: x * tangent_y + y * tangent_x."""
+        if isinstance(primals, tuple) and len(primals) == 2 and isinstance(tangents, tuple) and len(tangents) == 2:
+            x, y = primals
+            tx, ty = tangents
+            from . import mul, add
+            return add(mul(x, ty), mul(y, tx))
+        return tangents
 
 
 class SubOp(BinaryOperation):
@@ -41,6 +74,21 @@ class SubOp(BinaryOperation):
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.sub(args[0], args[1])
 
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for subtraction: ∂(x-y)/∂x = 1, ∂(x-y)/∂y = -1."""
+        if isinstance(primals, tuple) and len(primals) == 2:
+            from ..ops.unary import neg
+            # ∂L/∂x = ∂L/∂out, ∂L/∂y = -∂L/∂out
+            return (cotangent, neg(cotangent))
+        return cotangent
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP for subtraction: tangent_x - tangent_y."""
+        if isinstance(tangents, tuple) and len(tangents) == 2:
+            from . import sub
+            return sub(tangents[0], tangents[1])
+        return tangents
+
 
 class DivOp(BinaryOperation):
     @property
@@ -49,6 +97,31 @@ class DivOp(BinaryOperation):
 
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.div(args[0], args[1])
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for division: ∂(x/y)/∂x = 1/y, ∂(x/y)/∂y = -x/y²."""
+        if isinstance(primals, tuple) and len(primals) == 2:
+            x, y = primals
+            from . import div, mul
+            from ..ops.unary import neg
+            # ∂L/∂x = ∂L/∂out / y
+            grad_x = div(cotangent, y)
+            # ∂L/∂y = -∂L/∂out * x / y²
+            grad_y = neg(mul(cotangent, div(x, mul(y, y))))
+            return (grad_x, grad_y)
+        return cotangent
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP for division: (y*tangent_x - x*tangent_y) / y²."""
+        if isinstance(primals, tuple) and len(primals) == 2 and isinstance(tangents, tuple) and len(tangents) == 2:
+            x, y = primals
+            tx, ty = tangents
+            from . import div, mul, sub
+            # (y*tx - x*ty) / y²
+            numerator = sub(mul(y, tx), mul(x, ty))
+            denominator = mul(y, y)
+            return div(numerator, denominator)
+        return tangents
 
 
 class MatmulOp(Operation):
@@ -123,6 +196,28 @@ class MatmulOp(Operation):
         return OpShardingRuleTemplate.parse(
             "... m k, ... k n -> ... m n", input_shapes
         ).instantiate(input_shapes, output_shapes)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for matmul: ∂(X@W)/∂X = cot@W.T, ∂(X@W)/∂W = X.T@cot."""
+        if isinstance(primals, tuple) and len(primals) == 2:
+            x, y = primals
+            from ..ops.view.axes import swap_axes
+            # ∂L/∂X = ∂L/∂out @ W.T
+            grad_x = matmul(cotangent, swap_axes(y, axis1=-2, axis2=-1))
+            # ∂L/∂W = X.T @ ∂L/∂out
+            grad_y = matmul(swap_axes(x, axis1=-2, axis2=-1), cotangent)
+            return (grad_x, grad_y)
+        return cotangent
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP for matmul: X @ tangent_W + tangent_X @ W."""
+        if isinstance(primals, tuple) and len(primals) == 2 and isinstance(tangents, tuple) and len(tangents) == 2:
+            x, y = primals
+            tx, ty = tangents
+            from . import add
+            # X @ ty + tx @ W
+            return add(matmul(x, ty), matmul(tx, y))
+        return tangents
 
 
 add = AddOp()

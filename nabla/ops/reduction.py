@@ -40,6 +40,36 @@ class ReduceSumOp(ReduceOperation):
             axis = len(in_shape) + axis
         if keepdims:
             return tuple(1 if i == axis else d for i, d in enumerate(in_shape))
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for reduce_sum: broadcast cotangent back to input shape."""
+        if isinstance(primals, tuple):
+            x = primals[0]
+        else:
+            x = primals
+        from ..ops.view.shape import broadcast_to
+        return broadcast_to(cotangent, tuple(x.shape))
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP for reduce_sum: sum the tangents along the same axis."""
+        if isinstance(tangents, tuple):
+            t = tangents[0]
+        else:
+            t = tangents
+        # Sum of tangents is the JVP
+        return reduce_sum(t, axis=0, keepdims=True)
+
+    def infer_output_shape(
+        self, input_shapes: list[tuple[int, ...]], **kwargs: Any
+    ) -> tuple[int, ...]:
+        """Compute output shape for reduction."""
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+        in_shape = input_shapes[0]
+        if axis < 0:
+            axis = len(in_shape) + axis
+        if keepdims:
+            return tuple(1 if i == axis else d for i, d in enumerate(in_shape))
         else:
             return tuple(d for i, d in enumerate(in_shape) if i != axis)
 

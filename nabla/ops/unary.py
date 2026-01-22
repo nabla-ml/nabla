@@ -26,6 +26,33 @@ class ReluOp(UnaryOperation):
         """Apply ReLU element-wise."""
         return ops.relu(x)
 
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for ReLU: ∂relu(x)/∂x = (x > 0)."""
+        if isinstance(primals, tuple):
+            x = primals[0]
+        else:
+            x = primals
+        from ..ops.comparison import greater
+        from ..ops.binary import mul
+        # Derivative is 1 where x > 0, else 0
+        mask = greater(x, 0.0)
+        return mul(cotangent, mask)
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP for ReLU: tangent where x > 0, else 0."""
+        if isinstance(primals, tuple):
+            x = primals[0]
+        else:
+            x = primals
+        if isinstance(tangents, tuple):
+            t = tangents[0]
+        else:
+            t = tangents
+        from ..ops.comparison import greater
+        from ..ops.binary import mul
+        mask = greater(x, 0.0)
+        return mul(t, mask)
+
 
 class SigmoidOp(UnaryOperation):
     """Sigmoid activation function: 1 / (1 + exp(-x))."""
@@ -84,6 +111,20 @@ class ExpOp(UnaryOperation):
         """Apply exp element-wise."""
         return ops.exp(x)
 
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for exp: ∂exp(x)/∂x = exp(x) = output."""
+        from ..ops.binary import mul
+        return mul(cotangent, output)
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP for exp: tangent * exp(x) = tangent * output."""
+        if isinstance(tangents, tuple):
+            t = tangents[0]
+        else:
+            t = tangents
+        from ..ops.binary import mul
+        return mul(output, t)
+
 
 class NegOp(UnaryOperation):
     """Negation: -x."""
@@ -96,6 +137,18 @@ class NegOp(UnaryOperation):
         """Apply negation element-wise."""
         return ops.negate(x)
 
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for neg: ∂(-x)/∂x = -1."""
+        return neg(cotangent)
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP for neg: -tangent."""
+        if isinstance(tangents, tuple):
+            t = tangents[0]
+        else:
+            t = tangents
+        return neg(t)
+
 
 class AbsOp(UnaryOperation):
     """Absolute value: |x|."""
@@ -107,6 +160,37 @@ class AbsOp(UnaryOperation):
     def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
         """Apply abs element-wise."""
         return ops.abs(x)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for abs: ∂|x|/∂x = sign(x)."""
+        if isinstance(primals, tuple):
+            x = primals[0]
+        else:
+            x = primals
+        from ..ops.comparison import greater, less
+        from ..ops.binary import mul, sub
+        # sign(x) = 1 if x > 0, -1 if x < 0, 0 if x == 0
+        pos_mask = greater(x, 0.0)
+        neg_mask = less(x, 0.0)
+        sign = sub(pos_mask, neg_mask)  # 1 - 0 = 1 for pos, 0 - 1 = -1 for neg
+        return mul(cotangent, sign)
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP for abs: tangent * sign(x)."""
+        if isinstance(primals, tuple):
+            x = primals[0]
+        else:
+            x = primals
+        if isinstance(tangents, tuple):
+            t = tangents[0]
+        else:
+            t = tangents
+        from ..ops.comparison import greater, less
+        from ..ops.binary import mul, sub
+        pos_mask = greater(x, 0.0)
+        neg_mask = less(x, 0.0)
+        sign = sub(pos_mask, neg_mask)
+        return mul(t, sign)
 
 
 class _SoftmaxNativeOp(LogicalAxisOperation, UnaryOperation):
