@@ -151,6 +151,97 @@ class Trace:
         self.nodes = nodes
         self._computed = True
 
+    def rehydrate(self) -> None:
+        """Rehydrate all TensorImpl._values by replaying operations.
+        
+        Input tensors must already be realized (_storages populated).
+        """
+        if not self._computed:
+            self.compute()
+        
+        from ..tensor.api import Tensor
+        from .engine import GRAPH
+        
+        # Ensure all inputs are realized
+        input_tensors = [t for t in tree_leaves(self.inputs) if isinstance(t, Tensor)]
+        
+        for inp in input_tensors:
+            if not inp._impl.is_realized:
+                raise RuntimeError("Rehydrate requires realized inputs.")
+            # Add to graph (this handles adding as graph arguments)
+            GRAPH.add_input(inp)
+            
+            # For single-storage tensors, add_input sets tensor._value (BufferValue)
+            # We need to extract the TensorValue and store in _impl._values
+            if hasattr(inp, '_value') and len(inp._impl._storages) == 1:
+                with GRAPH.graph:
+                    inp._impl._values = [inp._value[...]]
+                    inp._impl.values_epoch = GRAPH.epoch
+
+        
+        # Iterate through nodes and call maxpr_all
+        for output_refs in self.nodes:
+            alive_outputs = output_refs.get_alive_outputs()
+            if not any(out is not None for out in alive_outputs):
+                continue
+
+            op = output_refs.op
+            
+            # 1. Wrap args in Tensor
+            def to_tensor(x):
+                if isinstance(x, TensorImpl):
+                    return Tensor(impl=x)
+                return x
+
+            op_args = pytree.tree_map(to_tensor, output_refs.op_args)
+            op_kwargs = output_refs.op_kwargs or {}
+
+            # 2. Collect metadata
+            max_batch_dims = 0
+            for arg in tree_leaves(op_args):
+                if isinstance(arg, Tensor):
+                    if arg.batch_dims > max_batch_dims:
+                        max_batch_dims = arg.batch_dims
+            
+            # 3. Adapt kwargs
+            if hasattr(op, "adapt_kwargs"):
+                 op_kwargs = op.adapt_kwargs(op_args, op_kwargs, max_batch_dims)
+
+            # 4. Get mesh/spec from outputs
+            mesh = None
+            output_sharding = None
+            
+            first_out = next((o for o in alive_outputs if o is not None), None)
+            if first_out and first_out.sharding:
+                output_sharding = first_out.sharding
+                mesh = first_out.sharding.mesh
+
+            # 5. Call maxpr_all
+            output_tensor_struct = op.maxpr_all(
+                op_args, 
+                op_kwargs, 
+                output_sharding, 
+                mesh, 
+                any_traced=False, 
+                max_batch_dims=max_batch_dims
+            )
+            
+            # 6. Assign values back to existing TensorImpls
+            if output_tensor_struct is None:
+                continue
+
+            # Extract produced TensorImpls in the same order as captured in OutputRefs
+            produced_impls = [
+                x._impl for x in pytree.tree_leaves(output_tensor_struct, is_leaf=pytree.is_tensor) 
+                if isinstance(x, Tensor)
+            ]
+            
+            # Map back to the original objects stored in the trace
+            for out_impl, produced_impl in zip(alive_outputs, produced_impls, strict=False):
+                if out_impl is not None and produced_impl is not None:
+                     out_impl._values = produced_impl._values
+                     out_impl.values_epoch = GRAPH.epoch
+
     def __str__(self) -> str:
         """Pretty-print the trace."""
         if not self._computed:

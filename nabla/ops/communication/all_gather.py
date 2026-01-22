@@ -125,7 +125,7 @@ class AllGatherOp(CollectiveOperation):
             results.append(gathered_per_group[other_coords])
         return results
 
-    def __call__(self, sharded_tensor, axis: int, **kwargs):
+    def execute(self, sharded_tensor, axis: int, **kwargs):
         """Gather all shards to produce a replicated tensor."""
         from ...core import GRAPH, Tensor
         from ...core.sharding.spec import DimSpec, ShardingSpec
@@ -331,7 +331,7 @@ class GatherAllAxesOp(Operation):
 
         return current_shard_descs[0][0]
 
-    def __call__(self, sharded_tensor):
+    def execute(self, sharded_tensor):
         """Gather all sharded axes to produce a replicated tensor."""
 
         from ...core import GRAPH, Tensor

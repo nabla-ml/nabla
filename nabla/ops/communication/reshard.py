@@ -98,7 +98,7 @@ class ReshardOp(Operation):
             "Use __call__ which orchestrates all_gather + shard_op."
         )
 
-    def __call__(
+    def execute(
         self,
         tensor: Tensor,
         mesh: DeviceMesh,

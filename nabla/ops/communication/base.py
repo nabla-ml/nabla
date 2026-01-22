@@ -19,7 +19,7 @@ class CollectiveOperation(Operation):
     Handles value hydration, graph execution (maxpr), and output wrapping/sharding update.
     """
 
-    def __call__(self, sharded_tensor, **kwargs):
+    def execute(self, sharded_tensor, **kwargs):
         from ...core import GRAPH, Tensor
 
         if not self._should_proceed(sharded_tensor):

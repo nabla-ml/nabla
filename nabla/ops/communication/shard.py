@@ -132,7 +132,7 @@ class ShardOp(Operation):
 
         return effective_x[tuple(slices)]
 
-    def __call__(
+    def execute(
         self,
         x,
         mesh: DeviceMesh,
