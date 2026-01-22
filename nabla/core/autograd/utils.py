@@ -103,11 +103,19 @@ def backward_on_trace(
             continue
         
         # Reconstruct primals (inputs) as Tensors
+        # Temporarily disable tracing on all tensor arguments during VJP computation
         primals_as_tensors = []
+        saved_traced_states = []
+        
         for arg in pytree.tree_leaves(output_refs.op_args):
             if isinstance(arg, TensorImpl):
-                primals_as_tensors.append(Tensor(impl=arg))
+                t = Tensor(impl=arg)
+                saved_traced_states.append((t, t.traced))
+                t.traced = False
+                primals_as_tensors.append(t)
             elif isinstance(arg, Tensor):
+                saved_traced_states.append((arg, arg.traced))
+                arg.traced = False
                 primals_as_tensors.append(arg)
             else:
                 # Non-tensor argument (scalar, etc.)
@@ -191,17 +199,16 @@ def backward_on_trace(
                 # First cotangent for this input
                 cotangent_map[arg_id] = cotangent_impl if isinstance(cotangent_impl, TensorImpl) else cotangent_impl._impl
     
-    # Step 5: Collect gradients for trace inputs
+    # Step 5: Collect gradients for trace inputs and wrap as Tensors
     gradients = {}
     for inp in input_leaves:
         inp_id = id(inp._impl)
         if inp_id in cotangent_map:
-            gradients[inp_id] = cotangent_map[inp_id]
+            grad_tensor = Tensor(impl=cotangent_map[inp_id])
+            gradients[inp_id] = grad_tensor
         else:
-            # No gradient computed - return zeros
             from ...ops.creation import zeros_like
-            zero_grad = zeros_like(inp)
-            gradients[inp_id] = zero_grad._impl
+            gradients[inp_id] = zeros_like(inp)
     
     # Step 6: Cleanup - clear cotangents from all TensorImpls in the trace
     cotangent_map.clear()
