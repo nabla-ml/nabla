@@ -19,6 +19,57 @@ class CollectiveOperation(Operation):
     Handles value hydration, graph execution (maxpr), and output wrapping/sharding update.
     """
 
+    def maxpr_all(
+        self,
+        args: tuple,
+        kwargs: dict,
+        output_sharding: Any,
+        mesh: Any,
+        any_traced: bool,
+        max_batch_dims: int,
+        original_kwargs: dict | None = None,
+    ) -> Any:
+        from ...core import GRAPH, Tensor
+        from ...core.sharding import spmd
+
+        if not args:
+            return None
+
+        # Collective operations operate on the whole set of shards at once.
+        # We assume the first argument is the sharded tensor.
+        sharded_tensor = args[0]
+        if isinstance(sharded_tensor, Tensor):
+            sharded_tensor.hydrate()
+            values = sharded_tensor.values
+        else:
+            # Handle list of values if passed directly (unlikely in tracing)
+            values = sharded_tensor if isinstance(sharded_tensor, list) else [sharded_tensor]
+
+        # Filter kwargs to match what maxpr expects (consistent with execute)
+        maxpr_kwargs = {
+            k: v for k, v in kwargs.items() if k not in ("mesh", "reduce_axes")
+        }
+
+        with GRAPH.graph:
+            result_values = self.maxpr(values, mesh=mesh, **maxpr_kwargs)
+
+        # Re-infer output sharding if it was None (though rehydrate usually has it)
+        if output_sharding is None and isinstance(sharded_tensor, Tensor):
+            output_sharding = self._compute_output_spec(
+                sharded_tensor, result_values, **kwargs
+            )
+
+        output = spmd.create_sharded_output(
+            result_values,
+            output_sharding,
+            any_traced,
+            max_batch_dims,
+            mesh=mesh,
+        )
+
+        self._setup_output_refs(output, args, original_kwargs or kwargs, any_traced)
+        return output
+
     def execute(self, sharded_tensor, **kwargs):
         from ...core import GRAPH, Tensor
 

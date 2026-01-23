@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
@@ -135,6 +135,10 @@ class AllReduceOp(CollectiveOperation):
                 raise ValueError(f"Unknown reduction op: {reduce_op}")
 
         return [result] * len(shard_values)
+        
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for AllReduce (sum): identity because it's a linear sum across devices."""
+        return cotangent
 
     def _compute_output_spec(self, input_tensor, results, **kwargs):
         """Output is fully replicated."""
@@ -243,3 +247,6 @@ def pmean(sharded_tensor, axis_name: str = None):
     Equivalent to psum(x) / axis_size.
     """
     return pmean_op(sharded_tensor, axis_name=axis_name)
+
+
+__all__ = ["AllReduceOp", "all_reduce", "pmean"]
