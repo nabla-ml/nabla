@@ -23,6 +23,23 @@ class ShardOp(Operation):
     def name(self) -> str:
         return "shard"
 
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for shard: reshard back to input's sharding."""
+        x = primals[0] if isinstance(primals, (list, tuple)) else primals
+        from .reshard import reshard
+
+        if not x.sharding:
+            # If input was not sharded (replicated), we gather/replicate the cotangent
+            from .all_gather import gather_all_axes
+            return gather_all_axes(cotangent)
+
+        return reshard(
+            cotangent,
+            x.sharding.mesh,
+            x.sharding.dim_specs,
+            replicated_axes=x.sharding.replicated_axes,
+        )
+
     def infer_sharding_spec(self, args, mesh, kwargs):
         spec = kwargs["spec"]
         input_spec = args[0].sharding

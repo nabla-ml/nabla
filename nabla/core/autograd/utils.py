@@ -197,10 +197,24 @@ def backward_on_trace(
     
     # Construct final gradient mapping for trace inputs
     gradients = {}
+    from ...ops.communication import reshard
+    from ...core.sharding.spec import needs_reshard
+    
     for inp in input_leaves:
         inp_id = id(inp._impl)
         if inp_id in cotangent_map:
-            gradients[inp] = Tensor(impl=cotangent_map[inp_id])
+            grad = Tensor(impl=cotangent_map[inp_id])
+            
+            # Ensure grad has same sharding as input to be future-proof (ZeRO/Pipeline)
+            if inp.sharding and needs_reshard(grad.sharding, inp.sharding):
+                grad = reshard(
+                    grad, 
+                    inp.sharding.mesh, 
+                    inp.sharding.dim_specs, 
+                    replicated_axes=inp.sharding.replicated_axes
+                )
+            
+            gradients[inp] = grad
         else:
             from ...ops.creation import zeros_like
             gradients[inp] = zeros_like(inp)

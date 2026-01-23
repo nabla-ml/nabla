@@ -299,4 +299,5 @@ __all__ = [
     "normal",
     "zeros_like",
     "ones_like",
+    "full_like",
 ]

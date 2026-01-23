@@ -28,6 +28,21 @@ class ReshardOp(Operation):
     def name(self) -> str:
         return "reshard"
 
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for reshard: reshard back to input's sharding."""
+        x = primals[0] if isinstance(primals, (list, tuple)) else primals
+
+        if not x.sharding:
+            from .all_gather import gather_all_axes
+            return gather_all_axes(cotangent)
+
+        return reshard(
+            cotangent,
+            x.sharding.mesh,
+            x.sharding.dim_specs,
+            replicated_axes=x.sharding.replicated_axes,
+        )
+
     def communication_cost(
         self,
         input_specs: list[ShardingSpec],

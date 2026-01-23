@@ -23,6 +23,21 @@ class AllGatherOp(CollectiveOperation):
     def name(self) -> str:
         return "all_gather"
 
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for all_gather: reshard back to input's sharding."""
+        x = primals[0] if isinstance(primals, (list, tuple)) else primals
+        from .reshard import reshard
+
+        if not x.sharding:
+            return cotangent
+
+        return reshard(
+            cotangent,
+            x.sharding.mesh,
+            x.sharding.dim_specs,
+            replicated_axes=x.sharding.replicated_axes,
+        )
+
     @classmethod
     def estimate_cost(
         cls,
@@ -242,6 +257,21 @@ class GatherAllAxesOp(Operation):
     @property
     def name(self) -> str:
         return "gather_all_axes"
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for gather_all_axes: reshard back to input's sharding."""
+        x = primals[0] if isinstance(primals, (list, tuple)) else primals
+        from .reshard import reshard
+
+        if not x.sharding:
+            return cotangent
+
+        return reshard(
+            cotangent,
+            x.sharding.mesh,
+            x.sharding.dim_specs,
+            replicated_axes=x.sharding.replicated_axes,
+        )
 
     def maxpr(
         self,

@@ -16,10 +16,17 @@ from .binary import AddOp, DivOp, MatmulOp, MulOp, SubOp, add, div, matmul, mul,
 from .communication import (
     AllGatherOp,
     AllReduceOp,
+    AllToAllOp,
+    PPermuteOp,
     ReduceScatterOp,
+    ReshardOp,
     ShardOp,
     all_gather,
     all_reduce,
+    all_to_all,
+    ppermute,
+    reduce_scatter,
+    reshard,
     shard,
 )
 from .comparison import (
@@ -55,6 +62,7 @@ from .creation import (
     zeros,
     zeros_like,
     ones_like,
+    full_like,
 )
 from .custom_op import call_custom_kernel
 from .multi_output import (
@@ -147,6 +155,7 @@ __all__ = [
     "ones",
     "zeros_like",
     "ones_like",
+    "full_like",
     "arange",
     "uniform",
     "gaussian",
@@ -211,9 +220,16 @@ __all__ = [
     "shard",
     "all_gather",
     "all_reduce",
+    "all_to_all",
+    "ppermute",
+    "reduce_scatter",
+    "reshard",
     "ShardOp",
     "AllGatherOp",
     "AllReduceOp",
+    "AllToAllOp",
+    "PPermuteOp",
     "ReduceScatterOp",
+    "ReshardOp",
     "call_custom_kernel",
 ]
