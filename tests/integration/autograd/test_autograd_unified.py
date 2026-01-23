@@ -33,8 +33,8 @@ def nabla_vjp(fn, *args, cotangents=None):
         from nabla.core.common import pytree
         def make_ones(t):
             if isinstance(t, nb.Tensor):
-                from nabla.ops.creation import zeros_like
-                return zeros_like(t) + 1.0
+                from nabla.ops.creation import full_like
+                return full_like(t, 1.0)
             return None
         cotangents = pytree.tree_map(make_ones, outputs)
         
