@@ -205,7 +205,9 @@ class Trace:
             
             # 3. Adapt kwargs
             if hasattr(op, "adapt_kwargs"):
-                 op_kwargs = op.adapt_kwargs(op_args, op_kwargs, max_batch_dims)
+                 adapted_kwargs = op.adapt_kwargs(op_args, op_kwargs, max_batch_dims)
+            else:
+                 adapted_kwargs = op_kwargs
 
             # 4. Get mesh/spec from outputs
             mesh = None
@@ -219,11 +221,12 @@ class Trace:
             # 5. Call maxpr_all
             output_tensor_struct = op.maxpr_all(
                 op_args, 
-                op_kwargs, 
+                adapted_kwargs, 
                 output_sharding, 
                 mesh, 
                 any_traced=False, 
-                max_batch_dims=max_batch_dims
+                max_batch_dims=max_batch_dims,
+                original_kwargs=op_kwargs
             )
             
             # 6. Assign values back to existing TensorImpls

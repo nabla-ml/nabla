@@ -61,24 +61,22 @@ def test_sharded_rehydration():
     has_values = bool(out_impl._get_valid_values())
     print(f"Output has_values: {has_values}")
     
-    if not has_values:
-        print("✗ FAILURE: Output not hydrated")
-        return False
+    assert has_values, "Output not hydrated"
         
     print(f"Output sharding: {out_impl.sharding}")
     
     # Verify values by comparing with eager execution
     # (Since we rehydrated, the _values should match what we'd get from evaluate)
-    eager_res = nb.ops.matmul(x1, x2)
-    GRAPH.evaluate(eager_res)
     
     # We can't directly compare TensorValues easily, but we can check if they exist and have correct shape
     val = out_impl._values[0]
     print(f"Rehydrated value type: {type(val)}")
     print(f"Rehydrated value shape: {val.type.shape}")
+
+    eager_res = nb.ops.matmul(x1, x2)
+    GRAPH.evaluate(eager_res)
     
     print(f"\n✓ SUCCESS: Sharded rehydration works!")
-    return True
 
 if __name__ == "__main__":
     success = test_sharded_rehydration()

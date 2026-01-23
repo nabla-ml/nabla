@@ -53,6 +53,8 @@ from .creation import (
     ones,
     uniform,
     zeros,
+    zeros_like,
+    ones_like,
 )
 from .custom_op import call_custom_kernel
 from .multi_output import (
@@ -143,6 +145,8 @@ __all__ = [
     "full",
     "zeros",
     "ones",
+    "zeros_like",
+    "ones_like",
     "arange",
     "uniform",
     "gaussian",

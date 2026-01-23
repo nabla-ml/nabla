@@ -56,7 +56,7 @@ def test_multi_output_rehydration():
     else:
         print(f"\n✗ FAILURE: Some outputs were not hydrated")
         
-    return all_ok
+    assert all_ok, "Some outputs were not hydrated"
 
 if __name__ == "__main__":
     success = test_multi_output_rehydration()

@@ -54,7 +54,6 @@ def test_binary_ops_vjp():
     print(f"✓ Div VJP: {len(grads)} gradients computed")
     
     print("\n✓ All binary operations support VJP!")
-    return True
 
 
 def test_unary_ops_vjp():
@@ -94,7 +93,6 @@ def test_unary_ops_vjp():
     print(f"✓ Neg VJP: {len(grads)} gradients computed")
     
     print("\n✓ All unary operations support VJP!")
-    return True
 
 
 def test_composed_operations():
@@ -129,7 +127,6 @@ def test_composed_operations():
     print(f"✓ Composed relu(x)*2 VJP: {len(grads)} gradients computed")
     
     print("\n✓ Composed operations support VJP!")
-    return True
 
 
 def test_chain_rule():
@@ -157,8 +154,6 @@ def test_chain_rule():
         if inp in grads:
             grad = grads[inp]
             print(f"  Gradient shape: {grad.shape}")
-    
-    return True
 
 
 def test_matmul_chain():
@@ -181,7 +176,6 @@ def test_matmul_chain():
     grads = backward_on_trace(traced, cotangent)
     
     print(f"\n✓ Matmul chain: Computed {len(grads)} gradients")
-    return True
 
 
 if __name__ == "__main__":

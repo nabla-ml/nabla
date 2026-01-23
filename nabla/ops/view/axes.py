@@ -214,6 +214,15 @@ class MoveAxisOp(Operation):
         order.insert(destination, source)
         return ops.permute(x, tuple(order))
 
+    def __call__(self, x: Tensor, *, source: int, destination: int) -> Tensor:
+        return super().__call__(x, source=source, destination=destination)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        source = output.op_kwargs.get("source")
+        destination = output.op_kwargs.get("destination")
+        # Inverse: move from destination back to source
+        return moveaxis(cotangent, source=destination, destination=source)
+
     def sharding_rule(
         self,
         input_shapes: list[tuple[int, ...]],
@@ -252,6 +261,13 @@ class UnsqueezePhysicalOp(Operation):
     def maxpr(self, x: TensorValue, *, axis: int = 0) -> TensorValue:
         return ops.unsqueeze(x, axis)
 
+    def __call__(self, x: Tensor, *, axis: int = 0) -> Tensor:
+        return super().__call__(x, axis=axis)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        axis = output.op_kwargs.get("axis", 0)
+        return squeeze_physical(cotangent, axis=axis)
+
     def sharding_rule(
         self,
         input_shapes: list[tuple[int, ...]],
@@ -287,6 +303,13 @@ class SqueezePhysicalOp(Operation):
 
     def maxpr(self, x: TensorValue, *, axis: int = 0) -> TensorValue:
         return ops.squeeze(x, axis)
+
+    def __call__(self, x: Tensor, *, axis: int = 0) -> Tensor:
+        return super().__call__(x, axis=axis)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        axis = output.op_kwargs.get("axis", 0)
+        return unsqueeze_physical(cotangent, axis=axis)
 
     def sharding_rule(
         self,

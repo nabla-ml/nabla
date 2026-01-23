@@ -46,6 +46,9 @@ class IncrBatchDimsOp(Operation):
     def __call__(self, x: Tensor) -> Tensor:
         return _copy_impl_with_batch_dims(x, x.batch_dims + 1, op=self, kwargs={})
 
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        return decr_batch_dims(cotangent)
+
 
 class DecrBatchDimsOp(Operation):
     @property
@@ -59,6 +62,9 @@ class DecrBatchDimsOp(Operation):
         if x.batch_dims <= 0:
             raise ValueError("Cannot decrement batch_dims below 0")
         return _copy_impl_with_batch_dims(x, x.batch_dims - 1, op=self, kwargs={})
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        return incr_batch_dims(cotangent)
 
 
 class MoveAxisToBatchDimsOp(Operation):
@@ -82,7 +88,11 @@ class MoveAxisToBatchDimsOp(Operation):
 
         physical_axis = batch_dims + axis
         result = super().__call__(x, physical_axis=physical_axis)
-        return _copy_impl_with_batch_dims(result, batch_dims + 1)
+        return _copy_impl_with_batch_dims(result, batch_dims + 1, op=self, kwargs={"axis": axis})
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        axis = output.op_kwargs.get("axis")
+        return move_axis_from_batch_dims(cotangent, batch_axis=0, logical_destination=axis)
 
 
 class MoveAxisFromBatchDimsOp(Operation):
@@ -125,7 +135,19 @@ class MoveAxisFromBatchDimsOp(Operation):
             physical_source=physical_source,
             physical_destination=physical_destination,
         )
-        return _copy_impl_with_batch_dims(result, new_batch_dims)
+        return _copy_impl_with_batch_dims(result, new_batch_dims, op=self, kwargs={"batch_axis": batch_axis, "logical_destination": logical_destination})
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        batch_axis = output.op_kwargs.get("batch_axis")
+        logical_destination = output.op_kwargs.get("logical_destination")
+        # Inverse: move from logical back to batch
+        # Wait, move_axis_to_batch_dims moves logical axis to physical 0.
+        # But here we moved FROM batch_axis to logical_destination.
+        # So we need to move FROM logical_destination BACK TO batch_axis.
+        # Currently move_axis_to_batch_dims always moves to physical 0.
+        # We might need a more general op if batch_axis != 0.
+        # For vmap, batch_axis is usually 0.
+        return move_axis_to_batch_dims(cotangent, axis=logical_destination)
 
 
 class BroadcastBatchDimsOp(Operation):

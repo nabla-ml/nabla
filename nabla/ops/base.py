@@ -78,6 +78,7 @@ class Operation(ABC):
         any_has_tangent = False
         max_batch_dims = 0
         any_sharded = False
+        original_kwargs = kwargs.copy() if kwargs else {}
 
         def collect_metadata(x: Any) -> Any:
             nonlocal any_traced, any_has_tangent, max_batch_dims, any_sharded
@@ -106,7 +107,13 @@ class Operation(ABC):
         args = spmd.reshard_inputs(args, input_shardings, mesh)
 
         output = self.maxpr_all(
-            args, kwargs, output_sharding, mesh, any_traced, max_batch_dims
+            args,
+            kwargs,
+            output_sharding,
+            mesh,
+            any_traced,
+            max_batch_dims,
+            original_kwargs=original_kwargs,
         )
 
         if reduce_axes and mesh:
@@ -125,6 +132,7 @@ class Operation(ABC):
         mesh: Any,
         any_traced: bool,
         max_batch_dims: int,
+        original_kwargs: dict | None = None,
     ) -> Any:
         from max import graph as g
 
@@ -185,7 +193,7 @@ class Operation(ABC):
                 shard_results, output_sharding, any_traced, max_batch_dims, mesh=mesh
             )
 
-        self._setup_output_refs(output, args, kwargs, any_traced)
+        self._setup_output_refs(output, args, original_kwargs or kwargs, any_traced)
         return output
 
     def apply_auto_reduction(self, output: Any, mesh: Any, reduce_axes: set[str]) -> Any:

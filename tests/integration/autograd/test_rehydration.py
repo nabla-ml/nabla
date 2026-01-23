@@ -72,9 +72,8 @@ def test_simple_rehydration():
         print(f"\n✓ SUCCESS: All intermediate tensors are rehydrated!")
     else:
         print(f"\n✗ FAILURE: Some tensors are still not rehydrated")
-        return False
-    
-    return True
+        
+    assert all_hydrated, "Some tensors are still not rehydrated"
 
 
 if __name__ == "__main__":
