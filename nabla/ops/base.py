@@ -325,7 +325,7 @@ class Operation(ABC):
         def to_impl(x: Any) -> Any:
             return x._impl if isinstance(x, Tensor) else x
 
-        stored_args = pytree.tree_map(to_impl, args) if traced else ()
+        stored_args = pytree.tree_map(to_impl, args)
 
         stored_kwargs = pytree.tree_map(to_impl, kwargs) if kwargs else None
 

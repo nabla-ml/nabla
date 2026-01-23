@@ -43,35 +43,17 @@ class ReduceSumOp(ReduceOperation):
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for reduce_sum: broadcast cotangent back to input shape."""
-        if isinstance(primals, tuple):
-            x = primals[0]
-        else:
-            x = primals
+        x = primals
         from ..ops.view.shape import broadcast_to
         return broadcast_to(cotangent, tuple(x.shape))
 
     def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
         """JVP for reduce_sum: sum the tangents along the same axis."""
-        if isinstance(tangents, tuple):
-            t = tangents[0]
-        else:
-            t = tangents
+        t = tangents
         # Sum of tangents is the JVP
-        return reduce_sum(t, axis=0, keepdims=True)
+        axis = output.op_kwargs.get("axis", 0)
+        return reduce_sum(t, axis=axis, keepdims=True)
 
-    def infer_output_shape(
-        self, input_shapes: list[tuple[int, ...]], **kwargs: Any
-    ) -> tuple[int, ...]:
-        """Compute output shape for reduction."""
-        axis = kwargs.get("axis", 0)
-        keepdims = kwargs.get("keepdims", False)
-        in_shape = input_shapes[0]
-        if axis < 0:
-            axis = len(in_shape) + axis
-        if keepdims:
-            return tuple(1 if i == axis else d for i, d in enumerate(in_shape))
-        else:
-            return tuple(d for i, d in enumerate(in_shape) if i != axis)
 
 
 class MeanOp(ReduceOperation):
@@ -84,6 +66,22 @@ class MeanOp(ReduceOperation):
     ) -> TensorValue:
         return ops.mean(x, axis)
 
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for mean: broadcast cotangent / axis_size."""
+        x = primals
+        
+        # Get axis from kwargs if available (from trace)
+        axis = output.op_kwargs.get("axis", 0)
+            
+        axis_size = x.shape[axis]
+        from ..ops.view.shape import broadcast_to
+        # Create target shape for broadcasting cotangent back to x's shape
+        target_shape = tuple(int(d) for d in x.shape)
+        return broadcast_to(cotangent, target_shape) / axis_size
+
+    def __call__(self, x, *, axis: int, keepdims: bool = False):
+        return super().__call__(x, axis=axis, keepdims=keepdims)
+
     def compute_cost(
         self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]
     ) -> float:
@@ -93,7 +91,6 @@ class MeanOp(ReduceOperation):
         num_elements = 1
         for d in input_shapes[0]:
             num_elements *= d
-
         return float(num_elements) + (
             float(num_elements) / input_shapes[0][0] if input_shapes[0] else 0
         )
@@ -126,6 +123,18 @@ class ReduceMaxOp(ReduceOperation):
         self, x: TensorValue, *, axis: int, keepdims: bool = False
     ) -> TensorValue:
         return ops._reduce_max(x, axis=axis)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for reduce_max: one-hot mask where input == max."""
+        x = primals
+        from ..ops.comparison import equal
+        from ..ops.view.shape import broadcast_to
+        from ..ops.binary import mul
+        # Broadcast output back to input shape for comparison
+        max_broadcasted = broadcast_to(output, tuple(x.shape))
+        mask = equal(x, max_broadcasted)  # 1.0 where x == max, 0.0 elsewhere
+        cotangent_broadcasted = broadcast_to(cotangent, tuple(x.shape))
+        return mul(cotangent_broadcasted, mask)
 
     def infer_output_shape(
         self, input_shapes: list[tuple[int, ...]], **kwargs: Any

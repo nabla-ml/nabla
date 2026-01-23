@@ -14,12 +14,19 @@ if TYPE_CHECKING:
     from ..tensor.impl import TensorImpl
 
 
+def _unwrap_single(tree: Any) -> Any:
+    """Unwrap a single-leaf tree if it's a list/tuple of size 1."""
+    if isinstance(tree, (list, tuple)) and len(tree) == 1:
+        return tree[0]
+    return tree
+
+
 def backward_on_trace(
     trace: Trace,
     cotangents: Any,
     *,
     checkpoint_policy: str = "none",
-) -> dict[int, TensorImpl]:
+) -> dict[Tensor, Tensor]:
     """Pure-function backpropagation on a Trace.
     
     Args:
@@ -28,42 +35,31 @@ def backward_on_trace(
         checkpoint_policy: Rematerialization strategy ("none" | "checkpoint" | "recompute_all")
     
     Returns:
-        Mapping from input TensorImpl id to gradient TensorImpl
-    
-    Algorithm:
-        1. Realize all trace inputs (populate _storages)
-        2. Rehydrate trace (repopulate all TensorImpl._values)
-        3. Initialize output cotangents
-        4. Backward traversal: compute VJPs in reverse topological order
-        5. Return gradients for trace inputs
+        Mapping from input Tensor to gradient Tensor
     """
     from ..common import pytree
     from ..tensor.api import Tensor
     from ..tensor.impl import TensorImpl
     from ..graph.engine import GRAPH
     
-    # Ensure trace is computed
     if not trace._computed:
         trace.compute()
     
-    # Step 1 & 2: Realize inputs and rehydrate the trace
+    # Ensure all inputs are realized to provide values for backprop
     input_leaves = [
         t for t in pytree.tree_leaves(trace.inputs) if isinstance(t, Tensor)
     ]
-    
-    # Realize all inputs
     for inp in input_leaves:
         if not inp._impl.is_realized:
             GRAPH.evaluate(inp)
     
-    # Rehydrate the trace (populates all TensorImpl._values)
+    # Rehydrate internal graph values
     trace.rehydrate()
     
-    # Step 3: Initialize cotangents for outputs
+    # Prepare global cotangent map
     output_leaves = [
         t._impl for t in pytree.tree_leaves(trace.outputs) if isinstance(t, Tensor)
     ]
-    
     cotangent_leaves = [
         t._impl for t in pytree.tree_leaves(cotangents) if isinstance(t, Tensor)
     ]
@@ -74,18 +70,15 @@ def backward_on_trace(
             f"number of outputs ({len(output_leaves)})"
         )
     
-    # Initialize cotangent storage - map from TensorImpl id to cotangent TensorImpl
     cotangent_map: dict[int, TensorImpl] = {}
-    
     for output_impl, cotangent_impl in zip(output_leaves, cotangent_leaves, strict=True):
         cotangent_map[id(output_impl)] = cotangent_impl
     
-    # Step 4: Backward Traversal - compute VJPs in reverse topological order
+    # Traverse captured nodes in reverse topological order
     for output_refs in reversed(trace.nodes):
-        # Get alive outputs
         alive_outputs = output_refs.get_alive_outputs()
         
-        # Check if any output has a cotangent
+        # Check if any output of this operation has a known cotangent
         has_cotangent = False
         for out_impl in alive_outputs:
             if out_impl is not None and id(out_impl) in cotangent_map:
@@ -95,43 +88,36 @@ def backward_on_trace(
         if not has_cotangent:
             continue
         
-        # Get the operation
         op = output_refs.op
-        
-        # Check if operation has VJP rule
         if not hasattr(op, 'vjp_rule'):
             continue
-        
-        # Reconstruct primals (inputs) as Tensors
-        # Temporarily disable tracing on all tensor arguments during VJP computation
-        primals_as_tensors = []
-        saved_traced_states = []
-        
+            
+        # 1. Prepare Primals (inputs to the operation)
+        primals_flat = []
         for arg in pytree.tree_leaves(output_refs.op_args):
             if isinstance(arg, TensorImpl):
                 t = Tensor(impl=arg)
-                saved_traced_states.append((t, t.traced))
                 t.traced = False
-                primals_as_tensors.append(t)
+                primals_flat.append(t)
             elif isinstance(arg, Tensor):
-                saved_traced_states.append((arg, arg.traced))
+                # Ensure the tensor wrapper is clean
                 arg.traced = False
-                primals_as_tensors.append(arg)
+                primals_flat.append(arg)
             else:
-                # Non-tensor argument (scalar, etc.)
-                primals_as_tensors.append(arg)
+                primals_flat.append(arg)
         
-        # Reconstruct with original structure
         primals_structured = pytree.tree_unflatten(
             pytree.tree_structure(output_refs.op_args),
-            primals_as_tensors
+            primals_flat
         )
         
-        # Reconstruct outputs as Tensors
+        # 2. Prepare Outputs (they carry the OutputRefs/op_kwargs)
         output_tensors = []
         for out_impl in alive_outputs:
             if out_impl is not None:
-                output_tensors.append(Tensor(impl=out_impl))
+                t = Tensor(impl=out_impl)
+                t.traced = False
+                output_tensors.append(t)
             else:
                 output_tensors.append(None)
         
@@ -139,81 +125,88 @@ def backward_on_trace(
             output_refs.tree_def, output_tensors
         )
         
-        # Get cotangents for outputs (create zeros if missing)
+        # 3. Prepare Cotangents
         output_cotangents = []
         for out_impl in alive_outputs:
-            if out_impl is not None and id(out_impl) in cotangent_map:
-                output_cotangents.append(Tensor(impl=cotangent_map[id(out_impl)]))
+            if out_impl is not None:
+                if id(out_impl) in cotangent_map:
+                    output_cotangents.append(Tensor(impl=cotangent_map[id(out_impl)]))
+                else:
+                    # If this specific output wasn't used, use zeros
+                    from ...ops.creation import zeros_like
+                    output_cotangents.append(zeros_like(Tensor(impl=out_impl)))
             else:
-                # Create zero cotangent
-                from ...ops.creation import zeros_like
-                output_cotangents.append(zeros_like(Tensor(impl=out_impl)))
+                output_cotangents.append(None)
         
         cotangents_structured = pytree.tree_unflatten(
             output_refs.tree_def, output_cotangents
         )
         
-        # Convert to scalar if single output
-        if len(output_cotangents) == 1:
-            cotangents_structured = cotangents_structured[0] if isinstance(cotangents_structured, (list, tuple)) else cotangents_structured
-            outputs_structured = outputs_structured[0] if isinstance(outputs_structured, (list, tuple)) else outputs_structured
+        # 4. Invoke VJP Rule with automatic unwrapping
+        vjp_primals = _unwrap_single(primals_structured)
+        vjp_cotangents = _unwrap_single(cotangents_structured)
+        vjp_outputs = _unwrap_single(outputs_structured)
         
-        # Call VJP rule
         try:
             input_cotangents = op.vjp_rule(
-                primals_structured,
-                cotangents_structured,
-                outputs_structured
+                vjp_primals,
+                vjp_cotangents,
+                vjp_outputs
             )
         except Exception as e:
             op_name = getattr(op, 'name', str(op))
             raise RuntimeError(
                 f"VJP rule failed for operation '{op_name}': {e}"
             ) from e
-        
-        # Accumulate cotangents for inputs
-        arg_leaves = [
-            arg._impl if isinstance(arg, Tensor) else arg 
+            
+        # 5. Accumulate Cotangents back to inputs
+        arg_impls = [
+            arg if isinstance(arg, (TensorImpl, Tensor)) else None
             for arg in pytree.tree_leaves(output_refs.op_args)
         ]
         
-        cotangent_result_leaves = [
-            ct._impl if isinstance(ct, Tensor) else ct
-            for ct in pytree.tree_leaves(input_cotangents)
-        ]
-        
-        for arg_impl, cotangent_impl in zip(arg_leaves, cotangent_result_leaves, strict=False):
-            if not isinstance(arg_impl, TensorImpl):
-                continue
+        # Wrap result in tuple if it was a single tensor for multiple args (unlikely but safe)
+        if not isinstance(input_cotangents, (list, tuple)) and len(arg_impls) == 1:
+            input_cotangents = (input_cotangents,)
             
+        cotangent_result_leaves = pytree.tree_leaves(input_cotangents)
+        
+        for arg, cot_result in zip(arg_impls, cotangent_result_leaves, strict=False):
+            if arg is None or cot_result is None:
+                continue
+                
+            arg_impl = arg._impl if isinstance(arg, Tensor) else arg
             arg_id = id(arg_impl)
             
+            # Ensure cot_result is a Tensor for accumulation
+            if isinstance(cot_result, TensorImpl):
+                cot_tensor = Tensor(impl=cot_result)
+            elif isinstance(cot_result, Tensor):
+                cot_tensor = cot_result
+            else:
+                # Should be a Tensor/TensorImpl already if VJP rule is correct
+                continue
+                
             if arg_id in cotangent_map:
-                # Accumulate: existing + new
                 from ...ops.binary import add
                 existing = Tensor(impl=cotangent_map[arg_id])
-                new = Tensor(impl=cotangent_impl) if isinstance(cotangent_impl, TensorImpl) else cotangent_impl
-                accumulated = add(existing, new)
+                accumulated = add(existing, cot_tensor)
                 cotangent_map[arg_id] = accumulated._impl
             else:
-                # First cotangent for this input
-                cotangent_map[arg_id] = cotangent_impl if isinstance(cotangent_impl, TensorImpl) else cotangent_impl._impl
+                cotangent_map[arg_id] = cot_tensor._impl
     
-    # Step 5: Collect gradients for trace inputs and wrap as Tensors
+    # Construct final gradient mapping for trace inputs
     gradients = {}
     for inp in input_leaves:
         inp_id = id(inp._impl)
         if inp_id in cotangent_map:
-            grad_tensor = Tensor(impl=cotangent_map[inp_id])
-            gradients[inp_id] = grad_tensor
+            gradients[inp] = Tensor(impl=cotangent_map[inp_id])
         else:
             from ...ops.creation import zeros_like
-            gradients[inp_id] = zeros_like(inp)
-    
-    # Step 6: Cleanup - clear cotangents from all TensorImpls in the trace
-    cotangent_map.clear()
+            gradients[inp] = zeros_like(inp)
     
     return gradients
+
 
 
 __all__ = ["backward_on_trace"]

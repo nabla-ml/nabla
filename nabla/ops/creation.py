@@ -29,6 +29,10 @@ class ConstantOp(Operation):
     ) -> TensorValue:
         return ops.constant(value, dtype, device)
 
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        # Constant has no differentiable inputs
+        return (None, None, None)
+
 
 class FullOp(Operation):
     """Create a tensor filled with a constant value."""
@@ -47,6 +51,9 @@ class FullOp(Operation):
         const = ops.constant(value, dtype, device)
         return ops.broadcast_to(const, shape)
 
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        return (None, None, None, None)
+
 
 class ZerosOp(Operation):
     """Create a tensor filled with zeros."""
@@ -63,6 +70,9 @@ class ZerosOp(Operation):
     ) -> TensorValue:
         const = ops.constant(0, dtype, device)
         return ops.broadcast_to(const, shape)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        return (None, None, None)
 
 
 class OnesOp(Operation):
@@ -81,6 +91,9 @@ class OnesOp(Operation):
         const = ops.constant(1, dtype, device)
         return ops.broadcast_to(const, shape)
 
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        return (None, None, None)
+
 
 class ArangeOp(Operation):
     """Create a tensor with evenly spaced values."""
@@ -98,6 +111,9 @@ class ArangeOp(Operation):
         device: Device,
     ) -> TensorValue:
         return ops.range(start, stop, step, dtype=dtype, device=device)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        return (None, None, None, None, None)
 
 
 class UniformOp(Operation):
@@ -252,6 +268,16 @@ def gaussian(
 normal = gaussian
 
 
+def zeros_like(x: Any) -> Any:
+    """Create a tensor of zeros with the same shape/dtype/device as x."""
+    return zeros(x.shape, dtype=x.dtype, device=x.device)
+
+
+def ones_like(x: Any) -> Any:
+    """Create a tensor of ones with the same shape/dtype/device as x."""
+    return ones(x.shape, dtype=x.dtype, device=x.device)
+
+
 __all__ = [
     "ConstantOp",
     "FullOp",
@@ -268,4 +294,6 @@ __all__ = [
     "uniform",
     "gaussian",
     "normal",
+    "zeros_like",
+    "ones_like",
 ]

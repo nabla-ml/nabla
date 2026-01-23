@@ -65,6 +65,14 @@ class SplitOp(LogicalAxisOperation):
         result_list = ops.split(x, split_sizes, axis)
         return tuple(result_list)
 
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for split: concatenate cotangents along split axis."""
+        from .view.shape import concatenate
+        # output is a tuple/list of tensors
+        target = output[0] if isinstance(output, (list, tuple)) else output
+        axis = target.op_kwargs.get("axis", 0)
+        return concatenate(cotangent, axis=axis)
+
     def sharding_rule(
         self,
         input_shapes: list[tuple[int, ...]],
@@ -158,6 +166,13 @@ class ChunkOp(LogicalAxisOperation):
 
         return ops.split(x, split_sizes, axis)
 
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for chunk: concatenate cotangents along chunk axis."""
+        from .view.shape import concatenate
+        target = output[0] if isinstance(output, (list, tuple)) else output
+        axis = target.op_kwargs.get("axis", 0)
+        return concatenate(cotangent, axis=axis)
+
     def sharding_rule(
         self,
         input_shapes: list[tuple[int, ...]],
@@ -224,6 +239,13 @@ class UnbindOp(LogicalAxisOperation):
 
         results = [ops.squeeze(s, axis) for s in sliced]
         return tuple(results)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for unbind: stack cotangents and unsqueeze along unbound axis."""
+        from .view.shape import stack
+        target = output[0] if isinstance(output, (list, tuple)) else output
+        axis = target.op_kwargs.get("axis", 0)
+        return stack(cotangent, axis=axis)
 
     def sharding_rule(
         self,

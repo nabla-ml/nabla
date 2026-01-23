@@ -154,9 +154,8 @@ def test_chain_rule():
     
     print(f"\n✓ Chain rule: Computed {len(grads)} gradients")
     for inp in [x1, x2]:
-        if id(inp._impl) in grads:
-            grad_impl = grads[id(inp._impl)]
-            grad = nb.Tensor(impl=grad_impl)
+        if inp in grads:
+            grad = grads[inp]
             print(f"  Gradient shape: {grad.shape}")
     
     return True

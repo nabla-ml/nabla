@@ -25,6 +25,11 @@ class EqualOp(BinaryOperation):
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.equal(args[0], args[1])
 
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for comparison: 0.0 gradients (non-differentiable)."""
+        from .creation import zeros_like
+        return (zeros_like(primals[0]), zeros_like(primals[1]))
+
 
 class NotEqualOp(BinaryOperation):
     @property
@@ -43,6 +48,11 @@ class GreaterOp(BinaryOperation):
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.greater(args[0], args[1])
 
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for comparison: 0.0 gradients (non-differentiable)."""
+        from .creation import zeros_like
+        return (zeros_like(primals[0]), zeros_like(primals[1]))
+
 
 class GreaterEqualOp(BinaryOperation):
     @property
@@ -60,6 +70,11 @@ class LessOp(BinaryOperation):
 
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.greater(args[1], args[0])
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for comparison: 0.0 gradients (non-differentiable)."""
+        from .creation import zeros_like
+        return (zeros_like(primals[0]), zeros_like(primals[1]))
 
 
 class LessEqualOp(BinaryOperation):

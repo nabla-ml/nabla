@@ -13,6 +13,48 @@ if TYPE_CHECKING:
     from ..core import Tensor
 
 
+def reduce_grad_to_shape(grad: Tensor, target_shape: tuple[int, ...]) -> Tensor:
+    """Reduce gradient to target shape by summing over broadcasted dimensions.
+    
+    This is used in binary operation VJPs when inputs had different shapes
+    and were broadcast together. The gradient w.r.t. each input needs to be
+    reduced back to that input's original shape.
+    
+    Args:
+        grad: Gradient tensor (shape matches the output of the forward operation)
+        target_shape: Original input shape we need to reduce to
+        
+    Returns:
+        Gradient reduced to target_shape
+    """
+    from ..ops.reduction import reduce_sum
+    
+    grad_shape = tuple(grad.shape)
+    
+    # If shapes already match, nothing to do
+    if grad_shape == target_shape:
+        return grad
+    
+    grad_rank = len(grad_shape)
+    target_rank = len(target_shape)
+    
+    # Step 1: Sum over leading dimensions that were broadcast
+    # (when target had fewer dims)
+    num_leading_dims = grad_rank - target_rank
+    for _ in range(num_leading_dims):
+        grad = reduce_sum(grad, axis=0, keepdims=False)
+    
+    # Step 2: Sum over dimensions that were size 1 in target but expanded
+    # Now grad and target should have same rank
+    current_shape = tuple(grad.shape)
+    for i, (grad_dim, target_dim) in enumerate(zip(current_shape, target_shape)):
+        if target_dim == 1 and grad_dim > 1:
+            grad = reduce_sum(grad, axis=i, keepdims=True)
+    
+    return grad
+
+
+
 def reduce_sum_vjp(primals: Any, cotangent: Any, output: Any) -> Any:
     """VJP for reduce_sum: broadcast cotangent back to input shape."""
     if isinstance(primals, tuple):
@@ -186,6 +228,7 @@ def neg_jvp(primals: Any, tangents: Any, output: Any) -> Any:
 
 
 __all__ = [
+    "reduce_grad_to_shape",
     "reduce_sum_vjp",
     "reduce_sum_jvp",
     "mean_vjp",

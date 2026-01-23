@@ -28,10 +28,7 @@ class ReluOp(UnaryOperation):
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for ReLU: ∂relu(x)/∂x = (x > 0)."""
-        if isinstance(primals, tuple):
-            x = primals[0]
-        else:
-            x = primals
+        x = primals
         from ..ops.comparison import greater
         from ..ops.binary import mul
         # Derivative is 1 where x > 0, else 0
@@ -40,14 +37,8 @@ class ReluOp(UnaryOperation):
 
     def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
         """JVP for ReLU: tangent where x > 0, else 0."""
-        if isinstance(primals, tuple):
-            x = primals[0]
-        else:
-            x = primals
-        if isinstance(tangents, tuple):
-            t = tangents[0]
-        else:
-            t = tangents
+        x = primals
+        t = tangents
         from ..ops.comparison import greater
         from ..ops.binary import mul
         mask = greater(x, 0.0)
@@ -64,6 +55,22 @@ class SigmoidOp(UnaryOperation):
     def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
         """Apply sigmoid element-wise."""
         return ops.sigmoid(x)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for sigmoid: ∂sigmoid(x)/∂x = sigmoid(x) * (1 - sigmoid(x)) = output * (1 - output)."""
+        from ..ops.binary import mul, sub
+        # output = sigmoid(x), so ∂L/∂x = ∂L/∂output * output * (1 - output)
+        one_minus_output = sub(1.0, output)
+        sigmoid_grad = mul(output, one_minus_output)
+        return mul(cotangent, sigmoid_grad)
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP for sigmoid: tangent * sigmoid(x) * (1 - sigmoid(x))."""
+        t = tangents
+        from ..ops.binary import mul, sub
+        one_minus_output = sub(1.0, output)
+        sigmoid_grad = mul(output, one_minus_output)
+        return mul(t, sigmoid_grad)
 
     def compute_cost(
         self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]
@@ -87,6 +94,22 @@ class TanhOp(UnaryOperation):
     def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
         """Apply tanh element-wise."""
         return ops.tanh(x)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for tanh: ∂tanh(x)/∂x = 1 - tanh(x)^2 = 1 - output^2."""
+        from ..ops.binary import mul, sub
+        # ∂L/∂x = ∂L/∂output * (1 - output^2)
+        output_squared = mul(output, output)
+        one_minus_output_sq = sub(1.0, output_squared)
+        return mul(cotangent, one_minus_output_sq)
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP for tanh: tangent * (1 - tanh(x)^2)."""
+        t = tangents
+        from ..ops.binary import mul, sub
+        output_squared = mul(output, output)
+        one_minus_output_sq = sub(1.0, output_squared)
+        return mul(t, one_minus_output_sq)
 
     def compute_cost(
         self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]
@@ -118,10 +141,7 @@ class ExpOp(UnaryOperation):
 
     def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
         """JVP for exp: tangent * exp(x) = tangent * output."""
-        if isinstance(tangents, tuple):
-            t = tangents[0]
-        else:
-            t = tangents
+        t = tangents
         from ..ops.binary import mul
         return mul(output, t)
 
@@ -143,10 +163,7 @@ class NegOp(UnaryOperation):
 
     def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
         """JVP for neg: -tangent."""
-        if isinstance(tangents, tuple):
-            t = tangents[0]
-        else:
-            t = tangents
+        t = tangents
         return neg(t)
 
 
@@ -162,34 +179,31 @@ class AbsOp(UnaryOperation):
         return ops.abs(x)
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        """VJP for abs: ∂|x|/∂x = sign(x)."""
-        if isinstance(primals, tuple):
-            x = primals[0]
-        else:
-            x = primals
+        """VJP for abs: grad = cotangent * sign(x)."""
+        x = primals
         from ..ops.comparison import greater, less
-        from ..ops.binary import mul, sub
-        # sign(x) = 1 if x > 0, -1 if x < 0, 0 if x == 0
-        pos_mask = greater(x, 0.0)
-        neg_mask = less(x, 0.0)
-        sign = sub(pos_mask, neg_mask)  # 1 - 0 = 1 for pos, 0 - 1 = -1 for neg
+        from ..ops.control_flow import where
+        from ..ops.creation import ones_like, zeros_like
+        from ..ops.binary import mul
+        from . import neg
+        
+        # sign(x) = 1 if x > 0 else (-1 if x < 0 else 0)
+        ones = ones_like(x)
+        sign = where(greater(x, 0.0), ones, where(less(x, 0.0), neg(ones), zeros_like(x)))
         return mul(cotangent, sign)
 
     def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
         """JVP for abs: tangent * sign(x)."""
-        if isinstance(primals, tuple):
-            x = primals[0]
-        else:
-            x = primals
-        if isinstance(tangents, tuple):
-            t = tangents[0]
-        else:
-            t = tangents
+        x = primals
+        t = tangents
         from ..ops.comparison import greater, less
-        from ..ops.binary import mul, sub
-        pos_mask = greater(x, 0.0)
-        neg_mask = less(x, 0.0)
-        sign = sub(pos_mask, neg_mask)
+        from ..ops.control_flow import where
+        from ..ops.creation import ones_like, zeros_like
+        from ..ops.binary import mul
+        from . import neg
+        
+        ones = ones_like(x)
+        sign = where(greater(x, 0.0), ones, where(less(x, 0.0), neg(ones), zeros_like(x)))
         return mul(t, sign)
 
 
@@ -209,6 +223,23 @@ class _SoftmaxNativeOp(LogicalAxisOperation, UnaryOperation):
         axis = kwargs.get("axis", -1)
         return ops.softmax(x, axis=axis)
 
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for softmax: ∂s_i/∂x_j = s_i(δ_ij - s_j)."""
+        # grad_x = output * (cotangent - sum(cotangent * output, axis, keepdims=True))
+        from ..ops.binary import mul, sub
+        from ..ops.reduction import reduce_sum
+        
+        axis = output.op_kwargs.get("axis", -1)
+        
+        # Element-wise product of cotangent and softmax output
+        cot_mul_out = mul(cotangent, output)
+        
+        # Sum along the softmax axis
+        sum_cot_mul_out = reduce_sum(cot_mul_out, axis=axis, keepdims=True)
+        
+        # Final VJP logic
+        return mul(output, sub(cotangent, sum_cot_mul_out))
+
     def compute_cost(
         self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]
     ) -> float:
@@ -221,12 +252,63 @@ class _SoftmaxNativeOp(LogicalAxisOperation, UnaryOperation):
         return 3.0 * num_elements
 
 
+class LogOp(UnaryOperation):
+    """Natural logarithm: log(x)."""
+
+    @property
+    def name(self) -> str:
+        return "log"
+
+    def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+        """Apply log element-wise."""
+        return ops.log(x)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for log: ∂log(x)/∂x = 1/x."""
+        x = primals
+        from ..ops.binary import div
+        return div(cotangent, x)
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP for log: tangent / x."""
+        x = primals
+        t = tangents
+        from ..ops.binary import div
+        return div(t, x)
+
+
+class SqrtOp(UnaryOperation):
+    """Square root: sqrt(x)."""
+
+    @property
+    def name(self) -> str:
+        return "sqrt"
+
+    def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+        """Apply sqrt element-wise."""
+        return ops.sqrt(x)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for sqrt: ∂sqrt(x)/∂x = 1/(2*sqrt(x)) = 1/(2*output)."""
+        from ..ops.binary import div, mul
+        # ∂L/∂x = ∂L/∂output * 1/(2*output)
+        return div(cotangent, mul(2.0, output))
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP for sqrt: tangent / (2*sqrt(x))."""
+        t = tangents
+        from ..ops.binary import div, mul
+        return div(t, mul(2.0, output))
+
+
 relu = ReluOp()
 sigmoid = SigmoidOp()
 tanh = TanhOp()
 exp = ExpOp()
 neg = NegOp()
 abs = AbsOp()
+log = LogOp()
+sqrt = SqrtOp()
 _softmax_native = _SoftmaxNativeOp()
 
 
@@ -265,11 +347,15 @@ __all__ = [
     "ExpOp",
     "NegOp",
     "AbsOp",
+    "LogOp",
+    "SqrtOp",
     "relu",
     "sigmoid",
     "tanh",
     "exp",
     "neg",
     "abs",
+    "log",
+    "sqrt",
     "softmax",
 ]

@@ -43,19 +43,9 @@ def test_simple_add_mul():
     
     print(f"\nNumber of gradients computed: {len(gradients)}")
     
-    # Extract gradients
-    grad_x1 = None
-    grad_x2 = None
-    
-    for inp in [x1, x2]:
-        inp_id = id(inp._impl)
-        if inp_id in gradients:
-            grad_impl = gradients[inp_id]
-            grad_tensor = nb.Tensor(impl=grad_impl)
-            if inp is x1:
-                grad_x1 = grad_tensor
-            else:
-                grad_x2 = grad_tensor
+    # Extract gradients directly from Tensor keys
+    grad_x1 = gradients.get(x1)
+    grad_x2 = gradients.get(x2)
     
     print(f"\nGradient w.r.t. x1: {grad_x1}")
     print(f"Gradient w.r.t. x2: {grad_x2}")
@@ -98,19 +88,9 @@ def test_matmul():
     print("\nRunning backward_on_trace...")
     gradients = backward_on_trace(traced, cotangent)
     
-    # Extract gradients
-    grad_x1 = None
-    grad_x2 = None
-    
-    for inp in [x1, x2]:
-        inp_id = id(inp._impl)
-        if inp_id in gradients:
-            grad_impl = gradients[inp_id]
-            grad_tensor = nb.Tensor(impl=grad_impl)
-            if inp is x1:
-                grad_x1 = grad_tensor
-            else:
-                grad_x2 = grad_tensor
+    # Extract gradients directly from Tensor keys
+    grad_x1 = gradients.get(x1)
+    grad_x2 = gradients.get(x2)
     
     print(f"\nGradient w.r.t. x1:\n{grad_x1}")
     print(f"\nGradient w.r.t. x2:\n{grad_x2}")

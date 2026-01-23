@@ -49,21 +49,16 @@ class UnsqueezeOp(LogicalAxisOperation):
         return len(input_shapes[0]) + 1
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        """VJP for unsqueeze: squeeze the cotangent."""
-        # Need to determine which axis was unsqueezed
-        # For now, we can squeeze at axis 0 as default
+        """VJP for unsqueeze: squeeze the cotangent at the unsqueezed axis."""
+        axis = output.op_kwargs.get("axis", 0)
         from . import squeeze
-        # In practice, we'd need to know the axis from context
-        return squeeze(cotangent, axis=0)
+        return squeeze(cotangent, axis=axis)
 
     def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
         """JVP for unsqueeze: unsqueeze the tangent."""
-        if isinstance(tangents, tuple):
-            t = tangents[0]
-        else:
-            t = tangents
+        axis = output.op_kwargs.get("axis", 0)
         from . import unsqueeze
-        return unsqueeze(t, axis=0)
+        return unsqueeze(tangents, axis=axis)
 
 
 class SqueezeOp(LogicalAxisOperation):
@@ -100,18 +95,16 @@ class SqueezeOp(LogicalAxisOperation):
         return len(input_shapes[0]) - 1
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        """VJP for squeeze: unsqueeze the cotangent."""
+        """VJP for squeeze: unsqueeze the cotangent at the squeezed axis."""
+        axis = output.op_kwargs.get("axis", 0)
         from . import unsqueeze
-        return unsqueeze(cotangent, axis=0)
+        return unsqueeze(cotangent, axis=axis)
 
     def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
         """JVP for squeeze: squeeze the tangent."""
-        if isinstance(tangents, tuple):
-            t = tangents[0]
-        else:
-            t = tangents
+        axis = output.op_kwargs.get("axis", 0)
         from . import squeeze
-        return squeeze(t, axis=0)
+        return squeeze(tangents, axis=axis)
 
 
 class SwapAxesOp(LogicalAxisOperation):
@@ -123,6 +116,16 @@ class SwapAxesOp(LogicalAxisOperation):
 
     def maxpr(self, x: TensorValue, *, axis1: int, axis2: int) -> TensorValue:
         return ops.transpose(x, axis1, axis2)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for swap_axes: swap back."""
+        # Transpose is self-inverse
+        axis1 = output.op_kwargs.get("axis1")
+        axis2 = output.op_kwargs.get("axis2")
+        return swap_axes(cotangent, axis1=axis1, axis2=axis2)
+
+    def __call__(self, x, *, axis1: int, axis2: int):
+        return super().__call__(x, axis1=axis1, axis2=axis2)
 
     def sharding_rule(
         self,

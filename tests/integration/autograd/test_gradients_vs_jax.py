@@ -66,9 +66,9 @@ def test_simple_linear_layer():
     grads_jax = grad_fn(W_np, x_np, b_np)
     
     # Compare - grads_nb now contains Tensor objects directly
-    grad_W_nb = to_numpy(grads_nb[id(W_nb._impl)])
-    grad_x_nb = to_numpy(grads_nb[id(x_nb._impl)])
-    grad_b_nb = to_numpy(grads_nb[id(b_nb._impl)])
+    grad_W_nb = to_numpy(grads_nb[W_nb])
+    grad_x_nb = to_numpy(grads_nb[x_nb])
+    grad_b_nb = to_numpy(grads_nb[b_nb])
     
     print(f"\nGradient shapes:")
     print(f"  ∇W: Nabla {grad_W_nb.shape}, JAX {grads_jax[0].shape}")
@@ -120,9 +120,9 @@ def test_two_layer_network():
     grads_jax = grad_fn(W1_np, W2_np, x_np)
     
     # Compare
-    grad_W1_nb = to_numpy(grads_nb[id(W1_nb._impl)])
-    grad_W2_nb = to_numpy(grads_nb[id(W2_nb._impl)])
-    grad_x_nb = to_numpy(grads_nb[id(x_nb._impl)])
+    grad_W1_nb = to_numpy(grads_nb[W1_nb])
+    grad_W2_nb = to_numpy(grads_nb[W2_nb])
+    grad_x_nb = to_numpy(grads_nb[x_nb])
     
     print(f"\nGradient shapes:")
     print(f"  ∇W1: Nabla {grad_W1_nb.shape}, JAX {grads_jax[0].shape}")
@@ -177,8 +177,8 @@ def test_elementwise_operations():
     grads_jax = grad_fn(x1_np, x2_np)
     
     # Compare
-    grad_x1_nb = to_numpy(grads_nb[id(x1_nb._impl)])
-    grad_x2_nb = to_numpy(grads_nb[id(x2_nb._impl)])
+    grad_x1_nb = to_numpy(grads_nb[x1_nb])
+    grad_x2_nb = to_numpy(grads_nb[x2_nb])
     
     print(f"\nGradient shapes:")
     print(f"  ∇x1: Nabla {grad_x1_nb.shape}, JAX {grads_jax[0].shape}")
@@ -230,9 +230,9 @@ def test_mixed_operations():
     grads_jax = grad_fn(W_np, x_np, bias_np)
     
     # Compare
-    grad_W_nb = to_numpy(grads_nb[id(W_nb._impl)])
-    grad_x_nb = to_numpy(grads_nb[id(x_nb._impl)])
-    grad_bias_nb = to_numpy(grads_nb[id(bias_nb._impl)])
+    grad_W_nb = to_numpy(grads_nb[W_nb])
+    grad_x_nb = to_numpy(grads_nb[x_nb])
+    grad_bias_nb = to_numpy(grads_nb[bias_nb])
     
     print(f"\nGradient shapes:")
     print(f"  ∇W: Nabla {grad_W_nb.shape}, JAX {grads_jax[0].shape}")
@@ -296,8 +296,8 @@ def test_deep_chain():
     grads_jax = grad_fn(x_np, y_np)
     
     # Compare
-    grad_x_nb = to_numpy(grads_nb[id(x_nb._impl)])
-    grad_y_nb = to_numpy(grads_nb[id(y_nb._impl)])
+    grad_x_nb = to_numpy(grads_nb[x_nb])
+    grad_y_nb = to_numpy(grads_nb[y_nb])
     
     print(f"\nGradient shapes:")
     print(f"  ∇x: Nabla {grad_x_nb.shape}, JAX {grads_jax[0].shape}")
