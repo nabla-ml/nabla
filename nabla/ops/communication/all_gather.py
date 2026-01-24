@@ -64,6 +64,22 @@ class AllGatherOp(CollectiveOperation):
         cost = (n_devices - 1) / n_devices * size_bytes / bandwidth
         return cost
 
+    def adapt_kwargs(self, args: tuple, kwargs: dict, max_batch_dims: int) -> dict:
+        """Recover sharded_axis_name for multi-dim mesh rehydration."""
+        if "sharded_axis_name" in kwargs:
+            return kwargs
+        
+        new_kwargs = dict(kwargs)
+        sharded_tensor = args[0]
+        axis = kwargs.get("axis")
+        
+        if sharded_tensor.sharding and axis is not None:
+             sharding = sharded_tensor.sharding
+             if axis < len(sharding.dim_specs) and sharding.dim_specs[axis].axes:
+                 new_kwargs["sharded_axis_name"] = sharding.dim_specs[axis].axes[0]
+                 
+        return new_kwargs
+
     def maxpr(
         self,
         shard_values: list[TensorValue],
@@ -86,12 +102,19 @@ class AllGatherOp(CollectiveOperation):
             ]
             return max_allgather(shard_values, signal_buffers, axis=axis)
 
-        if mesh is None or sharded_axis_name is None:
-
-            if len(shard_values) == 1:
-                return shard_values
+        if mesh is None or (sharded_axis_name is None and len(mesh.axis_names) <= 1):
+            # Fallback for single-axis mesh or no mesh: concat everything
+            if len(shard_values) <= 1:
+                return [shard_values[0]] * len(shard_values) if shard_values else []
             full_tensor = ops.concat(shard_values, axis=axis)
             return [full_tensor] * len(shard_values)
+
+        if sharded_axis_name is None and mesh:
+             # Try to infer if not provided (rehydration fallback)
+             # If we can't infer, we must still avoid concatenating all shards
+             # if the mesh is larger than the sharding factor.
+             # But it's better to rely on adapt_kwargs.
+             pass
 
         return self._simulate_grouped_gather(
             shard_values, axis, mesh, sharded_axis_name

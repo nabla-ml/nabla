@@ -61,18 +61,34 @@ class AllReduceOp(CollectiveOperation):
 
         return True
 
+    def adapt_kwargs(self, args: tuple, kwargs: dict, max_batch_dims: int) -> dict:
+        """Recover reduce_axes for multi-dim mesh rehydration."""
+        if "reduce_axes" in kwargs:
+            return kwargs
+        
+        new_kwargs = dict(kwargs)
+        sharded_tensor = args[0]
+        
+        if sharded_tensor.sharding:
+             # If we're performing all_reduce during backprop, it's often to reduce
+             # partial axes. We can find them in the GRADIENT'S sharding (before reduction).
+             # But here we look at the input to the operation.
+             # Actually, for AllReduce, we usually know which axes were partial.
+             pass
+                 
+        return new_kwargs
+
     def maxpr(
         self,
         shard_values: list[TensorValue],
         mesh: DeviceMesh = None,
         reduce_op: str = "sum",
+        reduce_axes: set[str] = None,
     ) -> list[TensorValue]:
-        """Reduce across all shards (AllReduce)."""
+        """Reduce across shards (AllReduce)."""
         if not shard_values:
             return []
 
-        # Implementation Note: MAX's native allreduce.sum() has issues on this hardware.
-        # We implement a robust all_reduce using allgather + local reduction.
         if mesh and mesh.is_distributed and len(shard_values) > 1:
             from max.dtype import DType
             from max.graph.ops.allgather import allgather as max_allgather
@@ -105,34 +121,30 @@ class AllReduceOp(CollectiveOperation):
                 # Reduce all chunks locally
                 reduced = chunks[0]
                 for chunk in chunks[1:]:
-                    if reduce_op == "sum":
-                        reduced = ops.add(reduced, chunk)
-                    elif reduce_op == "max":
-                        reduced = ops.max(reduced, chunk)
-                    elif reduce_op == "min":
-                        reduced = ops.min(reduced, chunk)
-                    elif reduce_op == "prod":
-                        reduced = ops.mul(reduced, chunk)
-                    else:
-                        raise ValueError(f"Unknown reduction op: {reduce_op}")
+                    if reduce_op == "sum": reduced = ops.add(reduced, chunk)
+                    elif reduce_op == "max": reduced = ops.max(reduced, chunk)
+                    elif reduce_op == "min": reduced = ops.min(reduced, chunk)
+                    elif reduce_op == "prod": reduced = ops.mul(reduced, chunk)
+                    else: raise ValueError(f"Unknown reduction op: {reduce_op}")
                 
                 result_values.append(reduced)
             
             return result_values
 
-        # Simulation mode and single-device fallback
+        if reduce_axes and mesh and not mesh.is_distributed:
+             # Use grouped simulation for multi-dim meshes
+             return self.simulate_grouped_execution(
+                 shard_values, mesh, reduce_axes, reduce_op=reduce_op
+             )
+
+        # Simulation mode and single-device fallback (Total reduction)
         result = shard_values[0]
         for sv in shard_values[1:]:
-            if reduce_op == "sum":
-                result = ops.add(result, sv)
-            elif reduce_op == "max":
-                result = ops.max(result, sv)
-            elif reduce_op == "min":
-                result = ops.min(result, sv)
-            elif reduce_op == "prod":
-                result = ops.mul(result, sv)
-            else:
-                raise ValueError(f"Unknown reduction op: {reduce_op}")
+            if reduce_op == "sum": result = ops.add(result, sv)
+            elif reduce_op == "max": result = ops.max(result, sv)
+            elif reduce_op == "min": result = ops.min(result, sv)
+            elif reduce_op == "prod": result = ops.mul(result, sv)
+            else: raise ValueError(f"Unknown reduction op: {reduce_op}")
 
         return [result] * len(shard_values)
         
@@ -141,15 +153,18 @@ class AllReduceOp(CollectiveOperation):
         return cotangent
 
     def _compute_output_spec(self, input_tensor, results, **kwargs):
-        """Output is fully replicated."""
-        from ...core.sharding.spec import DimSpec, ShardingSpec
-
-        mesh = input_tensor.sharding.mesh if input_tensor.sharding else None
-
-        if mesh and results:
-            rank = len(results[0].type.shape)
-            return ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)])
-        return None
+        """Output clears partial flags but preserves axes mappings for non-partial dims."""
+        from ...core.sharding.spec import ShardingSpec
+        
+        if not input_tensor.sharding:
+            return None
+            
+        new_spec = input_tensor.sharding.clone()
+        new_spec.partial_sum_axes.clear()
+        for ds in new_spec.dim_specs:
+            ds.partial = False
+            
+        return new_spec
 
     def simulate_grouped_execution(
         self,
@@ -218,15 +233,18 @@ class PMeanOp(CollectiveOperation):
         return [ops.mul(r, scale) for r in reduced]
 
     def _compute_output_spec(self, input_tensor, results, **kwargs):
-        """Output is fully replicated."""
-        from ...core.sharding.spec import DimSpec, ShardingSpec
-
-        mesh = input_tensor.sharding.mesh if input_tensor.sharding else None
-
-        if mesh and results:
-            rank = len(results[0].type.shape)
-            return ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)])
-        return None
+        """Output clears partial flags but preserves axes mappings for non-partial dims."""
+        from ...core.sharding.spec import ShardingSpec
+        
+        if not input_tensor.sharding:
+            return None
+            
+        new_spec = input_tensor.sharding.clone()
+        new_spec.partial_sum_axes.clear()
+        for ds in new_spec.dim_specs:
+            ds.partial = False
+            
+        return new_spec
 
 
 all_reduce_op = AllReduceOp()

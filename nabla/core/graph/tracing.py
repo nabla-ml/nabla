@@ -180,7 +180,7 @@ class Trace:
 
         
         # Iterate through nodes and call maxpr_all
-        for output_refs in self.nodes:
+        for i, output_refs in enumerate(self.nodes):
             alive_outputs = output_refs.get_alive_outputs()
             if not any(out is not None for out in alive_outputs):
                 continue
@@ -219,6 +219,11 @@ class Trace:
                 mesh = first_out.sharding.mesh
 
             # 5. Call maxpr_all
+            # print(f"[REHYDRATE] Executing {op.name} with output spec {output_sharding}")
+            # for i, arg in enumerate(tree_leaves(op_args)):
+            #     if isinstance(arg, Tensor):
+            #         print(f"  Input {i} shape: {arg._impl.physical_local_shape(0)}")
+
             output_tensor_struct = op.maxpr_all(
                 op_args, 
                 adapted_kwargs, 

@@ -154,11 +154,28 @@ class FactorShardingState:
                         factor.axes = list(new_axes)
                         factor.is_open = new_is_open
                 else:
-
-                    common = self._longest_common_prefix(factor.axes, new_axes)
-                    factor.axes = common
-                    factor.is_open = factor.is_open or new_is_open
+                    # If one is a prefix of the other, take the longer one (alignment)
+                    if len(new_axes) > len(factor.axes) and new_axes[:len(factor.axes)] == factor.axes:
+                        factor.axes = list(new_axes)
+                    elif len(factor.axes) >= len(new_axes) and factor.axes[:len(new_axes)] == new_axes:
+                        # factor.axes already contains new_axes as prefix, keep it
+                        pass
+                    else:
+                        # Real conflict, take common prefix
+                        common = self._longest_common_prefix(factor.axes, new_axes)
+                        factor.axes = common
+                        # If we lost axes, it might become open if either was open
+                        factor.is_open = factor.is_open or new_is_open
             return
+
+        if has_new and not has_existing:
+             # Replication matches anything if it's a prefix, but sharding is more specific.
+             # If factor was already replicated (closed or open), and new is sharded.
+             if new_priority <= factor.priority:
+                 factor.axes = list(new_axes)
+                 factor.priority = new_priority
+                 factor.is_open = new_is_open
+             return
 
         if has_new and new_priority > factor.priority:
             return
@@ -499,8 +516,8 @@ def _collect_to_factors(
                         axes_for_f = [proposed_axis]
 
                 if not axes_for_f and not dim_spec.is_open:
-
-                    continue
+                    # Explicit replication: merge it to ensure priority/closed status is seen
+                    pass
 
                 state.merge(
                     f,
@@ -524,6 +541,9 @@ def _should_update_dim(
         return True
 
     if proposed_priority == current.priority:
+        # If current is empty but proposed has sharding, adopt it (upgrade from replication)
+        if not current.axes and proposed_axes:
+            return True
 
         if current.is_open:
             if not current.axes and proposed_axes:

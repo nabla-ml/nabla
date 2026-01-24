@@ -190,6 +190,7 @@ def backward_on_trace(
             if arg_id in cotangent_map:
                 from ...ops.binary import add
                 existing = Tensor(impl=cotangent_map[arg_id])
+                
                 accumulated = add(existing, cot_tensor)
                 cotangent_map[arg_id] = accumulated._impl
             else:

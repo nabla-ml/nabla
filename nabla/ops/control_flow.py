@@ -47,6 +47,68 @@ def _wrap_tensor(x: Any, like: Tensor | None = None) -> Tensor:
 class WhereOp(Operation):
     """Element-wise conditional selection: where(cond, x, y)."""
 
+    def __call__(self, condition: Tensor, x: Tensor, y: Tensor) -> Tensor:
+        from . import view as view_ops
+        from .base import ensure_tensor
+
+        condition = ensure_tensor(condition)
+        x = ensure_tensor(x)
+        y = ensure_tensor(y)
+
+        # 1. Logical Broadcasting
+        c_shape = tuple(int(d) for d in condition.shape)
+        x_shape = tuple(int(d) for d in x.shape)
+        y_shape = tuple(int(d) for d in y.shape)
+
+        from .binary import mul # Just to get access to _broadcast_shapes or similar
+        # Actually BinaryOperation._broadcast_shapes is not static.
+        def broadcast_shapes(*shapes):
+            res = shapes[0]
+            for s in shapes[1:]:
+                # Simplified broadcast logic
+                if len(res) < len(s): res = (1,) * (len(s) - len(res)) + res
+                if len(s) < len(res): s = (1,) * (len(res) - len(s)) + s
+                new_res = []
+                for d1, d2 in zip(res, s):
+                    if d1 == d2: new_res.append(d1)
+                    elif d1 == 1: new_res.append(d2)
+                    elif d2 == 1: new_res.append(d1)
+                    else: raise ValueError(f"Incompatible shapes {res} and {s}")
+                res = tuple(new_res)
+            return res
+
+        target_logical = broadcast_shapes(c_shape, x_shape, y_shape)
+        
+        if c_shape != target_logical: condition = view_ops.broadcast_to(condition, target_logical)
+        if x_shape != target_logical: x = view_ops.broadcast_to(x, target_logical)
+        if y_shape != target_logical: y = view_ops.broadcast_to(y, target_logical)
+
+        # 2. Physical Broadcasting (Batch Dims)
+        max_bd = max(condition.batch_dims, x.batch_dims, y.batch_dims)
+        
+        # Get batch shape
+        batch_shape = ()
+        for t in [condition, x, y]:
+            if t.batch_dims == max_bd:
+                global_phys = t.physical_global_shape or t.local_shape
+                if global_phys:
+                    batch_shape = tuple(int(d) for d in global_phys[:max_bd])
+                    break
+        
+        target_physical = batch_shape + target_logical
+        
+        def align(t):
+            t_phys = t.physical_global_shape or t.local_shape
+            if t_phys is None or tuple(int(d) for d in t_phys) != target_physical:
+                return view_ops.broadcast_to_physical(t, target_physical)
+            return t
+
+        condition = align(condition)
+        x = align(x)
+        y = align(y)
+
+        return super().__call__(condition, x, y)
+
     @property
     def name(self) -> str:
         return "where"
