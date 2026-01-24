@@ -174,6 +174,20 @@ def constant(
     Args:
         value: Scalar, array, or nested sequence.
     """
+    if dtype is None:
+        import numpy as np
+        if isinstance(value, np.ndarray):
+            try:
+                dtype = DType[str(value.dtype)]
+            except (KeyError, ValueError):
+                pass
+        elif isinstance(value, int):
+            dtype = DType.int32
+        elif isinstance(value, float):
+            dtype = DType.float32
+        elif isinstance(value, bool):
+            dtype = DType.bool
+
     dtype, device = defaults(dtype, device)
     return _constant_op(value, dtype, device)
 

@@ -204,7 +204,13 @@ class ComputeGraph:
 
                 values = t._impl._values
                 if not values:
-
+                    print(f"FAILED TENSOR {id(t)} info:")
+                    print(f"  sharding: {t.sharding}")
+                    print(f"  realized: {t.is_realized}")
+                    print(f"  epoch: {t._impl.values_epoch}")
+                    print(f"  graph epoch: {self.epoch}")
+                    if t._impl.output_refs:
+                        print(f"  op: {t._impl.op_name}")
                     raise RuntimeError(
                         f"Attempting to evaluate tensor {id(t)} with no values/storage"
                     )

@@ -164,7 +164,9 @@ class MatmulOp(Operation):
         self,
         input_shapes: list[tuple[int, ...]],
         output_shapes: list[tuple[int, ...]],
+        **kwargs,
     ) -> Any:
+        # print(f"[Matmul] sharding_rule: {input_shapes} -> {output_shapes}")
         """Matmul: (batch..., m, k) @ (batch..., k, n) -> (batch..., m, n)."""
         from ..core.sharding.propagation import OpShardingRuleTemplate
 

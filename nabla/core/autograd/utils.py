@@ -45,18 +45,13 @@ def backward_on_trace(
     if not trace._computed:
         trace.compute()
     
-    # Ensure all inputs are realized to provide values for backprop
-    input_leaves = [
-        t for t in pytree.tree_leaves(trace.inputs) if isinstance(t, Tensor)
-    ]
-    for inp in input_leaves:
-        if not inp._impl.is_realized:
-            GRAPH.evaluate(inp)
-    
-    # Rehydrate internal graph values
+    # Rehydrate internal graph values (this also ensures all leaves are realized)
     trace.rehydrate()
     
     # Prepare global cotangent map
+    input_leaves = [
+        t for t in pytree.tree_leaves(trace.inputs) if isinstance(t, Tensor)
+    ]
     output_leaves = [
         t._impl for t in pytree.tree_leaves(trace.outputs) if isinstance(t, Tensor)
     ]
@@ -130,7 +125,9 @@ def backward_on_trace(
         for out_impl in alive_outputs:
             if out_impl is not None:
                 if id(out_impl) in cotangent_map:
-                    output_cotangents.append(Tensor(impl=cotangent_map[id(out_impl)]))
+                    cot_impl = cotangent_map[id(out_impl)]
+                    print(f"  [BACKPROP] Cot for output {id(out_impl)}: shards={len(cot_impl._values)}, sharding={cot_impl.sharding}")
+                    output_cotangents.append(Tensor(impl=cot_impl))
                 else:
                     # If this specific output wasn't used, use zeros
                     from ...ops.creation import zeros_like
@@ -147,6 +144,7 @@ def backward_on_trace(
         vjp_cotangents = _unwrap_single(cotangents_structured)
         vjp_outputs = _unwrap_single(outputs_structured)
         
+        print(f"  [BACKPROP] Op: {op.name}")
         try:
             input_cotangents = op.vjp_rule(
                 vjp_primals,
@@ -186,12 +184,45 @@ def backward_on_trace(
             else:
                 # Should be a Tensor/TensorImpl already if VJP rule is correct
                 continue
+            
+            print(f"    Arg {arg_id}: Result shards={len(cot_tensor._impl._values)}, sharding={cot_tensor.sharding}")
+
+            # CRITICAL: Handle rank mismatch (e.g. from vmap / broadcasting)
+            # If the cotangent has more dimensions than the primal (e.g. batch dims),
+            # we must sum over the extra leading dimensions.
+            arg_shape = Tensor(impl=arg_impl).shape
+            if len(cot_tensor.shape) > len(arg_shape):
+                diff = len(cot_tensor.shape) - len(arg_shape)
+                # Assume extra dims are at the front (standard broadcasting/vmap rules)
+                reduce_axes = list(range(diff))
+                print(f"      REDUCING rank mismatch: {cot_tensor.shape} -> {arg_shape} (axes={reduce_axes})")
+                from ...ops.reduction import reduce_sum
+                cot_tensor = reduce_sum(cot_tensor, axis=reduce_axes)
+                print(f"      New shards={len(cot_tensor._impl._values)}")
+
+            # CRITICAL: Preserve sharding of the original argument
+            from ...ops.communication import reshard
+            from ...core.sharding.spec import needs_reshard, ShardingSpec
+            
+            if arg_impl.sharding and needs_reshard(cot_tensor.sharding, arg_impl.sharding):
+                print(f"      RESHARDING to {arg_impl.sharding}")
+                cot_tensor = reshard(
+                    cot_tensor,
+                    arg_impl.sharding.mesh,
+                    arg_impl.sharding.dim_specs,
+                    replicated_axes=arg_impl.sharding.replicated_axes
+                )
+                print(f"      New shards={len(cot_tensor._impl._values)}")
+                # print(f"      [Autograd] Recovered sharding for {'dW' if is_dw else 'dX'}: "
+                #       f"Partial={new_partial}, Dims={new_dims}")
                 
             if arg_id in cotangent_map:
                 from ...ops.binary import add
                 existing = Tensor(impl=cotangent_map[arg_id])
                 
                 accumulated = add(existing, cot_tensor)
+                
+                print(f"      ACCUMULATED shards={len(accumulated._impl._values)}")
                 cotangent_map[arg_id] = accumulated._impl
             else:
                 cotangent_map[arg_id] = cot_tensor._impl
@@ -217,8 +248,12 @@ def backward_on_trace(
             
             gradients[inp] = grad
         else:
-            from ...ops.creation import zeros_like
-            gradients[inp] = zeros_like(inp)
+            from ...ops.creation import zeros_like, full
+            # Zero gradient must handle sharding too!
+            # zeros_like(inp) inherits sharding logic usually?
+            # If inp is sharded, zeros_like should be sharded.
+            z = zeros_like(inp)
+            gradients[inp] = z
     
     return gradients
 

@@ -16,15 +16,12 @@ if TYPE_CHECKING:
 
 def ensure_tensor(x: Any) -> Tensor:
     """Convert scalar or array-like to Tensor."""
-    import numpy as np
-
     from ..core import Tensor
 
     if isinstance(x, Tensor):
         return x
 
-    arr = np.asarray(x, dtype=np.float32)
-    return Tensor.from_dlpack(arr)
+    return Tensor.constant(x)
 
 
 class Operation(ABC):

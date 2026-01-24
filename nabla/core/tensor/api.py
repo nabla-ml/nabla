@@ -135,10 +135,16 @@ class Tensor(DLPackArray, HasTensorValue):
 
                 self.hydrate()
 
-            if not self._impl._values:
-                raise RuntimeError(
-                    f"Tensor {id(self)} has no values (epoch={GRAPH.epoch}, impl_epoch={self._impl.values_epoch})."
-                )
+        if not self._impl._values:
+            print(f"ERROR: Tensor {id(self)} values check failed.")
+            print(f"  Sharding: {self.sharding}")
+            print(f"  Realized: {self.is_realized}")
+            print(f"  Storages: {len(self._impl._storages) if self._impl._storages else 0}")
+            print(f"  Values Epoch: {self._impl.values_epoch}")
+            print(f"  GRAPH.epoch: {GRAPH.epoch}")
+            raise RuntimeError(
+                f"Tensor {id(self)} has no values (epoch={GRAPH.epoch}, impl_epoch={self._impl.values_epoch})."
+            )
 
         return [
             v[...] if isinstance(v, graph.BufferValue) else v

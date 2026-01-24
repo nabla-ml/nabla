@@ -294,14 +294,7 @@ class ConcatenateOp(LogicalAxisOperation):
         if not tensors:
             raise ValueError("concatenate expects at least one tensor")
 
-        first = tensors[0]
-        batch_dims = first.batch_dims
-
-        if axis < 0:
-            axis += len(first.shape)
-        phys_axis = batch_dims + axis
-
-        return super(LogicalAxisOperation, self).__call__(tensors, axis=phys_axis)
+        return super().__call__(tensors, axis=axis)
 
     def maxpr(self, tensors: list[TensorValue], *, axis: int = 0) -> TensorValue:
         return ops.concat(tensors, axis)
@@ -411,14 +404,17 @@ class BroadcastToPhysicalOp(Operation):
         out_rank = len(shape)
         added_dims = max(0, out_rank - in_rank)
 
+        in_batch_dims = x.batch_dims
         for _ in range(added_dims):
-            x = unsqueeze_physical(x, axis=0)
+            x = unsqueeze_physical(x, axis=in_batch_dims)
 
         result = super().__call__(x, shape=shape)
 
         if added_dims > 0:
-            for _ in range(added_dims):
-                result = incr_batch_dims(result)
+            # We don't necessarily want to increment batch_dims here 
+            # if the added dims were for the logical part of the shape.
+            # BinaryOp expects the batch_dims to match the input's.
+            pass
 
         return result
 
@@ -462,7 +458,6 @@ class BroadcastToPhysicalOp(Operation):
         in_mapping = {}
 
         for i in range(in_rank):
-
             out_dim_idx = i + offset
             in_dim_size = in_shape[i]
             out_dim_size = out_shape[out_dim_idx]
@@ -475,6 +470,33 @@ class BroadcastToPhysicalOp(Operation):
         return OpShardingRuleTemplate([in_mapping], [out_mapping]).instantiate(
             input_shapes, output_shapes
         )
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for broadcast_to_physical: sum over broadcasted dimensions."""
+        from ...ops.reduction import reduce_sum_physical
+
+        primal_phys = tuple(
+            int(d) for d in (primals.physical_global_shape or primals.local_shape)
+        )
+        output_phys = tuple(
+            int(d) for d in (output.physical_global_shape or output.local_shape)
+        )
+
+        in_rank = len(primal_phys)
+        out_rank = len(output_phys)
+        offset = out_rank - in_rank
+
+        result = cotangent
+        # 1. Sum over leading new dimensions (which became batch dims)
+        for _ in range(offset):
+            result = reduce_sum_physical(result, axis=0, keepdims=False)
+
+        # 2. Sum over dimensions that were size 1 and got broadcast physically
+        for i in reversed(range(in_rank)):
+            if primal_phys[i] == 1 and output_phys[i + offset] > 1:
+                result = reduce_sum_physical(result, axis=i, keepdims=True)
+
+        return result
 
     def _transform_shard_kwargs(
         self, kwargs: dict, output_sharding: Any, shard_idx: int

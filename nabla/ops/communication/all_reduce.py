@@ -154,15 +154,30 @@ class AllReduceOp(CollectiveOperation):
 
     def _compute_output_spec(self, input_tensor, results, **kwargs):
         """Output clears partial flags but preserves axes mappings for non-partial dims."""
-        from ...core.sharding.spec import ShardingSpec
+        from ...core.sharding.spec import ShardingSpec, DimSpec
         
         if not input_tensor.sharding:
             return None
+        
+        reduce_axes = kwargs.get("reduce_axes")
+        if isinstance(reduce_axes, str):
+            reduce_axes = {reduce_axes}
+        elif isinstance(reduce_axes, (list, tuple)):
+            reduce_axes = set(reduce_axes)
+            
+        if reduce_axes is None:
+            # Full reduction over all sharding axes -> Output is fully replicated
+            new_dim_specs = [DimSpec([]) for _ in input_tensor.sharding.dim_specs]
+            return ShardingSpec(new_dim_specs, partial_sum_axes=set())
             
         new_spec = input_tensor.sharding.clone()
         new_spec.partial_sum_axes.clear()
+        
         for ds in new_spec.dim_specs:
-            ds.partial = False
+             # Remove reduced axes from this dimension's sharding
+             ds.axes = tuple(ax for ax in ds.axes if ax not in reduce_axes)
+             if not ds.axes:
+                 ds.partial = False
             
         return new_spec
 
