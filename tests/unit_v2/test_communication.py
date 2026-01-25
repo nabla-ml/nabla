@@ -37,9 +37,6 @@ from .common import (
 )
 
 
-
-
-
 OPS["all_reduce_sum"] = Operation(
     "all_reduce_sum",
     "COMMUNICATION",
@@ -522,5 +519,3 @@ class TestAllToAllExtended:
 
         # all_to_all changes shape - verify it executes
         result.numpy()
-
-

@@ -104,19 +104,20 @@ class BroadcastToOp(LogicalShapeOperation):
         input_shape = tuple(primals.shape)
         output_rank = len(output.shape)
         input_rank = len(input_shape)
-        
+
         from ...ops.reduction import reduce_sum
+
         result = cotangent
-        
+
         # Sum over leading new dimensions
         for _ in range(output_rank - input_rank):
             result = reduce_sum(result, axis=0, keepdims=False)
-        
+
         # Sum over dimensions that were size 1 and got broadcast
         for i, in_dim in enumerate(input_shape):
             if in_dim == 1:
                 result = reduce_sum(result, axis=i, keepdims=True)
-        
+
         return result
 
     def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
@@ -411,7 +412,7 @@ class BroadcastToPhysicalOp(Operation):
         result = super().__call__(x, shape=shape)
 
         if added_dims > 0:
-            # We don't necessarily want to increment batch_dims here 
+            # We don't necessarily want to increment batch_dims here
             # if the added dims were for the logical part of the shape.
             # BinaryOp expects the batch_dims to match the input's.
             pass

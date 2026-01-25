@@ -31,6 +31,7 @@ class ShardOp(Operation):
         if not x.sharding:
             # If input was not sharded (replicated), we gather/replicate the cotangent
             from .all_gather import gather_all_axes
+
             return gather_all_axes(cotangent)
 
         return reshard(
@@ -210,9 +211,9 @@ class ShardOp(Operation):
         output.sharding = spec
 
         traced = x.traced if isinstance(x, Tensor) else False
-        self._setup_output_refs(
-            output, (x,), {"mesh": mesh, "dim_specs": dim_specs}, traced
-        )
+
+        trace_kwargs = {"mesh": mesh, "dim_specs": dim_specs}
+        self._setup_output_refs(output, (x,), trace_kwargs, trace_kwargs, traced)
 
         return output
 

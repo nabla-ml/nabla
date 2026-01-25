@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ..base import Operation
 
@@ -43,7 +43,9 @@ class CollectiveOperation(Operation):
             values = sharded_tensor.values
         else:
             # Handle list of values if passed directly (unlikely in tracing)
-            values = sharded_tensor if isinstance(sharded_tensor, list) else [sharded_tensor]
+            values = (
+                sharded_tensor if isinstance(sharded_tensor, list) else [sharded_tensor]
+            )
 
         # Filter kwargs to match what maxpr expects (consistent with execute)
         maxpr_kwargs = {
@@ -67,7 +69,9 @@ class CollectiveOperation(Operation):
             mesh=mesh,
         )
 
-        self._setup_output_refs(output, args, original_kwargs or kwargs, any_traced)
+        self._setup_output_refs(
+            output, args, original_kwargs or kwargs, kwargs, any_traced
+        )
         return output
 
     def execute(self, sharded_tensor, **kwargs):
@@ -95,7 +99,7 @@ class CollectiveOperation(Operation):
         output.sharding = output_spec
 
         self._setup_output_refs(
-            output, (sharded_tensor,), kwargs, sharded_tensor.traced
+            output, (sharded_tensor,), kwargs, kwargs, sharded_tensor.traced
         )
 
         return output

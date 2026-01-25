@@ -20,4 +20,3 @@ if TYPE_CHECKING:
 from __future__ import annotations
 
 # This file is deprecated. Operation execution logic is now in nabla.ops.base.Operation.execute.
-

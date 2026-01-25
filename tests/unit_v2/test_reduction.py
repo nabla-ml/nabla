@@ -275,7 +275,10 @@ class TestMultiAxisShardedReductions:
         assert tuple(int(d) for d in result.shape) == (8,)
         assert_allclose(result, expected)
 
-    @pytest.mark.parametrize("mesh_name,mesh_shape,mesh_axes", [("2x4", (2, 4), ("x", "y")), ("4x2", (4, 2), ("x", "y"))])
+    @pytest.mark.parametrize(
+        "mesh_name,mesh_shape,mesh_axes",
+        [("2x4", (2, 4), ("x", "y")), ("4x2", (4, 2), ("x", "y"))],
+    )
     def test_reduce_asymmetric_multi_axis_mesh(self, mesh_name, mesh_shape, mesh_axes):
         """Test reduction on asymmetric 2D mesh with both axes sharded."""
         mesh = DeviceMesh(f"mesh_{mesh_name}", mesh_shape, mesh_axes)

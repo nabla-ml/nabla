@@ -33,7 +33,9 @@ class TestVmapShardingUnary:
             x_sharded = x.shard(mesh, P(mesh_axes[-1]))
             return nb.relu(x_sharded)
 
-        np_x = jax.random.normal(jax.random.PRNGKey(42), (batch, features), dtype=jnp.float32)
+        np_x = jax.random.normal(
+            jax.random.PRNGKey(42), (batch, features), dtype=jnp.float32
+        )
         x = tensor_from_jax(np_x)
 
         result = nb.vmap(f)(x)
@@ -56,8 +58,12 @@ class TestVmapShardingBinary:
             bias_sharded = bias.shard(mesh, P(mesh_axes[-1]))
             return nb.add(x, bias_sharded)
 
-        np_x = jax.random.normal(jax.random.PRNGKey(43), (batch, hidden), dtype=jnp.float32)
-        np_bias = jax.random.normal(jax.random.PRNGKey(44), (hidden,), dtype=jnp.float32)
+        np_x = jax.random.normal(
+            jax.random.PRNGKey(43), (batch, hidden), dtype=jnp.float32
+        )
+        np_bias = jax.random.normal(
+            jax.random.PRNGKey(44), (hidden,), dtype=jnp.float32
+        )
 
         x = tensor_from_jax(np_x)
         bias = tensor_from_jax(np_bias)
@@ -81,8 +87,12 @@ class TestVmapShardingMatmul:
             w_sharded = w.shard(mesh, P(None, "tp"))
             return nb.matmul(x, w_sharded)
 
-        np_x = jax.random.normal(jax.random.PRNGKey(45), (batch, in_feat), dtype=jnp.float32)
-        np_w = jax.random.normal(jax.random.PRNGKey(46), (in_feat, out_feat), dtype=jnp.float32)
+        np_x = jax.random.normal(
+            jax.random.PRNGKey(45), (batch, in_feat), dtype=jnp.float32
+        )
+        np_w = jax.random.normal(
+            jax.random.PRNGKey(46), (in_feat, out_feat), dtype=jnp.float32
+        )
 
         x = tensor_from_jax(np_x)
         w = tensor_from_jax(np_w)
@@ -103,8 +113,12 @@ class TestVmapShardingMatmul:
             w_sharded = w.shard(mesh, P("tp", None))
             return nb.matmul(x_sharded, w_sharded)
 
-        np_x = jax.random.normal(jax.random.PRNGKey(47), (batch, in_feat), dtype=jnp.float32)
-        np_w = jax.random.normal(jax.random.PRNGKey(48), (in_feat, out_feat), dtype=jnp.float32)
+        np_x = jax.random.normal(
+            jax.random.PRNGKey(47), (batch, in_feat), dtype=jnp.float32
+        )
+        np_w = jax.random.normal(
+            jax.random.PRNGKey(48), (in_feat, out_feat), dtype=jnp.float32
+        )
 
         x = tensor_from_jax(np_x)
         w = tensor_from_jax(np_w)
@@ -163,10 +177,23 @@ class TestVmapShardingComposite:
 
             return out
 
-        np_x = jax.random.normal(jax.random.PRNGKey(50), (batch, hidden), dtype=jnp.float32) * 0.1
-        np_w1 = jax.random.normal(jax.random.PRNGKey(51), (hidden, ffn), dtype=jnp.float32) * 0.1
-        np_w2 = jax.random.normal(jax.random.PRNGKey(52), (ffn, hidden), dtype=jnp.float32) * 0.1
-        np_b1 = jax.random.normal(jax.random.PRNGKey(53), (ffn,), dtype=jnp.float32) * 0.1
+        np_x = (
+            jax.random.normal(
+                jax.random.PRNGKey(50), (batch, hidden), dtype=jnp.float32
+            )
+            * 0.1
+        )
+        np_w1 = (
+            jax.random.normal(jax.random.PRNGKey(51), (hidden, ffn), dtype=jnp.float32)
+            * 0.1
+        )
+        np_w2 = (
+            jax.random.normal(jax.random.PRNGKey(52), (ffn, hidden), dtype=jnp.float32)
+            * 0.1
+        )
+        np_b1 = (
+            jax.random.normal(jax.random.PRNGKey(53), (ffn,), dtype=jnp.float32) * 0.1
+        )
 
         x = tensor_from_jax(np_x)
         w1 = tensor_from_jax(np_w1)

@@ -176,6 +176,7 @@ def constant(
     """
     if dtype is None:
         import numpy as np
+
         if isinstance(value, np.ndarray):
             try:
                 dtype = DType[str(value.dtype)]
@@ -291,9 +292,11 @@ def ones_like(x: Any) -> Any:
     """Create a tensor of ones with the same shape/dtype/device as x."""
     return ones(x.shape, dtype=x.dtype, device=x.device)
 
+
 def full_like(x: Any, value: Number) -> Any:
     """Create a tensor of ones with the same shape/dtype/device as x."""
     return full(x.shape, value, dtype=x.dtype, device=x.device)
+
 
 __all__ = [
     "ConstantOp",

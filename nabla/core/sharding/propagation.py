@@ -155,9 +155,15 @@ class FactorShardingState:
                         factor.is_open = new_is_open
                 else:
                     # If one is a prefix of the other, take the longer one (alignment)
-                    if len(new_axes) > len(factor.axes) and new_axes[:len(factor.axes)] == factor.axes:
+                    if (
+                        len(new_axes) > len(factor.axes)
+                        and new_axes[: len(factor.axes)] == factor.axes
+                    ):
                         factor.axes = list(new_axes)
-                    elif len(factor.axes) >= len(new_axes) and factor.axes[:len(new_axes)] == new_axes:
+                    elif (
+                        len(factor.axes) >= len(new_axes)
+                        and factor.axes[: len(new_axes)] == new_axes
+                    ):
                         # factor.axes already contains new_axes as prefix, keep it
                         pass
                     else:
@@ -169,13 +175,13 @@ class FactorShardingState:
             return
 
         if has_new and not has_existing:
-             # Replication matches anything if it's a prefix, but sharding is more specific.
-             # If factor was already replicated (closed or open), and new is sharded.
-             if new_priority <= factor.priority:
-                 factor.axes = list(new_axes)
-                 factor.priority = new_priority
-                 factor.is_open = new_is_open
-             return
+            # Replication matches anything if it's a prefix, but sharding is more specific.
+            # If factor was already replicated (closed or open), and new is sharded.
+            if new_priority <= factor.priority:
+                factor.axes = list(new_axes)
+                factor.priority = new_priority
+                factor.is_open = new_is_open
+            return
 
         if has_new and new_priority > factor.priority:
             return
@@ -671,7 +677,70 @@ def propagate_sharding(
     if _update_from_factors(input_specs, rule.input_mappings, state):
         changed = True
 
-    return changed
+        def propagate_sharding(
+            rule: OpShardingRule,
+            input_specs: list[ShardingSpec],
+            output_specs: list[ShardingSpec],
+            strategy: PropagationStrategy = PropagationStrategy.BASIC,
+            max_priority: int | None = None,
+        ) -> bool:
+            """Propagate shardings between inputs/outputs. Returns True if changed."""
+            if not input_specs and not output_specs:
+                return False
+
+            mesh = input_specs[0].mesh if input_specs else output_specs[0].mesh
+
+            state = FactorShardingState()
+            _collect_to_factors(
+                input_specs,
+                rule.input_mappings,
+                rule,
+                mesh,
+                state,
+                strategy,
+                max_priority,
+            )
+            _collect_to_factors(
+                output_specs,
+                rule.output_mappings,
+                rule,
+                mesh,
+                state,
+                strategy,
+                max_priority,
+            )
+
+            changed = False
+            if _update_from_factors(output_specs, rule.output_mappings, state):
+                changed = True
+            if _update_from_factors(input_specs, rule.input_mappings, state):
+                changed = True
+
+                # Infer Partial Sums for outputs
+
+                contracting_factors = rule.get_contracting_factors()
+
+                partial_axes = set()
+
+                for f in contracting_factors:
+
+                    f_state = state.get(f)
+
+                    if f_state and f_state.axes:
+
+                        partial_axes.update(f_state.axes)
+
+                if partial_axes:
+
+                    for out_spec in output_specs:
+
+                        if not partial_axes.issubset(out_spec.partial_sum_axes):
+
+                            out_spec.partial_sum_axes.update(partial_axes)
+
+                            changed = True
+
+                return changed
 
 
 def run_hierarchical_propagation_pass(

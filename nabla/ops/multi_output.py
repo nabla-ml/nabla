@@ -68,6 +68,7 @@ class SplitOp(LogicalAxisOperation):
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for split: concatenate cotangents along split axis."""
         from .view.shape import concatenate
+
         # output is a tuple/list of tensors
         target = output[0] if isinstance(output, (list, tuple)) else output
         axis = target.op_kwargs.get("axis", 0)
@@ -169,6 +170,7 @@ class ChunkOp(LogicalAxisOperation):
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for chunk: concatenate cotangents along chunk axis."""
         from .view.shape import concatenate
+
         target = output[0] if isinstance(output, (list, tuple)) else output
         axis = target.op_kwargs.get("axis", 0)
         return concatenate(cotangent, axis=axis)
@@ -243,6 +245,7 @@ class UnbindOp(LogicalAxisOperation):
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for unbind: stack cotangents and unsqueeze along unbound axis."""
         from .view.shape import stack
+
         target = output[0] if isinstance(output, (list, tuple)) else output
         axis = target.op_kwargs.get("axis", 0)
         return stack(cotangent, axis=axis)
@@ -297,19 +300,19 @@ class MinMaxOp(Operation):
     def __call__(self, x: Tensor, **kwargs: Any) -> dict[str, Tensor]:
         """Compute global min and max by reducing all axes."""
         from ..ops.reduction import reduce_min, reduce_max
-        
+
         # Reduce along all axes to get scalar
         result_min = x
         result_max = x
         for axis in reversed(range(len(x.shape))):
             result_min = reduce_min(result_min, axis=axis, keepdims=False)
             result_max = reduce_max(result_max, axis=axis, keepdims=False)
-        
+
         return {
             "min": result_min,
             "max": result_max,
         }
-    
+
     def maxpr(self, x: TensorValue, **kwargs: Any) -> dict[str, TensorValue]:
         """Compute min and max simultaneously."""
         return {

@@ -31,7 +31,8 @@ class OutputRefs:
         tree_def: PyTreeDef for output structure.
         op: Producing Operation.
         op_args: Original input arguments.
-        op_kwargs: Original keyword arguments.
+        op_kwargs: Original logical keyword arguments.
+        physical_kwargs: Adapted physical keyword arguments.
     """
 
     _refs: tuple[weakref.ref, ...]
@@ -39,6 +40,7 @@ class OutputRefs:
     op: Operation
     op_args: tuple[Any, ...]
     op_kwargs: dict[str, Any] | None
+    physical_kwargs: dict[str, Any] | None = None
 
     def __post_init__(self):
         """Validate that refs and tree_def are consistent."""
@@ -153,20 +155,18 @@ class Trace:
 
     def rehydrate(self) -> None:
         """Rehydrate all TensorImpl._values by replaying operations.
-        
+
         Identifies all leaf tensors in the trace (including captured constants),
-        ensures they are realized, and then replays all operations in 
+        ensures they are realized, and then replays all operations in
         topological order to re-establish graph values for the current epoch.
         """
         if not self._computed:
             self.compute()
-        
+
         from ..tensor.api import Tensor
         from .engine import GRAPH
-        
+
         # 1. Collect all leaf TensorImpls in the trace.
-        # A leaf is a tensor that was either passed as a user input or 
-        # was an external/constant tensor existing before tracing.
         leaf_impls = set()
         for ref in self.nodes:
             for arg in tree_leaves(ref.op_args):
@@ -174,28 +174,23 @@ class Trace:
                     impl = arg._impl if isinstance(arg, Tensor) else arg
                     if not impl.output_refs:
                         leaf_impls.add(impl)
-        
+
         # Always include user-provided inputs as leaves.
         for inp in tree_leaves(self.inputs):
-             if isinstance(inp, (Tensor, TensorImpl)):
-                 leaf_impls.add(inp._impl if isinstance(inp, Tensor) else inp)
-        
-        # 2. Realize all leaves together. 
-        # They must be realized while their current _values (if any) are valid.
-        # If they are already realized, this call is safe.
+            if isinstance(inp, (Tensor, TensorImpl)):
+                leaf_impls.add(inp._impl if isinstance(inp, Tensor) else inp)
+
+        # 2. Realize all leaves together.
         leaf_tensors = [Tensor(impl=impl) for impl in leaf_impls]
         if leaf_tensors:
-             GRAPH.evaluate(leaf_tensors[0], *leaf_tensors[1:])
-        
-        # Now GRAPH.epoch has been incremented and every leaf has _storages.
-        
+            GRAPH.evaluate(leaf_tensors[0], *leaf_tensors[1:])
+
         # 3. Add all leaves to the current graph to get fresh values.
         for t in leaf_tensors:
             GRAPH.add_input(t)
-            # Ensure _values contains TensorValue (BufferValue is not suitable for SPMD)
-            if hasattr(t, '_value') and t._value is not None:
+            if hasattr(t, "_values") and t._values:
                 with GRAPH.graph:
-                    t._impl._values = [t._value[...]]
+                    t._impl._values = [v[...] for v in t._values]
                     t._impl.values_epoch = GRAPH.epoch
 
         # 4. Iterate through nodes and call maxpr_all to recompute intermediates.
@@ -205,7 +200,7 @@ class Trace:
                 continue
 
             op = output_refs.op
-            
+
             def to_tensor(x):
                 if isinstance(x, TensorImpl):
                     return Tensor(impl=x)
@@ -220,11 +215,12 @@ class Trace:
                 if isinstance(arg, Tensor):
                     if arg.batch_dims > max_batch_dims:
                         max_batch_dims = arg.batch_dims
-            
+
+            # Use adapt_kwargs dynamically during rehydration as batch_dims might change
             if hasattr(op, "adapt_kwargs"):
-                 adapted_kwargs = op.adapt_kwargs(op_args, op_kwargs, max_batch_dims)
+                adapted_kwargs = op.adapt_kwargs(op_args, op_kwargs, max_batch_dims)
             else:
-                 adapted_kwargs = op_kwargs
+                adapted_kwargs = op_kwargs
 
             # Determine sharding context from one of the alive outputs.
             mesh = None
@@ -236,44 +232,44 @@ class Trace:
 
             # Re-execute maxpr_all in the current graph epoch.
             output_tensor_struct = op.maxpr_all(
-                op_args, 
-                adapted_kwargs, 
-                output_sharding, 
-                mesh, 
-                any_traced=False, 
+                op_args,
+                adapted_kwargs,
+                output_sharding,
+                mesh,
+                any_traced=False,
                 max_batch_dims=max_batch_dims,
-                original_kwargs=op_kwargs
+                original_kwargs=op_kwargs,
             )
-            
+
             if output_tensor_struct is None:
                 continue
 
             # DEBUG: Print shard count for the first output
             first_out_leaves = [
-                x for x in pytree.tree_leaves(output_tensor_struct, is_leaf=pytree.is_tensor) 
+                x
+                for x in pytree.tree_leaves(
+                    output_tensor_struct, is_leaf=pytree.is_tensor
+                )
                 if isinstance(x, Tensor)
             ]
             if first_out_leaves:
-                 impl = first_out_leaves[0]._impl
-                 print(f"  [REHYDRATE] {op.name} produced {len(impl._values)} shards")
-
-            # DEBUG: Print step info
-            print(f"  [REHYDRATE] Node {i}: {op.name}")
-            for j, arg in enumerate(tree_leaves(op_args)):
-                if isinstance(arg, Tensor):
-                    print(f"    In {j}: shards={len(arg._impl._values)}, sharding={arg.sharding}")
+                impl = first_out_leaves[0]._impl
 
             # Extract produced TensorImpls and map them back to original objects.
             produced_impls = [
-                x._impl for x in pytree.tree_leaves(output_tensor_struct, is_leaf=pytree.is_tensor) 
+                x._impl
+                for x in pytree.tree_leaves(
+                    output_tensor_struct, is_leaf=pytree.is_tensor
+                )
                 if isinstance(x, Tensor)
             ]
 
-            for out_impl, produced_impl in zip(alive_outputs, produced_impls, strict=False):
+            for out_impl, produced_impl in zip(
+                alive_outputs, produced_impls, strict=False
+            ):
                 if out_impl is not None and produced_impl is not None:
-                     print(f"    Out: shards={len(produced_impl._values)}, sharding={produced_impl.sharding}")
-                     out_impl._values = produced_impl._values
-                     out_impl.values_epoch = GRAPH.epoch
+                    out_impl._values = produced_impl._values
+                    out_impl.values_epoch = GRAPH.epoch
 
     def __str__(self) -> str:
         """Pretty-print the trace."""
@@ -537,7 +533,7 @@ class GraphPrinter:
             lines.append(f"){fn_mesh_str} {{")
         else:
             lines.append(
-                f"{C_KEYWORD}fn{RESET}({', '.join(input_vars)}){fn_mesh_str} {{"
+                f"{C_KEYWORD}fn{RESET}({', '.join(input_vars)}){fn_mesh_str} {{ "
             )
 
         current_block_mesh = None

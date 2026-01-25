@@ -353,4 +353,3 @@ class TestGatherScatterRoundTrip:
 
         assert_shape(result, (8, 4))
         assert_allclose(result, expected)
-

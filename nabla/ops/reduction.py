@@ -45,6 +45,7 @@ class ReduceSumOp(ReduceOperation):
         """VJP for reduce_sum: broadcast cotangent back to input shape."""
         x = primals
         from ..ops.view.shape import broadcast_to
+
         return broadcast_to(cotangent, tuple(x.shape))
 
     def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
@@ -53,7 +54,6 @@ class ReduceSumOp(ReduceOperation):
         # Sum of tangents is the JVP
         axis = output.op_kwargs.get("axis", 0)
         return reduce_sum(t, axis=axis, keepdims=True)
-
 
 
 class MeanOp(ReduceOperation):
@@ -69,12 +69,13 @@ class MeanOp(ReduceOperation):
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for mean: broadcast cotangent / axis_size."""
         x = primals
-        
+
         # Get axis from kwargs if available (from trace)
         axis = output.op_kwargs.get("axis", 0)
-            
+
         axis_size = x.shape[axis]
         from ..ops.view.shape import broadcast_to
+
         # Create target shape for broadcasting cotangent back to x's shape
         target_shape = tuple(int(d) for d in x.shape)
         return broadcast_to(cotangent, target_shape) / axis_size
@@ -130,6 +131,7 @@ class ReduceMaxOp(ReduceOperation):
         from ..ops.comparison import equal
         from ..ops.view.shape import broadcast_to
         from ..ops.binary import mul
+
         # Broadcast output back to input shape for comparison
         max_broadcasted = broadcast_to(output, tuple(x.shape))
         mask = equal(x, max_broadcasted)  # 1.0 where x == max, 0.0 elsewhere
@@ -397,18 +399,25 @@ _mean_op = MeanOp()
 _reduce_max_op = ReduceMaxOp()
 
 
-def reduce_sum(x: Tensor, *, axis: int | tuple[int, ...] | list[int], keepdims: bool = False) -> Tensor:
+def reduce_sum(
+    x: Tensor,
+    *,
+    axis: int | tuple[int, ...] | list[int] | None = None,
+    keepdims: bool = False,
+) -> Tensor:
     from .view import squeeze
 
+    if axis is None:
+        axis = tuple(range(len(x.shape)))
+
     if isinstance(axis, (list, tuple)):
-        # Sort axes in descending order to avoid axis shifting if we were squeezing, 
-        # but here we use keepdims=True for intermediate steps, so order doesn't matter for correctness,
-        # but we must be careful with final squeezing.
-        axes = sorted([ax if ax >= 0 else len(x.shape) + ax for ax in axis], reverse=True)
+        axes = sorted(
+            [ax if ax >= 0 else len(x.shape) + ax for ax in axis], reverse=True
+        )
         res = x
         for ax in axes:
             res = _reduce_sum_op(res, axis=ax, keepdims=True)
-        
+
         if not keepdims:
             for ax in axes:
                 res = squeeze(res, axis=ax)
@@ -420,7 +429,12 @@ def reduce_sum(x: Tensor, *, axis: int | tuple[int, ...] | list[int], keepdims: 
     return result
 
 
-def mean(x: Tensor, *, axis: int | tuple[int, ...] | list[int], keepdims: bool = False) -> Tensor:
+def mean(
+    x: Tensor,
+    *,
+    axis: int | tuple[int, ...] | list[int] | None = None,
+    keepdims: bool = False,
+) -> Tensor:
     """Compute arithmetic mean along specified axis/axes.
 
     Implemented as sum(x) / product(shape[axes]) to correctly handle distributed sharding.
@@ -428,7 +442,11 @@ def mean(x: Tensor, *, axis: int | tuple[int, ...] | list[int], keepdims: bool =
     s = reduce_sum(x, axis=axis, keepdims=keepdims)
 
     shape = x.shape
-    if isinstance(axis, (list, tuple)):
+    if axis is None:
+        count = 1
+        for d in shape:
+            count *= int(d)
+    elif isinstance(axis, (list, tuple)):
         count = 1
         for ax in axis:
             norm_ax = ax if ax >= 0 else len(shape) + ax
@@ -436,19 +454,29 @@ def mean(x: Tensor, *, axis: int | tuple[int, ...] | list[int], keepdims: bool =
     else:
         norm_ax = axis if axis >= 0 else len(shape) + axis
         count = int(shape[norm_ax])
-        
+
     return s / count
 
 
-def reduce_max(x: Tensor, *, axis: int | tuple[int, ...] | list[int], keepdims: bool = False) -> Tensor:
+def reduce_max(
+    x: Tensor,
+    *,
+    axis: int | tuple[int, ...] | list[int] | None = None,
+    keepdims: bool = False,
+) -> Tensor:
     from .view import squeeze
 
+    if axis is None:
+        axis = tuple(range(len(x.shape)))
+
     if isinstance(axis, (list, tuple)):
-        axes = sorted([ax if ax >= 0 else len(x.shape) + ax for ax in axis], reverse=True)
+        axes = sorted(
+            [ax if ax >= 0 else len(x.shape) + ax for ax in axis], reverse=True
+        )
         res = x
         for ax in axes:
             res = _reduce_max_op(res, axis=ax, keepdims=True)
-        
+
         if not keepdims:
             for ax in axes:
                 res = squeeze(res, axis=ax)
@@ -484,15 +512,25 @@ def reduce_max_physical(x: Tensor, axis: int, keepdims: bool = False) -> Tensor:
     return result
 
 
-def reduce_min(x: Tensor, *, axis: int | tuple[int, ...] | list[int], keepdims: bool = False) -> Tensor:
+def reduce_min(
+    x: Tensor,
+    *,
+    axis: int | tuple[int, ...] | list[int] | None = None,
+    keepdims: bool = False,
+) -> Tensor:
     from .view import squeeze
 
+    if axis is None:
+        axis = tuple(range(len(x.shape)))
+
     if isinstance(axis, (list, tuple)):
-        axes = sorted([ax if ax >= 0 else len(x.shape) + ax for ax in axis], reverse=True)
+        axes = sorted(
+            [ax if ax >= 0 else len(x.shape) + ax for ax in axis], reverse=True
+        )
         res = x
         for ax in axes:
             res = _reduce_min_op(res, axis=ax, keepdims=True)
-        
+
         if not keepdims:
             for ax in axes:
                 res = squeeze(res, axis=ax)

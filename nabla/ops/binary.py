@@ -30,6 +30,7 @@ class AddOp(BinaryOperation):
     def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
         """JVP for addition: tangent_x + tangent_y."""
         from . import add
+
         return add(tangents[0], tangents[1])
 
 
@@ -45,6 +46,7 @@ class MulOp(BinaryOperation):
         """VJP for multiplication: ∂(x*y)/∂x = y, ∂(x*y)/∂y = x."""
         x, y = primals
         from . import mul
+
         return (mul(cotangent, y), mul(cotangent, x))
 
     def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
@@ -52,6 +54,7 @@ class MulOp(BinaryOperation):
         x, y = primals
         tx, ty = tangents
         from . import add, mul
+
         return add(mul(x, ty), mul(tx, y))
 
 
@@ -66,11 +69,13 @@ class SubOp(BinaryOperation):
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for subtraction: ∂(x-y)/∂x = 1, ∂(x-y)/∂y = -1."""
         from ..ops.unary import neg
+
         return (cotangent, neg(cotangent))
 
     def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
         """JVP for subtraction: tangent_x - tangent_y."""
         from . import sub
+
         return sub(tangents[0], tangents[1])
 
 
@@ -87,6 +92,7 @@ class DivOp(BinaryOperation):
         x, y = primals
         from . import div, mul
         from ..ops.unary import neg
+
         grad_x = div(cotangent, y)
         grad_y = neg(mul(cotangent, div(x, mul(y, y))))
         return (grad_x, grad_y)
@@ -96,6 +102,7 @@ class DivOp(BinaryOperation):
         x, y = primals
         tx, ty = tangents
         from . import div, mul, sub
+
         return div(sub(mul(y, tx), mul(x, ty)), mul(y, y))
 
 
@@ -179,6 +186,7 @@ class MatmulOp(Operation):
         x, y = primals
         from ..ops.view.axes import swap_axes
         from . import matmul
+
         # ∂L/∂X = ∂L/∂out @ W.T
         grad_x = matmul(cotangent, swap_axes(y, axis1=-2, axis2=-1))
         # ∂L/∂W = X.T @ ∂L/∂out
@@ -190,6 +198,7 @@ class MatmulOp(Operation):
         x, y = primals
         tx, ty = tangents
         from . import add, matmul
+
         return add(matmul(x, ty), matmul(tx, y))
 
 

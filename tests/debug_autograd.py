@@ -9,9 +9,11 @@ from nabla.core.autograd import backward_on_trace
 from nabla.core.sharding import DeviceMesh, DimSpec
 from nabla.transforms.vmap import vmap
 
+
 class TestAutogradDebug(unittest.TestCase):
     def test_01_simple_matmul_relu(self):
         print("\n[Test 01] Simple Matmul + ReLU (Unsharded)")
+
         def fn(x, w):
             return ops.relu(x @ w)
 
@@ -23,11 +25,11 @@ class TestAutogradDebug(unittest.TestCase):
 
         traced = trace(fn, x_nb, w_nb)
         print(f"  Nodes: {len(traced.nodes)}")
-        
+
         # Loss = sum(output)
         def loss_fn(x, w):
             return jnp.sum(jax.nn.relu(x @ w))
-        
+
         gw_jax = jax.grad(loss_fn, argnums=1)(x_np, w_np)
         gx_jax = jax.grad(loss_fn, argnums=0)(x_np, w_np)
 
@@ -41,6 +43,7 @@ class TestAutogradDebug(unittest.TestCase):
 
     def test_02_simple_vmap_unsharded(self):
         print("\n[Test 02] Simple VMap (Unsharded)")
+
         def layer(x, w):
             return ops.relu(x @ w)
 
@@ -58,7 +61,7 @@ class TestAutogradDebug(unittest.TestCase):
 
         traced = trace(full_fn, x_nb, w_nb)
         print(f"  Nodes: {len(traced.nodes)}")
-        
+
         def ref_fn(x, w):
             y = jax.vmap(lambda xi: jax.nn.relu(xi @ w))(x)
             return jnp.sum(y)
@@ -76,21 +79,23 @@ class TestAutogradDebug(unittest.TestCase):
         print("\n[Test 03] Data Parallel VMap")
         np.random.seed(42)
         mesh = DeviceMesh("dp", (2,), ("data",))
-        
+
         def layer(x, w):
             return ops.relu(x @ w)
 
-        vmapped_layer = vmap(layer, in_axes=(0, None), out_axes=0, spmd_axis_name="data", mesh=mesh)
+        vmapped_layer = vmap(
+            layer, in_axes=(0, None), out_axes=0, spmd_axis_name="data", mesh=mesh
+        )
 
         x_np = np.random.randn(4, 8, 16).astype(np.float32)
         w_np = np.random.randn(16, 32).astype(np.float32)
 
         x_nb = nb.Tensor.from_dlpack(x_np.copy())
         w_nb = nb.Tensor.from_dlpack(w_np.copy())
-        
+
         # Shard x along batch dim
         x_nb = ops.shard(x_nb, mesh, [DimSpec(["data"]), DimSpec([]), DimSpec([])])
-        
+
         # Explicitly replicate w to ensure correct gradient accumulation (AllReduce)
         w_nb = ops.shard(w_nb, mesh, [DimSpec([]), DimSpec([])])
 
@@ -119,6 +124,7 @@ class TestAutogradDebug(unittest.TestCase):
         np.testing.assert_allclose(grads[w_nb].to_numpy(), gw_jax, rtol=1e-5, atol=1e-5)
         print("  ✓ w gradients matched!")
         print("  ✓ DP VMap gradients matched!")
+
 
 if __name__ == "__main__":
     suite = unittest.TestSuite()

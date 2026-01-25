@@ -60,32 +60,42 @@ class WhereOp(Operation):
         x_shape = tuple(int(d) for d in x.shape)
         y_shape = tuple(int(d) for d in y.shape)
 
-        from .binary import mul # Just to get access to _broadcast_shapes or similar
+        from .binary import mul  # Just to get access to _broadcast_shapes or similar
+
         # Actually BinaryOperation._broadcast_shapes is not static.
         def broadcast_shapes(*shapes):
             res = shapes[0]
             for s in shapes[1:]:
                 # Simplified broadcast logic
-                if len(res) < len(s): res = (1,) * (len(s) - len(res)) + res
-                if len(s) < len(res): s = (1,) * (len(res) - len(s)) + s
+                if len(res) < len(s):
+                    res = (1,) * (len(s) - len(res)) + res
+                if len(s) < len(res):
+                    s = (1,) * (len(res) - len(s)) + s
                 new_res = []
                 for d1, d2 in zip(res, s):
-                    if d1 == d2: new_res.append(d1)
-                    elif d1 == 1: new_res.append(d2)
-                    elif d2 == 1: new_res.append(d1)
-                    else: raise ValueError(f"Incompatible shapes {res} and {s}")
+                    if d1 == d2:
+                        new_res.append(d1)
+                    elif d1 == 1:
+                        new_res.append(d2)
+                    elif d2 == 1:
+                        new_res.append(d1)
+                    else:
+                        raise ValueError(f"Incompatible shapes {res} and {s}")
                 res = tuple(new_res)
             return res
 
         target_logical = broadcast_shapes(c_shape, x_shape, y_shape)
-        
-        if c_shape != target_logical: condition = view_ops.broadcast_to(condition, target_logical)
-        if x_shape != target_logical: x = view_ops.broadcast_to(x, target_logical)
-        if y_shape != target_logical: y = view_ops.broadcast_to(y, target_logical)
+
+        if c_shape != target_logical:
+            condition = view_ops.broadcast_to(condition, target_logical)
+        if x_shape != target_logical:
+            x = view_ops.broadcast_to(x, target_logical)
+        if y_shape != target_logical:
+            y = view_ops.broadcast_to(y, target_logical)
 
         # 2. Physical Broadcasting (Batch Dims)
         max_bd = max(condition.batch_dims, x.batch_dims, y.batch_dims)
-        
+
         # Get batch shape
         batch_shape = ()
         for t in [condition, x, y]:
@@ -94,9 +104,9 @@ class WhereOp(Operation):
                 if global_phys:
                     batch_shape = tuple(int(d) for d in global_phys[:max_bd])
                     break
-        
+
         target_physical = batch_shape + target_logical
-        
+
         def align(t):
             t_phys = t.physical_global_shape or t.local_shape
             if t_phys is None or tuple(int(d) for d in t_phys) != target_physical:
@@ -122,18 +132,18 @@ class WhereOp(Operation):
         """VJP for where(cond, x, y): 0.0 for cond, masked cotangent for x and y."""
         from .creation import zeros_like
         from .control_flow import where
-        
+
         condition, x, y = primals
-        
+
         # grad_cond is always 0 as condition is non-differentiable
         grad_cond = zeros_like(condition)
-        
+
         # grad_x is cotangent where condition is True, else 0
         grad_x = where(condition, cotangent, zeros_like(x))
-        
+
         # grad_y is cotangent where condition is False, else 0 (or 0 where cond is True)
         grad_y = where(condition, zeros_like(y), cotangent)
-        
+
         return (grad_cond, grad_x, grad_y)
 
 

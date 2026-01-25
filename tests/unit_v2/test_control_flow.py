@@ -20,7 +20,7 @@ import nabla as nb
 from nabla.ops.control_flow import cond, scan, where, while_loop
 
 
-from . common import (
+from .common import (
     MESH_CONFIGS,
     DeviceMesh,
 )
@@ -95,7 +95,9 @@ class TestWhereOp:
     def test_where_vmap(self, batch_size):
         """vmap(where) with batched inputs."""
         key = jax.random.PRNGKey(102)
-        cond_jax = jax.random.choice(key, jnp.array([True, False]), shape=(batch_size, 8))
+        cond_jax = jax.random.choice(
+            key, jnp.array([True, False]), shape=(batch_size, 8)
+        )
         jax_x = make_jax_array(batch_size, 8, seed=42)
         jax_y = make_jax_array(batch_size, 8, seed=43)
 
@@ -239,7 +241,10 @@ class TestWhileLoopOp:
             i, acc = state
             return (i + 1, acc + i)
 
-        init_state = (nb.constant(1, dtype=nb.DType.int32), nb.constant(0, dtype=nb.DType.int32))
+        init_state = (
+            nb.constant(1, dtype=nb.DType.int32),
+            nb.constant(0, dtype=nb.DType.int32),
+        )
         result_i, result_acc = while_loop(cond_fn, body_fn, init_state)
 
         assert_allclose(result_i, jnp.array(11, dtype=jnp.int32))
@@ -412,7 +417,10 @@ class TestControlFlowEdgeCases:
             i, val = state
             return (i + 1, val + 5.0)
 
-        init_state = (nb.constant(0, dtype=nb.DType.int32), nb.constant(0.0, dtype=nb.DType.float32))
+        init_state = (
+            nb.constant(0, dtype=nb.DType.int32),
+            nb.constant(0.0, dtype=nb.DType.float32),
+        )
         result_i, result_val = while_loop(cond_fn, body_fn, init_state)
 
         assert_allclose(result_i, jnp.array(10, dtype=jnp.int32))

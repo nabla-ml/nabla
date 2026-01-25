@@ -57,44 +57,44 @@ class ReduceScatterOp(CollectiveOperation):
             from max.dtype import DType
             from max.graph.ops.allgather import allgather as max_allgather
             from max.graph.type import BufferType
-            
+
             # Robust implementation via allgather (since native allreduce is broken)
             BUFFER_SIZE = 65536
             signal_buffers = [
                 ops.buffer_create(BufferType(DType.uint8, (BUFFER_SIZE,), dev))
                 for dev in mesh.device_refs
             ]
-            
+
             # 1. Gather all inputs (concatenated)
             gathered_list = max_allgather(shard_values, signal_buffers, axis=axis)
-            gathered_tensor = gathered_list[0] # All devices get same data
-            
+            gathered_tensor = gathered_list[0]  # All devices get same data
+
             # 2. Split into original input chunks
             chunk_shape = shard_values[0].type.shape
             chunk_axis_size = int(chunk_shape[axis])
             num_shards = len(shard_values)
-            
+
             input_chunks = []
             for i in range(num_shards):
                 slices = [slice(None)] * len(chunk_shape)
                 slices[axis] = slice(i * chunk_axis_size, (i + 1) * chunk_axis_size)
                 input_chunks.append(gathered_tensor[tuple(slices)])
-            
+
             # 3. Reduce (Sum)
             reduced = input_chunks[0]
             for chunk in input_chunks[1:]:
                 reduced = ops.add(reduced, chunk)
-                
+
             # 4. Scatter (Split result into output chunks)
             # Result shape is same as input chunk shape
             output_axis_size = chunk_axis_size // num_shards
-            
+
             scattered = []
             for i in range(num_shards):
                 slices = [slice(None)] * len(chunk_shape)
                 slices[axis] = slice(i * output_axis_size, (i + 1) * output_axis_size)
                 scattered.append(reduced[tuple(slices)])
-                
+
             return scattered
 
         full_result = shard_values[0]

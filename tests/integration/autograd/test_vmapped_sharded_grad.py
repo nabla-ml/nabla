@@ -7,6 +7,7 @@ from nabla.core.autograd import backward_on_trace
 from nabla.core.sharding import DeviceMesh, DimSpec
 from nabla.transforms import vmap
 
+
 def test_vmapped_sharded_grad():
     """Test VJP rules on sharded and vmapped inputs."""
     print("\n" + "=" * 70)
@@ -14,7 +15,7 @@ def test_vmapped_sharded_grad():
     print("=" * 70)
 
     mesh = DeviceMesh("mesh", (2,), ("tp",))
-    
+
     # 8 samples, each size (4, 4)
     # Total shape: (8, 4, 4)
     np.random.seed(42)
@@ -34,7 +35,7 @@ def test_vmapped_sharded_grad():
     grad_fn = jax.grad(jax_vmap_fn, argnums=(0, 1))
     grads_jax = grad_fn(x_np, y_np)
 
-    # 2. Nabla 
+    # 2. Nabla
     x_nb = nb.Tensor.from_dlpack(x_np.copy())
     y_nb = nb.Tensor.from_dlpack(y_np.copy())
 
@@ -68,6 +69,7 @@ def test_vmapped_sharded_grad():
     # Verify
     def to_np(t):
         from nabla.core.graph.engine import GRAPH
+
         if not t._impl.is_realized:
             GRAPH.evaluate(t)
         return np.asarray(t.to_numpy())
@@ -76,11 +78,12 @@ def test_vmapped_sharded_grad():
     grad_y_nb = to_np(grads_nb[y_nb])
 
     print(f"\nGradient x shape: Nabla {grad_x_nb.shape}, JAX {grads_jax[0].shape}")
-    
+
     np.testing.assert_allclose(grad_x_nb, grads_jax[0], rtol=1e-5, atol=1e-6)
     np.testing.assert_allclose(grad_y_nb, grads_jax[1], rtol=1e-5, atol=1e-6)
-    
+
     print("\n✓ SUCCESS: VMapped + Sharded gradients match JAX!")
+
 
 if __name__ == "__main__":
     try:
@@ -88,5 +91,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n✗ Test FAILED:")
         import traceback
+
         traceback.print_exc()
         exit(1)

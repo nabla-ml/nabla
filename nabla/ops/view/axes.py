@@ -52,12 +52,14 @@ class UnsqueezeOp(LogicalAxisOperation):
         """VJP for unsqueeze: squeeze the cotangent at the unsqueezed axis."""
         axis = output.op_kwargs.get("axis", 0)
         from . import squeeze
+
         return squeeze(cotangent, axis=axis)
 
     def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
         """JVP for unsqueeze: unsqueeze the tangent."""
         axis = output.op_kwargs.get("axis", 0)
         from . import unsqueeze
+
         return unsqueeze(tangents, axis=axis)
 
 
@@ -98,12 +100,14 @@ class SqueezeOp(LogicalAxisOperation):
         """VJP for squeeze: unsqueeze the cotangent at the squeezed axis."""
         axis = output.op_kwargs.get("axis", 0)
         from . import unsqueeze
+
         return unsqueeze(cotangent, axis=axis)
 
     def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
         """JVP for squeeze: squeeze the tangent."""
         axis = output.op_kwargs.get("axis", 0)
         from . import squeeze
+
         return squeeze(tangents, axis=axis)
 
 

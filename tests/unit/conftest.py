@@ -21,9 +21,11 @@ import pytest
 from nabla import DeviceMesh, Tensor
 from nabla.core.sharding.spec import DimSpec
 
+
 def make_array(*shape: int, seed: int = 42):
     """Create a deterministic random tensor (Numpy-backed)."""
     import numpy as np
+
     np.random.seed(seed)
     return np.random.randn(*shape).astype(np.float32)
 
@@ -31,6 +33,7 @@ def make_array(*shape: int, seed: int = 42):
 def make_positive_array(*shape: int, seed: int = 42):
     """Create a deterministic positive random tensor (Numpy-backed)."""
     import numpy as np
+
     np.random.seed(seed)
     return np.abs(np.random.randn(*shape).astype(np.float32)) + 0.1
 
@@ -45,8 +48,6 @@ def to_numpy(t: Tensor):
     return t.numpy()
 
 
-
-
 def make_jax_array(*shape: int, seed: int = 42, dtype=jnp.float32) -> jax.Array:
     """Create a deterministic random JAX array."""
     key = jax.random.PRNGKey(seed)
@@ -54,7 +55,9 @@ def make_jax_array(*shape: int, seed: int = 42, dtype=jnp.float32) -> jax.Array:
     return jax.random.normal(key, shape, dtype=dtype)
 
 
-def make_positive_jax_array(*shape: int, seed: int = 42, dtype=jnp.float32) -> jax.Array:
+def make_positive_jax_array(
+    *shape: int, seed: int = 42, dtype=jnp.float32
+) -> jax.Array:
     """Create a deterministic positive random JAX array."""
     key = jax.random.PRNGKey(seed)
     return jnp.abs(jax.random.normal(key, shape, dtype=dtype)) + 0.1
@@ -74,9 +77,8 @@ def to_jax(t: Tensor) -> jax.Array:
     # Note: jnp.from_dlpack expects an object with __dlpack__ method or a capsule
     return jnp.from_dlpack(t)
 
-def assert_allclose(
-    result: Tensor, expected, rtol: float = 1e-5, atol: float = 1e-6
-):
+
+def assert_allclose(result: Tensor, expected, rtol: float = 1e-5, atol: float = 1e-6):
     """Assert tensor values match expected array (numpy or jax)."""
     if hasattr(result, "numpy"):
         actual = result.numpy()
@@ -84,8 +86,8 @@ def assert_allclose(
         actual = result
 
     import numpy as np
-    np.testing.assert_allclose(actual, expected, rtol=rtol, atol=atol)
 
+    np.testing.assert_allclose(actual, expected, rtol=rtol, atol=atol)
 
 
 def assert_shape(result: Tensor, expected_shape: tuple):

@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
@@ -30,7 +30,7 @@ def _copy_impl_with_batch_dims(
     output.sharding = x.sharding
 
     if op is not None and x.traced:
-        op._setup_output_refs(output, (x,), kwargs or {}, True)
+        op._setup_output_refs(output, (x,), kwargs or {}, kwargs or {}, True)
 
     return output
 
@@ -88,11 +88,15 @@ class MoveAxisToBatchDimsOp(Operation):
 
         physical_axis = batch_dims + axis
         result = super().__call__(x, physical_axis=physical_axis)
-        return _copy_impl_with_batch_dims(result, batch_dims + 1, op=self, kwargs={"axis": axis})
+        return _copy_impl_with_batch_dims(
+            result, batch_dims + 1, op=self, kwargs={"axis": axis}
+        )
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         axis = output.op_kwargs.get("axis")
-        return move_axis_from_batch_dims(cotangent, batch_axis=0, logical_destination=axis)
+        return move_axis_from_batch_dims(
+            cotangent, batch_axis=0, logical_destination=axis
+        )
 
 
 class MoveAxisFromBatchDimsOp(Operation):
@@ -135,7 +139,15 @@ class MoveAxisFromBatchDimsOp(Operation):
             physical_source=physical_source,
             physical_destination=physical_destination,
         )
-        return _copy_impl_with_batch_dims(result, new_batch_dims, op=self, kwargs={"batch_axis": batch_axis, "logical_destination": logical_destination})
+        return _copy_impl_with_batch_dims(
+            result,
+            new_batch_dims,
+            op=self,
+            kwargs={
+                "batch_axis": batch_axis,
+                "logical_destination": logical_destination,
+            },
+        )
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         batch_axis = output.op_kwargs.get("batch_axis")

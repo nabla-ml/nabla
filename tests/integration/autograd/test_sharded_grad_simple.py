@@ -6,6 +6,7 @@ from nabla.core.graph.tracing import trace
 from nabla.core.autograd import backward_on_trace
 from nabla.core.sharding import DeviceMesh, DimSpec
 
+
 def test_sharded_relu_mul():
     """Simple test with sharded inputs for ReLU and Multiplication."""
     print("\n" + "=" * 70)
@@ -14,7 +15,7 @@ def test_sharded_relu_mul():
 
     # 1. Setup Mesh
     mesh = DeviceMesh("mesh", (2,), ("tp",))
-    
+
     # Random seeding for reproducibility
     np.random.seed(42)
     x_np = np.random.randn(8, 4).astype(np.float32)
@@ -54,7 +55,7 @@ def test_sharded_relu_mul():
     traced = trace(nabla_fn, x_nb, y_nb)
     print("\nCaptured Trace:")
     print(traced)
-    
+
     # 4. Backward
     # Since output is a scalar, cotangent is 1.0
     cotangent = nb.Tensor.from_dlpack(np.array(1.0, dtype=np.float32))
@@ -63,6 +64,7 @@ def test_sharded_relu_mul():
     # 5. Verification
     def to_np(t):
         from nabla.core.graph.engine import GRAPH
+
         if not t._impl.is_realized:
             GRAPH.evaluate(t)
         return np.asarray(t.to_numpy())
@@ -75,8 +77,9 @@ def test_sharded_relu_mul():
 
     np.testing.assert_allclose(grad_x_nb, grads_jax[0], rtol=1e-5, atol=1e-6)
     np.testing.assert_allclose(grad_y_nb, grads_jax[1], rtol=1e-5, atol=1e-6)
-    
+
     print("\n✓ SUCCESS: Sharded ReLU/Mul gradients match JAX!")
+
 
 if __name__ == "__main__":
     try:
@@ -84,5 +87,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n✗ Test FAILED:")
         import traceback
+
         traceback.print_exc()
         exit(1)

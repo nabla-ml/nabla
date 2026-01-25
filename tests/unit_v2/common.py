@@ -36,7 +36,9 @@ def make_jax_array(*shape: int, seed: int = 42, dtype=jnp.float32) -> jax.Array:
     return jax.random.normal(key, shape, dtype=dtype)
 
 
-def make_positive_jax_array(*shape: int, seed: int = 42, dtype=jnp.float32) -> jax.Array:
+def make_positive_jax_array(
+    *shape: int, seed: int = 42, dtype=jnp.float32
+) -> jax.Array:
     """Create a deterministic positive random JAX array."""
     key = jax.random.PRNGKey(seed)
     return jnp.abs(jax.random.normal(key, shape, dtype=dtype)) + 0.1
@@ -59,6 +61,7 @@ def assert_allclose(
     """Assert tensor values match expected JAX array using DLPack conversion."""
     actual_jax = to_jax(result)
     import numpy as np
+
     np.testing.assert_allclose(actual_jax, expected, rtol=rtol, atol=atol)
 
 
@@ -239,7 +242,7 @@ def get_test_data_for_shapes(shapes, config: OpConfig):
             jax_base = jnp.arange(num_elements)
             # Create boolean mask
             jax_val = (jax_base.reshape(shape) % 2 == 0) if shape else jnp.array(True)
-            
+
             # Create Nabla Tensor from JAX array via DLPack
             nb_val = tensor_from_jax(jax_val)
         else:
@@ -256,7 +259,7 @@ def get_test_data_for_shapes(shapes, config: OpConfig):
 
                 if not config.use_stable_floats:
                     jax_val *= 0.1
-                
+
                 nb_val = tensor_from_jax(jax_val)
 
         nabla_primals.append(nb_val)
@@ -282,10 +285,10 @@ def compare_nested_structures(nb_res, jax_res, path="", tolerance=1e-4):
     if hasattr(nb_res, "numpy"):
         # Convert Nabla Tensor to JAX array via DLPack
         nb_val_jax = to_jax(nb_res)
-        jax_val = jnp.array(jax_res) # Ensure expected is JAX array
+        jax_val = jnp.array(jax_res)  # Ensure expected is JAX array
 
         if nb_val_jax.shape != jax_val.shape:
-             pass
+            pass
 
         # Use np.testing.assert_allclose which handles JAX arrays nicely
         # or implement custom JAX assert if strictly needed, but this is standard practice
@@ -467,9 +470,6 @@ def assert_spec(tensor: nb.Tensor, expected_dims: tuple[tuple[str, ...], ...]):
     assert (
         actual_dims == expected_dims
     ), f"Sharding spec mismatch: got {actual_dims}, expected {expected_dims}"
-
-
-
 
 
 def run_unified_test(op: Operation, config: OpConfig, suffix: str = ""):

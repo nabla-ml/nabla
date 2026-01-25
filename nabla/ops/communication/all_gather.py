@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
@@ -68,16 +68,16 @@ class AllGatherOp(CollectiveOperation):
         """Recover sharded_axis_name for multi-dim mesh rehydration."""
         if "sharded_axis_name" in kwargs:
             return kwargs
-        
+
         new_kwargs = dict(kwargs)
         sharded_tensor = args[0]
         axis = kwargs.get("axis")
-        
+
         if sharded_tensor.sharding and axis is not None:
-             sharding = sharded_tensor.sharding
-             if axis < len(sharding.dim_specs) and sharding.dim_specs[axis].axes:
-                 new_kwargs["sharded_axis_name"] = sharding.dim_specs[axis].axes[0]
-                 
+            sharding = sharded_tensor.sharding
+            if axis < len(sharding.dim_specs) and sharding.dim_specs[axis].axes:
+                new_kwargs["sharded_axis_name"] = sharding.dim_specs[axis].axes[0]
+
         return new_kwargs
 
     def maxpr(
@@ -110,11 +110,11 @@ class AllGatherOp(CollectiveOperation):
             return [full_tensor] * len(shard_values)
 
         if sharded_axis_name is None and mesh:
-             # Try to infer if not provided (rehydration fallback)
-             # If we can't infer, we must still avoid concatenating all shards
-             # if the mesh is larger than the sharding factor.
-             # But it's better to rely on adapt_kwargs.
-             pass
+            # Try to infer if not provided (rehydration fallback)
+            # If we can't infer, we must still avoid concatenating all shards
+            # if the mesh is larger than the sharding factor.
+            # But it's better to rely on adapt_kwargs.
+            pass
 
         return self._simulate_grouped_gather(
             shard_values, axis, mesh, sharded_axis_name
@@ -264,7 +264,11 @@ class AllGatherOp(CollectiveOperation):
         output.sharding = output_spec
 
         self._setup_output_refs(
-            output, (sharded_tensor,), {"axis": axis}, sharded_tensor.traced
+            output,
+            (sharded_tensor,),
+            {"axis": axis},
+            {"axis": axis},
+            sharded_tensor.traced,
         )
 
         return output
@@ -371,10 +375,10 @@ class GatherAllAxesOp(Operation):
                     if mesh and mesh.is_distributed and len(unique_chunks) > 1:
                         target_device = unique_chunks[0].device
                         unique_chunks = [
-                            ops.transfer_to(chunk, target_device) 
+                            ops.transfer_to(chunk, target_device)
                             for chunk in unique_chunks
                         ]
-                    
+
                     merged = ops.concat(unique_chunks, axis=d)
 
                     new_shard_descs.append((merged, members[0][2]))

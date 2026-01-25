@@ -31,6 +31,7 @@ class PPermuteOp(CollectiveOperation):
         perm = output.op_kwargs.get("permutation")
         inv_perm = [(dst, src) for src, dst in perm]
         from .p_permute import ppermute
+
         return ppermute(cotangent, inv_perm)
 
     def maxpr(

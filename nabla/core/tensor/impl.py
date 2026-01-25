@@ -170,7 +170,7 @@ class TensorImpl:
         """Storage shape for a specific shard (includes batch dims)."""
         if self._storages and shard_idx < len(self._storages):
             return graph.Shape(self._storages[shard_idx].shape)
-        
+
         values = self._get_valid_values()
         if values and shard_idx < len(values):
             return values[shard_idx].type.shape
@@ -217,13 +217,11 @@ class TensorImpl:
 
         values = self._get_valid_values()
         shard_shapes = (
-            [tuple(int(d) for d in v.type.shape) for v in values]
-            if values
-            else None
+            [tuple(int(d) for d in v.type.shape) for v in values] if values else None
         )
 
         if shard_shapes is None and self._storages:
-             shard_shapes = [tuple(int(d) for d in s.shape) for s in self._storages]
+            shard_shapes = [tuple(int(d) for d in s.shape) for s in self._storages]
 
         from ..sharding.spec import compute_global_shape
 
@@ -292,7 +290,7 @@ class TensorImpl:
     def primary_value(self) -> driver.Tensor | graph.BufferValue | graph.TensorValue:
         if self._storages:
             return self._storages[0]
-        
+
         values = self._get_valid_values()
         if values:
             return values[0]

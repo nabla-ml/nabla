@@ -190,10 +190,14 @@ class Operation(ABC):
                 shard_results, output_sharding, any_traced, max_batch_dims, mesh=mesh
             )
 
-        self._setup_output_refs(output, args, original_kwargs or kwargs, any_traced)
+        self._setup_output_refs(
+            output, args, original_kwargs or kwargs, kwargs, any_traced
+        )
         return output
 
-    def apply_auto_reduction(self, output: Any, mesh: Any, reduce_axes: set[str]) -> Any:
+    def apply_auto_reduction(
+        self, output: Any, mesh: Any, reduce_axes: set[str]
+    ) -> Any:
         from ..core import GRAPH, Tensor, pytree
         from ..core.sharding import spmd
         from ..core.sharding.spec import DimSpec, ShardingSpec
@@ -228,7 +232,9 @@ class Operation(ABC):
             )
 
             trace_kwargs = {"mesh": mesh, "reduce_axes": list(reduce_axes)}
-            all_reduce_op._setup_output_refs(reduced_tensor, (t,), trace_kwargs, t.traced)
+            all_reduce_op._setup_output_refs(
+                reduced_tensor, (t,), trace_kwargs, trace_kwargs, t.traced
+            )
 
             return reduced_tensor
 
@@ -308,7 +314,12 @@ class Operation(ABC):
         return None
 
     def _setup_output_refs(
-        self, output: Any, args: tuple, kwargs: dict, traced: bool
+        self,
+        output: Any,
+        args: tuple,
+        logical_kwargs: dict,
+        physical_kwargs: dict,
+        traced: bool,
     ) -> None:
         """Set up OutputRefs for tracing support."""
         from ..core import Tensor, pytree
@@ -332,14 +343,20 @@ class Operation(ABC):
 
         stored_args = pytree.tree_map(to_impl, args)
 
-        stored_kwargs = pytree.tree_map(to_impl, kwargs) if kwargs else None
+        stored_logical_kwargs = (
+            pytree.tree_map(to_impl, logical_kwargs) if logical_kwargs else None
+        )
+        stored_physical_kwargs = (
+            pytree.tree_map(to_impl, physical_kwargs) if physical_kwargs else None
+        )
 
         output_refs = OutputRefs(
             _refs=weak_refs,
             tree_def=output_tree_def,
             op=self,
             op_args=stored_args,
-            op_kwargs=stored_kwargs,
+            op_kwargs=stored_logical_kwargs,
+            physical_kwargs=stored_physical_kwargs,
         )
 
         for idx, impl in enumerate(output_impls):
@@ -453,18 +470,18 @@ class LogicalAxisOperation(Operation):
         # Assuming negative indices are resolved by the caller or we resolve them using shape from somewhere.
         # Actually `LogicalAxisOperation` resolved negative indices using `logical_ndim`.
         # We can assume positive indices for now or rethink.
-        
+
         # Let's check `Operation` usage. `execute` has access to `args`.
         # We can resolve negative axes in `adapt_kwargs` if we pass `args`?
         # But `adapt_kwargs` signature in `Operation` is `(self, kwargs, batch_dims)`.
         # Maybe we should change `adapt_kwargs` to take `args`?
         # Or `base.py` `maxpr_all` passes more context.
         # For now, let's just implement the shifting and assume positive or handle basic offset.
-        
+
         translated = {}
         for key, value in kwargs.items():
             if key in self.axis_arg_names and isinstance(value, int):
-                # We can't easily handle negative indices here without shape info. 
+                # We can't easily handle negative indices here without shape info.
                 # But standard usage often resolves them or we assume positive after some validation.
                 # If value < 0, it's tricky without rank.
                 # However, if we assume the user provided valid negative index for the logical shape...
@@ -474,11 +491,11 @@ class LogicalAxisOperation(Operation):
                 # -2 on logical is H. -2 on physical is H.
                 # So negative indices are fine as is!
                 # Only POSITIVE indices need shifting by batch_dims.
-                
+
                 if value >= 0:
-                     translated[key] = value + batch_dims
+                    translated[key] = value + batch_dims
                 else:
-                     translated[key] = value
+                    translated[key] = value
             else:
                 translated[key] = value
         return translated
@@ -607,11 +624,12 @@ class LogicalShapeOperation(Operation):
     def adapt_kwargs(self, args: tuple, kwargs: dict, batch_dims: int) -> dict:
         if batch_dims == 0:
             return kwargs
-            
+
         shape = kwargs.get("shape")
         if shape is not None and len(args) > 0:
             x = args[0]
             from ..core import Tensor
+
             if isinstance(x, Tensor):
                 if x.physical_global_shape is not None:
                     global_batch_shape = tuple(
@@ -621,19 +639,25 @@ class LogicalShapeOperation(Operation):
                     global_phys = x.local_shape
                     # Fallback if local_shape is None? Should not happen if hydrated or determined.
                     if global_phys is None:
-                         # If we can't determine physical shape, we might be in trouble or it's not realized.
-                         # But for shape ops we usually need it.
-                         # Let's assume input has shape info.
-                         global_phys = x.shape # Fallback to logical if physical missing? No.
-                         # If physical is missing it might be (B, ...). 
-                         # Let's rely on standard property behavior.
-                         pass 
-                    
+                        # If we can't determine physical shape, we might be in trouble or it's not realized.
+                        # But for shape ops we usually need it.
+                        # Let's assume input has shape info.
+                        global_phys = (
+                            x.shape
+                        )  # Fallback to logical if physical missing? No.
+                        # If physical is missing it might be (B, ...).
+                        # Let's rely on standard property behavior.
+                        pass
+
                     if global_phys:
-                        global_batch_shape = tuple(int(d) for d in global_phys[:batch_dims])
+                        global_batch_shape = tuple(
+                            int(d) for d in global_phys[:batch_dims]
+                        )
                     else:
                         # Best effort: assume standard layout
-                        global_batch_shape = x.shape[:batch_dims] # This is wrong if x.shape is logical.
+                        global_batch_shape = x.shape[
+                            :batch_dims
+                        ]  # This is wrong if x.shape is logical.
                         # But x.shape IS logical.
                         # Logic in original __call__:
                         # global_phys = x.local_shape
@@ -646,5 +670,5 @@ class LogicalShapeOperation(Operation):
                 new_kwargs["shape"] = physical_shape
                 return new_kwargs
         return kwargs
-        
+
     # No execute override needed anymore

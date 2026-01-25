@@ -34,6 +34,7 @@ class ReshardOp(Operation):
 
         if not x.sharding:
             from .all_gather import gather_all_axes
+
             return gather_all_axes(cotangent)
 
         return reshard(

@@ -139,7 +139,9 @@ class Tensor(DLPackArray, HasTensorValue):
             print(f"ERROR: Tensor {id(self)} values check failed.")
             print(f"  Sharding: {self.sharding}")
             print(f"  Realized: {self.is_realized}")
-            print(f"  Storages: {len(self._impl._storages) if self._impl._storages else 0}")
+            print(
+                f"  Storages: {len(self._impl._storages) if self._impl._storages else 0}"
+            )
             print(f"  Values Epoch: {self._impl.values_epoch}")
             print(f"  GRAPH.epoch: {GRAPH.epoch}")
             raise RuntimeError(
@@ -520,26 +522,26 @@ class Tensor(DLPackArray, HasTensorValue):
 
     def cpu(self) -> Tensor:
         """Move tensor to CPU, gathering shards if needed.
-        
+
         For sharded tensors, this first gathers all shards to a single device,
         then transfers to CPU. For unsharded tensors, it returns self if already
         on CPU, otherwise creates a new tensor on CPU.
-        
+
         Returns:
             Tensor on CPU with all data gathered.
         """
         from max.driver import CPU as CPUDevice
-        
+
         # If already on CPU and not sharded, return as-is
         if not self.is_sharded and str(self.device).startswith("Device(type=cpu"):
             return self
-        
+
         # If sharded, gather first
         t = self.gather() if self.is_sharded else self
-        
+
         # Realize to ensure we have storage
         t.realize()
-        
+
         # Create new tensor on CPU using numpy as intermediate
         data = t.to_numpy()  # This already moves to CPU
         return Tensor.from_dlpack(data)

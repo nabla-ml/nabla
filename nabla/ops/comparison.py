@@ -28,6 +28,7 @@ class EqualOp(BinaryOperation):
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for comparison: 0.0 gradients (non-differentiable)."""
         from .creation import zeros_like
+
         return (zeros_like(primals[0]), zeros_like(primals[1]))
 
 
@@ -51,6 +52,7 @@ class GreaterOp(BinaryOperation):
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for comparison: 0.0 gradients (non-differentiable)."""
         from .creation import zeros_like
+
         return (zeros_like(primals[0]), zeros_like(primals[1]))
 
 
@@ -74,6 +76,7 @@ class LessOp(BinaryOperation):
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for comparison: 0.0 gradients (non-differentiable)."""
         from .creation import zeros_like
+
         return (zeros_like(primals[0]), zeros_like(primals[1]))
 
 
@@ -124,6 +127,13 @@ logical_or = LogicalOrOp()
 logical_not = LogicalNotOp()
 
 __all__ = [
-    "equal", "not_equal", "greater", "greater_equal", "less", "less_equal",
-    "logical_and", "logical_or", "logical_not",
+    "equal",
+    "not_equal",
+    "greater",
+    "greater_equal",
+    "less",
+    "less_equal",
+    "logical_and",
+    "logical_or",
+    "logical_not",
 ]

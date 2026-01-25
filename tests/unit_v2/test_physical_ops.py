@@ -27,9 +27,6 @@ from .common import (
 )
 
 
-
-
-
 from .common import (
     assert_allclose,
     assert_shape,

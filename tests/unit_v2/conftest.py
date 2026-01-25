@@ -6,6 +6,7 @@
 import pytest
 from nabla import DeviceMesh
 
+
 @pytest.fixture
 def mesh_1d():
     """1D mesh with 4 devices named 'dp'."""

@@ -218,12 +218,14 @@ class TestUnbindSharding:
 
         x_sharded = shard_on_axis(x, mesh_1d, axis=1)
 
-        # Shard on axis 1, unbind on axis 0 (different axes)  
+        # Shard on axis 1, unbind on axis 0 (different axes)
         results = nb.unbind(x_sharded, axis=0)
 
         assert len(results) == 4
         for i, r in enumerate(results):
-            print(f"DEBUG: result[{i}] shape={tuple(int(d) for d in r.shape)}, expected=(2, 8)")
+            print(
+                f"DEBUG: result[{i}] shape={tuple(int(d) for d in r.shape)}, expected=(2, 8)"
+            )
             assert_shape(r, (2, 8))  # Unbinding axis 0 from (4,2,8) gives (2,8)
             assert_allclose(r, jax_x[i, :, :])
             assert_is_sharded(r, True)  # Preserves sharding from axis 1
@@ -368,4 +370,3 @@ class TestMultiOutputEdgeCases:
         assert len(results) == 1
         assert_shape(results[0], (8,))
         assert_allclose(results[0], jax_x[0])
-

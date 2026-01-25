@@ -264,7 +264,7 @@ def _batch_tensor(
             dim_specs = [DimSpec([]) for _ in range(physical_rank)]
 
             if t.sharding:
-                for i in range(min(old_batch_dims, len(t.sharding.dim_specs))):
+                for i in range(min(physical_rank, len(t.sharding.dim_specs))):
                     dim_specs[i] = t.sharding.dim_specs[i].clone()
 
             dim_specs[old_batch_dims] = DimSpec([spmd_axis_name])

@@ -1,13 +1,13 @@
-
 import numpy as np
 import nabla as nb
 from nabla import ops
 from nabla.core.sharding import DeviceMesh, DimSpec
 
+
 def debug_reducesum_vjp():
     print("debugging reducesum vjp...")
     mesh = DeviceMesh("dp", (2,), ("data",))
-    
+
     # Input X: (4, 4) sharded on 0
     x_np = np.random.randn(4, 4).astype(np.float32)
     x = nb.Tensor.from_dlpack(x_np)
@@ -22,17 +22,18 @@ def debug_reducesum_vjp():
     # VJP Rule: broadcast_to(cot, x.shape)
     # Using ops.broadcast_to manually
     from nabla.ops.view import shape as shape_ops
-    
+
     # We expect this to default to Replicated sharding since input is Replicated
     cot_bcast = shape_ops.broadcast_to(cot, x.shape)
     print(f"Bcast: {cot_bcast.shape} sharding={cot_bcast.sharding}")
-    
+
     # Backward loop does: reshard(cot_bcast, x.sharding)
     from nabla.ops.communication import reshard
+
     try:
         grads = reshard(cot_bcast, mesh, x.sharding.dim_specs)
         print(f"Resharded: {grads.shape} sharding={grads.sharding}")
-        
+
         # Verify values locally
         # Should be all 1s
         grads.hydrate()
@@ -48,6 +49,7 @@ def debug_reducesum_vjp():
 
     except Exception as e:
         print(f"Reshard failed: {e}")
+
 
 if __name__ == "__main__":
     debug_reducesum_vjp()
