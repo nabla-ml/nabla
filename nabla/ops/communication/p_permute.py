@@ -28,7 +28,7 @@ class PPermuteOp(CollectiveOperation):
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for ppermute: permute back with inverse table."""
-        perm = output.op_kwargs.get("permutation")
+        _, perm = primals
         inv_perm = [(dst, src) for src, dst in perm]
         from .p_permute import ppermute
 

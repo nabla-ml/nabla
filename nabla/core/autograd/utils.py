@@ -202,14 +202,27 @@ def backward_on_trace(
                 # Should be a Tensor/TensorImpl already if VJP rule is correct
                 continue
 
-            arg_shape = Tensor(impl=arg_impl).shape
-            if len(cot_tensor.shape) > len(arg_shape):
-                diff = len(cot_tensor.shape) - len(arg_shape)
+            arg_shape = tuple(int(d) for d in Tensor(impl=arg_impl).shape)
+            cot_shape = tuple(int(d) for d in cot_tensor.shape)
+
+            if len(cot_shape) > len(arg_shape):
+                diff = len(cot_shape) - len(arg_shape)
                 # Assume extra dims are at the front (standard broadcasting/vmap rules)
-                reduce_axes = list(range(diff))
                 from ...ops.reduction import reduce_sum
 
-                cot_tensor = reduce_sum(cot_tensor, axis=reduce_axes)
+                cot_tensor = reduce_sum(cot_tensor, axis=list(range(diff)))
+                cot_shape = tuple(int(d) for d in cot_tensor.shape)
+
+            # Handle size-1 broadcasting within same rank
+            reduce_axes = [
+                i
+                for i, (c_d, a_d) in enumerate(zip(cot_shape, arg_shape))
+                if a_d == 1 and c_d > 1
+            ]
+            if reduce_axes:
+                from ...ops.reduction import reduce_sum
+
+                cot_tensor = reduce_sum(cot_tensor, axis=reduce_axes, keepdims=True)
 
             # CRITICAL: Preserve sharding of the original argument
             from ...ops.communication import reshard

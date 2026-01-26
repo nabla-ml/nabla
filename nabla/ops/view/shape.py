@@ -345,6 +345,41 @@ class ConcatenateOp(LogicalAxisOperation):
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
         return len(input_shapes[0])
 
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for concatenate: split cotangent along axis."""
+        from ...ops.view import slice_tensor
+
+        axis = output.op_kwargs.get("axis", 0)
+        
+        # Calculate split indices based on primal shapes
+        start = 0
+        cotangent_slices = []
+        
+        # Handle negative axis
+        if axis < 0:
+            axis += len(primals[0].shape)
+
+        for x in primals:
+            # We slice along 'axis'
+            dim_size = int(x.shape[axis])
+            
+            # Construct start/size for slice_tensor
+            # slice_tensor takes start=[...], size=[...]
+            rank = len(x.shape)
+            
+            starts = [0] * rank
+            starts[axis] = start
+            
+            sizes = [int(d) for d in cotangent.shape] # Use full shape
+            sizes[axis] = dim_size # Update split axis size
+            
+            slc = slice_tensor(cotangent, start=starts, size=sizes)
+            cotangent_slices.append(slc)
+            
+            start += dim_size
+            
+        return cotangent_slices
+
 
 _broadcast_to_op = BroadcastToOp()
 _reshape_op = ReshapeOp()

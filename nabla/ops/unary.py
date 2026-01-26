@@ -30,11 +30,12 @@ class ReluOp(UnaryOperation):
         """VJP for ReLU: ∂relu(x)/∂x = (x > 0)."""
         x = primals
         from ..ops.comparison import greater
-        from ..ops.binary import mul
+        from ..ops.control_flow import where
+        from ..ops.creation import zeros_like
 
         # Derivative is 1 where x > 0, else 0
         mask = greater(x, 0.0)
-        return mul(cotangent, mask)
+        return where(mask, cotangent, zeros_like(cotangent))
 
     def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
         """JVP for ReLU: tangent where x > 0, else 0."""
@@ -195,12 +196,13 @@ class AbsOp(UnaryOperation):
         from ..ops.binary import mul
         from . import neg
 
-        # sign(x) = 1 if x > 0 else (-1 if x < 0 else 0)
-        ones = ones_like(x)
-        sign = where(
-            greater(x, 0.0), ones, where(less(x, 0.0), neg(ones), zeros_like(x))
+        # grad = cotangent if x > 0 else (-cotangent if x < 0 else 0)
+        from . import neg
+        return where(
+            greater(x, 0.0),
+            cotangent,
+            where(less(x, 0.0), neg(cotangent), zeros_like(cotangent)),
         )
-        return mul(cotangent, sign)
 
     def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
         """JVP for abs: tangent * sign(x)."""

@@ -61,8 +61,14 @@ class GatherOp(Operation):
 
             return ops.gather_nd(x, indices, batch_dims=batch_dims)
         else:
-
             return ops.gather(x, indices, axis)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        x, indices = primals
+        axis = output.op_kwargs.get("axis", 0)
+        from ..creation import zeros_like
+        gx = scatter(zeros_like(x), indices, cotangent, axis=axis)
+        return (gx, None)
 
     def sharding_rule(
         self,
@@ -165,6 +171,16 @@ class ScatterOp(Operation):
             stacked = ops.stack(coord_list, axis=-1)
 
             return ops.scatter_nd(x, updates, stacked)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        x, indices, updates = primals
+        axis = output.op_kwargs.get("axis", 0)
+        from ..creation import zeros_like
+
+        gx = scatter(cotangent, indices, zeros_like(updates), axis=axis)
+        g_updates = gather(cotangent, indices, axis=axis)
+
+        return (gx, None, g_updates)
 
     def sharding_rule(
         self,

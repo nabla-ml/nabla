@@ -129,14 +129,11 @@ class WhereOp(Operation):
         return ops.where(condition, x, y)
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        """VJP for where(cond, x, y): 0.0 for cond, masked cotangent for x and y."""
+        """VJP for where(cond, x, y): masked cotangent for x and y, None for cond."""
         from .creation import zeros_like
         from .control_flow import where
 
         condition, x, y = primals
-
-        # grad_cond is always 0 as condition is non-differentiable
-        grad_cond = zeros_like(condition)
 
         # grad_x is cotangent where condition is True, else 0
         grad_x = where(condition, cotangent, zeros_like(x))
@@ -144,7 +141,7 @@ class WhereOp(Operation):
         # grad_y is cotangent where condition is False, else 0 (or 0 where cond is True)
         grad_y = where(condition, zeros_like(y), cotangent)
 
-        return (grad_cond, grad_x, grad_y)
+        return (None, grad_x, grad_y)
 
 
 class CondOp(Operation):
