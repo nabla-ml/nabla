@@ -174,9 +174,10 @@ def constant(
     Args:
         value: Scalar, array, or nested sequence.
     """
-    if dtype is None:
-        import numpy as np
+    import numpy as np
+    from ..core.tensor.api import Tensor
 
+    if dtype is None:
         if isinstance(value, np.ndarray):
             try:
                 dtype = DType[str(value.dtype)]
@@ -188,6 +189,24 @@ def constant(
             dtype = DType.float32
         elif isinstance(value, bool):
             dtype = DType.bool
+
+    # If it's not a simple number, convert to a realized tensor via DLPack
+    # to avoid embedding large data as constants in the MAX graph.
+    if not isinstance(value, (int, float, bool, complex)) and not (
+        isinstance(value, np.ndarray) and value.ndim == 0
+    ):
+        # Convert lists/tuples to numpy array first
+        if isinstance(value, (list, tuple)):
+            value = np.array(value)
+            if dtype:
+                # Map MAX DType to numpy dtype if needed
+                try:
+                    # DType.float32.name -> "float32", which numpy accepts
+                    value = value.astype(dtype.name)
+                except Exception:
+                    pass
+
+        return Tensor.from_dlpack(value)
 
     dtype, device = defaults(dtype, device)
     return _constant_op(value, dtype, device)

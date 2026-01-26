@@ -96,3 +96,5 @@ mojo_experiments
 depr_nabla
 tmp_shardy_ref
 tmp_auto_sharding_refs
+
+clean_cache.sh
