@@ -153,6 +153,20 @@ def tree_unflatten(treedef: PyTreeDef, leaves: list) -> Any:
     return _build(treedef)
 
 
+def tree_flatten_full(
+    tree: Any,
+    is_leaf: Callable[[Any], bool] | None = None,
+) -> tuple[list, PyTreeDef]:
+    """Flatten a pytree into leaves and structure, treating None as a leaf."""
+    full_is_leaf = lambda x: (x is None) or (is_leaf(x) if is_leaf else False)
+    return tree_flatten(tree, is_leaf=full_is_leaf)
+
+
+def tree_unflatten_full(treedef: PyTreeDef, leaves: list) -> Any:
+    """Reconstruct a pytree from structure info and leaves, supporting None leaves."""
+    return tree_unflatten(treedef, leaves)
+
+
 def tree_leaves(
     tree: Any,
     is_leaf: Callable[[Any], bool] | None = None,

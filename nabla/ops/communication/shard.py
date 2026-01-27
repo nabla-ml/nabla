@@ -212,7 +212,11 @@ class ShardOp(Operation):
 
         traced = x.traced if isinstance(x, Tensor) else False
 
-        trace_kwargs = {"mesh": mesh, "dim_specs": dim_specs}
+        trace_kwargs = {
+            "mesh": mesh,
+            "dim_specs": dim_specs,
+            "global_shape": global_shape,
+        }
         self._setup_output_refs(output, (x,), trace_kwargs, trace_kwargs, traced)
 
         return output

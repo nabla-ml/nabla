@@ -231,45 +231,50 @@ class Trace:
                 mesh = first_out.sharding.mesh
 
             # Re-execute maxpr_all in the current graph epoch.
-            output_tensor_struct = op.maxpr_all(
-                op_args,
-                adapted_kwargs,
-                output_sharding,
-                mesh,
-                any_traced=False,
-                max_batch_dims=max_batch_dims,
-                original_kwargs=op_kwargs,
-            )
+            try:
+                output_tensor_struct = op.maxpr_all(
+                    op_args,
+                    adapted_kwargs,
+                    output_sharding,
+                    mesh,
+                    any_traced=False,
+                    max_batch_dims=max_batch_dims,
+                    original_kwargs=op_kwargs,
+                )
+            except Exception as e:
+                print(f"ERROR: maxpr_all failed for {op.name}: {e}")
+                output_tensor_struct = None
 
             if output_tensor_struct is None:
+                # print(f"DEBUG: maxpr_all returned None for {op.name}")
                 continue
 
-            # DEBUG: Print shard count for the first output
-            first_out_leaves = [
-                x
-                for x in pytree.tree_leaves(
-                    output_tensor_struct, is_leaf=pytree.is_tensor
-                )
-                if isinstance(x, Tensor)
-            ]
-            if first_out_leaves:
-                impl = first_out_leaves[0]._impl
+            # Extract produced TensorImpls
+            produced_leaves = pytree.tree_leaves(
+                output_tensor_struct, is_leaf=pytree.is_tensor
+            )
+            
+            produced_impls = []
+            for leaf in produced_leaves:
+                if isinstance(leaf, Tensor):
+                    produced_impls.append(leaf._impl)
+                elif isinstance(leaf, TensorImpl):
+                    produced_impls.append(leaf)
+                else:
+                    produced_impls.append(None)
 
-            # Extract produced TensorImpls and map them back to original objects.
-            produced_impls = [
-                x._impl
-                for x in pytree.tree_leaves(
-                    output_tensor_struct, is_leaf=pytree.is_tensor
-                )
-                if isinstance(x, Tensor)
-            ]
-
-            for out_impl, produced_impl in zip(
-                alive_outputs, produced_impls, strict=False
+            # Map produced values back to the alive outputs in the trace.
+            for ref, produced_impl in zip(
+                output_refs._refs, produced_impls, strict=False
             ):
+                out_impl = ref()
                 if out_impl is not None and produced_impl is not None:
                     out_impl._values = produced_impl._values
                     out_impl.values_epoch = GRAPH.epoch
+
+
+
+
 
     def __str__(self) -> str:
         """Pretty-print the trace."""

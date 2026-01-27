@@ -21,8 +21,10 @@ from .core import (
     tree_structure,
     tree_unflatten,
     untraced,
+    untraced,
     with_batch_dims,
 )
+from .core.autograd.api import grad
 from .core.sharding.spec import (
     DeviceMesh,
     DimSpec,

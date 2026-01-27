@@ -268,20 +268,163 @@ class ReshapeOp(LogicalShapeOperation):
         return reshape(tangents, target_shape)
 
 
+
+class SliceUpdateOp(Operation):
+    @property
+    def name(self) -> str:
+        return "slice_update"
+
+    def __call__(self, x: Tensor, update: Tensor, *, start: Any, size: Any) -> Tensor:
+        # Resolve negative start indices
+        shape = x.shape
+        rank = len(shape)
+        resolved_start = []
+        for i, s in enumerate(start):
+            if s < 0:
+                s += shape[i]
+            resolved_start.append(s)
+        resolved_start = tuple(resolved_start)
+
+        batch_dims = x.batch_dims
+        slices = [slice(None)] * batch_dims
+        for s, sz in zip(resolved_start, size, strict=False):
+            end = s + sz
+            slices.append(slice(s, end))
+
+        return super().__call__(
+            x, update, slices=tuple(slices), start=resolved_start, size=size
+        )
+
+    def maxpr(
+        self,
+        x: TensorValue,
+        update: TensorValue,
+        *,
+        slices: tuple[slice, ...],
+        **kwargs,
+    ) -> TensorValue:
+        """Update using pre-computed slices."""
+        x_buffer = ops.buffer_create(x.type.as_buffer())
+        ops.buffer_store(x_buffer, x)
+        ops.buffer_store_slice(x_buffer, update, slices)
+        return ops.buffer_load(x_buffer)
+
+    def infer_output_rank(self, input_shapes, **kwargs) -> int:
+        return len(input_shapes[0])
+        
+    def infer_sharding_spec(
+        self,
+        args: tuple,
+        mesh: Any,
+        kwargs: dict = None,
+    ) -> tuple[Any | None, list[Any | None], bool]:
+        """Explicitly force everything to be Replicated."""
+        from ...core.sharding.spmd import create_replicated_spec
+        from ...core import Tensor, pytree
+
+        leaves = [a for a in pytree.tree_leaves(args) if isinstance(a, Tensor)]
+        input_specs = []
+        for t in leaves:
+            rank = len(t.shape)
+            input_specs.append(create_replicated_spec(mesh, rank))
+
+        # Output is also replicated
+        output_rank = len(leaves[0].shape)
+        output_spec = create_replicated_spec(mesh, output_rank)
+
+        return output_spec, input_specs, False
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        # primals = (x, update)
+        x_in = primals[0]
+        u_in = primals[1]
+        start = output.op_kwargs.get("start")
+        size = output.op_kwargs.get("size")
+
+        from ..creation import zeros_like
+        from .shape import slice_tensor, slice_update
+
+        # Compute dx: cotangent with zeros at the update region
+        u_zeros = zeros_like(u_in)
+        dx = slice_update(cotangent, u_zeros, start=start, size=size)
+
+        # Compute du: slice of cotangent corresponding to the update
+        du = slice_tensor(cotangent, start=start, size=size)
+
+        return (dx, du, None, None)
+
+
 class SliceTensorOp(Operation):
     @property
     def name(self) -> str:
         return "slice_tensor"
 
-    def maxpr(self, x: TensorValue, start: Any, size: Any) -> TensorValue:
-        slices = []
-        for s, sz in zip(start, size, strict=False):
+    def __call__(self, x: Tensor, *, start: Any, size: Any) -> Tensor:
+        # Resolve negative start indices
+        shape = x.shape
+        rank = len(shape)
+        resolved_start = []
+        for i, s in enumerate(start):
+            if s < 0:
+                s += shape[i]
+            resolved_start.append(s)
+        resolved_start = tuple(resolved_start)
+
+        batch_dims = x.batch_dims
+        slices = [slice(None)] * batch_dims
+        for s, sz in zip(resolved_start, size, strict=False):
             end = s + sz
             slices.append(slice(s, end))
+
+        return super().__call__(x, slices=tuple(slices), start=resolved_start, size=size)
+
+    def maxpr(
+        self, x: TensorValue, *, slices: tuple[slice, ...], **kwargs
+    ) -> TensorValue:
         return ops.slice_tensor(x, slices)
 
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
         return len(input_shapes[0])
+
+    def infer_sharding_spec(
+        self,
+        args: tuple,
+        mesh: Any,
+        kwargs: dict = None,
+    ) -> tuple[Any | None, list[Any | None], bool]:
+        """Explicitly force everything to be Replicated."""
+        from ...core.sharding.spmd import create_replicated_spec
+        from ...core import Tensor, pytree
+
+        leaves = [a for a in pytree.tree_leaves(args) if isinstance(a, Tensor)]
+        input_specs = []
+        for t in leaves:
+            rank = len(t.shape)
+            input_specs.append(create_replicated_spec(mesh, rank))
+
+        # Output is also replicated
+        output_rank = len(leaves[0].shape)
+        output_spec = create_replicated_spec(mesh, output_rank)
+
+        return output_spec, input_specs, False
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        # VJP: slice_tensor(x, start, size) -> slice_update(zeros_like(x), cotangent, start, size)
+        if isinstance(primals, (list, tuple)):
+            x = primals[0]
+        else:
+            x = primals
+
+        start = output.op_kwargs.get("start")
+        size = output.op_kwargs.get("size")
+
+        from ..creation import zeros_like
+        from .shape import slice_update
+
+        z = zeros_like(x)
+        grad = slice_update(z, cotangent, start=start, size=size)
+
+        return (grad, None, None)
 
 
 class ConcatenateOp(LogicalAxisOperation):
@@ -402,8 +545,17 @@ def reshape(x: Tensor, shape: tuple[int, ...]) -> Tensor:
     return _reshape_op(x, shape=shape)
 
 
+_slice_update_op = SliceUpdateOp()
+
 def slice_tensor(x: Tensor, start: Any, size: Any) -> Tensor:
     return _slice_tensor_op(x, start=start, size=size)
+
+def slice_update(x: Tensor, update: Tensor, start: Any, size: Any) -> Tensor:
+    """Update a slice of x with new values."""
+    from ..base import ensure_tensor
+    x = ensure_tensor(x)
+    update = ensure_tensor(update)
+    return _slice_update_op(x, update, start=start, size=size)
 
 
 def concatenate(tensors: Sequence[Tensor], axis: int = 0) -> Tensor:

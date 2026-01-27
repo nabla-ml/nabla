@@ -41,11 +41,13 @@ from .shape import (
     ConcatenateOp,
     ReshapeOp,
     SliceTensorOp,
+    SliceUpdateOp,
     broadcast_to,
     broadcast_to_physical,
     concatenate,
     reshape,
     slice_tensor,
+    slice_update,
     stack,
 )
 
@@ -62,6 +64,8 @@ __all__ = [
     "reshape",
     "SliceTensorOp",
     "slice_tensor",
+    "SliceUpdateOp",
+    "slice_update",
     "ConcatenateOp",
     "concatenate",
     "stack",
