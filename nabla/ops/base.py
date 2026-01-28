@@ -236,7 +236,7 @@ class Operation(ABC):
                     args, shard_idx, input_shardings, g, Tensor, pytree
                 )
                 shard_kwargs = self._transform_shard_kwargs(
-                    kwargs, output_sharding, shard_idx
+                    kwargs, output_sharding, shard_idx, args
                 )
                 if shard_kwargs is None:
                     shard_kwargs = {}
@@ -352,7 +352,7 @@ class Operation(ABC):
         return kwargs
 
     def _transform_shard_kwargs(
-        self, kwargs: dict, output_sharding: Any, shard_idx: int
+        self, kwargs: dict, output_sharding: Any, shard_idx: int, args: tuple
     ) -> dict:
         """Transform kwargs for per-shard maxpr execution."""
 

@@ -81,11 +81,8 @@ class BroadcastToOp(LogicalShapeOperation):
             input_shapes, output_shapes
         )
 
-    def infer_output_rank(self, input_shapes, **kwargs) -> int:
-        return len(kwargs.get("shape", input_shapes[0]))
-
     def _transform_shard_kwargs(
-        self, kwargs: dict, output_sharding, shard_idx: int
+        self, kwargs: dict, output_sharding, shard_idx: int, args: tuple
     ) -> dict:
         """Convert global target shape to local shape for each shard."""
         from ...core.sharding.spec import compute_local_shape
@@ -243,7 +240,7 @@ class ReshapeOp(LogicalShapeOperation):
         )
 
     def _transform_shard_kwargs(
-        self, kwargs: dict, output_sharding, shard_idx: int
+        self, kwargs: dict, output_sharding, shard_idx: int, args: tuple
     ) -> dict:
         """Convert global target shape to local shape for each shard."""
         from ...core.sharding.spec import compute_local_shape
@@ -425,6 +422,105 @@ class SliceTensorOp(Operation):
         grad = slice_update(z, cotangent, start=start, size=size)
 
         return (grad, None, None)
+
+    def _transform_shard_kwargs(
+        self, kwargs: dict, output_sharding: Any, shard_idx: int, args: tuple
+    ) -> dict:
+        """Transform slice args to be local to the shard."""
+        import math
+
+        # 1. Get Global Slice Request
+        global_start = kwargs.get("start")
+        global_size = kwargs.get("size")
+        if global_start is None or global_size is None:
+            return kwargs
+
+        # 2. Get Input Info
+        if not args:
+            return kwargs
+        x = args[0]
+        # We need the underlying sharding info from the input tensor
+        if not hasattr(x, "sharding") or x.sharding is None:
+            return kwargs
+
+        input_sharding = x.sharding
+        # Use logical shape (Tensor.shape) which corresponds to global logical shape
+        input_global_shape = x.shape
+
+        # 3. Compute Input Shard Interval for each dim
+        mesh = input_sharding.mesh
+        # Map logical shard index to device ID in the mesh
+        # mesh.devices is a list of device IDs corresponding to the flattened mesh
+        device_id = mesh.devices[shard_idx] if shard_idx < len(mesh.devices) else shard_idx
+
+        local_start_indices = []
+        local_sizes = []
+
+        for dim_idx, (g_start, g_size) in enumerate(zip(global_start, global_size)):
+            dim_spec = (
+                input_sharding.dim_specs[dim_idx]
+                if dim_idx < len(input_sharding.dim_specs)
+                else None
+            )
+            global_len = int(input_global_shape[dim_idx])
+
+            # --- Determine Shard Interval ---
+            if not dim_spec or not dim_spec.axes:
+                shard_start = 0
+                shard_end = global_len
+            else:
+                total_shards = 1
+                my_shard_index = 0
+                for axis_name in dim_spec.axes:
+                    size = mesh.get_axis_size(axis_name)
+                    coord = mesh.get_coordinate(device_id, axis_name)
+                    my_shard_index = (my_shard_index * size) + coord
+                    total_shards *= size
+
+                chunk_size = math.ceil(global_len / total_shards)
+                shard_start = my_shard_index * chunk_size
+                shard_end = min(shard_start + chunk_size, global_len)
+
+            # --- Intersect with Global Slice ---
+            req_start = g_start
+            req_end = g_start + g_size
+
+            # Intersection in Global Coords
+            inter_start = max(shard_start, req_start)
+            inter_end = min(shard_end, req_end)
+
+            if inter_end <= inter_start:
+                local_len = 0
+                local_off = 0
+            else:
+                local_len = inter_end - inter_start
+                # Map to Local Coords (relative to Shard Start)
+                local_off = inter_start - shard_start
+
+            local_start_indices.append(local_off)
+            local_sizes.append(local_len)
+
+        # 4. Update kwargs
+        new_kwargs = kwargs.copy()
+        new_kwargs["start"] = tuple(local_start_indices)
+        new_kwargs["size"] = tuple(local_sizes)
+
+        # Reconstruct slices for maxpr (assuming full rank coverage)
+        final_slices = []
+        for s, sz in zip(local_start_indices, local_sizes):
+            final_slices.append(slice(s, s + sz))
+        
+        # If there were batch dims handled by __call__ (prepended slices), 
+        # we might be missing them if we just replace `slices`.
+        # However, `start` and `size` usually cover the whole tensor rank for `slice_tensor`.
+        # If they don't, we might need to handle it. 
+        # But `slice_tensor` impl in `__call__` loops over `start`/`size`.
+        # We assume `start`/`size` match rank here.
+        
+        new_kwargs["slices"] = tuple(final_slices)
+
+        return new_kwargs
+
 
 
 class ConcatenateOp(LogicalAxisOperation):
@@ -687,7 +783,7 @@ class BroadcastToPhysicalOp(Operation):
         return result
 
     def _transform_shard_kwargs(
-        self, kwargs: dict, output_sharding: Any, shard_idx: int
+        self, kwargs: dict, output_sharding, shard_idx: int, args: tuple
     ) -> dict:
         """Convert global target shape to local shape for each shard."""
         from ...core.sharding.spec import compute_local_shape
