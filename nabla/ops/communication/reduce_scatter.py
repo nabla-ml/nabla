@@ -45,13 +45,58 @@ class ReduceScatterOp(CollectiveOperation):
         cost = (n_devices - 1) / n_devices * size_bytes / bandwidth
         return cost
 
-    def maxpr(
+    def infer_sharding_spec(self, args: Any, mesh: DeviceMesh, kwargs: dict) -> Any:
+        """Infer sharding for ReduceScatter (Adaptation Layer)."""
+        input_tensor = args[0]
+        input_sharding = input_tensor.sharding
+        output_sharding = self._compute_output_spec(input_tensor, None, **kwargs)
+        return output_sharding, [input_sharding], False
+
+    def physical_execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
+        """Sum-reduce across shards then scatter the result (Physical)."""
+        from ...core import GRAPH, Tensor
+        
+        sharded_tensor: Tensor = args[0]
+        
+        # Handle positional or keyword axis
+        if len(args) > 1:
+            axis = args[1]
+        else:
+            axis = kwargs.get("axis")
+            
+        if axis is None:
+            raise ValueError("ReduceScatterOp requires an 'axis' argument.")
+            
+        # 1. Derive Metadata
+        mesh = self._derive_mesh(sharded_tensor, kwargs)
+        
+        # 2. Validation & Early Exit
+        if not sharded_tensor.sharding:
+             return (sharded_tensor.values, None, None)
+
+        # 2. Execution Context
+        with GRAPH.graph:
+            values = sharded_tensor.values
+            
+            # Ported logic from maxpr
+            scattered_values = self._scatter_logic(
+                values, axis, mesh=mesh
+            )
+
+        # 3. Compute Output Spec
+        output_spec = self._compute_output_spec(
+            sharded_tensor, scattered_values, axis=axis
+        )
+
+        return (scattered_values, output_spec, mesh)
+
+    def _scatter_logic(
         self,
         shard_values: list[TensorValue],
         axis: int,
         mesh: DeviceMesh = None,
     ) -> list[TensorValue]:
-        """Sum-reduce across shards then scatter the result."""
+        """Core reduce-scatter implementation (MAX ops or simulation)."""
 
         if mesh and mesh.is_distributed:
             from max.dtype import DType
@@ -123,18 +168,15 @@ class ReduceScatterOp(CollectiveOperation):
         input_spec = input_tensor.sharding
 
         if mesh and input_spec:
-
-            rank = len(results[0].type.shape) if results else 0
+            rank = len(input_tensor.shape)
             new_dim_specs = []
 
             mesh_axes = mesh.axis_names
             target_mesh_axis = mesh_axes[0] if mesh_axes else "unknown"
 
-            rank = len(results[0].type.shape)
             kwargs_axis = kwargs.get("axis", 0)
 
             for d in range(rank):
-
                 input_d_spec = (
                     input_spec.dim_specs[d] if d < len(input_spec.dim_specs) else None
                 )

@@ -55,17 +55,13 @@ class AllReduceOp(CollectiveOperation):
         reduce_op = kwargs.get("reduce_op", "sum")
         reduce_axes = kwargs.get("reduce_axes")
         
-        # 1. Validation & Early Exit
+        # 1. Derive Metadata
+        mesh = self._derive_mesh(sharded_tensor, kwargs)
+        reduce_axes = self._get_reduce_axes(sharded_tensor, kwargs)
+        
+        # 2. Validation & Early Exit
         if not sharded_tensor.sharding:
              return (sharded_tensor.values, sharded_tensor.sharding, None)
-
-        mesh = sharded_tensor.sharding.mesh
-        
-        # 2. Derive reduce_axes if None (internal SPMD context)
-        # If it's still None after probing, it means total reduction (all shards).
-        if reduce_axes is None and sharded_tensor.sharding:
-            if sharded_tensor.sharding.partial_sum_axes:
-                reduce_axes = set(sharded_tensor.sharding.partial_sum_axes)
             
         # 3. Execution Context
         with GRAPH.graph:

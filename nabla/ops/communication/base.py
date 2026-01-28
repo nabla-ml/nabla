@@ -19,90 +19,44 @@ class CollectiveOperation(Operation):
     Handles value hydration, graph execution (maxpr), and output wrapping/sharding update.
     """
 
-    def maxpr_all(
-        self,
-        args: tuple,
-        kwargs: dict,
-        output_sharding: Any,
-        mesh: Any,
-        any_traced: bool,
-        max_batch_dims: int,
-        original_kwargs: dict | None = None,
-    ) -> Any:
-        from ...core import GRAPH, Tensor
-        from ...core.sharding import spmd
+    # Legacy execute and maxpr_all methods have been removed. 
+    # All communication operations now implement physical_execute.
 
-        if not args:
+    def _derive_mesh(self, tensor, kwargs):
+        """Derive device mesh from tensor or kwargs."""
+        if hasattr(tensor, "sharding") and tensor.sharding:
+            return tensor.sharding.mesh
+        return kwargs.get("mesh")
+
+    def _get_sharded_axis_name(self, tensor, axis):
+        """Get the name of the mesh axis that a tensor is sharded on at the given dimension."""
+        if axis is None or not hasattr(tensor, "sharding") or not tensor.sharding:
             return None
+        
+        sharding = tensor.sharding
+        # Normalize axis
+        rank = len(sharding.dim_specs)
+        spec_idx = axis if axis >= 0 else rank + axis
+        
+        if 0 <= spec_idx < rank:
+            dim_spec = sharding.dim_specs[spec_idx]
+            if dim_spec.axes:
+                return dim_spec.axes[0]  # Standard 1D-per-dim sharding
+        return None
 
-        # Collective operations operate on the whole set of shards at once.
-        # We assume the first argument is the sharded tensor.
-        sharded_tensor = args[0]
-        if isinstance(sharded_tensor, Tensor):
-            sharded_tensor.hydrate()
-            values = sharded_tensor.values
-        else:
-            # Handle list of values if passed directly (unlikely in tracing)
-            values = (
-                sharded_tensor if isinstance(sharded_tensor, list) else [sharded_tensor]
-            )
-
-        # Filter kwargs to match what maxpr expects (consistent with execute)
-        maxpr_kwargs = {
-            k: v for k, v in kwargs.items() if k not in ("mesh", "reduce_axes")
-        }
-
-        with GRAPH.graph:
-            result_values = self.maxpr(values, mesh=mesh, **maxpr_kwargs)
-
-        # Re-infer output sharding if it was None (though rehydrate usually has it)
-        if output_sharding is None and isinstance(sharded_tensor, Tensor):
-            output_sharding = self._compute_output_spec(
-                sharded_tensor, result_values, **kwargs
-            )
-
-        output = spmd.create_sharded_output(
-            result_values,
-            output_sharding,
-            any_traced,
-            max_batch_dims,
-            mesh=mesh,
-        )
-
-        self._setup_output_refs(
-            output, args, original_kwargs or kwargs, kwargs, any_traced
-        )
-        return output
-
-    def execute(self, sharded_tensor, **kwargs):
-        from ...core import GRAPH, Tensor
-
-        if not self._should_proceed(sharded_tensor):
-            return sharded_tensor
-
-        mesh = sharded_tensor.sharding.mesh if sharded_tensor.sharding else None
-
-        with GRAPH.graph:
-            sharded_tensor.hydrate()
-            maxpr_kwargs = {
-                k: v for k, v in kwargs.items() if k not in ("mesh", "reduce_axes")
-            }
-            result_values = self.maxpr(sharded_tensor.values, mesh=mesh, **maxpr_kwargs)
-
-        output_spec = self._compute_output_spec(sharded_tensor, result_values, **kwargs)
-
-        output = Tensor._create_unsafe(
-            values=result_values,
-            traced=sharded_tensor.traced,
-            batch_dims=sharded_tensor.batch_dims,
-        )
-        output.sharding = output_spec
-
-        self._setup_output_refs(
-            output, (sharded_tensor,), kwargs, kwargs, sharded_tensor.traced
-        )
-
-        return output
+    def _get_reduce_axes(self, tensor, kwargs):
+        """Determine which mesh axes to reduce over."""
+        reduce_axes = kwargs.get("reduce_axes")
+        if reduce_axes is not None:
+             if isinstance(reduce_axes, str):
+                 return {reduce_axes}
+             return set(reduce_axes)
+        
+        # Fallback: reduce over all partial axes if none specified
+        if hasattr(tensor, "sharding") and tensor.sharding:
+            if tensor.sharding.partial_sum_axes:
+                return set(tensor.sharding.partial_sum_axes)
+        return None
 
     def _should_proceed(self, tensor):
         """Check if operation should proceed (has sharding and potentially multiple shards)."""

@@ -34,7 +34,45 @@ class PPermuteOp(CollectiveOperation):
 
         return ppermute(cotangent, inv_perm)
 
-    def maxpr(
+    def infer_sharding_spec(self, args: Any, mesh: DeviceMesh, kwargs: dict) -> Any:
+        """Infer sharding for PPermute (Adaptation Layer)."""
+        input_tensor = args[0]
+        input_sharding = input_tensor.sharding
+        # PPermute preserves sharding spec (it just moves data between devices).
+        return input_sharding, [input_sharding], False
+
+    def physical_execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
+        """Point-to-point permutation (Physical)."""
+        from ...core import GRAPH, Tensor
+        
+        sharded_tensor: Tensor = args[0]
+        permutation = kwargs.get("permutation")
+        
+        if permutation is None:
+            raise ValueError("PPermuteOp requires a 'permutation' argument.")
+            
+        # 1. Derive Metadata
+        mesh = self._derive_mesh(sharded_tensor, kwargs)
+        
+        # 2. Validation & Early Exit
+        if not sharded_tensor.sharding:
+             return (sharded_tensor.values, None, None)
+
+        # 2. Execution Context
+        with GRAPH.graph:
+            values = sharded_tensor.values
+            
+            # Ported logic from maxpr
+            result_values = self._ppermute_logic(
+                values, permutation, mesh=mesh
+            )
+
+        # 3. Output Spec (Preserve input spec)
+        output_spec = sharded_tensor.sharding
+
+        return (result_values, output_spec, mesh)
+
+    def _ppermute_logic(
         self,
         shard_values: list[TensorValue],
         permutation: list[tuple],

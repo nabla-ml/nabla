@@ -26,7 +26,46 @@ class AllToAllOp(CollectiveOperation):
     def name(self) -> str:
         return "all_to_all"
 
-    def maxpr(
+    def infer_sharding_spec(self, args: Any, mesh: DeviceMesh, kwargs: dict) -> Any:
+        """Infer sharding for AllToAll (Adaptation Layer)."""
+        input_tensor = args[0]
+        input_sharding = input_tensor.sharding
+        output_sharding = self._compute_output_spec(input_tensor, None, **kwargs)
+        return output_sharding, [input_sharding], False
+
+    def physical_execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
+        """All-to-all distributed transpose (Physical)."""
+        from ...core import GRAPH, Tensor
+        
+        sharded_tensor: Tensor = args[0]
+        split_axis = kwargs.get("split_axis", 0)
+        concat_axis = kwargs.get("concat_axis", 0)
+        tiled = kwargs.get("tiled", True)
+        
+        # 1. Derive Metadata
+        mesh = self._derive_mesh(sharded_tensor, kwargs)
+        
+        # 2. Validation & Early Exit
+        if not sharded_tensor.sharding:
+             return (sharded_tensor.values, None, None)
+
+        # 2. Execution Context
+        with GRAPH.graph:
+            values = sharded_tensor.values
+            
+            # Ported logic from maxpr
+            result_values = self._all_to_all_logic(
+                values, split_axis, concat_axis, mesh=mesh, tiled=tiled
+            )
+
+        # 3. Compute Output Spec
+        output_spec = self._compute_output_spec(
+            sharded_tensor, result_values, split_axis=split_axis, concat_axis=concat_axis
+        )
+
+        return (result_values, output_spec, mesh)
+
+    def _all_to_all_logic(
         self,
         shard_values: list[TensorValue],
         split_axis: int,
@@ -111,7 +150,6 @@ class AllToAllOp(CollectiveOperation):
             target_axes = new_dim_specs[split_axis].axes
 
             if source_axes:
-
                 moved_axes = list(source_axes)
                 new_dim_specs[concat_axis] = DimSpec([], is_open=True)
                 new_dim_specs[split_axis] = DimSpec(

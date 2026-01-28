@@ -126,14 +126,8 @@ class AllGatherOp(CollectiveOperation):
             raise ValueError("AllGatherOp requires an 'axis' argument.")
             
         # 1. Derive Metadata
-        mesh = sharded_tensor.sharding.mesh if sharded_tensor.sharding else kwargs.get("mesh")
-        sharded_axis_name = None
-        
-        if sharded_tensor.sharding:
-            sharding = sharded_tensor.sharding
-            spec_idx = axis if axis >= 0 else len(sharding.dim_specs) + axis
-            if spec_idx < len(sharding.dim_specs) and sharding.dim_specs[spec_idx].axes:
-                sharded_axis_name = sharding.dim_specs[spec_idx].axes[0]
+        mesh = self._derive_mesh(sharded_tensor, kwargs)
+        sharded_axis_name = self._get_sharded_axis_name(sharded_tensor, axis)
 
         # 2. Validation & Early Exit
         if not sharded_axis_name:
