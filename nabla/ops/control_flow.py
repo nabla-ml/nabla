@@ -380,7 +380,6 @@ class ScanOp(Operation):
         for i in range(length):
 
             def _slice_at_i(x):
-
                 local_shape = x.local_shape
                 start = [i] + [0] * (x.rank - 1)
                 size = [1] + [int(d) for d in local_shape[1:]]

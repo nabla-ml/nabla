@@ -392,21 +392,21 @@ class SliceTensorOp(Operation):
         mesh: Any,
         kwargs: dict = None,
     ) -> tuple[Any | None, list[Any | None], bool]:
-        """Explicitly force everything to be Replicated."""
-        from ...core.sharding.spmd import create_replicated_spec
-        from ...core import Tensor, pytree
-
-        leaves = [a for a in pytree.tree_leaves(args) if isinstance(a, Tensor)]
-        input_specs = []
-        for t in leaves:
-            rank = len(t.shape)
-            input_specs.append(create_replicated_spec(mesh, rank))
-
-        # Output is also replicated
-        output_rank = len(leaves[0].shape)
-        output_spec = create_replicated_spec(mesh, output_rank)
-
-        return output_spec, input_specs, False
+        """Propagate input sharding spec."""
+        from ...core import Tensor
+        
+        if not args:
+            return None, [], False
+            
+        x = args[0]
+        if isinstance(x, Tensor) and x.sharding:
+            # Slice preserves rank and dimension alignment (mostly), 
+            # so we can propagate the spec.
+            # NOTE: If we slice a sharded dimension to size 1 (or small),
+            # it technically remains sharded (distributed scalar/small tensor).
+            return x.sharding, [x.sharding], False
+            
+        return None, [None], False
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         # VJP: slice_tensor(x, start, size) -> slice_update(zeros_like(x), cotangent, start, size)

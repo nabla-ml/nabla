@@ -200,7 +200,7 @@ class Trace:
                 continue
 
             op = output_refs.op
-
+            
             def to_tensor(x):
                 if isinstance(x, TensorImpl):
                     return Tensor(impl=x)
@@ -230,20 +230,69 @@ class Trace:
                 output_sharding = first_out.sharding
                 mesh = first_out.sharding.mesh
 
-            # Re-execute maxpr_all in the current graph epoch.
-            try:
-                output_tensor_struct = op.maxpr_all(
-                    op_args,
-                    adapted_kwargs,
-                    output_sharding,
-                    mesh,
-                    any_traced=False,
-                    max_batch_dims=max_batch_dims,
-                    original_kwargs=op_kwargs,
-                )
-            except Exception as e:
-                print(f"ERROR: maxpr_all failed for {op.name}: {e}")
-                output_tensor_struct = None
+            # === New Physical Execution Path ===
+            if hasattr(op, "physical_execute"):
+                try:
+                    # physical_execute returns a PhysicalResult (or tuple/list of TensorValues)
+                    # It handles its own auto-reduction and internal logic.
+                    # We pass the original arguments and kwargs.
+                    with GRAPH.graph:
+                        raw_result = op.physical_execute(op_args, op_kwargs)
+                    
+                    # If it returns a named tuple or custom object, we might need to extract values.
+                    # For now, we assume it returns the raw value structure matching the output.
+                    # If PhysicalResult (namedtuple) is used, extracting .shard_values is needed.
+                    # Let's assume for now it returns the values directly as the plan implies "raw values".
+                    # However, the plan mentioned PhysicalResult(shard_values, ...).
+                    # Let's be flexible: check if it has 'shard_values' attr.
+                    if isinstance(raw_result, tuple) and len(raw_result) == 3:
+                        # Standard Tuple Return: (values, sharding, mesh)
+                        shard_values, r_sharding, r_mesh = raw_result
+                        
+                        from ..sharding import spmd
+                        output_tensor_struct = spmd.create_sharded_output(
+                            shard_values,
+                            r_sharding,
+                            traced=True, # Always true in rehydration
+                            batch_dims=max_batch_dims,
+                            mesh=r_mesh
+                        )
+                    elif hasattr(raw_result, "shard_values"):
+                        # Legacy/Object Return (PhysicalResult)
+                        r_sharding = raw_result.output_sharding if hasattr(raw_result, "output_sharding") else output_sharding
+                        r_mesh = raw_result.mesh if hasattr(raw_result, "mesh") else mesh
+                        
+                        from ..sharding import spmd
+                        output_tensor_struct = spmd.create_sharded_output(
+                            raw_result.shard_values,
+                            r_sharding,
+                            traced=True, # Always true in rehydration
+                            batch_dims=max_batch_dims,
+                            mesh=r_mesh
+                        )
+                    else:
+                        # Direct Return (if strict contract not yet fully enforced or simpler op)
+                        output_tensor_struct = raw_result
+
+                except Exception as e:
+                    print(f"ERROR: physical_execute failed for {op.name}: {e}")
+                    output_tensor_struct = None
+            else:
+                # === Legacy Path ===
+                # Re-execute maxpr_all in the current graph epoch.
+                try:
+                    output_tensor_struct = op.maxpr_all(
+                        op_args,
+                        adapted_kwargs,
+                        output_sharding,
+                        mesh,
+                        any_traced=False,
+                        max_batch_dims=max_batch_dims,
+                        original_kwargs=op_kwargs,
+                    )
+                except Exception as e:
+                    print(f"ERROR: maxpr_all failed for {op.name}: {e}")
+                    output_tensor_struct = None
 
             if output_tensor_struct is None:
                 # print(f"DEBUG: maxpr_all returned None for {op.name}")

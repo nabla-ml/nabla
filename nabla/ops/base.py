@@ -65,6 +65,94 @@ class Operation(ABC):
         return total
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        # === New Path: Physical Execution ===
+        if hasattr(self, "physical_execute"):
+            from ..core import GRAPH, Tensor, pytree
+            from ..core.sharding import spmd
+
+            # 1. Collect Metadata (for Adaptation logic)
+            max_batch_dims = 0
+            any_traced = False
+            any_sharded = False
+            
+            def collect_metadata(x):
+                nonlocal max_batch_dims, any_traced, any_sharded
+                if isinstance(x, Tensor):
+                    if x.batch_dims > max_batch_dims:
+                        max_batch_dims = x.batch_dims
+                    if x.traced:
+                        any_traced = True
+                    if x.is_sharded:
+                        any_sharded = True
+            
+            pytree.tree_map(collect_metadata, args)
+
+            # 2. Adaptation: Reshard Inputs
+            # Note: In the new model, __call__ handles this.
+            # We assume physical_execute expects valid inputs.
+            mesh = spmd.get_mesh_from_args(args) if any_sharded else None
+            
+            # Infer expected input sharding specific to this op (if relevant for resharding)
+            # Legacy logic used spmd.infer_output_sharding to get input_shardings.
+            # We must replicate that here to perform the necessary data movement.
+            # This is "Adaptation".
+            
+            # We temporarily use the SPMD utility to get required input specs
+            # This logic mimics the beginning of the legacy `execute` method
+            adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)
+            args = spmd.ensure_specs(args, mesh)
+            _, input_shardings, _ = spmd.infer_output_sharding(
+                self, args, mesh, adapted_kwargs or {}
+            )
+            
+            # Perform the data movement (Logical Adaptation)
+            resharded_args = spmd.reshard_inputs(args, input_shardings, mesh)
+
+            # 3. Physical Execution (The "Dumb" Executor)
+            # Returns raw TensorValues (PhysicalResult)
+            with GRAPH.graph:
+                raw_result = self.physical_execute(resharded_args, kwargs)
+
+            # 4. Packaging (Wrapping raw values into nabla.Tensor)
+            shard_values = None
+            output_sharding = None
+            res_mesh = mesh
+
+            if isinstance(raw_result, tuple) and len(raw_result) == 3:
+                 shard_values, output_sharding, res_mesh = raw_result
+            elif hasattr(raw_result, "shard_values"):
+                 shard_values = raw_result.shard_values
+                 output_sharding = getattr(raw_result, "output_sharding", None)
+                 res_mesh = getattr(raw_result, "mesh", mesh)
+            else:
+                 shard_values = raw_result
+
+            output = spmd.create_sharded_output(
+                shard_values,
+                output_sharding,
+                any_traced,
+                max_batch_dims,
+                mesh=res_mesh,
+            )
+
+            # 5. Tracing
+            self._setup_output_refs(
+                output, args, kwargs, kwargs, any_traced
+            )
+            
+            # 6. Post-Processing (JVP)
+            # Check for tangents in ORIGINAL args
+            any_has_tangent = False
+            for x in pytree.tree_leaves(args):
+                if isinstance(x, Tensor) and x.tangent is not None:
+                    any_has_tangent = True
+            
+            if any_has_tangent:
+                self._apply_jvp(args, output)
+
+            return output
+
+        # === Legacy Path ===
         return self.execute(*args, **kwargs)
 
     def execute(self, *args: Any, **kwargs: Any) -> Any:

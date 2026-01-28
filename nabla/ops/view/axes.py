@@ -48,6 +48,31 @@ class UnsqueezeOp(LogicalAxisOperation):
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
         return len(input_shapes[0]) + 1
 
+    def infer_sharding_spec(
+        self, args: tuple, mesh: Any, kwargs: dict = None
+    ) -> tuple[Any | None, list[Any | None], bool]:
+        """Insert empty dim spec at unsqueezed axis."""
+        from ...core import Tensor
+        from ...core.sharding.spec import DimSpec
+
+        if not args:
+            return None, [], False
+        
+        x = args[0]
+        if isinstance(x, Tensor) and x.sharding:
+            new_dim_specs = list(x.sharding.dim_specs)
+            axis = kwargs.get("axis", 0)
+            if axis < 0:
+                axis += len(x.shape) + 1
+            
+            new_dim_specs.insert(axis, DimSpec([]))
+            
+            new_spec = x.sharding.clone()
+            new_spec.dim_specs = new_dim_specs
+            return new_spec, [x.sharding], False
+
+        return None, [None], False
+
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for unsqueeze: squeeze the cotangent at the unsqueezed axis."""
         axis = output.op_kwargs.get("axis", 0)
@@ -95,6 +120,37 @@ class SqueezeOp(LogicalAxisOperation):
 
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
         return len(input_shapes[0]) - 1
+
+    def infer_sharding_spec(
+        self, args: tuple, mesh: Any, kwargs: dict = None
+    ) -> tuple[Any | None, list[Any | None], bool]:
+        """Remove dim spec at squeezed axis."""
+        from ...core import Tensor
+        
+        if not args:
+            return None, [], False
+
+        x = args[0]
+        if isinstance(x, Tensor) and x.sharding:
+            axis = kwargs.get("axis", 0)
+            if axis < 0:
+                axis += len(x.shape)
+
+            new_dim_specs = list(x.sharding.dim_specs)
+            
+            # Squeezing a sharded dimension is undefined unless it's handled 
+            # (e.g. implicitly replicated or partial). 
+            # For now we assume we just drop the spec. 
+            # If the dimension was sharded, we might lose info unless we track it?
+            # But usually squeeze(1) implies size 1.
+            if axis < len(new_dim_specs):
+                new_dim_specs.pop(axis)
+            
+            new_spec = x.sharding.clone()
+            new_spec.dim_specs = new_dim_specs
+            return new_spec, [x.sharding], False
+
+        return None, [None], False
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for squeeze: unsqueeze the cotangent at the squeezed axis."""

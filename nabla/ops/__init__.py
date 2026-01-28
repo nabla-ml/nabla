@@ -19,7 +19,6 @@ from .communication import (
     AllToAllOp,
     PPermuteOp,
     ReduceScatterOp,
-    ReshardOp,
     ShardOp,
     all_gather,
     all_reduce,
@@ -236,6 +235,5 @@ __all__ = [
     "AllToAllOp",
     "PPermuteOp",
     "ReduceScatterOp",
-    "ReshardOp",
     "call_custom_kernel",
 ]

@@ -64,8 +64,11 @@ def reshard_inputs(
                 return shard_fn(x, mesh, required.dim_specs)
             return x
 
+        from .spec import needs_reshard
         if not needs_reshard(current, required):
             return x
+        
+        from ...ops.communication.reshard import reshard_tensor
         return reshard_tensor(x, current, required, mesh)
 
     return pytree.tree_map(reshard_if_needed, args)
@@ -262,14 +265,14 @@ def _check_contracting_factors_sharded(
     return reduce_axes, ghost_axes
 
 
+
+
+
 def create_replicated_spec(mesh: DeviceMesh, rank: int) -> ShardingSpec:
     """Create a fully replicated sharding spec."""
     from .spec import DimSpec, ShardingSpec
 
     return ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)])
-
-
-from .spec import needs_reshard
 
 
 def get_shard_args(
@@ -301,72 +304,6 @@ def get_shard_args(
         return vals[0] if vals else x.__tensorvalue__()
 
     return pytree.tree_map(extract, args)
-
-
-def reshard_tensor(
-    tensor: Tensor,
-    from_spec: ShardingSpec | None,
-    to_spec: ShardingSpec | None,
-    mesh: DeviceMesh,
-) -> Tensor:
-    """Reshard tensor with minimal communication (smart slicing/gathering)."""
-    from ...ops.communication import all_gather
-    from ...ops.communication import shard as shard_op
-
-    if mesh is None:
-        return tensor
-
-    if not from_spec:
-        from_spec = create_replicated_spec(mesh, len(tensor.shape))
-
-    if not needs_reshard(from_spec, to_spec):
-        return tensor
-
-    result = tensor
-
-    for dim in range(len(from_spec.dim_specs)):
-        from_axes = (
-            set(from_spec.dim_specs[dim].axes)
-            if dim < len(from_spec.dim_specs)
-            else set()
-        )
-        to_axes = (
-            set(to_spec.dim_specs[dim].axes) if dim < len(to_spec.dim_specs) else set()
-        )
-
-        axes_to_remove = from_axes - to_axes
-
-        if from_spec.dim_specs[dim].partial:
-            from ...ops.communication import all_reduce
-
-            target_is_partial = (
-                dim < len(to_spec.dim_specs) and to_spec.dim_specs[dim].partial
-            )
-
-            if not target_is_partial:
-                result = all_reduce(result)
-                continue
-
-        if axes_to_remove:
-            from ...ops.communication import all_gather
-
-            result = all_gather(result, axis=dim)
-
-    for ghost_ax in from_spec.partial_sum_axes:
-        if ghost_ax not in to_spec.partial_sum_axes:
-            from ...ops.communication import all_reduce
-
-            result = all_reduce(result)
-
-    result = shard_op(
-        result,
-        mesh,
-        to_spec.dim_specs,
-        replicated_axes=to_spec.replicated_axes,
-        _bypass_idempotency=True,
-    )
-
-    return result
 
 
 def create_sharded_output(

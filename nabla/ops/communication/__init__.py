@@ -17,7 +17,7 @@ from .axis_index import AxisIndexOp, axis_index, axis_index_op
 from .base import CollectiveOperation
 from .p_permute import PPermuteOp, ppermute, ppermute_op
 from .reduce_scatter import ReduceScatterOp, reduce_scatter, reduce_scatter_op
-from .reshard import ReshardOp, reshard, reshard_op
+from .reshard import reshard
 from .shard import ShardOp, shard, shard_op
 
 __all__ = [
@@ -31,7 +31,6 @@ __all__ = [
     "PPermuteOp",
     "AllToAllOp",
     "AxisIndexOp",
-    "ReshardOp",
     "shard",
     "all_gather",
     "gather_all_axes",
@@ -51,5 +50,4 @@ __all__ = [
     "ppermute_op",
     "all_to_all_op",
     "axis_index_op",
-    "reshard_op",
 ]
