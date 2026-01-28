@@ -57,7 +57,7 @@ class ShardOp(Operation):
         input_spec = args[0].sharding
         return spec, [input_spec], False
 
-    def maxpr(
+    def _shard_logic(
         self,
         x: TensorValue,
         mesh: DeviceMesh,
@@ -143,8 +143,8 @@ class ShardOp(Operation):
             elif not isinstance(x, g.TensorValue):
                  x_input = g.TensorValue(x)
             
-            # maxpr expects a single value input usually (replicated)
-            shard_values = self.maxpr(
+            # _shard_logic expects a single value input usually (replicated)
+            shard_values = self._shard_logic(
                 x_input, mesh, dim_specs, global_shape=global_shape, **kwargs
             )
              
@@ -174,12 +174,17 @@ class ShardOp(Operation):
             # No hydrate needed, checked by caller or covered by graph context
             vals = x._values
 
-            if vals:
-                if len(vals) > shard_idx:
+            if vals and len(vals) > 0:
+                # If we have shards, try to find the one matching our device index
+                if shard_idx < len(vals):
                     effective_x = vals[shard_idx]
-
+                    
+                    # If we picked a specific shard, we must account for its offset in the global tensor
                     if x.sharding:
-                        for d, dim_spec in enumerate(x.sharding.dim_specs):
+                         for d, dim_spec in enumerate(x.sharding.dim_specs):
+                            if d >= len(global_shape): break
+                            
+                            # Re-calculate position for this shard index
                             offset = 0
                             shard_pos = 0
                             total_shards = 1
@@ -193,6 +198,9 @@ class ShardOp(Operation):
                             chunk_size = math.ceil(dim_global_len / total_shards)
                             input_shard_offset[d] = shard_pos * chunk_size
                 else:
+                    # Fallback/Broadcasting: Use the first shard (assumed replicated or broadcasting)
+                    # No offset applied because we treat it as covering the start? 
+                    # Or we assume it's the full tensor?
                     effective_x = vals[0]
 
         target_local_shape = compute_local_shape(global_shape, spec, shard_idx)
@@ -204,6 +212,7 @@ class ShardOp(Operation):
             inp_len = int(effective_x.type.shape[d])
 
             if inp_len == t_len:
+                # Optimization: full dimension match
                 slices.append(slice(0, t_len))
                 continue
 
@@ -222,14 +231,16 @@ class ShardOp(Operation):
 
             end_global = min(start_global + chunk_size, g_len)
 
+            # Adjust global start/end by the offset of the input shard we are slicing from
             start_local = start_global - input_shard_offset[d]
             end_local = end_global - input_shard_offset[d]
 
+            # Clip to valid range of the input shard
             start_local = max(0, min(start_local, inp_len))
             end_local = max(0, min(end_local, inp_len))
 
             slices.append(slice(start_local, end_local))
-
+            
         return effective_x[tuple(slices)]
 
 
@@ -317,7 +328,7 @@ def shard(
 
         if axes_to_remove:
             from .all_gather import all_gather
-            result = all_gather(result, axis=dim)
+            result = all_gather(result, axis=None, physical_axis=dim)
 
     # 2. Ghost Axes Reduction
     for ghost_ax in from_spec.partial_sum_axes:

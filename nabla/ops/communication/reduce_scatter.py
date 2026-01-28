@@ -47,10 +47,8 @@ class ReduceScatterOp(CollectiveOperation):
 
     def infer_sharding_spec(self, args: Any, mesh: DeviceMesh, kwargs: dict) -> Any:
         """Infer sharding for ReduceScatter (Adaptation Layer)."""
-        input_tensor = args[0]
-        input_sharding = input_tensor.sharding
-        output_sharding = self._compute_output_spec(input_tensor, None, **kwargs)
-        return output_sharding, [input_sharding], False
+        # CollectiveOperation.infer_sharding_spec handles validation and calls _compute_output_spec
+        return super().infer_sharding_spec(args, mesh, kwargs)
 
     def physical_execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
         """Sum-reduce across shards then scatter the result (Physical)."""
@@ -67,8 +65,14 @@ class ReduceScatterOp(CollectiveOperation):
         if axis is None:
             raise ValueError("ReduceScatterOp requires an 'axis' argument.")
             
+        if axis is None:
+            raise ValueError("ReduceScatterOp requires an 'axis' argument.")
+            
         # 1. Derive Metadata
         mesh = self._derive_mesh(sharded_tensor, kwargs)
+        
+        # Calculate physical axis
+        physical_axis = self._get_physical_axis(sharded_tensor, axis)
         
         # 2. Validation & Early Exit
         if not sharded_tensor.sharding:
@@ -80,10 +84,11 @@ class ReduceScatterOp(CollectiveOperation):
             
             # Ported logic from maxpr
             scattered_values = self._scatter_logic(
-                values, axis, mesh=mesh
+                values, physical_axis, mesh=mesh
             )
 
         # 3. Compute Output Spec
+        # Use logical axis; _compute_output_spec converts it.
         output_spec = self._compute_output_spec(
             sharded_tensor, scattered_values, axis=axis
         )
@@ -168,20 +173,21 @@ class ReduceScatterOp(CollectiveOperation):
         input_spec = input_tensor.sharding
 
         if mesh and input_spec:
-            rank = len(input_tensor.shape)
+            rank = len(input_spec.dim_specs)
             new_dim_specs = []
 
             mesh_axes = mesh.axis_names
             target_mesh_axis = mesh_axes[0] if mesh_axes else "unknown"
 
             kwargs_axis = kwargs.get("axis", 0)
+            target_dim = self._get_physical_axis(input_tensor, kwargs_axis)
 
             for d in range(rank):
                 input_d_spec = (
                     input_spec.dim_specs[d] if d < len(input_spec.dim_specs) else None
                 )
 
-                if d == kwargs_axis:
+                if d == target_dim:
                     current_axes = sorted(
                         list(
                             set(input_d_spec.axes if input_d_spec else [])

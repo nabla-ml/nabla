@@ -131,6 +131,7 @@ def infer_output_sharding(
         if spec is None:
             rank = len(phys_shape_tuple)
             spec = ShardingSpec(mesh, [DimSpec([], is_open=True) for _ in range(rank)])
+        
         input_specs.append(spec.clone())
         input_shapes.append(phys_shape_tuple)
 

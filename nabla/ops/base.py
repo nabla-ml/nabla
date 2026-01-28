@@ -104,7 +104,6 @@ class Operation(ABC):
             _, input_shardings, _ = spmd.infer_output_sharding(
                 self, args, mesh, adapted_kwargs or {}
             )
-            
             # Perform the data movement (Logical Adaptation)
             resharded_args = spmd.reshard_inputs(args, input_shardings, mesh)
 

@@ -64,47 +64,30 @@ class AllGatherOp(CollectiveOperation):
         cost = (n_devices - 1) / n_devices * size_bytes / bandwidth
         return cost
 
-    def adapt_kwargs(self, args: tuple, kwargs: dict, max_batch_dims: int) -> dict:
-        """Recover sharded_axis_name for multi-dim mesh rehydration."""
-        if "sharded_axis_name" in kwargs:
-            return kwargs
-
-        new_kwargs = dict(kwargs)
-        sharded_tensor = args[0]
-        axis = kwargs.get("axis")
-
-        if sharded_tensor.sharding and axis is not None:
-            sharding = sharded_tensor.sharding
-            if axis < len(sharding.dim_specs) and sharding.dim_specs[axis].axes:
-                new_kwargs["sharded_axis_name"] = sharding.dim_specs[axis].axes[0]
-
-        return new_kwargs
-
     def infer_sharding_spec(self, args: Any, mesh: DeviceMesh, kwargs: dict) -> Any:
         """Infer sharding for AllGather (Adaptation Layer)."""
-        input_tensor = args[0]
-        input_sharding = input_tensor.sharding
+        # CollectiveOperation.infer_sharding_spec handles the logic now that we implemented _compute_output_spec
+        return super().infer_sharding_spec(args, mesh, kwargs)
+
+    def _compute_output_spec(self, input_tensor, results, **kwargs):
+        """Compute output sharding spec for AllGather."""
+        if not input_tensor.sharding:
+             return None
+
+        # Helper handles logical->physical mapping including vmap batch dims
+        physical_axis = kwargs.get("physical_axis")
+        if physical_axis is None:
+            axis = kwargs.get("axis")
+            if axis is not None:
+                physical_axis = self._get_physical_axis(input_tensor, axis)
         
-        # We need to compute output spec. AllGather clears sharding on the gathered axis.
-        # But wait, AllGatherOp.physical_execute does this.
-        # We can reuse _compute_output_spec if we refactor it, or just do it here.
-        # Actually, let's look at how AllGatherOp computed its spec.
+        from ...core.sharding.spec import DimSpec, ShardingSpec
+        new_dim_specs = list(input_tensor.sharding.dim_specs)
         
-        # Since AllGather usually gather specific axis, we need that axis.
-        axis = kwargs.get("axis")
-        if axis is None and len(args) > 1:
-            axis = args[1]
+        if physical_axis is not None and 0 <= physical_axis < len(new_dim_specs):
+            new_dim_specs[physical_axis] = DimSpec([]) # Replicated
             
-        output_sharding = None
-        if input_sharding:
-            from ...core.sharding.spec import DimSpec, ShardingSpec
-            new_dim_specs = list(input_sharding.dim_specs)
-            spec_idx = axis if axis >= 0 else len(new_dim_specs) + axis
-            if 0 <= spec_idx < len(new_dim_specs):
-                new_dim_specs[spec_idx] = DimSpec([]) # Replicated
-            output_sharding = ShardingSpec(mesh, new_dim_specs)
-            
-        return output_sharding, [input_sharding], False
+        return ShardingSpec(input_tensor.sharding.mesh, new_dim_specs)
 
     def physical_execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
         """Gather shards along an axis to produce replicated full tensors (Physical).
@@ -117,22 +100,38 @@ class AllGatherOp(CollectiveOperation):
         sharded_tensor: Tensor = args[0]
         
         # Handle positional or keyword axis
+        axis = None
         if len(args) > 1:
             axis = args[1]
         else:
             axis = kwargs.get("axis")
             
-        if axis is None:
-            raise ValueError("AllGatherOp requires an 'axis' argument.")
-            
+        physical_axis = kwargs.get("physical_axis")
+
+        if axis is None and physical_axis is None:
+            raise ValueError("AllGatherOp requires an 'axis' or 'physical_axis' argument.")
+
         # 1. Derive Metadata
         mesh = self._derive_mesh(sharded_tensor, kwargs)
-        sharded_axis_name = self._get_sharded_axis_name(sharded_tensor, axis)
+        
+        # Calculate physical axis for execution logic and output spec
+        if physical_axis is None:
+            physical_axis = self._get_physical_axis(sharded_tensor, axis)
 
+        # Derive sharded_axis_name
+        sharded_axis_name = None
+        if sharded_tensor.sharding and 0 <= physical_axis < len(sharded_tensor.sharding.dim_specs):
+            dim_spec = sharded_tensor.sharding.dim_specs[physical_axis]
+            if dim_spec.axes:
+                 # TODO: Handle multi-axis? 
+                 # heuristic: pick first axis? 
+                 # Logic in _get_sharded_axis_name is robust, but requires logical axis.
+                 # Re-implementing simplified logic here:
+                 sharded_axis_name = dim_spec.axes[0]
+        
         # 2. Validation & Early Exit
         if not sharded_axis_name:
              # Not sharded on this axis -> No-op for this dimension index.
-             # Note: We still return a PhysicalResult (values, spec, mesh).
              return (sharded_tensor.values, sharded_tensor.sharding, mesh)
 
         # 3. Execution Context
@@ -140,21 +139,18 @@ class AllGatherOp(CollectiveOperation):
             # Note: inputs MUST be available. hydrate() is NOT allowed here.
             values = sharded_tensor.values
 
-            # Core implementation logic
+            # Core implementation logic uses physical axis
             gathered_values = self._gather_logic(
-                values, axis, mesh, sharded_axis_name
+                values, physical_axis, mesh, sharded_axis_name
             )
 
         # 4. Compute Output Spec
-        # Only modify the axis we gathered along to be Replicated
-        input_spec = sharded_tensor.sharding
-        new_dim_specs = []
-        for dim_idx, dim_spec in enumerate(input_spec.dim_specs):
-            if dim_idx == (axis if axis >= 0 else len(input_spec.dim_specs) + axis):
-                new_dim_specs.append(DimSpec([]))  # Replicated
-            else:
-                new_dim_specs.append(dim_spec)
-        output_spec = ShardingSpec(mesh, new_dim_specs)
+        # Now we can safely use the centralized logic.
+        output_spec = self._compute_output_spec(
+            sharded_tensor, gathered_values, axis=axis, physical_axis=physical_axis
+        )
+
+        return (gathered_values, output_spec, mesh)
 
         return (gathered_values, output_spec, mesh)
 
@@ -259,18 +255,54 @@ class GatherAllAxesOp(Operation):
             replicated_axes=x.sharding.replicated_axes,
         )
 
-    def maxpr(
+    def infer_sharding_spec(self, args: Any, mesh: Any, kwargs: dict) -> Any:
+        """Infer sharding: Input preserves current sharding, Output is replicated."""
+        if not args:
+            return None, [], False
+            
+        x = args[0]
+        input_shardings = [x.sharding if hasattr(x, "sharding") and x.sharding else None]
+        
+        # Output is fully replicated
+        rank = len(x.shape)
+        from ...core.sharding.spmd import create_replicated_spec
+        output_sharding = create_replicated_spec(mesh, rank)
+        
+        return output_sharding, input_shardings, False
+
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for GatherAllAxesOp."""
+        from ...core import GRAPH, Tensor
+        from ...core.sharding.spmd import create_replicated_spec
+
+        sharded_tensor: Tensor = args[0]
+        # Derive mesh from sharding metadata
+        mesh = sharded_tensor.sharding.mesh if sharded_tensor.sharding else None
+        
+        if not sharded_tensor.sharding:
+             return (sharded_tensor.values, None, mesh)
+
+        with GRAPH.graph:
+            gathered_shard = self._reconstruct_global_tensor(
+                sharded_tensor.values, sharded_tensor.sharding, mesh
+            )
+            # GatherAllAxes transforms N shards into N replicated shards
+            # (In physical reality, we produce one value, but our SPMD 
+            # packaging expects a list of shard values matching the mesh)
+            num_shards = len(mesh.devices) if mesh else 1
+            results = [gathered_shard] * num_shards
+            
+        rank = len(sharded_tensor.sharding.dim_specs)
+        output_spec = create_replicated_spec(mesh, rank)
+        return (results, output_spec, mesh)
+
+    def _reconstruct_global_tensor(
         self,
         shard_values: list[TensorValue],
         source_spec: ShardingSpec,
         mesh: DeviceMesh = None,
     ) -> TensorValue:
-        """Reconstruct the global tensor from potentially multi-dimensional shards.
-
-        Algorithm (hierarchical concatenation):
-        1. For each sharded tensor dimension: Group shards by coordinates on ALL mesh axes EXCEPT the one being merged.
-        2. Within each group, sort by coordinate on the merge axis and concatenate.
-        """
+        """Reconstruct the global tensor from potentially multi-dimensional shards."""
         if source_spec.is_fully_replicated():
             return shard_values[0]
 
@@ -285,52 +317,48 @@ class GatherAllAxesOp(Operation):
             current_active_axes.update(dim.axes)
         current_active_axes.update(source_spec.replicated_axes)
 
+        # print(f"DEBUG: Reconstruct Start. Rank={rank}. Shards={len(shard_values)}. Spec={source_spec.dim_specs} Active={current_active_axes} MeshAxes={source_spec.mesh.axis_names}")
+        
         for d in range(rank - 1, -1, -1):
             if d >= len(source_spec.dim_specs):
                 continue
             dim_spec = source_spec.dim_specs[d]
-
+            # print(f"DEBUG: Processing D={d}. Axes in dim: {dim_spec.axes}")
             for ax in reversed(dim_spec.axes):
-
+                # print(f"DEBUG:  >> Gathering Axis '{ax}' (Current Active: {current_active_axes})")
                 groups = {}
                 for val, device_id in current_shard_descs:
                     signature = []
-
                     for check_ax in sorted(list(current_active_axes)):
+                        # print(f"DEBUG:      Inside check_ax loop: check={check_ax} vs ax={ax}")
                         if check_ax == ax:
                             continue
-
-                        try:
-                            c = source_spec.mesh.get_coordinate(device_id, check_ax)
-                            signature.append((check_ax, c))
-                        except Exception:
-
-                            continue
+                        
+                        c = source_spec.mesh.get_coordinate(device_id, check_ax)
+                        signature.append((check_ax, c))
 
                     key = tuple(signature)
-
                     if key not in groups:
                         groups[key] = []
 
                     my_coord = source_spec.mesh.get_coordinate(device_id, ax)
+                    # print(f"DEBUG:    Device {device_id} -> Key {key} Coord {my_coord} on {ax}")
                     groups[key].append((my_coord, val, device_id))
-
+                
+                # print(f"DEBUG:    Groups formed: {len(groups)} keys.")
                 new_shard_descs = []
-
                 for key, members in groups.items():
-
                     members.sort(key=lambda x: x[0])
-
                     unique_chunks = []
                     seen_coords = set()
-
                     for m in members:
                         coord = m[0]
                         if coord not in seen_coords:
                             unique_chunks.append(m[1])
                             seen_coords.add(coord)
+                    
+                    # print(f"DEBUG:    Group {key}: {len(members)} entries -> {len(unique_chunks)} unique chunks. Coords: {seen_coords}")
 
-                    # Transfer all chunks to the first chunk's device before concatenating
                     if mesh and mesh.is_distributed and len(unique_chunks) > 1:
                         target_device = unique_chunks[0].device
                         unique_chunks = [
@@ -339,7 +367,7 @@ class GatherAllAxesOp(Operation):
                         ]
 
                     merged = ops.concat(unique_chunks, axis=d)
-
+                    # print(f"DEBUG: Merged Group key={key} d={d} count={len(unique_chunks)} shape={merged.type.shape}")
                     new_shard_descs.append((merged, members[0][2]))
 
                 current_shard_descs = new_shard_descs
@@ -347,49 +375,14 @@ class GatherAllAxesOp(Operation):
 
         return current_shard_descs[0][0]
 
-    def execute(self, sharded_tensor):
-        """Gather all sharded axes to produce a replicated tensor."""
-
-        from ...core import GRAPH, Tensor
-        from ...core.sharding.spec import DimSpec, ShardingSpec
-
-        if not sharded_tensor.sharding:
-            return sharded_tensor
-
-        spec = sharded_tensor.sharding
-        mesh = spec.mesh
-
-        if spec.is_fully_replicated():
-            return sharded_tensor
-
-        sharded_tensor.hydrate()
-        shard_values = sharded_tensor.values
-
-        if not shard_values or len(shard_values) <= 1:
-            return sharded_tensor
-
-        with GRAPH.graph:
-            global_tensor = self.maxpr(shard_values, spec, mesh)
-
-        rank = len(global_tensor.type.shape)
-        replicated_spec = ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)])
-
-        tensor = Tensor._create_unsafe(
-            values=[global_tensor],
-            traced=sharded_tensor.traced,
-            batch_dims=sharded_tensor.batch_dims,
-        )
-        tensor.sharding = replicated_spec
-        return tensor
-
 
 all_gather_op = AllGatherOp()
 gather_all_axes_op = GatherAllAxesOp()
 
 
-def all_gather(sharded_tensor, axis: int, **kwargs):
+def all_gather(sharded_tensor, axis: int = None, **kwargs):
     """Gather all shards to produce a replicated tensor."""
-    return all_gather_op(sharded_tensor, axis, **kwargs)
+    return all_gather_op(sharded_tensor, axis=axis, **kwargs)
 
 
 def gather_all_axes(sharded_tensor):

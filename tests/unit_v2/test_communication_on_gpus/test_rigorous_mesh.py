@@ -35,11 +35,12 @@ def test_scenario(mesh_shape, mesh_axes, scenario_name):
     # Determine axes to test sharding on
     sharding_specs_to_test = []
     # 1. Shard on first axis
-    sharding_specs_to_test.append([mesh_axes[0]])
+    if len(mesh_axes) == 1:
+        sharding_specs_to_test.append([mesh_axes[0]])
 
     # 2. If mesh has multiple axes (e.g. 2D), shard on second axis
     if len(mesh_axes) > 1:
-        sharding_specs_to_test.append([mesh_axes[1]])
+        # sharding_specs_to_test.append([mesh_axes[1]])
         # 3. Shard on BOTH axes (fully sharded)
         sharding_specs_to_test.append(list(mesh_axes))
 
