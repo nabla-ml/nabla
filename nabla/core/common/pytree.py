@@ -211,10 +211,12 @@ def tree_map(
             if not all(isinstance(x, tuple) and len(x) == len(primary) for x in others):
                 raise ValueError("Tree structure mismatch: Tuple length or type")
 
-            result_gen = (
+            result_tuple = tuple(
                 _map(c, *[x[i] for x in others]) for i, c in enumerate(primary)
             )
-            return type(primary)(result_gen)
+            if type(primary) is tuple:
+                return result_tuple
+            return type(primary)(*result_tuple)
 
         if isinstance(primary, dict):
             if not all(isinstance(x, dict) and len(x) == len(primary) for x in others):

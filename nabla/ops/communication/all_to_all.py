@@ -33,6 +33,14 @@ class AllToAllOp(CollectiveOperation):
         # CollectiveOperation.infer_sharding_spec handles validation and calls _compute_output_spec
         return super().infer_sharding_spec(args, mesh, kwargs)
 
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for all_to_all: another all_to_all with swapped axes."""
+        split_axis = output.op_kwargs.get("split_axis")
+        concat_axis = output.op_kwargs.get("concat_axis")
+        from .all_to_all import all_to_all
+        # Swap split and concat for backward
+        return all_to_all(cotangent, split_axis=concat_axis, concat_axis=split_axis)
+
     def physical_execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
         """All-to-all distributed transpose (Physical)."""
         from ...core import GRAPH, Tensor

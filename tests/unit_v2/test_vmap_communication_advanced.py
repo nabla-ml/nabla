@@ -109,17 +109,16 @@ class TestVmapCommunicationAdvanced:
         # Nabla Grad
         grad_fn = nb.grad(loss_fn)
         grad_x = grad_fn(x)
+
+        mid = H // 2
+        x_L = np_x[:, :mid]
+        x_R = np_x[:, mid:]
+        res = x_L + x_R
+        # Gradient is concatenation of gradients for each part
+        grad_L = 2 * res
+        grad_R = 2 * res
+        expected_grad = jnp.concatenate([grad_L, grad_R], axis=1)
         
-        # Analytical Gradient:
-        # y = sum((sum(sharded_u))**2) = sum((u)**2) if sharded_u sum matches u?
-        # Wait, all_reduce sums SHARDS.
-        # If u is sharded, u_local = u_global_slice.
-        # all_reduce(u_local) = sum(u_local_i) = u_global.
-        # So res = u_global.
-        # Loss = sum(u_global^2).
-        # dLoss/du_global = 2 * u_global.
-        
-        expected_grad = 2 * np_x
         assert_allclose(grad_x, expected_grad)
 
     def test_vmap_reduce_scatter_grad(self):
@@ -147,23 +146,9 @@ class TestVmapCommunicationAdvanced:
         
         # JAX Reference
         def jax_loss(x_arr):
-            # reduce_scatter simulation: sum rep then split?
-            # Input is Replicated.
-            # ReduceScatter on Replicated input X:
-            # Conceptually: X is partial sum? No, X is fully replicated.
-            # If we treat X as "to be reduced".
-            # Result on device i = Sum(X_j) for j in devices? No.
-            # ReduceScatter logic: Reduce (sum) then Scatter.
-            # If input is Replicated X on all devices.
-            # Sum = X * NumDevices.
-            # Scatter -> Split (X * NumDevices) into chunks.
-            # Result_i = (X * N)[chunk_i].
-            
-            # Loss = sum(Result_i^2).
-            # This logic is tricky to replicate exactly without SPMD semantics in JAX.
-            # But let's verify simply that it runs and has correct shape.
             return 0.0
 
         # We verify shapes and finiteness for now
-        assert grad_x.shape == (B, H)
-        assert not jnp.isnan(tensor_from_jax(grad_x).to_numpy()).any()
+        assert tuple(int(d) for d in grad_x.shape) == (B, H)
+        from .common import to_jax
+        assert not jnp.isnan(to_jax(grad_x)).any()

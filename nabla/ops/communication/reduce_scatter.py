@@ -50,6 +50,18 @@ class ReduceScatterOp(CollectiveOperation):
         # CollectiveOperation.infer_sharding_spec handles validation and calls _compute_output_spec
         return super().infer_sharding_spec(args, mesh, kwargs)
 
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP for reduce_scatter: all_gather the gradients."""
+        from .all_gather import all_gather
+
+        # Axis is required. Passed as second positional arg by wrapper.
+        if isinstance(primals, (list, tuple)) and len(primals) > 1:
+            axis = primals[1]
+        else:
+            axis = 0 # Fallback 
+            
+        return all_gather(cotangent, axis=axis)
+
     def physical_execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
         """Sum-reduce across shards then scatter the result (Physical)."""
         from ...core import GRAPH, Tensor
@@ -61,9 +73,6 @@ class ReduceScatterOp(CollectiveOperation):
             axis = args[1]
         else:
             axis = kwargs.get("axis")
-            
-        if axis is None:
-            raise ValueError("ReduceScatterOp requires an 'axis' argument.")
             
         if axis is None:
             raise ValueError("ReduceScatterOp requires an 'axis' argument.")
@@ -177,7 +186,7 @@ class ReduceScatterOp(CollectiveOperation):
             new_dim_specs = []
 
             mesh_axes = mesh.axis_names
-            target_mesh_axis = mesh_axes[0] if mesh_axes else "unknown"
+            # target_mesh_axis = mesh_axes[0] if mesh_axes else "unknown" # OLD BUGGY LOGIC
 
             kwargs_axis = kwargs.get("axis", 0)
             target_dim = self._get_physical_axis(input_tensor, kwargs_axis)
@@ -191,7 +200,7 @@ class ReduceScatterOp(CollectiveOperation):
                     current_axes = sorted(
                         list(
                             set(input_d_spec.axes if input_d_spec else [])
-                            | {target_mesh_axis}
+                            | set(mesh_axes) # Add ALL mesh axes
                         )
                     )
                     new_dim_specs.append(DimSpec(current_axes))
@@ -211,4 +220,4 @@ def reduce_scatter(sharded_tensor, axis: int, **kwargs):
 
     Note: MAX only supports sum reduction natively.
     """
-    return reduce_scatter_op(sharded_tensor, axis=axis, **kwargs)
+    return reduce_scatter_op(sharded_tensor, axis, **kwargs)

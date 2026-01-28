@@ -159,8 +159,23 @@ class AllReduceOp(CollectiveOperation):
         return output_sharding, [input_sharding], False
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        """VJP for AllReduce (sum): identity because it's a linear sum across devices."""
-        return cotangent
+        """VJP for AllReduce (sum): assign replicated gradient to shards."""
+        input_tensor = primals[0] if isinstance(primals, (list, tuple)) else primals
+        
+        if not input_tensor.sharding:
+            return cotangent
+
+        from ...core.sharding import spmd
+        
+        cotangent.hydrate()
+        
+        return spmd.create_sharded_output(
+            cotangent.values,
+            input_tensor.sharding,
+            cotangent.traced,
+            cotangent.batch_dims,
+            input_tensor.sharding.mesh
+        )
 
     def _compute_output_spec(self, input_tensor, results, **kwargs):
         """Output clears partial flags but preserves axes mappings for non-partial dims."""
