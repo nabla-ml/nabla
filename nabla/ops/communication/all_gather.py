@@ -80,21 +80,78 @@ class AllGatherOp(CollectiveOperation):
 
         return new_kwargs
 
-    def maxpr(
+    def physical_execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
+        """Gather shards along an axis to produce replicated full tensors (Physical).
+        
+        Derives all physical context (mesh, sharded_axis_name) internally.
+        """
+        from ...core import GRAPH, Tensor
+        from ...core.sharding.spec import DimSpec, ShardingSpec
+
+        sharded_tensor: Tensor = args[0]
+        
+        # Handle positional or keyword axis
+        if len(args) > 1:
+            axis = args[1]
+        else:
+            axis = kwargs.get("axis")
+            
+        if axis is None:
+            raise ValueError("AllGatherOp requires an 'axis' argument.")
+            
+        # 1. Derive Metadata
+        mesh = sharded_tensor.sharding.mesh if sharded_tensor.sharding else kwargs.get("mesh")
+        sharded_axis_name = None
+        
+        if sharded_tensor.sharding:
+            sharding = sharded_tensor.sharding
+            spec_idx = axis if axis >= 0 else len(sharding.dim_specs) + axis
+            if spec_idx < len(sharding.dim_specs) and sharding.dim_specs[spec_idx].axes:
+                sharded_axis_name = sharding.dim_specs[spec_idx].axes[0]
+
+        # 2. Validation & Early Exit
+        if not sharded_axis_name:
+             # Not sharded on this axis -> No-op for this dimension index.
+             # Note: We still return a PhysicalResult (values, spec, mesh).
+             return (sharded_tensor.values, sharded_tensor.sharding, mesh)
+
+        # 3. Execution Context
+        with GRAPH.graph:
+            # Note: inputs MUST be available. hydrate() is NOT allowed here.
+            values = sharded_tensor.values
+
+            # Core implementation logic
+            gathered_values = self._gather_logic(
+                values, axis, mesh, sharded_axis_name
+            )
+
+        # 4. Compute Output Spec
+        # Only modify the axis we gathered along to be Replicated
+        input_spec = sharded_tensor.sharding
+        new_dim_specs = []
+        for dim_idx, dim_spec in enumerate(input_spec.dim_specs):
+            if dim_idx == (axis if axis >= 0 else len(input_spec.dim_specs) + axis):
+                new_dim_specs.append(DimSpec([]))  # Replicated
+            else:
+                new_dim_specs.append(dim_spec)
+        output_spec = ShardingSpec(mesh, new_dim_specs)
+
+        return (gathered_values, output_spec, mesh)
+
+    def _gather_logic(
         self,
         shard_values: list[TensorValue],
         axis: int,
         mesh: DeviceMesh = None,
         sharded_axis_name: str = None,
     ) -> list[TensorValue]:
-        """Gather all shards along the specified axis."""
+        """Core gather implementation (MAX ops or simulation)."""
 
         if mesh and mesh.is_distributed:
             from max.dtype import DType
             from max.graph.ops.allgather import allgather as max_allgather
             from max.graph.type import BufferType
 
-            # Signal buffer must be uint8 and large enough (>49KB) to avoid errors
             BUFFER_SIZE = 65536
             signal_buffers = [
                 ops.buffer_create(BufferType(DType.uint8, (BUFFER_SIZE,), dev))
@@ -103,18 +160,10 @@ class AllGatherOp(CollectiveOperation):
             return max_allgather(shard_values, signal_buffers, axis=axis)
 
         if mesh is None or (sharded_axis_name is None and len(mesh.axis_names) <= 1):
-            # Fallback for single-axis mesh or no mesh: concat everything
             if len(shard_values) <= 1:
                 return [shard_values[0]] * len(shard_values) if shard_values else []
             full_tensor = ops.concat(shard_values, axis=axis)
             return [full_tensor] * len(shard_values)
-
-        if sharded_axis_name is None and mesh:
-            # Try to infer if not provided (rehydration fallback)
-            # If we can't infer, we must still avoid concatenating all shards
-            # if the mesh is larger than the sharding factor.
-            # But it's better to rely on adapt_kwargs.
-            pass
 
         return self._simulate_grouped_gather(
             shard_values, axis, mesh, sharded_axis_name
@@ -162,116 +211,6 @@ class AllGatherOp(CollectiveOperation):
             )
             results.append(gathered_per_group[other_coords])
         return results
-
-    def execute(self, sharded_tensor, axis: int, **kwargs):
-        """Gather all shards to produce a replicated tensor."""
-        from ...core import GRAPH, Tensor
-        from ...core.sharding.spec import DimSpec, ShardingSpec
-
-        if (not sharded_tensor._values and not sharded_tensor._storages) or (
-            sharded_tensor.sharding and sharded_tensor.sharding.is_fully_replicated()
-        ):
-            return sharded_tensor
-
-        mesh = sharded_tensor.sharding.mesh if sharded_tensor.sharding else None
-        sharded_axis_name = None
-
-        if sharded_tensor.sharding:
-
-            sharding = sharded_tensor.sharding
-            if axis < len(sharding.dim_specs) and sharding.dim_specs[axis].axes:
-                sharded_axis_name = sharding.dim_specs[axis].axes[0]
-
-        with GRAPH.graph:
-            sharded_tensor.hydrate()
-
-            if len(sharded_tensor.values) <= 1:
-                from max.graph import Shape
-
-                from ...core.sharding.spec import compute_global_shape
-
-                batch_dims = sharded_tensor.batch_dims
-
-                local_shape = sharded_tensor.physical_local_shape(0)
-                if local_shape is None:
-                    local_shape = sharded_tensor.shape
-
-                if sharded_tensor.sharding and local_shape is not None:
-                    global_shape_tuple = compute_global_shape(
-                        tuple(local_shape), sharded_tensor.sharding
-                    )
-                    global_shape = Shape(global_shape_tuple)
-                else:
-                    global_shape = local_shape
-
-                rank = len(global_shape) if global_shape else len(sharded_tensor.shape)
-                replicated_spec = (
-                    ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)])
-                    if mesh
-                    else None
-                )
-
-                tensor = Tensor._create_unsafe(
-                    storages=sharded_tensor._storages,
-                    values=sharded_tensor._values,
-                    traced=sharded_tensor.traced,
-                    batch_dims=batch_dims,
-                )
-                tensor.sharding = replicated_spec
-
-                return tensor
-
-        with GRAPH.graph:
-            gathered = self.maxpr(
-                sharded_tensor.values,
-                axis,
-                mesh=mesh,
-                sharded_axis_name=sharded_axis_name,
-            )
-
-        from max.graph import Shape
-
-        from ...core.sharding.spec import compute_global_shape
-
-        local_shape = sharded_tensor.physical_local_shape(0)
-        if sharded_tensor.sharding and local_shape is not None:
-            global_shape_tuple = compute_global_shape(
-                tuple(local_shape), sharded_tensor.sharding
-            )
-            global_shape = Shape(global_shape_tuple)
-        else:
-
-            global_shape = None
-
-        output_spec = None
-        if mesh and sharded_tensor.sharding:
-            input_spec = sharded_tensor.sharding
-            new_dim_specs = []
-            for dim_idx, dim_spec in enumerate(input_spec.dim_specs):
-                if dim_idx == axis:
-
-                    new_dim_specs.append(DimSpec([]))
-                else:
-
-                    new_dim_specs.append(dim_spec)
-            output_spec = ShardingSpec(mesh, new_dim_specs)
-
-        output = Tensor._create_unsafe(
-            values=gathered,
-            traced=sharded_tensor.traced,
-            batch_dims=sharded_tensor.batch_dims,
-        )
-        output.sharding = output_spec
-
-        self._setup_output_refs(
-            output,
-            (sharded_tensor,),
-            {"axis": axis},
-            {"axis": axis},
-            sharded_tensor.traced,
-        )
-
-        return output
 
 
 class GatherAllAxesOp(Operation):
