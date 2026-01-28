@@ -340,3 +340,51 @@ def create_sharded_output(
     output.sharding = sharding
 
     return output
+
+def execute_on_shards(
+    op_fn: Any,
+    args: tuple,
+    kwargs: dict,
+    mesh: DeviceMesh | None,
+    input_shardings: list[ShardingSpec | None] | None = None,
+    op: Any | None = None,
+) -> list[Any]:
+    """Execute op_fn on each shard, handling input slicing and kwarg transformation."""
+    from max import graph as g
+    from ..tensor import Tensor
+    from .. import pytree
+
+    # Pre-fetch input shardings if not provided
+    if mesh is not None and input_shardings is None:
+        leaves = [a for a in pytree.tree_leaves(args) if isinstance(a, Tensor)]
+        input_shardings = [t.sharding for t in leaves]
+
+    # Infer output sharding if needed for keyword transformation
+    output_sharding = None
+    if op is not None and mesh is not None and hasattr(op, "_transform_shard_kwargs"):
+        output_sharding, _, _ = infer_output_sharding(op, args, mesh, kwargs)
+
+    if mesh is None:
+        # Local execution (0-th shard/unsharded view)
+        shard_args = get_shard_args(args, 0, input_shardings, g, Tensor, pytree)
+        local_kwargs = kwargs
+        if op is not None and output_sharding is not None and hasattr(op, "_transform_shard_kwargs"):
+            local_kwargs = op._transform_shard_kwargs(kwargs, output_sharding, 0, shard_args)
+        return [op_fn(*shard_args, **local_kwargs)]
+
+    results = []
+    num_shards = len(mesh.devices)
+    
+    for i in range(num_shards):
+        # Slice args for this shard
+        shard_args = get_shard_args(args, i, input_shardings, g, Tensor, pytree)
+        
+        # Transform kwargs if op provides a hook
+        local_kwargs = kwargs
+        if op is not None and output_sharding is not None and hasattr(op, "_transform_shard_kwargs"):
+             local_kwargs = op._transform_shard_kwargs(kwargs, output_sharding, i, shard_args)
+        
+        # Execute
+        results.append(op_fn(*shard_args, **local_kwargs))
+
+    return results

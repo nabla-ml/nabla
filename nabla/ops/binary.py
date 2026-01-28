@@ -140,7 +140,17 @@ class MatmulOp(Operation):
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.matmul(args[0], args[1])
         
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for Matmul."""
+        from ..core import GRAPH
+        from ..core.sharding import spmd
         
+        mesh = spmd.get_mesh_from_args(args)
+        
+        with GRAPH.graph:
+            shard_results = spmd.execute_on_shards(self.maxpr, args, kwargs, mesh, op=self)
+        
+        return (shard_results, None, mesh)
     def __call__(self, x: Tensor, y: Tensor) -> Tensor:
         from . import view as view_ops
         from .base import ensure_tensor

@@ -101,7 +101,7 @@ class Operation(ABC):
             # This logic mimics the beginning of the legacy `execute` method
             adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)
             args = spmd.ensure_specs(args, mesh)
-            _, input_shardings, _ = spmd.infer_output_sharding(
+            predicted_output_spec, input_shardings, reduce_axes = spmd.infer_output_sharding(
                 self, args, mesh, adapted_kwargs or {}
             )
             # Perform the data movement (Logical Adaptation)
@@ -126,6 +126,10 @@ class Operation(ABC):
             else:
                  shard_values = raw_result
 
+            # Use predicted spec if physical execution didn't return one
+            if output_sharding is None:
+                output_sharding = predicted_output_spec
+            
             output = spmd.create_sharded_output(
                 shard_values,
                 output_sharding,
@@ -133,6 +137,11 @@ class Operation(ABC):
                 max_batch_dims,
                 mesh=res_mesh,
             )
+
+            # 5. SPMD: Post-Op Collectives (Automatic Reductions)
+            if reduce_axes and mesh:
+                from .communication import all_reduce
+                output = all_reduce(output, reduce_axes=list(reduce_axes), reduce_op=self.collective_reduce_type)
 
             # 5. Tracing
             self._setup_output_refs(
@@ -468,6 +477,18 @@ class BinaryOperation(Operation):
             num_elements *= d
         return float(num_elements)
 
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for Binary Ops."""
+        from ..core import GRAPH
+        from ..core.sharding import spmd
+        
+        mesh = spmd.get_mesh_from_args(args)
+        
+        with GRAPH.graph:
+            shard_results = spmd.execute_on_shards(self.maxpr, args, kwargs, mesh, op=self)
+        
+        return (shard_results, None, mesh)
+
     def __call__(self, x: Tensor, y: Tensor) -> Tensor:
         from . import view as view_ops
         from .base import ensure_tensor
@@ -703,6 +724,18 @@ class UnaryOperation(Operation):
         for d in input_shapes[0]:
             num_elements *= d
         return float(num_elements)
+
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for Unary Ops."""
+        from ..core import GRAPH
+        from ..core.sharding import spmd
+        
+        mesh = spmd.get_mesh_from_args(args)
+        
+        with GRAPH.graph:
+            shard_results = spmd.execute_on_shards(self.maxpr, args, kwargs, mesh, op=self)
+                
+        return (shard_results, None, mesh)
 
 
 class LogicalShapeOperation(Operation):
