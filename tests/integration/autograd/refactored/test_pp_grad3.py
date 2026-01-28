@@ -12,8 +12,8 @@ from nabla.ops import communication
 from max.dtype import DType
 
 # --- Project Constants ---
-DP_SIZE = 1
-PP_SIZE = 2
+DP_SIZE = 2
+PP_SIZE = 4
 TOTAL_DEVICES = DP_SIZE * PP_SIZE
 
 MICRO_BATCHES = 4
