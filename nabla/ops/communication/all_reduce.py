@@ -47,45 +47,50 @@ class AllReduceOp(CollectiveOperation):
         cost = 2.0 * (n_devices - 1) / n_devices * size_bytes / bandwidth
         return cost
 
-    def _should_proceed(self, tensor):
-        """Check if all_reduce should proceed."""
+    def physical_execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
+        """Sum-reduce across shards (Physical)."""
+        from ...core import GRAPH, Tensor
+        
+        sharded_tensor: Tensor = args[0]
+        reduce_op = kwargs.get("reduce_op", "sum")
+        reduce_axes = kwargs.get("reduce_axes")
+        
+        # 1. Validation & Early Exit
+        if not sharded_tensor.sharding:
+             return (sharded_tensor.values, sharded_tensor.sharding, None)
 
-        has_multiple_shards = (tensor._values and len(tensor._values) > 1) or (
-            tensor._storages and len(tensor._storages) > 1
+        mesh = sharded_tensor.sharding.mesh
+        
+        # 2. Derive reduce_axes if None (internal SPMD context)
+        # If it's still None after probing, it means total reduction (all shards).
+        if reduce_axes is None and sharded_tensor.sharding:
+            if sharded_tensor.sharding.partial_sum_axes:
+                reduce_axes = set(sharded_tensor.sharding.partial_sum_axes)
+            
+        # 3. Execution Context
+        with GRAPH.graph:
+            values = sharded_tensor.values
+            
+            # Ported logic from maxpr
+            reduced_values = self._reduce_logic(
+                values, mesh=mesh, reduce_op=reduce_op, reduce_axes=reduce_axes
+            )
+
+        # 4. Compute Output Spec
+        output_spec = self._compute_output_spec(
+            sharded_tensor, reduced_values, reduce_axes=reduce_axes
         )
-        if not has_multiple_shards:
-            return False
 
-        if tensor.sharding and tensor.sharding.is_fully_replicated():
-            return False
+        return (reduced_values, output_spec, mesh)
 
-        return True
-
-    def adapt_kwargs(self, args: tuple, kwargs: dict, max_batch_dims: int) -> dict:
-        """Recover reduce_axes for multi-dim mesh rehydration."""
-        if "reduce_axes" in kwargs:
-            return kwargs
-
-        new_kwargs = dict(kwargs)
-        sharded_tensor = args[0]
-
-        if sharded_tensor.sharding:
-            # If we're performing all_reduce during backprop, it's often to reduce
-            # partial axes. We can find them in the GRADIENT'S sharding (before reduction).
-            # But here we look at the input to the operation.
-            # Actually, for AllReduce, we usually know which axes were partial.
-            pass
-
-        return new_kwargs
-
-    def maxpr(
+    def _reduce_logic(
         self,
         shard_values: list[TensorValue],
         mesh: DeviceMesh = None,
         reduce_op: str = "sum",
         reduce_axes: set[str] = None,
     ) -> list[TensorValue]:
-        """Reduce across shards (AllReduce)."""
+        """Core reduction implementation (MAX ops or simulation)."""
         if not shard_values:
             return []
 
@@ -94,23 +99,18 @@ class AllReduceOp(CollectiveOperation):
             from max.graph.ops.allgather import allgather as max_allgather
             from max.graph.type import BufferType
 
-            # Signal buffer must be uint8 and large enough (>49KB) to avoid errors
             BUFFER_SIZE = 65536
             signal_buffers = [
                 ops.buffer_create(BufferType(DType.uint8, (BUFFER_SIZE,), dev))
                 for dev in mesh.device_refs
             ]
 
-            # allgather returns list of gathered tensors, one per device
-            # Each contains all data concatenated
             gathered = max_allgather(shard_values, signal_buffers, axis=0)
 
-            # Now split each gathered tensor back into chunks and reduce
             result_values = []
             chunk_size = shard_values[0].type.shape[0]
 
             for gathered_tensor in gathered:
-                # Split the gathered tensor into N chunks
                 chunks = []
                 for i in range(len(shard_values)):
                     start = i * chunk_size
@@ -118,7 +118,6 @@ class AllReduceOp(CollectiveOperation):
                     chunk = gathered_tensor[start:end]
                     chunks.append(chunk)
 
-                # Reduce all chunks locally
                 reduced = chunks[0]
                 for chunk in chunks[1:]:
                     if reduce_op == "sum":
@@ -137,12 +136,10 @@ class AllReduceOp(CollectiveOperation):
             return result_values
 
         if reduce_axes and mesh and not mesh.is_distributed:
-            # Use grouped simulation for multi-dim meshes
             return self.simulate_grouped_execution(
                 shard_values, mesh, reduce_axes, reduce_op=reduce_op
             )
 
-        # Simulation mode and single-device fallback (Total reduction)
         result = shard_values[0]
         for sv in shard_values[1:]:
             if reduce_op == "sum":
@@ -157,6 +154,13 @@ class AllReduceOp(CollectiveOperation):
                 raise ValueError(f"Unknown reduction op: {reduce_op}")
 
         return [result] * len(shard_values)
+
+    def infer_sharding_spec(self, args: Any, mesh: DeviceMesh, kwargs: dict) -> Any:
+        """Infer sharding for AllReduce (Adaptation Layer)."""
+        input_tensor = args[0]
+        input_sharding = input_tensor.sharding
+        output_sharding = self._compute_output_spec(input_tensor, None, **kwargs)
+        return output_sharding, [input_sharding], False
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for AllReduce (sum): identity because it's a linear sum across devices."""
@@ -178,13 +182,12 @@ class AllReduceOp(CollectiveOperation):
         if reduce_axes is None:
             # Full reduction over all sharding axes -> Output is fully replicated
             new_dim_specs = [DimSpec([]) for _ in input_tensor.sharding.dim_specs]
-            return ShardingSpec(new_dim_specs, partial_sum_axes=set())
+            return ShardingSpec(input_tensor.sharding.mesh, new_dim_specs, partial_sum_axes=set())
 
         new_spec = input_tensor.sharding.clone()
-        new_spec.partial_sum_axes.clear()
+        new_spec.partial_sum_axes = set(ax for ax in new_spec.partial_sum_axes if ax not in reduce_axes)
 
         for ds in new_spec.dim_specs:
-            # Remove reduced axes from this dimension's sharding
             ds.axes = tuple(ax for ax in ds.axes if ax not in reduce_axes)
             if not ds.axes:
                 ds.partial = False
@@ -206,7 +209,7 @@ class AllReduceOp(CollectiveOperation):
 
         all_axes = set(mesh.axis_names)
         if all_axes.issubset(reduce_axes):
-            return self.maxpr(shard_results, mesh=mesh, reduce_op=reduce_op)
+            return self._reduce_logic(shard_results, mesh=mesh, reduce_op=reduce_op)
 
         group_axes = [ax for ax in all_axes if ax not in reduce_axes]
         groups = self._group_shards_by_axes(shard_results, mesh, group_axes)
@@ -218,7 +221,7 @@ class AllReduceOp(CollectiveOperation):
             group_shards = [val for _, val in group_members]
 
             if len(group_shards) > 1:
-                curr_reduced = self.maxpr(group_shards, mesh=mesh, reduce_op=reduce_op)
+                curr_reduced = self._reduce_logic(group_shards, mesh=mesh, reduce_op=reduce_op)
             else:
                 curr_reduced = [group_shards[0]]
 
@@ -237,25 +240,28 @@ class PMeanOp(CollectiveOperation):
     def name(self) -> str:
         return "pmean"
 
-    def maxpr(
-        self,
-        shard_values: list[TensorValue],
-        mesh: DeviceMesh = None,
-        axis_name: str = None,
-    ) -> list[TensorValue]:
-        """Compute mean across shards."""
+    def physical_execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
+        """Compute mean across shards (Physical)."""
+        from ...core import GRAPH
+        
+        # 1. Perform AllReduce first
+        shard_values, output_spec, mesh = all_reduce_op.physical_execute(args, kwargs)
+        
+        axis_name = kwargs.get("axis_name")
+        
+        # 2. Rescale
+        with GRAPH.graph:
+            if axis_name and mesh:
+                axis_size = mesh.get_axis_size(axis_name)
+            else:
+                axis_size = len(shard_values)
 
-        reduced = all_reduce_op.maxpr(shard_values, mesh=mesh)
+            dtype = shard_values[0].type.dtype
+            device = shard_values[0].type.device
+            scale = ops.constant(1.0 / axis_size, dtype, device)
+            scaled_values = [ops.mul(r, scale) for r in shard_values]
 
-        if axis_name and mesh:
-            axis_size = mesh.get_axis_size(axis_name)
-        else:
-            axis_size = len(shard_values)
-
-        dtype = reduced[0].type.dtype
-        device = reduced[0].type.device
-        scale = ops.constant(1.0 / axis_size, dtype, device)
-        return [ops.mul(r, scale) for r in reduced]
+        return (scaled_values, output_spec, mesh)
 
     def _compute_output_spec(self, input_tensor, results, **kwargs):
         """Output clears partial flags but preserves axes mappings for non-partial dims."""

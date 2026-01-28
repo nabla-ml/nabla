@@ -80,6 +80,32 @@ class AllGatherOp(CollectiveOperation):
 
         return new_kwargs
 
+    def infer_sharding_spec(self, args: Any, mesh: DeviceMesh, kwargs: dict) -> Any:
+        """Infer sharding for AllGather (Adaptation Layer)."""
+        input_tensor = args[0]
+        input_sharding = input_tensor.sharding
+        
+        # We need to compute output spec. AllGather clears sharding on the gathered axis.
+        # But wait, AllGatherOp.physical_execute does this.
+        # We can reuse _compute_output_spec if we refactor it, or just do it here.
+        # Actually, let's look at how AllGatherOp computed its spec.
+        
+        # Since AllGather usually gather specific axis, we need that axis.
+        axis = kwargs.get("axis")
+        if axis is None and len(args) > 1:
+            axis = args[1]
+            
+        output_sharding = None
+        if input_sharding:
+            from ...core.sharding.spec import DimSpec, ShardingSpec
+            new_dim_specs = list(input_sharding.dim_specs)
+            spec_idx = axis if axis >= 0 else len(new_dim_specs) + axis
+            if 0 <= spec_idx < len(new_dim_specs):
+                new_dim_specs[spec_idx] = DimSpec([]) # Replicated
+            output_sharding = ShardingSpec(mesh, new_dim_specs)
+            
+        return output_sharding, [input_sharding], False
+
     def physical_execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
         """Gather shards along an axis to produce replicated full tensors (Physical).
         
