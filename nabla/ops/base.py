@@ -109,6 +109,10 @@ class Operation(ABC):
 
             # 3. Physical Execution (The "Dumb" Executor)
             # Returns raw TensorValues (PhysicalResult)
+            # NOTE: We pass RAW kwargs here, not adapted_kwargs.
+            # physical_execute is responsible for doing adaptation internally.
+            # This ensures consistency with trace rehydration, which only has
+            # access to the original kwargs.
             with GRAPH.graph:
                 raw_result = self.physical_execute(resharded_args, kwargs)
 
@@ -130,18 +134,45 @@ class Operation(ABC):
             if output_sharding is None:
                 output_sharding = predicted_output_spec
             
-            output = spmd.create_sharded_output(
-                shard_values,
-                output_sharding,
-                any_traced,
-                max_batch_dims,
-                mesh=res_mesh,
-            )
+            # Handle structured outputs (tuples/lists from multi-output ops like split)
+            first_shard = shard_values[0] if shard_values else None
+            if isinstance(first_shard, (list, tuple)):
+                # Unzip: [(a0, b0), (a1, b1)] -> ([a0, a1], [b0, b1])
+                unzipped = list(zip(*shard_values))
+                outputs = []
+                for res_shards in unzipped:
+                    outputs.append(
+                        spmd.create_sharded_output(
+                            list(res_shards),
+                            output_sharding,
+                            any_traced,
+                            max_batch_dims,
+                            mesh=res_mesh,
+                        )
+                    )
+                output = tuple(outputs) if isinstance(first_shard, tuple) else outputs
+            elif isinstance(first_shard, dict):
+                # Handle dict output
+                keys = first_shard.keys()
+                outputs = {}
+                for k in keys:
+                    res_shards = [r[k] for r in shard_values]
+                    outputs[k] = spmd.create_sharded_output(
+                        res_shards, output_sharding, any_traced, max_batch_dims, mesh=res_mesh
+                    )
+                output = outputs
+            else:
+                output = spmd.create_sharded_output(
+                    shard_values,
+                    output_sharding,
+                    any_traced,
+                    max_batch_dims,
+                    mesh=res_mesh,
+                )
 
             # 5. SPMD: Post-Op Collectives (Automatic Reductions)
             if reduce_axes and mesh:
-                from .communication import all_reduce
-                output = all_reduce(output, reduce_axes=list(reduce_axes), reduce_op=self.collective_reduce_type)
+                output = self.apply_auto_reduction(output, mesh, reduce_axes)
 
             # 5. Tracing
             self._setup_output_refs(
@@ -564,42 +595,11 @@ class LogicalAxisOperation(Operation):
         if batch_dims == 0:
             return kwargs
 
-        # Typically the tensor argument is checked for logical ndim, but here we don't have it directly.
-        # However, adapt_kwargs is called within maxpr_all where we know max_batch_dims.
-        # But we need logical_ndim of the input.
-        # The original code used `x.shape` which is the logical shape.
-        # We can pass `input_visual_rank` or similar if needed, but usually we just offset by batch_dims.
-        # Wait, the offset depends on logical_ndim for negative axes.
-        # We might need to handle negative axes earlier or passed resolved kwargs.
-        # But `LogicalAxisOperation` in `__call__` handled this via `x.shape`.
-        # `x` is available in `adapt_kwargs`? No.
-        # We need to resolve negative axes BEFORE adapt_kwargs or inside it if we have context.
-        # If we just shift positive indices, it's safer.
-        # Assuming negative indices are resolved by the caller or we resolve them using shape from somewhere.
-        # Actually `LogicalAxisOperation` resolved negative indices using `logical_ndim`.
-        # We can assume positive indices for now or rethink.
-
-        # Let's check `Operation` usage. `execute` has access to `args`.
-        # We can resolve negative axes in `adapt_kwargs` if we pass `args`?
-        # But `adapt_kwargs` signature in `Operation` is `(self, kwargs, batch_dims)`.
-        # Maybe we should change `adapt_kwargs` to take `args`?
-        # Or `base.py` `maxpr_all` passes more context.
-        # For now, let's just implement the shifting and assume positive or handle basic offset.
-
         translated = {}
         for key, value in kwargs.items():
             if key in self.axis_arg_names and isinstance(value, int):
-                # We can't easily handle negative indices here without shape info.
-                # But standard usage often resolves them or we assume positive after some validation.
-                # If value < 0, it's tricky without rank.
-                # However, if we assume the user provided valid negative index for the logical shape...
-                # We can leave it negative? No, that would index from the end of PHYSICAL shape (including batch).
-                # That is WRONG. -1 on logical (H, W) means W.
-                # -1 on physical (B, H, W) means W. So negative indices are actually preserved OK if they refer to the last dims!
-                # -2 on logical is H. -2 on physical is H.
-                # So negative indices are fine as is!
+                # Negative indices are preserved (they index from end of both logical and physical)
                 # Only POSITIVE indices need shifting by batch_dims.
-
                 if value >= 0:
                     translated[key] = value + batch_dims
                 else:
@@ -607,6 +607,35 @@ class LogicalAxisOperation(Operation):
             else:
                 translated[key] = value
         return translated
+
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for LogicalAxisOperation.
+        
+        Executes the maxpr on each shard independently.
+        Subclasses like ReduceOperation may override for specialized behavior.
+        
+        NOTE: This method receives RAW kwargs and performs adaptation internally.
+        """
+        from ..core import GRAPH, Tensor, pytree
+        from ..core.sharding import spmd
+        
+        # Compute batch_dims from args for kwargs adaptation
+        max_batch_dims = 0
+        for x in pytree.tree_leaves(args):
+            if isinstance(x, Tensor) and x.batch_dims > max_batch_dims:
+                max_batch_dims = x.batch_dims
+        
+        # Adapt kwargs (e.g., shift axis indices by batch_dims)
+        adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)
+        
+        mesh = spmd.get_mesh_from_args(args)
+        
+        with GRAPH.graph:
+            shard_results = spmd.execute_on_shards(
+                self.maxpr, args, adapted_kwargs, mesh, op=self
+            )
+        
+        return (shard_results, None, mesh)
 
     def sharding_rule(
         self,
@@ -710,6 +739,37 @@ class ReduceOperation(LogicalAxisOperation):
         else:
             return tuple(d for i, d in enumerate(in_shape) if i != axis)
 
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for Reduction Ops.
+        
+        Executes the reduction maxpr on each shard independently.
+        Cross-shard reductions (when reducing over sharded axes) are handled
+        by the auto-AllReduce mechanism in Operation.__call__.
+        
+        NOTE: This method receives RAW kwargs and performs adaptation internally.
+        This ensures consistency with trace rehydration.
+        """
+        from ..core import GRAPH, Tensor, pytree
+        from ..core.sharding import spmd
+        
+        # Compute batch_dims from args for kwargs adaptation
+        max_batch_dims = 0
+        for x in pytree.tree_leaves(args):
+            if isinstance(x, Tensor) and x.batch_dims > max_batch_dims:
+                max_batch_dims = x.batch_dims
+        
+        # Adapt kwargs (e.g., shift axis indices by batch_dims)
+        adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)
+        
+        mesh = spmd.get_mesh_from_args(args)
+        
+        with GRAPH.graph:
+            shard_results = spmd.execute_on_shards(
+                self.maxpr, args, adapted_kwargs, mesh, op=self
+            )
+        
+        return (shard_results, None, mesh)
+
 
 class UnaryOperation(Operation):
     """Base for unary element-wise operations."""
@@ -791,4 +851,30 @@ class LogicalShapeOperation(Operation):
                 return new_kwargs
         return kwargs
 
-    # No execute override needed anymore
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for LogicalShapeOperation.
+        
+        Executes maxpr on each shard with shape kwargs adapted for batch_dims.
+        
+        NOTE: This method receives RAW kwargs and performs adaptation internally.
+        """
+        from ..core import GRAPH, Tensor, pytree
+        from ..core.sharding import spmd
+        
+        # Compute batch_dims from args for kwargs adaptation
+        max_batch_dims = 0
+        for x in pytree.tree_leaves(args):
+            if isinstance(x, Tensor) and x.batch_dims > max_batch_dims:
+                max_batch_dims = x.batch_dims
+        
+        # Adapt kwargs (prepend batch shape to target shape)
+        adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)
+        
+        mesh = spmd.get_mesh_from_args(args)
+        
+        with GRAPH.graph:
+            shard_results = spmd.execute_on_shards(
+                self.maxpr, args, adapted_kwargs, mesh, op=self
+            )
+        
+        return (shard_results, None, mesh)
