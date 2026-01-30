@@ -382,7 +382,7 @@ def execute_on_shards(
         # Transform kwargs if op provides a hook
         local_kwargs = kwargs
         if op is not None and output_sharding is not None and hasattr(op, "_transform_shard_kwargs"):
-             local_kwargs = op._transform_shard_kwargs(kwargs, output_sharding, i, shard_args)
+             local_kwargs = op._transform_shard_kwargs(kwargs, output_sharding, i, args)
         
         # Execute
         results.append(op_fn(*shard_args, **local_kwargs))

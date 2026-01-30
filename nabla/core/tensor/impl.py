@@ -207,14 +207,18 @@ class TensorImpl:
     @property
     def physical_global_shape(self) -> graph.Shape | None:
         """Global physical shape (includes batch dims)."""
-
-        if not self.sharding:
-            return self.local_shape
-
         local = self.physical_shape
         if local is None:
-            return None
+             raise RuntimeError(
+                 f"Cannot determine physical shape for tensor (sharding={self.sharding}). "
+                 "No valid values or storage available in current epoch."
+             )
 
+        # Unsharded case: local shape IS the physical global shape
+        if not self.sharding:
+            return local
+
+        # Sharded case: reconstruct from local chunks + spec
         values = self._get_valid_values()
         shard_shapes = (
             [tuple(int(d) for d in v.type.shape) for v in values] if values else None

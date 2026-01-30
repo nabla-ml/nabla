@@ -244,16 +244,32 @@ class BackwardEngine:
     def _finalize(self) -> dict[Tensor, Tensor]:
         """Convert accumulated cotangents to input gradients."""
         from ..common import pytree
+        import sys
+
+        sys.stderr.write("\n[FINALIZE] Starting finalize...\n")
+        sys.stderr.flush()
 
         gradients = {}
         input_leaves = [
             t for t in pytree.tree_leaves(self.trace.inputs) if isinstance(t, Tensor)
         ]
 
+        sys.stderr.write(f"[FINALIZE] Found {len(input_leaves)} input leaves\n")
+        sys.stderr.flush()
+
         for inp in input_leaves:
             inp_id = id(inp._impl)
+            sys.stderr.write(f"[FINALIZE] Processing input {inp_id}, in map: {inp_id in self.cotangent_map}\n")
+            sys.stderr.flush()
+            
             if inp_id in self.cotangent_map:
-                grad = Tensor(impl=self.cotangent_map[inp_id])
+                cot_impl = self.cotangent_map[inp_id]
+                sys.stderr.write(f"[FINALIZE] cotangent impl: {cot_impl}\n")
+                sys.stderr.flush()
+                
+                grad = Tensor(impl=cot_impl)
+                sys.stderr.write(f"[FINALIZE] Created grad tensor\n")
+                sys.stderr.flush()
                 
                 # Double check for un-reduced partials at inputs
                 if grad.sharding and grad.sharding.partial_sum_axes:
@@ -286,6 +302,10 @@ def backward_on_trace(
     checkpoint_policy: str = "none",
 ) -> dict[Tensor, Tensor]:
     """Pure-function backpropagation on a Trace."""
+    import sys
+    sys.stderr.write(f"\n[BACKWARD] Entering backward_on_trace\n")
+    sys.stderr.flush()
+
     if not trace._computed:
         trace.compute()
 

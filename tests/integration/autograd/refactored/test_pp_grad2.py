@@ -112,16 +112,44 @@ def test_pp_grad_with_bias():
         return ops.mean(diff * diff)
 
     # 5. Compute Gradients
-    print("Computing Gradients (W, B)...")
+    print("Computing Gradients (X, W, B)...")
+    import sys
+    sys.stdout.flush()
     from nabla.core.autograd import grad
     
-    # We differentiate w.r.t. weights (arg 1) and biases (arg 2)
-    grad_fn = grad(pipeline_loss, argnums=(1, 2))
+    # We differentiate w.r.t. x (arg 0), weights (arg 1) and biases (arg 2)
+    grad_fn = grad(pipeline_loss, argnums=(0, 1, 2))
     
-    w_grad_sharded, b_grad_sharded = grad_fn(x_padded_nb, w_sharded, b_sharded, state_sharded, mask_0_sharded, y_nb)
+    print("Calling grad_fn...")
+    sys.stdout.flush()
+    x_grad_sharded, w_grad_sharded, b_grad_sharded = grad_fn(x_padded_nb, w_sharded, b_sharded, state_sharded, mask_0_sharded, y_nb)
+    print("grad_fn returned")
+    sys.stdout.flush()
     
+    print(f"X grad shape: {x_grad_sharded.shape}")
+    print(f"X grad sharding: {x_grad_sharded.sharding}")
+    print(f"W grad shape: {w_grad_sharded.shape}")
+    print(f"W grad sharding: {w_grad_sharded.sharding}")
+    print(f"B grad shape: {b_grad_sharded.shape}")
+    print(f"B grad sharding: {b_grad_sharded.sharding}")
+    
+    print("X grad has open/unknown dims:", 
+          [d.is_open for d in x_grad_sharded.sharding.dim_specs] if x_grad_sharded.sharding else None)
+    
+    # Skip x grad for now - it has unknown sharding
+    print("Converting X grad to numpy...")
+    x_grad_all_np = x_grad_sharded.to_numpy()
+    # Only compare the non-padded part (first MICRO_BATCHES steps)
+    x_grad_np = x_grad_all_np[:MICRO_BATCHES]
+    print(f"X grad numpy shape: {x_grad_np.shape}")
+    
+    print("Converting W grad to numpy...")
     w_grad_np = w_grad_sharded.to_numpy()
+    print(f"W grad numpy shape: {w_grad_np.shape}")
+    
+    print("Converting B grad to numpy...")
     b_grad_np = b_grad_sharded.to_numpy()
+    print(f"B grad numpy shape: {b_grad_np.shape}")
 
     # 6. Verify against JAX
     print("Running Reference (JAX)...")
@@ -129,7 +157,7 @@ def test_pp_grad_with_bias():
     import jax.numpy as jnp
     jax.config.update("jax_enable_x64", False)
     
-    def jax_ref(params_w, params_b, x, y):
+    def jax_ref(x, params_w, params_b, y):
         def apply(curr, w, b): return jax.nn.relu(curr @ w + b)
         preds = []
         for i in range(MICRO_BATCHES):
@@ -141,20 +169,32 @@ def test_pp_grad_with_bias():
         preds = jnp.stack(preds)
         return jnp.mean((preds - y)**2)
 
-    grad_ref_fn = jax.jit(jax.grad(jax_ref, argnums=(0, 1)))
-    w_grad_ref, b_grad_ref = grad_ref_fn(w_np, b_np, x_np, y_np)
+    grad_ref_fn = jax.jit(jax.grad(jax_ref, argnums=(0, 1, 2)))
+    x_grad_ref, w_grad_ref, b_grad_ref = grad_ref_fn(x_np, w_np, b_np, y_np)
     
     # 7. Compare
+    if x_grad_np is not None:
+        x_diff = np.max(np.abs(x_grad_np - x_grad_ref))
+    else:
+        x_diff = 0.0 # Skip comparison
+        
     w_diff = np.max(np.abs(w_grad_np - w_grad_ref))
     b_diff = np.max(np.abs(b_grad_np - b_grad_ref))
     
+    if x_grad_np is not None:
+        print(f"Max X Grad Diff:      {x_diff:.6f}")
+    else:
+        print(f"Max X Grad Diff:      N/A (Skipped)")
+        
     print(f"Max Weight Grad Diff: {w_diff:.6f}")
     print(f"Max Bias Grad Diff:   {b_diff:.6f}")
     
     passed = (w_diff < 5e-4) and (b_diff < 5e-4)
+    if x_grad_np is not None:
+        passed = passed and (x_diff < 5e-4)
     
     if passed:
-        print("✅ SUCCESS: Gradients Match")
+        print("✅ SUCCESS: All (Checked) Gradients Match")
     else:
         print("❌ FAILURE: Gradients Mismatch")
         if w_diff >= 5e-4:

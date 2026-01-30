@@ -127,8 +127,18 @@ class ShardOp(Operation):
                     global_shape = tuple(int(d) for d in local)
                 # Fallback if uninitialized?
                 if global_shape is None:
+                    print(f"[DEBUG] ShardOp: local_shape is None. x.batch_dims={x.batch_dims}")
+                    # Try to force fallback but warn/debug
                     global_shape = tuple(int(d) for d in x.shape) # Logical fallback
-            
+
+                if len(global_shape) != len(target_spec.dim_specs):
+                     print(f"[DEBUG] ShardOp: Rank mismatch detected! Global: {global_shape} (len={len(global_shape)}), Spec: {len(target_spec.dim_specs)}")
+                     print(f"[DEBUG] x type: {type(x)}, batch_dims: {getattr(x, 'batch_dims', 'N/A')}")
+                     print(f"[DEBUG] x.shape (logical): {x.shape}")
+                     if isinstance(x, Tensor):
+                         print(f"[DEBUG] x.local_shape: {x.local_shape}")
+                         print(f"[DEBUG] x.values valid? {x._impl.values_epoch == GRAPH.epoch}")
+
             if global_shape is None and "global_shape" in kwargs:
                  global_shape = kwargs["global_shape"]
 

@@ -165,6 +165,13 @@ class Trace:
 
         from ..tensor.api import Tensor
         from .engine import GRAPH
+        import sys, os
+
+        sys.stderr.write(f"\n[REHYDRATE] Starting rehydrate. Computed={self._computed}\n")
+        sys.stderr.flush()
+        try:
+            os.fsync(sys.stderr.fileno())
+        except: pass
 
         # 1. Collect all leaf TensorImpls in the trace.
         leaf_impls = set()
@@ -183,7 +190,11 @@ class Trace:
         # 2. Realize all leaves together.
         leaf_tensors = [Tensor(impl=impl) for impl in leaf_impls]
         if leaf_tensors:
+            sys.stderr.write(f"[REHYDRATE] Evaluating {len(leaf_tensors)} leaves...\n")
+            sys.stderr.flush()
             GRAPH.evaluate(leaf_tensors[0], *leaf_tensors[1:])
+            sys.stderr.write(f"[REHYDRATE] Evaluation done.\n")
+            sys.stderr.flush()
 
         # 3. Add all leaves to the current graph to get fresh values.
         for t in leaf_tensors:
@@ -191,15 +202,30 @@ class Trace:
             if hasattr(t, "_values") and t._values:
                 with GRAPH.graph:
                     t._impl._values = [v[...] for v in t._values]
+                    t._impl._values = [v[...] for v in t._values]
                     t._impl.values_epoch = GRAPH.epoch
+        
+        sys.stderr.write(f"[REHYDRATE] Leaves updated. Starting node loop...\n")
+        sys.stderr.flush()
 
         # 4. Iterate through nodes and call maxpr_all to recompute intermediates.
         for i, output_refs in enumerate(self.nodes):
+            import sys
+            sys.stderr.write(f"\n{'='*70}\n")
+            sys.stderr.write(f"[REHYDRATE] Node {i}: {output_refs.op.name if output_refs.op else 'unknown'}\n")
+            sys.stderr.flush()
+            
             alive_outputs = output_refs.get_alive_outputs()
             if not any(out is not None for out in alive_outputs):
+                sys.stderr.write(f"  Skipping (no alive outputs)\n")
+                sys.stderr.flush()
                 continue
 
             op = output_refs.op
+            
+            sys.stderr.write(f"  Op: {op.name}\n")
+            sys.stderr.write(f"  Alive outputs: {len([o for o in alive_outputs if o is not None])}\n")
+            sys.stderr.flush()
             
             def to_tensor(x):
                 if isinstance(x, TensorImpl):
@@ -232,12 +258,18 @@ class Trace:
 
             # === New Physical Execution Path ===
             if hasattr(op, "physical_execute"):
+                sys.stderr.write(f"  Using physical_execute\n")
+                sys.stderr.flush()
                 try:
                     # physical_execute returns a PhysicalResult (or tuple/list of TensorValues)
                     # It handles its own auto-reduction and internal logic.
                     # We pass the original arguments and kwargs.
                     with GRAPH.graph:
+                        sys.stderr.write(f"  Calling physical_execute...\n")
+                        sys.stderr.flush()
                         raw_result = op.physical_execute(op_args, op_kwargs)
+                        sys.stderr.write(f"  physical_execute returned\n")
+                        sys.stderr.flush()
                     
                     # If it returns a named tuple or custom object, we might need to extract values.
                     # For now, we assume it returns the raw value structure matching the output.
@@ -275,6 +307,10 @@ class Trace:
                         output_tensor_struct = raw_result
 
                 except Exception as e:
+                    sys.stderr.write(f"  ERROR: physical_execute failed: {e}\n")
+                    sys.stderr.flush()
+                    import traceback
+                    traceback.print_exc()
                     print(f"ERROR: physical_execute failed for {op.name}: {e}")
                     output_tensor_struct = None
             else:

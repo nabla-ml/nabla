@@ -508,15 +508,29 @@ class Tensor(DLPackArray, HasTensorValue):
 
     def realize(self) -> Tensor:
         """Force immediate realization (blocking)."""
+        import sys
+        sys.stderr.write(f"\n[REALIZE] Starting realize, real={self.real}\n")
+        sys.stderr.flush()
+        
         if not self.real:
+            sys.stderr.write(f"[REALIZE] _in_global_compute_graph={self._in_global_compute_graph}\n")
+            sys.stderr.flush()
+            
             if not self._in_global_compute_graph:
                 raise TypeError("Can't realize symbolic tensors.")
 
+            sys.stderr.write(f"[REALIZE] is_realized={self._impl.is_realized}\n")
+            sys.stderr.flush()
+            
             if self._impl.is_realized:
                 return self
             from ..graph.engine import GRAPH
 
+            sys.stderr.write(f"[REALIZE] Calling GRAPH.evaluate\n")
+            sys.stderr.flush()
             GRAPH.evaluate(self)
+            sys.stderr.write(f"[REALIZE] GRAPH.evaluate returned\n")
+            sys.stderr.flush()
 
         return self
 

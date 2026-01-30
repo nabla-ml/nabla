@@ -300,15 +300,85 @@ class SliceUpdateOp(Operation):
         slices: tuple[slice, ...],
         **kwargs,
     ) -> TensorValue:
-        """Update using pre-computed slices."""
-        x_buffer = ops.buffer_create(x.type.as_buffer())
-        ops.buffer_store(x_buffer, x)
-        ops.buffer_store_slice(x_buffer, update, slices)
-        return ops.buffer_load(x_buffer)
+        """Update using functional ops (pad + where) to avoid buffer crashes."""
+        start = kwargs.get("start")
+        size = kwargs.get("size")
+
+        # Fallback to buffer if start/size missing (e.g. legacy traces)
+        if start is None or size is None:
+            import sys
+            sys.stderr.write("[SliceUpdateOp.maxpr] Missing start/size, using buffer ops\n")
+            sys.stderr.flush()
+            x_buffer = ops.buffer_create(x.type.as_buffer())
+            ops.buffer_store(x_buffer, x)
+            ops.buffer_store_slice(x_buffer, update, slices)
+            return ops.buffer_load(x_buffer)
+
+        # Functional implementation
+        rank = len(x.shape)
+        paddings = []
+        
+        # We need update shape for ones_like
+        update_shape = []
+
+        for i in range(rank):
+            s = start[i]
+            sz = size[i]
+            # Handle potential negative start (though __call__ resolves it)
+            # x.shape[i] might be a Dim object. We assume it converts to int validly here if needed,
+            # or ops.pad handles it.
+            # But ops.pad expects `int` usually.
+            # Let's try to access `.value` if it's a constant Dim, or cast to int.
+            dim_len = int(x.shape[i])
+            
+            before = s
+            after = dim_len - (s + sz)
+            paddings.extend([before, after])
+            
+            update_shape.append(int(sz))
+
+        # Create padded update (value=0.0 to not affect outside)
+        padded_update = ops.pad(update, paddings, value=0.0)
+        
+        # Create mask
+        # Create ones of shape 'size'
+        # ops.full usually not available, use constant + broadcast
+        scalar_one = ops.constant(1.0, dtype=x.dtype, device=x.device)
+        # broadcast to update shpae
+        ones_update = ops.broadcast_to(scalar_one, tuple(update_shape))
+        padded_mask = ops.pad(ones_update, paddings, value=0.0)
+        
+        # Logic: result = x * (1 - mask) + padded_update
+        # mask is 1.0 where update is, 0.0 elsewhere.
+        # x * (1 - 1) + update = update.
+        # x * (1 - 0) + 0 = x.
+        
+        inv_mask = ops.sub(ops.constant(1.0, dtype=x.dtype, device=x.device), padded_mask)
+        masked_x = ops.mul(x, inv_mask)
+        result = ops.add(masked_x, padded_update)
+        
+        return result
 
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
         return len(input_shapes[0])
         
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        from ...core import GRAPH
+        from ...core.sharding import spmd
+
+        mesh = spmd.get_mesh_from_args(args)
+
+        with GRAPH.graph:
+            shard_results = spmd.execute_on_shards(
+                self.maxpr, args, kwargs, mesh, op=self
+            )
+
+        output_sharding, _, _ = spmd.infer_output_sharding(
+            self, args, mesh, kwargs or {}
+        )
+
+        return (shard_results, output_sharding, mesh)
+
     def infer_sharding_spec(
         self,
         args: tuple,
@@ -379,6 +449,23 @@ class SliceTensorOp(Operation):
         self, x: TensorValue, *, slices: tuple[slice, ...], **kwargs
     ) -> TensorValue:
         return ops.slice_tensor(x, slices)
+
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        from ...core import GRAPH
+        from ...core.sharding import spmd
+
+        mesh = spmd.get_mesh_from_args(args)
+
+        with GRAPH.graph:
+            shard_results = spmd.execute_on_shards(
+                self.maxpr, args, kwargs, mesh, op=self
+            )
+
+        output_sharding, _, _ = spmd.infer_output_sharding(
+            self, args, mesh, kwargs or {}
+        )
+
+        return (shard_results, output_sharding, mesh)
 
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
         return len(input_shapes[0])
@@ -507,15 +594,13 @@ class SliceTensorOp(Operation):
 
         # Reconstruct slices for maxpr (assuming full rank coverage)
         final_slices = []
+        
+        # Prepend batch dims if present
+        if hasattr(x, "batch_dims"):
+            final_slices.extend([slice(None)] * x.batch_dims)
+
         for s, sz in zip(local_start_indices, local_sizes):
             final_slices.append(slice(s, s + sz))
-        
-        # If there were batch dims handled by __call__ (prepended slices), 
-        # we might be missing them if we just replace `slices`.
-        # However, `start` and `size` usually cover the whole tensor rank for `slice_tensor`.
-        # If they don't, we might need to handle it. 
-        # But `slice_tensor` impl in `__call__` loops over `start`/`size`.
-        # We assume `start`/`size` match rank here.
         
         new_kwargs["slices"] = tuple(final_slices)
 

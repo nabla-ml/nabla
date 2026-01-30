@@ -65,6 +65,19 @@ class Operation(ABC):
         return total
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        # DEBUG: Log every operation call with detailed input info
+        import sys
+        from ..core import Tensor
+        sys.stderr.write(f"\n{'='*70}\n")
+        sys.stderr.write(f"[OP CALL] {self.__class__.__name__}\n")
+        for i, arg in enumerate(args):
+            if isinstance(arg, Tensor):
+                sharding_str = f"{arg.sharding}" if arg.is_sharded else "unsharded"
+                sys.stderr.write(f"  arg[{i}]: shape={arg.shape} (local={arg._tensor.shape if hasattr(arg, '_tensor') else 'N/A'}), {sharding_str}, traced={arg.traced}\n")
+        if kwargs:
+            sys.stderr.write(f"  kwargs: {list(kwargs.keys())}\n")
+        sys.stderr.flush()
+        
         # === New Path: Physical Execution ===
         if hasattr(self, "physical_execute"):
             from ..core import GRAPH, Tensor, pytree
@@ -104,6 +117,10 @@ class Operation(ABC):
             predicted_output_spec, input_shardings, reduce_axes = spmd.infer_output_sharding(
                 self, args, mesh, adapted_kwargs or {}
             )
+            import sys
+            sys.stderr.write(f"[__call__] {self.__class__.__name__} predicted_output_spec: {predicted_output_spec}\n")
+            sys.stderr.flush()
+            
             # Perform the data movement (Logical Adaptation)
             resharded_args = spmd.reshard_inputs(args, input_shardings, mesh)
 
@@ -175,8 +192,9 @@ class Operation(ABC):
                 output = self.apply_auto_reduction(output, mesh, reduce_axes)
 
             # 5. Tracing
+            # Store resharded_args (not original args) so rehydration has correctly sharded inputs
             self._setup_output_refs(
-                output, args, kwargs, kwargs, any_traced
+                output, resharded_args, kwargs, kwargs, any_traced
             )
             
             # 6. Post-Processing (JVP)
@@ -189,6 +207,15 @@ class Operation(ABC):
             if any_has_tangent:
                 self._apply_jvp(args, output)
 
+            import sys
+            from ..core import Tensor
+            sys.stderr.write(f"[OP DONE] {self.__class__.__name__} -> ")
+            if isinstance(output, Tensor):
+                sharding_str = f"{output.sharding}" if output.is_sharded else "unsharded"
+                sys.stderr.write(f"shape={output.shape} (local={output._tensor.shape if hasattr(output, '_tensor') else 'N/A'}), {sharding_str}\n")
+            else:
+                sys.stderr.write(f"{type(output).__name__}\n")
+            sys.stderr.flush()
             return output
 
         # === Legacy Path ===
@@ -246,6 +273,15 @@ class Operation(ABC):
         if any_has_tangent:
             self._apply_jvp(args, output)
 
+        import sys
+        from ..core import Tensor
+        sys.stderr.write(f"[OP DONE LEGACY] {self.__class__.__name__} -> ")
+        if isinstance(output, Tensor):
+            sharding_str = f"{output.sharding}" if output.is_sharded else "unsharded"
+            sys.stderr.write(f"shape={output.shape} (local={output._tensor.shape if hasattr(output, '_tensor') else 'N/A'}), {sharding_str}\n")
+        else:
+            sys.stderr.write(f"{type(output).__name__}\n")
+        sys.stderr.flush()
         return output
 
     def maxpr_all(
@@ -269,18 +305,47 @@ class Operation(ABC):
             leaves = [a for a in pytree.tree_leaves(args) if isinstance(a, Tensor)]
             input_shardings = [t.sharding for t in leaves]
 
+        # Optimization: If output is fully replicated and all inputs are replicated,
+        # only compute once and duplicate the result
+        is_output_replicated = output_sharding is not None and output_sharding.is_fully_replicated()
+        all_inputs_replicated = all(
+            s is None or s.is_fully_replicated() for s in input_shardings
+        )
+        
+        import sys
+        sys.stderr.write(f"[maxpr_all] op={self.name}, is_output_replicated={is_output_replicated}, all_inputs_replicated={all_inputs_replicated}, num_shards={num_shards}, input_shardings={input_shardings}\n")
+        sys.stderr.flush()
+        
         with GRAPH.graph:
             shard_results = []
-            for shard_idx in range(num_shards):
+            if is_output_replicated and all_inputs_replicated and num_shards > 1:
+                sys.stderr.write(f"[maxpr_all] TAKING REPLICATED OPTIMIZATION PATH\n")
+                sys.stderr.flush()
+                # Only compute once for replicated case
                 shard_args = spmd.get_shard_args(
-                    args, shard_idx, input_shardings, g, Tensor, pytree
+                    args, 0, input_shardings, g, Tensor, pytree
                 )
                 shard_kwargs = self._transform_shard_kwargs(
-                    kwargs, output_sharding, shard_idx, args
+                    kwargs, output_sharding, 0, args
                 )
                 if shard_kwargs is None:
                     shard_kwargs = {}
-                shard_results.append(self.maxpr(*shard_args, **shard_kwargs))
+                result = self.maxpr(*shard_args, **shard_kwargs)
+                # Duplicate the result for all shards
+                shard_results = [result] * num_shards
+            else:
+                sys.stderr.write(f"[maxpr_all] TAKING STANDARD PATH\n")
+                sys.stderr.flush()
+                for shard_idx in range(num_shards):
+                    shard_args = spmd.get_shard_args(
+                        args, shard_idx, input_shardings, g, Tensor, pytree
+                    )
+                    shard_kwargs = self._transform_shard_kwargs(
+                        kwargs, output_sharding, shard_idx, args
+                    )
+                    if shard_kwargs is None:
+                        shard_kwargs = {}
+                    shard_results.append(self.maxpr(*shard_args, **shard_kwargs))
 
         if not shard_results:
             return None
@@ -508,6 +573,7 @@ class BinaryOperation(Operation):
             num_elements *= d
         return float(num_elements)
 
+
     def physical_execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for Binary Ops."""
         from ..core import GRAPH
@@ -515,10 +581,20 @@ class BinaryOperation(Operation):
         
         mesh = spmd.get_mesh_from_args(args)
         
+        import sys
+        sys.stderr.write(f"\n[BINARY physical_execute] op={self.name}, mesh={mesh}\n")
+        sys.stderr.flush()
+        
         with GRAPH.graph:
             shard_results = spmd.execute_on_shards(self.maxpr, args, kwargs, mesh, op=self)
         
-        return (shard_results, None, mesh)
+        sys.stderr.write(f"[BINARY physical_execute] Got {len(shard_results)} results\n")
+        sys.stderr.flush()
+        
+        # Infer output sharding from inputs
+        output_sharding, _, _ = spmd.infer_output_sharding(self, args, mesh, kwargs or {})
+        
+        return (shard_results, output_sharding, mesh)
 
     def __call__(self, x: Tensor, y: Tensor) -> Tensor:
         from . import view as view_ops
