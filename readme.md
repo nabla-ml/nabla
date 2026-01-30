@@ -2,16 +2,9 @@
 
 > **⚠️ IMPORTANT: Architecture Under Heavy Restructuring**
 > 
-> **You are viewing the `main` development branch** which contains a **complete rewrite** of Nabla with:
-> - Distributed SPMD execution (factor-based sharding)
-> - Multi-device/multi-GPU training
-> - New graph-based execution model
+> **You are viewing the `main` development branch** with a complete rewrite featuring distributed SPMD execution, multi-device training, and a new graph-based execution model.
 > 
-> **For the current stable release (single-device, non-distributed):**
-> - PyPI: `pip install nabla-ml` (v25.7)
-> - Source: [nabla/v25.7 branch](https://github.com/nabla-ml/nabla/tree/nabla/v25.7)
-> 
-> The repository structure and code shown below reflect the **new architecture in development**.
+> The stable release (v25.7, single-device) is available on the [nabla/v25.7 branch](https://github.com/nabla-ml/nabla/tree/nabla/v25.7). See Installation section below.
 
 ---
 
@@ -23,19 +16,16 @@ Welcome! Nabla is a Machine Learning library for the emerging Mojo/Python ecosys
 
 For tutorials and API reference, visit: [nablaml.com](https://nablaml.com/index.html)
 
-## Installation
+## Installation & Quick Start
 
+### For Users: Stable Release (v25.7)
+
+Install from PyPI:
 ```bash
 pip install nabla-ml
 ```
 
-## Quick Start
-
-> **Note**: The following example works with the **v25.7 release** (`pip install nabla-ml`).  
-> The `main` branch code is under active development and APIs may differ.
-
-*The most simple, but fully functional Neural Network training setup:*
-
+Example - Simple MLP training:
 ```python
 import nabla as nb
 
@@ -63,53 +53,25 @@ for i in range(1001):
     if i % 100 == 0: print(i, loss.to_numpy())
 ```
 
-## For Developers
+### For Contributors: Development Branch (main)
 
-1. Clone the repository
-2. Create a virtual environment (recommended)
-3. Install dependencies
+> **Working on the new distributed architecture?** Clone main:
 
 ```bash
 git clone https://github.com/nabla-ml/nabla.git
 cd nabla
-
-python3 -m venv venv
+python -m venv venv
 source venv/bin/activate
-
 pip install -r requirements-dev.txt
 pip install -e ".[dev]"
 ```
 
-## Repository Structure (New Architecture)
+⚠️ **Note**: The `main` branch is under active development. APIs are unstable and the example above won't work.
 
-> **Note**: This structure reflects the **new distributed architecture** under development on `main`.  
-> The [v25.7 release](https://github.com/nabla-ml/nabla/tree/nabla/v25.7) has a different, simpler structure (non-distributed).
+## Repository Structure
 
-```text
-nabla/
-├── nabla/                     # Core Python library (NEW ARCHITECTURE)
-│   ├── core/                  # Execution engine (Tensor, Graph, Sharding, Autograd)
-│   │   ├── tensor/            # Dual-object model (Tensor wrapper + TensorImpl state)
-│   │   ├── graph/             # Trace recording, rehydration, OutputRefs
-│   │   ├── sharding/          # Factor-based SPMD propagation, DeviceMesh
-│   │   └── autograd/          # Backward pass engine (BackwardEngine, VJP rules)
-│   ├── ops/                   # Operations (arithmetic, reductions, communication, views)
-│   │   ├── communication/     # Collective ops (AllReduce, AllGather, etc.)
-│   │   └── view/              # Metadata-only ops (reshape, squeeze, etc.)
-│   └── transforms/            # Function transformations (grad, vmap, shard_map, compile)
-├── tests/                     # Comprehensive test suite
-├── tutorials/                 # Notebooks on Nabla usage for ML tasks
-└── examples/                  # Example scripts for common use cases
-```
-
-**Key architectural changes** from v25.7:
-- **Distributed execution**: Tensors can be sharded across multiple devices
-- **Factor-based sharding**: Operations describe transformations via factor notation (e.g., `"m k, k n -> m n"`)
-- **Eager SPMD**: Sharding decisions and communication happen per-operation, not via compilation
-- **Graph tracing**: All operations recorded for autograd and JIT compilation
-- **Physical execution model**: Operations implement `physical_execute` to work on `TensorValue` shards
-
-See [nabla/README.md](nabla/README.md) for detailed architecture documentation.
+> **For developers working on `main` branch:**  
+> See [nabla/README.md](nabla/README.md) for detailed architecture documentation of the new distributed execution model.
 
 ## Contributing
 
