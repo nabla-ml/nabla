@@ -1,6 +1,6 @@
 # Sharding Engine
 
-[← Back to Core Hub](../README.md)
+[← Back to Core](../README.md)
 
 ## Philosophy
 Nabla uses **Factor-Based Sharding Propagation** (inspired by GSPMD/Shardy). Instead of mapping "Dimension 0 -> Machine Axis `dp`", we map "Factor `batch` -> Machine Axis `dp`". Operations describe how they transform factors (e.g., `batch features`). The engine solves constraints to determine the layout of every tensor.

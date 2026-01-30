@@ -1,6 +1,6 @@
 # Communication Operations
 
-[← Back to Ops Hub](../README.md)
+[← Back to Ops](../README.md)
 
 ## Philosophy
 Communication operations are explicit instructions to move data across the mesh. In Nabla, these are treated as regular `Operation`s that take a `Tensor`, perform a collective (via MAX/NCCL), and return a `Tensor` with a new `ShardingSpec`.

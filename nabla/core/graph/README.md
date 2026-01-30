@@ -1,6 +1,6 @@
 # Graph Engine & Tracing
 
-[← Back to Reference](../../../README.md)
+[← Back to Core](../README.md)
 
 ## Philosophy
 The Graph Engine is the "Brain" of Nabla. It is responsible for **capturing** user operations into a symbolic graph, **compiling** that graph into a Maxwell model, and **executing** it. It employs a **Lazy-Eager** strategy: the graph is always building (Lazy), but execution is triggered implicitly when data is inspected (Eager feel).

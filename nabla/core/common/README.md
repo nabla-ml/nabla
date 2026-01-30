@@ -1,6 +1,6 @@
 # Common Core Utilities
 
-[← Back to Reference](../../../README.md)
+[← Back to Core](../README.md)
 
 ## Philosophy
 The `common` module provides the foundational infrastructure used across the entire library. It handles global state (context) and structural data manipulation (pytrees). It is designed to be **stateless logic** (pytree) and **thread-local state** (context) to avoid side effects in the graph engine.

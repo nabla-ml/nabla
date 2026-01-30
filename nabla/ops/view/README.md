@@ -1,6 +1,6 @@
 # View Operations
 
-[← Back to Ops Hub](../README.md)
+[← Back to Ops](../README.md)
 
 ## Philosophy
 View operations manipulate tensor **metadata** (shape, strides) without copying or moving the underlying data. In a distributed context, they must define how **logical** dimension changes map to **physical** sharding constraints.

@@ -1,6 +1,6 @@
 # Tensor System
 
-[← Back to Reference](../../../README.md)
+[← Back to Core](../README.md)
 
 ## Philosophy
 The Tensor system uses the **Facade Pattern** to strictly separate user-facing API from internal state. This allows a single opaque `Tensor` object to represent data that might be:
