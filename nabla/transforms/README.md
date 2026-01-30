@@ -9,75 +9,68 @@ Transforms wrap a user function to alter its execution semantics. They are the b
 
 ### `shard_map` (Distributed Execution)
 
-Executes single-device code across a device mesh using SPMD parallelism.
+Distributes single-device code across a device mesh using **trace-and-replay**:
 
-**Three-Phase Process**:
+**Execution Flow**:
 
-1. **Trace Logical Function**: Execute function with logical tensor inputs to capture operation graph.
+1. **Logical Trace**: Execute function with logical tensor inputs
+   - User calls like `x.shard(mesh, spec)` execute eagerly, creating sharded tensors
+   - Operations execute and record in computation graph
+   - Captures the sequence of operations with their shardings
 
-2. **Auto-Sharding (Optional)**: If `auto_sharding=True`:
-   - Extract graph topology and operation costs
-   - Run `SimpleSolver` to determine optimal sharding strategy
-   - Apply solver constraints to the graph
+2. **Auto-Sharding (Optional)**: If `auto_sharding=True`
+   - Extract graph topology and operation costs to JSON
+   - Run `SimpleSolver` to compute optimal sharding strategy
+   - Solver produces constraints (target shardings per operation)
 
-3. **Trace-and-Replay**: Execute function again with physical tensors:
-   - Each logical tensor becomes a collection of shard tensors
-   - Operations automatically invoke sharding propagation
-   - Communication ops inserted by `reshard_inputs` where needed
-   - Result is fully distributed computation graph
+3. **Physical Trace Replay**: Re-execute function with dual tensors
+   - Each tensor now has `.dual` attribute pointing to physical shards
+   - Operations detect dual mode, use `tensor.dual` for per-shard execution
+   - Solver constraints enforced via additional `.shard()` calls during replay
+   - Same Python code executes, different execution path (physical shards instead of logical)
+   - Result: Distributed computation graph with per-shard operations
 
-**Key Insight**: User writes single-device math. Sharding propagation and communication insertion happen automatically during physical trace replay.
+**Key Insight - Trace Rehydration**: 
+- First trace captures "what operations to do" (logical structure)
+- Second trace executes "how to do them distributed" (physical execution)
+- Both traces execute eagerly, but operate on different tensor representations
+- This separation enables robust replaying without re-invoking Python logic
 
-### `vmap` (Automatic Batching)
+### `vmap` (Vectorization)
 
-Vectorizes a function over a batch dimension without explicit loops.
+Auto-batches operations over leading dimension(s):
 
-**Prefix Semantics**: Batch dimensions are always leading dimensions in the tensor shape. For nested vmaps, multiple batch dimensions stack at the front.
+**Prefix Semantics**: Batch dimensions always appear as leading dimensions in shape. For nested `vmap`, multiple batch dimensions stack at front.
 
-**Batch Dimension Propagation**:
-- Operations receive tensors with `batch_dims` metadata
-- Binary ops unify batch dimensions: `output_batch_dims = max(lhs_batch_dims, rhs_batch_dims)`
-- Broadcasting handled via `broadcast_batch_dims` internal operation
-- Reductions over batch dimensions require special handling
+**Mechanism**:
+- `TensorImpl.batch_dims` tracks count of leading batch dimensions
+- Binary ops unify batch dims: `output_batch_dims = max(lhs_batch_dims, rhs_batch_dims)`
+- Internal ops (`incr_batch_dims`, `move_axis_to_batch_dims`) manage batch dimension metadata
+- Operations execute normally but interpret leading N dimensions as batch
 
-**Implementation**:
-- `TensorImpl` tracks `batch_dims` count
-- View operations (`incr_batch_dims`, `decr_batch_dims`) manipulate batch dimension metadata
-- Physical shapes include batch dimensions as leading axes
-
-Example:
+**Example**:
 ```python
-@vmap
+@vmap  # Vectorize over axis 0
 def f(x, y):
-    return x * y + x
+    return x * y  # Inner computation
 
-# Input shapes: x=[10, 5], y=[10, 5]
-# Batch dimension: 0 (size 10)
-# Inner computation sees: x=[5], y=[5]
+f(x=[10, 5], y=[10, 5])  # Batch size 10
+# Inner function sees virtual shapes [5], [5]
 # Output: [10, 5]
 ```
 
 ### `compile` (JIT Compilation)
 
-Just-in-time compilation with graph optimization.
+Defers graph compilation until first execution, caches for subsequent calls:
 
-**Compilation Pipeline**:
+**Pipeline**:
+1. **Trace**: Capture function execution as computation graph
+2. **Optimize**: Dead code elimination (DCE), common subexpression elimination (CSE), constant folding
+3. **Lower**: Generate MAX executable from optimized graph
+4. **Cache**: Store compiled artifact keyed by (function, input_shapes, input_dtypes)
+5. **Execute**: Run compiled code, bypass Python on subsequent calls
 
-1. **Graph Capture**: Trace function to build computation graph
-2. **Optimization Passes**:
-   - **Dead Code Elimination (DCE)**: Remove unused operations
-   - **Common Subexpression Elimination (CSE)**: Deduplicate identical subgraphs
-   - **Constant Folding**: Pre-compute constant expressions
-3. **Code Generation**: Lower graph to MAX executable
-4. **Caching**: Store compiled artifact, keyed by function identity and input shapes
-5. **Execution**: Run compiled code on subsequent calls
-
-**Benefits**:
-- Eliminates Python interpreter overhead
-- Enables whole-graph optimizations
-- Amortizes compilation cost across multiple invocations
-
-**Compatibility**: Works with both sharded and non-sharded tensors. When combined with `shard_map`, compiles the distributed graph with all communication operations inlined.
+**Compatibility**: Works with both sharded and non-sharded tensors. Combined with `shard_map`, compiles the distributed graph including all communication operations.
 
 ## Component Map
 

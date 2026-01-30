@@ -7,58 +7,23 @@ View operations manipulate tensor **metadata** (shape, strides) without copying 
 
 ## Architecture & Internals
 
-### Logical vs Physical Views
-
-**Logical View**: User-facing shape transformations operating on global tensor semantics.
-- `reshape((1024,))` → `(32, 32)`: Changes logical shape
-- `unsqueeze(axis=0)`: Adds dimension of size 1
-- `transpose()`: Swaps dimensions
-
-**Physical View**: Per-shard adaptations for distributed execution.
-- Each shard computes its local shape transformation
-- Sharding propagation determines if transformation is valid without communication
-
 ### Conservative Reshape
 
-**Problem**: Arbitrary reshapes on sharded tensors can create complex strided layouts unsupported by compute kernels.
+View operations change tensor metadata without copying data. For distributed tensors:
 
-**Solution**: When reshape crosses sharded boundaries, gather the tensor to replicated state before reshaping.
+- **Reshape crossing sharded boundaries**: Automatic AllGather to replicated state before reshaping
+- **Rationale**: Correctness over performance. Complex strided layouts unsupported by compute kernels.
 
-Example:
-```python
-# Tensor sharded on dim 0: shape [1024/8, 128] per shard
-x = x.shard(mesh, P("dp"))
-# Reshape [1024, 128] -> [32, 32, 128]
-y = x.reshape(32, 32, 128)
-# First dimension splits 1024 -> (32, 32)
-# Since original dim 0 was sharded, automatic AllGather inserted
-```
+### Broadcasting
 
-This prioritizes correctness over performance for distributed reshapes.
+Broadcasting handled naturally by factor-based sharding. Operations automatically handle dimension expansion (e.g., `[features]` → `[batch, features]`) during propagation.
 
-### Broadcasting in SPMD
+### Batch Dimensions
 
-Broadcasting naturally handled by factor-based sharding:
-
-**Elementwise with broadcasting**:
-```python
-x = x.shard(mesh, P("dp"))  # Shape: [batch/dp, features]
-y = y.shard(mesh, P())       # Shape: [features] replicated
-z = x + y  # Broadcasting: [batch/dp, features] + [features]
-# Factor rule handles [1] -> [batch] dimension addition
-# Output: [batch/dp, features] - preserves sharding
-```
-
-### Batch Dimension Operations
-
-Internal operations for `vmap` transform:
-
-- `incr_batch_dims`: Increment batch dimension count (for nested vmaps)
-- `decr_batch_dims`: Decrement after vmap unwrapping
-- `move_axis_to_batch_dims`: Convert regular axis to batch axis
-- `move_axis_from_batch_dims`: Extract batch axis to regular axis
-
-These maintain the invariant that batch dimensions are always leading dimensions in prefix order.
+Internal ops for `vmap` maintain batch dimension invariants:
+- `incr_batch_dims`, `decr_batch_dims`: Adjust batch dimension count
+- `move_axis_to_batch_dims`, `move_axis_from_batch_dims`: Convert axes
+- Batch dimensions always appear as leading axes in prefix order
 
 ## Component Map
 

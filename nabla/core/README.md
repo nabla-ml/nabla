@@ -7,41 +7,51 @@ The `core` module contains the engines that drive Nabla: State Management, Graph
 
 ## Architecture & Internals
 
-The core follows a layered architecture:
+Layered architecture with strict import hierarchy:
 
-1. **Bottom (Common)**: Shared utilities (`pytree`, `context`) used across all modules.
-2. **State (Tensor)**: Data containers (`Tensor`, `TensorImpl`) holding values, metadata, and sharding specs.
-3. **Logic (Graph)**: The execution engine (`ComputeGraph`) that records operations as a DAG.
-4. **Distribution (Sharding)**: The compiler that annotates graphs with SPMD execution information.
-5. **Differentiation (Autograd)**: Gradient computation through reverse-mode autodiff.
+1. **Common**: Shared utilities (`pytree`, `context`) - no dependencies
+2. **Tensor**: Data containers (`Tensor`, `TensorImpl`) - imports graph
+3. **Graph**: Execution engine (`ComputeGraph`) - imports common
+4. **Sharding**: SPMD execution via factor-based propagation - imports tensor
+5. **Autograd**: Reverse-mode autodiff - imports graph, tensor
 
-### Execution Model: Logical vs Physical
+### Execution Model: Eager Operations with Graph Recording
 
-Operations execute in two distinct layers to enable robust tracing and distributed execution:
+Operations execute in a single eager pass with integrated sharding:
 
-**Logical Layer** (`op.execute`):
-- Entry point for all operations
-- Validates inputs (shapes, dtypes), handles broadcasting and type promotion
-- Calls `preshard_inputs` to move data before computation
-- Delegates to `physical_execute` for actual computation
-- Wraps raw results into `nabla.Tensor` objects
-- Creates symbolic graph nodes during tracing
+**Eager Execution**:
+1. **Input Validation**: Check shapes, dtypes, broadcasting, type promotion
+2. **Sharding Propagation**: Run three-phase factor-based algorithm (COLLECT → RESOLVE → UPDATE)
+3. **Reshard**: Execute AllReduce/AllGather immediately if input shardings mismatch required shardings
+4. **Per-Shard Execution**: Loop over device mesh shards, call `op.maxpr()` with local shard data
+5. **Result Packaging**: Wrap results into new `Tensor` objects with sharding metadata
 
-**Physical Layer** (`physical_execute`):
-- Loops over each device shard index
-- Calls `op._transform_shard_kwargs()` to adapt arguments per shard
-- Executes `op.maxpr()` on each shard (the MAX Engine primitive)
-- Returns `PhysicalResult(symbolic_nodes, computed_values)`
-- Must run inside `graph.context()` to access lazy values
+**Graph Recording** (happens simultaneously):
+6. **Create Node**: Add `OutputRefs` to global `ComputeGraph` for tracing/autodiff
 
-This separation ensures:
-- Traced graphs can be replayed without triggering recursive propagation
-- Physical execution is independent of tracing machinery
-- Clear boundary between user-facing API and SPMD implementation
+**Key Distinction**: 
+- **Sharding is eager** - Data movement (AllReduce, AllGather) happens immediately during operation call
+- **Graph is lazy** - Compilation to MAX executable deferred until data access (`.numpy()`, `print()`)
 
-### Strict Layering
+### The Dual Tensor System
 
-Hierarchy: `sharding` imports `tensor`, `tensor` imports `graph`, `graph` imports `common`. Circular dependencies are strictly forbidden to maintain clean architecture as the codebase scales.
+Enables trace rehydration for `shard_map`:
+
+**Logical Tensor**: User-facing `Tensor` object with global shape, sharding metadata  
+**Physical Shards**: List of per-device shard objects (one per mesh device)
+
+**Why Dual System**:
+- Captured graphs can be replayed with different tensor implementations (logical vs physical)
+- `shard_map` traces once with logical tensors, replays with physical tensors (dual execution paths)
+- Physical replay: operations access `tensor.dual` to get per-shard data without triggering recursion
+- Enables robust trace rehydration without re-executing Python logic
+
+### Physical Execution Context
+
+Physical execution (shard loop) must run inside `graph.context()` to:
+- Access lazy tensor values safely without triggering recursive compilation
+- Prevent graph recording during physical shard operations
+- Enable clean separation between logical tracing and physical SPMD execution
 
 ## Component Map
 

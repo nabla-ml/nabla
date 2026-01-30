@@ -7,65 +7,29 @@ Communication operations are explicit instructions to move data across the mesh.
 
 ## Architecture & Internals
 
-### The Collective Base
+### Execution Model
 
-All communication operations inherit from `CollectiveOperation` in [base.py](base.py):
+Communication ops inherit from `CollectiveOperation` and execute eagerly:
 
-1. **Hydrate**: Forces input realization (synchronization point)
-2. **Execute**: Invokes MAX/NCCL collective primitive
-3. **Spec Update**: Computes resulting `ShardingSpec` transformation
+1. Force input realization (synchronization point)
+2. Execute MAX/NCCL collective primitive immediately
+3. Return new tensor with updated `ShardingSpec`
 
-**Critical**: Collective operations MUST implement `physical_execute` to prevent recursion during SPMD execution. They operate directly on shard data without triggering sharding propagation.
+**Critical**: Must implement `physical_execute` to prevent recursion during SPMD execution.
 
 ### Automatic Insertion
 
-Communication operations are automatically inserted by `reshard_inputs` when:
+Inserted eagerly by `reshard_inputs` during operation execution:
 
-1. **Partial Sum Reduction**: Operation produces `partial_sum_axes` (e.g., matmul with sharded contracting dimension) → Insert `AllReduce`
-2. **Sharding Mismatch**: Input sharding doesn't match required sharding:
-   - Sharded → Replicated: `AllGather`
-   - Replicated → Sharded: Split data (no comm needed)
-   - Sharded axis A → Sharded axis B: `AllToAll`
+- **Partial sums** (contracting dimension sharded) → `AllReduce`
+- **Sharded → Replicated** → `AllGather`  
+- **Axis redistribution** → `AllToAll`
 
-### Sharding Patterns
+### Common Patterns
 
-**Column-Parallel Pattern** (no communication):
-```python
-# Model Parallel: shard output features
-w = w.shard(mesh, P(None, "tp"))  # Weight: [hidden, features/tp]
-y = x @ w  # Output: [batch, features/tp]
-# No AllReduce needed - output stays sharded
-```
-
-**Row-Parallel Pattern** (requires AllReduce):
-```python
-# Model Parallel: shard input features
-x = x.shard(mesh, P(None, "tp"))  # Input: [batch, features/tp]
-w = w.shard(mesh, P("tp", None))  # Weight: [features/tp, hidden]
-y = x @ w  # Contracting dim sharded → partial sums
-# Automatic AllReduce on "tp" axis
-```
-
-**Data-Parallel Pattern** (no communication for forward):
-```python
-# Data Parallel: shard batch
-x = x.shard(mesh, P("dp"))  # Input: [batch/dp, features]
-w = w.shard(mesh, P())      # Weight: [features, hidden] replicated
-y = x @ w  # Output: [batch/dp, hidden]
-# No communication in forward pass
-# AllReduce needed in backward for weight gradients
-```
-
-### Cost Modeling
-
-Communication operations estimate network costs for auto-sharding:
-
-- **AllReduce**: `2 * (N - 1) / N * bytes` (ring algorithm)
-- **AllGather**: `(N - 1) / N * bytes`
-- **AllToAll**: `(N - 1) / N * bytes`
-- **ReduceScatter**: `(N - 1) / N * bytes`
-
-These estimates guide the auto-sharding optimizer when comparing parallelization strategies.
+**Column-parallel** (no comm): Shard output features → `w.shard(mesh, P(None, "tp"))`  
+**Row-parallel** (AllReduce): Shard contracting dim → automatic AllReduce on tp axis  
+**Data-parallel**: Shard batch → no forward comm, AllReduce for weight gradients in backward
 
 ## Component Map
 

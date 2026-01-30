@@ -10,60 +10,66 @@ In Nabla, every operation (`Add`, `Matmul`, `Reshape`) is a **stateless singleto
 
 ## Architecture & Internals
 
+## Architecture & Internals
+
 ### Operation Hierarchy
+
+Operations are stateless singletons inheriting from `Operation`:
 
 ```
 Operation (base class)
-├── UnaryOperation          # Single-input ops (ReLU, Exp, Neg)
-├── BinaryOperation         # Two-input ops (Add, Mul, Matmul)
-├── LogicalAxisOperation    # Ops with axis parameters
+├── UnaryOperation          # Single-input (ReLU, Exp, Neg)
+├── BinaryOperation         # Two-input (Add, Mul, Matmul)
+├── LogicalAxisOperation    # With axis parameters
 │   ├── ReduceOperation     # Reductions (Sum, Mean)
-│   └── LogicalShapeOperation  # Shape ops (Reshape, Transpose)
-└── CollectiveOperation     # Communication primitives (AllReduce, AllGather)
+│   └── LogicalShapeOperation  # Shape manipulation (Reshape, Transpose)
+└── CollectiveOperation     # Communication (AllReduce, AllGather)
 ```
 
-**Key Methods Every Operation Implements**:
-
-- `maxpr(*args, **kwargs)`: MAX Engine primitive execution
+**Key Methods**:
+- `maxpr(*args, **kwargs)`: MAX Engine primitive execution per shard
 - `sharding_rule(*arg_shapes)`: Returns einsum-like factor notation for propagation
-- `vjp(cotangents, *primals, **kwargs)`: Gradient computation (VJP)
-- `_transform_shard_kwargs(shard_idx, **kwargs)`: Per-shard argument adaptation (optional)
+- `vjp(cotangents, *primals, **kwargs)`: Vector-Jacobian product for autodiff
+- `_transform_shard_kwargs(shard_idx, **kwargs)`: Adapt arguments per shard (optional)
 
-### The Dispatch Loop
+### Operation Execution Flow
 
-Operation execution flows through two layers:
+Eager execution with integrated sharding:
 
-**Logical Layer** (`op.execute`):
-1. Validate inputs (shapes, dtypes, broadcasting)
-2. Call `preshard_inputs` to satisfy sharding requirements
-3. Invoke `physical_execute` for computation
-4. Wrap results into `nabla.Tensor` objects
-5. Record graph node via `OutputRefs`
+1. **Validate Inputs**: Check shapes, dtypes, handle broadcasting and type promotion
+2. **Infer Sharding Rule**: Get factor-based rule (e.g., `"m k, k n -> m n"` for matmul)
+3. **Propagate Sharding**: Run three-phase algorithm (COLLECT → RESOLVE → UPDATE)
+   - Determine output sharding from input shardings
+   - Identify required input shardings (may differ from current)
+4. **Reshard Inputs**: Execute communication ops immediately if current ≠ required sharding
+   - Partial sums → AllReduce
+   - Sharded → Replicated → AllGather
+   - Axis redistribution → AllToAll
+5. **Execute Per-Shard**: Loop over device mesh shard indices
+   - Call `_transform_shard_kwargs(shard_idx, kwargs)` to adapt arguments
+   - Execute `maxpr(shard_args, shard_kwargs)` for each shard
+6. **Package Results**: Wrap shard results into new `Tensor` with computed sharding
+7. **Record Graph Node**: Add `OutputRefs` to global graph for tracing/autodiff
 
-**Physical Layer** (`physical_execute`):
-1. Loop over each shard index in the device mesh
-2. Call `op._transform_shard_kwargs(shard_idx, kwargs)` for per-shard arguments
-3. Execute `op.maxpr()` on shard data
-4. Return `PhysicalResult(symbolic_nodes, computed_values)`
+**Execution Context**: Per-shard execution (step 5) runs inside `graph.context()` to access lazy values without recursion.
 
-**Execution Context**: Physical execution must occur inside `graph.context()` to access lazy tensor values without triggering recursive compilation.
+### Sharding Rules
 
-### Sharding Propagation
-
-Operations define sharding via einsum-like notation:
+Operations define factor transformations using einsum-like notation:
 
 **Matmul**: `"m k, k n -> m n"`
-- Factor `m`: Maps to A's rows, C's rows
-- Factor `k`: Maps to A's cols, B's rows (contracting)
-- Factor `n`: Maps to B's cols, C's cols
+- Factors: `m` (rows), `k` (contracting), `n` (cols)
+- Factor `k` appears in inputs but not output → contracting factor
+- If `k` is sharded, output has partial sums → AllReduce
 
-**Binary elementwise**: `"d0 d1, d0 d1 -> d0 d1"`
-- Both inputs must match on all dimensions
-- Output inherits sharding
+**Binary Elementwise**: `"d0 d1, d0 d1 -> d0 d1"`
+- All factors preserved
+- Inputs must have compatible shardings
+- Output inherits factor shardings
 
-**Reduction on axis 0**: `"d0 d1 -> d1"`
-- Factor `d0` contracts away
-- If `d0` was sharded, output has partial sums requiring AllReduce
+**Reduction**: `"d0 d1 -> d1"` (reduce over axis 0)
+- Factor `d0` contracts
+- If `d0` was sharded → partial sums → AllReduce
 
 ## Component Map
 

@@ -27,17 +27,16 @@ The `Trace` object captures a subgraph between specific input tensors and output
 - `op_kwargs`: Configuration
 - `_refs`: Weak references to output `TensorImpl` objects
 
-### Execution Loop
+### Execution and Recording
 
-The dispatch loop coordinates logical and physical execution:
+Operations execute eagerly and record graph nodes simultaneously:
 
-1. **Input Validation**: Operation receives arguments, validates shapes/dtypes
-2. **Pre-sharding**: `preshard_inputs` moves data to required shardings
-3. **Physical Execution**: `physical_execute` runs SPMD kernel on each shard
-4. **Result Wrapping**: Raw values wrapped into `Tensor` objects with graph nodes
-5. **Graph Recording**: `OutputRefs` node added to global graph
+1. Validate inputs and propagate sharding
+2. Execute communication ops if resharding needed
+3. Execute `maxpr()` per shard
+4. Wrap results and create `OutputRefs` graph node
 
-**Context Management**: Physical execution must run inside `graph.context()` to safely access lazy tensor values without triggering recursive compilation.
+**Context**: `graph.context()` required for safe lazy value access during execution.
 
 ## Component Map
 

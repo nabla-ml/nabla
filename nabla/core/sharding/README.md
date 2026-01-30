@@ -12,62 +12,60 @@ Nabla uses **Factor-Based Sharding Propagation** (inspired by GSPMD/Shardy). Ins
 *   **`ShardingSpec`**: Describes precisely how a tensor is split.
     *   `DimSpec`: List of mesh axes assigned to a tensor dimension.
 
-### 2. The Propagation Loop (`spmd.py`)
+### 2. The Propagation Algorithm
 
-For every Operation `Z = f(X, Y)`:
+Runs **eagerly per-operation** during execution (not as a compilation phase).
 
-1. **Infer**: Query operation for `OpShardingRule` (e.g., `"m k, k n -> m n"` for matmul)
-2. **Propagate**: Three-phase algorithm:
-   - **COLLECT**: Convert dimension specs to factor specs
-   - **RESOLVE**: Resolve conflicts via priority system
-   - **UPDATE**: Project factor specs back to output dimension specs
-3. **Reshard**: Insert communication ops if input shardings don't match requirements
-
-### Three-Phase Propagation Algorithm
+**Three-Phase Process**:
 
 **COLLECT Phase**: Convert dimension shardings to factor shardings.
-
-Example: Matmul `C = A @ B` with rule `"m k, k n -> m n"`
-- If `A` has `DimSpec(["dp"], ...)` on dimension 0, factor `m` collects `["dp"]`
-- If `B` has `DimSpec(["tp"], ...)` on dimension 1, factor `n` collects `["tp"]`
-- Factor `k` collects from both `A`'s dimension 1 and `B`'s dimension 0
+- For matmul `C = A @ B` with rule `"m k, k n -> m n"`:
+  - Factor `m` collects sharding from A's dimension 0
+  - Factor `k` collects from both A's dimension 1 and B's dimension 0
+  - Factor `n` collects from B's dimension 1
+- Each factor accumulates all shardings from dimensions it maps to
 
 **RESOLVE Phase**: Resolve conflicts using priority system.
+- Explicit replication (via `replicated_axes`) overrides all other constraints
+- Lower `priority` value = higher priority (0 = strongest constraint)
+- At equal priority, higher parallelism wins (more sharded axes preferred)
+- Common prefix fallback if no clear winner
+- Detect contracting factors: present in inputs but absent in outputs
 
-Rules (in order):
-1. Explicit replication (via `replicated_axes`) always wins
-2. Higher-priority specs override lower-priority specs (lower `priority` value = higher priority)
-3. More parallelism wins at equal priority
-4. Common prefix fallback if no clear winner
+**UPDATE Phase**: Project resolved factor shardings back to output dimensions.
+- Map each output dimension to its corresponding factors
+- Inherit sharding from factor assignments
+- Mark axes as `partial=True` if they hold unreduced partial sums from contracting factors
+- These partial axes trigger automatic AllReduce insertion
 
-**UPDATE Phase**: Project resolved factor shardings to output dimensions.
+**Reshard Phase**: Execute communication ops immediately if needed.
+- Input sharding ≠ required sharding → AllGather or AllToAll executes now
+- Output has partial sums → AllReduce executes immediately after computation
+- No lazy insertion - communication happens during operation execution
 
-- Detect contracting factors (present in inputs, absent in outputs)
-- Mark output axes as `partial=True` if they hold unreduced partial sums
-- Example: Row-parallel matmul where `k` is sharded produces output with `partial_sum_axes={'tp'}`
+### Examples
 
-### Practical Examples
-
-**Column-Parallel Matmul** (Megatron-LM pattern):
+**Column-parallel matmul** (no communication):
 ```python
 mesh = DeviceMesh((8,), ["tp"])
-w = w.shard(mesh, P(None, "tp"))  # Shard output features
-y = x @ w  # No AllReduce needed, outputs are sharded on "tp"
+w = w.shard(mesh, P(None, "tp"))  # [hidden, features/8] per device
+y = x @ w  # Output: [batch, features/8] - stays sharded on tp
+# Factor n sharded on tp, preserved in output, no contracting factors
 ```
 
-**Row-Parallel Matmul** (requires reduction):
+**Row-parallel matmul** (immediate AllReduce):
 ```python
-x = x.shard(mesh, P("tp"))  # Shard input features
-w = w.shard(mesh, P("tp", None))  # Shard input features
-y = x @ w  # Auto-insert AllReduce on "tp" axis
-# Factor k is sharded on "tp", contracts away → partial sums → AllReduce
+x = x.shard(mesh, P("tp"))        # [batch, features/8]
+w = w.shard(mesh, P("tp", None))  # [features/8, hidden]
+y = x @ w  # Factor k (contracting) sharded on tp
+# Output has partial_sum_axes={'tp'} → AllReduce executes before returning y
 ```
 
-**Data-Parallel Elementwise**:
+**Data-parallel** (no forward communication):
 ```python
 mesh = DeviceMesh((8,), ["dp"])
-x = x.shard(mesh, P("dp"))
-y = relu(x)  # Preserves "dp" sharding, no communication
+x = x.shard(mesh, P("dp"))  # [batch/8, features]
+y = relu(x)  # Factor d0 sharded on dp, preserved → no communication
 ```
 
 ## Component Map

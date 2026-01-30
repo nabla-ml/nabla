@@ -2,68 +2,63 @@
 
 ## Philosophy
 
-Nabla implements **"Lazy-Eager" Execution** on a **Unified SPMD Runtime** with **Factor-Based Sharding**.
+Nabla implements **Eager Execution with Lazy Graph Recording** using **Factor-Based SPMD Sharding**.
 
-**Lazy-Eager Execution**: Code looks eager (like PyTorch), but operations are lazily traced into a computation graph and compiled just-in-time when you access data.
+**Execution Model**: Operations execute immediately (including data movement and sharding), but are recorded in a computation graph. Graph compilation to MAX executables happens lazily when accessing concrete data (`.numpy()`, `print()`).
 
-**Unified SPMD Runtime**: You write code for a single logical device. The compiler automatically parallelizes it across a cluster of accelerators through sharding propagation.
+**Factor-Based Sharding**: Operations define transformations via **named factors** (e.g., `"m k, k n -> m n"` for matmul) rather than positional dimensions. The three-phase propagation algorithm (COLLECT → RESOLVE → UPDATE) runs **eagerly per-operation** to determine output sharding and required input shardings.
 
-**Factor-Based Sharding**: Unlike JAX's dimension-to-axis mapping, Nabla maps **named factors** (abstract indices in operations) to device mesh axes. This handles broadcasting, reshaping, and einsum-style operations naturally without dimension tracking complexities.
-
-### Execution Model: Logical vs Physical
-
-Operations in Nabla execute in two layers:
-
-**Logical Layer** (User Interface):
-- Validates inputs, handles broadcasting and type promotion
-- Performs pre-operation data movement via `preshard_inputs`
-- Delegates computation to physical layer
-- Wraps results into `nabla.Tensor` objects
-- Enables tracing with symbolic nodes
-
-**Physical Layer** (SPMD Kernel Runner):
-- Executes actual computation on device shards
-- Signature: `physical_execute(op, args, kwargs, mesh) -> PhysicalResult`
-- Loops over each shard and calls `op.maxpr()` (MAX Primitive)
-- Must run inside `graph.context()` for lazy value access
-- Handles per-shard argument transformations
-
-This separation ensures robust trace rehydration: traced graphs can be replayed without triggering recursive propagation, and physical execution remains independent of the tracing system.
+**SPMD Execution**: Write code for a single logical device. Each operation automatically handles distributed execution via the dual tensor system: logical tensors contain multiple shard objects, operations loop over shards and execute `maxpr()` (MAX primitives) per shard.
 
 ## Architecture & Internals
 
-### The Lifecycle
+### Operation Execution Flow
 
-1. **Interact**: User manipulates `Tensor` objects (pointers to graph nodes).
-2. **Trace**: Operations like `x + y` record nodes in the global `ComputeGraph`.
-3. **Compile**: Accessing data (e.g., `print(x)`) triggers compilation.
-4. **Shard**: The compiler runs **Sharding Propagation** to determine per-shard execution.
-5. **Execute**: The graph executes on accelerators via MAX Engine.
+When you call an operation (e.g., `x + y` or `matmul(a, b)`):
 
-### Sharding Propagation: The Three-Phase Algorithm
+1. **Input Validation**: Check shapes, dtypes, handle broadcasting and type promotion
+2. **Sharding Inference**: Call operation's `sharding_rule()` to get factor-based propagation rule
+3. **Propagate Sharding**: Run three-phase algorithm eagerly:
+   - COLLECT: Map input dimension shardings → factor shardings
+   - RESOLVE: Resolve conflicts via priority, detect contracting factors
+   - UPDATE: Map factor shardings → output dimension shardings
+4. **Reshard Inputs**: If input shardings don't match required shardings, execute communication ops immediately:
+   - AllReduce for partial sums (contracting dimensions)
+   - AllGather for sharded → replicated
+   - AllToAll for axis redistribution
+5. **Execute**: Loop over device mesh shards, call `op.maxpr()` per shard with local data
+6. **Package Results**: Wrap results into new `Tensor` with sharding metadata
+7. **Record Graph**: Create `OutputRefs` node for tracing/autodiff
 
-For each operation, sharding propagates through three phases:
+**Key Point**: Steps 1-6 execute eagerly. Step 7 records for potential JIT compilation.
 
-**COLLECT**: Convert dimension shardings to factor shardings. For `matmul(A, B)` with sharding rule `"m k, k n -> m n"`, factor `k` collects sharding from both input dimensions.
+### The Dual Tensor System
 
-**RESOLVE**: Resolve conflicts using priority system. Explicit replications override higher priorities. Higher parallelism wins at equal priority. Detects contracting factors (present in inputs but not outputs) which become partial sum axes.
+Every sharded tensor is represented by:
+- **Logical Tensor** (`Tensor`): User-facing object with global shape and sharding metadata
+- **Physical Shards**: List of shard objects (one per device), each holding local data
 
-**UPDATE**: Project factor shardings back to output dimension shardings. Marks axes as `partial=True` if they hold unreduced partial sums from contracting factors.
+This dual representation enables:
+- **Trace Rehydration**: Captured graphs can be replayed with different shard configurations without re-executing Python
+- **Unified Engine**: Same graph recording works for single-device and distributed execution
+- **shard_map**: Trace with logical tensors, replay with physical shards (different execution paths)
 
-### Communication Injection
+### Sharding Propagation Details
 
-After propagation, `reshard_inputs` automatically inserts communication operations when input shardings don't match required shardings:
+**Factor-Based Rules**: Operations specify how factors transform (einsum notation):
+- Matmul: `"m k, k n -> m n"` - factor `k` contracts (appears in inputs, not output)
+- Binary elementwise: `"d0 d1, d0 d1 -> d0 d1"` - all factors preserved
+- Reduction: `"d0 d1 -> d1"` - factor `d0` contracts
 
-- **AllReduce**: Reduce partial sums across axes (e.g., after matmul with sharded contracting dimension)
-- **AllGather**: Gather sharded data to replicated
-- **AllToAll**: Redistribute data across different mesh axes
-- **ReduceScatter**: Reduce then scatter results
+**Conflict Resolution**:
+1. Explicit replication (via `replicated_axes`) overrides everything
+2. Higher priority (lower `priority` value) wins
+3. More parallelism wins at same priority
+4. Common prefix fallback
 
-Example: Row-parallel matmul with `A` sharded on `k` and `B` sharded on `k` produces output with `partial_sum_axes={'k'}`, triggering automatic `AllReduce` on the `k` axis.
-
-### The Dual System
-
-Every sharded logical tensor is backed by a graph of physical shards. This allows reusing the same graph engine for both single-device and distributed execution, at the cost of complexity in the `shard_map` trace-and-replay engine.
+**Automatic Communication**:
+- Contracting factors that are sharded → Output gets `partial_sum_axes` → AllReduce executes immediately
+- Mismatched input sharding → AllGather/AllToAll executes immediately before computation
 
 ## Module Map
 
