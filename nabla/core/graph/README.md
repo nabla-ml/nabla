@@ -8,23 +8,36 @@ The Graph Engine is the "Brain" of Nabla. It is responsible for **capturing** us
 ## Architecture & Internals
 
 ### The Global Singleton
-We use a singleton `GRAPH` (`ComputeGraph`) to capture operations. There are no "graph contexts" for the user to manage.
-*   **Weak References**: The graph tracks unrealized tensors via `weakref.WeakValueDictionary`. If a user discards a tensor variable in Python, it is garbage collected, and the graph engine automatically drops the corresponding dead nodes before compilation.
-*   **Epochs**: We track an `_info_epoch` counter to invalidate staleness (internal mechanism).
-*   **Lazy Evaluation**: Operations are lazily added to the graph. `evaluate()` compiles and runs the subgraph needed to realize specific tensors.
+
+The singleton `GRAPH` (`ComputeGraph`) captures all operations. No explicit graph contexts for users to manage.
+
+**Weak References**: The graph tracks unrealized tensors via `weakref.WeakValueDictionary`. Discarded Python variables are automatically garbage collected, and the graph engine drops corresponding dead nodes before compilation.
+
+**Epochs**: Internal `_info_epoch` counter tracks staleness for cache invalidation.
+
+**Lazy Evaluation**: Operations are lazily added to the graph. `evaluate()` compiles and runs the subgraph needed to realize specific tensors.
 
 ### Tracing
-The `Trace` object captures a subgraph between specific input tensors and output tensors.
-*   **`OutputRefs`**: A struct shared by all sibling outputs of an operation. It's the graph node. It holds references to:
-    *   `op`: The operation instance.
-    *   `op_args`: The inputs to the op.
-    *   `op_kwargs`: Configuration.
-    *   `_refs`: Weak references to output `TensorImpl`s.
 
-> [!NOTE] Design Decision: Singleton Graph
-> *   **Choice**: One global `ComputeGraph` instead of per-thread or explicit graph scopes.
-> *   **Why**: Maximizes distinct "PyTorch-like" feel. Users never accidentally define ops "outside" a graph.
-> *   **Trade-off**: Harder to support multi-threaded graph construction (requires strictly thread-local value stacks if we go parallel).
+The `Trace` object captures a subgraph between specific input tensors and output tensors.
+
+**`OutputRefs`**: Shared node structure for all sibling outputs of an operation. Holds:
+- `op`: The operation instance
+- `op_args`: Input tensors
+- `op_kwargs`: Configuration
+- `_refs`: Weak references to output `TensorImpl` objects
+
+### Execution Loop
+
+The dispatch loop coordinates logical and physical execution:
+
+1. **Input Validation**: Operation receives arguments, validates shapes/dtypes
+2. **Pre-sharding**: `preshard_inputs` moves data to required shardings
+3. **Physical Execution**: `physical_execute` runs SPMD kernel on each shard
+4. **Result Wrapping**: Raw values wrapped into `Tensor` objects with graph nodes
+5. **Graph Recording**: `OutputRefs` node added to global graph
+
+**Context Management**: Physical execution must run inside `graph.context()` to safely access lazy tensor values without triggering recursive compilation.
 
 ## Component Map
 

@@ -13,18 +13,62 @@ Nabla uses **Factor-Based Sharding Propagation** (inspired by GSPMD/Shardy). Ins
     *   `DimSpec`: List of mesh axes assigned to a tensor dimension.
 
 ### 2. The Propagation Loop (`spmd.py`)
-For every Operation `Z = f(X, Y)`:
-1.  **Infer**: Ask the op for its `OpShardingRule` (e.g., `i k, k j -> i j`).
-2.  **Propagate**:
-    *   Convert Input Specs (Dim → Axes) to Factor Specs (Factor → Axes).
-    *   Resolve conflicts (priority system).
-    *   Project Factor Specs to Output Specs.
-3.  **Reshard**: If inputs don't match the required sharding, insert `reshard` (comm ops).
 
-> [!NOTE] Design Decision: Factors vs Dimensions
-> *   **Choice**: Propagate sharding via named factors (`i`, `j`, `batch`), not positional dimensions.
-> *   **Why**: Handles broadcasting (`1 -> N`) and reshaping (`(a b) -> a b`) naturally.
-> *   **Trade-off**: Ops must implement `sharding_rule()` instead of just simple dimension mapping.
+For every Operation `Z = f(X, Y)`:
+
+1. **Infer**: Query operation for `OpShardingRule` (e.g., `"m k, k n -> m n"` for matmul)
+2. **Propagate**: Three-phase algorithm:
+   - **COLLECT**: Convert dimension specs to factor specs
+   - **RESOLVE**: Resolve conflicts via priority system
+   - **UPDATE**: Project factor specs back to output dimension specs
+3. **Reshard**: Insert communication ops if input shardings don't match requirements
+
+### Three-Phase Propagation Algorithm
+
+**COLLECT Phase**: Convert dimension shardings to factor shardings.
+
+Example: Matmul `C = A @ B` with rule `"m k, k n -> m n"`
+- If `A` has `DimSpec(["dp"], ...)` on dimension 0, factor `m` collects `["dp"]`
+- If `B` has `DimSpec(["tp"], ...)` on dimension 1, factor `n` collects `["tp"]`
+- Factor `k` collects from both `A`'s dimension 1 and `B`'s dimension 0
+
+**RESOLVE Phase**: Resolve conflicts using priority system.
+
+Rules (in order):
+1. Explicit replication (via `replicated_axes`) always wins
+2. Higher-priority specs override lower-priority specs (lower `priority` value = higher priority)
+3. More parallelism wins at equal priority
+4. Common prefix fallback if no clear winner
+
+**UPDATE Phase**: Project resolved factor shardings to output dimensions.
+
+- Detect contracting factors (present in inputs, absent in outputs)
+- Mark output axes as `partial=True` if they hold unreduced partial sums
+- Example: Row-parallel matmul where `k` is sharded produces output with `partial_sum_axes={'tp'}`
+
+### Practical Examples
+
+**Column-Parallel Matmul** (Megatron-LM pattern):
+```python
+mesh = DeviceMesh((8,), ["tp"])
+w = w.shard(mesh, P(None, "tp"))  # Shard output features
+y = x @ w  # No AllReduce needed, outputs are sharded on "tp"
+```
+
+**Row-Parallel Matmul** (requires reduction):
+```python
+x = x.shard(mesh, P("tp"))  # Shard input features
+w = w.shard(mesh, P("tp", None))  # Shard input features
+y = x @ w  # Auto-insert AllReduce on "tp" axis
+# Factor k is sharded on "tp", contracts away → partial sums → AllReduce
+```
+
+**Data-Parallel Elementwise**:
+```python
+mesh = DeviceMesh((8,), ["dp"])
+x = x.shard(mesh, P("dp"))
+y = relu(x)  # Preserves "dp" sharding, no communication
+```
 
 ## Component Map
 

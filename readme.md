@@ -68,22 +68,18 @@ pip install -e ".[dev]"
 
 ## Repository Structure
 
-> NOTE: Find the following repository structure on the latest release branch: [nabla/v25.7](https://github.com/nabla-ml/nabla/tree/nabla/v25.7).
-
-<!-- ![alt text](assets/image.png) -->
-
 ```text
 nabla/
 ├── nabla/                     # Core Python library
-│   ├── core/                  # Tensor class and MAX compiler integration
-│   ├── nn/                    # Neural network modules and models
-│   ├── ops/                   # Mathematical operations (binary, unary, linalg, etc.)
-│   ├── transforms/            # Function transformations (vmap, grad, jit, etc.)
-│   └── utils/                 # Utilities (formatting, types, MAX-interop, etc.)
+│   ├── core/                  # Execution engine (Tensor, Graph, Sharding, Autograd)
+│   ├── ops/                   # Operations (arithmetic, reductions, communication, views)
+│   └── transforms/            # Function transformations (grad, vmap, shard_map, compile)
 ├── tests/                     # Comprehensive test suite
 ├── tutorials/                 # Notebooks on Nabla usage for ML tasks
 └── examples/                  # Example scripts for common use cases
 ```
+
+The current main branch implements a distributed SPMD execution model with factor-based sharding. See [nabla/README.md](nabla/README.md) for detailed architecture documentation.
 
 ## Contributing
 

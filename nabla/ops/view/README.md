@@ -7,20 +7,58 @@ View operations manipulate tensor **metadata** (shape, strides) without copying 
 
 ## Architecture & Internals
 
-### Logical vs Physical View
-*   **Logical**: User sees `reshape(1024) -> (32, 32)`.
-*   **Physical**: Each shard might just change its local index math, OR if the reshape crosses sharded boundaries, it might require communication (global gather).
+### Logical vs Physical Views
 
-### Key Mechanisms
-*   **`LogicalShapeOperation`**: Base class for ops that only change shape (`reshape`, `broadcast_to`).
-*   **Conservative Reshape**: If a logical reshape crosses a sharded axis, we conservatively gather the tensor to avoid complex strided-sharding logic.
-*   **Broadcast**: Handled via `OpShardingRuleTemplate`.
-    *   `1 -> N`: Replicates the data along the new dimension (no communication if existing shards match).
+**Logical View**: User-facing shape transformations operating on global tensor semantics.
+- `reshape((1024,))` → `(32, 32)`: Changes logical shape
+- `unsqueeze(axis=0)`: Adds dimension of size 1
+- `transpose()`: Swaps dimensions
 
-> [!NOTE] Design Decision: Conservative Reshape
-> *   **Choice**: `reshape()` gathers sharded tensors if the reshape touches sharded dimensions.
-> *   **Why**: Correctness first. Arbitrary reshapes on distributed data can lead to extremely complex "strided sharding" layouts that are hard to support in kernels.
-> *   **Trade-off**: Performance hit on distributed reshapes (requires network traffic).
+**Physical View**: Per-shard adaptations for distributed execution.
+- Each shard computes its local shape transformation
+- Sharding propagation determines if transformation is valid without communication
+
+### Conservative Reshape
+
+**Problem**: Arbitrary reshapes on sharded tensors can create complex strided layouts unsupported by compute kernels.
+
+**Solution**: When reshape crosses sharded boundaries, gather the tensor to replicated state before reshaping.
+
+Example:
+```python
+# Tensor sharded on dim 0: shape [1024/8, 128] per shard
+x = x.shard(mesh, P("dp"))
+# Reshape [1024, 128] -> [32, 32, 128]
+y = x.reshape(32, 32, 128)
+# First dimension splits 1024 -> (32, 32)
+# Since original dim 0 was sharded, automatic AllGather inserted
+```
+
+This prioritizes correctness over performance for distributed reshapes.
+
+### Broadcasting in SPMD
+
+Broadcasting naturally handled by factor-based sharding:
+
+**Elementwise with broadcasting**:
+```python
+x = x.shard(mesh, P("dp"))  # Shape: [batch/dp, features]
+y = y.shard(mesh, P())       # Shape: [features] replicated
+z = x + y  # Broadcasting: [batch/dp, features] + [features]
+# Factor rule handles [1] -> [batch] dimension addition
+# Output: [batch/dp, features] - preserves sharding
+```
+
+### Batch Dimension Operations
+
+Internal operations for `vmap` transform:
+
+- `incr_batch_dims`: Increment batch dimension count (for nested vmaps)
+- `decr_batch_dims`: Decrement after vmap unwrapping
+- `move_axis_to_batch_dims`: Convert regular axis to batch axis
+- `move_axis_from_batch_dims`: Extract batch axis to regular axis
+
+These maintain the invariant that batch dimensions are always leading dimensions in prefix order.
 
 ## Component Map
 

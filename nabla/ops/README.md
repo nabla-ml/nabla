@@ -10,16 +10,60 @@ In Nabla, every operation (`Add`, `Matmul`, `Reshape`) is a **stateless singleto
 
 ## Architecture & Internals
 
-### The Dispatch Loop
-When you call `x + y`, `Operation.__call__` executes:
-1.  **Infer**: Uses `sharding_rule()` to determine output sharding.
-2.  **Reshard**: Calls `reshard_inputs()` (hooks into `core/sharding`) to satisfy input requirements.
-3.  **Execute**: Runs `maxpr()` (Maximum Intermediate Representation) to trace the logic into the graph.
+### Operation Hierarchy
 
-> [!NOTE] Design Decision: Stateless Singletons
-> *   **Choice**: ops are `const` singletons (e.g., `_add_op = AddOp()`).
-> *   **Why**: No per-call overhead for object creation. Easy to register globally.
-> *   **Trade-off**: Must pass all state (like `mesh`) as arguments to `__call__`.
+```
+Operation (base class)
+├── UnaryOperation          # Single-input ops (ReLU, Exp, Neg)
+├── BinaryOperation         # Two-input ops (Add, Mul, Matmul)
+├── LogicalAxisOperation    # Ops with axis parameters
+│   ├── ReduceOperation     # Reductions (Sum, Mean)
+│   └── LogicalShapeOperation  # Shape ops (Reshape, Transpose)
+└── CollectiveOperation     # Communication primitives (AllReduce, AllGather)
+```
+
+**Key Methods Every Operation Implements**:
+
+- `maxpr(*args, **kwargs)`: MAX Engine primitive execution
+- `sharding_rule(*arg_shapes)`: Returns einsum-like factor notation for propagation
+- `vjp(cotangents, *primals, **kwargs)`: Gradient computation (VJP)
+- `_transform_shard_kwargs(shard_idx, **kwargs)`: Per-shard argument adaptation (optional)
+
+### The Dispatch Loop
+
+Operation execution flows through two layers:
+
+**Logical Layer** (`op.execute`):
+1. Validate inputs (shapes, dtypes, broadcasting)
+2. Call `preshard_inputs` to satisfy sharding requirements
+3. Invoke `physical_execute` for computation
+4. Wrap results into `nabla.Tensor` objects
+5. Record graph node via `OutputRefs`
+
+**Physical Layer** (`physical_execute`):
+1. Loop over each shard index in the device mesh
+2. Call `op._transform_shard_kwargs(shard_idx, kwargs)` for per-shard arguments
+3. Execute `op.maxpr()` on shard data
+4. Return `PhysicalResult(symbolic_nodes, computed_values)`
+
+**Execution Context**: Physical execution must occur inside `graph.context()` to access lazy tensor values without triggering recursive compilation.
+
+### Sharding Propagation
+
+Operations define sharding via einsum-like notation:
+
+**Matmul**: `"m k, k n -> m n"`
+- Factor `m`: Maps to A's rows, C's rows
+- Factor `k`: Maps to A's cols, B's rows (contracting)
+- Factor `n`: Maps to B's cols, C's cols
+
+**Binary elementwise**: `"d0 d1, d0 d1 -> d0 d1"`
+- Both inputs must match on all dimensions
+- Output inherits sharding
+
+**Reduction on axis 0**: `"d0 d1 -> d1"`
+- Factor `d0` contracts away
+- If `d0` was sharded, output has partial sums requiring AllReduce
 
 ## Component Map
 

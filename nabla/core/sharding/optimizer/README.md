@@ -17,10 +17,43 @@ The solving process involves four phases:
 4.  **Export**: Returns a solution dictionary mapping Node IDs to input/output sharding specs.
 
 ### Cost Model
-The solver estimates costs to decide between strategies:
-*   **Data Parallel (DP)**: Split Batch dimension. Cost = `Compute / N`. Comm = 0 (usually).
-*   **Model Parallel (MP)**: Split Contracting dimension. Cost = `Compute / N + AllReduce(Bytes)`.
-It queries `AllReduceOp.estimate_cost()` to get realistic communication latency estimates.
+
+Operations implement cost estimation methods to guide sharding decisions:
+
+**Compute Cost**: Estimated FLOPs for the operation.
+- Matmul: `2 * M * N * K` FLOPs
+- Binary elementwise: `prod(output_shape)` operations
+- Reductions: `prod(input_shape)` operations
+
+**Memory Cost**: Estimated bytes transferred.
+- Input/output sizes in bytes
+- Intermediate activation memory
+
+**Communication Cost**: Network traffic from resharding.
+- AllReduce: `2 * (N - 1) / N * bytes` for ring algorithm
+- AllGather: `(N - 1) / N * bytes`
+- AllToAll: `(N - 1) / N * bytes`
+
+### Example: Matmul Sharding Decision
+
+Consider `C = matmul(A, B)` with shapes `(1024, 512) @ (512, 2048)` on 8 devices:
+
+**Data Parallel (split batch dimension)**:
+- Compute: `2 * 1024 * 512 * 2048 / 8 = 268M FLOPs/device`
+- Communication: None (no dimension contraction)
+- Total cost: Low
+
+**Tensor Parallel (split contracting dimension K)**:
+- Compute: `2 * 1024 * 512 * 2048 / 8 = 268M FLOPs/device`
+- Communication: AllReduce of `1024 * 2048 * 4 bytes = 8MB`
+- Total cost: Higher due to AllReduce
+
+**Model Parallel (split output features)**:
+- Compute: `2 * 1024 * 512 * 2048 / 8 = 268M FLOPs/device`
+- Communication: None (output stays sharded)
+- Total cost: Low
+
+The solver compares these strategies and selects the one minimizing `compute_time + communication_time`.
 
 ## Component Map
 
