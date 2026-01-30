@@ -2,6 +2,17 @@
 # Nabla 2026
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
+"""Batch dimension manipulation operations.
+
+These operations manipulate the batch_dims metadata and perform the necessary
+physical axis permutations to move axes in/out of the batch dimension region.
+
+Key insight: move_axis_to/from_batch_dims are composed from simpler primitives:
+- moveaxis_physical (physical axis permutation)
+- incr_batch_dims / decr_batch_dims (batch_dims metadata adjustment)
+
+This means sharding rules are inherited from the underlying moveaxis operation.
+"""
 
 from __future__ import annotations
 
@@ -15,27 +26,9 @@ if TYPE_CHECKING:
     from ...core.tensor import Tensor
 
 
-def _copy_impl_with_batch_dims(
-    x: Tensor, new_batch_dims: int, op: Operation = None, kwargs: dict = None
-) -> Tensor:
-    from ...core import Tensor
-
-    output = Tensor._create_unsafe(
-        storages=x._storages,
-        values=x._values,
-        traced=x.traced,
-        batch_dims=new_batch_dims,
-    )
-
-    output.sharding = x.sharding
-
-    if op is not None and x.traced:
-        op._setup_output_refs(output, (x,), kwargs or {}, kwargs or {}, True)
-
-    return output
-
-
 class IncrBatchDimsOp(Operation):
+    """Increment batch_dims counter without changing data layout."""
+
     @property
     def name(self) -> str:
         return "incr_batch_dims"
@@ -44,13 +37,17 @@ class IncrBatchDimsOp(Operation):
         return x
 
     def __call__(self, x: Tensor) -> Tensor:
-        return _copy_impl_with_batch_dims(x, x.batch_dims + 1, op=self, kwargs={})
+        result = super().__call__(x)
+        result._impl.batch_dims = x.batch_dims + 1
+        return result
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         return decr_batch_dims(cotangent)
 
 
 class DecrBatchDimsOp(Operation):
+    """Decrement batch_dims counter without changing data layout."""
+
     @property
     def name(self) -> str:
         return "decr_batch_dims"
@@ -61,100 +58,79 @@ class DecrBatchDimsOp(Operation):
     def __call__(self, x: Tensor) -> Tensor:
         if x.batch_dims <= 0:
             raise ValueError("Cannot decrement batch_dims below 0")
-        return _copy_impl_with_batch_dims(x, x.batch_dims - 1, op=self, kwargs={})
+        result = super().__call__(x)
+        result._impl.batch_dims = x.batch_dims - 1
+        return result
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         return incr_batch_dims(cotangent)
 
 
-class MoveAxisToBatchDimsOp(Operation):
+class MoveAxisPhysicalOp(Operation):
+    """Move a physical axis to another physical position, preserving batch_dims."""
+
     @property
     def name(self) -> str:
-        return "move_axis_to_batch_dims"
+        return "moveaxis_physical"
 
-    def maxpr(self, x: TensorValue, *, physical_axis: int) -> TensorValue:
+    def maxpr(self, x: TensorValue, *, source: int, destination: int) -> TensorValue:
         rank = len(x.type.shape)
+        if source < 0:
+            source = rank + source
+        if destination < 0:
+            destination = rank + destination
+
         order = list(range(rank))
-        order.pop(physical_axis)
-        order.insert(0, physical_axis)
+        order.pop(source)
+        order.insert(destination, source)
         return ops.permute(x, tuple(order))
 
-    def __call__(self, x: Tensor, *, axis: int) -> Tensor:
-        batch_dims = x.batch_dims
-        logical_rank = len(x.shape)
-
-        if axis < 0:
-            axis = logical_rank + axis
-
-        physical_axis = batch_dims + axis
-        result = super().__call__(x, physical_axis=physical_axis)
-        return _copy_impl_with_batch_dims(
-            result, batch_dims + 1, op=self, kwargs={"axis": axis}
-        )
+    def __call__(self, x: Tensor, *, source: int, destination: int) -> Tensor:
+        # Preserve batch_dims through the permutation
+        original_batch_dims = x.batch_dims
+        result = super().__call__(x, source=source, destination=destination)
+        result._impl.batch_dims = original_batch_dims
+        return result
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        axis = output.op_kwargs.get("axis")
-        return move_axis_from_batch_dims(
-            cotangent, batch_axis=0, logical_destination=axis
-        )
+        source = output.op_kwargs.get("source")
+        destination = output.op_kwargs.get("destination")
+        # Inverse: move from destination back to source
+        return moveaxis_physical(cotangent, source=destination, destination=source)
 
+    def sharding_rule(
+        self,
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        **kwargs: Any,
+    ) -> Any:
+        from ...core.sharding.propagation import OpShardingRuleTemplate
 
-class MoveAxisFromBatchDimsOp(Operation):
-    @property
-    def name(self) -> str:
-        return "move_axis_from_batch_dims"
+        rank = len(input_shapes[0])
+        source = kwargs.get("source")
+        destination = kwargs.get("destination")
 
-    def maxpr(
-        self, x: TensorValue, *, physical_source: int, physical_destination: int
-    ) -> TensorValue:
-        rank = len(x.type.shape)
-        order = list(range(rank))
-        order.pop(physical_source)
-        order.insert(physical_destination, physical_source)
-        return ops.permute(x, tuple(order))
+        if source < 0:
+            source += rank
+        if destination < 0:
+            destination += rank
 
-    def __call__(
-        self, x: Tensor, *, batch_axis: int = 0, logical_destination: int = 0
-    ) -> Tensor:
-        current_batch_dims = x.batch_dims
-        if current_batch_dims <= 0:
-            raise ValueError("No batch dims to move from")
+        factors = [f"d{i}" for i in range(rank)]
+        in_str = " ".join(factors)
 
-        logical_rank = len(x.shape)
+        perm = list(factors)
+        val = perm.pop(source)
+        perm.insert(destination, val)
+        out_str = " ".join(perm)
 
-        if batch_axis < 0:
-            batch_axis = current_batch_dims + batch_axis
-
-        physical_source = batch_axis
-        new_batch_dims = current_batch_dims - 1
-        new_logical_rank = logical_rank + 1
-
-        if logical_destination < 0:
-            logical_destination = new_logical_rank + logical_destination
-
-        physical_destination = new_batch_dims + logical_destination
-
-        result = super().__call__(
-            x,
-            physical_source=physical_source,
-            physical_destination=physical_destination,
-        )
-        return _copy_impl_with_batch_dims(
-            result,
-            new_batch_dims,
-            op=self,
-            kwargs={
-                "batch_axis": batch_axis,
-                "logical_destination": logical_destination,
-            },
-        )
-
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        logical_destination = output.op_kwargs.get("logical_destination")
-        return move_axis_to_batch_dims(cotangent, axis=logical_destination)
+        return OpShardingRuleTemplate.parse(
+            f"{in_str} -> {out_str}", input_shapes
+        ).instantiate(input_shapes, output_shapes)
 
 
 class BroadcastBatchDimsOp(Operation):
+    """Broadcast tensor to have specified batch dimensions."""
+
     @property
     def name(self) -> str:
         return "broadcast_batch_dims"
@@ -162,53 +138,118 @@ class BroadcastBatchDimsOp(Operation):
     def maxpr(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
         return ops.broadcast_to(x, shape)
 
+    def sharding_rule(
+        self,
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        **kwargs: Any,
+    ) -> Any:
+        """Broadcast adds batch dims as prefix, input dims shift to suffix."""
+        from ...core.sharding.propagation import OpShardingRuleTemplate
+
+        if not input_shapes or not output_shapes:
+            return None
+
+        in_shape = input_shapes[0]
+        out_shape = output_shapes[0]
+        
+        in_rank = len(in_shape)
+        out_rank = len(out_shape)
+        n_batch_dims = out_rank - in_rank
+
+        # Output: batch dims get independent factors, then input dims
+        out_factors = [f"d{i}" for i in range(out_rank)]
+        out_mapping = {i: [out_factors[i]] for i in range(out_rank)}
+
+        # Input: dimensions map to output dimensions after batch prefix
+        in_mapping = {}
+        for i in range(in_rank):
+            out_idx = i + n_batch_dims
+            in_mapping[i] = [out_factors[out_idx]]
+
+        return OpShardingRuleTemplate([in_mapping], [out_mapping]).instantiate(
+            input_shapes, output_shapes
+        )
+
     def __call__(self, x: Tensor, *, batch_shape: tuple[int, ...]) -> Tensor:
+        from ...core import Tensor
+        
         logical_shape = tuple(x.shape)
         physical_shape = tuple(batch_shape) + logical_shape
 
         result = super().__call__(x, shape=physical_shape)
-        return _copy_impl_with_batch_dims(result, len(batch_shape))
+        
+        # Update batch_dims to match the new batch shape
+        output = Tensor._create_unsafe(
+            storages=result._storages,
+            values=result._values,
+            traced=result.traced,
+            batch_dims=len(batch_shape),
+        )
+        output.sharding = result.sharding
+        return output
 
 
+# Singleton instances
 _incr_batch_dims_op = IncrBatchDimsOp()
 _decr_batch_dims_op = DecrBatchDimsOp()
-_move_axis_to_batch_dims_op = MoveAxisToBatchDimsOp()
-_move_axis_from_batch_dims_op = MoveAxisFromBatchDimsOp()
+_moveaxis_physical_op = MoveAxisPhysicalOp()
 _broadcast_batch_dims_op = BroadcastBatchDimsOp()
 
 
 def incr_batch_dims(x: Tensor) -> Tensor:
+    """Increment batch_dims counter (first physical dim becomes batch dim)."""
     return _incr_batch_dims_op(x)
 
 
 def decr_batch_dims(x: Tensor) -> Tensor:
+    """Decrement batch_dims counter (first batch dim becomes logical dim)."""
     return _decr_batch_dims_op(x)
 
 
+def moveaxis_physical(x: Tensor, source: int, destination: int) -> Tensor:
+    """Move a physical axis to another physical position."""
+    return _moveaxis_physical_op(x, source=source, destination=destination)
+
+
 def move_axis_to_batch_dims(x: Tensor, axis: int) -> Tensor:
-    return _move_axis_to_batch_dims_op(x, axis=axis)
+    """Move a logical axis into the batch dimensions (3 ops: calc + moveaxis_physical + incr)."""
+    physical_axis = x.batch_dims + (axis if axis >= 0 else len(x.shape) + axis)
+    if physical_axis != 0:
+        x = moveaxis_physical(x, source=physical_axis, destination=0)
+    return incr_batch_dims(x)
 
 
 def move_axis_from_batch_dims(
     x: Tensor, batch_axis: int = 0, logical_destination: int = 0
 ) -> Tensor:
-    return _move_axis_from_batch_dims_op(
-        x, batch_axis=batch_axis, logical_destination=logical_destination
-    )
+    """Move a batch dimension to logical axis (3 ops: calc + moveaxis_physical + decr)."""
+    if x.batch_dims <= 0:
+        raise ValueError("No batch dims to move from")
+    
+    batch_axis = batch_axis if batch_axis >= 0 else x.batch_dims + batch_axis
+    new_batch_dims = x.batch_dims - 1
+    logical_destination = logical_destination if logical_destination >= 0 else (len(x.shape) + 1) + logical_destination
+    physical_dest = new_batch_dims + logical_destination
+    
+    if batch_axis != physical_dest:
+        x = moveaxis_physical(x, source=batch_axis, destination=physical_dest)
+    return decr_batch_dims(x)
 
 
 def broadcast_batch_dims(x: Tensor, batch_shape: tuple[int, ...]) -> Tensor:
+    """Broadcast tensor to have specified batch shape."""
     return _broadcast_batch_dims_op(x, batch_shape=batch_shape)
 
 
 __all__ = [
     "IncrBatchDimsOp",
     "DecrBatchDimsOp",
-    "MoveAxisToBatchDimsOp",
-    "MoveAxisFromBatchDimsOp",
+    "MoveAxisPhysicalOp",
     "BroadcastBatchDimsOp",
     "incr_batch_dims",
     "decr_batch_dims",
+    "moveaxis_physical",
     "move_axis_to_batch_dims",
     "move_axis_from_batch_dims",
     "broadcast_batch_dims",

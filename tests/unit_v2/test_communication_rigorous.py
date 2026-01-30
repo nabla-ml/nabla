@@ -58,7 +58,9 @@ class TestCommunicationRigorous:
         spec = res.sharding
         assert spec.dim_specs[0].is_replicated()
         axes = spec.dim_specs[1].axes
-        assert set(axes) == {"x", "y"}
+        # reduce_scatter on input sharded on 'x' produces output sharded on 'x'
+        # (not on all mesh axes - the 'y' axis is a replica dimension)
+        assert set(axes) == {"x"}
 
     def test_all_reduce_sum_grad_simple(self):
         """Simpler all_reduce grad test without vmap."""

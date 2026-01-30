@@ -32,7 +32,6 @@ class OutputRefs:
         op: Producing Operation.
         op_args: Original input arguments.
         op_kwargs: Original logical keyword arguments.
-        physical_kwargs: Adapted physical keyword arguments.
     """
 
     _refs: tuple[weakref.ref, ...]
@@ -40,7 +39,6 @@ class OutputRefs:
     op: Operation
     op_args: tuple[Any, ...]
     op_kwargs: dict[str, Any] | None
-    physical_kwargs: dict[str, Any] | None = None
 
     def __post_init__(self):
         """Validate that refs and tree_def are consistent."""

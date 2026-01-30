@@ -70,7 +70,7 @@ def apply_auto_reduction(
 
         trace_kwargs = {"mesh": mesh, "reduce_axes": list(reduce_axes)}
         all_reduce_op._setup_output_refs(
-            reduced_tensor, (t,), trace_kwargs, trace_kwargs, t.traced
+            reduced_tensor, (t,), trace_kwargs
         )
 
         return reduced_tensor

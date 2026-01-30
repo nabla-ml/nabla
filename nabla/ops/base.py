@@ -195,7 +195,7 @@ class Operation(ABC):
 
             # 5. Tracing
             # Store resharded_args (not original args) so rehydration has correctly sharded inputs
-            self._setup_output_refs(output, resharded_args, kwargs, kwargs, any_traced)
+            self._setup_output_refs(output, resharded_args, kwargs)
 
             # 6. Post-Processing (JVP)
             # Check for tangents in ORIGINAL args
@@ -275,8 +275,6 @@ class Operation(ABC):
         output: Any,
         args: tuple,
         logical_kwargs: dict,
-        physical_kwargs: dict,
-        traced: bool,
     ) -> None:
         """Set up OutputRefs for tracing support."""
         from ..core import Tensor, pytree
@@ -303,9 +301,6 @@ class Operation(ABC):
         stored_logical_kwargs = (
             pytree.tree_map(to_impl, logical_kwargs) if logical_kwargs else None
         )
-        stored_physical_kwargs = (
-            pytree.tree_map(to_impl, physical_kwargs) if physical_kwargs else None
-        )
 
         output_refs = OutputRefs(
             _refs=weak_refs,
@@ -313,7 +308,6 @@ class Operation(ABC):
             op=self,
             op_args=stored_args,
             op_kwargs=stored_logical_kwargs,
-            physical_kwargs=stored_physical_kwargs,
         )
 
         for idx, impl in enumerate(output_impls):

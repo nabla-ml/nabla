@@ -87,17 +87,29 @@ class ReduceScatterOp(CollectiveOperation):
         if not sharded_tensor.sharding:
             return (sharded_tensor.values, None, None)
 
+        # Get the mesh axes that the scatter dimension is sharded on
+        input_spec = sharded_tensor.sharding
+        scatter_axes = set()
+        if physical_axis < len(input_spec.dim_specs):
+            scatter_axes = set(input_spec.dim_specs[physical_axis].axes or [])
+        
+        # If scatter_axes is empty (input was replicated on this axis), scatter across ALL mesh axes
+        if not scatter_axes and mesh:
+            scatter_axes = set(mesh.axis_names)
+
         # 2. Execution Context
         with GRAPH.graph:
             values = sharded_tensor.values
 
             # Ported logic from maxpr
-            scattered_values = self._scatter_logic(values, physical_axis, mesh=mesh)
+            scattered_values = self._scatter_logic(
+                values, physical_axis, mesh=mesh, scatter_axes=scatter_axes
+            )
 
         # 3. Compute Output Spec
         # Use logical axis; _compute_output_spec converts it.
         output_spec = self._compute_output_spec(
-            sharded_tensor, scattered_values, axis=axis
+            sharded_tensor, scattered_values, axis=axis, scatter_axes=scatter_axes
         )
 
         return (scattered_values, output_spec, mesh)
@@ -107,6 +119,7 @@ class ReduceScatterOp(CollectiveOperation):
         shard_values: list[TensorValue],
         axis: int,
         mesh: DeviceMesh = None,
+        scatter_axes: set[str] = None,
     ) -> list[TensorValue]:
         """Core reduce-scatter implementation (MAX ops or simulation)."""
 
@@ -154,6 +167,14 @@ class ReduceScatterOp(CollectiveOperation):
 
             return scattered
 
+        # Simulation mode: handle grouped execution for multi-axis meshes
+        if scatter_axes and mesh and len(mesh.axis_names) > 1:
+            # Group shards by their coordinates on axes NOT being scattered
+            other_axes = [ax for ax in mesh.axis_names if ax not in scatter_axes]
+            if other_axes:
+                return self._grouped_scatter(shard_values, axis, mesh, scatter_axes, other_axes)
+
+        # Simple case: all shards participate in the same reduce-scatter
         full_result = shard_values[0]
         for sv in shard_values[1:]:
             full_result = ops.add(full_result, sv)
@@ -172,8 +193,57 @@ class ReduceScatterOp(CollectiveOperation):
 
         return scattered
 
+    def _grouped_scatter(
+        self,
+        shard_values: list[TensorValue],
+        axis: int,
+        mesh: DeviceMesh,
+        scatter_axes: set[str],
+        other_axes: list[str],
+    ) -> list[TensorValue]:
+        """Perform reduce-scatter within groups defined by non-scatter axes.
+        
+        This handles multi-axis meshes where we only scatter along specific axes.
+        Shards with the same coordinates on 'other_axes' form a group and
+        participate in the same reduce-scatter operation.
+        """
+        # Group shards by their coordinates on the other axes
+        groups = self._group_shards_by_axes(shard_values, mesh, other_axes)
+        
+        num_total_shards = len(shard_values)
+        new_results = [None] * num_total_shards
+        
+        for key, group_members in groups.items():
+            # Extract the values for this group
+            group_shards = [val for _, val in group_members]
+            group_indices = [idx for idx, _ in group_members]
+            num_in_group = len(group_shards)
+            
+            if num_in_group <= 1:
+                # Only one shard in group - nothing to reduce or scatter
+                for shard_idx, val in group_members:
+                    new_results[shard_idx] = val
+                continue
+            
+            # Reduce within the group
+            full_result = group_shards[0]
+            for sv in group_shards[1:]:
+                full_result = ops.add(full_result, sv)
+            
+            # Scatter: each shard in the group gets a portion
+            shape = full_result.type.shape
+            axis_size = int(shape[axis])
+            chunk_size = axis_size // num_in_group
+            
+            for i, (shard_idx, _) in enumerate(group_members):
+                slices = [slice(None)] * len(shape)
+                slices[axis] = slice(i * chunk_size, (i + 1) * chunk_size)
+                new_results[shard_idx] = full_result[tuple(slices)]
+        
+        return new_results
+
     def _compute_output_spec(self, input_tensor, results, **kwargs):
-        """Output sharding: the scatter axis becomes sharded."""
+        """Output sharding: the scatter axis becomes sharded on the scatter_axes."""
         from ...core.sharding.spec import DimSpec, ShardingSpec
 
         mesh = input_tensor.sharding.mesh if input_tensor.sharding else None
@@ -183,8 +253,14 @@ class ReduceScatterOp(CollectiveOperation):
             rank = len(input_spec.dim_specs)
             new_dim_specs = []
 
-            mesh_axes = mesh.axis_names
-            # target_mesh_axis = mesh_axes[0] if mesh_axes else "unknown" # OLD BUGGY LOGIC
+            # Use only the axes that are actually being scattered across
+            scatter_axes = kwargs.get("scatter_axes", set())
+            if not scatter_axes:
+                # Fallback: use the axes from the input sharding on the target dim
+                kwargs_axis = kwargs.get("axis", 0)
+                target_dim = self._get_physical_axis(input_tensor, kwargs_axis)
+                if target_dim < len(input_spec.dim_specs):
+                    scatter_axes = set(input_spec.dim_specs[target_dim].axes or [])
 
             kwargs_axis = kwargs.get("axis", 0)
             target_dim = self._get_physical_axis(input_tensor, kwargs_axis)
@@ -195,12 +271,8 @@ class ReduceScatterOp(CollectiveOperation):
                 )
 
                 if d == target_dim:
-                    current_axes = sorted(
-                        list(
-                            set(input_d_spec.axes if input_d_spec else [])
-                            | set(mesh_axes)  # Add ALL mesh axes
-                        )
-                    )
+                    # Output is sharded on the scatter_axes (same as input sharding on this dim)
+                    current_axes = sorted(list(scatter_axes))
                     new_dim_specs.append(DimSpec(current_axes))
                 else:
                     new_dim_specs.append(input_d_spec if input_d_spec else DimSpec([]))

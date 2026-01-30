@@ -21,13 +21,13 @@ from .batch import (
     BroadcastBatchDimsOp,
     DecrBatchDimsOp,
     IncrBatchDimsOp,
-    MoveAxisFromBatchDimsOp,
-    MoveAxisToBatchDimsOp,
+    MoveAxisPhysicalOp,
     broadcast_batch_dims,
     decr_batch_dims,
     incr_batch_dims,
     move_axis_from_batch_dims,
     move_axis_to_batch_dims,
+    moveaxis_physical,
 )
 from .indexing import (
     GatherOp,

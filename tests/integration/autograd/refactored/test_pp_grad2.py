@@ -144,44 +144,17 @@ def test_pp_grad_with_bias():
     # We differentiate w.r.t. x (arg 0), weights (arg 1) and biases (arg 2)
     grad_fn = grad(pipeline_loss, argnums=(0, 1, 2))
 
-    print("Calling grad_fn...")
-    sys.stdout.flush()
     x_grad_sharded, w_grad_sharded, b_grad_sharded = grad_fn(
         x_padded_nb, w_sharded, b_sharded, state_sharded, mask_0_sharded, y_nb
     )
-    print("grad_fn returned")
-    sys.stdout.flush()
 
-    print(f"X grad shape: {x_grad_sharded.shape}")
-    print(f"X grad sharding: {x_grad_sharded.sharding}")
-    print(f"W grad shape: {w_grad_sharded.shape}")
-    print(f"W grad sharding: {w_grad_sharded.sharding}")
-    print(f"B grad shape: {b_grad_sharded.shape}")
-    print(f"B grad sharding: {b_grad_sharded.sharding}")
-
-    print(
-        "X grad has open/unknown dims:",
-        (
-            [d.is_open for d in x_grad_sharded.sharding.dim_specs]
-            if x_grad_sharded.sharding
-            else None
-        ),
-    )
-
-    # Skip x grad for now - it has unknown sharding
-    print("Converting X grad to numpy...")
+    # Convert to numpy
     x_grad_all_np = x_grad_sharded.to_numpy()
     # Only compare the non-padded part (first MICRO_BATCHES steps)
     x_grad_np = x_grad_all_np[:MICRO_BATCHES]
-    print(f"X grad numpy shape: {x_grad_np.shape}")
 
-    print("Converting W grad to numpy...")
     w_grad_np = w_grad_sharded.to_numpy()
-    print(f"W grad numpy shape: {w_grad_np.shape}")
-
-    print("Converting B grad to numpy...")
     b_grad_np = b_grad_sharded.to_numpy()
-    print(f"B grad numpy shape: {b_grad_np.shape}")
 
     # 6. Verify against JAX
     print("Running Reference (JAX)...")
