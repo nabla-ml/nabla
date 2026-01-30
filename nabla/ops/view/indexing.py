@@ -67,6 +67,7 @@ class GatherOp(Operation):
         x, indices = primals
         axis = output.op_kwargs.get("axis", 0)
         from ..creation import zeros_like
+
         gx = scatter(zeros_like(x), indices, cotangent, axis=axis)
         return (gx, None)
 

@@ -17,31 +17,45 @@ MICRO_BATCHES = 8
 MICRO_BATCH_SIZE = 4
 DIM = 16
 
+
 def stage_compute(x, w, b):
     """Simple MLP layer with bias: ReLU(X @ W + B)."""
     return ops.relu(ops.matmul(x, w) + b)
 
-def pipeline_step(current_state, fresh_input, weight_stack, bias_stack, mask_0, step_fn, perm):
+
+def pipeline_step(
+    current_state, fresh_input, weight_stack, bias_stack, mask_0, step_fn, perm
+):
     """Single step of the GPipe pipeline with bias handling."""
     # Compute sharded step across all stages (vmapped)
     computed = step_fn(current_state, weight_stack, bias_stack)
-    
+
     # Shift activations to the right (circular: i -> i+1)
     shifted = communication.ppermute(computed, perm)
-    
+
     # Extract result from Stage 0 (which holds the wrapped Stage N-1 output)
     res_part = ops.where(mask_0, shifted, ops.zeros_like(shifted))
     result = ops.reduce_sum(res_part, axis=0)
 
     # Inject fresh input into Stage 0, overwriting the wrapped data
     next_state = ops.where(mask_0, fresh_input, shifted)
-    
+
     return next_state, result
 
-def pipeline_loop(padded_inputs, weight_stack, bias_stack, current_state, mask_0, step_fn, perm, total_steps):
+
+def pipeline_loop(
+    padded_inputs,
+    weight_stack,
+    bias_stack,
+    current_state,
+    mask_0,
+    step_fn,
+    perm,
+    total_steps,
+):
     """Unrolled GPipe execution loop."""
     results = []
-    
+
     for t in range(total_steps):
         # A. Fetch Input (Slice + Squeeze)
         start_idx = (t, 0, 0)
@@ -49,10 +63,13 @@ def pipeline_loop(padded_inputs, weight_stack, bias_stack, current_state, mask_0
         fraction = ops.slice_tensor(padded_inputs, start=start_idx, size=slice_size)
         fresh = ops.squeeze(fraction, axis=0)
 
-        current_state, res = pipeline_step(current_state, fresh, weight_stack, bias_stack, mask_0, step_fn, perm)
+        current_state, res = pipeline_step(
+            current_state, fresh, weight_stack, bias_stack, mask_0, step_fn, perm
+        )
         results.append(res)
 
     return ops.stack(results, axis=0), current_state
+
 
 def test_pp_grad_with_bias():
     # 1. Setup Mesh
@@ -60,31 +77,33 @@ def test_pp_grad_with_bias():
     print(f"Running GPipe Grads Test (Weights + Bias) on Mesh: {mesh}")
 
     np.random.seed(42)
-    
+
     # 2. Data Setup
     # Weights: (Stages, In, Out)
     w_np = np.random.randn(STAGES, DIM, DIM).astype(np.float32)
-    # Bias: (Stages, Out) -> We add a 1 for broadcasting compatibility if needed, 
+    # Bias: (Stages, Out) -> We add a 1 for broadcasting compatibility if needed,
     # but vmap handles the first dim as the parallel axis.
     b_np = np.random.randn(STAGES, DIM).astype(np.float32)
-    
+
     x_np = np.random.randn(MICRO_BATCHES, MICRO_BATCH_SIZE, DIM).astype(np.float32)
     y_np = np.random.randn(MICRO_BATCHES, MICRO_BATCH_SIZE, DIM).astype(np.float32)
 
     w_spec = [DimSpec.from_raw(d) for d in P("stage", None, None)]
     b_spec = [DimSpec.from_raw(d) for d in P("stage", None)]
-    
+
     w_sharded = ops.shard(nb.Tensor.from_dlpack(w_np), mesh, w_spec).realize()
     b_sharded = ops.shard(nb.Tensor.from_dlpack(b_np), mesh, b_spec).realize()
 
     # Pad inputs with zeros for flush phase (Total steps = MB + STAGES)
     padding = np.zeros((STAGES, MICRO_BATCH_SIZE, DIM), dtype=np.float32)
     x_padded_nb = nb.Tensor.from_dlpack(np.concatenate([x_np, padding], axis=0))
-    y_nb = nb.Tensor.from_dlpack(y_np) 
+    y_nb = nb.Tensor.from_dlpack(y_np)
 
     # Initial State (Zeros) - used as the carry across pipeline steps
-    state_sharded = ops.shard(nb.zeros((STAGES, MICRO_BATCH_SIZE, DIM), dtype=DType.float32), mesh, w_spec).realize()
-    
+    state_sharded = ops.shard(
+        nb.zeros((STAGES, MICRO_BATCH_SIZE, DIM), dtype=DType.float32), mesh, w_spec
+    ).realize()
+
     # Injection Mask (Stage 0)
     mask_np = np.eye(STAGES, 1).reshape(STAGES, 1, 1).astype(bool)
     mask_0_sharded = ops.shard(nb.Tensor.from_dlpack(mask_np), mesh, w_spec).realize()
@@ -93,15 +112,19 @@ def test_pp_grad_with_bias():
     idx = mesh.axis_names.index("stage")
     size = mesh.shape[idx]
     perm = [(i, (i + 1) % size) for i in range(size)]
-    
+
     # Auto-vectorize the stage calculation over the 'stage' axis
     # in_axes=(0, 0, 0) means x, w, and b are all sharded/vmapped over dim 0
-    step_fn = vmap(stage_compute, in_axes=(0, 0, 0), out_axes=0, spmd_axis_name="stage", mesh=mesh)
+    step_fn = vmap(
+        stage_compute, in_axes=(0, 0, 0), out_axes=0, spmd_axis_name="stage", mesh=mesh
+    )
 
     # 4. Define Loss Function for Grad
     def pipeline_loss(inputs, weights, biases, state, mask, targets):
         total_steps = MICRO_BATCHES + STAGES
-        stream_outputs, _ = pipeline_loop(inputs, weights, biases, state, mask, step_fn, perm, total_steps)
+        stream_outputs, _ = pipeline_loop(
+            inputs, weights, biases, state, mask, step_fn, perm, total_steps
+        )
 
         # Slice valid range [STAGES : STAGES+MB] where results start emerging
         indices = ops.arange(STAGES, STAGES + MICRO_BATCHES, dtype=DType.int64)
@@ -114,39 +137,48 @@ def test_pp_grad_with_bias():
     # 5. Compute Gradients
     print("Computing Gradients (X, W, B)...")
     import sys
+
     sys.stdout.flush()
     from nabla.core.autograd import grad
-    
+
     # We differentiate w.r.t. x (arg 0), weights (arg 1) and biases (arg 2)
     grad_fn = grad(pipeline_loss, argnums=(0, 1, 2))
-    
+
     print("Calling grad_fn...")
     sys.stdout.flush()
-    x_grad_sharded, w_grad_sharded, b_grad_sharded = grad_fn(x_padded_nb, w_sharded, b_sharded, state_sharded, mask_0_sharded, y_nb)
+    x_grad_sharded, w_grad_sharded, b_grad_sharded = grad_fn(
+        x_padded_nb, w_sharded, b_sharded, state_sharded, mask_0_sharded, y_nb
+    )
     print("grad_fn returned")
     sys.stdout.flush()
-    
+
     print(f"X grad shape: {x_grad_sharded.shape}")
     print(f"X grad sharding: {x_grad_sharded.sharding}")
     print(f"W grad shape: {w_grad_sharded.shape}")
     print(f"W grad sharding: {w_grad_sharded.sharding}")
     print(f"B grad shape: {b_grad_sharded.shape}")
     print(f"B grad sharding: {b_grad_sharded.sharding}")
-    
-    print("X grad has open/unknown dims:", 
-          [d.is_open for d in x_grad_sharded.sharding.dim_specs] if x_grad_sharded.sharding else None)
-    
+
+    print(
+        "X grad has open/unknown dims:",
+        (
+            [d.is_open for d in x_grad_sharded.sharding.dim_specs]
+            if x_grad_sharded.sharding
+            else None
+        ),
+    )
+
     # Skip x grad for now - it has unknown sharding
     print("Converting X grad to numpy...")
     x_grad_all_np = x_grad_sharded.to_numpy()
     # Only compare the non-padded part (first MICRO_BATCHES steps)
     x_grad_np = x_grad_all_np[:MICRO_BATCHES]
     print(f"X grad numpy shape: {x_grad_np.shape}")
-    
+
     print("Converting W grad to numpy...")
     w_grad_np = w_grad_sharded.to_numpy()
     print(f"W grad numpy shape: {w_grad_np.shape}")
-    
+
     print("Converting B grad to numpy...")
     b_grad_np = b_grad_sharded.to_numpy()
     print(f"B grad numpy shape: {b_grad_np.shape}")
@@ -155,44 +187,47 @@ def test_pp_grad_with_bias():
     print("Running Reference (JAX)...")
     import jax
     import jax.numpy as jnp
+
     jax.config.update("jax_enable_x64", False)
-    
+
     def jax_ref(x, params_w, params_b, y):
-        def apply(curr, w, b): return jax.nn.relu(curr @ w + b)
+        def apply(curr, w, b):
+            return jax.nn.relu(curr @ w + b)
+
         preds = []
         for i in range(MICRO_BATCHES):
             a = x[i]
             # Sequential application through stages
-            for w, b in zip(params_w, params_b): 
+            for w, b in zip(params_w, params_b):
                 a = apply(a, w, b)
             preds.append(a)
         preds = jnp.stack(preds)
-        return jnp.mean((preds - y)**2)
+        return jnp.mean((preds - y) ** 2)
 
     grad_ref_fn = jax.jit(jax.grad(jax_ref, argnums=(0, 1, 2)))
     x_grad_ref, w_grad_ref, b_grad_ref = grad_ref_fn(x_np, w_np, b_np, y_np)
-    
+
     # 7. Compare
     if x_grad_np is not None:
         x_diff = np.max(np.abs(x_grad_np - x_grad_ref))
     else:
-        x_diff = 0.0 # Skip comparison
-        
+        x_diff = 0.0  # Skip comparison
+
     w_diff = np.max(np.abs(w_grad_np - w_grad_ref))
     b_diff = np.max(np.abs(b_grad_np - b_grad_ref))
-    
+
     if x_grad_np is not None:
         print(f"Max X Grad Diff:      {x_diff:.6f}")
     else:
         print(f"Max X Grad Diff:      N/A (Skipped)")
-        
+
     print(f"Max Weight Grad Diff: {w_diff:.6f}")
     print(f"Max Bias Grad Diff:   {b_diff:.6f}")
-    
+
     passed = (w_diff < 5e-4) and (b_diff < 5e-4)
     if x_grad_np is not None:
         passed = passed and (x_diff < 5e-4)
-    
+
     if passed:
         print("✅ SUCCESS: All (Checked) Gradients Match")
     else:
@@ -201,6 +236,7 @@ def test_pp_grad_with_bias():
             print("Weight Grad Mismatch!")
         if b_diff >= 5e-4:
             print("Bias Grad Mismatch!")
+
 
 if __name__ == "__main__":
     test_pp_grad_with_bias()

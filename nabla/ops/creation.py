@@ -305,11 +305,10 @@ normal = gaussian
 def zeros_like(x: Any) -> Any:
     """Create a tensor of zeros with the same shape/dtype/device/sharding as x."""
     from ..core.tensor.api import Tensor
-    
+
     if not isinstance(x, Tensor):
         return zeros(x.shape, dtype=x.dtype, device=x.device)
-    
-    
+
     # Use physical global shape (handles batch_dims cases)
     # The _impl access is safe because we check isinstance(Tensor)
     shape = x._impl.physical_global_shape
@@ -317,80 +316,81 @@ def zeros_like(x: Any) -> Any:
     # Use global logical shape so that shard() can correctly slice it down
     # (MAX compiler optimizes zeros(global) -> shard -> zeros(local))
     result = zeros(shape, dtype=x.dtype, device=x.device)
-    
+
     # Inherit batch_dims
     result.batch_dims = x.batch_dims
-    
+
     # If x is sharded, shard the result the same way
     if x.sharding and x.sharding.mesh:
         from .communication import shard
+
         result = shard(
             result,
             x.sharding.mesh,
             x.sharding.dim_specs,
             replicated_axes=x.sharding.replicated_axes,
         )
-    
+
     return result
 
 
 def ones_like(x: Any) -> Any:
     """Create a tensor of ones with the same shape/dtype/device/sharding as x."""
     from ..core.tensor.api import Tensor
-    
+
     if not isinstance(x, Tensor):
         return ones(x.shape, dtype=x.dtype, device=x.device)
-    
-    
+
     # Use physical global shape
     shape = x._impl.physical_global_shape
 
     # Use global logical shape
     result = ones(shape, dtype=x.dtype, device=x.device)
-    
+
     # Inherit batch_dims
     result.batch_dims = x.batch_dims
-    
+
     # If x is sharded, shard the result the same way
     if x.sharding and x.sharding.mesh:
         from .communication import shard
+
         result = shard(
             result,
             x.sharding.mesh,
             x.sharding.dim_specs,
             replicated_axes=x.sharding.replicated_axes,
         )
-    
+
     return result
 
 
 def full_like(x: Any, value: Number) -> Any:
     """Create a tensor filled with value with the same shape/dtype/device/sharding as x."""
     from ..core.tensor.api import Tensor
-    
+
     if not isinstance(x, Tensor):
         return full(x.shape, value, dtype=x.dtype, device=x.device)
-    
-    
+
     # Use physical global shape
     shape = x._impl.physical_global_shape
 
     # Use global logical shape
     result = full(shape, value, dtype=x.dtype, device=x.device)
-    
+
     # Inherit batch_dims
     result.batch_dims = x.batch_dims
-    
+
     # If x is sharded, shard the result the same way
     if x.sharding and x.sharding.mesh:
         from .communication import shard
+
         result = shard(
             result,
             x.sharding.mesh,
             x.sharding.dim_specs,
             replicated_axes=x.sharding.replicated_axes,
         )
-    
+
     return result
 
 

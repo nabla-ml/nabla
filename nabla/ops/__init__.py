@@ -74,7 +74,16 @@ from .multi_output import (
     split,
     unbind,
 )
-from .reduction import MeanOp, ReduceMaxOp, ReduceMinOp, ReduceSumOp, mean, reduce_max, reduce_min, reduce_sum
+from .reduction import (
+    MeanOp,
+    ReduceMaxOp,
+    ReduceMinOp,
+    ReduceSumOp,
+    mean,
+    reduce_max,
+    reduce_min,
+    reduce_sum,
+)
 from .unary import (
     ExpOp,
     NegOp,

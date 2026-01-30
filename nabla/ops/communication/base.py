@@ -19,33 +19,35 @@ class CollectiveOperation(Operation):
     Handles value hydration, graph execution (maxpr), and output wrapping/sharding update.
     """
 
-    # Legacy execute and maxpr_all methods have been removed. 
+    # Legacy execute and maxpr_all methods have been removed.
     # All communication operations now implement physical_execute.
 
     def infer_sharding_spec(self, args: Any, mesh: DeviceMesh, kwargs: dict) -> Any:
         """Default adaptation: validate inputs and compute output spec."""
         # This implementation allows subclasses to strictly rely on _compute_output_spec
         # for both adaptation and execution phases.
-        
+
         if not args:
             return None, [], False
-            
+
         input_tensor = args[0]
         input_sharding = input_tensor.sharding
-        
+
         # Validation: check if we should proceed (must have sharding)
         if not input_sharding:
-             # If no input sharding, typically no output sharding unless op creates it.
-             # Most comm ops require input sharding.
-             return None, [None] * len(args), False
+            # If no input sharding, typically no output sharding unless op creates it.
+            # Most comm ops require input sharding.
+            return None, [None] * len(args), False
 
         # Compute output sharding using the subclass logic
         # We pass None for results locally since this is logical inference
         output_sharding = self._compute_output_spec(input_tensor, None, **kwargs)
-        
+
         # Default: preserve input sharding for all args
-        input_shardings = [arg.sharding if hasattr(arg, "sharding") else None for arg in args]
-        
+        input_shardings = [
+            arg.sharding if hasattr(arg, "sharding") else None for arg in args
+        ]
+
         return output_sharding, input_shardings, False
 
     def _derive_mesh(self, tensor, kwargs):
@@ -58,39 +60,41 @@ class CollectiveOperation(Operation):
         """Convert logical axis to physical axis, accounting for batch_dims."""
         if axis is None:
             return None
-        
+
         # Current batch dims (inserted by vmap) are always at the front
         batch_dims = tensor.batch_dims
-        logical_rank = len(tensor.shape) # .shape is logical shape if batch_dims > 0? 
+        logical_rank = len(tensor.shape)  # .shape is logical shape if batch_dims > 0?
         # Wait, wrapper Tensor.shape usually returns logical shape if batch_dims > 0?
         # Let's check Tensor implementation.
         # Assuming Tensor.shape is logical shape:
-        
+
         # If we access tensor.shape, it returns the shape MINUS batch dims?
         # Let's assume standard behavior:
         # axis < 0 -> axis + logical_rank
         # physical_axis = batch_dims + axis
-        
-        # To be safe, let's use the full rank from internal values if possible, 
+
+        # To be safe, let's use the full rank from internal values if possible,
         # but Tensor wrapper abstracts this.
         # Let's trust tensor.shape is logical.
-        
+
         logical_rank = len(tensor.shape)
         norm_axis = axis if axis >= 0 else logical_rank + axis
-        
+
         if norm_axis < 0 or norm_axis >= logical_rank:
-             raise ValueError(f"Axis {axis} out of bounds for logical rank {logical_rank}")
-             
+            raise ValueError(
+                f"Axis {axis} out of bounds for logical rank {logical_rank}"
+            )
+
         return batch_dims + norm_axis
 
     def _get_sharded_axis_name(self, tensor, axis):
         """Get the name of the mesh axis that a tensor is sharded on at the given dimension."""
         if axis is None or not hasattr(tensor, "sharding") or not tensor.sharding:
             return None
-        
+
         sharding = tensor.sharding
         physical_axis = self._get_physical_axis(tensor, axis)
-        
+
         if 0 <= physical_axis < len(sharding.dim_specs):
             dim_spec = sharding.dim_specs[physical_axis]
             if dim_spec.axes:
@@ -101,10 +105,10 @@ class CollectiveOperation(Operation):
         """Determine which mesh axes to reduce over."""
         reduce_axes = kwargs.get("reduce_axes")
         if reduce_axes is not None:
-             if isinstance(reduce_axes, str):
-                 return {reduce_axes}
-             return set(reduce_axes)
-        
+            if isinstance(reduce_axes, str):
+                return {reduce_axes}
+            return set(reduce_axes)
+
         # Fallback: reduce over all partial axes if none specified
         if hasattr(tensor, "sharding") and tensor.sharding:
             if tensor.sharding.partial_sum_axes:

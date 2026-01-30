@@ -139,18 +139,21 @@ class MatmulOp(Operation):
 
     def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.matmul(args[0], args[1])
-        
+
     def physical_execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for Matmul."""
         from ..core import GRAPH
         from ..core.sharding import spmd
-        
+
         mesh = spmd.get_mesh_from_args(args)
-        
+
         with GRAPH.graph:
-            shard_results = spmd.execute_on_shards(self.maxpr, args, kwargs, mesh, op=self)
-        
+            shard_results = spmd.execute_on_shards(
+                self.maxpr, args, kwargs, mesh, op=self
+            )
+
         return (shard_results, None, mesh)
+
     def __call__(self, x: Tensor, y: Tensor) -> Tensor:
         from . import view as view_ops
         from .base import ensure_tensor
@@ -169,16 +172,18 @@ class MatmulOp(Operation):
         # 1. Logical Broadcasting
         x_logical = tuple(int(d) for d in x.shape)
         y_logical = tuple(int(d) for d in y.shape)
-        
+
         # Matmul broadcasting: align batch prefixes
         x_batch_logical = x_logical[:-2]
         y_batch_logical = y_logical[:-2]
-        
+
         if x_batch_logical != y_batch_logical:
             # Standard numpy matmul broadcasting for batch dims
             # We can use BinaryOperation's helper if we had access, or just simple align
-            target_batch = self._broadcast_batch_shapes(x_batch_logical, y_batch_logical)
-            
+            target_batch = self._broadcast_batch_shapes(
+                x_batch_logical, y_batch_logical
+            )
+
             if x_batch_logical != target_batch:
                 x = view_ops.broadcast_to(x, target_batch + x_logical[-2:])
             if y_batch_logical != target_batch:
@@ -188,7 +193,9 @@ class MatmulOp(Operation):
         y_physical_batch = y.physical_global_shape[:-2]
 
         if x_physical_batch != y_physical_batch:
-            target_batch = self._broadcast_batch_shapes(x_physical_batch, y_physical_batch)
+            target_batch = self._broadcast_batch_shapes(
+                x_physical_batch, y_physical_batch
+            )
             if x_physical_batch != target_batch:
                 x = view_ops.broadcast_to_physical(x, target_batch + x_logical[-2:])
             if y_physical_batch != target_batch:
@@ -206,7 +213,9 @@ class MatmulOp(Operation):
 
         return result
 
-    def _broadcast_batch_shapes(self, s1: tuple[int, ...], s2: tuple[int, ...]) -> tuple[int, ...]:
+    def _broadcast_batch_shapes(
+        self, s1: tuple[int, ...], s2: tuple[int, ...]
+    ) -> tuple[int, ...]:
         s1 = tuple(s1)
         s2 = tuple(s2)
         if len(s1) > len(s2):
@@ -215,12 +224,15 @@ class MatmulOp(Operation):
             s1 = (1,) * (len(s2) - len(s1)) + s1
         res = []
         for d1, d2 in zip(s1, s2):
-            if d1 == d2: res.append(d1)
-            elif d1 == 1: res.append(d2)
-            elif d2 == 1: res.append(d1)
-            else: raise ValueError(f"Batch shapes {s1} and {s2} incompatible")
+            if d1 == d2:
+                res.append(d1)
+            elif d1 == 1:
+                res.append(d2)
+            elif d2 == 1:
+                res.append(d1)
+            else:
+                raise ValueError(f"Batch shapes {s1} and {s2} incompatible")
         return tuple(res)
-
 
     def sharding_rule(
         self,

@@ -144,17 +144,10 @@ class ComputeGraph:
         """Main entry point: Evaluates specific tensors and their dependencies."""
         from ..common.pytree import tree_leaves
         from ..tensor.api import Tensor
-        
-        import sys as _sys
-        _sys.stderr.write(f"\n[ENGINE.evaluate] Starting, tensor shape={tensor.shape}\n")
-        _sys.stderr.flush()
 
         sys.last_value = None
         sys.last_traceback = None
         gc.collect()
-        
-        _sys.stderr.write(f"[ENGINE.evaluate] After gc\n")
-        _sys.stderr.flush()
 
         seen: set[int] = set()
         targets: list[Tensor] = []
@@ -175,17 +168,11 @@ class ComputeGraph:
 
         for t in self.unrealized.values():
             add_target(t)
-            
-        _sys.stderr.write(f"[ENGINE.evaluate] targets={len(targets)}, calling _evaluate_normal\n")
-        _sys.stderr.flush()
 
         return self._evaluate_normal(targets, return_model=return_model)
 
     def _evaluate_normal(self, unrealized: list[Tensor], return_model: bool) -> Any:
         """Standard compilation path handling both single-device and eager-sharded execution."""
-        import sys as _sys
-        _sys.stderr.write(f"[_evaluate_normal] Starting with {len(unrealized)} tensors\n")
-        _sys.stderr.flush()
 
         if DEBUG_LAZY_EVAL:
             print("=" * 70)
@@ -201,20 +188,9 @@ class ComputeGraph:
         all_values = []
         value_map = []
 
-        _sys.stderr.write(f"[_evaluate_normal] About to enter graph context\n")
-        _sys.stderr.flush()
-        
         with self.graph:
-            _sys.stderr.write(f"[_evaluate_normal] Inside graph context\n")
-            _sys.stderr.flush()
-            
             for i, t in enumerate(unrealized):
-                _sys.stderr.write(f"[_evaluate_normal] Processing tensor {i}, epoch check: {t._impl.values_epoch} vs {self.epoch}\n")
-                _sys.stderr.flush()
-
                 if t._impl.values_epoch != self.epoch:
-                    _sys.stderr.write(f"[_evaluate_normal] Clearing stale values\n")
-                    _sys.stderr.flush()
                     if DEBUG_LAZY_EVAL:
                         print(
                             f"[LAZY DEBUG] Clearing stale values for target tensor {id(t)} "
@@ -222,20 +198,10 @@ class ComputeGraph:
                         )
                     t._impl._values = []
 
-                _sys.stderr.write(f"[_evaluate_normal] Checking if need to add_input\n")
-                _sys.stderr.flush()
-                
                 if not t._impl._values and t._impl.is_realized:
-                    _sys.stderr.write(f"[_evaluate_normal] Adding as input\n")
-                    _sys.stderr.flush()
                     self.add_input(t)
 
-                _sys.stderr.write(f"[_evaluate_normal] Getting values\n")
-                _sys.stderr.flush()
-                
                 values = t._impl._values
-                _sys.stderr.write(f"[_evaluate_normal] Got {len(values) if values else 0} values\n")
-                _sys.stderr.flush()
                 if not values:
                     print(f"FAILED TENSOR {id(t)} info:")
                     print(f"  sharding: {t.sharding}")
@@ -248,50 +214,22 @@ class ComputeGraph:
                         f"Attempting to evaluate tensor {id(t)} with no values/storage"
                     )
 
-                _sys.stderr.write(f"[_evaluate_normal] Checking multi-shard\n")
-                _sys.stderr.flush()
-                
                 if values and len(values) > 1:
-                    _sys.stderr.write(f"[_evaluate_normal] Multi-shard path\n")
-                    _sys.stderr.flush()
                     for shard_idx, val in enumerate(values):
                         all_values.append(val)
                         value_map.append((t, shard_idx))
                 else:
-                    _sys.stderr.write(f"[_evaluate_normal] Single value path, appending values[0]\n")
-                    _sys.stderr.flush()
-                    _sys.stderr.write(f"[_evaluate_normal] values[0] type: {type(values[0])}\n")
-                    _sys.stderr.flush()
                     all_values.append(values[0])
-                    _sys.stderr.write(f"[_evaluate_normal] Appended to all_values\n")
-                    _sys.stderr.flush()
                     value_map.append((t, None))
-                    _sys.stderr.write(f"[_evaluate_normal] Appended to value_map\n")
-                    _sys.stderr.flush()
 
-            _sys.stderr.write(f"[_evaluate_normal] Loop done, calling graph.output with {len(all_values)} values\n")
-            _sys.stderr.flush()
-            _sys.stderr.write(f"[_evaluate_normal] all_values[0]: {all_values[0] if all_values else 'empty'}\n")
-            _sys.stderr.flush()
             seed = ops.random._peek_seed()
-            _sys.stderr.write(f"[_evaluate_normal] Got seed: {seed}\n")
-            _sys.stderr.flush()
             self.graph.output(seed, *all_values)
-            _sys.stderr.write(f"[_evaluate_normal] graph.output done\n")
-            _sys.stderr.write(f"[_evaluate_normal] Graph after output: {self.graph}\n")
-            _sys.stderr.flush()
-        
-        _sys.stderr.write(f"[_evaluate_normal] Exited graph context\n")
-        _sys.stderr.flush()
 
         if DEBUG_LAZY_EVAL:
             print("[LAZY EVAL] MAX Graph:")
             print(self.graph)
             print("=" * 70)
 
-        _sys.stderr.write(f"[_evaluate_normal] Calling _compile_and_execute_with_map\n")
-        _sys.stderr.flush()
-        
         return self._compile_and_execute_with_map(unrealized, value_map, return_model)
 
     def _compile_and_execute_with_map(
@@ -301,43 +239,20 @@ class ComputeGraph:
         return_model: bool,
     ) -> Any:
         """Compiles and executes with sharded tensor support."""
-        import sys as _sys
-        _sys.stderr.write(f"[_compile_and_execute_with_map] Starting\n")
-        _sys.stderr.flush()
 
         try:
-            _sys.stderr.write(f"[_compile_and_execute_with_map] About to lower\n")
-            _sys.stderr.flush()
             module = _core.Operation._from_cmlir(self.graph._module.operation)
-            _sys.stderr.write(f"[_compile_and_execute_with_map] Got module\n")
-            _sys.stderr.flush()
             _core.lower(module, [builtin.passes.RemoveDeadValues()])
-            _sys.stderr.write(f"[_compile_and_execute_with_map] Lowered\n")
-            _sys.stderr.flush()
             _remove_unused_arguments(self.graph)
-            _sys.stderr.write(f"[_compile_and_execute_with_map] Removed unused args\n")
-            _sys.stderr.flush()
         except Exception as e:
             if DEBUG_LAZY_EVAL:
                 print(f"[LAZY EVAL ERROR] Optimization failed: {e}")
             raise
 
         try:
-            _sys.stderr.write(f"[_compile_and_execute_with_map] Building inputs\n")
-            _sys.stderr.flush()
             inputs = [self.sources[inp._mlir_value] for inp in self.graph.inputs]
-            _sys.stderr.write(f"[_compile_and_execute_with_map] Got {len(inputs)} inputs, {len(self.graph.inputs)} graph inputs\n")
-            _sys.stderr.flush()
-            _sys.stderr.write(f"[_compile_and_execute_with_map] Graph before load:\n{self.graph}\n")
-            _sys.stderr.flush()
-            _sys.stderr.write(f"[_compile_and_execute_with_map] Loading model...\n")
-            _sys.stderr.flush()
             model = _session().load(self.graph)
-            _sys.stderr.write(f"[_compile_and_execute_with_map] Model loaded, executing\n")
-            _sys.stderr.flush()
             seed_val, *results = model(*inputs)
-            _sys.stderr.write(f"[_compile_and_execute_with_map] Model executed\n")
-            _sys.stderr.flush()
         except BaseException as e:
 
             self.graph._erase_output_if_present()

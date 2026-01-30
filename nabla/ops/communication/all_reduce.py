@@ -50,23 +50,23 @@ class AllReduceOp(CollectiveOperation):
     def physical_execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
         """Sum-reduce across shards (Physical)."""
         from ...core import GRAPH, Tensor
-        
+
         sharded_tensor: Tensor = args[0]
         reduce_op = kwargs.get("reduce_op", "sum")
         reduce_axes = kwargs.get("reduce_axes")
-        
+
         # 1. Derive Metadata
         mesh = self._derive_mesh(sharded_tensor, kwargs)
         reduce_axes = self._get_reduce_axes(sharded_tensor, kwargs)
-        
+
         # 2. Validation & Early Exit
         if not sharded_tensor.sharding:
-             return (sharded_tensor.values, sharded_tensor.sharding, None)
-            
+            return (sharded_tensor.values, sharded_tensor.sharding, None)
+
         # 3. Execution Context
         with GRAPH.graph:
             values = sharded_tensor.values
-            
+
             # Ported logic from maxpr
             reduced_values = self._reduce_logic(
                 values, mesh=mesh, reduce_op=reduce_op, reduce_axes=reduce_axes
@@ -161,20 +161,20 @@ class AllReduceOp(CollectiveOperation):
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for AllReduce (sum): assign replicated gradient to shards."""
         input_tensor = primals[0] if isinstance(primals, (list, tuple)) else primals
-        
+
         if not input_tensor.sharding:
             return cotangent
 
         from ...core.sharding import spmd
-        
+
         cotangent.hydrate()
-        
+
         return spmd.create_sharded_output(
             cotangent.values,
             input_tensor.sharding,
             cotangent.traced,
             cotangent.batch_dims,
-            input_tensor.sharding.mesh
+            input_tensor.sharding.mesh,
         )
 
     def _compute_output_spec(self, input_tensor, results, **kwargs):
@@ -193,10 +193,14 @@ class AllReduceOp(CollectiveOperation):
         if reduce_axes is None:
             # Full reduction over all sharding axes -> Output is fully replicated
             new_dim_specs = [DimSpec([]) for _ in input_tensor.sharding.dim_specs]
-            return ShardingSpec(input_tensor.sharding.mesh, new_dim_specs, partial_sum_axes=set())
+            return ShardingSpec(
+                input_tensor.sharding.mesh, new_dim_specs, partial_sum_axes=set()
+            )
 
         new_spec = input_tensor.sharding.clone()
-        new_spec.partial_sum_axes = set(ax for ax in new_spec.partial_sum_axes if ax not in reduce_axes)
+        new_spec.partial_sum_axes = set(
+            ax for ax in new_spec.partial_sum_axes if ax not in reduce_axes
+        )
 
         for ds in new_spec.dim_specs:
             ds.axes = tuple(ax for ax in ds.axes if ax not in reduce_axes)
@@ -232,7 +236,9 @@ class AllReduceOp(CollectiveOperation):
             group_shards = [val for _, val in group_members]
 
             if len(group_shards) > 1:
-                curr_reduced = self._reduce_logic(group_shards, mesh=mesh, reduce_op=reduce_op)
+                curr_reduced = self._reduce_logic(
+                    group_shards, mesh=mesh, reduce_op=reduce_op
+                )
             else:
                 curr_reduced = [group_shards[0]]
 
@@ -254,12 +260,12 @@ class PMeanOp(CollectiveOperation):
     def physical_execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
         """Compute mean across shards (Physical)."""
         from ...core import GRAPH
-        
+
         # 1. Perform AllReduce first
         shard_values, output_spec, mesh = all_reduce_op.physical_execute(args, kwargs)
-        
+
         axis_name = kwargs.get("axis_name")
-        
+
         # 2. Rescale
         with GRAPH.graph:
             if axis_name and mesh:

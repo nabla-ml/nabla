@@ -58,43 +58,41 @@ class ReduceScatterOp(CollectiveOperation):
         if isinstance(primals, (list, tuple)) and len(primals) > 1:
             axis = primals[1]
         else:
-            axis = 0 # Fallback 
-            
+            axis = 0  # Fallback
+
         return all_gather(cotangent, axis=axis)
 
     def physical_execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
         """Sum-reduce across shards then scatter the result (Physical)."""
         from ...core import GRAPH, Tensor
-        
+
         sharded_tensor: Tensor = args[0]
-        
+
         # Handle positional or keyword axis
         if len(args) > 1:
             axis = args[1]
         else:
             axis = kwargs.get("axis")
-            
+
         if axis is None:
             raise ValueError("ReduceScatterOp requires an 'axis' argument.")
-            
+
         # 1. Derive Metadata
         mesh = self._derive_mesh(sharded_tensor, kwargs)
-        
+
         # Calculate physical axis
         physical_axis = self._get_physical_axis(sharded_tensor, axis)
-        
+
         # 2. Validation & Early Exit
         if not sharded_tensor.sharding:
-             return (sharded_tensor.values, None, None)
+            return (sharded_tensor.values, None, None)
 
         # 2. Execution Context
         with GRAPH.graph:
             values = sharded_tensor.values
-            
+
             # Ported logic from maxpr
-            scattered_values = self._scatter_logic(
-                values, physical_axis, mesh=mesh
-            )
+            scattered_values = self._scatter_logic(values, physical_axis, mesh=mesh)
 
         # 3. Compute Output Spec
         # Use logical axis; _compute_output_spec converts it.
@@ -200,7 +198,7 @@ class ReduceScatterOp(CollectiveOperation):
                     current_axes = sorted(
                         list(
                             set(input_d_spec.axes if input_d_spec else [])
-                            | set(mesh_axes) # Add ALL mesh axes
+                            | set(mesh_axes)  # Add ALL mesh axes
                         )
                     )
                     new_dim_specs.append(DimSpec(current_axes))

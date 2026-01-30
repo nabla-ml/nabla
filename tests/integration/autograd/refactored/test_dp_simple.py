@@ -4,6 +4,7 @@ from nabla import ops
 from nabla.core.sharding import DeviceMesh, PartitionSpec as P, DimSpec
 from max.dtype import DType
 
+
 def test_dp_simple():
     DP_SIZE = 2
     DIM = 4
@@ -30,27 +31,30 @@ def test_dp_simple():
         return ops.mean(diff * diff)
 
     from nabla.core.autograd import grad
+
     grad_fn = grad(loss_fn, argnums=1)
-    
+
     w_grad = grad_fn(x_nb, w_nb, y_nb)
     w_grad_np = w_grad.to_numpy()
 
     # JAX
     import jax
     import jax.numpy as jnp
+
     def jax_loss(x, w, y):
         pred = x @ w
-        return jnp.mean((pred - y)**2)
-    
+        return jnp.mean((pred - y) ** 2)
+
     jax_grad_fn = jax.grad(jax_loss, argnums=1)
     w_ref = jax_grad_fn(x_np, w_np, y_np)
 
     print("Nabla Grad Sample:", w_grad_np[0, :3])
     print("JAX Grad Sample:  ", w_ref[0, :3])
-    
+
     diff = np.max(np.abs(w_grad_np - w_ref))
     print(f"Max Diff: {diff:.6f}")
     assert diff < 1e-5
+
 
 if __name__ == "__main__":
     test_dp_simple()

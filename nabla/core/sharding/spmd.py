@@ -65,10 +65,12 @@ def reshard_inputs(
             return x
 
         from .spec import needs_reshard
+
         if not needs_reshard(current, required):
             return x
-        
+
         from ...ops.communication.reshard import reshard_tensor
+
         return reshard_tensor(x, current, required, mesh)
 
     return pytree.tree_map(reshard_if_needed, args)
@@ -131,7 +133,7 @@ def infer_output_sharding(
         if spec is None:
             rank = len(phys_shape_tuple)
             spec = ShardingSpec(mesh, [DimSpec([], is_open=True) for _ in range(rank)])
-        
+
         input_specs.append(spec.clone())
         input_shapes.append(phys_shape_tuple)
 
@@ -266,9 +268,6 @@ def _check_contracting_factors_sharded(
     return reduce_axes, ghost_axes
 
 
-
-
-
 def create_replicated_spec(mesh: DeviceMesh, rank: int) -> ShardingSpec:
     """Create a fully replicated sharding spec."""
     from .spec import DimSpec, ShardingSpec
@@ -341,6 +340,7 @@ def create_sharded_output(
 
     return output
 
+
 def execute_on_shards(
     op_fn: Any,
     args: tuple,
@@ -368,22 +368,32 @@ def execute_on_shards(
         # Local execution (0-th shard/unsharded view)
         shard_args = get_shard_args(args, 0, input_shardings, g, Tensor, pytree)
         local_kwargs = kwargs
-        if op is not None and output_sharding is not None and hasattr(op, "_transform_shard_kwargs"):
-            local_kwargs = op._transform_shard_kwargs(kwargs, output_sharding, 0, shard_args)
+        if (
+            op is not None
+            and output_sharding is not None
+            and hasattr(op, "_transform_shard_kwargs")
+        ):
+            local_kwargs = op._transform_shard_kwargs(
+                kwargs, output_sharding, 0, shard_args
+            )
         return [op_fn(*shard_args, **local_kwargs)]
 
     results = []
     num_shards = len(mesh.devices)
-    
+
     for i in range(num_shards):
         # Slice args for this shard
         shard_args = get_shard_args(args, i, input_shardings, g, Tensor, pytree)
-        
+
         # Transform kwargs if op provides a hook
         local_kwargs = kwargs
-        if op is not None and output_sharding is not None and hasattr(op, "_transform_shard_kwargs"):
-             local_kwargs = op._transform_shard_kwargs(kwargs, output_sharding, i, args)
-        
+        if (
+            op is not None
+            and output_sharding is not None
+            and hasattr(op, "_transform_shard_kwargs")
+        ):
+            local_kwargs = op._transform_shard_kwargs(kwargs, output_sharding, i, args)
+
         # Execute
         results.append(op_fn(*shard_args, **local_kwargs))
 

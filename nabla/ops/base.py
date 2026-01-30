@@ -65,19 +65,7 @@ class Operation(ABC):
         return total
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        # DEBUG: Log every operation call with detailed input info
-        import sys
-        from ..core import Tensor
-        sys.stderr.write(f"\n{'='*70}\n")
-        sys.stderr.write(f"[OP CALL] {self.__class__.__name__}\n")
-        for i, arg in enumerate(args):
-            if isinstance(arg, Tensor):
-                sharding_str = f"{arg.sharding}" if arg.is_sharded else "unsharded"
-                sys.stderr.write(f"  arg[{i}]: shape={arg.shape} (local={arg._tensor.shape if hasattr(arg, '_tensor') else 'N/A'}), {sharding_str}, traced={arg.traced}\n")
-        if kwargs:
-            sys.stderr.write(f"  kwargs: {list(kwargs.keys())}\n")
-        sys.stderr.flush()
-        
+
         # === New Path: Physical Execution ===
         if hasattr(self, "physical_execute"):
             from ..core import GRAPH, Tensor, pytree
@@ -87,7 +75,7 @@ class Operation(ABC):
             max_batch_dims = 0
             any_traced = False
             any_sharded = False
-            
+
             def collect_metadata(x):
                 nonlocal max_batch_dims, any_traced, any_sharded
                 if isinstance(x, Tensor):
@@ -97,30 +85,27 @@ class Operation(ABC):
                         any_traced = True
                     if x.is_sharded:
                         any_sharded = True
-            
+
             pytree.tree_map(collect_metadata, args)
 
             # 2. Adaptation: Reshard Inputs
             # Note: In the new model, __call__ handles this.
             # We assume physical_execute expects valid inputs.
             mesh = spmd.get_mesh_from_args(args) if any_sharded else None
-            
+
             # Infer expected input sharding specific to this op (if relevant for resharding)
             # Legacy logic used spmd.infer_output_sharding to get input_shardings.
             # We must replicate that here to perform the necessary data movement.
             # This is "Adaptation".
-            
+
             # We temporarily use the SPMD utility to get required input specs
             # This logic mimics the beginning of the legacy `execute` method
             adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)
             args = spmd.ensure_specs(args, mesh)
-            predicted_output_spec, input_shardings, reduce_axes = spmd.infer_output_sharding(
-                self, args, mesh, adapted_kwargs or {}
+            predicted_output_spec, input_shardings, reduce_axes = (
+                spmd.infer_output_sharding(self, args, mesh, adapted_kwargs or {})
             )
-            import sys
-            sys.stderr.write(f"[__call__] {self.__class__.__name__} predicted_output_spec: {predicted_output_spec}\n")
-            sys.stderr.flush()
-            
+
             # Perform the data movement (Logical Adaptation)
             resharded_args = spmd.reshard_inputs(args, input_shardings, mesh)
 
@@ -139,18 +124,18 @@ class Operation(ABC):
             res_mesh = mesh
 
             if isinstance(raw_result, tuple) and len(raw_result) == 3:
-                 shard_values, output_sharding, res_mesh = raw_result
+                shard_values, output_sharding, res_mesh = raw_result
             elif hasattr(raw_result, "shard_values"):
-                 shard_values = raw_result.shard_values
-                 output_sharding = getattr(raw_result, "output_sharding", None)
-                 res_mesh = getattr(raw_result, "mesh", mesh)
+                shard_values = raw_result.shard_values
+                output_sharding = getattr(raw_result, "output_sharding", None)
+                res_mesh = getattr(raw_result, "mesh", mesh)
             else:
-                 shard_values = raw_result
+                shard_values = raw_result
 
             # Use predicted spec if physical execution didn't return one
             if output_sharding is None:
                 output_sharding = predicted_output_spec
-            
+
             # Handle structured outputs (tuples/lists from multi-output ops like split)
             first_shard = shard_values[0] if shard_values else None
             if isinstance(first_shard, (list, tuple)):
@@ -175,7 +160,11 @@ class Operation(ABC):
                 for k in keys:
                     res_shards = [r[k] for r in shard_values]
                     outputs[k] = spmd.create_sharded_output(
-                        res_shards, output_sharding, any_traced, max_batch_dims, mesh=res_mesh
+                        res_shards,
+                        output_sharding,
+                        any_traced,
+                        max_batch_dims,
+                        mesh=res_mesh,
                     )
                 output = outputs
             else:
@@ -193,29 +182,18 @@ class Operation(ABC):
 
             # 5. Tracing
             # Store resharded_args (not original args) so rehydration has correctly sharded inputs
-            self._setup_output_refs(
-                output, resharded_args, kwargs, kwargs, any_traced
-            )
-            
+            self._setup_output_refs(output, resharded_args, kwargs, kwargs, any_traced)
+
             # 6. Post-Processing (JVP)
             # Check for tangents in ORIGINAL args
             any_has_tangent = False
             for x in pytree.tree_leaves(args):
                 if isinstance(x, Tensor) and x.tangent is not None:
                     any_has_tangent = True
-            
+
             if any_has_tangent:
                 self._apply_jvp(args, output)
 
-            import sys
-            from ..core import Tensor
-            sys.stderr.write(f"[OP DONE] {self.__class__.__name__} -> ")
-            if isinstance(output, Tensor):
-                sharding_str = f"{output.sharding}" if output.is_sharded else "unsharded"
-                sys.stderr.write(f"shape={output.shape} (local={output._tensor.shape if hasattr(output, '_tensor') else 'N/A'}), {sharding_str}\n")
-            else:
-                sys.stderr.write(f"{type(output).__name__}\n")
-            sys.stderr.flush()
             return output
 
         # === Legacy Path ===
@@ -273,15 +251,6 @@ class Operation(ABC):
         if any_has_tangent:
             self._apply_jvp(args, output)
 
-        import sys
-        from ..core import Tensor
-        sys.stderr.write(f"[OP DONE LEGACY] {self.__class__.__name__} -> ")
-        if isinstance(output, Tensor):
-            sharding_str = f"{output.sharding}" if output.is_sharded else "unsharded"
-            sys.stderr.write(f"shape={output.shape} (local={output._tensor.shape if hasattr(output, '_tensor') else 'N/A'}), {sharding_str}\n")
-        else:
-            sys.stderr.write(f"{type(output).__name__}\n")
-        sys.stderr.flush()
         return output
 
     def maxpr_all(
@@ -307,20 +276,16 @@ class Operation(ABC):
 
         # Optimization: If output is fully replicated and all inputs are replicated,
         # only compute once and duplicate the result
-        is_output_replicated = output_sharding is not None and output_sharding.is_fully_replicated()
+        is_output_replicated = (
+            output_sharding is not None and output_sharding.is_fully_replicated()
+        )
         all_inputs_replicated = all(
             s is None or s.is_fully_replicated() for s in input_shardings
         )
-        
-        import sys
-        sys.stderr.write(f"[maxpr_all] op={self.name}, is_output_replicated={is_output_replicated}, all_inputs_replicated={all_inputs_replicated}, num_shards={num_shards}, input_shardings={input_shardings}\n")
-        sys.stderr.flush()
-        
+
         with GRAPH.graph:
             shard_results = []
             if is_output_replicated and all_inputs_replicated and num_shards > 1:
-                sys.stderr.write(f"[maxpr_all] TAKING REPLICATED OPTIMIZATION PATH\n")
-                sys.stderr.flush()
                 # Only compute once for replicated case
                 shard_args = spmd.get_shard_args(
                     args, 0, input_shardings, g, Tensor, pytree
@@ -334,8 +299,6 @@ class Operation(ABC):
                 # Duplicate the result for all shards
                 shard_results = [result] * num_shards
             else:
-                sys.stderr.write(f"[maxpr_all] TAKING STANDARD PATH\n")
-                sys.stderr.flush()
                 for shard_idx in range(num_shards):
                     shard_args = spmd.get_shard_args(
                         args, shard_idx, input_shardings, g, Tensor, pytree
@@ -573,27 +536,23 @@ class BinaryOperation(Operation):
             num_elements *= d
         return float(num_elements)
 
-
     def physical_execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for Binary Ops."""
         from ..core import GRAPH
         from ..core.sharding import spmd
-        
+
         mesh = spmd.get_mesh_from_args(args)
-        
-        import sys
-        sys.stderr.write(f"\n[BINARY physical_execute] op={self.name}, mesh={mesh}\n")
-        sys.stderr.flush()
-        
+
         with GRAPH.graph:
-            shard_results = spmd.execute_on_shards(self.maxpr, args, kwargs, mesh, op=self)
-        
-        sys.stderr.write(f"[BINARY physical_execute] Got {len(shard_results)} results\n")
-        sys.stderr.flush()
-        
+            shard_results = spmd.execute_on_shards(
+                self.maxpr, args, kwargs, mesh, op=self
+            )
+
         # Infer output sharding from inputs
-        output_sharding, _, _ = spmd.infer_output_sharding(self, args, mesh, kwargs or {})
-        
+        output_sharding, _, _ = spmd.infer_output_sharding(
+            self, args, mesh, kwargs or {}
+        )
+
         return (shard_results, output_sharding, mesh)
 
     def __call__(self, x: Tensor, y: Tensor) -> Tensor:
@@ -686,31 +645,31 @@ class LogicalAxisOperation(Operation):
 
     def physical_execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for LogicalAxisOperation.
-        
+
         Executes the maxpr on each shard independently.
         Subclasses like ReduceOperation may override for specialized behavior.
-        
+
         NOTE: This method receives RAW kwargs and performs adaptation internally.
         """
         from ..core import GRAPH, Tensor, pytree
         from ..core.sharding import spmd
-        
+
         # Compute batch_dims from args for kwargs adaptation
         max_batch_dims = 0
         for x in pytree.tree_leaves(args):
             if isinstance(x, Tensor) and x.batch_dims > max_batch_dims:
                 max_batch_dims = x.batch_dims
-        
+
         # Adapt kwargs (e.g., shift axis indices by batch_dims)
         adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)
-        
+
         mesh = spmd.get_mesh_from_args(args)
-        
+
         with GRAPH.graph:
             shard_results = spmd.execute_on_shards(
                 self.maxpr, args, adapted_kwargs, mesh, op=self
             )
-        
+
         return (shard_results, None, mesh)
 
     def sharding_rule(
@@ -817,33 +776,33 @@ class ReduceOperation(LogicalAxisOperation):
 
     def physical_execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for Reduction Ops.
-        
+
         Executes the reduction maxpr on each shard independently.
         Cross-shard reductions (when reducing over sharded axes) are handled
         by the auto-AllReduce mechanism in Operation.__call__.
-        
+
         NOTE: This method receives RAW kwargs and performs adaptation internally.
         This ensures consistency with trace rehydration.
         """
         from ..core import GRAPH, Tensor, pytree
         from ..core.sharding import spmd
-        
+
         # Compute batch_dims from args for kwargs adaptation
         max_batch_dims = 0
         for x in pytree.tree_leaves(args):
             if isinstance(x, Tensor) and x.batch_dims > max_batch_dims:
                 max_batch_dims = x.batch_dims
-        
+
         # Adapt kwargs (e.g., shift axis indices by batch_dims)
         adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)
-        
+
         mesh = spmd.get_mesh_from_args(args)
-        
+
         with GRAPH.graph:
             shard_results = spmd.execute_on_shards(
                 self.maxpr, args, adapted_kwargs, mesh, op=self
             )
-        
+
         return (shard_results, None, mesh)
 
 
@@ -865,12 +824,14 @@ class UnaryOperation(Operation):
         """Physical execution for Unary Ops."""
         from ..core import GRAPH
         from ..core.sharding import spmd
-        
+
         mesh = spmd.get_mesh_from_args(args)
-        
+
         with GRAPH.graph:
-            shard_results = spmd.execute_on_shards(self.maxpr, args, kwargs, mesh, op=self)
-                
+            shard_results = spmd.execute_on_shards(
+                self.maxpr, args, kwargs, mesh, op=self
+            )
+
         return (shard_results, None, mesh)
 
 
@@ -929,28 +890,28 @@ class LogicalShapeOperation(Operation):
 
     def physical_execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for LogicalShapeOperation.
-        
+
         Executes maxpr on each shard with shape kwargs adapted for batch_dims.
-        
+
         NOTE: This method receives RAW kwargs and performs adaptation internally.
         """
         from ..core import GRAPH, Tensor, pytree
         from ..core.sharding import spmd
-        
+
         # Compute batch_dims from args for kwargs adaptation
         max_batch_dims = 0
         for x in pytree.tree_leaves(args):
             if isinstance(x, Tensor) and x.batch_dims > max_batch_dims:
                 max_batch_dims = x.batch_dims
-        
+
         # Adapt kwargs (prepend batch shape to target shape)
         adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)
-        
+
         mesh = spmd.get_mesh_from_args(args)
-        
+
         with GRAPH.graph:
             shard_results = spmd.execute_on_shards(
                 self.maxpr, args, adapted_kwargs, mesh, op=self
             )
-        
+
         return (shard_results, None, mesh)

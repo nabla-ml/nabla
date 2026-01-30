@@ -198,6 +198,7 @@ class AbsOp(UnaryOperation):
 
         # grad = cotangent if x > 0 else (-cotangent if x < 0 else 0)
         from . import neg
+
         return where(
             greater(x, 0.0),
             cotangent,

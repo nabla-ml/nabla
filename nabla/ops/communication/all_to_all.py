@@ -38,36 +38,37 @@ class AllToAllOp(CollectiveOperation):
         split_axis = output.op_kwargs.get("split_axis")
         concat_axis = output.op_kwargs.get("concat_axis")
         from .all_to_all import all_to_all
+
         # Swap split and concat for backward
         return all_to_all(cotangent, split_axis=concat_axis, concat_axis=split_axis)
 
     def physical_execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
         """All-to-all distributed transpose (Physical)."""
         from ...core import GRAPH, Tensor
-        
+
         sharded_tensor: Tensor = args[0]
         tiled = kwargs.get("tiled", True)
 
         split_axis = kwargs.get("split_axis", 0)
         concat_axis = kwargs.get("concat_axis", 0)
-        
+
         # Calculate physical axes
         phys_split_axis = self._get_physical_axis(sharded_tensor, split_axis)
         phys_concat_axis = self._get_physical_axis(sharded_tensor, concat_axis)
         mesh = self._derive_mesh(sharded_tensor, kwargs)
-        
+
         # Calculate physical axes
         phys_split_axis = self._get_physical_axis(sharded_tensor, split_axis)
         phys_concat_axis = self._get_physical_axis(sharded_tensor, concat_axis)
-        
+
         # 2. Validation & Early Exit
         if not sharded_tensor.sharding:
-             return (sharded_tensor.values, None, None)
+            return (sharded_tensor.values, None, None)
 
         # 3. Execution Context
         with GRAPH.graph:
             values = sharded_tensor.values
-            
+
             # Ported logic from maxpr
             result_values = self._all_to_all_logic(
                 values, phys_split_axis, phys_concat_axis, mesh=mesh, tiled=tiled
@@ -75,7 +76,10 @@ class AllToAllOp(CollectiveOperation):
 
         # 4. Compute Output Spec
         output_spec = self._compute_output_spec(
-            sharded_tensor, result_values, split_axis=split_axis, concat_axis=concat_axis
+            sharded_tensor,
+            result_values,
+            split_axis=split_axis,
+            concat_axis=concat_axis,
         )
 
         return (result_values, output_spec, mesh)
@@ -163,11 +167,13 @@ class AllToAllOp(CollectiveOperation):
                 DimSpec(list(ds.axes), is_open=ds.is_open)
                 for ds in input_spec.dim_specs
             ]
-            
+
             # If sharding mismatch, just return None or raise. AllToAll assumes valid input spec.
-            if phys_concat_axis >= len(new_dim_specs) or phys_split_axis >= len(new_dim_specs):
-                 # This might happen if shapes are weird, but usually protected by validation
-                 return None
+            if phys_concat_axis >= len(new_dim_specs) or phys_split_axis >= len(
+                new_dim_specs
+            ):
+                # This might happen if shapes are weird, but usually protected by validation
+                return None
 
             source_axes = new_dim_specs[phys_concat_axis].axes
             target_axes = new_dim_specs[phys_split_axis].axes

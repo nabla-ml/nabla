@@ -96,6 +96,7 @@ class TestMatmulGradSharded:
         def nb_loss(x_in, w_in):
             def matmul_fn(x_i, w_i):
                 return ops.matmul(x_i, w_i)
+
             result = vmap(matmul_fn)(x_in, w_in)
             return reduce_sum(result)
 
@@ -132,7 +133,7 @@ class TestMatmulGradSharded:
                 in_axes=0,
                 out_axes=0,
                 spmd_axis_name="stage",
-                mesh=mesh_4
+                mesh=mesh_4,
             )
             result = vmapped_matmul(x_in, w_in)
             return reduce_sum(result)
@@ -170,7 +171,13 @@ class TestBinaryOpsGradSharded:
         b_sharded = ops.shard(b, mesh_4, spec_b).realize()
 
         def nb_loss(x_in, b_in):
-            vmapped_add = vmap(lambda a, b_val: a + b_val, in_axes=0, out_axes=0, spmd_axis_name="stage", mesh=mesh_4)
+            vmapped_add = vmap(
+                lambda a, b_val: a + b_val,
+                in_axes=0,
+                out_axes=0,
+                spmd_axis_name="stage",
+                mesh=mesh_4,
+            )
             result = vmapped_add(x_in, b_in)
             return reduce_sum(result)
 
@@ -243,7 +250,9 @@ class TestReluGradSharded:
         x_sharded = ops.shard(x, mesh_4, spec).realize()
 
         def nb_loss(x_in):
-            vmapped_relu = vmap(ops.relu, in_axes=0, out_axes=0, spmd_axis_name="stage", mesh=mesh_4)
+            vmapped_relu = vmap(
+                ops.relu, in_axes=0, out_axes=0, spmd_axis_name="stage", mesh=mesh_4
+            )
             result = vmapped_relu(x_in)
             return reduce_sum(result)
 
@@ -302,7 +311,9 @@ class TestSliceSqueezeStackGrad:
             stacked = ops.stack([x1_in, x2_in, x3_in], axis=0)
             return reduce_sum(stacked)
 
-        grad_x1, grad_x2, grad_x3 = nb.grad(nb_loss, argnums=(0, 1, 2))(x1_sharded, x2_sharded, x3_sharded)
+        grad_x1, grad_x2, grad_x3 = nb.grad(nb_loss, argnums=(0, 1, 2))(
+            x1_sharded, x2_sharded, x3_sharded
+        )
 
         assert_allclose(grad_x1, grad_jax[0])
         assert_allclose(grad_x2, grad_jax[1])
@@ -390,7 +401,7 @@ class TestPipelinePatternGrad:
         """
         Full pipeline_step gradient test:
         vmap(stage_compute) -> ppermute -> where -> reduce_sum
-        
+
         This is the EXACT failing pattern from test_pp_grad2.py.
         """
         # Setup like pipeline
@@ -406,10 +417,10 @@ class TestPipelinePatternGrad:
             for i in range(4):
                 computed.append(jax.nn.relu(jnp.matmul(state[i], w[i]) + b[i]))
             computed = jnp.stack(computed)
-            
+
             # Shift (ppermute simulation - ring shift right)
             shifted = jnp.roll(computed, shift=1, axis=0)
-            
+
             # Extract result (where + reduce_sum)
             selected = jnp.where(mask, shifted, jnp.zeros_like(shifted))
             result = jnp.sum(selected, axis=0)
@@ -429,7 +440,7 @@ class TestPipelinePatternGrad:
 
         spec_3d = [DimSpec.from_raw(d) for d in P("stage", None, None)]
         spec_2d = [DimSpec.from_raw(d) for d in P("stage", None)]
-        
+
         state_sharded = ops.shard(state, mesh_4, spec_3d).realize()
         w_sharded = ops.shard(w, mesh_4, spec_3d).realize()
         b_sharded = ops.shard(b, mesh_4, spec_2d).realize()
@@ -440,7 +451,13 @@ class TestPipelinePatternGrad:
         def stage_compute_fn(x_val, w_val, b_val):
             return ops.relu(ops.matmul(x_val, w_val) + b_val)
 
-        step_fn = vmap(stage_compute_fn, in_axes=(0, 0, 0), out_axes=0, spmd_axis_name="stage", mesh=mesh_4)
+        step_fn = vmap(
+            stage_compute_fn,
+            in_axes=(0, 0, 0),
+            out_axes=0,
+            spmd_axis_name="stage",
+            mesh=mesh_4,
+        )
 
         def nb_loss(state_in, w_in, b_in):
             computed = step_fn(state_in, w_in, b_in)
@@ -450,12 +467,14 @@ class TestPipelinePatternGrad:
             return reduce_sum(result)
 
         # This should NOT crash with shape mismatch
-        grad_state, grad_w, grad_b = nb.grad(nb_loss, argnums=(0, 1, 2))(state_sharded, w_sharded, b_sharded)
+        grad_state, grad_w, grad_b = nb.grad(nb_loss, argnums=(0, 1, 2))(
+            state_sharded, w_sharded, b_sharded
+        )
 
         assert_shape(grad_state, (4, 4, 8))
         assert_shape(grad_w, (4, 8, 8))
         assert_shape(grad_b, (4, 8))
-        
+
         # Compare with JAX (may have small differences due to ppermute simulation)
         assert_allclose(grad_state, grad_jax[0], rtol=1e-4, atol=1e-4)
         assert_allclose(grad_w, grad_jax[1], rtol=1e-4, atol=1e-4)

@@ -48,12 +48,16 @@ class ShardOp(Operation):
             # Fallback for new flow where dim_specs is passed directly
             if "dim_specs" in kwargs:
                 from ...core.sharding.spec import ShardingSpec
-                spec = ShardingSpec(mesh, kwargs["dim_specs"], 
-                                  replicated_axes=kwargs.get("replicated_axes", set()))
+
+                spec = ShardingSpec(
+                    mesh,
+                    kwargs["dim_specs"],
+                    replicated_axes=kwargs.get("replicated_axes", set()),
+                )
             else:
                 # Should we raise? Or return defaults?
                 pass
-                
+
         input_spec = args[0].sharding
         return spec, [input_spec], False
 
@@ -81,11 +85,15 @@ class ShardOp(Operation):
 
     def physical_execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for ShardOp.
-        
+
         Derives all physical metadata from args/kwargs and slices the input.
         Returns raw shard values as a tuple: (values, output_spec, mesh).
         """
-        from ...core.sharding.spec import ShardingSpec, needs_reshard, compute_global_shape
+        from ...core.sharding.spec import (
+            ShardingSpec,
+            needs_reshard,
+            compute_global_shape,
+        )
         from ...core.sharding import spmd
         from ...core import Tensor
         from ...core import GRAPH
@@ -93,30 +101,28 @@ class ShardOp(Operation):
 
         with GRAPH.graph:
             x = args[0]
-            
+
             # Handle positional arguments for mesh/dim_specs
             if len(args) > 1:
                 mesh = args[1]
             else:
                 mesh = kwargs.get("mesh")
-                
+
             if len(args) > 2:
                 dim_specs = args[2]
             else:
                 dim_specs = kwargs.get("dim_specs")
-            
+
             replicated_axes = kwargs.get("replicated_axes") or set()
-            
+
             # We need to construct the target spec to check idempotency and return it
-            target_spec = ShardingSpec(
-                mesh, dim_specs, replicated_axes=replicated_axes
-            )
+            target_spec = ShardingSpec(mesh, dim_specs, replicated_axes=replicated_axes)
             # 1. Idempotency Check
             if isinstance(x, Tensor) and x.sharding:
                 if not needs_reshard(x.sharding, target_spec):
                     # Identity OP: Just return values.
                     return (x.values, target_spec, mesh)
-            
+
             # 2. Global Shape Determination
             global_shape = None
             if isinstance(x, Tensor):
@@ -127,37 +133,27 @@ class ShardOp(Operation):
                     global_shape = tuple(int(d) for d in local)
                 # Fallback if uninitialized?
                 if global_shape is None:
-                    print(f"[DEBUG] ShardOp: local_shape is None. x.batch_dims={x.batch_dims}")
-                    # Try to force fallback but warn/debug
-                    global_shape = tuple(int(d) for d in x.shape) # Logical fallback
-
-                if len(global_shape) != len(target_spec.dim_specs):
-                     print(f"[DEBUG] ShardOp: Rank mismatch detected! Global: {global_shape} (len={len(global_shape)}), Spec: {len(target_spec.dim_specs)}")
-                     print(f"[DEBUG] x type: {type(x)}, batch_dims: {getattr(x, 'batch_dims', 'N/A')}")
-                     print(f"[DEBUG] x.shape (logical): {x.shape}")
-                     if isinstance(x, Tensor):
-                         print(f"[DEBUG] x.local_shape: {x.local_shape}")
-                         print(f"[DEBUG] x.values valid? {x._impl.values_epoch == GRAPH.epoch}")
+                    global_shape = tuple(int(d) for d in x.shape)
 
             if global_shape is None and "global_shape" in kwargs:
-                 global_shape = kwargs["global_shape"]
+                global_shape = kwargs["global_shape"]
 
             # 3. Kernel Execution (Slicing)
             x_input = x
             if isinstance(x, Tensor):
-                 vals = x.values
-                 if vals:
-                     x_input = vals[0]
-                 else:
-                     raise ValueError("ShardOp input tensor missing values.")
+                vals = x.values
+                if vals:
+                    x_input = vals[0]
+                else:
+                    raise ValueError("ShardOp input tensor missing values.")
             elif not isinstance(x, g.TensorValue):
-                 x_input = g.TensorValue(x)
-            
+                x_input = g.TensorValue(x)
+
             # _shard_logic expects a single value input usually (replicated)
             shard_values = self._shard_logic(
                 x_input, mesh, dim_specs, global_shape=global_shape, **kwargs
             )
-             
+
             return (shard_values, target_spec, mesh)
 
     def _simulate_shard_execution(self, x, global_shape, spec, mesh):
@@ -188,12 +184,13 @@ class ShardOp(Operation):
                 # If we have shards, try to find the one matching our device index
                 if shard_idx < len(vals):
                     effective_x = vals[shard_idx]
-                    
+
                     # If we picked a specific shard, we must account for its offset in the global tensor
                     if x.sharding:
-                         for d, dim_spec in enumerate(x.sharding.dim_specs):
-                            if d >= len(global_shape): break
-                            
+                        for d, dim_spec in enumerate(x.sharding.dim_specs):
+                            if d >= len(global_shape):
+                                break
+
                             # Re-calculate position for this shard index
                             offset = 0
                             shard_pos = 0
@@ -209,7 +206,7 @@ class ShardOp(Operation):
                             input_shard_offset[d] = shard_pos * chunk_size
                 else:
                     # Fallback/Broadcasting: Use the first shard (assumed replicated or broadcasting)
-                    # No offset applied because we treat it as covering the start? 
+                    # No offset applied because we treat it as covering the start?
                     # Or we assume it's the full tensor?
                     effective_x = vals[0]
 
@@ -250,12 +247,11 @@ class ShardOp(Operation):
             end_local = max(0, min(end_local, inp_len))
 
             slices.append(slice(start_local, end_local))
-            
+
         return effective_x[tuple(slices)]
 
 
 shard_op = ShardOp()
-
 
 
 def create_replicated_spec(mesh: DeviceMesh, rank: int) -> ShardingSpec:
@@ -273,7 +269,7 @@ def shard(
     **kwargs,
 ):
     """Shard a tensor according to the given mesh and dimension specs.
-    
+
     This operation is "smart":
     1. If the input is already sharded differently, it inserts necessary
        communication (AllGather, AllReduce) to transition to the valid state.
@@ -282,7 +278,6 @@ def shard(
     from ...core import Tensor
     from ...core.sharding.spec import ShardingSpec, needs_reshard, DimSpec
 
-    
     # UI Convenience: Handle implicit batch dimensions in spec
     if isinstance(x, Tensor):
         batch_dims = x.batch_dims
@@ -302,15 +297,15 @@ def shard(
     )
 
     if not isinstance(x, Tensor) or not x.sharding:
-         # If not a tensor or not sharded, treat as fresh slicing (legacy behavior)
-         return shard_op(x, mesh, dim_specs, replicated_axes=replicated_axes, **kwargs)
+        # If not a tensor or not sharded, treat as fresh slicing (legacy behavior)
+        return shard_op(x, mesh, dim_specs, replicated_axes=replicated_axes, **kwargs)
 
     # === Transition Logic (merged from ReshardOp) ===
     from_spec = x.sharding
     to_spec = target_spec
 
     if not needs_reshard(from_spec, to_spec):
-         return shard_op(x, mesh, dim_specs, replicated_axes=replicated_axes, **kwargs)
+        return shard_op(x, mesh, dim_specs, replicated_axes=replicated_axes, **kwargs)
 
     result = x
 
@@ -329,6 +324,7 @@ def shard(
         # Handle partial sums
         if from_spec.dim_specs[dim].partial:
             from .all_reduce import all_reduce
+
             target_is_partial = (
                 dim < len(to_spec.dim_specs) and to_spec.dim_specs[dim].partial
             )
@@ -338,21 +334,17 @@ def shard(
 
         if axes_to_remove:
             from .all_gather import all_gather
+
             result = all_gather(result, axis=None, physical_axis=dim)
 
     # 2. Ghost Axes Reduction
     for ghost_ax in from_spec.partial_sum_axes:
         if ghost_ax not in to_spec.partial_sum_axes:
             from .all_reduce import all_reduce
+
             result = all_reduce(result)
 
     # 3. Contraction (ShardOp)
     # We pass _bypass_idempotency=True to force the shard op even if specs look similar
     # (though usually the shape change prevents that confusion, explicit is better)
-    return shard_op(
-        result,
-        mesh,
-        dim_specs,
-        replicated_axes=replicated_axes,
-        **kwargs
-    )
+    return shard_op(result, mesh, dim_specs, replicated_axes=replicated_axes, **kwargs)

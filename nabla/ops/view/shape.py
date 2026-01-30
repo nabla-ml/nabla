@@ -265,7 +265,6 @@ class ReshapeOp(LogicalShapeOperation):
         return reshape(tangents, target_shape)
 
 
-
 class SliceUpdateOp(Operation):
     @property
     def name(self) -> str:
@@ -304,11 +303,7 @@ class SliceUpdateOp(Operation):
         start = kwargs.get("start")
         size = kwargs.get("size")
 
-        # Fallback to buffer if start/size missing (e.g. legacy traces)
         if start is None or size is None:
-            import sys
-            sys.stderr.write("[SliceUpdateOp.maxpr] Missing start/size, using buffer ops\n")
-            sys.stderr.flush()
             x_buffer = ops.buffer_create(x.type.as_buffer())
             ops.buffer_store(x_buffer, x)
             ops.buffer_store_slice(x_buffer, update, slices)
@@ -317,7 +312,7 @@ class SliceUpdateOp(Operation):
         # Functional implementation
         rank = len(x.shape)
         paddings = []
-        
+
         # We need update shape for ones_like
         update_shape = []
 
@@ -330,16 +325,16 @@ class SliceUpdateOp(Operation):
             # But ops.pad expects `int` usually.
             # Let's try to access `.value` if it's a constant Dim, or cast to int.
             dim_len = int(x.shape[i])
-            
+
             before = s
             after = dim_len - (s + sz)
             paddings.extend([before, after])
-            
+
             update_shape.append(int(sz))
 
         # Create padded update (value=0.0 to not affect outside)
         padded_update = ops.pad(update, paddings, value=0.0)
-        
+
         # Create mask
         # Create ones of shape 'size'
         # ops.full usually not available, use constant + broadcast
@@ -347,21 +342,23 @@ class SliceUpdateOp(Operation):
         # broadcast to update shpae
         ones_update = ops.broadcast_to(scalar_one, tuple(update_shape))
         padded_mask = ops.pad(ones_update, paddings, value=0.0)
-        
+
         # Logic: result = x * (1 - mask) + padded_update
         # mask is 1.0 where update is, 0.0 elsewhere.
         # x * (1 - 1) + update = update.
         # x * (1 - 0) + 0 = x.
-        
-        inv_mask = ops.sub(ops.constant(1.0, dtype=x.dtype, device=x.device), padded_mask)
+
+        inv_mask = ops.sub(
+            ops.constant(1.0, dtype=x.dtype, device=x.device), padded_mask
+        )
         masked_x = ops.mul(x, inv_mask)
         result = ops.add(masked_x, padded_update)
-        
+
         return result
 
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
         return len(input_shapes[0])
-        
+
     def physical_execute(self, args: tuple, kwargs: dict) -> Any:
         from ...core import GRAPH
         from ...core.sharding import spmd
@@ -443,7 +440,9 @@ class SliceTensorOp(Operation):
             end = s + sz
             slices.append(slice(s, end))
 
-        return super().__call__(x, slices=tuple(slices), start=resolved_start, size=size)
+        return super().__call__(
+            x, slices=tuple(slices), start=resolved_start, size=size
+        )
 
     def maxpr(
         self, x: TensorValue, *, slices: tuple[slice, ...], **kwargs
@@ -478,18 +477,18 @@ class SliceTensorOp(Operation):
     ) -> tuple[Any | None, list[Any | None], bool]:
         """Propagate input sharding spec."""
         from ...core import Tensor
-        
+
         if not args:
             return None, [], False
-            
+
         x = args[0]
         if isinstance(x, Tensor) and x.sharding:
-            # Slice preserves rank and dimension alignment (mostly), 
+            # Slice preserves rank and dimension alignment (mostly),
             # so we can propagate the spec.
             # NOTE: If we slice a sharded dimension to size 1 (or small),
             # it technically remains sharded (distributed scalar/small tensor).
             return x.sharding, [x.sharding], False
-            
+
         return None, [None], False
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
@@ -538,7 +537,9 @@ class SliceTensorOp(Operation):
         mesh = input_sharding.mesh
         # Map logical shard index to device ID in the mesh
         # mesh.devices is a list of device IDs corresponding to the flattened mesh
-        device_id = mesh.devices[shard_idx] if shard_idx < len(mesh.devices) else shard_idx
+        device_id = (
+            mesh.devices[shard_idx] if shard_idx < len(mesh.devices) else shard_idx
+        )
 
         local_start_indices = []
         local_sizes = []
@@ -594,18 +595,17 @@ class SliceTensorOp(Operation):
 
         # Reconstruct slices for maxpr (assuming full rank coverage)
         final_slices = []
-        
+
         # Prepend batch dims if present
         if hasattr(x, "batch_dims"):
             final_slices.extend([slice(None)] * x.batch_dims)
 
         for s, sz in zip(local_start_indices, local_sizes):
             final_slices.append(slice(s, s + sz))
-        
+
         new_kwargs["slices"] = tuple(final_slices)
 
         return new_kwargs
-
 
 
 class ConcatenateOp(LogicalAxisOperation):
@@ -674,11 +674,11 @@ class ConcatenateOp(LogicalAxisOperation):
         from ...ops.view import slice_tensor
 
         axis = output.op_kwargs.get("axis", 0)
-        
+
         # Calculate split indices based on primal shapes
         start = 0
         cotangent_slices = []
-        
+
         # Handle negative axis
         if axis < 0:
             axis += len(primals[0].shape)
@@ -686,22 +686,22 @@ class ConcatenateOp(LogicalAxisOperation):
         for x in primals:
             # We slice along 'axis'
             dim_size = int(x.shape[axis])
-            
+
             # Construct start/size for slice_tensor
             # slice_tensor takes start=[...], size=[...]
             rank = len(x.shape)
-            
+
             starts = [0] * rank
             starts[axis] = start
-            
-            sizes = [int(d) for d in cotangent.shape] # Use full shape
-            sizes[axis] = dim_size # Update split axis size
-            
+
+            sizes = [int(d) for d in cotangent.shape]  # Use full shape
+            sizes[axis] = dim_size  # Update split axis size
+
             slc = slice_tensor(cotangent, start=starts, size=sizes)
             cotangent_slices.append(slc)
-            
+
             start += dim_size
-            
+
         return cotangent_slices
 
 
@@ -728,12 +728,15 @@ def reshape(x: Tensor, shape: tuple[int, ...]) -> Tensor:
 
 _slice_update_op = SliceUpdateOp()
 
+
 def slice_tensor(x: Tensor, start: Any, size: Any) -> Tensor:
     return _slice_tensor_op(x, start=start, size=size)
+
 
 def slice_update(x: Tensor, update: Tensor, start: Any, size: Any) -> Tensor:
     """Update a slice of x with new values."""
     from ..base import ensure_tensor
+
     x = ensure_tensor(x)
     update = ensure_tensor(update)
     return _slice_update_op(x, update, start=start, size=size)

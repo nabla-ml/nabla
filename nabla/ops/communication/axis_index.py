@@ -36,7 +36,9 @@ class AxisIndexOp(CollectiveOperation):
             if len(args) >= 2:
                 mesh, axis_name = args[0], args[1]
             else:
-                raise ValueError("AxisIndexOp requires 'mesh' and 'axis_name' arguments.")
+                raise ValueError(
+                    "AxisIndexOp requires 'mesh' and 'axis_name' arguments."
+                )
 
         results = []
         with GRAPH.graph:

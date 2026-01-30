@@ -140,7 +140,7 @@ class TestPPermuteVJP:
 class TestVmapPPermuteWhereGrad:
     """Test the specific pattern from pipeline parallelism:
     vmap(compute) -> ppermute -> where -> reduce_sum -> grad
-    
+
     This is the pattern that fails in test_pp_grad2.py.
     """
 
@@ -170,7 +170,9 @@ class TestVmapPPermuteWhereGrad:
         def identity(x_in):
             return x_in
 
-        vmapped_fn = vmap(identity, in_axes=0, out_axes=0, spmd_axis_name="dp", mesh=mesh_4)
+        vmapped_fn = vmap(
+            identity, in_axes=0, out_axes=0, spmd_axis_name="dp", mesh=mesh_4
+        )
 
         def loss_fn(x_in):
             computed = vmapped_fn(x_in)

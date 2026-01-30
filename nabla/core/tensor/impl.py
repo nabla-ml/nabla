@@ -209,10 +209,10 @@ class TensorImpl:
         """Global physical shape (includes batch dims)."""
         local = self.physical_shape
         if local is None:
-             raise RuntimeError(
-                 f"Cannot determine physical shape for tensor (sharding={self.sharding}). "
-                 "No valid values or storage available in current epoch."
-             )
+            raise RuntimeError(
+                f"Cannot determine physical shape for tensor (sharding={self.sharding}). "
+                "No valid values or storage available in current epoch."
+            )
 
         # Unsharded case: local shape IS the physical global shape
         if not self.sharding:

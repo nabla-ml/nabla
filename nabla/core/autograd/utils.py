@@ -171,7 +171,9 @@ class BackwardEngine:
 
         vjp_primals = pytree.tree_map(wrap, node.op_args)
 
-        output_tensors = [Tensor(impl=o) if o is not None else None for o in alive_outputs]
+        output_tensors = [
+            Tensor(impl=o) if o is not None else None for o in alive_outputs
+        ]
         vjp_outputs = pytree.tree_unflatten(node.tree_def, output_tensors)
 
         cot_tensors = []
@@ -229,7 +231,9 @@ class BackwardEngine:
 
             arg_impl_real = arg_impl._impl if isinstance(arg_impl, Tensor) else arg_impl
             cot_tensor = (
-                Tensor(impl=cot_result) if isinstance(cot_result, TensorImpl) else cot_result
+                Tensor(impl=cot_result)
+                if isinstance(cot_result, TensorImpl)
+                else cot_result
             )
             if not isinstance(cot_tensor, Tensor):
                 continue
@@ -244,42 +248,32 @@ class BackwardEngine:
     def _finalize(self) -> dict[Tensor, Tensor]:
         """Convert accumulated cotangents to input gradients."""
         from ..common import pytree
-        import sys
-
-        sys.stderr.write("\n[FINALIZE] Starting finalize...\n")
-        sys.stderr.flush()
 
         gradients = {}
         input_leaves = [
             t for t in pytree.tree_leaves(self.trace.inputs) if isinstance(t, Tensor)
         ]
 
-        sys.stderr.write(f"[FINALIZE] Found {len(input_leaves)} input leaves\n")
-        sys.stderr.flush()
-
         for inp in input_leaves:
             inp_id = id(inp._impl)
-            sys.stderr.write(f"[FINALIZE] Processing input {inp_id}, in map: {inp_id in self.cotangent_map}\n")
-            sys.stderr.flush()
-            
             if inp_id in self.cotangent_map:
                 cot_impl = self.cotangent_map[inp_id]
-                sys.stderr.write(f"[FINALIZE] cotangent impl: {cot_impl}\n")
-                sys.stderr.flush()
-                
                 grad = Tensor(impl=cot_impl)
-                sys.stderr.write(f"[FINALIZE] Created grad tensor\n")
-                sys.stderr.flush()
-                
+
                 # Double check for un-reduced partials at inputs
                 if grad.sharding and grad.sharding.partial_sum_axes:
                     from ...ops.communication import all_reduce
-                    grad = all_reduce(grad, reduce_axes=list(grad.sharding.partial_sum_axes))
-                
+
+                    grad = all_reduce(
+                        grad, reduce_axes=list(grad.sharding.partial_sum_axes)
+                    )
+
                 # Ensure it matches input sharding (for Pipeline/ZeRO)
                 from ...core.sharding.spec import needs_reshard
+
                 if inp.sharding and needs_reshard(grad.sharding, inp.sharding):
                     from ...ops.communication import reshard
+
                     grad = reshard(
                         grad,
                         inp.sharding.mesh,
@@ -289,6 +283,7 @@ class BackwardEngine:
                 gradients[inp] = grad
             else:
                 from ...ops.creation import zeros_like
+
                 gradients[inp] = zeros_like(inp)
 
         return gradients
@@ -302,9 +297,6 @@ def backward_on_trace(
     checkpoint_policy: str = "none",
 ) -> dict[Tensor, Tensor]:
     """Pure-function backpropagation on a Trace."""
-    import sys
-    sys.stderr.write(f"\n[BACKWARD] Entering backward_on_trace\n")
-    sys.stderr.flush()
 
     if not trace._computed:
         trace.compute()
