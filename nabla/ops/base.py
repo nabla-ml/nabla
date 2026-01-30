@@ -64,6 +64,31 @@ class Operation(ABC):
             total += elements * dtype_bytes
         return total
 
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Default physical execution: execute maxpr on each shard independently.
+        
+        This is the standard pattern used by most operations. Operations with
+        specialized execution logic (communication ops, reductions, etc.) can override.
+        
+        Returns:
+            tuple: (shard_results, output_sharding, mesh)
+        """
+        from ..core import GRAPH
+        from ..core.sharding import spmd
+
+        mesh = spmd.get_mesh_from_args(args)
+
+        with GRAPH.graph:
+            shard_results = spmd.execute_on_shards(
+                self.maxpr, args, kwargs, mesh, op=self
+            )
+
+        output_sharding, _, _ = spmd.infer_output_sharding(
+            self, args, mesh, kwargs or {}
+        )
+
+        return (shard_results, output_sharding, mesh)
+
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
 
         # === New Path: Physical Execution ===
@@ -196,165 +221,12 @@ class Operation(ABC):
 
             return output
 
-        # === Legacy Path (DEPRECATED - Kept for reference) ===
-        # All operations should now have physical_execute implemented.
-        # If you see this error, add physical_execute to the operation class.
-        raise NotImplementedError(
-            f"Operation '{self.name}' does not have physical_execute implemented. "
-            f"All operations must implement physical_execute for the new execution model."
+        # This should never happen since all operations now have physical_execute
+        # (either their own implementation or the default one from the base class)
+        raise RuntimeError(
+            f"Operation '{self.name}' reached unreachable code path. "
+            f"This is a bug in the execution model."
         )
-        # return self.execute(*args, **kwargs)
-
-    def execute(self, *args: Any, **kwargs: Any) -> Any:
-        from ..core import Tensor, pytree
-        from ..core.sharding import spmd
-
-        any_traced = False
-        any_has_tangent = False
-        max_batch_dims = 0
-        any_sharded = False
-        original_kwargs = kwargs.copy() if kwargs else {}
-
-        def collect_metadata(x: Any) -> Any:
-            nonlocal any_traced, any_has_tangent, max_batch_dims, any_sharded
-            if isinstance(x, Tensor):
-                if x.traced:
-                    any_traced = True
-                if x.tangent is not None:
-                    any_has_tangent = True
-                if x.batch_dims > max_batch_dims:
-                    max_batch_dims = x.batch_dims
-                if x.is_sharded:
-                    any_sharded = True
-            return x
-
-        pytree.tree_map(collect_metadata, args)
-
-        kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)
-
-        mesh = spmd.get_mesh_from_args(args) if any_sharded else None
-
-        args = spmd.ensure_specs(args, mesh)
-        output_sharding, input_shardings, reduce_axes = spmd.infer_output_sharding(
-            self, args, mesh, kwargs or {}
-        )
-
-        args = spmd.reshard_inputs(args, input_shardings, mesh)
-
-        output = self.maxpr_all(
-            args,
-            kwargs,
-            output_sharding,
-            mesh,
-            any_traced,
-            max_batch_dims,
-            original_kwargs=original_kwargs,
-        )
-
-        if reduce_axes and mesh:
-            output = self.apply_auto_reduction(output, mesh, reduce_axes)
-
-        if any_has_tangent:
-            self._apply_jvp(args, output)
-
-        return output
-
-    def maxpr_all(
-        self,
-        args: tuple,
-        kwargs: dict,
-        output_sharding: Any,
-        mesh: Any,
-        any_traced: bool,
-        max_batch_dims: int,
-        original_kwargs: dict | None = None,
-    ) -> Any:
-        from max import graph as g
-
-        from ..core import GRAPH, Tensor, pytree
-        from ..core.sharding import spmd
-
-        num_shards = len(mesh.devices) if mesh else 1
-        input_shardings = []
-        if mesh:
-            leaves = [a for a in pytree.tree_leaves(args) if isinstance(a, Tensor)]
-            input_shardings = [t.sharding for t in leaves]
-
-        # Optimization: If output is fully replicated and all inputs are replicated,
-        # only compute once and duplicate the result
-        is_output_replicated = (
-            output_sharding is not None and output_sharding.is_fully_replicated()
-        )
-        all_inputs_replicated = all(
-            s is None or s.is_fully_replicated() for s in input_shardings
-        )
-
-        with GRAPH.graph:
-            shard_results = []
-            if is_output_replicated and all_inputs_replicated and num_shards > 1:
-                # Only compute once for replicated case
-                shard_args = spmd.get_shard_args(
-                    args, 0, input_shardings, g, Tensor, pytree
-                )
-                shard_kwargs = self._transform_shard_kwargs(
-                    kwargs, output_sharding, 0, args
-                )
-                if shard_kwargs is None:
-                    shard_kwargs = {}
-                result = self.maxpr(*shard_args, **shard_kwargs)
-                # Duplicate the result for all shards
-                shard_results = [result] * num_shards
-            else:
-                for shard_idx in range(num_shards):
-                    shard_args = spmd.get_shard_args(
-                        args, shard_idx, input_shardings, g, Tensor, pytree
-                    )
-                    shard_kwargs = self._transform_shard_kwargs(
-                        kwargs, output_sharding, shard_idx, args
-                    )
-                    if shard_kwargs is None:
-                        shard_kwargs = {}
-                    shard_results.append(self.maxpr(*shard_args, **shard_kwargs))
-
-        if not shard_results:
-            return None
-
-        # Handle structured outputs
-        first_res = shard_results[0]
-        if isinstance(first_res, (list, tuple)):
-            # Unzip: [(a0, b0), (a1, b1)] -> ([a0, a1], [b0, b1])
-            unzipped = list(zip(*shard_results))
-            outputs = []
-            for res_shards in unzipped:
-                outputs.append(
-                    spmd.create_sharded_output(
-                        list(res_shards),
-                        output_sharding,
-                        any_traced,
-                        max_batch_dims,
-                        mesh=mesh,
-                    )
-                )
-            output = tuple(outputs) if isinstance(first_res, tuple) else outputs
-        elif isinstance(first_res, dict):
-            # Handle dict output
-            keys = first_res.keys()
-            outputs = {}
-            for k in keys:
-                res_shards = [r[k] for r in shard_results]
-                outputs[k] = spmd.create_sharded_output(
-                    res_shards, output_sharding, any_traced, max_batch_dims, mesh=mesh
-                )
-            output = outputs
-        else:
-            output = spmd.create_sharded_output(
-                shard_results, output_sharding, any_traced, max_batch_dims, mesh=mesh
-            )
-
-        self._setup_output_refs(
-            output, args, original_kwargs or kwargs, kwargs, any_traced
-        )
-        return output
 
     def apply_auto_reduction(
         self, output: Any, mesh: Any, reduce_axes: set[str]

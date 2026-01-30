@@ -164,24 +164,6 @@ class ReduceSumPhysicalOp(Operation):
 
         return ops.sum(x, axis=axis)
 
-    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
-        """Physical execution for ReduceSumPhysicalOp."""
-        from ..core import GRAPH
-        from ..core.sharding import spmd
-
-        mesh = spmd.get_mesh_from_args(args)
-
-        with GRAPH.graph:
-            shard_results = spmd.execute_on_shards(
-                self.maxpr, args, kwargs, mesh, op=self
-            )
-
-        output_sharding, _, _ = spmd.infer_output_sharding(
-            self, args, mesh, kwargs or {}
-        )
-
-        return (shard_results, output_sharding, mesh)
-
     def sharding_rule(
         self,
         input_shapes: list[tuple[int, ...]],
@@ -231,24 +213,6 @@ class MeanPhysicalOp(Operation):
     ) -> TensorValue:
 
         return ops.mean(x, axis=axis)
-
-    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
-        """Physical execution for MeanPhysicalOp."""
-        from ..core import GRAPH
-        from ..core.sharding import spmd
-
-        mesh = spmd.get_mesh_from_args(args)
-
-        with GRAPH.graph:
-            shard_results = spmd.execute_on_shards(
-                self.maxpr, args, kwargs, mesh, op=self
-            )
-
-        output_sharding, _, _ = spmd.infer_output_sharding(
-            self, args, mesh, kwargs or {}
-        )
-
-        return (shard_results, output_sharding, mesh)
 
     def sharding_rule(
         self,
@@ -303,24 +267,6 @@ class ReduceMaxPhysicalOp(Operation):
     ) -> TensorValue:
 
         return ops._reduce_max(x, axis=axis)
-
-    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
-        """Physical execution for ReduceMaxPhysicalOp."""
-        from ..core import GRAPH
-        from ..core.sharding import spmd
-
-        mesh = spmd.get_mesh_from_args(args)
-
-        with GRAPH.graph:
-            shard_results = spmd.execute_on_shards(
-                self.maxpr, args, kwargs, mesh, op=self
-            )
-
-        output_sharding, _, _ = spmd.infer_output_sharding(
-            self, args, mesh, kwargs or {}
-        )
-
-        return (shard_results, output_sharding, mesh)
 
     def sharding_rule(
         self,
@@ -403,24 +349,6 @@ class ReduceMinPhysicalOp(Operation):
         self, x: TensorValue, *, axis: int, keepdims: bool = False
     ) -> TensorValue:
         return ops._reduce_min(x, axis=axis)
-
-    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
-        """Physical execution for ReduceMinPhysicalOp."""
-        from ..core import GRAPH
-        from ..core.sharding import spmd
-
-        mesh = spmd.get_mesh_from_args(args)
-
-        with GRAPH.graph:
-            shard_results = spmd.execute_on_shards(
-                self.maxpr, args, kwargs, mesh, op=self
-            )
-
-        output_sharding, _, _ = spmd.infer_output_sharding(
-            self, args, mesh, kwargs or {}
-        )
-
-        return (shard_results, output_sharding, mesh)
 
     def sharding_rule(
         self,

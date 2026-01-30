@@ -332,21 +332,10 @@ class SliceUpdateOp(Operation):
 
             update_shape.append(int(sz))
 
-        # Create padded update (value=0.0 to not affect outside)
         padded_update = ops.pad(update, paddings, value=0.0)
-
-        # Create mask
-        # Create ones of shape 'size'
-        # ops.full usually not available, use constant + broadcast
         scalar_one = ops.constant(1.0, dtype=x.dtype, device=x.device)
-        # broadcast to update shpae
         ones_update = ops.broadcast_to(scalar_one, tuple(update_shape))
         padded_mask = ops.pad(ones_update, paddings, value=0.0)
-
-        # Logic: result = x * (1 - mask) + padded_update
-        # mask is 1.0 where update is, 0.0 elsewhere.
-        # x * (1 - 1) + update = update.
-        # x * (1 - 0) + 0 = x.
 
         inv_mask = ops.sub(
             ops.constant(1.0, dtype=x.dtype, device=x.device), padded_mask
@@ -358,23 +347,6 @@ class SliceUpdateOp(Operation):
 
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
         return len(input_shapes[0])
-
-    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
-        from ...core import GRAPH
-        from ...core.sharding import spmd
-
-        mesh = spmd.get_mesh_from_args(args)
-
-        with GRAPH.graph:
-            shard_results = spmd.execute_on_shards(
-                self.maxpr, args, kwargs, mesh, op=self
-            )
-
-        output_sharding, _, _ = spmd.infer_output_sharding(
-            self, args, mesh, kwargs or {}
-        )
-
-        return (shard_results, output_sharding, mesh)
 
     def infer_sharding_spec(
         self,
@@ -449,23 +421,6 @@ class SliceTensorOp(Operation):
     ) -> TensorValue:
         return ops.slice_tensor(x, slices)
 
-    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
-        from ...core import GRAPH
-        from ...core.sharding import spmd
-
-        mesh = spmd.get_mesh_from_args(args)
-
-        with GRAPH.graph:
-            shard_results = spmd.execute_on_shards(
-                self.maxpr, args, kwargs, mesh, op=self
-            )
-
-        output_sharding, _, _ = spmd.infer_output_sharding(
-            self, args, mesh, kwargs or {}
-        )
-
-        return (shard_results, output_sharding, mesh)
-
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
         return len(input_shapes[0])
 
@@ -483,16 +438,11 @@ class SliceTensorOp(Operation):
 
         x = args[0]
         if isinstance(x, Tensor) and x.sharding:
-            # Slice preserves rank and dimension alignment (mostly),
-            # so we can propagate the spec.
-            # NOTE: If we slice a sharded dimension to size 1 (or small),
-            # it technically remains sharded (distributed scalar/small tensor).
             return x.sharding, [x.sharding], False
 
         return None, [None], False
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        # VJP: slice_tensor(x, start, size) -> slice_update(zeros_like(x), cotangent, start, size)
         if isinstance(primals, (list, tuple)):
             x = primals[0]
         else:
@@ -760,24 +710,6 @@ class BroadcastToPhysicalOp(Operation):
     def maxpr(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
         return ops.broadcast_to(x, shape)
 
-    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
-        """Physical execution for BroadcastToPhysicalOp."""
-        from ...core import GRAPH
-        from ...core.sharding import spmd
-
-        mesh = spmd.get_mesh_from_args(args)
-
-        with GRAPH.graph:
-            shard_results = spmd.execute_on_shards(
-                self.maxpr, args, kwargs, mesh, op=self
-            )
-
-        output_sharding, _, _ = spmd.infer_output_sharding(
-            self, args, mesh, kwargs or {}
-        )
-
-        return (shard_results, output_sharding, mesh)
-
     def __call__(self, x: Tensor, *, shape: tuple[int, ...]) -> Tensor:
         """Broadcast physical shape, auto-incrementing batch_dims when rank increases.
 
@@ -801,9 +733,6 @@ class BroadcastToPhysicalOp(Operation):
         result = super().__call__(x, shape=shape)
 
         if added_dims > 0:
-            # We don't necessarily want to increment batch_dims here
-            # if the added dims were for the logical part of the shape.
-            # BinaryOp expects the batch_dims to match the input's.
             pass
 
         return result
