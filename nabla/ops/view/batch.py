@@ -43,6 +43,29 @@ class IncrBatchDimsOp(Operation):
     def maxpr(self, x: TensorValue) -> TensorValue:
         return x
 
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for IncrBatchDimsOp.
+        
+        This op only modifies batch_dims metadata, not tensor values.
+        Just pass through the values unchanged.
+        """
+        from ...core import GRAPH
+        from ...core.sharding import spmd
+        from typing import Any
+
+        mesh = spmd.get_mesh_from_args(args)
+
+        with GRAPH.graph:
+            shard_results = spmd.execute_on_shards(
+                self.maxpr, args, kwargs, mesh, op=self
+            )
+
+        output_sharding, _, _ = spmd.infer_output_sharding(
+            self, args, mesh, kwargs or {}
+        )
+
+        return (shard_results, output_sharding, mesh)
+
     def __call__(self, x: Tensor) -> Tensor:
         return _copy_impl_with_batch_dims(x, x.batch_dims + 1, op=self, kwargs={})
 
@@ -57,6 +80,25 @@ class DecrBatchDimsOp(Operation):
 
     def maxpr(self, x: TensorValue) -> TensorValue:
         return x
+
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for DecrBatchDimsOp."""
+        from ...core import GRAPH
+        from ...core.sharding import spmd
+        from typing import Any
+
+        mesh = spmd.get_mesh_from_args(args)
+
+        with GRAPH.graph:
+            shard_results = spmd.execute_on_shards(
+                self.maxpr, args, kwargs, mesh, op=self
+            )
+
+        output_sharding, _, _ = spmd.infer_output_sharding(
+            self, args, mesh, kwargs or {}
+        )
+
+        return (shard_results, output_sharding, mesh)
 
     def __call__(self, x: Tensor) -> Tensor:
         if x.batch_dims <= 0:
@@ -78,6 +120,25 @@ class MoveAxisToBatchDimsOp(Operation):
         order.pop(physical_axis)
         order.insert(0, physical_axis)
         return ops.permute(x, tuple(order))
+
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for MoveAxisToBatchDimsOp."""
+        from ...core import GRAPH
+        from ...core.sharding import spmd
+        from typing import Any
+
+        mesh = spmd.get_mesh_from_args(args)
+
+        with GRAPH.graph:
+            shard_results = spmd.execute_on_shards(
+                self.maxpr, args, kwargs, mesh, op=self
+            )
+
+        output_sharding, _, _ = spmd.infer_output_sharding(
+            self, args, mesh, kwargs or {}
+        )
+
+        return (shard_results, output_sharding, mesh)
 
     def __call__(self, x: Tensor, *, axis: int) -> Tensor:
         batch_dims = x.batch_dims
@@ -112,6 +173,25 @@ class MoveAxisFromBatchDimsOp(Operation):
         order.pop(physical_source)
         order.insert(physical_destination, physical_source)
         return ops.permute(x, tuple(order))
+
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for MoveAxisFromBatchDimsOp."""
+        from ...core import GRAPH
+        from ...core.sharding import spmd
+        from typing import Any
+
+        mesh = spmd.get_mesh_from_args(args)
+
+        with GRAPH.graph:
+            shard_results = spmd.execute_on_shards(
+                self.maxpr, args, kwargs, mesh, op=self
+            )
+
+        output_sharding, _, _ = spmd.infer_output_sharding(
+            self, args, mesh, kwargs or {}
+        )
+
+        return (shard_results, output_sharding, mesh)
 
     def __call__(
         self, x: Tensor, *, batch_axis: int = 0, logical_destination: int = 0
@@ -169,6 +249,25 @@ class BroadcastBatchDimsOp(Operation):
 
     def maxpr(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
         return ops.broadcast_to(x, shape)
+
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for BroadcastBatchDimsOp."""
+        from ...core import GRAPH
+        from ...core.sharding import spmd
+        from typing import Any
+
+        mesh = spmd.get_mesh_from_args(args)
+
+        with GRAPH.graph:
+            shard_results = spmd.execute_on_shards(
+                self.maxpr, args, kwargs, mesh, op=self
+            )
+
+        output_sharding, _, _ = spmd.infer_output_sharding(
+            self, args, mesh, kwargs or {}
+        )
+
+        return (shard_results, output_sharding, mesh)
 
     def __call__(self, x: Tensor, *, batch_shape: tuple[int, ...]) -> Tensor:
         logical_shape = tuple(x.shape)

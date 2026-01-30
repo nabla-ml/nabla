@@ -109,6 +109,24 @@ class LogicalNotOp(Operation):
     def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.logical_not(x)
 
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for LogicalNotOp."""
+        from ..core import GRAPH
+        from ..core.sharding import spmd
+
+        mesh = spmd.get_mesh_from_args(args)
+
+        with GRAPH.graph:
+            shard_results = spmd.execute_on_shards(
+                self.maxpr, args, kwargs, mesh, op=self
+            )
+
+        output_sharding, _, _ = spmd.infer_output_sharding(
+            self, args, mesh, kwargs or {}
+        )
+
+        return (shard_results, output_sharding, mesh)
+
 
 equal = EqualOp()
 not_equal = NotEqualOp()

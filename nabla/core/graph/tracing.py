@@ -291,21 +291,26 @@ class Trace:
                     print(f"ERROR: physical_execute failed for {op.name}: {e}")
                     output_tensor_struct = None
             else:
-                # === Legacy Path ===
-                # Re-execute maxpr_all in the current graph epoch.
-                try:
-                    output_tensor_struct = op.maxpr_all(
-                        op_args,
-                        adapted_kwargs,
-                        output_sharding,
-                        mesh,
-                        any_traced=False,
-                        max_batch_dims=max_batch_dims,
-                        original_kwargs=op_kwargs,
-                    )
-                except Exception as e:
-                    print(f"ERROR: maxpr_all failed for {op.name}: {e}")
-                    output_tensor_struct = None
+                # === Legacy Path (DEPRECATED - Kept for reference) ===
+                # All operations should now have physical_execute implemented.
+                # If you see this error, the operation needs to be refactored.
+                raise NotImplementedError(
+                    f"Operation '{op.name}' missing physical_execute. "
+                    f"All operations must implement physical_execute for trace rehydration."
+                )
+                # try:
+                #     output_tensor_struct = op.maxpr_all(
+                #         op_args,
+                #         adapted_kwargs,
+                #         output_sharding,
+                #         mesh,
+                #         any_traced=False,
+                #         max_batch_dims=max_batch_dims,
+                #         original_kwargs=op_kwargs,
+                #     )
+                # except Exception as e:
+                #     print(f"ERROR: maxpr_all failed for {op.name}: {e}")
+                #     output_tensor_struct = None
 
             if output_tensor_struct is None:
                 # print(f"DEBUG: maxpr_all returned None for {op.name}")

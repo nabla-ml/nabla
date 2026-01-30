@@ -760,6 +760,24 @@ class BroadcastToPhysicalOp(Operation):
     def maxpr(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
         return ops.broadcast_to(x, shape)
 
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for BroadcastToPhysicalOp."""
+        from ...core import GRAPH
+        from ...core.sharding import spmd
+
+        mesh = spmd.get_mesh_from_args(args)
+
+        with GRAPH.graph:
+            shard_results = spmd.execute_on_shards(
+                self.maxpr, args, kwargs, mesh, op=self
+            )
+
+        output_sharding, _, _ = spmd.infer_output_sharding(
+            self, args, mesh, kwargs or {}
+        )
+
+        return (shard_results, output_sharding, mesh)
+
     def __call__(self, x: Tensor, *, shape: tuple[int, ...]) -> Tensor:
         """Broadcast physical shape, auto-incrementing batch_dims when rank increases.
 

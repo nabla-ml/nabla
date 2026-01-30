@@ -63,6 +63,24 @@ class GatherOp(Operation):
         else:
             return ops.gather(x, indices, axis)
 
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for GatherOp."""
+        from ...core import GRAPH
+        from ...core.sharding import spmd
+
+        mesh = spmd.get_mesh_from_args(args)
+
+        with GRAPH.graph:
+            shard_results = spmd.execute_on_shards(
+                self.maxpr, args, kwargs, mesh, op=self
+            )
+
+        output_sharding, _, _ = spmd.infer_output_sharding(
+            self, args, mesh, kwargs or {}
+        )
+
+        return (shard_results, output_sharding, mesh)
+
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         x, indices = primals
         axis = output.op_kwargs.get("axis", 0)
@@ -172,6 +190,24 @@ class ScatterOp(Operation):
             stacked = ops.stack(coord_list, axis=-1)
 
             return ops.scatter_nd(x, updates, stacked)
+
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for ScatterOp."""
+        from ...core import GRAPH
+        from ...core.sharding import spmd
+
+        mesh = spmd.get_mesh_from_args(args)
+
+        with GRAPH.graph:
+            shard_results = spmd.execute_on_shards(
+                self.maxpr, args, kwargs, mesh, op=self
+            )
+
+        output_sharding, _, _ = spmd.infer_output_sharding(
+            self, args, mesh, kwargs or {}
+        )
+
+        return (shard_results, output_sharding, mesh)
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         x, indices, updates = primals

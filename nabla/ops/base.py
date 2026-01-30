@@ -196,8 +196,14 @@ class Operation(ABC):
 
             return output
 
-        # === Legacy Path ===
-        return self.execute(*args, **kwargs)
+        # === Legacy Path (DEPRECATED - Kept for reference) ===
+        # All operations should now have physical_execute implemented.
+        # If you see this error, add physical_execute to the operation class.
+        raise NotImplementedError(
+            f"Operation '{self.name}' does not have physical_execute implemented. "
+            f"All operations must implement physical_execute for the new execution model."
+        )
+        # return self.execute(*args, **kwargs)
 
     def execute(self, *args: Any, **kwargs: Any) -> Any:
         from ..core import Tensor, pytree

@@ -29,6 +29,25 @@ class ConstantOp(Operation):
     ) -> TensorValue:
         return ops.constant(value, dtype, device)
 
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for ConstantOp.
+        
+        Creation ops don't use sharding - they create new data.
+        We just call maxpr once and replicate across all shards if needed.
+        """
+        from ..core import GRAPH
+        from ..core.sharding import spmd
+        from typing import Any
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        with GRAPH.graph:
+            result = self.maxpr(*args, **kwargs)
+            shard_results = [result] * num_shards
+
+        return (shard_results, None, mesh)
+
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         # Constant has no differentiable inputs
         return (None, None, None)
@@ -51,6 +70,21 @@ class FullOp(Operation):
         const = ops.constant(value, dtype, device)
         return ops.broadcast_to(const, shape)
 
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for FullOp."""
+        from ..core import GRAPH
+        from ..core.sharding import spmd
+        from typing import Any
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        with GRAPH.graph:
+            result = self.maxpr(*args, **kwargs)
+            shard_results = [result] * num_shards
+
+        return (shard_results, None, mesh)
+
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         return (None, None, None, None)
 
@@ -70,6 +104,21 @@ class ZerosOp(Operation):
     ) -> TensorValue:
         const = ops.constant(0, dtype, device)
         return ops.broadcast_to(const, shape)
+
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for ZerosOp."""
+        from ..core import GRAPH
+        from ..core.sharding import spmd
+        from typing import Any
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        with GRAPH.graph:
+            result = self.maxpr(*args, **kwargs)
+            shard_results = [result] * num_shards
+
+        return (shard_results, None, mesh)
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         return (None, None, None)
@@ -91,6 +140,21 @@ class OnesOp(Operation):
         const = ops.constant(1, dtype, device)
         return ops.broadcast_to(const, shape)
 
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for OnesOp."""
+        from ..core import GRAPH
+        from ..core.sharding import spmd
+        from typing import Any
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        with GRAPH.graph:
+            result = self.maxpr(*args, **kwargs)
+            shard_results = [result] * num_shards
+
+        return (shard_results, None, mesh)
+
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         return (None, None, None)
 
@@ -111,6 +175,21 @@ class ArangeOp(Operation):
         device: Device,
     ) -> TensorValue:
         return ops.range(start, stop, step, dtype=dtype, device=device)
+
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for ArangeOp."""
+        from ..core import GRAPH
+        from ..core.sharding import spmd
+        from typing import Any
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        with GRAPH.graph:
+            result = self.maxpr(*args, **kwargs)
+            shard_results = [result] * num_shards
+
+        return (shard_results, None, mesh)
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         return (None, None, None, None, None)
@@ -134,6 +213,24 @@ class UniformOp(Operation):
         tensor_type = TensorType(dtype, shape, device=DeviceRef.from_device(device))
         return ops.random.uniform(tensor_type, range=(low, high))
 
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for UniformOp.
+        
+        Random ops create independent samples on each shard.
+        """
+        from ..core import GRAPH
+        from ..core.sharding import spmd
+        from typing import Any
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        with GRAPH.graph:
+            # Each shard gets independent random values
+            shard_results = [self.maxpr(*args, **kwargs) for _ in range(num_shards)]
+
+        return (shard_results, None, mesh)
+
 
 class GaussianOp(Operation):
     """Create a tensor with Gaussian (normal) random values."""
@@ -152,6 +249,24 @@ class GaussianOp(Operation):
     ) -> TensorValue:
         tensor_type = TensorType(dtype, shape, device=DeviceRef.from_device(device))
         return ops.random.gaussian(tensor_type, mean=mean, std=std)
+
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for GaussianOp.
+        
+        Random ops create independent samples on each shard.
+        """
+        from ..core import GRAPH
+        from ..core.sharding import spmd
+        from typing import Any
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        with GRAPH.graph:
+            # Each shard gets independent random values
+            shard_results = [self.maxpr(*args, **kwargs) for _ in range(num_shards)]
+
+        return (shard_results, None, mesh)
 
 
 _constant_op = ConstantOp()

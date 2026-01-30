@@ -128,6 +128,28 @@ class WhereOp(Operation):
     ) -> graph.TensorValue:
         return ops.where(condition, x, y)
 
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for WhereOp.
+        
+        Note: __call__ already handles all broadcasting logic.
+        physical_execute just runs maxpr on each shard.
+        """
+        from ..core import GRAPH
+        from ..core.sharding import spmd
+
+        mesh = spmd.get_mesh_from_args(args)
+
+        with GRAPH.graph:
+            shard_results = spmd.execute_on_shards(
+                self.maxpr, args, kwargs, mesh, op=self
+            )
+
+        output_sharding, _, _ = spmd.infer_output_sharding(
+            self, args, mesh, kwargs or {}
+        )
+
+        return (shard_results, output_sharding, mesh)
+
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for where(cond, x, y): masked cotangent for x and y, None for cond."""
         from .creation import zeros_like
@@ -166,6 +188,30 @@ class CondOp(Operation):
     def infer_sharding_spec(self, args: tuple, mesh: DeviceMesh, kwargs: dict = None):
         """Cond: Output sharding is determined by operands/branches."""
         return None, [], False
+
+    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for CondOp.
+        
+        CondOp has special handling since it involves functions.
+        We execute maxpr on each shard.
+        """
+        from ..core import GRAPH
+        from ..core.sharding import spmd
+
+        mesh = spmd.get_mesh_from_args(args)
+
+        with GRAPH.graph:
+            shard_results = spmd.execute_on_shards(
+                self.maxpr, args, kwargs, mesh, op=self
+            )
+
+        # CondOp output sharding is tricky - depends on branch outputs
+        # For now, let spmd infer it
+        output_sharding, _, _ = spmd.infer_output_sharding(
+            self, args, mesh, kwargs or {}
+        )
+
+        return (shard_results, output_sharding, mesh)
 
     def maxpr(self, pred_shard, true_fn, false_fn, *operand_shards):
         def wrapped_fn(fn, input_tensors):
