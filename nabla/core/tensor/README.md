@@ -2,38 +2,134 @@
 
 [← Back to Core](../README.md)
 
-## Philosophy
-The Tensor system uses the **Facade Pattern** to strictly separate user-facing API from internal state. This allows a single opaque `Tensor` object to represent data that might be:
-1.  **Symbolic**: A node in a computation graph.
-2.  **Realized**: A concrete buffer on a GPU/TPU.
-3.  **Sharded**: Distributed across multiple devices.
+> **Purpose**: The dual-object Tensor/TensorImpl model separates user API from internal state, enabling multi-output operations and trace-based autodiff.
 
-## Architecture & Internals
+## The Dual-Object Model
 
-### The Dual-Object Model
-*   **`Tensor` (API)**: Immutable-ish wrapper. Implements operator overloading (`__add__`), shape access, and NumPy compatibility. It holds a reference to `TensorImpl`.
-*   **`TensorImpl` (State)**: The heavy lifter. It contains:
-    *   `_values`: List of symbolic graph nodes (one per shard, for lazy execution).
-    *   `_storages`: List of concrete data blocks (one per shard, for eager/realized execution).
-    *   `output_refs`: Provenance (what op created this?).
-    *   `sharding`: The distributed layout.
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        User Code                                        │
+│                            │                                            │
+│                            ▼                                            │
+│  ┌─────────────────────────────────────────────────────────────────┐    │
+│  │                         Tensor (API)                            │    │
+│  │  ─────────────────────────────────────────────────────────────  │    │
+│  │  • User-facing, lightweight wrapper                             │    │
+│  │  • Implements __add__, __mul__, etc. (operator overloading)     │    │
+│  │  • Properties: .shape, .dtype, .device                          │    │
+│  │  • Methods: .numpy(), .item(), .shard()                         │    │
+│  │  • Holds reference to TensorImpl                                │    │
+│  └──────────────────────────┬──────────────────────────────────────┘    │
+│                             │                                           │
+│                             │ wraps                                     │
+│                             ▼                                           │
+│  ┌─────────────────────────────────────────────────────────────────┐    │
+│  │                       TensorImpl (State)                        │    │
+│  │  ─────────────────────────────────────────────────────────────  │    │
+│  │  _values: list[TensorValue]    # Lazy graph nodes (per shard)   │    │
+│  │  _storages: list[driver.Tensor] # Realized data (per shard)     │    │
+│  │  values_epoch: int              # For staleness detection       │    │
+│  │                                                                 │    │
+│  │  sharding: ShardingSpec         # How tensor is distributed     │    │
+│  │  batch_dims: int                # Leading batch dims (vmap)     │    │
+│  │  traced: bool                   # Record in computation graph?  │    │
+│  │                                                                 │    │
+│  │  output_refs: OutputRefs        # What operation created this?  │    │
+│  │  output_index: int              # Which output of that op?      │    │
+│  │                                                                 │    │
+│  │  tangent: TensorImpl            # For JVP (forward-mode AD)     │    │
+│  │  cotangent: TensorImpl          # For VJP (backward-mode AD)    │    │
+│  └─────────────────────────────────────────────────────────────────┘    │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
 
-### Lazy State Management
-Tensors exist in a superposition of states. A `Tensor` usually starts as **Unrealized** (holding `_values`). When `data` is requested (e.g., `.numpy()`), it triggers the graph engine to compile the subgraph and fill `_storages`, becoming **Realized**.
+### Why Two Objects?
 
-> [!NOTE] Design Decision: Facade Pattern
-> *   **Choice**: Separate `Tensor` and `TensorImpl`.
-> *   **Why**: Multi-output operations (like `split`) produce multiple `Tensor`s. These need to share back-references to the *same* creating operation for autodiff and graph traversal. `TensorImpl` handles this shared state (`OutputRefs`), while `Tensor` remains a lightweight handle.
-> *   **Trade-off**: Double object allocation overhead for every tensor.
+**Problem**: Multi-output operations (like `split`) produce multiple tensors that share the same parent operation. How do we track this for autodiff?
+
+```python
+a, b, c = split(x, 3)  # 3 Tensors from 1 operation
+# All three need to reference the same OutputRefs for backward pass
+```
+
+**Solution**: 
+- `TensorImpl` holds the shared `output_refs` 
+- All sibling outputs point to the SAME `OutputRefs` object
+- Each has different `output_index` (0, 1, 2)
+
+```python
+a._impl.output_refs is b._impl.output_refs is c._impl.output_refs  # True
+a._impl.output_index  # 0
+b._impl.output_index  # 1  
+c._impl.output_index  # 2
+```
+
+## Lazy vs Realized State
+
+```
+                 UNREALIZED                              REALIZED
+                 ──────────                              ────────
+  _values:       [TensorValue, ...]       →              [TensorValue, ...]
+  _storages:     None                     →              [driver.Tensor, ...]
+  
+  Trigger: .numpy(), .item(), print(), GRAPH.evaluate()
+```
+
+**Key insight**: Most tensors stay unrealized until data is explicitly needed. This enables graph optimization before execution.
+
+### Epoch-Based Staleness
+
+```python
+y = x + 1                    # y._impl.values_epoch = current_epoch
+z = y * 2                    # z._impl.values_epoch = current_epoch
+print(z.numpy())             # Evaluates, epoch increments
+# Now y._impl.values_epoch < GRAPH.epoch (stale!)
+# y._impl._get_valid_values() returns []
+```
+
+The `values_epoch` field detects stale values. `_get_valid_values()` returns empty list if epoch doesn't match.
+
+## Shape Properties
+
+TensorImpl provides multiple shape views:
+
+| Property | Description | Example |
+|----------|-------------|---------|
+| `physical_local_shape(shard_idx)` | Per-shard storage shape (includes batch_dims) | `[B, M/2, N]` |
+| `logical_local_shape(shard_idx)` | Per-shard shape (excludes batch_dims) | `[M/2, N]` |
+| `physical_global_shape` | Full storage shape (reconstructed from sharding) | `[B, M, N]` |
+| `global_shape` | User-facing logical shape | `[M, N]` |
+
+## Navigation
+
+From any tensor, you can navigate the computation graph:
+
+```python
+# Get parent operation
+tensor._impl.op  # → Operation that created this
+
+# Get input tensors
+tensor._impl.parents  # → list[TensorImpl]
+
+# Get kwargs used
+tensor._impl.op_kwargs  # → dict (original kwargs!)
+
+# Check if leaf (no parents)
+tensor._impl.is_leaf  # → bool
+```
 
 ## Component Map
 
-| File | Role | Exported Symbols |
-| :--- | :--- | :--- |
-| [`api.py`](api.py) | **The API** | **Classes**: `Tensor`<br>**Factory Methods**: `constant`, `full`, `zeros`, `ones`, `arange`, `uniform`, `gaussian`<br>**Key Properties**: `shape`, `dtype`, `device`, `sharded`, `local_shape`, `global_shape`<br>**Key Methods**: `numpy()`, `item()`, `realize()`, `shard()`, `with_sharding()`<br>**Re-exports**: `defaults`, `default_device`, `default_dtype`, `defaults_like` |
-| [`impl.py`](impl.py) | **The State** | **Classes**: `TensorImpl`<br>**Internal Properties**: `_values`, `_storages`, `sharding`, `traced`, `dual`, `batch_dims`, `output_refs`<br>**Methods**: `realize()`, `gather()`, `to_numpy()`, `physical_global_shape`, `logical_local_shape` |
+| File | Purpose | Key Exports |
+|------|---------|-------------|
+| [api.py](api.py) | User-facing Tensor class | `Tensor`, factory methods (`zeros`, `ones`, etc.) |
+| [impl.py](impl.py) | Internal TensorImpl state | `TensorImpl` |
 
 ## Maintenance Guide
-> **Note to AI Agents**:
-> 1.  **Update Requirement**: You **MUST** update this file whenever you modify, restructure, or add ANY code in this module. Do not skip this step.
-> 2.  **Accuracy**: This file serves as the source of truth for the module's architecture. Ensure the Component Map and Philosophy sections remain accurate after your changes.
+
+> **AI Agents - Critical Rules**:
+> 1. **output_refs sharing**: Multi-output ops must share the same OutputRefs instance
+> 2. **values_epoch**: Always check/update when manipulating `_values`
+> 3. **Shapes**: Remember `batch_dims` offset when computing shapes
+> 4. **Weak refs**: TensorImpl is weakly referenced by OutputRefs; can be GC'd

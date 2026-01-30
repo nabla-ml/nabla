@@ -114,17 +114,8 @@ class Operation(ABC):
             pytree.tree_map(collect_metadata, args)
 
             # 2. Adaptation: Reshard Inputs
-            # Note: In the new model, __call__ handles this.
-            # We assume physical_execute expects valid inputs.
             mesh = spmd.get_mesh_from_args(args) if any_sharded else None
 
-            # Infer expected input sharding specific to this op (if relevant for resharding)
-            # Legacy logic used spmd.infer_output_sharding to get input_shardings.
-            # We must replicate that here to perform the necessary data movement.
-            # This is "Adaptation".
-
-            # We temporarily use the SPMD utility to get required input specs
-            # This logic mimics the beginning of the legacy `execute` method
             adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)
             args = spmd.ensure_specs(args, mesh)
             predicted_output_spec, input_shardings, reduce_axes = (
@@ -134,12 +125,7 @@ class Operation(ABC):
             # Perform the data movement (Logical Adaptation)
             resharded_args = spmd.reshard_inputs(args, input_shardings, mesh)
 
-            # 3. Physical Execution (The "Dumb" Executor)
-            # Returns raw TensorValues (PhysicalResult)
-            # NOTE: We pass RAW kwargs here, not adapted_kwargs.
-            # physical_execute is responsible for doing adaptation internally.
-            # This ensures consistency with trace rehydration, which only has
-            # access to the original kwargs.
+            # 3. Physical Execution 
             with GRAPH.graph:
                 raw_result = self.physical_execute(resharded_args, kwargs)
 

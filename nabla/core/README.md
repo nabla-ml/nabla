@@ -2,68 +2,177 @@
 
 [← Back to Root](../README.md)
 
-## Philosophy
-The `core` module contains the engines that drive Nabla: State Management, Graph Compilation, and Distributed Execution. It is organized into semantic submodules to strictly separate concerns and avoid circular dependencies.
+> **Purpose**: This module contains the fundamental building blocks that power Nabla: tensor state management, graph recording, automatic differentiation, and distributed execution.
 
-## Architecture & Internals
+## How the Core Modules Work Together
 
-Layered architecture with strict import hierarchy:
+Understanding Nabla requires seeing how these components interact during operation execution:
 
-1. **Common**: Shared utilities (`pytree`, `context`) - no dependencies
-2. **Tensor**: Data containers (`Tensor`, `TensorImpl`) - imports graph
-3. **Graph**: Execution engine (`ComputeGraph`) - imports common
-4. **Sharding**: SPMD execution via factor-based propagation - imports tensor
-5. **Autograd**: Reverse-mode autodiff - imports graph, tensor
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     Core Module Interaction Flow                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   User Code                                                                 │
+│      │                                                                      │
+│      ▼                                                                      │
+│   ┌──────────────┐                                                          │
+│   │   TENSOR     │  User-facing Tensor wraps TensorImpl (state)             │
+│   │   (facade)   │  Provides .shape, .numpy(), arithmetic operators         │
+│   └──────┬───────┘                                                          │
+│          │ calls operation (e.g., x + y)                                    │
+│          ▼                                                                  │
+│   ┌──────────────┐                                                          │
+│   │   SHARDING   │  Infers output sharding from input shardings             │
+│   │   (spmd.py)  │  Determines if inputs need resharding                    │
+│   └──────┬───────┘  Inserts AllGather/AllReduce if needed                   │
+│          │                                                                  │
+│          ▼                                                                  │
+│   ┌──────────────┐                                                          │
+│   │    GRAPH     │  Executes maxpr() per shard inside graph context         │
+│   │   (engine)   │  Records OutputRefs node for tracing                     │
+│   └──────┬───────┘                                                          │
+│          │                                                                  │
+│          ▼                                                                  │
+│   ┌──────────────┐                                                          │
+│   │  AUTOGRAD    │  (Later) Walks OutputRefs backward to compute gradients  │
+│   │  (backward)  │  Uses trace rehydration to restore intermediate values   │
+│   └──────────────┘                                                          │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
-### Execution Model: Eager Operations with Graph Recording
+## Key Concepts
 
-Operations execute in a single eager pass with integrated sharding:
+### 1. The Dual Object Model (Tensor/TensorImpl)
 
-**Eager Execution**:
-1. **Input Validation**: Check shapes, dtypes, broadcasting, type promotion
-2. **Sharding Propagation**: Run three-phase factor-based algorithm (COLLECT → RESOLVE → UPDATE)
-3. **Reshard**: Execute AllReduce/AllGather immediately if input shardings mismatch required shardings
-4. **Per-Shard Execution**: Loop over device mesh shards, call `op.maxpr()` with local shard data
-5. **Result Packaging**: Wrap results into new `Tensor` objects with sharding metadata
+**Problem**: Multi-output operations (like `split`) produce multiple tensors that share the same "parent" operation. How do we track this for autodiff?
 
-**Graph Recording** (happens simultaneously):
-6. **Create Node**: Add `OutputRefs` to global `ComputeGraph` for tracing/autodiff
+**Solution**: Separate user API (`Tensor`) from internal state (`TensorImpl`):
 
-**Key Distinction**: 
-- **Sharding is eager** - Data movement (AllReduce, AllGather) happens immediately during operation call
-- **Graph is lazy** - Compilation to MAX executable deferred until data access (`.numpy()`, `print()`)
+```
+Tensor (user-facing)              TensorImpl (internal state)
+├── .shape, .dtype, .device       ├── _values: list[TensorValue]  # lazy graph nodes
+├── .numpy(), .item()             ├── _storages: list[driver.Tensor]  # realized data
+├── arithmetic operators          ├── sharding: ShardingSpec
+└── wraps ─────────────────────► ├── output_refs: OutputRefs  # parent op info
+                                  ├── traced: bool
+                                  └── batch_dims: int
+```
 
-### The Dual Tensor System
+**OutputRefs**: When an operation produces outputs, all sibling outputs share the SAME `OutputRefs` object. This contains:
+- The operation that created them
+- The input arguments (as TensorImpls)
+- Weak references to all output TensorImpls
 
-Enables trace rehydration for `shard_map`:
+This enables backward traversal: from any tensor, follow `output_refs.op_args` to find its inputs.
 
-**Logical Tensor**: User-facing `Tensor` object with global shape, sharding metadata  
-**Physical Shards**: List of per-device shard objects (one per mesh device)
+### 2. Graph Epochs and Rehydration
 
-**Why Dual System**:
-- Captured graphs can be replayed with different tensor implementations (logical vs physical)
-- `shard_map` traces once with logical tensors, replays with physical tensors (dual execution paths)
-- Physical replay: operations access `tensor.dual` to get per-shard data without triggering recursion
-- Enables robust trace rehydration without re-executing Python logic
+**Problem**: After `evaluate()` compiles and runs a graph, the old `_values` become stale. But autodiff needs intermediate values.
 
-### Physical Execution Context
+**Solution**: Epochs + Rehydration
 
-Physical execution (shard loop) must run inside `graph.context()` to:
-- Access lazy tensor values safely without triggering recursive compilation
-- Prevent graph recording during physical shard operations
-- Enable clean separation between logical tracing and physical SPMD execution
+**Epochs**: Each graph compilation increments `GRAPH.epoch`. TensorImpl stores `values_epoch` to detect staleness.
+
+**Rehydration** (`Trace.rehydrate()`): Before backward pass, replay all operations:
+1. Find leaf tensors (constants, inputs) → ensure realized
+2. Add leaves to current graph epoch
+3. For each operation in topological order:
+   - Call `op.physical_execute()` to recompute _values
+   - Update output TensorImpls with fresh values
+
+This is why `physical_execute` receives ORIGINAL kwargs and performs adaptation internally—rehydration doesn't have access to pre-computed adapted kwargs.
+
+### 3. Lazy Evaluation Model
+
+```
+                    ┌─────────────┐
+                    │   Tensor    │
+                    │  created    │
+                    └──────┬──────┘
+                           │
+        ┌──────────────────┼──────────────────┐
+        │                  │                  │
+        ▼                  ▼                  ▼
+   UNREALIZED         OPERATION          REALIZED
+   (has _values)        called          (has _storages)
+        │                  │                  │
+        │                  │                  │
+        │     _values      │                  │
+        │◄─────────────────┤                  │
+        │                  │                  │
+        │                  │                  │
+        └──────────────────┼──────────────────┘
+                           │
+                     .numpy() or
+                     print() called
+                           │
+                           ▼
+                    ┌─────────────┐
+                    │  GRAPH      │
+                    │  compiles   │
+                    │  & executes │
+                    └─────────────┘
+```
+
+**Key insight**: Most tensors stay "unrealized" (only _values, no _storages) until you explicitly need data. This enables graph optimization before execution.
+
+### 4. Physical Execution Context
+
+Operations call `maxpr()` inside `GRAPH.graph` context. This:
+- Provides access to lazy tensor values without triggering recursive compilation
+- Allows graph node creation for the current epoch
+- Required for any code that manipulates `_values`
+
+## Module Architecture
+
+Strict import hierarchy to avoid circular dependencies:
+
+```
+Level 0: common/     (pytree, context managers - no deps)
+         │
+Level 1: graph/      (ComputeGraph, imports common)
+         │
+Level 2: tensor/     (Tensor, TensorImpl - imports graph)
+         │
+Level 3: sharding/   (ShardingSpec, propagation - imports tensor)
+         │
+Level 4: autograd/   (grad, backward - imports all above)
+```
 
 ## Component Map
 
-| Submodule | Purpose | Exported Symbols (in `nabla.core`) |
-| :--- | :--- | :--- |
-| **[`tensor/`](tensor/README.md)** | **State** | `Tensor`, `TensorImpl`, `OutputRefs` |
-| **[`graph/`](graph/README.md)** | **Brain** | `ComputeGraph`, `GRAPH`, `driver_tensor_type`, `Trace`, `trace`, `get_operations_topological`, `get_all_impls_topological`, `print_trace_graph`, `apply_to_operations` |
-| **[`sharding/`](sharding/README.md)** | **Distribution** | (Not directly re-exported via `core`, accessed via `nabla.core.sharding`) |
-| **[`autograd/`](autograd/README.md)** | **Differentiation** | (Accessed via `nabla.grad`, `nabla.value_and_grad`, etc.) |
-| **[`common/`](common/README.md)** | **Utils** | `defaults`, `default_device`, `default_dtype`, `defaults_like`, `tree_map`, `tree_flatten`, `tree_unflatten`, `tree_leaves`, `tree_structure`, `PyTreeDef`, `tensor_leaves`, `traced`, `untraced`, `with_batch_dims` |
+| Submodule | Purpose | Key Concepts | Documentation |
+|-----------|---------|--------------|---------------|
+| **[tensor/](tensor/README.md)** | State management | Tensor/TensorImpl facade, lazy realization | Dual object model |
+| **[graph/](graph/README.md)** | Execution engine | GRAPH singleton, OutputRefs, Trace, rehydration | Graph recording, epochs |
+| **[sharding/](sharding/README.md)** | SPMD distribution | Factor propagation, DeviceMesh, resharding | Automatic communication |
+| **[autograd/](autograd/README.md)** | Differentiation | BackwardEngine, VJP rules, cotangent accumulation | Trace-based gradients |
+| **[common/](common/README.md)** | Utilities | pytree operations, context managers | Shared infrastructure |
+
+## Exported Symbols
+
+From `nabla.core`:
+
+```python
+# Tensor System
+Tensor, TensorImpl, OutputRefs
+
+# Graph Engine  
+ComputeGraph, GRAPH, Trace, trace
+
+# Defaults & Context
+defaults, default_device, default_dtype, defaults_like
+traced, untraced, with_batch_dims
+
+# PyTree Utilities
+tree_map, tree_flatten, tree_unflatten, tree_leaves, tree_structure, PyTreeDef
+```
 
 ## Maintenance Guide
+
 > **Note to AI Agents**:
-> 1.  **Update Requirement**: You **MUST** update this file whenever you modify, restructure, or add ANY code in this module. Do not skip this step.
-> 2.  **Accuracy**: This file serves as the source of truth for the module's architecture. Ensure the Component Map and Philosophy sections remain accurate after your changes.
+> 1. **Import Hierarchy**: Respect the levels above. Adding imports that go "up" creates cycles.
+> 2. **Rehydration**: If changing operation execution, ensure `physical_execute` can work during rehydration (receives original kwargs).
+> 3. **OutputRefs**: Any change to how operations record their outputs affects autodiff. Test gradients.
