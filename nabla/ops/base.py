@@ -203,7 +203,9 @@ class Operation(ABC):
 
             # 5. SPMD: Post-Op Collectives (Automatic Reductions)
             if reduce_axes and mesh:
-                output = self.apply_auto_reduction(output, mesh, reduce_axes)
+                from .execution_utils import apply_auto_reduction
+
+                output = apply_auto_reduction(self, output, mesh, reduce_axes)
 
             # 5. Tracing
             # Store resharded_args (not original args) so rehydration has correctly sharded inputs
@@ -217,7 +219,9 @@ class Operation(ABC):
                     any_has_tangent = True
 
             if any_has_tangent:
-                self._apply_jvp(args, output)
+                from .execution_utils import apply_jvp
+
+                apply_jvp(self, args, output)
 
             return output
 
@@ -227,72 +231,6 @@ class Operation(ABC):
             f"Operation '{self.name}' reached unreachable code path. "
             f"This is a bug in the execution model."
         )
-
-    def apply_auto_reduction(
-        self, output: Any, mesh: Any, reduce_axes: set[str]
-    ) -> Any:
-        from ..core import GRAPH, Tensor, pytree
-        from ..core.sharding import spmd
-        from ..core.sharding.spec import DimSpec, ShardingSpec
-        from .communication import all_reduce_op
-
-        def apply_grouped_all_reduce(t):
-            if not isinstance(t, Tensor):
-                return t
-
-            t.hydrate()
-            if not t._values:
-                return t
-
-            with GRAPH.graph:
-                reduced_values = all_reduce_op.simulate_grouped_execution(
-                    t.values, mesh, reduce_axes, reduce_op=self.collective_reduce_type
-                )
-
-            current_spec = t.sharding
-            if current_spec:
-                new_dim_specs = []
-                for ds in current_spec.dim_specs:
-                    new_axes = sorted(list(set(ds.axes) - reduce_axes))
-                    new_dim_specs.append(DimSpec(new_axes))
-                new_spec = ShardingSpec(mesh, new_dim_specs)
-            else:
-                rank = len(t.shape)
-                new_spec = ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)])
-
-            reduced_tensor = spmd.create_sharded_output(
-                reduced_values, new_spec, t.traced, t.batch_dims, mesh
-            )
-
-            trace_kwargs = {"mesh": mesh, "reduce_axes": list(reduce_axes)}
-            all_reduce_op._setup_output_refs(
-                reduced_tensor, (t,), trace_kwargs, trace_kwargs, t.traced
-            )
-
-            return reduced_tensor
-
-        return pytree.tree_map(apply_grouped_all_reduce, output)
-
-    def _apply_jvp(self, args: tuple, output: Any) -> None:
-        from ..core import Tensor, pytree
-
-        tangents = pytree.tree_map(
-            lambda x: (
-                Tensor(impl=x.tangent) if isinstance(x, Tensor) and x.tangent else None
-            ),
-            args,
-        )
-        output_tangent = self.jvp_rule(args, tangents, output)
-        if output_tangent is not None:
-            pytree.tree_map(
-                lambda o, t: (
-                    setattr(o._impl, "tangent", t._impl)
-                    if isinstance(o, Tensor) and isinstance(t, Tensor)
-                    else None
-                ),
-                output,
-                output_tangent,
-            )
 
     def adapt_kwargs(self, args: tuple, kwargs: dict, batch_dims: int) -> dict:
         return kwargs
