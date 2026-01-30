@@ -1,5 +1,20 @@
 # NABLA
 
+> **⚠️ IMPORTANT: Architecture Under Heavy Restructuring**
+> 
+> **You are viewing the `main` development branch** which contains a **complete rewrite** of Nabla with:
+> - Distributed SPMD execution (factor-based sharding)
+> - Multi-device/multi-GPU training
+> - New graph-based execution model
+> 
+> **For the current stable release (single-device, non-distributed):**
+> - PyPI: `pip install nabla-ml` (v25.7)
+> - Source: [nabla/v25.7 branch](https://github.com/nabla-ml/nabla/tree/nabla/v25.7)
+> 
+> The repository structure and code shown below reflect the **new architecture in development**.
+
+---
+
 Welcome! Nabla is a Machine Learning library for the emerging Mojo/Python ecosystem, featuring:
 
 - Gradient computation the PyTorch way (imperatively via .backward())
@@ -8,10 +23,6 @@ Welcome! Nabla is a Machine Learning library for the emerging Mojo/Python ecosys
 
 For tutorials and API reference, visit: [nablaml.com](https://nablaml.com/index.html)
 
-> NOTE: Go to the latest release branch to explore its code: [nabla/v25.7](https://github.com/nabla-ml/nabla/tree/nabla/v25.7).
-
-> *Why does this main branch look so different compared to the latest release?* We are currently working on a complete rewrite of Nabla, which will include Sharding, distributed training, a new execution model, and many more cool features. Stay tuned! 🔥
-
 ## Installation
 
 ```bash
@@ -19,6 +30,9 @@ pip install nabla-ml
 ```
 
 ## Quick Start
+
+> **Note**: The following example works with the **v25.7 release** (`pip install nabla-ml`).  
+> The `main` branch code is under active development and APIs may differ.
 
 *The most simple, but fully functional Neural Network training setup:*
 
@@ -66,20 +80,36 @@ pip install -r requirements-dev.txt
 pip install -e ".[dev]"
 ```
 
-## Repository Structure
+## Repository Structure (New Architecture)
+
+> **Note**: This structure reflects the **new distributed architecture** under development on `main`.  
+> The [v25.7 release](https://github.com/nabla-ml/nabla/tree/nabla/v25.7) has a different, simpler structure (non-distributed).
 
 ```text
 nabla/
-├── nabla/                     # Core Python library
+├── nabla/                     # Core Python library (NEW ARCHITECTURE)
 │   ├── core/                  # Execution engine (Tensor, Graph, Sharding, Autograd)
+│   │   ├── tensor/            # Dual-object model (Tensor wrapper + TensorImpl state)
+│   │   ├── graph/             # Trace recording, rehydration, OutputRefs
+│   │   ├── sharding/          # Factor-based SPMD propagation, DeviceMesh
+│   │   └── autograd/          # Backward pass engine (BackwardEngine, VJP rules)
 │   ├── ops/                   # Operations (arithmetic, reductions, communication, views)
+│   │   ├── communication/     # Collective ops (AllReduce, AllGather, etc.)
+│   │   └── view/              # Metadata-only ops (reshape, squeeze, etc.)
 │   └── transforms/            # Function transformations (grad, vmap, shard_map, compile)
 ├── tests/                     # Comprehensive test suite
 ├── tutorials/                 # Notebooks on Nabla usage for ML tasks
 └── examples/                  # Example scripts for common use cases
 ```
 
-The current main branch implements a distributed SPMD execution model with factor-based sharding. See [nabla/README.md](nabla/README.md) for detailed architecture documentation.
+**Key architectural changes** from v25.7:
+- **Distributed execution**: Tensors can be sharded across multiple devices
+- **Factor-based sharding**: Operations describe transformations via factor notation (e.g., `"m k, k n -> m n"`)
+- **Eager SPMD**: Sharding decisions and communication happen per-operation, not via compilation
+- **Graph tracing**: All operations recorded for autograd and JIT compilation
+- **Physical execution model**: Operations implement `physical_execute` to work on `TensorValue` shards
+
+See [nabla/README.md](nabla/README.md) for detailed architecture documentation.
 
 ## Contributing
 
