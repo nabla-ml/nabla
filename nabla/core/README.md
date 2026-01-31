@@ -29,13 +29,13 @@ Understanding Nabla requires seeing how these components interact during operati
 │          │                                                                  │
 │          ▼                                                                  │
 │   ┌──────────────┐                                                          │
-│   │    GRAPH     │  Executes maxpr() per shard inside graph context         │
-│   │   (engine)   │  Records OutputRefs node for tracing                     │
+│   │    GRAPH     │  Executes kernel() per shard inside graph context         │
+│   │   (engine)   │  Records OpNode node for tracing                     │
 │   └──────┬───────┘                                                          │
 │          │                                                                  │
 │          ▼                                                                  │
 │   ┌──────────────┐                                                          │
-│   │  AUTOGRAD    │  (Later) Walks OutputRefs backward to compute gradients  │
+│   │  AUTOGRAD    │  (Later) Walks OpNode backward to compute gradients  │
 │   │  (backward)  │  Uses trace rehydration to restore intermediate values   │
 │   └──────────────┘                                                          │
 │                                                                             │
@@ -55,12 +55,12 @@ Tensor (user-facing)              TensorImpl (internal state)
 ├── .shape, .dtype, .device       ├── _values: list[TensorValue]  # lazy graph nodes
 ├── .numpy(), .item()             ├── _storages: list[driver.Tensor]  # realized data
 ├── arithmetic operators          ├── sharding: ShardingSpec
-└── wraps ─────────────────────► ├── output_refs: OutputRefs  # parent op info
+└── wraps ─────────────────────► ├── output_refs: OpNode  # parent op info
                                   ├── traced: bool
                                   └── batch_dims: int
 ```
 
-**OutputRefs**: When an operation produces outputs, all sibling outputs share the SAME `OutputRefs` object. This contains:
+**OpNode**: When an operation produces outputs, all sibling outputs share the SAME `OpNode` object. This contains:
 - The operation that created them
 - The input arguments (as TensorImpls)
 - Weak references to all output TensorImpls
@@ -75,14 +75,14 @@ This enables backward traversal: from any tensor, follow `output_refs.op_args` t
 
 **Epochs**: Each graph compilation increments `GRAPH.epoch`. TensorImpl stores `values_epoch` to detect staleness.
 
-**Rehydration** (`Trace.rehydrate()`): Before backward pass, replay all operations:
+**Rehydration** (`Trace.refresh_graph_values()`): Before backward pass, replay all operations:
 1. Find leaf tensors (constants, inputs) → ensure realized
 2. Add leaves to current graph epoch
 3. For each operation in topological order:
-   - Call `op.physical_execute()` to recompute _values
+   - Call `op.execute()` to recompute _values
    - Update output TensorImpls with fresh values
 
-This is why `physical_execute` receives ORIGINAL kwargs and performs adaptation internally—rehydration doesn't have access to pre-computed adapted kwargs.
+This is why `execute` receives ORIGINAL kwargs and performs adaptation internally—rehydration doesn't have access to pre-computed adapted kwargs.
 
 ### 3. Lazy Evaluation Model
 
@@ -120,7 +120,7 @@ This is why `physical_execute` receives ORIGINAL kwargs and performs adaptation 
 
 ### 4. Physical Execution Context
 
-Operations call `maxpr()` inside `GRAPH.graph` context. This:
+Operations call `kernel()` inside `GRAPH.graph` context. This:
 - Provides access to lazy tensor values without triggering recursive compilation
 - Allows graph node creation for the current epoch
 - Required for any code that manipulates `_values`
@@ -132,7 +132,7 @@ Strict import hierarchy to avoid circular dependencies:
 ```
 Level 0: common/     (pytree, context managers - no deps)
          │
-Level 1: graph/      (ComputeGraph, imports common)
+Level 1: graph/      (Graph, imports common)
          │
 Level 2: tensor/     (Tensor, TensorImpl - imports graph)
          │
@@ -146,7 +146,7 @@ Level 4: autograd/   (grad, backward - imports all above)
 | Submodule | Purpose | Key Concepts | Documentation |
 |-----------|---------|--------------|---------------|
 | **[tensor/](tensor/README.md)** | State management | Tensor/TensorImpl facade, lazy realization | Dual object model |
-| **[graph/](graph/README.md)** | Execution engine | GRAPH singleton, OutputRefs, Trace, rehydration | Graph recording, epochs |
+| **[graph/](graph/README.md)** | Execution engine | GRAPH singleton, OpNode, Trace, rehydration | Graph recording, epochs |
 | **[sharding/](sharding/README.md)** | SPMD distribution | Factor propagation, DeviceMesh, resharding | Automatic communication |
 | **[autograd/](autograd/README.md)** | Differentiation | BackwardEngine, VJP rules, cotangent accumulation | Trace-based gradients |
 | **[common/](common/README.md)** | Utilities | pytree operations, context managers | Shared infrastructure |
@@ -157,10 +157,10 @@ From `nabla.core`:
 
 ```python
 # Tensor System
-Tensor, TensorImpl, OutputRefs
+Tensor, TensorImpl, OpNode
 
 # Graph Engine  
-ComputeGraph, GRAPH, Trace, trace
+Graph, GRAPH, Trace, trace
 
 # Defaults & Context
 defaults, default_device, default_dtype, defaults_like
@@ -174,5 +174,5 @@ tree_map, tree_flatten, tree_unflatten, tree_leaves, tree_structure, PyTreeDef
 
 > **Note to AI Agents**:
 > 1. **Import Hierarchy**: Respect the levels above. Adding imports that go "up" creates cycles.
-> 2. **Rehydration**: If changing operation execution, ensure `physical_execute` can work during rehydration (receives original kwargs).
-> 3. **OutputRefs**: Any change to how operations record their outputs affects autodiff. Test gradients.
+> 2. **Rehydration**: If changing operation execution, ensure `execute` can work during rehydration (receives original kwargs).
+> 3. **OpNode**: Any change to how operations record their outputs affects autodiff. Test gradients.

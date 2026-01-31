@@ -15,7 +15,7 @@ from max.dtype import DType
 
 if TYPE_CHECKING:
     from ...ops import Operation
-    from ..graph.tracing import OutputRefs
+    from ..graph.tracing import OpNode
     from ..sharding import ShardingSpec
 
 
@@ -23,10 +23,10 @@ class TensorImpl:
     """Graph node containing tensor data and autograd structure.
 
     Attributes:
-        _values: Graph values for lazy execution (one per shard).
-        _storages: Realized driver.Tensors (one per shard).
+        _graph_values: Graph values for lazy execution (one per shard).
+        _buffers: Realized driver.Tensors (one per shard).
         sharding: Sharding specification.
-        traced: Whether this node is traced.
+        is_traced: Whether this node is traced.
         tangent: Tangent for JVP.
         cotangent: Cotangent for VJP.
         batch_dims: Number of batch dimensions.
@@ -34,31 +34,31 @@ class TensorImpl:
     """
 
     __slots__ = (
-        "_values",
-        "_storages",
+        "_graph_values",
+        "_buffers",
         "sharding",
         "sharding_constraint",
-        "traced",
+        "is_traced",
         "tangent",
         "cotangent",
         "dual",
         "batch_dims",
         "output_refs",
         "output_index",
-        "values_epoch",
+        "graph_values_epoch",
         "__weakref__",
     )
 
-    _values: list[graph.BufferValue | graph.TensorValue]
-    _storages: list[driver.Tensor] | None
+    _graph_values: list[graph.BufferValue | graph.TensorValue]
+    _buffers: list[driver.Tensor] | None
     sharding: object | None
     sharding_constraint: object | None
-    traced: bool
+    is_traced: bool
     tangent: TensorImpl | None
     cotangent: TensorImpl | None
     dual: TensorImpl | None
     batch_dims: int
-    output_refs: OutputRefs | None
+    output_refs: OpNode | None
     output_index: int
     output_index: int
 
@@ -71,14 +71,14 @@ class TensorImpl:
             | list[graph.BufferValue | graph.TensorValue]
             | None
         ) = None,
-        traced: bool = False,
+        is_traced: bool = False,
         batch_dims: int = 0,
         sharding_constraint: ShardingSpec | None = None,
     ):
-        self._values = (
+        self._graph_values = (
             values if isinstance(values, list) else ([values] if values else [])
         )
-        self._storages = (
+        self._buffers = (
             storages
             if isinstance(storages, list)
             else ([storages] if storages else None)
@@ -86,19 +86,19 @@ class TensorImpl:
 
         self.sharding = None
         self.sharding_constraint = sharding_constraint
-        self.traced = traced
+        self.is_traced = is_traced
         self.tangent = None
         self.cotangent = None
         self.dual = None
         self.batch_dims = batch_dims
         self.output_refs = None
         self.output_index = 0
-        self.values_epoch = -1
+        self.graph_values_epoch = -1
 
     def _validate_sharding(self) -> None:
         """Validate consistency of shards and sharding spec."""
-        n_vals = len(self._values)
-        n_stores = len(self._storages) if self._storages else 0
+        n_vals = len(self._graph_values)
+        n_stores = len(self._buffers) if self._buffers else 0
 
         if n_vals > 0 and n_stores > 0 and n_vals != n_stores:
             raise ValueError(
@@ -115,13 +115,13 @@ class TensorImpl:
 
     @property
     def is_realized(self) -> bool:
-        return self._storages is not None and len(self._storages) > 0
+        return self._buffers is not None and len(self._buffers) > 0
 
     @property
     def num_shards(self) -> int:
-        if self._storages is not None:
-            return len(self._storages)
-        return len(self._values) if self._values else 1
+        if self._buffers is not None:
+            return len(self._buffers)
+        return len(self._graph_values) if self._graph_values else 1
 
     @property
     def is_sharded(self) -> bool:
@@ -159,19 +159,19 @@ class TensorImpl:
     def is_leaf(self) -> bool:
         return len(self.parents) == 0
 
-    def _get_valid_values(self):
+    def _get_valid_graph_values(self):
         from ..graph.engine import GRAPH
 
-        if self.values_epoch != GRAPH.epoch:
+        if self.graph_values_epoch != GRAPH.epoch:
             return []
-        return self._values
+        return self._graph_values
 
     def physical_local_shape(self, shard_idx: int = 0) -> graph.Shape | None:
         """Storage shape for a specific shard (includes batch dims)."""
-        if self._storages and shard_idx < len(self._storages):
-            return graph.Shape(self._storages[shard_idx].shape)
+        if self._buffers and shard_idx < len(self._buffers):
+            return graph.Shape(self._buffers[shard_idx].shape)
 
-        values = self._get_valid_values()
+        values = self._get_valid_graph_values()
         if values and shard_idx < len(values):
             return values[shard_idx].type.shape
         return None
@@ -219,13 +219,13 @@ class TensorImpl:
             return local
 
         # Sharded case: reconstruct from local chunks + spec
-        values = self._get_valid_values()
+        values = self._get_valid_graph_values()
         shard_shapes = (
             [tuple(int(d) for d in v.type.shape) for v in values] if values else None
         )
 
-        if shard_shapes is None and self._storages:
-            shard_shapes = [tuple(int(d) for d in s.shape) for s in self._storages]
+        if shard_shapes is None and self._buffers:
+            shard_shapes = [tuple(int(d) for d in s.shape) for s in self._buffers]
 
         from ..sharding.spec import compute_global_shape
 
@@ -257,45 +257,45 @@ class TensorImpl:
 
     def __repr__(self) -> str:
         shards_str = f", shards={self.num_shards}" if self.is_sharded else ""
-        return f"TensorImpl(op={self.op_name}, traced={self.traced}, parents={len(self.parents)}, batch_dims={self.batch_dims}{shards_str})"
+        return f"TensorImpl(op={self.op_name}, is_traced={self.is_traced}, parents={len(self.parents)}, batch_dims={self.batch_dims}{shards_str})"
 
     def get_unrealized_shape(self) -> graph.Shape:
-        values = self._get_valid_values()
+        values = self._get_valid_graph_values()
         if not values:
-            raise RuntimeError("Internal error: _values missing")
+            raise RuntimeError("Internal error: _graph_values missing")
         return values[0].type.shape
 
     def get_unrealized_dtype(self) -> DType:
-        values = self._get_valid_values()
+        values = self._get_valid_graph_values()
         if not values:
-            raise RuntimeError("Internal error: _values missing")
+            raise RuntimeError("Internal error: _graph_values missing")
         return values[0].type.dtype
 
     def get_realized_shape(self) -> graph.Shape:
-        values = self._get_valid_values()
+        values = self._get_valid_graph_values()
         if values:
             return values[0].type.shape
-        if self._storages:
-            return graph.Shape(self._storages[0].shape)
+        if self._buffers:
+            return graph.Shape(self._buffers[0].shape)
         if self.sharding:
 
             pass
         raise RuntimeError("No shape source available")
 
     def get_realized_dtype(self) -> DType:
-        values = self._get_valid_values()
+        values = self._get_valid_graph_values()
         if values:
             return values[0].type.dtype
-        if self._storages:
-            return self._storages[0].dtype
+        if self._buffers:
+            return self._buffers[0].dtype
         raise RuntimeError("No dtype source available")
 
     @property
     def primary_value(self) -> driver.Tensor | graph.BufferValue | graph.TensorValue:
-        if self._storages:
-            return self._storages[0]
+        if self._buffers:
+            return self._buffers[0]
 
-        values = self._get_valid_values()
+        values = self._get_valid_graph_values()
         if values:
             return values[0]
         raise RuntimeError("Tensor has no storage and no values")

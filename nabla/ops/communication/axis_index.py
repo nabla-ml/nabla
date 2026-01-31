@@ -22,7 +22,7 @@ class AxisIndexOp(CollectiveOperation):
     def name(self) -> str:
         return "axis_index"
 
-    def physical_execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
+    def execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
         """Return the device's position along a mesh axis (Physical)."""
         from ...core import GRAPH, Tensor
         from ...core.sharding.spec import DimSpec, ShardingSpec

@@ -8,7 +8,7 @@
 
 Unlike PyTorch (which stores gradient tape per-tensor), Nabla uses **trace-based** autodiff:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                          Gradient Computation Flow                          │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -24,16 +24,16 @@ Unlike PyTorch (which stores gradient tape per-tensor), Nabla uses **trace-based
 │  │   What happens:                                                     │    │
 │  │   • Mark input tensors as traced=True                               │    │
 │  │   • Execute loss_fn normally                                        │    │
-│  │   • Each operation records OutputRefs via _setup_output_refs        │    │
+│  │   • Each operation records OpNode via _setup_output_refs        │    │
 │  │   • trace.compute() walks backward from outputs via DFS             │    │
-│  │   • Result: t.nodes = list of OutputRefs in topological order       │    │
+│  │   • Result: t.nodes = list of OpNode in topological order       │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                     │                                       │
 │                                     ▼                                       │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │ STEP 2: REHYDRATE  (tracing.py → Trace.rehydrate)                   │    │
+│  │ STEP 2: REHYDRATE  (tracing.py → Trace.refresh_graph_values)                   │    │
 │  │                                                                     │    │
-│  │   t.rehydrate()                                                     │    │
+│  │   t.refresh_graph_values()                                                     │    │
 │  │                                                                     │    │
 │  │   Why needed: Graph _values are epoch-scoped. After evaluate(),     │    │
 │  │   they become stale. Rehydration restores them for current epoch.   │    │
@@ -43,11 +43,11 @@ Unlike PyTorch (which stores gradient tape per-tensor), Nabla uses **trace-based
 │  │   2. Add leaves to current graph epoch                              │    │
 │  │   3. For each node in topological order:                            │    │
 │  │      • Wrap TensorImpls as Tensors                                  │    │
-│  │      • Call op.physical_execute(args, ORIGINAL_kwargs)              │    │
+│  │      • Call op.execute(args, ORIGINAL_kwargs)              │    │
 │  │      • Map fresh _values back to original TensorImpls               │    │
 │  │                                                                     │    │
-│  │   Critical: physical_execute receives original kwargs because       │    │
-│  │   that's all we stored in OutputRefs. It adapts internally.         │    │
+│  │   Critical: execute receives original kwargs because       │    │
+│  │   that's all we stored in OpNode. It adapts internally.         │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                     │                                       │
 │                                     ▼                                       │
@@ -178,23 +178,24 @@ def _accumulate_cotangent(cotangent_map, target_impl, cot_tensor):
 
 ## API Reference
 
-| Function | Purpose |
-|----------|---------|
-| `grad(fn, argnums=0)` | Returns function computing gradients w.r.t. specified args |
-| `value_and_grad(fn, argnums=0)` | Returns function computing both value and gradients |
-| `backward_on_trace(trace, cotangents)` | Core backward engine (used internally) |
+| Function                               | Purpose                                                    |
+| :------------------------------------- | :--------------------------------------------------------- |
+| `grad(fn, argnums=0)`                  | Returns function computing gradients w.r.t. specified args |
+| `value_and_grad(fn, argnums=0)`        | Returns function computing both value and gradients        |
+| `backward_on_trace(trace, cotangents)` | Core backward engine (used internally)                     |
 
 ## File Map
 
-| File | Purpose |
-|------|---------|
-| [api.py](api.py) | User-facing `grad`, `value_and_grad` |
+| File                 | Purpose                                                                          |
+| :------------------- | :------------------------------------------------------------------------------- |
+| [api.py](api.py)     | User-facing `grad`, `value_and_grad`                                             |
 | [utils.py](utils.py) | `BackwardEngine`, `backward_on_trace`, `_reduce_to_shape`, `_accumulate_cotangent` |
 
 ## Maintenance Guide
 
 > **AI Agents - Critical Rules**:
+>
 > 1. **VJP signature**: `vjp_rule(primals, cotangent, output)` - note the order!
-> 2. **Rehydration**: Always call `trace.rehydrate()` before backward pass
+> 2. **Rehydration**: Always call `trace.refresh_graph_values()` before backward pass
 > 3. **Shape alignment**: Always call `_reduce_to_shape` on VJP outputs
 > 4. **Sharding**: Use `_accumulate_cotangent` which handles partial sums and resharding

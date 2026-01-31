@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
-"""ComputeGraph: Manages lazy evaluation and graph compilation."""
+"""Graph: Manages lazy evaluation and graph compilation."""
 
 from __future__ import annotations
 
@@ -95,7 +95,7 @@ class ComputeGraph:
 
     def add_input(self, tensor: Tensor) -> None:
         """Registers a realized tensor's storages as graph inputs."""
-        storages = tensor._impl._storages
+        storages = tensor._impl._buffers
         if not storages:
             raise TypeError("Only realized tensors may be graph inputs.")
 
@@ -103,7 +103,7 @@ class ComputeGraph:
         assert isinstance(op, mo.GraphOp)
         block = op.regions[0].front
 
-        tensor_values = []
+        tensor_graph_values = []
         for storage in storages:
             with self.graph:
                 tensor_type = graph.TensorType(
@@ -119,17 +119,17 @@ class ComputeGraph:
                 buffer_val = graph.BufferValue.from_mlir(
                     block.add_argument(typ, _location())
                 )
-                tensor_values.append(buffer_val)
+                tensor_graph_values.append(buffer_val)
 
             self.sources[buffer_val._mlir_value] = storage
 
-        if len(tensor_values) == 1:
-            tensor._value = tensor_values[0]
+        if len(tensor_graph_values) == 1:
+            tensor._value = tensor_graph_values[0]
         else:
 
             with self.graph:
-                tensor._impl._values = [bv[...] for bv in tensor_values]
-                tensor._impl.values_epoch = self.epoch
+                tensor._impl._graph_values = [bv[...] for bv in tensor_graph_values]
+                tensor._impl.graph_values_epoch = self.epoch
 
     def add_unrealized(self, tensor: Tensor) -> None:
         """Registers a tensor as pending computation."""
@@ -181,32 +181,32 @@ class ComputeGraph:
             )
             for i, t in enumerate(unrealized):
                 op_name = t._impl.op_name if t._impl.output_refs else "<leaf>"
-                num_shards = len(t._impl._values) if t._impl._values else 1
+                num_shards = len(t._impl._graph_values) if t._impl._graph_values else 1
                 print(f"  [{i}] id={id(t)} op={op_name} shards={num_shards}")
             print("-" * 70)
 
-        all_values = []
+        all_graph_values = []
         value_map = []
 
         with self.graph:
             for i, t in enumerate(unrealized):
-                if t._impl.values_epoch != self.epoch:
+                if t._impl.graph_values_epoch != self.epoch:
                     if DEBUG_LAZY_EVAL:
                         print(
                             f"[LAZY DEBUG] Clearing stale values for target tensor {id(t)} "
-                            f"(epoch: {t._impl.values_epoch} != {self.epoch})"
+                            f"(epoch: {t._impl.graph_values_epoch} != {self.epoch})"
                         )
-                    t._impl._values = []
+                    t._impl._graph_values = []
 
-                if not t._impl._values and t._impl.is_realized:
+                if not t._impl._graph_values and t._impl.is_realized:
                     self.add_input(t)
 
-                values = t._impl._values
+                values = t._impl._graph_values
                 if not values:
                     print(f"FAILED TENSOR {id(t)} info:")
                     print(f"  sharding: {t.sharding}")
                     print(f"  realized: {t.is_realized}")
-                    print(f"  epoch: {t._impl.values_epoch}")
+                    print(f"  epoch: {t._impl.graph_values_epoch}")
                     print(f"  graph epoch: {self.epoch}")
                     if t._impl.output_refs:
                         print(f"  op: {t._impl.op_name}")
@@ -216,14 +216,14 @@ class ComputeGraph:
 
                 if values and len(values) > 1:
                     for shard_idx, val in enumerate(values):
-                        all_values.append(val)
+                        all_graph_values.append(val)
                         value_map.append((t, shard_idx))
                 else:
-                    all_values.append(values[0])
+                    all_graph_values.append(values[0])
                     value_map.append((t, None))
 
             seed = ops.random._peek_seed()
-            self.graph.output(seed, *all_values)
+            self.graph.output(seed, *all_graph_values)
 
         if DEBUG_LAZY_EVAL:
             print("[LAZY EVAL] MAX Graph:")
@@ -276,8 +276,8 @@ class ComputeGraph:
                 if len(shard_results) > 1:
 
                     shard_results.sort(key=lambda x: x[0] if x[0] is not None else 0)
-                    t._impl._storages = [r for _, r in shard_results]
-                    t._impl._values = []
+                    t._impl._buffers = [r for _, r in shard_results]
+                    t._impl._graph_values = []
                 else:
 
                     _, storage = shard_results[0]
@@ -293,8 +293,8 @@ class ComputeGraph:
         """Populates tensors with execution results."""
         for t, storage in zip(unrealized, results, strict=True):
             if isinstance(storage, list):
-                t._impl._storages = storage
-                t._impl._values = []
+                t._impl._buffers = storage
+                t._impl._graph_values = []
             else:
                 t.storage = storage
                 t._value = None

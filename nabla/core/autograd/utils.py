@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ..graph.tracing import Trace, OutputRefs
+    from ..graph.tracing import Trace, OpNode
     from ..tensor.impl import TensorImpl
 
 from ..tensor.api import Tensor
@@ -128,9 +128,9 @@ class BackwardEngine:
 
         for x in pytree.tree_leaves(tree):
             if isinstance(x, Tensor):
-                self._original_flags[id(x)] = x.traced
+                self._original_flags[id(x)] = x.is_traced
                 if not self.create_graph:
-                    x.traced = False
+                    x.is_traced = False
 
     def _restore_trace_state(self, tree: Any):
         """Restore original tracing flags."""
@@ -138,7 +138,7 @@ class BackwardEngine:
 
         for x in pytree.tree_leaves(tree):
             if isinstance(x, Tensor) and id(x) in self._original_flags:
-                x.traced = self._original_flags[id(x)]
+                x.is_traced = self._original_flags[id(x)]
 
     def run(self) -> dict[Tensor, Tensor]:
         """Execute backward pass."""
@@ -146,7 +146,7 @@ class BackwardEngine:
             self._process_node(node)
         return self._finalize()
 
-    def _process_node(self, node: OutputRefs):
+    def _process_node(self, node: OpNode):
         from ..common import pytree
         from ..tensor.impl import TensorImpl
 
@@ -301,7 +301,7 @@ def backward_on_trace(
     if not trace._computed:
         trace.compute()
 
-    trace.rehydrate()
+    trace.refresh_graph_values()
 
     engine = BackwardEngine(trace, cotangents, create_graph=create_graph)
     return engine.run()

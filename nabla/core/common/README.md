@@ -11,7 +11,7 @@ The `common` module provides the foundational infrastructure used across the ent
 Nabla uses a **JAX-compatible Pytree system**. A pytree is a tree of Python containers (list, tuple, dict) where the leaves are Tensors (or other data).
 - **Flattening**: Converts arbitrary nested structures into a flat list of leaves + a `PyTreeDef` (structure).
 - **Fast Traversal**: `tree_map` avoids intermediate object creation by traversing structures in-place.
-- **Node Registry**: Supports custom types (like `OutputRefs`) via a registry system.
+- **Node Registry**: Supports custom types (like `OpNode`) via a registry system.
 - **Tensor Awareness**: Includes helpers like `tensor_leaves`, `traced`, and `with_batch_dims` specifically for Nabla internal metadata.
 
 ### Context

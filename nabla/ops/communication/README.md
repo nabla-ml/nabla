@@ -8,24 +8,24 @@
 
 ### The Key Architectural Difference
 
-**Normal ops** (matmul, add, relu) follow this flow in `physical_execute`:
+**Normal ops** (matmul, add, relu) follow this flow in `execute`:
 ```
-physical_execute → spmd.execute_on_shards → self.maxpr(shard_value)
+execute → spmd.execute_on_shards → self.kernel(shard_value)
                    (loops over shards)       (MAX graph op)
 ```
 
-**Communication ops COMPLETELY OVERRIDE `physical_execute`** to work directly on the `list[TensorValue]`:
+**Communication ops COMPLETELY OVERRIDE `execute`** to work directly on the `list[TensorValue]`:
 ```
-physical_execute → self._reduce_logic(shard_values)
+execute → self._reduce_logic(shard_values)
                    (custom logic that COORDINATES across all shards)
 ```
 
 This is critical because collectives aren't "per-shard" operations—they inherently involve ALL shards talking to each other.
 
-### Inside AllReduceOp.physical_execute
+### Inside AllReduceOp.execute
 
 ```python
-def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+def execute(self, args: tuple, kwargs: dict) -> Any:
     sharded_tensor = args[0]
     
     # 1. Get the list of TensorValues (one per device)

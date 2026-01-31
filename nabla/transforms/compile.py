@@ -63,7 +63,7 @@ class _CachedModel:
     input_order: list[int]
     output_treedef: Any
     output_tensor_mask: list[bool]
-    output_static_values: list[Any]
+    output_static_graph_values: list[Any]
 
 
 class CompiledFunction(Generic[T]):
@@ -200,7 +200,7 @@ class CompiledFunction(Generic[T]):
                 input_order=list(range(len(tensor_idx))),
                 output_treedef=out_treedef,
                 output_tensor_mask=output_mask,
-                output_static_values=static_out,
+                output_static_graph_values=static_out,
             )
 
             self._add_to_cache(key, cached, t0)
@@ -298,7 +298,7 @@ class CompiledFunction(Generic[T]):
 
         all_leaves: list[Any] = []
         tensor_iter = iter(Tensor(storage=o) for o in outputs)
-        static_iter = iter(cached.output_static_values)
+        static_iter = iter(cached.output_static_graph_values)
 
         for is_tensor in cached.output_tensor_mask:
             all_leaves.append(next(tensor_iter) if is_tensor else next(static_iter))

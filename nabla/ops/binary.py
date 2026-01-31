@@ -20,7 +20,7 @@ class AddOp(BinaryOperation):
     def name(self) -> str:
         return "add"
 
-    def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
+    def kernel(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.add(args[0], args[1])
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
@@ -39,7 +39,7 @@ class MulOp(BinaryOperation):
     def name(self) -> str:
         return "mul"
 
-    def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
+    def kernel(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.mul(args[0], args[1])
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
@@ -63,7 +63,7 @@ class SubOp(BinaryOperation):
     def name(self) -> str:
         return "sub"
 
-    def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
+    def kernel(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.sub(args[0], args[1])
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
@@ -84,7 +84,7 @@ class DivOp(BinaryOperation):
     def name(self) -> str:
         return "div"
 
-    def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
+    def kernel(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.div(args[0], args[1])
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
@@ -137,10 +137,10 @@ class MatmulOp(Operation):
 
         return 2.0 * batch_size * m * n * k
 
-    def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
+    def kernel(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.matmul(args[0], args[1])
 
-    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+    def execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for Matmul."""
         from ..core import GRAPH
         from ..core.sharding import spmd
@@ -149,7 +149,7 @@ class MatmulOp(Operation):
 
         with GRAPH.graph:
             shard_results = spmd.execute_on_shards(
-                self.maxpr, args, kwargs, mesh, op=self
+                self.kernel, args, kwargs, mesh, op=self
             )
 
         return (shard_results, None, mesh)

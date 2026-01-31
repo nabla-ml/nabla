@@ -21,7 +21,7 @@ class ConstantOp(Operation):
     def name(self) -> str:
         return "constant"
 
-    def maxpr(
+    def kernel(
         self,
         value: NestedArray | Number,
         dtype: DType,
@@ -29,11 +29,11 @@ class ConstantOp(Operation):
     ) -> TensorValue:
         return ops.constant(value, dtype, device)
 
-    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+    def execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for ConstantOp.
-        
+
         Creation ops don't use sharding - they create new data.
-        We just call maxpr once and replicate across all shards if needed.
+        We just call kernel once and replicate across all shards if needed.
         """
         from ..core import GRAPH
         from ..core.sharding import spmd
@@ -43,7 +43,7 @@ class ConstantOp(Operation):
         num_shards = len(mesh.devices) if mesh else 1
 
         with GRAPH.graph:
-            result = self.maxpr(*args, **kwargs)
+            result = self.kernel(*args, **kwargs)
             shard_results = [result] * num_shards
 
         return (shard_results, None, mesh)
@@ -60,7 +60,7 @@ class FullOp(Operation):
     def name(self) -> str:
         return "full"
 
-    def maxpr(
+    def kernel(
         self,
         shape: ShapeLike,
         value: Number,
@@ -70,7 +70,7 @@ class FullOp(Operation):
         const = ops.constant(value, dtype, device)
         return ops.broadcast_to(const, shape)
 
-    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+    def execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for FullOp."""
         from ..core import GRAPH
         from ..core.sharding import spmd
@@ -80,7 +80,7 @@ class FullOp(Operation):
         num_shards = len(mesh.devices) if mesh else 1
 
         with GRAPH.graph:
-            result = self.maxpr(*args, **kwargs)
+            result = self.kernel(*args, **kwargs)
             shard_results = [result] * num_shards
 
         return (shard_results, None, mesh)
@@ -96,7 +96,7 @@ class ZerosOp(Operation):
     def name(self) -> str:
         return "zeros"
 
-    def maxpr(
+    def kernel(
         self,
         shape: ShapeLike,
         dtype: DType,
@@ -105,7 +105,7 @@ class ZerosOp(Operation):
         const = ops.constant(0, dtype, device)
         return ops.broadcast_to(const, shape)
 
-    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+    def execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for ZerosOp."""
         from ..core import GRAPH
         from ..core.sharding import spmd
@@ -115,7 +115,7 @@ class ZerosOp(Operation):
         num_shards = len(mesh.devices) if mesh else 1
 
         with GRAPH.graph:
-            result = self.maxpr(*args, **kwargs)
+            result = self.kernel(*args, **kwargs)
             shard_results = [result] * num_shards
 
         return (shard_results, None, mesh)
@@ -131,7 +131,7 @@ class OnesOp(Operation):
     def name(self) -> str:
         return "ones"
 
-    def maxpr(
+    def kernel(
         self,
         shape: ShapeLike,
         dtype: DType,
@@ -140,7 +140,7 @@ class OnesOp(Operation):
         const = ops.constant(1, dtype, device)
         return ops.broadcast_to(const, shape)
 
-    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+    def execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for OnesOp."""
         from ..core import GRAPH
         from ..core.sharding import spmd
@@ -150,7 +150,7 @@ class OnesOp(Operation):
         num_shards = len(mesh.devices) if mesh else 1
 
         with GRAPH.graph:
-            result = self.maxpr(*args, **kwargs)
+            result = self.kernel(*args, **kwargs)
             shard_results = [result] * num_shards
 
         return (shard_results, None, mesh)
@@ -166,7 +166,7 @@ class ArangeOp(Operation):
     def name(self) -> str:
         return "arange"
 
-    def maxpr(
+    def kernel(
         self,
         start: int,
         stop: int,
@@ -176,7 +176,7 @@ class ArangeOp(Operation):
     ) -> TensorValue:
         return ops.range(start, stop, step, dtype=dtype, device=device)
 
-    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+    def execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for ArangeOp."""
         from ..core import GRAPH
         from ..core.sharding import spmd
@@ -186,7 +186,7 @@ class ArangeOp(Operation):
         num_shards = len(mesh.devices) if mesh else 1
 
         with GRAPH.graph:
-            result = self.maxpr(*args, **kwargs)
+            result = self.kernel(*args, **kwargs)
             shard_results = [result] * num_shards
 
         return (shard_results, None, mesh)
@@ -202,7 +202,7 @@ class UniformOp(Operation):
     def name(self) -> str:
         return "uniform"
 
-    def maxpr(
+    def kernel(
         self,
         shape: ShapeLike,
         low: float,
@@ -213,9 +213,9 @@ class UniformOp(Operation):
         tensor_type = TensorType(dtype, shape, device=DeviceRef.from_device(device))
         return ops.random.uniform(tensor_type, range=(low, high))
 
-    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+    def execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for UniformOp.
-        
+
         Random ops create independent samples on each shard.
         """
         from ..core import GRAPH
@@ -227,7 +227,7 @@ class UniformOp(Operation):
 
         with GRAPH.graph:
             # Each shard gets independent random values
-            shard_results = [self.maxpr(*args, **kwargs) for _ in range(num_shards)]
+            shard_results = [self.kernel(*args, **kwargs) for _ in range(num_shards)]
 
         return (shard_results, None, mesh)
 
@@ -239,7 +239,7 @@ class GaussianOp(Operation):
     def name(self) -> str:
         return "gaussian"
 
-    def maxpr(
+    def kernel(
         self,
         shape: ShapeLike,
         mean: float,
@@ -250,9 +250,9 @@ class GaussianOp(Operation):
         tensor_type = TensorType(dtype, shape, device=DeviceRef.from_device(device))
         return ops.random.gaussian(tensor_type, mean=mean, std=std)
 
-    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+    def execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for GaussianOp.
-        
+
         Random ops create independent samples on each shard.
         """
         from ..core import GRAPH
@@ -264,7 +264,7 @@ class GaussianOp(Operation):
 
         with GRAPH.graph:
             # Each shard gets independent random values
-            shard_results = [self.maxpr(*args, **kwargs) for _ in range(num_shards)]
+            shard_results = [self.kernel(*args, **kwargs) for _ in range(num_shards)]
 
         return (shard_results, None, mesh)
 
@@ -333,13 +333,13 @@ def full(
     *,
     dtype: DType | None = None,
     device: Device | None = None,
-    traced: bool = False,
+    is_traced: bool = False,
 ):
     """Create a tensor filled with a constant value."""
     dtype, device = defaults(dtype, device)
     t = _full_op(shape, value, dtype, device)
-    if traced:
-        t.traced = True
+    if is_traced:
+        t.is_traced = True
     return t
 
 
@@ -348,13 +348,13 @@ def zeros(
     *,
     dtype: DType | None = None,
     device: Device | None = None,
-    traced: bool = False,
+    is_traced: bool = False,
 ):
     """Create a tensor filled with zeros."""
     dtype, device = defaults(dtype, device)
     t = _zeros_op(shape, dtype, device)
-    if traced:
-        t.traced = True
+    if is_traced:
+        t.is_traced = True
     return t
 
 
@@ -363,13 +363,13 @@ def ones(
     *,
     dtype: DType | None = None,
     device: Device | None = None,
-    traced: bool = False,
+    is_traced: bool = False,
 ):
     """Create a tensor filled with ones."""
     dtype, device = defaults(dtype, device)
     t = _ones_op(shape, dtype, device)
-    if traced:
-        t.traced = True
+    if is_traced:
+        t.is_traced = True
     return t
 
 

@@ -10,19 +10,19 @@ from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
-from ..base import LogicalAxisOperation, LogicalShapeOperation, Operation
+from ..base import AxisOp, ShapeOp, Operation
 from .axes import unsqueeze
 
 if TYPE_CHECKING:
     from ...core import Tensor
 
 
-class BroadcastToOp(LogicalShapeOperation):
+class BroadcastToOp(ShapeOp):
     @property
     def name(self) -> str:
         return "broadcast_to"
 
-    def maxpr(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
+    def kernel(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
 
         return ops.broadcast_to(x, shape)
 
@@ -123,7 +123,7 @@ class BroadcastToOp(LogicalShapeOperation):
         return broadcast_to(tangents, target_shape)
 
 
-class ReshapeOp(LogicalShapeOperation):
+class ReshapeOp(ShapeOp):
     @property
     def name(self) -> str:
         return "reshape"
@@ -160,7 +160,7 @@ class ReshapeOp(LogicalShapeOperation):
 
         return super().__call__(x, shape=shape)
 
-    def maxpr(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
+    def kernel(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
         return ops.reshape(x, shape)
 
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
@@ -291,7 +291,7 @@ class SliceUpdateOp(Operation):
             x, update, slices=tuple(slices), start=resolved_start, size=size
         )
 
-    def maxpr(
+    def kernel(
         self,
         x: TensorValue,
         update: TensorValue,
@@ -416,7 +416,7 @@ class SliceTensorOp(Operation):
             x, slices=tuple(slices), start=resolved_start, size=size
         )
 
-    def maxpr(
+    def kernel(
         self, x: TensorValue, *, slices: tuple[slice, ...], **kwargs
     ) -> TensorValue:
         return ops.slice_tensor(x, slices)
@@ -543,7 +543,7 @@ class SliceTensorOp(Operation):
         new_kwargs["start"] = tuple(local_start_indices)
         new_kwargs["size"] = tuple(local_sizes)
 
-        # Reconstruct slices for maxpr (assuming full rank coverage)
+        # Reconstruct slices for kernel (assuming full rank coverage)
         final_slices = []
 
         # Prepend batch dims if present
@@ -558,7 +558,7 @@ class SliceTensorOp(Operation):
         return new_kwargs
 
 
-class ConcatenateOp(LogicalAxisOperation):
+class ConcatenateOp(AxisOp):
     """Concatenate tensors along an axis."""
 
     @property
@@ -571,7 +571,7 @@ class ConcatenateOp(LogicalAxisOperation):
 
         return super().__call__(tensors, axis=axis)
 
-    def maxpr(self, tensors: list[TensorValue], *, axis: int = 0) -> TensorValue:
+    def kernel(self, tensors: list[TensorValue], *, axis: int = 0) -> TensorValue:
         return ops.concat(tensors, axis)
 
     def sharding_rule(
@@ -707,7 +707,7 @@ class BroadcastToPhysicalOp(Operation):
     def name(self) -> str:
         return "broadcast_to_physical"
 
-    def maxpr(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
+    def kernel(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
         return ops.broadcast_to(x, shape)
 
     def __call__(self, x: Tensor, *, shape: tuple[int, ...]) -> Tensor:

@@ -24,9 +24,9 @@ val, grads = nabla.value_and_grad(loss_fn)(params, x, y)
 ```
 
 **How it works** (see [core/autograd/](../core/autograd/README.md)):
-1. **Trace**: Execute `loss_fn` with tracing enabled, capturing OutputRefs
+1. **Trace**: Execute `loss_fn` with tracing enabled, capturing OpNode
 2. **Rehydrate**: Restore all intermediate `_values` for current epoch
-3. **Backward**: Walk OutputRefs in reverse, calling `vjp_rule` per operation
+3. **Backward**: Walk OpNode in reverse, calling `vjp_rule` per operation
 4. **Accumulate**: Sum cotangents where tensors are used multiple times
 
 ### `vmap` - Automatic Vectorization
@@ -135,7 +135,7 @@ result = fast_fn(x2, y2)
 Rehydration is needed because graph `_values` are epoch-scoped. After `evaluate()`, old values become stale. Before backward pass (or trace replay), rehydration restores them:
 
 ```python
-def rehydrate(trace):
+def refresh_graph_values(trace):
     # 1. Find all leaves (constants, inputs without output_refs)
     # 2. Ensure leaves are realized
     # 3. Add leaves to current graph epoch
@@ -147,7 +147,7 @@ def rehydrate(trace):
         kwargs = output_refs.op_kwargs  # ← original kwargs!
         
         # Re-execute to get fresh values
-        result = op.physical_execute(args, kwargs)
+        result = op.execute(args, kwargs)
         
         # Map values back to original TensorImpls
         for ref, new_impl in zip(output_refs._refs, result_impls):
@@ -157,7 +157,7 @@ def rehydrate(trace):
                 original_impl.values_epoch = GRAPH.epoch
 ```
 
-**Why original kwargs**: `physical_execute` adapts internally. This is the only way rehydration can work correctly.
+**Why original kwargs**: `execute` adapts internally. This is the only way rehydration can work correctly.
 
 ---
 

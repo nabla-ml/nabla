@@ -34,7 +34,7 @@ class Operation(ABC):
     @abstractmethod
     def name(self) -> str: ...
 
-    def maxpr(self, *args: graph.TensorValue, **kwargs: Any) -> Any:
+    def kernel(self, *args: graph.TensorValue, **kwargs: Any) -> Any:
         """Returns TensorValue or pytree of TensorValues."""
         ...
 
@@ -64,12 +64,12 @@ class Operation(ABC):
             total += elements * dtype_bytes
         return total
 
-    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
-        """Default physical execution: execute maxpr on each shard independently.
-        
+    def execute(self, args: tuple, kwargs: dict) -> Any:
+        """Default physical execution: execute kernel on each shard independently.
+
         This is the standard pattern used by most operations. Operations with
         specialized execution logic (communication ops, reductions, etc.) can override.
-        
+
         Returns:
             tuple: (shard_results, output_sharding, mesh)
         """
@@ -80,7 +80,7 @@ class Operation(ABC):
 
         with GRAPH.graph:
             shard_results = spmd.execute_on_shards(
-                self.maxpr, args, kwargs, mesh, op=self
+                self.kernel, args, kwargs, mesh, op=self
             )
 
         output_sharding, _, _ = spmd.infer_output_sharding(
@@ -92,7 +92,7 @@ class Operation(ABC):
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
 
         # === New Path: Physical Execution ===
-        if hasattr(self, "physical_execute"):
+        if hasattr(self, "execute"):
             from ..core import GRAPH, Tensor, pytree
             from ..core.sharding import spmd
 
@@ -106,7 +106,7 @@ class Operation(ABC):
                 if isinstance(x, Tensor):
                     if x.batch_dims > max_batch_dims:
                         max_batch_dims = x.batch_dims
-                    if x.traced:
+                    if x.is_traced:
                         any_traced = True
                     if x.is_sharded:
                         any_sharded = True
@@ -125,33 +125,33 @@ class Operation(ABC):
             # Perform the data movement (Logical Adaptation)
             resharded_args = spmd.reshard_inputs(args, input_shardings, mesh)
 
-            # 3. Physical Execution 
+            # 3. Physical Execution
             with GRAPH.graph:
-                raw_result = self.physical_execute(resharded_args, kwargs)
+                raw_result = self.execute(resharded_args, kwargs)
 
             # 4. Packaging (Wrapping raw values into nabla.Tensor)
-            shard_values = None
+            shard_graph_values = None
             output_sharding = None
             res_mesh = mesh
 
             if isinstance(raw_result, tuple) and len(raw_result) == 3:
-                shard_values, output_sharding, res_mesh = raw_result
-            elif hasattr(raw_result, "shard_values"):
-                shard_values = raw_result.shard_values
+                shard_graph_values, output_sharding, res_mesh = raw_result
+            elif hasattr(raw_result, "shard_graph_values"):
+                shard_graph_values = raw_result.shard_graph_values
                 output_sharding = getattr(raw_result, "output_sharding", None)
                 res_mesh = getattr(raw_result, "mesh", mesh)
             else:
-                shard_values = raw_result
+                shard_graph_values = raw_result
 
             # Use predicted spec if physical execution didn't return one
             if output_sharding is None:
                 output_sharding = predicted_output_spec
 
             # Handle structured outputs (tuples/lists from multi-output ops like split)
-            first_shard = shard_values[0] if shard_values else None
+            first_shard = shard_graph_values[0] if shard_graph_values else None
             if isinstance(first_shard, (list, tuple)):
                 # Unzip: [(a0, b0), (a1, b1)] -> ([a0, a1], [b0, b1])
-                unzipped = list(zip(*shard_values))
+                unzipped = list(zip(*shard_graph_values))
                 outputs = []
                 for res_shards in unzipped:
                     outputs.append(
@@ -169,7 +169,7 @@ class Operation(ABC):
                 keys = first_shard.keys()
                 outputs = {}
                 for k in keys:
-                    res_shards = [r[k] for r in shard_values]
+                    res_shards = [r[k] for r in shard_graph_values]
                     outputs[k] = spmd.create_sharded_output(
                         res_shards,
                         output_sharding,
@@ -180,7 +180,7 @@ class Operation(ABC):
                 output = outputs
             else:
                 output = spmd.create_sharded_output(
-                    shard_values,
+                    shard_graph_values,
                     output_sharding,
                     any_traced,
                     max_batch_dims,
@@ -211,7 +211,7 @@ class Operation(ABC):
 
             return output
 
-        # This should never happen since all operations now have physical_execute
+        # This should never happen since all operations now have execute
         # (either their own implementation or the default one from the base class)
         raise RuntimeError(
             f"Operation '{self.name}' reached unreachable code path. "
@@ -224,7 +224,7 @@ class Operation(ABC):
     def _transform_shard_kwargs(
         self, kwargs: dict, output_sharding: Any, shard_idx: int, args: tuple
     ) -> dict:
-        """Transform kwargs for per-shard maxpr execution."""
+        """Transform kwargs for per-shard kernel execution."""
 
         return kwargs
 
@@ -276,7 +276,7 @@ class Operation(ABC):
         args: tuple,
         logical_kwargs: dict,
     ) -> None:
-        """Set up OutputRefs for tracing support."""
+        """Set up OpNode for tracing support."""
         from ..core import Tensor, pytree
 
         output_impls = [
@@ -288,7 +288,7 @@ class Operation(ABC):
 
         import weakref
 
-        from ..core import OutputRefs
+        from ..core import OpNode
 
         _, output_tree_def = pytree.tree_flatten(output, is_leaf=pytree.is_tensor)
         weak_refs = tuple(weakref.ref(impl) for impl in output_impls)
@@ -302,7 +302,7 @@ class Operation(ABC):
             pytree.tree_map(to_impl, logical_kwargs) if logical_kwargs else None
         )
 
-        output_refs = OutputRefs(
+        output_refs = OpNode(
             _refs=weak_refs,
             tree_def=output_tree_def,
             op=self,
@@ -332,7 +332,7 @@ class BinaryOperation(Operation):
             num_elements *= d
         return float(num_elements)
 
-    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+    def execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for Binary Ops."""
         from ..core import GRAPH
         from ..core.sharding import spmd
@@ -341,7 +341,7 @@ class BinaryOperation(Operation):
 
         with GRAPH.graph:
             shard_results = spmd.execute_on_shards(
-                self.maxpr, args, kwargs, mesh, op=self
+                self.kernel, args, kwargs, mesh, op=self
             )
 
         # Infer output sharding from inputs
@@ -412,7 +412,7 @@ class BinaryOperation(Operation):
         return tuple(result)
 
 
-class LogicalAxisOperation(Operation):
+class AxisOp(Operation):
     """Base for ops that take LOGICAL axis/axes kwargs.
 
     Translates integer kwargs by batch_dims offset.
@@ -439,10 +439,10 @@ class LogicalAxisOperation(Operation):
                 translated[key] = value
         return translated
 
-    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
-        """Physical execution for LogicalAxisOperation.
+    def execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for AxisOp.
 
-        Executes the maxpr on each shard independently.
+        Executes the kernel on each shard independently.
         Subclasses like ReduceOperation may override for specialized behavior.
 
         NOTE: This method receives RAW kwargs and performs adaptation internally.
@@ -463,7 +463,7 @@ class LogicalAxisOperation(Operation):
 
         with GRAPH.graph:
             shard_results = spmd.execute_on_shards(
-                self.maxpr, args, adapted_kwargs, mesh, op=self
+                self.kernel, args, adapted_kwargs, mesh, op=self
             )
 
         return (shard_results, None, mesh)
@@ -494,7 +494,7 @@ class LogicalAxisOperation(Operation):
         )
 
 
-class ReduceOperation(LogicalAxisOperation):
+class ReduceOperation(AxisOp):
     """Base for reduction operations (sum, mean, max, min, etc.)."""
 
     def compute_cost(
@@ -570,10 +570,10 @@ class ReduceOperation(LogicalAxisOperation):
         else:
             return tuple(d for i, d in enumerate(in_shape) if i != axis)
 
-    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+    def execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for Reduction Ops.
 
-        Executes the reduction maxpr on each shard independently.
+        Executes the reduction kernel on each shard independently.
         Cross-shard reductions (when reducing over sharded axes) are handled
         by the auto-AllReduce mechanism in Operation.__call__.
 
@@ -596,7 +596,7 @@ class ReduceOperation(LogicalAxisOperation):
 
         with GRAPH.graph:
             shard_results = spmd.execute_on_shards(
-                self.maxpr, args, adapted_kwargs, mesh, op=self
+                self.kernel, args, adapted_kwargs, mesh, op=self
             )
 
         return (shard_results, None, mesh)
@@ -616,7 +616,7 @@ class UnaryOperation(Operation):
             num_elements *= d
         return float(num_elements)
 
-    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+    def execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for Unary Ops."""
         from ..core import GRAPH
         from ..core.sharding import spmd
@@ -625,13 +625,13 @@ class UnaryOperation(Operation):
 
         with GRAPH.graph:
             shard_results = spmd.execute_on_shards(
-                self.maxpr, args, kwargs, mesh, op=self
+                self.kernel, args, kwargs, mesh, op=self
             )
 
         return (shard_results, None, mesh)
 
 
-class LogicalShapeOperation(Operation):
+class ShapeOp(Operation):
     """Base for ops that take LOGICAL shape kwargs."""
 
     def adapt_kwargs(self, args: tuple, kwargs: dict, batch_dims: int) -> dict:
@@ -684,10 +684,10 @@ class LogicalShapeOperation(Operation):
                 return new_kwargs
         return kwargs
 
-    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
-        """Physical execution for LogicalShapeOperation.
+    def execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for ShapeOp.
 
-        Executes maxpr on each shard with shape kwargs adapted for batch_dims.
+        Executes kernel on each shard with shape kwargs adapted for batch_dims.
 
         NOTE: This method receives RAW kwargs and performs adaptation internally.
         """
@@ -707,7 +707,7 @@ class LogicalShapeOperation(Operation):
 
         with GRAPH.graph:
             shard_results = spmd.execute_on_shards(
-                self.maxpr, args, adapted_kwargs, mesh, op=self
+                self.kernel, args, adapted_kwargs, mesh, op=self
             )
 
         return (shard_results, None, mesh)

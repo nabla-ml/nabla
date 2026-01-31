@@ -51,14 +51,14 @@ When you call any operation (e.g., `add(x, y)` or `x + y`), `Operation.__call__(
 │  │ PHASE 3: PHYSICAL EXECUTION  (lines ~128-130 in base.py)            │    │
 │  │                                                                     │    │
 │  │   with GRAPH.graph:                                                 │   │
-│  │       raw_result = self.physical_execute(resharded_args, kwargs)    │    │
+│  │       raw_result = self.execute(resharded_args, kwargs)    │    │
 │  │                                                                     │    │
-│  │   CRITICAL: physical_execute receives ORIGINAL kwargs, not adapted! │    │
+│  │   CRITICAL: execute receives ORIGINAL kwargs, not adapted! │    │
 │  │   It calls adapt_kwargs internally. This ensures rehydration works. │    │
 │  │                                                                     │    │
-│  │   Inside physical_execute (default implementation):                 │    │
+│  │   Inside execute (default implementation):                 │    │
 │  │   • Adapts kwargs internally                                        │    │
-│  │   • Loops over shards: spmd.execute_on_shards(self.maxpr, ...)      │    │
+│  │   • Loops over shards: spmd.execute_on_shards(self.kernel, ...)      │    │
 │  │   • Returns: (shard_values, output_sharding, mesh)                  │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                     │                                       │
@@ -89,7 +89,7 @@ When you call any operation (e.g., `add(x, y)` or `x + y`), `Operation.__call__(
 │  │   • Calls all_reduce_op.simulate_grouped_execution() per tensor     │    │
 │  │   • Uses op.collective_reduce_type (sum/max/min/prod)               │    │
 │  │   • Updates sharding spec to remove reduced axes                    │    │
-│  │   • Sets up OutputRefs for the all_reduce operation                 │    │
+│  │   • Sets up OpNode for the all_reduce operation                 │    │
 │  │                                                                     │    │
 │  │   When this triggers: contracting factors (like K in matmul)        │    │
 │  │   that were sharded produce partial sums needing reduction.         │    │
@@ -101,7 +101,7 @@ When you call any operation (e.g., `add(x, y)` or `x + y`), `Operation.__call__(
 │  │                                                                     │    │
 │  │   # 6a. Record for autodiff (graph node creation)                   │    │
 │  │   self._setup_output_refs(output, resharded_args, kwargs, ...)      │    │
-│  │   # Creates OutputRefs with: op, inputs, kwargs for backward pass   │    │
+│  │   # Creates OpNode with: op, inputs, kwargs for backward pass   │    │
 │  │   # Note: stores resharded_args, not original args                  │    │
 │  │                                                                     │    │
 │  │   # 6b. Forward-mode autodiff (JVP)                                 │    │
@@ -116,21 +116,21 @@ When you call any operation (e.g., `add(x, y)` or `x + y`), `Operation.__call__(
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Why `physical_execute` Receives Original kwargs
+### Why `execute` Receives Original kwargs
 
 This is a **critical design decision** for trace rehydration:
 
 ```python
 # In __call__:
-raw_result = self.physical_execute(resharded_args, kwargs)  # ← original kwargs!
+raw_result = self.execute(resharded_args, kwargs)  # ← original kwargs!
 
-# Inside physical_execute (default implementation):
-def physical_execute(self, args, kwargs):
+# Inside execute (default implementation):
+def execute(self, args, kwargs):
     adapted_kwargs = self.adapt_kwargs(args, kwargs, batch_dims)  # adapts here
-    shard_results = spmd.execute_on_shards(self.maxpr, args, adapted_kwargs, mesh)
+    shard_results = spmd.execute_on_shards(self.kernel, args, adapted_kwargs, mesh)
 ```
 
-During **rehydration** (replaying the trace for backward pass), we only have access to the original `kwargs` stored in `OutputRefs`. If `__call__` passed pre-adapted kwargs to `physical_execute`, rehydration would fail or produce wrong results.
+During **rehydration** (replaying the trace for backward pass), we only have access to the original `kwargs` stored in `OpNode`. If `__call__` passed pre-adapted kwargs to `execute`, rehydration would fail or produce wrong results.
 
 ---
 
@@ -140,7 +140,7 @@ During **rehydration** (replaying the trace for backward pass), we only have acc
 Operation (base class - defines __call__ lifecycle)
 │
 ├── UnaryOperation        # Single input: relu, exp, neg
-│   └── Default physical_execute loops over shards
+│   └── Default execute loops over shards
 │
 ├── BinaryOperation       # Two inputs: add, mul, matmul  
 │   └── Overrides __call__ to broadcast shapes BEFORE parent lifecycle
@@ -158,8 +158,8 @@ Operation (base class - defines __call__ lifecycle)
 | Method | Required | Purpose | Code Location |
 |--------|----------|---------|---------------|
 | `name` | ✅ | String identifier | Property |
-| `maxpr(*args, **kwargs)` | ✅ | MAX primitive (per-shard) | Called in shard loop |
-| `physical_execute(args, kwargs)` | Has default | Custom execution logic | Override if needed |
+| `kernel(*args, **kwargs)` | ✅ | MAX primitive (per-shard) | Called in shard loop |
+| `execute(args, kwargs)` | Has default | Custom execution logic | Override if needed |
 | `adapt_kwargs(args, kwargs, batch_dims)` | Has default | Translate logical→physical kwargs | Override for axis ops |
 | `vjp_rule(primals, cotangent, output)` | For autodiff | Backward gradient | [core/autograd/](../core/autograd/) |
 | `jvp_rule(primals, tangents, output)` | For forward-mode | Forward tangent | execution_utils.py |
@@ -182,7 +182,7 @@ y = matmul(A, B)  # A: [M, K] sharded on K, B: [K, N]
 - If B's K dim has different sharding → `reshard_inputs` inserts communication
 
 **Phase 3 (Physical Execution)**:
-- Loops over shards, calls `matmul.maxpr(A_shard, B_shard)`
+- Loops over shards, calls `matmul.kernel(A_shard, B_shard)`
 - Each shard computes partial `[M, N]` result
 
 **Phase 4 (Packaging)**: Wraps shard results into output Tensor
@@ -192,7 +192,7 @@ y = matmul(A, B)  # A: [M, K] sharded on K, B: [K, N]
 - `apply_auto_reduction` calls grouped all-reduce
 - Produces correct global `[M, N]` result
 
-**Phase 6 (Tracing)**: Records OutputRefs for backward pass
+**Phase 6 (Tracing)**: Records OpNode for backward pass
 
 ---
 
@@ -218,7 +218,7 @@ y = matmul(A, B)  # A: [M, K] sharded on K, B: [K, N]
 ## Maintenance Guide
 
 > **AI Agents - Critical Rules**:
-> 1. **`physical_execute` contract**: MUST receive original kwargs and adapt internally. Breaking this breaks rehydration.
+> 1. **`execute` contract**: MUST receive original kwargs and adapt internally. Breaking this breaks rehydration.
 > 2. **`_setup_output_refs`**: Stores `resharded_args`, not original args. Backward pass needs correctly sharded inputs.
 > 3. **`adapt_kwargs`**: Only positive axis indices need translation. Negative indices index from end in both logical and physical.
 > 4. **Testing**: Every op needs gradient tests via `nabla.grad(fn)(x)`.

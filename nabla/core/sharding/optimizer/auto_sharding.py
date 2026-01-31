@@ -16,7 +16,7 @@ from ..propagation import (
 from ..spec import DeviceMesh, DimSpec, ShardingSpec
 
 
-class SimpleSolver:
+class AutoSharding:
     """Solver that uses factor-based propagation with cost-based seeding.
 
     Phases:

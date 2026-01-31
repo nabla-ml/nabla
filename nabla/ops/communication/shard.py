@@ -83,7 +83,7 @@ class ShardOp(Operation):
 
         return self._simulate_shard_execution(x, global_shape, spec, mesh)
 
-    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+    def execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for ShardOp.
 
         Derives all physical metadata from args/kwargs and slices the input.
@@ -150,24 +150,24 @@ class ShardOp(Operation):
                 x_input = g.TensorValue(x)
 
             # _shard_logic expects a single value input usually (replicated)
-            shard_values = self._shard_logic(
+            shard_graph_values = self._shard_logic(
                 x_input, mesh, dim_specs, global_shape=global_shape, **kwargs
             )
 
-            return (shard_values, target_spec, mesh)
+            return (shard_graph_values, target_spec, mesh)
 
     def _simulate_shard_execution(self, x, global_shape, spec, mesh):
         """Execute sharding manually for all devices (simulation)."""
         num_shards = len(mesh.devices)
-        shard_values = []
+        shard_graph_values = []
         for shard_idx in range(num_shards):
             val = self._slice_for_device(x, global_shape, spec, shard_idx, mesh)
 
             if mesh.is_distributed:
                 val = ops.transfer_to(val, mesh.device_refs[shard_idx])
-            shard_values.append(val)
+            shard_graph_values.append(val)
 
-        return shard_values
+        return shard_graph_values
 
     def _slice_for_device(self, x, global_shape, spec, shard_idx, mesh):
         from ...core.sharding.spec import compute_local_shape
@@ -178,7 +178,7 @@ class ShardOp(Operation):
 
         if isinstance(x, Tensor):
             # No hydrate needed, checked by caller or covered by graph context
-            vals = x._values
+            vals = x._graph_values
 
             if vals and len(vals) > 0:
                 # If we have shards, try to find the one matching our device index

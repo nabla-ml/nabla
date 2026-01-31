@@ -8,7 +8,7 @@
 
 ### The Global GRAPH Singleton
 
-All operations are recorded in the global `GRAPH` (`ComputeGraph`). No explicit graph contexts for users.
+All operations are recorded in the global `GRAPH` (`Graph`). No explicit graph contexts for users.
 
 ```python
 from nabla.core import GRAPH
@@ -22,7 +22,7 @@ z = y * 2  # Adds another node
 
 Graph values (`_values`) are scoped to **epochs**:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                           Epoch Lifecycle                               │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -51,13 +51,13 @@ Graph values (`_values`) are scoped to **epochs**:
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### OutputRefs: The Graph Node
+### OpNode: The Graph Node
 
-Every operation creates an `OutputRefs` node linking outputs to their creation context:
+Every operation creates an `OpNode` node linking outputs to their creation context:
 
 ```python
 @dataclass
-class OutputRefs:
+class OpNode:
     _refs: tuple[weakref.ref, ...]  # Weak refs to output TensorImpls
     tree_def: PyTreeDef             # Structure of outputs (for multi-output ops)
     op: Operation                   # The operation that created these outputs
@@ -75,7 +75,7 @@ class OutputRefs:
 t = trace(lambda x: x * 2 + 1, input_tensor)
 # t.inputs = (input_tensor,)
 # t.outputs = result_tensor
-# t.nodes = [OutputRefs(mul), OutputRefs(add)]  # topological order
+# t.nodes = [OpNode(mul), OpNode(add)]  # topological order
 ```
 
 **Trace.compute()**: Walks backward from outputs via `output_refs.op_args`, collecting nodes in topological order via DFS.
@@ -84,12 +84,12 @@ t = trace(lambda x: x * 2 + 1, input_tensor)
 
 **Why needed**: Before backward pass (or trace replay), intermediate tensors may have stale `_values`. Rehydration replays operations to restore them.
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                         Trace.rehydrate()                               │
+│                         Trace.refresh_graph_values()                               │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
-│  def rehydrate(self):                                                   │
+│  def refresh_graph_values(self):                                                   │
 │      # 1. Find leaf tensors (no output_refs = constants/inputs)         │
 │      leaf_impls = set()                                                 │
 │      for ref in self.nodes:                                             │
@@ -114,9 +114,9 @@ t = trace(lambda x: x * 2 + 1, input_tensor)
 │          args = wrap_as_tensors(output_refs.op_args)                    │
 │          kwargs = output_refs.op_kwargs  # ← ORIGINAL kwargs!           │
 │                                                                         │
-│          # physical_execute adapts kwargs internally                    │
+│          # execute adapts kwargs internally                    │
 │          with GRAPH.graph:                                              │
-│              result = op.physical_execute(args, kwargs)                 │
+│              result = op.execute(args, kwargs)                 │
 │                                                                         │
 │          # Map fresh values back to original TensorImpls                │
 │          for ref, new_impl in zip(output_refs._refs, result_impls):     │
@@ -128,7 +128,7 @@ t = trace(lambda x: x * 2 + 1, input_tensor)
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Critical design decision**: Rehydration calls `op.physical_execute(args, kwargs)` with **original kwargs**. This is why `physical_execute` must accept original kwargs and adapt internally—it's the only kwargs we have stored!
+**Critical design decision**: Rehydration calls `op.execute(args, kwargs)` with **original kwargs**. This is why `execute` must accept original kwargs and adapt internally—it's the only kwargs we have stored!
 
 ## Lazy Evaluation
 
@@ -147,16 +147,17 @@ print(z.numpy())  # NOW compilation + execution happens
 
 ## Component Map
 
-| File | Purpose | Key Exports |
-|------|---------|-------------|
-| [engine.py](engine.py) | Global graph singleton, evaluation | `ComputeGraph`, `GRAPH`, `driver_tensor_type` |
-| [tracing.py](tracing.py) | Trace capture, OutputRefs, rehydration | `Trace`, `OutputRefs`, `trace`, `GraphPrinter` |
-| [utils.py](utils.py) | Graph traversal algorithms | `get_operations_topological`, `get_all_impls_topological` |
+| File                     | Purpose                             | Key Exports                                                 |
+| :----------------------- | :---------------------------------- | :---------------------------------------------------------- |
+| [engine.py](engine.py)   | Global graph singleton, evaluation  | `Graph`, `GRAPH`, `driver_tensor_type`                      |
+| [tracing.py](tracing.py) | Trace capture, OpNode, rehydration  | `Trace`, `OpNode`, `trace`, `GraphPrinter`                  |
+| [utils.py](utils.py)     | Graph traversal algorithms          | `get_operations_topological`, `get_all_impls_topological`   |
 
 ## Maintenance Guide
 
 > **AI Agents - Critical Rules**:
-> 1. **OutputRefs.op_kwargs**: Must store ORIGINAL kwargs, not adapted. Rehydration depends on this.
+>
+> 1. **OpNode.op_kwargs**: Must store ORIGINAL kwargs, not adapted. Rehydration depends on this.
 > 2. **Epochs**: After `evaluate()`, epoch increments. All old `_values` become stale.
-> 3. **Weak refs**: OutputRefs uses weakrefs to outputs. GC'd tensors return `None` from `ref()`.
+> 3. **Weak refs**: OpNode uses weakrefs to outputs. GC'd tensors return `None` from `ref()`.
 > 4. **Graph context**: Physical execution must run inside `GRAPH.graph` context.

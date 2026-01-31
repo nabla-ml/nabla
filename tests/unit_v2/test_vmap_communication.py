@@ -87,7 +87,7 @@ class TestVmapCommunicationStress:
         # which has shape (batch, hidden/2) because each shard processes its local data sum.
         # Wait, if all_reduce is executed on sharded data, it usually reduces across the mesh.
         # But here we assume it outputs the same shape as input shard?
-        # Yes, maxpr all_reduce outputs same shape as input.
+        # Yes, kernel all_reduce outputs same shape as input.
 
         expected = expected_sum
 

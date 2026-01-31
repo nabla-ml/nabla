@@ -24,7 +24,7 @@ from .common import (
 from .graph import (
     GRAPH,
     ComputeGraph,
-    OutputRefs,
+    OpNode,
     Trace,
     apply_to_operations,
     driver_tensor_type,
@@ -39,7 +39,7 @@ from .autograd import grad, value_and_grad
 __all__ = [
     "Tensor",
     "TensorImpl",
-    "OutputRefs",
+    "OpNode",
     "defaults",
     "default_device",
     "default_dtype",

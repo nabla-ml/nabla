@@ -24,7 +24,7 @@ class ReduceSumOp(ReduceOperation):
     def name(self) -> str:
         return "reduce_sum"
 
-    def maxpr(
+    def kernel(
         self, x: TensorValue, *, axis: int, keepdims: bool = False
     ) -> TensorValue:
         return ops.sum(x, axis)
@@ -61,7 +61,7 @@ class MeanOp(ReduceOperation):
     def name(self) -> str:
         return "mean"
 
-    def maxpr(
+    def kernel(
         self, x: TensorValue, *, axis: int, keepdims: bool = False
     ) -> TensorValue:
         return ops.mean(x, axis)
@@ -120,7 +120,7 @@ class ReduceMaxOp(ReduceOperation):
     def collective_reduce_type(self) -> str:
         return "max"
 
-    def maxpr(
+    def kernel(
         self, x: TensorValue, *, axis: int, keepdims: bool = False
     ) -> TensorValue:
         return ops._reduce_max(x, axis=axis)
@@ -158,7 +158,7 @@ class ReduceSumPhysicalOp(Operation):
     def name(self) -> str:
         return "reduce_sum_physical"
 
-    def maxpr(
+    def kernel(
         self, x: TensorValue, *, axis: int, keepdims: bool = False
     ) -> TensorValue:
 
@@ -208,7 +208,7 @@ class MeanPhysicalOp(Operation):
     def name(self) -> str:
         return "mean_physical"
 
-    def maxpr(
+    def kernel(
         self, x: TensorValue, *, axis: int, keepdims: bool = False
     ) -> TensorValue:
 
@@ -262,7 +262,7 @@ class ReduceMaxPhysicalOp(Operation):
     def collective_reduce_type(self) -> str:
         return "max"
 
-    def maxpr(
+    def kernel(
         self, x: TensorValue, *, axis: int, keepdims: bool = False
     ) -> TensorValue:
 
@@ -316,7 +316,7 @@ class ReduceMinOp(ReduceOperation):
     def collective_reduce_type(self) -> str:
         return "min"
 
-    def maxpr(
+    def kernel(
         self, x: TensorValue, *, axis: int, keepdims: bool = False
     ) -> TensorValue:
         return ops._reduce_min(x, axis=axis)
@@ -345,7 +345,7 @@ class ReduceMinPhysicalOp(Operation):
     def collective_reduce_type(self) -> str:
         return "min"
 
-    def maxpr(
+    def kernel(
         self, x: TensorValue, *, axis: int, keepdims: bool = False
     ) -> TensorValue:
         return ops._reduce_min(x, axis=axis)

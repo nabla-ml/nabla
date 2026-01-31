@@ -49,14 +49,14 @@ def shard_map(
         traced = trace(func, *logical_args, **kwargs)
 
         if auto_sharding:
-            from ..core.sharding.optimizer.simple_solver import SimpleSolver
+            from ..core.sharding.optimizer.auto_sharding import AutoSharding
             from ..core.sharding.spec import DimSpec
 
             extractor = _ShardingGraphExtractor(
                 traced, in_specs, out_specs, debug=debug
             )
             json_graph = extractor.extract()
-            solver = SimpleSolver(mesh.shape, mesh.axis_names)
+            solver = AutoSharding(mesh.shape, mesh.axis_names)
             solution = solver.solve(json_graph, debug=debug)
 
         pytree.tree_map(

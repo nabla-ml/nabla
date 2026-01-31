@@ -41,7 +41,7 @@ class PPermuteOp(CollectiveOperation):
         # PPermute preserves sharding spec (it just moves data between devices).
         return input_sharding, [input_sharding], False
 
-    def physical_execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
+    def execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
         """Point-to-point permutation (Physical)."""
         from ...core import GRAPH, Tensor
 
@@ -62,22 +62,22 @@ class PPermuteOp(CollectiveOperation):
         with GRAPH.graph:
             values = sharded_tensor.values
 
-            # Ported logic from maxpr
-            result_values = self._ppermute_logic(values, permutation, mesh=mesh)
+            # Ported logic from kernel
+            result_graph_values = self._ppermute_logic(values, permutation, mesh=mesh)
 
         # 3. Output Spec (Preserve input spec)
         output_spec = sharded_tensor.sharding
 
-        return (result_values, output_spec, mesh)
+        return (result_graph_values, output_spec, mesh)
 
     def _ppermute_logic(
         self,
-        shard_values: list[TensorValue],
+        shard_graph_values: list[TensorValue],
         permutation: list[tuple],
         mesh: DeviceMesh = None,
     ) -> list[TensorValue]:
         """Permute values between devices according to permutation."""
-        num_devices = len(shard_values)
+        num_devices = len(shard_graph_values)
 
         dest_to_src = {}
         for src, dst in permutation:
@@ -92,7 +92,7 @@ class PPermuteOp(CollectiveOperation):
         for dst in range(num_devices):
             if dst in dest_to_src:
                 src = dest_to_src[dst]
-                val = shard_values[src]
+                val = shard_graph_values[src]
 
                 if mesh and mesh.is_distributed:
                     val = ops.transfer_to(val, mesh.device_refs[dst])
@@ -100,7 +100,7 @@ class PPermuteOp(CollectiveOperation):
                 results.append(val)
             else:
 
-                template = shard_values[0]
+                template = shard_graph_values[0]
                 zero_val = ops.constant(0, template.type.dtype, template.type.device)
                 zero_val = ops.broadcast_to(zero_val, template.type.shape)
                 results.append(zero_val)

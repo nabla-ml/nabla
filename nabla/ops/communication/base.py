@@ -16,11 +16,11 @@ if TYPE_CHECKING:
 class CollectiveOperation(Operation):
     """Base class for collective communication operations.
 
-    Handles value hydration, graph execution (maxpr), and output wrapping/sharding update.
+    Handles value hydration, graph execution (kernel), and output wrapping/sharding update.
     """
 
-    # Legacy execute and maxpr_all methods have been removed.
-    # All communication operations now implement physical_execute.
+    # Legacy execute and kernel_all methods have been removed.
+    # All communication operations now implement execute.
 
     def infer_sharding_spec(self, args: Any, mesh: DeviceMesh, kwargs: dict) -> Any:
         """Default adaptation: validate inputs and compute output spec."""
@@ -119,8 +119,8 @@ class CollectiveOperation(Operation):
         """Check if operation should proceed (has sharding and potentially multiple shards)."""
         if not tensor.sharding:
             return False
-        if (tensor._values and len(tensor._values) > 1) or (
-            tensor._storages and len(tensor._storages) > 1
+        if (tensor._graph_values and len(tensor._graph_values) > 1) or (
+            tensor._buffers and len(tensor._buffers) > 1
         ):
             return True
         return False
@@ -165,10 +165,10 @@ class CollectiveOperation(Operation):
         """Estimate cost of the collective operation."""
         return 0.0
 
-    def _group_shards_by_axes(self, shard_values, mesh, group_by_axes):
+    def _group_shards_by_axes(self, shard_graph_values, mesh, group_by_axes):
         """Group shards by coordinates on specific axes."""
         groups = {}
-        for shard_idx, val in enumerate(shard_values):
+        for shard_idx, val in enumerate(shard_graph_values):
             key_parts = []
             for axis_name in group_by_axes:
                 key_parts.append(mesh.get_coordinate(shard_idx, axis_name))

@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class OutputRefs:
+class OpNode:
     """Lightweight container for multi-output operation siblings.
 
     Attributes:
@@ -44,7 +44,7 @@ class OutputRefs:
         """Validate that refs and tree_def are consistent."""
         if len(self._refs) != self.tree_def.num_leaves:
             raise ValueError(
-                f"OutputRefs: ref count {len(self._refs)} doesn't match "
+                f"OpNode: ref count {len(self._refs)} doesn't match "
                 f"tree_def leaves {self.tree_def.num_leaves}"
             )
 
@@ -60,7 +60,7 @@ class OutputRefs:
     def __repr__(self) -> str:
         alive = sum(1 for ref in self._refs if ref() is not None)
         op_name = self.op.name if hasattr(self.op, "name") else str(self.op)
-        return f"OutputRefs(op={op_name}, outputs={self.num_outputs}, alive={alive})"
+        return f"OpNode(op={op_name}, outputs={self.num_outputs}, alive={alive})"
 
 
 COMM_OPS = {
@@ -88,14 +88,14 @@ class Trace:
     Attributes:
         inputs: Input pytree structure.
         outputs: Output pytree structure.
-        nodes: Topological list of OutputRefs.
+        nodes: Topological list of OpNode.
     """
 
     def __init__(self, inputs: Any, outputs: Any):
         self.inputs = inputs
         self.outputs = outputs
         self._computed = False
-        self.nodes: list[OutputRefs] = []
+        self.nodes: list[OpNode] = []
 
         from ..tensor.api import Tensor
 
@@ -109,7 +109,7 @@ class Trace:
             return
 
         visited: set[int] = set()
-        nodes: list[OutputRefs] = []
+        nodes: list[OpNode] = []
 
         from ..tensor.api import Tensor
 
@@ -117,12 +117,12 @@ class Trace:
             t._impl for t in tree_leaves(self.outputs) if isinstance(t, Tensor)
         ]
 
-        root_refs: list[OutputRefs] = []
+        root_refs: list[OpNode] = []
         for leaf in output_leaves:
             if leaf.output_refs is not None:
                 root_refs.append(leaf.output_refs)
 
-        def dfs(refs: OutputRefs) -> None:
+        def dfs(refs: OpNode) -> None:
             refs_id = id(refs)
             if refs_id in visited:
                 return
@@ -151,8 +151,8 @@ class Trace:
         self.nodes = nodes
         self._computed = True
 
-    def rehydrate(self) -> None:
-        """Rehydrate all TensorImpl._values by replaying operations.
+    def refresh_graph_values(self) -> None:
+        """Rehydrate all TensorImpl._graph_values by replaying operations.
 
         Identifies all leaf tensors in the trace (including captured constants),
         ensures they are realized, and then replays all operations in
@@ -186,13 +186,13 @@ class Trace:
         # 3. Add all leaves to the current graph to get fresh values.
         for t in leaf_tensors:
             GRAPH.add_input(t)
-            if hasattr(t, "_values") and t._values:
+            if hasattr(t, "_graph_values") and t._graph_values:
                 with GRAPH.graph:
-                    t._impl._values = [v[...] for v in t._values]
-                    t._impl._values = [v[...] for v in t._values]
-                    t._impl.values_epoch = GRAPH.epoch
+                    t._impl._graph_values = [v[...] for v in t._graph_values]
+                    t._impl._graph_values = [v[...] for v in t._graph_values]
+                    t._impl.graph_values_epoch = GRAPH.epoch
 
-        # 4. Iterate through nodes and call maxpr_all to recompute intermediates.
+        # 4. Iterate through nodes and call kernel_all to recompute intermediates.
         for i, output_refs in enumerate(self.nodes):
 
             alive_outputs = output_refs.get_alive_outputs()
@@ -231,34 +231,34 @@ class Trace:
                 mesh = first_out.sharding.mesh
 
             # === New Physical Execution Path ===
-            if hasattr(op, "physical_execute"):
+            if hasattr(op, "execute"):
                 try:
-                    # physical_execute returns a PhysicalResult (or tuple/list of TensorValues)
+                    # execute returns a PhysicalResult (or tuple/list of TensorValues)
                     # It handles its own auto-reduction and internal logic.
                     # We pass the original arguments and kwargs.
                     with GRAPH.graph:
-                        raw_result = op.physical_execute(op_args, op_kwargs)
+                        raw_result = op.execute(op_args, op_kwargs)
 
                     # If it returns a named tuple or custom object, we might need to extract values.
                     # For now, we assume it returns the raw value structure matching the output.
-                    # If PhysicalResult (namedtuple) is used, extracting .shard_values is needed.
+                    # If PhysicalResult (namedtuple) is used, extracting .shard_graph_values is needed.
                     # Let's assume for now it returns the values directly as the plan implies "raw values".
-                    # However, the plan mentioned PhysicalResult(shard_values, ...).
-                    # Let's be flexible: check if it has 'shard_values' attr.
+                    # However, the plan mentioned PhysicalResult(shard_graph_values, ...).
+                    # Let's be flexible: check if it has 'shard_graph_values' attr.
                     if isinstance(raw_result, tuple) and len(raw_result) == 3:
                         # Standard Tuple Return: (values, sharding, mesh)
-                        shard_values, r_sharding, r_mesh = raw_result
+                        shard_graph_values, r_sharding, r_mesh = raw_result
 
                         from ..sharding import spmd
 
                         output_tensor_struct = spmd.create_sharded_output(
-                            shard_values,
+                            shard_graph_values,
                             r_sharding,
-                            traced=True,  # Always true in rehydration
+                            is_traced=True,  # Always true in rehydration
                             batch_dims=max_batch_dims,
                             mesh=r_mesh,
                         )
-                    elif hasattr(raw_result, "shard_values"):
+                    elif hasattr(raw_result, "shard_graph_values"):
                         # Legacy/Object Return (PhysicalResult)
                         r_sharding = (
                             raw_result.output_sharding
@@ -272,9 +272,9 @@ class Trace:
                         from ..sharding import spmd
 
                         output_tensor_struct = spmd.create_sharded_output(
-                            raw_result.shard_values,
+                            raw_result.shard_graph_values,
                             r_sharding,
-                            traced=True,  # Always true in rehydration
+                            is_traced=True,  # Always true in rehydration
                             batch_dims=max_batch_dims,
                             mesh=r_mesh,
                         )
@@ -286,17 +286,17 @@ class Trace:
                     import traceback
 
                     traceback.print_exc()
-                    print(f"ERROR: physical_execute failed for {op.name}: {e}")
+                    print(f"ERROR: execute failed for {op.name}: {e}")
                     output_tensor_struct = None
             else:
-                # All operations should now have physical_execute implemented
+                # All operations should now have execute implemented
                 raise NotImplementedError(
-                    f"Operation '{op.name}' missing physical_execute. "
-                    f"All operations must implement physical_execute for trace rehydration."
+                    f"Operation '{op.name}' missing execute. "
+                    f"All operations must implement execute for trace rehydration."
                 )
 
             if output_tensor_struct is None:
-                # print(f"DEBUG: maxpr_all returned None for {op.name}")
+                # print(f"DEBUG: kernel_all returned None for {op.name}")
                 continue
 
             # Extract produced TensorImpls
@@ -319,8 +319,8 @@ class Trace:
             ):
                 out_impl = ref()
                 if out_impl is not None and produced_impl is not None:
-                    out_impl._values = produced_impl._values
-                    out_impl.values_epoch = GRAPH.epoch
+                    out_impl._graph_values = produced_impl._graph_values
+                    out_impl.graph_values_epoch = GRAPH.epoch
 
     def __str__(self) -> str:
         """Pretty-print the trace."""
@@ -350,10 +350,10 @@ def trace(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Trace:
     if not input_tensors:
         raise ValueError("trace: No input tensors found. Pass at least one Tensor.")
 
-    original_traced: dict[int, bool] = {}
+    original_is_traced: dict[int, bool] = {}
     for t in input_tensors:
-        original_traced[id(t)] = t.traced
-        t.traced = True
+        original_is_traced[id(t)] = t.is_traced
+        t.is_traced = True
 
     try:
 
@@ -365,8 +365,8 @@ def trace(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Trace:
     finally:
 
         for t in input_tensors:
-            if id(t) in original_traced:
-                t.traced = original_traced[id(t)]
+            if id(t) in original_is_traced:
+                t.is_traced = original_is_traced[id(t)]
 
 
 class GraphPrinter:
@@ -388,10 +388,10 @@ class GraphPrinter:
             dtype = "?"
             if hasattr(node, "dtype") and node.dtype:
                 dtype = str(node.dtype)
-            elif hasattr(node, "_storages") and node._storages:
-                dtype = str(node._storages[0].dtype)
-            elif hasattr(node, "_values") and node._values:
-                dtype = str(node._values[0].type.dtype)
+            elif hasattr(node, "_buffers") and node._buffers:
+                dtype = str(node._buffers[0].dtype)
+            elif hasattr(node, "_graph_values") and node._graph_values:
+                dtype = str(node._graph_values[0].type.dtype)
             return (
                 dtype.lower()
                 .replace("dtype.", "")
@@ -697,4 +697,4 @@ class GraphPrinter:
         return "\n".join(lines)
 
 
-__all__ = ["Trace", "trace", "OutputRefs"]
+__all__ = ["Trace", "trace", "OpNode"]

@@ -19,7 +19,7 @@ class AddOneCustomOp(UnaryOperation):
     def name(self) -> str:
         return "add_one_custom"
 
-    def maxpr(self, *args, **kwargs):
+    def kernel(self, *args, **kwargs):
         return call_custom_kernel(
             func_name="add_one_custom",
             kernel_path=Path(__file__).parent / "custom_kernels",

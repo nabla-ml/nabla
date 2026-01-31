@@ -45,11 +45,11 @@ def apply_auto_reduction(
             return t
 
         t.hydrate()
-        if not t._values:
+        if not t._graph_values:
             return t
 
         with GRAPH.graph:
-            reduced_values = all_reduce_op.simulate_grouped_execution(
+            reduced_graph_values = all_reduce_op.simulate_grouped_execution(
                 t.values, mesh, reduce_axes, reduce_op=op.collective_reduce_type
             )
 
@@ -65,13 +65,11 @@ def apply_auto_reduction(
             new_spec = ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)])
 
         reduced_tensor = spmd.create_sharded_output(
-            reduced_values, new_spec, t.traced, t.batch_dims, mesh
+            reduced_graph_values, new_spec, t.is_traced, t.batch_dims, mesh
         )
 
         trace_kwargs = {"mesh": mesh, "reduce_axes": list(reduce_axes)}
-        all_reduce_op._setup_output_refs(
-            reduced_tensor, (t,), trace_kwargs
-        )
+        all_reduce_op._setup_output_refs(reduced_tensor, (t,), trace_kwargs)
 
         return reduced_tensor
 

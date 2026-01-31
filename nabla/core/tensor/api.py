@@ -46,116 +46,116 @@ class Tensor(DLPackArray, HasTensorValue):
         storage: driver.Tensor | None = None,
         value: graph.BufferValue | graph.TensorValue | None = None,
         impl: TensorImpl | None = None,
-        traced: bool = False,
+        is_traced: bool = False,
     ):
         if impl is not None:
             self._impl = impl
         else:
             assert storage is not None or value is not None
-            self._impl = TensorImpl(storages=storage, values=value, traced=traced)
+            self._impl = TensorImpl(storages=storage, values=value, is_traced=is_traced)
 
-        if self._impl._values and self._impl.values_epoch == -1:
-            self._impl.values_epoch = GRAPH.epoch
+        if self._impl._graph_values and self._impl.graph_values_epoch == -1:
+            self._impl.graph_values_epoch = GRAPH.epoch
 
         self.real = self._impl.is_realized
 
     @property
-    def _storages(self) -> list[driver.Tensor] | None:
-        return self._impl._storages
+    def _buffers(self) -> list[driver.Tensor] | None:
+        return self._impl._buffers
 
-    @_storages.setter
-    def _storages(self, value: list[driver.Tensor] | None) -> None:
-        self._impl._storages = value
+    @_buffers.setter
+    def _buffers(self, value: list[driver.Tensor] | None) -> None:
+        self._impl._buffers = value
 
     @property
     def storage(self) -> driver.Tensor | None:
-        if self._impl._storages and len(self._impl._storages) > 0:
-            return self._impl._storages[0]
+        if self._impl._buffers and len(self._impl._buffers) > 0:
+            return self._impl._buffers[0]
         return None
 
     @storage.setter
     def storage(self, value: driver.Tensor | None) -> None:
         if value is None:
-            self._impl._storages = None
+            self._impl._buffers = None
         else:
-            self._impl._storages = [value]
+            self._impl._buffers = [value]
 
     @property
     def _value(self) -> graph.BufferValue | graph.TensorValue | None:
-        if self._impl._values and len(self._impl._values) > 0:
-            if self._impl.values_epoch != GRAPH.epoch:
+        if self._impl._graph_values and len(self._impl._graph_values) > 0:
+            if self._impl.graph_values_epoch != GRAPH.epoch:
                 if DEBUG_LAZY_EVAL:
                     print(
                         f"[LAZY DEBUG] Clearing stale _value for tensor {id(self)} "
-                        f"(epoch: {self._impl.values_epoch} != {GRAPH.epoch})"
+                        f"(epoch: {self._impl.graph_values_epoch} != {GRAPH.epoch})"
                     )
-                self._impl._values = []
+                self._impl._graph_values = []
                 return None
-            return self._impl._values[0]
+            return self._impl._graph_values[0]
         return None
 
     @_value.setter
     def _value(self, value: graph.BufferValue | graph.TensorValue | None) -> None:
         if value is None:
-            self._impl._values = []
+            self._impl._graph_values = []
         else:
-            self._impl._values = [value]
-        self._impl.values_epoch = GRAPH.epoch
+            self._impl._graph_values = [value]
+        self._impl.graph_values_epoch = GRAPH.epoch
 
     @property
-    def _values(self) -> list[graph.BufferValue | graph.TensorValue]:
-        if self._impl.values_epoch != GRAPH.epoch:
+    def _graph_values(self) -> list[graph.BufferValue | graph.TensorValue]:
+        if self._impl.graph_values_epoch != GRAPH.epoch:
             if DEBUG_LAZY_EVAL:
                 print(
-                    f"[LAZY DEBUG] Clearing stale _values for tensor {id(self)} "
-                    f"(epoch: {self._impl.values_epoch} != {GRAPH.epoch})"
+                    f"[LAZY DEBUG] Clearing stale _graph_values for tensor {id(self)} "
+                    f"(epoch: {self._impl.graph_values_epoch} != {GRAPH.epoch})"
                 )
-            self._impl._values = []
-        return self._impl._values
+            self._impl._graph_values = []
+        return self._impl._graph_values
 
-    @_values.setter
-    def _values(self, value: list[graph.BufferValue | graph.TensorValue]) -> None:
-        self._impl._values = value
-        self._impl.values_epoch = GRAPH.epoch
+    @_graph_values.setter
+    def _graph_values(self, value: list[graph.BufferValue | graph.TensorValue]) -> None:
+        self._impl._graph_values = value
+        self._impl.graph_values_epoch = GRAPH.epoch
 
     @property
     def values(self) -> list[graph.TensorValue]:
         """Get all graph values as TensorValues; error if empty."""
 
-        if self._impl.values_epoch != GRAPH.epoch:
+        if self._impl.graph_values_epoch != GRAPH.epoch:
             if DEBUG_LAZY_EVAL:
                 print(
                     f"[LAZY DEBUG] Clearing stale values for tensor {id(self)} "
-                    f"(epoch: {self._impl.values_epoch} != {GRAPH.epoch})"
+                    f"(epoch: {self._impl.graph_values_epoch} != {GRAPH.epoch})"
                 )
-            self._impl._values = []
+            self._impl._graph_values = []
 
-        if not self._impl._values:
-            if self._impl._storages:
+        if not self._impl._graph_values:
+            if self._impl._buffers:
 
                 self.hydrate()
 
-        if not self._impl._values:
+        if not self._impl._graph_values:
             print(f"ERROR: Tensor {id(self)} values check failed.")
             print(f"  Sharding: {self.sharding}")
             print(f"  Realized: {self.is_realized}")
             print(
-                f"  Storages: {len(self._impl._storages) if self._impl._storages else 0}"
+                f"  Storages: {len(self._impl._buffers) if self._impl._buffers else 0}"
             )
-            print(f"  Values Epoch: {self._impl.values_epoch}")
+            print(f"  Values Epoch: {self._impl.graph_values_epoch}")
             print(f"  GRAPH.epoch: {GRAPH.epoch}")
             raise RuntimeError(
-                f"Tensor {id(self)} has no values (epoch={GRAPH.epoch}, impl_epoch={self._impl.values_epoch})."
+                f"Tensor {id(self)} has no values (epoch={GRAPH.epoch}, impl_epoch={self._impl.graph_values_epoch})."
             )
 
         return [
             v[...] if isinstance(v, graph.BufferValue) else v
-            for v in self._impl._values
+            for v in self._impl._graph_values
         ]
 
     def hydrate(self) -> Tensor:
         """Populate values from storages for realized tensors."""
-        if not self._impl._values and self._impl._storages:
+        if not self._impl._graph_values and self._impl._buffers:
             GRAPH.add_input(self)
         return self
 
@@ -164,12 +164,12 @@ class Tensor(DLPackArray, HasTensorValue):
         return self._impl.primary_value
 
     @property
-    def traced(self) -> bool:
-        return self._impl.traced
+    def is_traced(self) -> bool:
+        return self._impl.is_traced
 
-    @traced.setter
-    def traced(self, value: bool) -> None:
-        self._impl.traced = value
+    @is_traced.setter
+    def is_traced(self, value: bool) -> None:
+        self._impl.is_traced = value
 
     @property
     def batch_dims(self) -> int:
@@ -187,7 +187,7 @@ class Tensor(DLPackArray, HasTensorValue):
 
     def trace(self) -> Tensor:
         """Enable tracing on this tensor for autograd."""
-        self._impl.traced = True
+        self._impl.is_traced = True
         return self
 
     @property
@@ -331,11 +331,11 @@ class Tensor(DLPackArray, HasTensorValue):
         *,
         dtype: DType | None = None,
         device: Device | None = None,
-        traced: bool = False,
+        is_traced: bool = False,
     ) -> Tensor:
         from ...ops import creation
 
-        return creation.full(shape, value, dtype=dtype, device=device, traced=traced)
+        return creation.full(shape, value, dtype=dtype, device=device, is_traced=traced)
 
     @classmethod
     def zeros(
@@ -344,11 +344,11 @@ class Tensor(DLPackArray, HasTensorValue):
         *,
         dtype: DType | None = None,
         device: Device | None = None,
-        traced: bool = False,
+        is_traced: bool = False,
     ) -> Tensor:
         from ...ops import creation
 
-        return creation.zeros(shape, dtype=dtype, device=device, traced=traced)
+        return creation.zeros(shape, dtype=dtype, device=device, is_traced=traced)
 
     @classmethod
     def ones(
@@ -357,11 +357,11 @@ class Tensor(DLPackArray, HasTensorValue):
         *,
         dtype: DType | None = None,
         device: Device | None = None,
-        traced: bool = False,
+        is_traced: bool = False,
     ) -> Tensor:
         from ...ops import creation
 
-        return creation.ones(shape, dtype=dtype, device=device, traced=traced)
+        return creation.ones(shape, dtype=dtype, device=device, is_traced=traced)
 
     @classmethod
     def arange(
@@ -566,17 +566,17 @@ class Tensor(DLPackArray, HasTensorValue):
         """Unified DLPack export."""
         t = self.gather()
         t.realize()
-        if not t._impl._storages:
+        if not t._impl._buffers:
             raise RuntimeError("Failed to realize tensor for DLPack export")
-        return t._impl._storages[0].__dlpack__(stream=stream)
+        return t._impl._buffers[0].__dlpack__(stream=stream)
 
     def __dlpack_device__(self):
         """Unified DLPack device export."""
         t = self.gather()
         t.realize()
-        if not t._impl._storages:
+        if not t._impl._buffers:
             raise RuntimeError("Failed to realize tensor for DLPack device export")
-        return t._impl._storages[0].__dlpack_device__()
+        return t._impl._buffers[0].__dlpack_device__()
 
     def __rich_repr__(self):
         yield "shape", self.shape
@@ -602,17 +602,17 @@ class Tensor(DLPackArray, HasTensorValue):
         """Unified item access."""
         t = self.gather()
         t.realize()
-        if not t._impl._storages:
+        if not t._impl._buffers:
             raise RuntimeError("Failed to realize tensor for item access")
-        return t._impl._storages[0].to(CPU()).item()
+        return t._impl._buffers[0].to(CPU()).item()
 
     def to_numpy(self):
         """Convert tensor to numpy array."""
         t = self.gather()
         t.realize()
-        if not t._impl._storages:
+        if not t._impl._buffers:
             raise RuntimeError("Failed to realize tensor for NumPy export")
-        return t._impl._storages[0].to(CPU()).to_numpy()
+        return t._impl._buffers[0].to(CPU()).to_numpy()
 
     numpy = to_numpy
 

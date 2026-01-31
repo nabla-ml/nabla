@@ -234,7 +234,9 @@ def traced(tree: Any) -> Any:
     from ..tensor.api import Tensor
 
     return tree_map(
-        lambda x: setattr(x._impl, "traced", True) or x if isinstance(x, Tensor) else x,
+        lambda x: (
+            setattr(x._impl, "is_traced", True) or x if isinstance(x, Tensor) else x
+        ),
         tree,
     )
 
@@ -245,7 +247,7 @@ def untraced(tree: Any) -> Any:
 
     return tree_map(
         lambda x: (
-            setattr(x._impl, "traced", False) or x if isinstance(x, Tensor) else x
+            setattr(x._impl, "is_traced", False) or x if isinstance(x, Tensor) else x
         ),
         tree,
     )

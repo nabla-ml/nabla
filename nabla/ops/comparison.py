@@ -22,7 +22,7 @@ class EqualOp(BinaryOperation):
     def name(self) -> str:
         return "equal"
 
-    def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
+    def kernel(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.equal(args[0], args[1])
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
@@ -35,7 +35,7 @@ class NotEqualOp(BinaryOperation):
     def name(self) -> str:
         return "not_equal"
 
-    def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
+    def kernel(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.not_equal(args[0], args[1])
 
 
@@ -44,7 +44,7 @@ class GreaterOp(BinaryOperation):
     def name(self) -> str:
         return "greater"
 
-    def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
+    def kernel(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.greater(args[0], args[1])
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
@@ -57,7 +57,7 @@ class GreaterEqualOp(BinaryOperation):
     def name(self) -> str:
         return "greater_equal"
 
-    def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
+    def kernel(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.greater_equal(args[0], args[1])
 
 
@@ -66,7 +66,7 @@ class LessOp(BinaryOperation):
     def name(self) -> str:
         return "less"
 
-    def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
+    def kernel(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.greater(args[1], args[0])
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
@@ -79,7 +79,7 @@ class LessEqualOp(BinaryOperation):
     def name(self) -> str:
         return "less_equal"
 
-    def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
+    def kernel(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.greater_equal(args[1], args[0])
 
 
@@ -88,7 +88,7 @@ class LogicalAndOp(BinaryOperation):
     def name(self) -> str:
         return "logical_and"
 
-    def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
+    def kernel(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.logical_and(args[0], args[1])
 
 
@@ -97,7 +97,7 @@ class LogicalOrOp(BinaryOperation):
     def name(self) -> str:
         return "logical_or"
 
-    def maxpr(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
+    def kernel(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.logical_or(args[0], args[1])
 
 
@@ -106,7 +106,7 @@ class LogicalNotOp(Operation):
     def name(self) -> str:
         return "logical_not"
 
-    def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.logical_not(x)
 
 

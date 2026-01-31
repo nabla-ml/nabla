@@ -9,10 +9,10 @@ from typing import Any
 
 from max.graph import TensorValue, ops
 
-from .base import LogicalAxisOperation, Operation
+from .base import AxisOp, Operation
 
 
-class SplitOp(LogicalAxisOperation):
+class SplitOp(AxisOp):
     """Split a tensor into multiple equal chunks along an axis.
 
     Example:
@@ -47,7 +47,7 @@ class SplitOp(LogicalAxisOperation):
 
         return super().__call__(x, **kwargs)
 
-    def maxpr(
+    def kernel(
         self, x: TensorValue, *, num_splits: int, axis: int = 0
     ) -> tuple[TensorValue, ...]:
         """Split tensor into num_splits equal parts along axis."""
@@ -113,7 +113,7 @@ class SplitOp(LogicalAxisOperation):
         return len(input_shapes[0])
 
 
-class ChunkOp(LogicalAxisOperation):
+class ChunkOp(AxisOp):
     """Split a tensor into a specified number of chunks.
 
     Similar to SplitOp but returns a list instead of tuple.
@@ -150,7 +150,9 @@ class ChunkOp(LogicalAxisOperation):
 
         return super().__call__(x, **kwargs)
 
-    def maxpr(self, x: TensorValue, *, chunks: int, axis: int = 0) -> list[TensorValue]:
+    def kernel(
+        self, x: TensorValue, *, chunks: int, axis: int = 0
+    ) -> list[TensorValue]:
         """Split tensor into specified number of chunks."""
         shape = list(x.type.shape)
         axis_size = int(shape[axis])
@@ -219,7 +221,7 @@ class ChunkOp(LogicalAxisOperation):
         return len(input_shapes[0])
 
 
-class UnbindOp(LogicalAxisOperation):
+class UnbindOp(AxisOp):
     """Remove a dimension and return tuple of slices.
 
     Example:
@@ -231,7 +233,7 @@ class UnbindOp(LogicalAxisOperation):
     def name(self) -> str:
         return "unbind"
 
-    def maxpr(self, x: TensorValue, *, axis: int = 0) -> tuple[TensorValue, ...]:
+    def kernel(self, x: TensorValue, *, axis: int = 0) -> tuple[TensorValue, ...]:
         """Remove dimension and return slices."""
         shape = list(x.type.shape)
         axis_size = int(shape[axis])
@@ -313,7 +315,7 @@ class MinMaxOp(Operation):
             "max": result_max,
         }
 
-    def maxpr(self, x: TensorValue, **kwargs: Any) -> dict[str, TensorValue]:
+    def kernel(self, x: TensorValue, **kwargs: Any) -> dict[str, TensorValue]:
         """Compute min and max simultaneously."""
         return {
             "min": ops.min(x),

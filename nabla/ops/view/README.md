@@ -8,12 +8,12 @@
 
 ### The Key Architectural Difference
 
-**Normal ops** inherit `Operation.physical_execute` which:
+**Normal ops** inherit `Operation.execute` which:
 1. Gets mesh from args
-2. Calls `spmd.execute_on_shards(self.maxpr, args, kwargs, mesh)`
+2. Calls `spmd.execute_on_shards(self.kernel, args, kwargs, mesh)`
 3. Returns `(shard_results, None, mesh)`
 
-**View ops** inherit from specialized base classes that **override `physical_execute`** to:
+**View ops** inherit from specialized base classes that **override `execute`** to:
 1. **Adapt kwargs** (translate logical axis/shape → physical)
 2. THEN call `spmd.execute_on_shards` with adapted kwargs
 
@@ -25,7 +25,7 @@
 │  LogicalAxisOperation (squeeze, unsqueeze, swap_axes, reduce_sum)           │
 │  ─────────────────────────────────────────────────────────────────          │
 │                                                                              │
-│  physical_execute(args, kwargs):                                            │
+│  execute(args, kwargs):                                            │
 │      # 1. Compute batch_dims from args                                      │
 │      max_batch_dims = max(t.batch_dims for t in args)                       │
 │                                                                              │
@@ -33,9 +33,9 @@
 │      adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)       │
 │      # Example: axis=0 with batch_dims=2 → axis=2                          │
 │                                                                              │
-│      # 3. Execute maxpr on each shard with ADAPTED kwargs                   │
+│      # 3. Execute kernel on each shard with ADAPTED kwargs                   │
 │      shard_results = spmd.execute_on_shards(                                │
-│          self.maxpr, args, adapted_kwargs, mesh                             │
+│          self.kernel, args, adapted_kwargs, mesh                             │
 │      )                                                                       │
 │                                                                              │
 │      return (shard_results, None, mesh)                                     │
@@ -45,7 +45,7 @@
 │  LogicalShapeOperation (reshape, broadcast_to)                              │
 │  ────────────────────────────────────────────                                │
 │                                                                              │
-│  physical_execute(args, kwargs):                                            │
+│  execute(args, kwargs):                                            │
 │      # 1. Compute batch_dims from args                                      │
 │      max_batch_dims = max(t.batch_dims for t in args)                       │
 │                                                                              │
@@ -53,9 +53,9 @@
 │      adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)       │
 │      # Example: shape=(10,5) with batch_shape=(B1,B2) → shape=(B1,B2,10,5) │
 │                                                                              │
-│      # 3. Execute maxpr on each shard with ADAPTED kwargs                   │
+│      # 3. Execute kernel on each shard with ADAPTED kwargs                   │
 │      shard_results = spmd.execute_on_shards(                                │
-│          self.maxpr, args, adapted_kwargs, mesh                             │
+│          self.kernel, args, adapted_kwargs, mesh                             │
 │      )                                                                       │
 │                                                                              │
 │      return (shard_results, None, mesh)                                     │

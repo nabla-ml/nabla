@@ -45,8 +45,8 @@ Every operation (e.g., `add`, `matmul`, `relu`) goes through the same six-phase 
 │                                                                             │
 │  Phase 3: PHYSICAL EXECUTION                                                │
 │  ─────────────────────────────                                              │
-│  • Call op.physical_execute(resharded_args, kwargs)                         │
-│  • This loops over each shard in the mesh and calls op.maxpr() per shard    │
+│  • Call op.execute(resharded_args, kwargs)                         │
+│  • This loops over each shard in the mesh and calls op.kernel() per shard    │
 │  • Returns raw TensorValues (one per shard) + output sharding info          │
 │                                                                             │
 │  Phase 4: PACKAGING                                                         │
@@ -62,7 +62,7 @@ Every operation (e.g., `add`, `matmul`, `relu`) goes through the same six-phase 
 │                                                                             │
 │  Phase 6: TRACING (Graph Recording)                                         │
 │  ───────────────────────────────────                                        │
-│  • Call _setup_output_refs() to create OutputRefs node containing:          │
+│  • Call _setup_output_refs() to create OpNode node containing:          │
 │    - Weak refs to output TensorImpls                                        │
 │    - The operation instance                                                 │
 │    - The input arguments (as TensorImpls)                                   │
@@ -96,10 +96,10 @@ Every operation (e.g., `add`, `matmul`, `relu`) goes through the same six-phase 
 │  ──────────────────────                                                     │
 │  1. User calls trace(fn, *args) or implicitly via grad(fn)                  │
 │  2. Input tensors marked as traced=True                                     │
-│  3. Function executes, each operation records OutputRefs via Phase 6        │
+│  3. Function executes, each operation records OpNode via Phase 6        │
 │  4. Trace.compute() walks backward from outputs, collects nodes in topo     │
-│     order via DFS on OutputRefs.op_args                                     │
-│  5. Result: Trace object with .inputs, .outputs, .nodes (list of OutputRefs)│
+│     order via DFS on OpNode.op_args                                     │
+│  5. Result: Trace object with .inputs, .outputs, .nodes (list of OpNode)│
 │                                                                             │
 │  REHYDRATION (Graph Value Restoration)                                      │
 │  ──────────────────────────────────────                                     │
@@ -108,17 +108,17 @@ Every operation (e.g., `add`, `matmul`, `relu`) goes through the same six-phase 
 │  Why needed: Graph values (_values) are epoch-scoped. After evaluate(),     │
 │  the graph resets. Rehydration rebuilds _values for intermediate tensors.   │
 │                                                                             │
-│  How it works (Trace.rehydrate()):                                          │
+│  How it works (Trace.refresh_graph_values()):                                          │
 │  1. Find all leaf tensors (no output_refs) → ensure they're realized        │
 │  2. Add leaves to current graph epoch via GRAPH.add_input()                 │
 │  3. Iterate through nodes in topological order:                             │
 │     a. Reconstruct args by wrapping TensorImpls as Tensors                  │
 │     b. Call op.adapt_kwargs() for current batch_dims                        │
-│     c. Call op.physical_execute(args, kwargs) to recompute values           │
+│     c. Call op.execute(args, kwargs) to recompute values           │
 │     d. Map produced values back to original output TensorImpls              │
 │  4. Now all intermediate tensors have valid _values in current epoch        │
 │                                                                             │
-│  Key design: physical_execute receives ORIGINAL kwargs, not pre-adapted.    │
+│  Key design: execute receives ORIGINAL kwargs, not pre-adapted.    │
 │  It performs adaptation internally. This ensures rehydration correctness.   │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -141,7 +141,7 @@ Nabla uses **reverse-mode autodiff** via trace-based VJP (Vector-Jacobian Produc
 │                                                                             │
 │  1. TRACE: Execute fn(x), capture Trace object                              │
 │                                                                             │
-│  2. REHYDRATE: Call trace.rehydrate() to restore all intermediate _values   │
+│  2. REHYDRATE: Call trace.refresh_graph_values() to restore all intermediate _values   │
 │                                                                             │
 │  3. INITIALIZE: Create cotangent_map with output cotangent (usually 1.0)    │
 │                                                                             │
@@ -218,7 +218,7 @@ Nabla uses **factor-based sharding propagation** rather than dimension-based:
 | Submodule | Purpose | Key Concepts |
 |-----------|---------|--------------|
 | [core/tensor/](core/tensor/README.md) | Tensor/TensorImpl facade | Dual object model, lazy realization |
-| [core/graph/](core/graph/README.md) | Graph recording, tracing | OutputRefs, Trace, rehydration |
+| [core/graph/](core/graph/README.md) | Graph recording, tracing | OpNode, Trace, rehydration |
 | [core/autograd/](core/autograd/README.md) | Gradient computation | BackwardEngine, VJP, cotangent accumulation |
 | [core/sharding/](core/sharding/README.md) | SPMD distribution | Factor propagation, DeviceMesh |
 
@@ -230,9 +230,9 @@ Nabla uses **factor-based sharding propagation** rather than dimension-based:
 
 **To understand gradient computation**: Read `backward_on_trace()` in [core/autograd/utils.py](core/autograd/utils.py)
 
-**To understand trace rehydration**: Read `Trace.rehydrate()` in [core/graph/tracing.py](core/graph/tracing.py)
+**To understand trace rehydration**: Read `Trace.refresh_graph_values()` in [core/graph/tracing.py](core/graph/tracing.py)
 
-**To add a new operation**: Implement `maxpr()`, `vjp_rule()`, and optionally `sharding_rule()` - see [ops/README.md](ops/README.md)
+**To add a new operation**: Implement `kernel()`, `vjp_rule()`, and optionally `sharding_rule()` - see [ops/README.md](ops/README.md)
 
 ---
 

@@ -47,7 +47,7 @@ class AllReduceOp(CollectiveOperation):
         cost = 2.0 * (n_devices - 1) / n_devices * size_bytes / bandwidth
         return cost
 
-    def physical_execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
+    def execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
         """Sum-reduce across shards (Physical)."""
         from ...core import GRAPH, Tensor
 
@@ -67,30 +67,30 @@ class AllReduceOp(CollectiveOperation):
         with GRAPH.graph:
             values = sharded_tensor.values
 
-            # Ported logic from maxpr
-            reduced_values = self._reduce_logic(
+            # Ported logic from kernel
+            reduced_graph_values = self._reduce_logic(
                 values, mesh=mesh, reduce_op=reduce_op, reduce_axes=reduce_axes
             )
 
         # 4. Compute Output Spec
         output_spec = self._compute_output_spec(
-            sharded_tensor, reduced_values, reduce_axes=reduce_axes
+            sharded_tensor, reduced_graph_values, reduce_axes=reduce_axes
         )
 
-        return (reduced_values, output_spec, mesh)
+        return (reduced_graph_values, output_spec, mesh)
 
     def _reduce_logic(
         self,
-        shard_values: list[TensorValue],
+        shard_graph_values: list[TensorValue],
         mesh: DeviceMesh = None,
         reduce_op: str = "sum",
         reduce_axes: set[str] = None,
     ) -> list[TensorValue]:
         """Core reduction implementation (MAX ops or simulation)."""
-        if not shard_values:
+        if not shard_graph_values:
             return []
 
-        if mesh and mesh.is_distributed and len(shard_values) > 1:
+        if mesh and mesh.is_distributed and len(shard_graph_values) > 1:
             from max.dtype import DType
             from max.graph.ops.allgather import allgather as max_allgather
             from max.graph.type import BufferType
@@ -101,14 +101,14 @@ class AllReduceOp(CollectiveOperation):
                 for dev in mesh.device_refs
             ]
 
-            gathered = max_allgather(shard_values, signal_buffers, axis=0)
+            gathered = max_allgather(shard_graph_values, signal_buffers, axis=0)
 
-            result_values = []
-            chunk_size = shard_values[0].type.shape[0]
+            result_graph_values = []
+            chunk_size = shard_graph_values[0].type.shape[0]
 
             for gathered_tensor in gathered:
                 chunks = []
-                for i in range(len(shard_values)):
+                for i in range(len(shard_graph_values)):
                     start = i * chunk_size
                     end = (i + 1) * chunk_size
                     chunk = gathered_tensor[start:end]
@@ -127,17 +127,17 @@ class AllReduceOp(CollectiveOperation):
                     else:
                         raise ValueError(f"Unknown reduction op: {reduce_op}")
 
-                result_values.append(reduced)
+                result_graph_values.append(reduced)
 
-            return result_values
+            return result_graph_values
 
         if reduce_axes and mesh and not mesh.is_distributed:
             return self.simulate_grouped_execution(
-                shard_values, mesh, reduce_axes, reduce_op=reduce_op
+                shard_graph_values, mesh, reduce_axes, reduce_op=reduce_op
             )
 
-        result = shard_values[0]
-        for sv in shard_values[1:]:
+        result = shard_graph_values[0]
+        for sv in shard_graph_values[1:]:
             if reduce_op == "sum":
                 result = ops.add(result, sv)
             elif reduce_op == "max":
@@ -149,7 +149,7 @@ class AllReduceOp(CollectiveOperation):
             else:
                 raise ValueError(f"Unknown reduction op: {reduce_op}")
 
-        return [result] * len(shard_values)
+        return [result] * len(shard_graph_values)
 
     def infer_sharding_spec(self, args: Any, mesh: DeviceMesh, kwargs: dict) -> Any:
         """Infer sharding for AllReduce (Adaptation Layer)."""
@@ -172,7 +172,7 @@ class AllReduceOp(CollectiveOperation):
         return spmd.create_sharded_output(
             cotangent.values,
             input_tensor.sharding,
-            cotangent.traced,
+            cotangent.is_traced,
             cotangent.batch_dims,
             input_tensor.sharding.mesh,
         )
@@ -257,12 +257,12 @@ class PMeanOp(CollectiveOperation):
     def name(self) -> str:
         return "pmean"
 
-    def physical_execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
+    def execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
         """Compute mean across shards (Physical)."""
         from ...core import GRAPH
 
         # 1. Perform AllReduce first
-        shard_values, output_spec, mesh = all_reduce_op.physical_execute(args, kwargs)
+        shard_graph_values, output_spec, mesh = all_reduce_op.execute(args, kwargs)
 
         axis_name = kwargs.get("axis_name")
 
@@ -271,14 +271,14 @@ class PMeanOp(CollectiveOperation):
             if axis_name and mesh:
                 axis_size = mesh.get_axis_size(axis_name)
             else:
-                axis_size = len(shard_values)
+                axis_size = len(shard_graph_values)
 
-            dtype = shard_values[0].type.dtype
-            device = shard_values[0].type.device
+            dtype = shard_graph_values[0].type.dtype
+            device = shard_graph_values[0].type.device
             scale = ops.constant(1.0 / axis_size, dtype, device)
-            scaled_values = [ops.mul(r, scale) for r in shard_values]
+            scaled_graph_values = [ops.mul(r, scale) for r in shard_graph_values]
 
-        return (scaled_values, output_spec, mesh)
+        return (scaled_graph_values, output_spec, mesh)
 
     def _compute_output_spec(self, input_tensor, results, **kwargs):
         """Output clears partial flags but preserves axes mappings for non-partial dims."""

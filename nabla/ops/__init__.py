@@ -5,8 +5,8 @@
 
 from .base import (
     BinaryOperation,
-    LogicalAxisOperation,
-    LogicalShapeOperation,
+    AxisOp,
+    ShapeOp,
     Operation,
     ReduceOperation,
     UnaryOperation,
@@ -128,8 +128,8 @@ __all__ = [
     "BinaryOperation",
     "UnaryOperation",
     "ReduceOperation",
-    "LogicalShapeOperation",
-    "LogicalAxisOperation",
+    "ShapeOp",
+    "AxisOp",
     "ensure_tensor",
     "add",
     "mul",

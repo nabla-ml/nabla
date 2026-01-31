@@ -41,7 +41,7 @@ class GatherOp(Operation):
 
         return super().__call__(x, indices, axis=phys_axis, batch_dims=batch_dims)
 
-    def maxpr(
+    def kernel(
         self,
         x: TensorValue,
         indices: TensorValue,
@@ -123,7 +123,7 @@ class ScatterOp(Operation):
 
         return super().__call__(x, indices, updates, axis=phys_axis)
 
-    def maxpr(
+    def kernel(
         self,
         x: TensorValue,
         indices: TensorValue,

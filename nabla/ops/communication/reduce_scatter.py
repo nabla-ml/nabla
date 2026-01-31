@@ -62,7 +62,7 @@ class ReduceScatterOp(CollectiveOperation):
 
         return all_gather(cotangent, axis=axis)
 
-    def physical_execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
+    def execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
         """Sum-reduce across shards then scatter the result (Physical)."""
         from ...core import GRAPH, Tensor
 
@@ -92,7 +92,7 @@ class ReduceScatterOp(CollectiveOperation):
         scatter_axes = set()
         if physical_axis < len(input_spec.dim_specs):
             scatter_axes = set(input_spec.dim_specs[physical_axis].axes or [])
-        
+
         # If scatter_axes is empty (input was replicated on this axis), scatter across ALL mesh axes
         if not scatter_axes and mesh:
             scatter_axes = set(mesh.axis_names)
@@ -101,22 +101,22 @@ class ReduceScatterOp(CollectiveOperation):
         with GRAPH.graph:
             values = sharded_tensor.values
 
-            # Ported logic from maxpr
-            scattered_values = self._scatter_logic(
+            # Ported logic from kernel
+            scattered_graph_values = self._scatter_logic(
                 values, physical_axis, mesh=mesh, scatter_axes=scatter_axes
             )
 
         # 3. Compute Output Spec
         # Use logical axis; _compute_output_spec converts it.
         output_spec = self._compute_output_spec(
-            sharded_tensor, scattered_values, axis=axis, scatter_axes=scatter_axes
+            sharded_tensor, scattered_graph_values, axis=axis, scatter_axes=scatter_axes
         )
 
-        return (scattered_values, output_spec, mesh)
+        return (scattered_graph_values, output_spec, mesh)
 
     def _scatter_logic(
         self,
-        shard_values: list[TensorValue],
+        shard_graph_values: list[TensorValue],
         axis: int,
         mesh: DeviceMesh = None,
         scatter_axes: set[str] = None,
@@ -136,13 +136,13 @@ class ReduceScatterOp(CollectiveOperation):
             ]
 
             # 1. Gather all inputs (concatenated)
-            gathered_list = max_allgather(shard_values, signal_buffers, axis=axis)
+            gathered_list = max_allgather(shard_graph_values, signal_buffers, axis=axis)
             gathered_tensor = gathered_list[0]  # All devices get same data
 
             # 2. Split into original input chunks
-            chunk_shape = shard_values[0].type.shape
+            chunk_shape = shard_graph_values[0].type.shape
             chunk_axis_size = int(chunk_shape[axis])
-            num_shards = len(shard_values)
+            num_shards = len(shard_graph_values)
 
             input_chunks = []
             for i in range(num_shards):
@@ -172,14 +172,16 @@ class ReduceScatterOp(CollectiveOperation):
             # Group shards by their coordinates on axes NOT being scattered
             other_axes = [ax for ax in mesh.axis_names if ax not in scatter_axes]
             if other_axes:
-                return self._grouped_scatter(shard_values, axis, mesh, scatter_axes, other_axes)
+                return self._grouped_scatter(
+                    shard_graph_values, axis, mesh, scatter_axes, other_axes
+                )
 
         # Simple case: all shards participate in the same reduce-scatter
-        full_result = shard_values[0]
-        for sv in shard_values[1:]:
+        full_result = shard_graph_values[0]
+        for sv in shard_graph_values[1:]:
             full_result = ops.add(full_result, sv)
 
-        num_shards = len(shard_values)
+        num_shards = len(shard_graph_values)
         shape = full_result.type.shape
         axis_size = int(shape[axis])
         chunk_size = axis_size // num_shards
@@ -195,51 +197,51 @@ class ReduceScatterOp(CollectiveOperation):
 
     def _grouped_scatter(
         self,
-        shard_values: list[TensorValue],
+        shard_graph_values: list[TensorValue],
         axis: int,
         mesh: DeviceMesh,
         scatter_axes: set[str],
         other_axes: list[str],
     ) -> list[TensorValue]:
         """Perform reduce-scatter within groups defined by non-scatter axes.
-        
+
         This handles multi-axis meshes where we only scatter along specific axes.
         Shards with the same coordinates on 'other_axes' form a group and
         participate in the same reduce-scatter operation.
         """
         # Group shards by their coordinates on the other axes
-        groups = self._group_shards_by_axes(shard_values, mesh, other_axes)
-        
-        num_total_shards = len(shard_values)
+        groups = self._group_shards_by_axes(shard_graph_values, mesh, other_axes)
+
+        num_total_shards = len(shard_graph_values)
         new_results = [None] * num_total_shards
-        
+
         for key, group_members in groups.items():
             # Extract the values for this group
             group_shards = [val for _, val in group_members]
             group_indices = [idx for idx, _ in group_members]
             num_in_group = len(group_shards)
-            
+
             if num_in_group <= 1:
                 # Only one shard in group - nothing to reduce or scatter
                 for shard_idx, val in group_members:
                     new_results[shard_idx] = val
                 continue
-            
+
             # Reduce within the group
             full_result = group_shards[0]
             for sv in group_shards[1:]:
                 full_result = ops.add(full_result, sv)
-            
+
             # Scatter: each shard in the group gets a portion
             shape = full_result.type.shape
             axis_size = int(shape[axis])
             chunk_size = axis_size // num_in_group
-            
+
             for i, (shard_idx, _) in enumerate(group_members):
                 slices = [slice(None)] * len(shape)
                 slices[axis] = slice(i * chunk_size, (i + 1) * chunk_size)
                 new_results[shard_idx] = full_result[tuple(slices)]
-        
+
         return new_results
 
     def _compute_output_spec(self, input_tensor, results, **kwargs):

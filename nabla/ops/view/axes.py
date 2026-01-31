@@ -9,20 +9,20 @@ from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
-from ..base import LogicalAxisOperation, Operation
+from ..base import AxisOp, Operation
 
 if TYPE_CHECKING:
     from ...core import Tensor
 
 
-class UnsqueezeOp(LogicalAxisOperation):
+class UnsqueezeOp(AxisOp):
     axis_offset_for_insert = True
 
     @property
     def name(self) -> str:
         return "unsqueeze"
 
-    def maxpr(self, x: TensorValue, *, axis: int = 0) -> TensorValue:
+    def kernel(self, x: TensorValue, *, axis: int = 0) -> TensorValue:
         return ops.unsqueeze(x, axis)
 
     def sharding_rule(
@@ -88,14 +88,14 @@ class UnsqueezeOp(LogicalAxisOperation):
         return unsqueeze(tangents, axis=axis)
 
 
-class SqueezeOp(LogicalAxisOperation):
+class SqueezeOp(AxisOp):
     axis_offset_for_insert = False
 
     @property
     def name(self) -> str:
         return "squeeze"
 
-    def maxpr(self, x: TensorValue, *, axis: int = 0) -> TensorValue:
+    def kernel(self, x: TensorValue, *, axis: int = 0) -> TensorValue:
         return ops.squeeze(x, axis)
 
     def sharding_rule(
@@ -167,14 +167,14 @@ class SqueezeOp(LogicalAxisOperation):
         return squeeze(tangents, axis=axis)
 
 
-class SwapAxesOp(LogicalAxisOperation):
+class SwapAxesOp(AxisOp):
     axis_arg_names = ("axis1", "axis2")
 
     @property
     def name(self) -> str:
         return "swap_axes"
 
-    def maxpr(self, x: TensorValue, *, axis1: int, axis2: int) -> TensorValue:
+    def kernel(self, x: TensorValue, *, axis1: int, axis2: int) -> TensorValue:
         return ops.transpose(x, axis1, axis2)
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
@@ -262,7 +262,7 @@ class MoveAxisOp(Operation):
     def name(self) -> str:
         return "moveaxis"
 
-    def maxpr(self, x: TensorValue, *, source: int, destination: int) -> TensorValue:
+    def kernel(self, x: TensorValue, *, source: int, destination: int) -> TensorValue:
         rank = len(x.type.shape)
         if source < 0:
             source = rank + source
@@ -318,7 +318,7 @@ class UnsqueezePhysicalOp(Operation):
     def name(self) -> str:
         return "unsqueeze_physical"
 
-    def maxpr(self, x: TensorValue, *, axis: int = 0) -> TensorValue:
+    def kernel(self, x: TensorValue, *, axis: int = 0) -> TensorValue:
         return ops.unsqueeze(x, axis)
 
     def __call__(self, x: Tensor, *, axis: int = 0) -> Tensor:
@@ -361,7 +361,7 @@ class SqueezePhysicalOp(Operation):
     def name(self) -> str:
         return "squeeze_physical"
 
-    def maxpr(self, x: TensorValue, *, axis: int = 0) -> TensorValue:
+    def kernel(self, x: TensorValue, *, axis: int = 0) -> TensorValue:
         return ops.squeeze(x, axis)
 
     def __call__(self, x: Tensor, *, axis: int = 0) -> Tensor:

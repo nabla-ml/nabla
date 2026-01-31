@@ -34,7 +34,7 @@
 │  │  batch_dims: int                # Leading batch dims (vmap)     │    │
 │  │  traced: bool                   # Record in computation graph?  │    │
 │  │                                                                 │    │
-│  │  output_refs: OutputRefs        # What operation created this?  │    │
+│  │  output_refs: OpNode        # What operation created this?  │    │
 │  │  output_index: int              # Which output of that op?      │    │
 │  │                                                                 │    │
 │  │  tangent: TensorImpl            # For JVP (forward-mode AD)     │    │
@@ -50,12 +50,12 @@
 
 ```python
 a, b, c = split(x, 3)  # 3 Tensors from 1 operation
-# All three need to reference the same OutputRefs for backward pass
+# All three need to reference the same OpNode for backward pass
 ```
 
 **Solution**: 
 - `TensorImpl` holds the shared `output_refs` 
-- All sibling outputs point to the SAME `OutputRefs` object
+- All sibling outputs point to the SAME `OpNode` object
 - Each has different `output_index` (0, 1, 2)
 
 ```python
@@ -129,7 +129,7 @@ tensor._impl.is_leaf  # → bool
 ## Maintenance Guide
 
 > **AI Agents - Critical Rules**:
-> 1. **output_refs sharing**: Multi-output ops must share the same OutputRefs instance
+> 1. **output_refs sharing**: Multi-output ops must share the same OpNode instance
 > 2. **values_epoch**: Always check/update when manipulating `_values`
 > 3. **Shapes**: Remember `batch_dims` offset when computing shapes
-> 4. **Weak refs**: TensorImpl is weakly referenced by OutputRefs; can be GC'd
+> 4. **Weak refs**: TensorImpl is weakly referenced by OpNode; can be GC'd

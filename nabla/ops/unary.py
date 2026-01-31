@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
-from .base import LogicalAxisOperation, UnaryOperation
+from .base import AxisOp, UnaryOperation
 
 if TYPE_CHECKING:
     from ..core import Tensor
@@ -22,7 +22,7 @@ class ReluOp(UnaryOperation):
     def name(self) -> str:
         return "relu"
 
-    def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
         """Apply ReLU element-wise."""
         return ops.relu(x)
 
@@ -55,7 +55,7 @@ class SigmoidOp(UnaryOperation):
     def name(self) -> str:
         return "sigmoid"
 
-    def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
         """Apply sigmoid element-wise."""
         return ops.sigmoid(x)
 
@@ -96,7 +96,7 @@ class TanhOp(UnaryOperation):
     def name(self) -> str:
         return "tanh"
 
-    def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
         """Apply tanh element-wise."""
         return ops.tanh(x)
 
@@ -137,7 +137,7 @@ class ExpOp(UnaryOperation):
     def name(self) -> str:
         return "exp"
 
-    def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
         """Apply exp element-wise."""
         return ops.exp(x)
 
@@ -162,7 +162,7 @@ class NegOp(UnaryOperation):
     def name(self) -> str:
         return "neg"
 
-    def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
         """Apply negation element-wise."""
         return ops.negate(x)
 
@@ -183,7 +183,7 @@ class AbsOp(UnaryOperation):
     def name(self) -> str:
         return "abs"
 
-    def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
         """Apply abs element-wise."""
         return ops.abs(x)
 
@@ -222,7 +222,7 @@ class AbsOp(UnaryOperation):
         return mul(t, sign)
 
 
-class _SoftmaxNativeOp(LogicalAxisOperation, UnaryOperation):
+class _SoftmaxNativeOp(AxisOp, UnaryOperation):
     """Softmax activation function: exp(x) / sum(exp(x))."""
 
     @property
@@ -233,7 +233,7 @@ class _SoftmaxNativeOp(LogicalAxisOperation, UnaryOperation):
         """Apply softmax along specified axis."""
         return super().__call__(x, axis=axis)
 
-    def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
         """Apply softmax using MAX's native softmax."""
         axis = kwargs.get("axis", -1)
         return ops.softmax(x, axis=axis)
@@ -274,7 +274,7 @@ class LogOp(UnaryOperation):
     def name(self) -> str:
         return "log"
 
-    def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
         """Apply log element-wise."""
         return ops.log(x)
 
@@ -301,7 +301,7 @@ class SqrtOp(UnaryOperation):
     def name(self) -> str:
         return "sqrt"
 
-    def maxpr(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
         """Apply sqrt element-wise."""
         return ops.sqrt(x)
 

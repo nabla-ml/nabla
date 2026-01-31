@@ -90,7 +90,7 @@ class AllGatherOp(CollectiveOperation):
 
         return ShardingSpec(input_tensor.sharding.mesh, new_dim_specs)
 
-    def physical_execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
+    def execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
         """Gather shards along an axis to produce replicated full tensors (Physical).
 
         Derives all physical context (mesh, sharded_axis_name) internally.
@@ -128,40 +128,35 @@ class AllGatherOp(CollectiveOperation):
         ):
             dim_spec = sharded_tensor.sharding.dim_specs[physical_axis]
             if dim_spec.axes:
-                # TODO: Handle multi-axis?
-                # heuristic: pick first axis?
-                # Logic in _get_sharded_axis_name is robust, but requires logical axis.
-                # Re-implementing simplified logic here:
                 sharded_axis_name = dim_spec.axes[0]
 
         # 2. Validation & Early Exit
         if not sharded_axis_name:
-            # Not sharded on this axis -> No-op for this dimension index.
             return (sharded_tensor.values, sharded_tensor.sharding, mesh)
 
         # 3. Execution Context
         with GRAPH.graph:
-            # Note: inputs MUST be available. hydrate() is NOT allowed here.
             values = sharded_tensor.values
-
-            # Core implementation logic uses physical axis
-            gathered_values = self._gather_logic(
+            gathered_graph_values = self._gather_logic(
                 values, physical_axis, mesh, sharded_axis_name
             )
 
         # 4. Compute Output Spec
         # Now we can safely use the centralized logic.
         output_spec = self._compute_output_spec(
-            sharded_tensor, gathered_values, axis=axis, physical_axis=physical_axis
+            sharded_tensor,
+            gathered_graph_values,
+            axis=axis,
+            physical_axis=physical_axis,
         )
 
-        return (gathered_values, output_spec, mesh)
+        return (gathered_graph_values, output_spec, mesh)
 
-        return (gathered_values, output_spec, mesh)
+        return (gathered_graph_values, output_spec, mesh)
 
     def _gather_logic(
         self,
-        shard_values: list[TensorValue],
+        shard_graph_values: list[TensorValue],
         axis: int,
         mesh: DeviceMesh = None,
         sharded_axis_name: str = None,
@@ -178,19 +173,25 @@ class AllGatherOp(CollectiveOperation):
                 ops.buffer_create(BufferType(DType.uint8, (BUFFER_SIZE,), dev))
                 for dev in mesh.device_refs
             ]
-            return max_allgather(shard_values, signal_buffers, axis=axis)
+            return max_allgather(shard_graph_values, signal_buffers, axis=axis)
 
         if mesh is None or (sharded_axis_name is None and len(mesh.axis_names) <= 1):
-            if len(shard_values) <= 1:
-                return [shard_values[0]] * len(shard_values) if shard_values else []
-            full_tensor = ops.concat(shard_values, axis=axis)
-            return [full_tensor] * len(shard_values)
+            if len(shard_graph_values) <= 1:
+                return (
+                    [shard_graph_values[0]] * len(shard_graph_values)
+                    if shard_graph_values
+                    else []
+                )
+            full_tensor = ops.concat(shard_graph_values, axis=axis)
+            return [full_tensor] * len(shard_graph_values)
 
         return self._simulate_grouped_gather(
-            shard_values, axis, mesh, sharded_axis_name
+            shard_graph_values, axis, mesh, sharded_axis_name
         )
 
-    def _simulate_grouped_gather(self, shard_values, axis, mesh, sharded_axis_name):
+    def _simulate_grouped_gather(
+        self, shard_graph_values, axis, mesh, sharded_axis_name
+    ):
         """Handle simulated gather logic for multi-dimensional meshes."""
 
         all_axes = list(mesh.axis_names)
@@ -200,7 +201,7 @@ class AllGatherOp(CollectiveOperation):
 
             unique_shards = []
             seen_coords = set()
-            for shard_idx, val in enumerate(shard_values):
+            for shard_idx, val in enumerate(shard_graph_values):
                 coord = mesh.get_coordinate(shard_idx, sharded_axis_name)
                 if coord not in seen_coords:
                     seen_coords.add(coord)
@@ -213,9 +214,9 @@ class AllGatherOp(CollectiveOperation):
                 if len(shards_to_concat) > 1
                 else shards_to_concat[0]
             )
-            return [full_tensor] * len(shard_values)
+            return [full_tensor] * len(shard_graph_values)
 
-        groups = self._group_shards_by_axes(shard_values, mesh, other_axes)
+        groups = self._group_shards_by_axes(shard_graph_values, mesh, other_axes)
 
         gathered_per_group = {}
         for other_coords, members in groups.items():
@@ -226,7 +227,7 @@ class AllGatherOp(CollectiveOperation):
             gathered_per_group[other_coords] = gathered
 
         results = []
-        for shard_idx in range(len(shard_values)):
+        for shard_idx in range(len(shard_graph_values)):
             other_coords = tuple(
                 mesh.get_coordinate(shard_idx, ax) for ax in other_axes
             )
@@ -278,7 +279,7 @@ class GatherAllAxesOp(Operation):
 
         return output_sharding, input_shardings, False
 
-    def physical_execute(self, args: tuple, kwargs: dict) -> Any:
+    def execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for GatherAllAxesOp."""
         from ...core import GRAPH, Tensor
         from ...core.sharding.spmd import create_replicated_spec
@@ -294,9 +295,6 @@ class GatherAllAxesOp(Operation):
             gathered_shard = self._reconstruct_global_tensor(
                 sharded_tensor.values, sharded_tensor.sharding, mesh
             )
-            # GatherAllAxes transforms N shards into N replicated shards
-            # (In physical reality, we produce one value, but our SPMD
-            # packaging expects a list of shard values matching the mesh)
             num_shards = len(mesh.devices) if mesh else 1
             results = [gathered_shard] * num_shards
 
@@ -306,39 +304,36 @@ class GatherAllAxesOp(Operation):
 
     def _reconstruct_global_tensor(
         self,
-        shard_values: list[TensorValue],
+        shard_graph_values: list[TensorValue],
         source_spec: ShardingSpec,
         mesh: DeviceMesh = None,
     ) -> TensorValue:
         """Reconstruct the global tensor from potentially multi-dimensional shards."""
         if source_spec.is_fully_replicated():
-            return shard_values[0]
+            return shard_graph_values[0]
 
         current_shard_descs = [
-            (shard_values[i], source_spec.mesh.devices[i])
-            for i in range(len(shard_values))
+            (shard_graph_values[i], source_spec.mesh.devices[i])
+            for i in range(len(shard_graph_values))
         ]
-        rank = len(shard_values[0].type.shape)
+        rank = len(shard_graph_values[0].type.shape)
 
         current_active_axes = set()
         for dim in source_spec.dim_specs:
             current_active_axes.update(dim.axes)
         current_active_axes.update(source_spec.replicated_axes)
 
-        # print(f"DEBUG: Reconstruct Start. Rank={rank}. Shards={len(shard_values)}. Spec={source_spec.dim_specs} Active={current_active_axes} MeshAxes={source_spec.mesh.axis_names}")
+        # print(f"DEBUG: Reconstruct Start. Rank={rank}. Shards={len(shard_graph_values)}. Spec={source_spec.dim_specs} Active={current_active_axes} MeshAxes={source_spec.mesh.axis_names}")
 
         for d in range(rank - 1, -1, -1):
             if d >= len(source_spec.dim_specs):
                 continue
             dim_spec = source_spec.dim_specs[d]
-            # print(f"DEBUG: Processing D={d}. Axes in dim: {dim_spec.axes}")
             for ax in reversed(dim_spec.axes):
-                # print(f"DEBUG:  >> Gathering Axis '{ax}' (Current Active: {current_active_axes})")
                 groups = {}
                 for val, device_id in current_shard_descs:
                     signature = []
                     for check_ax in sorted(list(current_active_axes)):
-                        # print(f"DEBUG:      Inside check_ax loop: check={check_ax} vs ax={ax}")
                         if check_ax == ax:
                             continue
 
@@ -350,10 +345,8 @@ class GatherAllAxesOp(Operation):
                         groups[key] = []
 
                     my_coord = source_spec.mesh.get_coordinate(device_id, ax)
-                    # print(f"DEBUG:    Device {device_id} -> Key {key} Coord {my_coord} on {ax}")
                     groups[key].append((my_coord, val, device_id))
 
-                # print(f"DEBUG:    Groups formed: {len(groups)} keys.")
                 new_shard_descs = []
                 for key, members in groups.items():
                     members.sort(key=lambda x: x[0])
@@ -365,8 +358,6 @@ class GatherAllAxesOp(Operation):
                             unique_chunks.append(m[1])
                             seen_coords.add(coord)
 
-                    # print(f"DEBUG:    Group {key}: {len(members)} entries -> {len(unique_chunks)} unique chunks. Coords: {seen_coords}")
-
                     if mesh and mesh.is_distributed and len(unique_chunks) > 1:
                         target_device = unique_chunks[0].device
                         unique_chunks = [
@@ -375,7 +366,6 @@ class GatherAllAxesOp(Operation):
                         ]
 
                     merged = ops.concat(unique_chunks, axis=d)
-                    # print(f"DEBUG: Merged Group key={key} d={d} count={len(unique_chunks)} shape={merged.type.shape}")
                     new_shard_descs.append((merged, members[0][2]))
 
                 current_shard_descs = new_shard_descs

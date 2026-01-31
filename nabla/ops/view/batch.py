@@ -33,7 +33,7 @@ class IncrBatchDimsOp(Operation):
     def name(self) -> str:
         return "incr_batch_dims"
 
-    def maxpr(self, x: TensorValue) -> TensorValue:
+    def kernel(self, x: TensorValue) -> TensorValue:
         return x
 
     def __call__(self, x: Tensor) -> Tensor:
@@ -52,7 +52,7 @@ class DecrBatchDimsOp(Operation):
     def name(self) -> str:
         return "decr_batch_dims"
 
-    def maxpr(self, x: TensorValue) -> TensorValue:
+    def kernel(self, x: TensorValue) -> TensorValue:
         return x
 
     def __call__(self, x: Tensor) -> Tensor:
@@ -73,7 +73,7 @@ class MoveAxisPhysicalOp(Operation):
     def name(self) -> str:
         return "moveaxis_physical"
 
-    def maxpr(self, x: TensorValue, *, source: int, destination: int) -> TensorValue:
+    def kernel(self, x: TensorValue, *, source: int, destination: int) -> TensorValue:
         rank = len(x.type.shape)
         if source < 0:
             source = rank + source
@@ -135,7 +135,7 @@ class BroadcastBatchDimsOp(Operation):
     def name(self) -> str:
         return "broadcast_batch_dims"
 
-    def maxpr(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
+    def kernel(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
         return ops.broadcast_to(x, shape)
 
     def sharding_rule(
@@ -152,7 +152,7 @@ class BroadcastBatchDimsOp(Operation):
 
         in_shape = input_shapes[0]
         out_shape = output_shapes[0]
-        
+
         in_rank = len(in_shape)
         out_rank = len(out_shape)
         n_batch_dims = out_rank - in_rank
@@ -173,17 +173,17 @@ class BroadcastBatchDimsOp(Operation):
 
     def __call__(self, x: Tensor, *, batch_shape: tuple[int, ...]) -> Tensor:
         from ...core import Tensor
-        
+
         logical_shape = tuple(x.shape)
         physical_shape = tuple(batch_shape) + logical_shape
 
         result = super().__call__(x, shape=physical_shape)
-        
+
         # Update batch_dims to match the new batch shape
         output = Tensor._create_unsafe(
-            storages=result._storages,
-            values=result._values,
-            traced=result.traced,
+            storages=result._buffers,
+            values=result._graph_values,
+            is_traced=result.is_traced,
             batch_dims=len(batch_shape),
         )
         output.sharding = result.sharding
@@ -226,12 +226,16 @@ def move_axis_from_batch_dims(
     """Move a batch dimension to logical axis (3 ops: calc + moveaxis_physical + decr)."""
     if x.batch_dims <= 0:
         raise ValueError("No batch dims to move from")
-    
+
     batch_axis = batch_axis if batch_axis >= 0 else x.batch_dims + batch_axis
     new_batch_dims = x.batch_dims - 1
-    logical_destination = logical_destination if logical_destination >= 0 else (len(x.shape) + 1) + logical_destination
+    logical_destination = (
+        logical_destination
+        if logical_destination >= 0
+        else (len(x.shape) + 1) + logical_destination
+    )
     physical_dest = new_batch_dims + logical_destination
-    
+
     if batch_axis != physical_dest:
         x = moveaxis_physical(x, source=batch_axis, destination=physical_dest)
     return decr_batch_dims(x)

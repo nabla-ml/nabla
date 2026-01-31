@@ -5,10 +5,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Dict, Set, Tuple
 
 if TYPE_CHECKING:
     from ..tensor import Tensor
+    from .propagation import OpShardingRule
     from .spec import DeviceMesh, ShardingSpec
 
 
@@ -309,7 +310,7 @@ def get_shard_args(
 def create_sharded_output(
     results: list[Any],
     sharding: ShardingSpec | None,
-    traced: bool,
+    is_traced: bool,
     batch_dims: int,
     mesh: DeviceMesh | None = None,
 ) -> Tensor:
@@ -333,7 +334,7 @@ def create_sharded_output(
 
     output = Tensor._create_unsafe(
         values=results,
-        traced=traced,
+        is_traced=is_traced,
         batch_dims=batch_dims,
     )
     output.sharding = sharding

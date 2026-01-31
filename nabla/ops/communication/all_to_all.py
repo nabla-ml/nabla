@@ -42,7 +42,7 @@ class AllToAllOp(CollectiveOperation):
         # Swap split and concat for backward
         return all_to_all(cotangent, split_axis=concat_axis, concat_axis=split_axis)
 
-    def physical_execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
+    def execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
         """All-to-all distributed transpose (Physical)."""
         from ...core import GRAPH, Tensor
 
@@ -69,37 +69,37 @@ class AllToAllOp(CollectiveOperation):
         with GRAPH.graph:
             values = sharded_tensor.values
 
-            # Ported logic from maxpr
-            result_values = self._all_to_all_logic(
+            # Ported logic from kernel
+            result_graph_values = self._all_to_all_logic(
                 values, phys_split_axis, phys_concat_axis, mesh=mesh, tiled=tiled
             )
 
         # 4. Compute Output Spec
         output_spec = self._compute_output_spec(
             sharded_tensor,
-            result_values,
+            result_graph_values,
             split_axis=split_axis,
             concat_axis=concat_axis,
         )
 
-        return (result_values, output_spec, mesh)
+        return (result_graph_values, output_spec, mesh)
 
     def _all_to_all_logic(
         self,
-        shard_values: list[TensorValue],
+        shard_graph_values: list[TensorValue],
         split_axis: int,
         concat_axis: int,
         mesh: DeviceMesh = None,
         tiled: bool = True,
     ) -> list[TensorValue]:
         """All-to-all: distributed transpose of tensor blocks."""
-        num_devices = len(shard_values)
+        num_devices = len(shard_graph_values)
 
         if num_devices <= 1:
-            return shard_values
+            return shard_graph_values
 
         chunks_per_device = []
-        for val in shard_values:
+        for val in shard_graph_values:
             shape = val.type.shape
             axis_size = int(shape[split_axis])
             chunk_size = axis_size // num_devices

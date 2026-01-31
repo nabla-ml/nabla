@@ -27,10 +27,10 @@ def _unwrap_tensor(x: Any) -> Any:
     from ..core.tensor import Tensor
 
     if isinstance(x, Tensor):
-        if not x._values:
+        if not x._graph_values:
             pass
-        if hasattr(x, "_impl") and x._values:
-            return x._values[0]
+        if hasattr(x, "_impl") and x._graph_values:
+            return x._graph_values[0]
         return x
     return x
 
@@ -123,7 +123,7 @@ class WhereOp(Operation):
     def name(self) -> str:
         return "where"
 
-    def maxpr(
+    def kernel(
         self, condition: graph.TensorValue, x: graph.TensorValue, y: graph.TensorValue
     ) -> graph.TensorValue:
         return ops.where(condition, x, y)
@@ -167,7 +167,7 @@ class CondOp(Operation):
         """Cond: Output sharding is determined by operands/branches."""
         return None, [], False
 
-    def maxpr(self, pred_shard, true_fn, false_fn, *operand_shards):
+    def kernel(self, pred_shard, true_fn, false_fn, *operand_shards):
         def wrapped_fn(fn, input_tensors):
             return fn(*input_tensors)
 
@@ -228,7 +228,7 @@ class WhileLoopOp(Operation):
         args = (cond_fn, body_fn, init_val)
 
         leaves = pytree.tree_leaves(init_val)
-        any_traced = any(x.traced for x in leaves if isinstance(x, Tensor))
+        any_traced = any(x.is_traced for x in leaves if isinstance(x, Tensor))
         max_batch_dims = max(
             (x.batch_dims for x in leaves if isinstance(x, Tensor)), default=0
         )
@@ -261,7 +261,7 @@ class WhileLoopOp(Operation):
                 shard_init_val = spmd.get_shard_args(
                     init_val, shard_idx, leaf_specs, g, Tensor, pytree
                 )
-                res = self.maxpr(cond_fn, body_fn, shard_init_val)
+                res = self.kernel(cond_fn, body_fn, shard_init_val)
                 shard_results.append(res)
 
         if not shard_results:
@@ -290,7 +290,7 @@ class WhileLoopOp(Operation):
         """Unused by custom __call__."""
         return None, [], False
 
-    def maxpr(self, cond_fn, body_fn, *init_shards):
+    def kernel(self, cond_fn, body_fn, *init_shards):
         init_val_shard = init_shards[0]
 
         from ..core.tensor import Tensor
@@ -299,7 +299,7 @@ class WhileLoopOp(Operation):
             return Tensor(value=x)
 
         def unwrap(x):
-            return x._values[0] if isinstance(x, Tensor) else x
+            return x._graph_values[0] if isinstance(x, Tensor) else x
 
         def max_cond_fn(*args_flat):
             args_struct = pytree.tree_unflatten(
@@ -328,7 +328,7 @@ class ScanOp(Operation):
     def name(self) -> str:
         return "scan"
 
-    def maxpr(self, *args, **kwargs) -> Any:
+    def kernel(self, *args, **kwargs) -> Any:
         raise NotImplementedError(
             "ScanOp is currently a macro and does not map to a single MAX op."
         )
