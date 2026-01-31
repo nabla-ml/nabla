@@ -21,47 +21,47 @@
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                        View Op Execution Flow                                │
+│                        View Op Execution Flow                               │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
+│                                                                             │
 │  LogicalAxisOperation (squeeze, unsqueeze, swap_axes, reduce_sum)           │
 │  ─────────────────────────────────────────────────────────────────          │
-│                                                                              │
-│  execute(args, kwargs):                                            │
+│                                                                             │
+│  execute(args, kwargs):                                                     │
 │      # 1. Compute batch_dims from args                                      │
 │      max_batch_dims = max(t.batch_dims for t in args)                       │
-│                                                                              │
+│                                                                             │
 │      # 2. ADAPT: shift axis indices by batch_dims                           │
 │      adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)       │
-│      # Example: axis=0 with batch_dims=2 → axis=2                          │
-│                                                                              │
-│      # 3. Execute kernel on each shard with ADAPTED kwargs                   │
+│      # Example: axis=0 with batch_dims=2 → axis=2                           │
+│                                                                             │
+│      # 3. Execute kernel on each shard with ADAPTED kwargs                  │
 │      shard_results = spmd.execute_on_shards(                                │
-│          self.kernel, args, adapted_kwargs, mesh                             │
-│      )                                                                       │
-│                                                                              │
+│          self.kernel, args, adapted_kwargs, mesh                            │
+│      )                                                                      │
+│                                                                             │
 │      return (shard_results, None, mesh)                                     │
-│                                                                              │
+│                                                                             │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
+│                                                                             │
 │  LogicalShapeOperation (reshape, broadcast_to)                              │
-│  ────────────────────────────────────────────                                │
-│                                                                              │
-│  execute(args, kwargs):                                            │
+│  ────────────────────────────────────────────                               │
+│                                                                             │
+│  execute(args, kwargs):                                                     │
 │      # 1. Compute batch_dims from args                                      │
 │      max_batch_dims = max(t.batch_dims for t in args)                       │
-│                                                                              │
+│                                                                             │
 │      # 2. ADAPT: prepend batch shape to target shape                        │
 │      adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)       │
-│      # Example: shape=(10,5) with batch_shape=(B1,B2) → shape=(B1,B2,10,5) │
-│                                                                              │
-│      # 3. Execute kernel on each shard with ADAPTED kwargs                   │
+│      # Example: shape=(10,5) with batch_shape=(B1,B2) → shape=(B1,B2,10,5)  │
+│                                                                             │
+│      # 3. Execute kernel on each shard with ADAPTED kwargs                  │
 │      shard_results = spmd.execute_on_shards(                                │
-│          self.kernel, args, adapted_kwargs, mesh                             │
-│      )                                                                       │
-│                                                                              │
+│          self.kernel, args, adapted_kwargs, mesh                            │
+│      )                                                                      │
+│                                                                             │
 │      return (shard_results, None, mesh)                                     │
-│                                                                              │
+│                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 

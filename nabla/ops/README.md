@@ -50,15 +50,15 @@ When you call any operation (e.g., `add(x, y)` or `x + y`), `Operation.__call__(
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
 │  │ PHASE 3: PHYSICAL EXECUTION  (lines ~128-130 in base.py)            │    │
 │  │                                                                     │    │
-│  │   with GRAPH.graph:                                                 │   │
-│  │       raw_result = self.execute(resharded_args, kwargs)    │    │
+│  │   with GRAPH.graph:                                                 │    │
+│  │       raw_result = self.execute(resharded_args, kwargs)             │    │
 │  │                                                                     │    │
-│  │   CRITICAL: execute receives ORIGINAL kwargs, not adapted! │    │
+│  │   CRITICAL: execute receives ORIGINAL kwargs, not adapted!          │    │
 │  │   It calls adapt_kwargs internally. This ensures rehydration works. │    │
 │  │                                                                     │    │
-│  │   Inside execute (default implementation):                 │    │
+│  │   Inside execute (default implementation):                          │    │
 │  │   • Adapts kwargs internally                                        │    │
-│  │   • Loops over shards: spmd.execute_on_shards(self.kernel, ...)      │    │
+│  │   • Loops over shards: spmd.execute_on_shards(self.kernel, ...)     │    │
 │  │   • Returns: (shard_values, output_sharding, mesh)                  │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                     │                                       │
@@ -89,7 +89,7 @@ When you call any operation (e.g., `add(x, y)` or `x + y`), `Operation.__call__(
 │  │   • Calls all_reduce_op.simulate_grouped_execution() per tensor     │    │
 │  │   • Uses op.collective_reduce_type (sum/max/min/prod)               │    │
 │  │   • Updates sharding spec to remove reduced axes                    │    │
-│  │   • Sets up OpNode for the all_reduce operation                 │    │
+│  │   • Sets up OpNode for the all_reduce operation                     │    │
 │  │                                                                     │    │
 │  │   When this triggers: contracting factors (like K in matmul)        │    │
 │  │   that were sharded produce partial sums needing reduction.         │    │
@@ -101,7 +101,7 @@ When you call any operation (e.g., `add(x, y)` or `x + y`), `Operation.__call__(
 │  │                                                                     │    │
 │  │   # 6a. Record for autodiff (graph node creation)                   │    │
 │  │   self._setup_output_refs(output, resharded_args, kwargs, ...)      │    │
-│  │   # Creates OpNode with: op, inputs, kwargs for backward pass   │    │
+│  │   # Creates OpNode with: op, inputs, kwargs for backward pass       │    │
 │  │   # Note: stores resharded_args, not original args                  │    │
 │  │                                                                     │    │
 │  │   # 6b. Forward-mode autodiff (JVP)                                 │    │

@@ -34,7 +34,7 @@
 │  │  batch_dims: int                # Leading batch dims (vmap)     │    │
 │  │  traced: bool                   # Record in computation graph?  │    │
 │  │                                                                 │    │
-│  │  output_refs: OpNode        # What operation created this?  │    │
+│  │  output_refs: OpNode        # What operation created this?      │    │
 │  │  output_index: int              # Which output of that op?      │    │
 │  │                                                                 │    │
 │  │  tangent: TensorImpl            # For JVP (forward-mode AD)     │    │

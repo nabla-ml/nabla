@@ -45,8 +45,8 @@ Every operation (e.g., `add`, `matmul`, `relu`) goes through the same six-phase 
 │                                                                             │
 │  Phase 3: PHYSICAL EXECUTION                                                │
 │  ─────────────────────────────                                              │
-│  • Call op.execute(resharded_args, kwargs)                         │
-│  • This loops over each shard in the mesh and calls op.kernel() per shard    │
+│  • Call op.execute(resharded_args, kwargs)                                  │
+│  • This loops over each shard in the mesh and calls op.kernel() per shard   │
 │  • Returns raw TensorValues (one per shard) + output sharding info          │
 │                                                                             │
 │  Phase 4: PACKAGING                                                         │
@@ -96,10 +96,10 @@ Every operation (e.g., `add`, `matmul`, `relu`) goes through the same six-phase 
 │  ──────────────────────                                                     │
 │  1. User calls trace(fn, *args) or implicitly via grad(fn)                  │
 │  2. Input tensors marked as traced=True                                     │
-│  3. Function executes, each operation records OpNode via Phase 6        │
+│  3. Function executes, each operation records OpNode via Phase 6            │
 │  4. Trace.compute() walks backward from outputs, collects nodes in topo     │
-│     order via DFS on OpNode.op_args                                     │
-│  5. Result: Trace object with .inputs, .outputs, .nodes (list of OpNode)│
+│     order via DFS on OpNode.op_args                                         │
+│  5. Result: Trace object with .inputs, .outputs, .nodes (list of OpNode).   │
 │                                                                             │
 │  REHYDRATION (Graph Value Restoration)                                      │
 │  ──────────────────────────────────────                                     │
@@ -108,17 +108,17 @@ Every operation (e.g., `add`, `matmul`, `relu`) goes through the same six-phase 
 │  Why needed: Graph values (_values) are epoch-scoped. After evaluate(),     │
 │  the graph resets. Rehydration rebuilds _values for intermediate tensors.   │
 │                                                                             │
-│  How it works (Trace.refresh_graph_values()):                                          │
+│  How it works (Trace.refresh_graph_values()):                               │
 │  1. Find all leaf tensors (no output_refs) → ensure they're realized        │
 │  2. Add leaves to current graph epoch via GRAPH.add_input()                 │
 │  3. Iterate through nodes in topological order:                             │
 │     a. Reconstruct args by wrapping TensorImpls as Tensors                  │
 │     b. Call op.adapt_kwargs() for current batch_dims                        │
-│     c. Call op.execute(args, kwargs) to recompute values           │
+│     c. Call op.execute(args, kwargs) to recompute values                    │
 │     d. Map produced values back to original output TensorImpls              │
 │  4. Now all intermediate tensors have valid _values in current epoch        │
 │                                                                             │
-│  Key design: execute receives ORIGINAL kwargs, not pre-adapted.    │
+│  Key design: execute receives ORIGINAL kwargs, not pre-adapted.             │
 │  It performs adaptation internally. This ensures rehydration correctness.   │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -141,13 +141,14 @@ Nabla uses **reverse-mode autodiff** via trace-based VJP (Vector-Jacobian Produc
 │                                                                             │
 │  1. TRACE: Execute fn(x), capture Trace object                              │
 │                                                                             │
-│  2. REHYDRATE: Call trace.refresh_graph_values() to restore all intermediate _values   │
+│  2. REHYDRATE: Call trace.refresh_graph_values() to restore all             |
+|     intermediate _values                                                    │
 │                                                                             │
 │  3. INITIALIZE: Create cotangent_map with output cotangent (usually 1.0)    │
 │                                                                             │
 │  4. BACKWARD ITERATION: For each node in reversed(trace.nodes):             │
 │     a. Skip if op has no vjp_rule or no output has cotangent                │
-│     b. Reconstruct primals and outputs as Tensors from TensorImpls          │
+│     b. Reconstruct primals and outputs as Tensors from TensorImpls          |
 │     c. Gather output cotangents from cotangent_map                          │
 │     d. Call op.vjp_rule(primals, cotangent, output) → input cotangents      │
 │     e. Reduce cotangents to match primal shapes (handle broadcasting)       │

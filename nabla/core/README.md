@@ -29,13 +29,13 @@ Understanding Nabla requires seeing how these components interact during operati
 │          │                                                                  │
 │          ▼                                                                  │
 │   ┌──────────────┐                                                          │
-│   │    GRAPH     │  Executes kernel() per shard inside graph context         │
-│   │   (engine)   │  Records OpNode node for tracing                     │
+│   │    GRAPH     │  Executes kernel() per shard inside graph context        │
+│   │   (engine)   │  Records OpNode node for tracing                         │
 │   └──────┬───────┘                                                          │
 │          │                                                                  │
 │          ▼                                                                  │
 │   ┌──────────────┐                                                          │
-│   │  AUTOGRAD    │  (Later) Walks OpNode backward to compute gradients  │
+│   │  AUTOGRAD    │  (Later) Walks OpNode backward to compute gradients      │
 │   │  (backward)  │  Uses trace rehydration to restore intermediate values   │
 │   └──────────────┘                                                          │
 │                                                                             │
