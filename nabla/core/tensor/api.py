@@ -335,7 +335,7 @@ class Tensor(DLPackArray, HasTensorValue):
     ) -> Tensor:
         from ...ops import creation
 
-        return creation.full(shape, value, dtype=dtype, device=device, is_traced=traced)
+        return creation.full(shape, value, dtype=dtype, device=device, is_traced=is_traced)
 
     @classmethod
     def zeros(
@@ -348,7 +348,7 @@ class Tensor(DLPackArray, HasTensorValue):
     ) -> Tensor:
         from ...ops import creation
 
-        return creation.zeros(shape, dtype=dtype, device=device, is_traced=traced)
+        return creation.zeros(shape, dtype=dtype, device=device, is_traced=is_traced)
 
     @classmethod
     def ones(
@@ -361,7 +361,7 @@ class Tensor(DLPackArray, HasTensorValue):
     ) -> Tensor:
         from ...ops import creation
 
-        return creation.ones(shape, dtype=dtype, device=device, is_traced=traced)
+        return creation.ones(shape, dtype=dtype, device=device, is_traced=is_traced)
 
     @classmethod
     def arange(

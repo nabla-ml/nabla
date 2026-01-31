@@ -24,6 +24,21 @@ def ensure_tensor(x: Any) -> Tensor:
     return Tensor.constant(x)
 
 
+def _make_hashable(obj: Any) -> Any:
+    """Convert objects to stable, hashable keys for graph caching."""
+    from ..core import Tensor
+
+    if isinstance(obj, Tensor):
+        return ("tensor", str(obj.dtype), tuple(obj.shape), str(obj.sharding))
+    if isinstance(obj, (list, tuple)):
+        return tuple(_make_hashable(x) for x in obj)
+    if isinstance(obj, dict):
+        return tuple(sorted((k, _make_hashable(v)) for k, v in obj.items()))
+    if isinstance(obj, (int, float, str, bool, type(None))):
+        return obj
+    return str(obj)
+
+
 class Operation(ABC):
     """Base class for all operations.
 
@@ -90,6 +105,16 @@ class Operation(ABC):
         return (shard_results, output_sharding, mesh)
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
+
+        # Update rolling hash for caching based on op identity and arguments
+        from ..core import GRAPH
+
+        op_key = (
+            self.name,
+            tuple(_make_hashable(x) for x in args),
+            tuple(sorted((k, _make_hashable(v)) for k, v in kwargs.items())),
+        )
+        GRAPH.update_hash(op_key)
 
         # === New Path: Physical Execution ===
         if hasattr(self, "execute"):
@@ -286,12 +311,10 @@ class Operation(ABC):
         if not output_impls:
             return
 
-        import weakref
-
         from ..core import OpNode
 
         _, output_tree_def = pytree.tree_flatten(output, is_leaf=pytree.is_tensor)
-        weak_refs = tuple(weakref.ref(impl) for impl in output_impls)
+        output_refs = tuple(output_impls)
 
         def to_impl(x: Any) -> Any:
             return x._impl if isinstance(x, Tensor) else x
@@ -303,7 +326,7 @@ class Operation(ABC):
         )
 
         output_refs = OpNode(
-            _refs=weak_refs,
+            _refs=output_refs,
             tree_def=output_tree_def,
             op=self,
             op_args=stored_args,

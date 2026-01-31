@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-import weakref
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -27,14 +26,14 @@ class OpNode:
     """Lightweight container for multi-output operation siblings.
 
     Attributes:
-        _refs: Weak references to output TensorImpls.
+        _refs: Strong references to output TensorImpls.
         tree_def: PyTreeDef for output structure.
         op: Producing Operation.
         op_args: Original input arguments.
         op_kwargs: Original logical keyword arguments.
     """
 
-    _refs: tuple[weakref.ref, ...]
+    _refs: tuple[TensorImpl, ...]
     tree_def: PyTreeDef
     op: Operation
     op_args: tuple[Any, ...]
@@ -49,8 +48,8 @@ class OpNode:
             )
 
     def get_alive_outputs(self) -> list[TensorImpl | None]:
-        """Get output TensorImpls (None if GC'd)."""
-        return [ref() for ref in self._refs]
+        """Get output TensorImpls."""
+        return list(self._refs)
 
     @property
     def num_outputs(self) -> int:
@@ -58,7 +57,7 @@ class OpNode:
         return len(self._refs)
 
     def __repr__(self) -> str:
-        alive = sum(1 for ref in self._refs if ref() is not None)
+        alive = len(self._refs)
         op_name = self.op.name if hasattr(self.op, "name") else str(self.op)
         return f"OpNode(op={op_name}, outputs={self.num_outputs}, alive={alive})"
 
@@ -164,33 +163,35 @@ class Trace:
         from ..tensor.api import Tensor
         from .engine import GRAPH
 
-        # 1. Collect all leaf TensorImpls in the trace.
-        leaf_impls = set()
+        # 1. Collect all leaf TensorImpls in the trace (stable order).
+        leaf_impls = []
+        seen_leaf_impls: set[int] = set()
+
+        def add_leaf(impl: TensorImpl) -> None:
+            iid = id(impl)
+            if iid in seen_leaf_impls:
+                return
+            seen_leaf_impls.add(iid)
+            leaf_impls.append(impl)
         for ref in self.nodes:
             for arg in tree_leaves(ref.op_args):
                 if isinstance(arg, (Tensor, TensorImpl)):
                     impl = arg._impl if isinstance(arg, Tensor) else arg
                     if not impl.output_refs:
-                        leaf_impls.add(impl)
+                        add_leaf(impl)
 
         # Always include user-provided inputs as leaves.
         for inp in tree_leaves(self.inputs):
             if isinstance(inp, (Tensor, TensorImpl)):
-                leaf_impls.add(inp._impl if isinstance(inp, Tensor) else inp)
+                add_leaf(inp._impl if isinstance(inp, Tensor) else inp)
 
-        # 2. Realize all leaves together.
+        # 2. Realize leaves individually and add to current graph.
         leaf_tensors = [Tensor(impl=impl) for impl in leaf_impls]
-        if leaf_tensors:
-            GRAPH.evaluate(leaf_tensors[0], *leaf_tensors[1:])
-
-        # 3. Add all leaves to the current graph to get fresh values.
         for t in leaf_tensors:
-            GRAPH.add_input(t)
-            if hasattr(t, "_graph_values") and t._graph_values:
-                with GRAPH.graph:
-                    t._impl._graph_values = [v[...] for v in t._graph_values]
-                    t._impl._graph_values = [v[...] for v in t._graph_values]
-                    t._impl.graph_values_epoch = GRAPH.epoch
+            if t.is_realized:
+                GRAPH.add_input(t)
+            else:
+                GRAPH.evaluate(t)
 
         # 4. Iterate through nodes and call kernel_all to recompute intermediates.
         for i, output_refs in enumerate(self.nodes):
@@ -317,7 +318,7 @@ class Trace:
             for ref, produced_impl in zip(
                 output_refs._refs, produced_impls, strict=False
             ):
-                out_impl = ref()
+                out_impl = ref
                 if out_impl is not None and produced_impl is not None:
                     out_impl._graph_values = produced_impl._graph_values
                     out_impl.graph_values_epoch = GRAPH.epoch

@@ -60,7 +60,6 @@ class TensorImpl:
     batch_dims: int
     output_refs: OpNode | None
     output_index: int
-    output_index: int
 
     def __init__(
         self,

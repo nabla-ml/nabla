@@ -25,6 +25,7 @@ from ..common.context import _session
 
 _GRAPH_EPOCH: int = 0
 _SEED: ContextVar[Tensor] = ContextVar("_SEED")
+_GRAPH_CACHE: dict[int, Any] = {}
 
 import os
 
@@ -77,12 +78,22 @@ class ComputeGraph:
     sources: dict[_core.Value[Any], driver.Tensor]
     unrealized: weakref.WeakValueDictionary[int, Tensor]
     epoch: int
+    _graph_hash: int
+    _input_refs: list[Tensor]
+    _skip_finalize: bool
 
     def __init__(self, context: mlir.Context | None = None, seed: int = 0):
         global _GRAPH_EPOCH
         _GRAPH_EPOCH += 1
         self.epoch = _GRAPH_EPOCH
+        self._graph_hash = 0
+        self._input_refs = []
+        self._skip_finalize = False
         self._reset(context, seed)
+
+    def update_hash(self, key: Any) -> None:
+        """Updates the rolling graph hash with a new operation key."""
+        self._graph_hash = hash((self._graph_hash, key))
 
     def _reset(self, context: mlir.Context | None, seed: int) -> None:
         """Resets the internal graph state."""
@@ -90,14 +101,27 @@ class ComputeGraph:
         self.sources = {}
         self.unrealized = weakref.WeakValueDictionary()
         self.graph = graph.Graph("main", input_types=[], context=self.context)
+        self._input_refs = []
+        self._graph_hash = 0
+        self._skip_finalize = False
         with self.graph:
             ops.random.set_seed(seed)
 
     def add_input(self, tensor: Tensor) -> None:
         """Registers a realized tensor's storages as graph inputs."""
+        if any(t is tensor for t in self._input_refs):
+            return
+
         storages = tensor._impl._buffers
         if not storages:
             raise TypeError("Only realized tensors may be graph inputs.")
+
+        # Track input refs for cache input ordering
+        self._input_refs.append(tensor)
+
+        # Include input signature in graph hash to avoid leaf-only cache collisions
+        input_key = ("input", str(tensor.dtype), tuple(tensor.shape), str(tensor.sharding))
+        self.update_hash(input_key)
 
         op = _core.Operation._from_cmlir(self.graph._mlir_op)
         assert isinstance(op, mo.GraphOp)
@@ -125,6 +149,9 @@ class ComputeGraph:
 
         if len(tensor_graph_values) == 1:
             tensor._value = tensor_graph_values[0]
+            with self.graph:
+                tensor._impl._graph_values = [tensor_graph_values[0][...]]
+                tensor._impl.graph_values_epoch = self.epoch
         else:
 
             with self.graph:
@@ -168,6 +195,9 @@ class ComputeGraph:
 
         for t in self.unrealized.values():
             add_target(t)
+
+        # Skip finalize when only evaluating leaf inputs (used by rehydration)
+        self._skip_finalize = all(t._impl.output_refs is None for t in targets)
 
         return self._evaluate_normal(targets, return_model=return_model)
 
@@ -249,18 +279,33 @@ class ComputeGraph:
                 print(f"[LAZY EVAL ERROR] Optimization failed: {e}")
             raise
 
-        try:
-            inputs = [self.sources[inp._mlir_value] for inp in self.graph.inputs]
-            model = _session().load(self.graph)
-            seed_val, *results = model(*inputs)
-        except BaseException as e:
+        # Build input buffers in graph argument order for deterministic caching
+        inputs: list[driver.Tensor] = []
+        for inp in self.graph.inputs:
+            storage = self.sources.get(inp._mlir_value)
+            if storage is None:
+                raise RuntimeError("Missing storage for graph input")
+            inputs.append(storage)
 
-            self.graph._erase_output_if_present()
-            if DEBUG_LAZY_EVAL:
-                print("\n[LAZY EVAL ERROR] Failed to compile/execute. Graph state:")
-                print(self.graph._module.operation)
-                print("=" * 70)
-            raise RuntimeError(f"Failed to compile/execute graph: {e}") from e
+        cached_model = _GRAPH_CACHE.get(self._graph_hash)
+        if cached_model is not None:
+            model = cached_model
+            try:
+                seed_val, *results = model(*inputs)
+            except BaseException as e:
+                raise RuntimeError(f"Cached model execution failed: {e}") from e
+        else:
+            try:
+                model = _session().load(self.graph)
+                seed_val, *results = model(*inputs)
+                _GRAPH_CACHE[self._graph_hash] = model
+            except BaseException as e:
+                self.graph._erase_output_if_present()
+                if DEBUG_LAZY_EVAL:
+                    print("\n[LAZY EVAL ERROR] Failed to compile/execute. Graph state:")
+                    print(self.graph._module.operation)
+                    print("=" * 70)
+                raise RuntimeError(f"Failed to compile/execute graph: {e}") from e
 
         tensor_results: dict[int, list] = {}
         for (tensor, shard_idx), result in zip(value_map, results, strict=True):
@@ -286,7 +331,9 @@ class ComputeGraph:
                 t.real = True
 
         result = (model, inputs) if return_model else None
-        self._finalize_evaluation(seed_value=seed_val.item())
+        if not self._skip_finalize:
+            self._finalize_evaluation(seed_value=seed_val.item())
+        self._skip_finalize = False
         return result
 
     def _store_results(self, unrealized: list[Tensor], results: list) -> None:
