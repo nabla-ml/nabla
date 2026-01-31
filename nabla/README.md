@@ -22,7 +22,7 @@ Understanding Nabla requires understanding three lifecycles: **Operation Executi
 
 Every operation (e.g., `add`, `matmul`, `relu`) goes through the same six-phase lifecycle in `Operation.__call__()`. This is the heart of Nabla's execution model:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                        Operation.__call__() Lifecycle                       │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -87,7 +87,7 @@ Every operation (e.g., `add`, `matmul`, `relu`) goes through the same six-phase 
 
 **Tracing** captures what operations happened. **Rehydration** replays those operations to restore graph values.
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           Trace Lifecycle                                   │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -132,7 +132,7 @@ Every operation (e.g., `add`, `matmul`, `relu`) goes through the same six-phase 
 
 Nabla uses **reverse-mode autodiff** via trace-based VJP (Vector-Jacobian Product):
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                        Backward Pass Lifecycle                              │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -174,12 +174,13 @@ Nabla uses **reverse-mode autodiff** via trace-based VJP (Vector-Jacobian Produc
 Every tensor has two representations that enable powerful features:
 
 | Aspect | Logical View | Physical View |
-|--------|--------------|---------------|
+| :--- | :--- | :--- |
 | **Shape** | Global shape (what user sees) | Per-shard local shape |
 | **Storage** | `Tensor` with sharding metadata | `TensorImpl._values` (list per shard) |
 | **Purpose** | User API, shape reasoning | Actual computation |
 
 **Why this matters**:
+
 - **Trace Rehydration**: Replay captured ops without re-executing Python
 - **shard_map**: Same code runs differently (logical trace vs physical execution)
 - **Epoch Management**: Values are scoped to graph epochs; rehydration restores them
@@ -197,6 +198,7 @@ Nabla uses **factor-based sharding propagation** rather than dimension-based:
 ```
 
 **Three-phase propagation** (runs eagerly per-operation):
+
 1. **COLLECT**: Gather shardings from input dimensions to factors
 2. **RESOLVE**: Resolve conflicts using priority rules
 3. **UPDATE**: Project factor shardings to output dimensions
@@ -208,7 +210,7 @@ Nabla uses **factor-based sharding propagation** rather than dimension-based:
 ## Module Map
 
 | Module | Purpose | Start Here |
-|--------|---------|------------|
+| :--- | :--- | :--- |
 | **[core/](core/README.md)** | Tensor state, graph engine, sharding, autodiff | Understanding internals |
 | **[ops/](ops/README.md)** | Operation definitions, `__call__` lifecycle, VJP/JVP rules | Adding new ops |
 | **[transforms/](transforms/README.md)** | `vmap`, `shard_map`, `compile` | High-level transforms |
@@ -216,7 +218,7 @@ Nabla uses **factor-based sharding propagation** rather than dimension-based:
 ### Core Submodules
 
 | Submodule | Purpose | Key Concepts |
-|-----------|---------|--------------|
+| :--- | :--- | :--- |
 | [core/tensor/](core/tensor/README.md) | Tensor/TensorImpl facade | Dual object model, lazy realization |
 | [core/graph/](core/graph/README.md) | Graph recording, tracing | OpNode, Trace, rehydration |
 | [core/autograd/](core/autograd/README.md) | Gradient computation | BackwardEngine, VJP, cotangent accumulation |
@@ -239,6 +241,7 @@ Nabla uses **factor-based sharding propagation** rather than dimension-based:
 ## Maintenance Guide
 
 > **Note to AI Agents**:
+>
 > 1. **Read Recursively**: Start here, then follow links to understand specific subsystems.
 > 2. **Update Requirement**: Update this file when modifying architecture. Keep lifecycle diagrams accurate.
 > 3. **Focus on Lifecycles**: This file explains "how things flow". Submodule READMEs explain "what things are".

@@ -8,7 +8,7 @@
 
 Understanding Nabla requires seeing how these components interact during operation execution:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                     Core Module Interaction Flow                            │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -50,7 +50,7 @@ Understanding Nabla requires seeing how these components interact during operati
 
 **Solution**: Separate user API (`Tensor`) from internal state (`TensorImpl`):
 
-```
+```text
 Tensor (user-facing)              TensorImpl (internal state)
 ├── .shape, .dtype, .device       ├── _values: list[TensorValue]  # lazy graph nodes
 ├── .numpy(), .item()             ├── _storages: list[driver.Tensor]  # realized data
@@ -61,6 +61,7 @@ Tensor (user-facing)              TensorImpl (internal state)
 ```
 
 **OpNode**: When an operation produces outputs, all sibling outputs share the SAME `OpNode` object. This contains:
+
 - The operation that created them
 - The input arguments (as TensorImpls)
 - Weak references to all output TensorImpls
@@ -76,6 +77,7 @@ This enables backward traversal: from any tensor, follow `output_refs.op_args` t
 **Epochs**: Each graph compilation increments `GRAPH.epoch`. TensorImpl stores `values_epoch` to detect staleness.
 
 **Rehydration** (`Trace.refresh_graph_values()`): Before backward pass, replay all operations:
+
 1. Find leaf tensors (constants, inputs) → ensure realized
 2. Add leaves to current graph epoch
 3. For each operation in topological order:
@@ -86,7 +88,7 @@ This is why `execute` receives ORIGINAL kwargs and performs adaptation internall
 
 ### 3. Lazy Evaluation Model
 
-```
+```text
                     ┌─────────────┐
                     │   Tensor    │
                     │  created    │
@@ -116,11 +118,12 @@ This is why `execute` receives ORIGINAL kwargs and performs adaptation internall
                     └─────────────┘
 ```
 
-**Key insight**: Most tensors stay "unrealized" (only _values, no _storages) until you explicitly need data. This enables graph optimization before execution.
+**Key insight**: Most tensors stay "unrealized" (only `_values`, no `_storages`) until you explicitly need data. This enables graph optimization before execution.
 
 ### 4. Physical Execution Context
 
 Operations call `kernel()` inside `GRAPH.graph` context. This:
+
 - Provides access to lazy tensor values without triggering recursive compilation
 - Allows graph node creation for the current epoch
 - Required for any code that manipulates `_values`
@@ -129,7 +132,7 @@ Operations call `kernel()` inside `GRAPH.graph` context. This:
 
 Strict import hierarchy to avoid circular dependencies:
 
-```
+```text
 Level 0: common/     (pytree, context managers - no deps)
          │
 Level 1: graph/      (Graph, imports common)
@@ -144,7 +147,7 @@ Level 4: autograd/   (grad, backward - imports all above)
 ## Component Map
 
 | Submodule | Purpose | Key Concepts | Documentation |
-|-----------|---------|--------------|---------------|
+| :--- | :--- | :--- | :--- |
 | **[tensor/](tensor/README.md)** | State management | Tensor/TensorImpl facade, lazy realization | Dual object model |
 | **[graph/](graph/README.md)** | Execution engine | GRAPH singleton, OpNode, Trace, rehydration | Graph recording, epochs |
 | **[sharding/](sharding/README.md)** | SPMD distribution | Factor propagation, DeviceMesh, resharding | Automatic communication |
@@ -173,6 +176,7 @@ tree_map, tree_flatten, tree_unflatten, tree_leaves, tree_structure, PyTreeDef
 ## Maintenance Guide
 
 > **Note to AI Agents**:
+>
 > 1. **Import Hierarchy**: Respect the levels above. Adding imports that go "up" creates cycles.
 > 2. **Rehydration**: If changing operation execution, ensure `execute` can work during rehydration (receives original kwargs).
 > 3. **OpNode**: Any change to how operations record their outputs affects autodiff. Test gradients.

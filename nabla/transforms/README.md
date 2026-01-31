@@ -24,6 +24,7 @@ val, grads = nabla.value_and_grad(loss_fn)(params, x, y)
 ```
 
 **How it works** (see [core/autograd/](../core/autograd/README.md)):
+
 1. **Trace**: Execute `loss_fn` with tracing enabled, capturing OpNode
 2. **Rehydrate**: Restore all intermediate `_values` for current epoch
 3. **Backward**: Walk OpNode in reverse, calling `vjp_rule` per operation
@@ -43,12 +44,13 @@ y = batched_fn(x_batch, w)  # x_batch: [B, D], w: [D, D]
 ```
 
 **How it works**:
+
 1. **Increment batch_dims**: Input tensors get `batch_dims += 1`
 2. **Execute normally**: Operations see leading dims as batch
 3. **Axis translation**: `LogicalAxisOperation.adapt_kwargs` shifts axis indices by batch_dims
 4. **Preserve semantics**: Negative axes still work (index from end)
 
-```
+```text
 vmap(f)                           Normal f
 Input: [B, D]                     Input: [D]
         │                                │
@@ -76,7 +78,7 @@ def data_parallel_forward(x, params):
 
 **How it works** - Trace-and-Replay:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                        shard_map Execution Flow                         │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -122,6 +124,7 @@ result = fast_fn(x2, y2)
 ```
 
 **Pipeline**:
+
 1. **Trace**: Capture computation graph
 2. **Optimize**: DCE, CSE, constant folding
 3. **Lower**: Generate MAX executable
@@ -164,7 +167,7 @@ def refresh_graph_values(trace):
 ## Component Map
 
 | File | Purpose | Key Exports |
-|------|---------|-------------|
+| :--- | :--- | :--- |
 | [shard_map.py](shard_map.py) | Distributed execution | `shard_map` |
 | [vmap.py](vmap.py) | Vectorization | `vmap` |
 | [compile.py](compile.py) | JIT compilation | `compile`, `CompiledFunction` |
@@ -174,6 +177,7 @@ def refresh_graph_values(trace):
 ## Maintenance Guide
 
 > **AI Agents - Critical Rules**:
+>
 > 1. **vmap + axis ops**: Ensure `adapt_kwargs` correctly handles batch_dims offset
 > 2. **shard_map replay**: Must use same kwargs as original trace
 > 3. **compile caching**: Cache key must include all shape/dtype info

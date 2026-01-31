@@ -9,15 +9,17 @@
 ### The Key Architectural Difference
 
 **Normal ops** inherit `Operation.execute` which:
+
 1. Gets mesh from args
 2. Calls `spmd.execute_on_shards(self.kernel, args, kwargs, mesh)`
 3. Returns `(shard_results, None, mesh)`
 
 **View ops** inherit from specialized base classes that **override `execute`** to:
+
 1. **Adapt kwargs** (translate logical axis/shape → physical)
 2. THEN call `spmd.execute_on_shards` with adapted kwargs
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                        View Op Execution Flow                                │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -66,13 +68,14 @@
 ### Why This Matters
 
 The user writes **logical** code:
+
 ```python
 x = squeeze(x, axis=0)  # User thinks: "remove first axis"
 ```
 
 But under vmap with `batch_dims=2`, the physical tensor has shape `(B1, B2, ...)`. The `axis=0` the user specified is actually `axis=2` in physical space:
 
-```
+```text
 Logical:   (10, 5)        squeeze axis=0 → (5,)
 Physical:  (B1, B2, 10, 5) squeeze axis=2 → (B1, B2, 5)
 ```
@@ -81,7 +84,7 @@ Physical:  (B1, B2, 10, 5) squeeze axis=2 → (B1, B2, 5)
 
 ## The Base Class Hierarchy
 
-```
+```text
 Operation (base.py)
     ├── LogicalAxisOperation           # Translates axis kwargs
     │       ├── ReduceOperation        # reduce_sum, reduce_mean, etc.
@@ -100,7 +103,7 @@ Operation (base.py)
 The `batch.py` ops are used internally by `vmap` to manage batch dimensions:
 
 | Op | Purpose |
-|----|--------|
+| :--- | :--- |
 | `incr_batch_dims` | Mark another leading dim as batch (bump counter) |
 | `decr_batch_dims` | Unmark leading batch dim (decrement counter) |
 | `move_axis_to_batch_dims` | Move axis to front, mark as batch |
@@ -113,12 +116,14 @@ Batch dimensions are always **leading axes** in prefix order.
 
 | File | Role | Exported Symbols |
 | :--- | :--- | :--- |
-| [`shape.py`](shape.py) | **Shape Transformation** | **Classes**: `BroadcastToOp`, `ReshapeOp`, `SliceUpdateOp`, `SliceTensorOp`, `ConcatenateOp`, `BroadcastToPhysicalOp`<br>**Functions**: `broadcast_to`, `reshape`, `slice_tensor`, `slice_update`, `concatenate`, `stack`, `broadcast_to_physical` |
-| [`axes.py`](axes.py) | **Axis Manipulation** | **Classes**: `UnsqueezeOp`, `SqueezeOp`, `SwapAxesOp`, `MoveAxisOp`, `UnsqueezePhysicalOp`, `SqueezePhysicalOp`<br>**Functions**: `unsqueeze`, `squeeze`, `swap_axes`, `moveaxis`, `unsqueeze_physical`, `squeeze_physical` |
-| [`batch.py`](batch.py) | **Batch Dim Internals** | **Classes**: `IncrBatchDimsOp`, `DecrBatchDimsOp`, `MoveAxisToBatchDimsOp`, `MoveAxisFromBatchDimsOp`, `BroadcastBatchDimsOp`<br>**Functions**: `incr_batch_dims`, `decr_batch_dims`, `move_axis_to_batch_dims`, `move_axis_from_batch_dims`, `broadcast_batch_dims` |
-| [`indexing.py`](indexing.py) | **Indexing/Slicing** | **Classes**: `GatherOp`, `ScatterOp`<br>**Functions**: `gather`, `scatter` |
+| [`shape.py`](shape.py) | **Shape Transformation** | **Classes**: `BroadcastToOp`, `ReshapeOp`, `SliceUpdateOp`, `SliceTensorOp`, `ConcatenateOp`, `BroadcastToPhysicalOp`; **Functions**: `broadcast_to`, `reshape`, `slice_tensor`, `slice_update`, `concatenate`, `stack`, `broadcast_to_physical` |
+| [`axes.py`](axes.py) | **Axis Manipulation** | **Classes**: `UnsqueezeOp`, `SqueezeOp`, `SwapAxesOp`, `MoveAxisOp`, `UnsqueezePhysicalOp`, `SqueezePhysicalOp`; **Functions**: `unsqueeze`, `squeeze`, `swap_axes`, `moveaxis`, `unsqueeze_physical`, `squeeze_physical` |
+| [`batch.py`](batch.py) | **Batch Dim Internals** | **Classes**: `IncrBatchDimsOp`, `DecrBatchDimsOp`, `MoveAxisToBatchDimsOp`, `MoveAxisFromBatchDimsOp`, `BroadcastBatchDimsOp`; **Functions**: `incr_batch_dims`, `decr_batch_dims`, `move_axis_to_batch_dims`, `move_axis_from_batch_dims`, `broadcast_batch_dims` |
+| [`indexing.py`](indexing.py) | **Indexing/Slicing** | **Classes**: `GatherOp`, `ScatterOp`; **Functions**: `gather`, `scatter` |
 
 ## Maintenance Guide
+
 > **Note to AI Agents**:
-> 1.  **Update Requirement**: You **MUST** update this file whenever you modify, restructure, or add ANY code in this module. Do not skip this step.
-> 2.  **Accuracy**: This file serves as the source of truth for the module's architecture. Ensure the Component Map and Philosophy sections remain accurate after your changes.
+>
+> 1. **Update Requirement**: You **MUST** update this file whenever you modify, restructure, or add ANY code in this module. Do not skip this step.
+> 2. **Accuracy**: This file serves as the source of truth for the module's architecture. Ensure the Component Map and Philosophy sections remain accurate after your changes.

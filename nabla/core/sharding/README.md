@@ -9,6 +9,7 @@
 ### The Big Picture
 
 When you call an operation on sharded tensors, the sharding engine:
+
 1. **Infers** what sharding the output will have
 2. **Determines** what sharding each input MUST have
 3. **Reshards** inputs if they don't match (inserts communication)
@@ -33,6 +34,7 @@ x = x.shard(mesh, P("dp", None))  # Shard dim 0 on "dp", replicate dim 1
 ```
 
 **ShardingSpec** describes how each tensor dimension maps to mesh axes:
+
 - `P("dp")` → dimension sharded across "dp" axis
 - `P(None)` → dimension replicated
 - `P("dp", "tp")` → dimension sharded across both (nested sharding)
@@ -41,7 +43,7 @@ x = x.shard(mesh, P("dp", None))  # Shard dim 0 on "dp", replicate dim 1
 
 Unlike dimension-based sharding, Nabla uses **factors** (inspired by GSPMD):
 
-```
+```text
 Matmul rule: "m k, k n -> m n"
                 │ │    │ │
                 │ │    │ └── Factor 'n' = columns
@@ -54,7 +56,7 @@ Matmul rule: "m k, k n -> m n"
 
 ### The Three-Phase Algorithm
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    Factor Propagation (per operation)                   │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -111,8 +113,9 @@ resharded_args = spmd.reshard_inputs(args, input_shardings, mesh)
 ```
 
 This may insert:
+
 - **shard()**: Replicated → Sharded
-- **all_gather()**: Sharded → Replicated  
+- **all_gather()**: Sharded → Replicated
 - **reshard_tensor()**: AllToAll for axis redistribution
 
 ### Post-Op: apply_auto_reduction()
@@ -172,7 +175,7 @@ y = h @ w2       # Factor 'k' (hidden) sharded on "tp"!
 ## Component Map
 
 | File | Purpose | Key Exports |
-|------|---------|-------------|
+| :--- | :--- | :--- |
 | [spec.py](spec.py) | Data structures | `DeviceMesh`, `ShardingSpec`, `DimSpec`, `PartitionSpec` (alias `P`), `compute_local_shape`, `compute_global_shape`, `needs_reshard` |
 | [spmd.py](spmd.py) | SPMD pipeline | `infer_output_sharding`, `reshard_inputs`, `create_sharded_output`, `execute_on_shards`, `get_mesh_from_args` |
 | [propagation.py](propagation.py) | Factor algorithm | `propagate_sharding`, `OpShardingRule`, `OpShardingRuleTemplate` |
@@ -181,6 +184,7 @@ y = h @ w2       # Factor 'k' (hidden) sharded on "tp"!
 ## Maintenance Guide
 
 > **AI Agents - Critical Rules**:
+>
 > 1. **reduce_axes**: Returned by `infer_output_sharding`, used by `apply_auto_reduction`. Don't lose this!
 > 2. **Factor notation**: Operations define sharding via `"m k, k n -> m n"` style rules
 > 3. **Eager execution**: Communication happens immediately, not lazily

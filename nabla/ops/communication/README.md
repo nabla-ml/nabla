@@ -9,13 +9,15 @@
 ### The Key Architectural Difference
 
 **Normal ops** (matmul, add, relu) follow this flow in `execute`:
-```
+
+```text
 execute → spmd.execute_on_shards → self.kernel(shard_value)
                    (loops over shards)       (MAX graph op)
 ```
 
 **Communication ops COMPLETELY OVERRIDE `execute`** to work directly on the `list[TensorValue]`:
-```
+
+```text
 execute → self._reduce_logic(shard_values)
                    (custom logic that COORDINATES across all shards)
 ```
@@ -72,7 +74,7 @@ def _reduce_logic(self, shard_values: list[TensorValue], ...):
 
 All communication ops inherit from `CollectiveOperation` ([base.py](base.py)):
 
-```
+```text
 Operation
     └── CollectiveOperation
             ├── AllReduceOp      # Sum/max/min/prod across shards
@@ -84,6 +86,7 @@ Operation
 ```
 
 `CollectiveOperation` provides:
+
 - `_derive_mesh()`: Extract mesh from tensor or kwargs
 - `_get_reduce_axes()`: Determine which mesh axes to reduce over
 - `_get_physical_axis()`: Convert logical axis → physical (accounting for batch_dims)
@@ -94,7 +97,7 @@ Operation
 Communication ops are inserted **eagerly** by the sharding engine:
 
 | Trigger | Inserted Op | Where |
-|---------|-------------|-------|
+| :--- | :--- | :--- |
 | Contracting dim sharded → partial sums | `AllReduceOp` | `apply_auto_reduction` (Phase 5) |
 | Input needs to be replicated | `AllGatherOp` | `reshard_inputs` (Phase 2) |
 | Change sharded axis | `AllToAllOp` | `reshard_inputs` (Phase 2) |
@@ -112,17 +115,19 @@ if reduce_axes and mesh:
 
 | File | Role | Exported Symbols |
 | :--- | :--- | :--- |
-| [`base.py`](base.py) | **Base Class** | **Classes**: `CollectiveOperation`<br>**Methods**: `estimate_cost`, `communication_cost` |
-| [`shard.py`](shard.py) | **Entry Point** | **Classes**: `ShardOp`<br>**Functions**: `shard`, `create_replicated_spec` |
+| [`base.py`](base.py) | **Base Class** | **Classes**: `CollectiveOperation`; **Methods**: `estimate_cost`, `communication_cost` |
+| [`shard.py`](shard.py) | **Entry Point** | **Classes**: `ShardOp`; **Functions**: `shard`, `create_replicated_spec` |
 | [`reshard.py`](reshard.py) | **Transition** | **Functions**: `reshard`, `reshard_tensor` (Smart transition between any two specs) |
-| [`all_reduce.py`](all_reduce.py) | **Reduce** | **Classes**: `AllReduceOp`, `PMeanOp`<br>**Functions**: `all_reduce`, `pmean` |
-| [`all_gather.py`](all_gather.py) | **Gather** | **Classes**: `AllGatherOp`, `GatherAllAxesOp`<br>**Functions**: `all_gather`, `gather_all_axes` |
-| [`reduce_scatter.py`](reduce_scatter.py) | **Scatter** | **Classes**: `ReduceScatterOp`<br>**Functions**: `reduce_scatter` |
-| [`all_to_all.py`](all_to_all.py) | **Shuffle** | **Classes**: `AllToAllOp`<br>**Functions**: `all_to_all` |
-| [`p_permute.py`](p_permute.py) | **Permute** | **Classes**: `PPermuteOp`<br>**Functions**: `ppermute` (Peer-to-peer cyclic shifts) |
-| [`axis_index.py`](axis_index.py) | **Metadata** | **Classes**: `AxisIndexOp`<br>**Functions**: `axis_index` (Get device index within mesh axis) |
+| [`all_reduce.py`](all_reduce.py) | **Reduce** | **Classes**: `AllReduceOp`, `PMeanOp`; **Functions**: `all_reduce`, `pmean` |
+| [`all_gather.py`](all_gather.py) | **Gather** | **Classes**: `AllGatherOp`, `GatherAllAxesOp`; **Functions**: `all_gather`, `gather_all_axes` |
+| [`reduce_scatter.py`](reduce_scatter.py) | **Scatter** | **Classes**: `ReduceScatterOp`; **Functions**: `reduce_scatter` |
+| [`all_to_all.py`](all_to_all.py) | **Shuffle** | **Classes**: `AllToAllOp`; **Functions**: `all_to_all` |
+| [`p_permute.py`](p_permute.py) | **Permute** | **Classes**: `PPermuteOp`; **Functions**: `ppermute` (Peer-to-peer cyclic shifts) |
+| [`axis_index.py`](axis_index.py) | **Metadata** | **Classes**: `AxisIndexOp`; **Functions**: `axis_index` (Get device index within mesh axis) |
 
 ## Maintenance Guide
+
 > **Note to AI Agents**:
-> 1.  **Update Requirement**: You **MUST** update this file whenever you modify, restructure, or add ANY code in this module. Do not skip this step.
-> 2.  **Accuracy**: This file serves as the source of truth for the module's architecture. Ensure the Component Map and Philosophy sections remain accurate after your changes.
+>
+> 1. **Update Requirement**: You **MUST** update this file whenever you modify, restructure, or add ANY code in this module. Do not skip this step.
+> 2. **Accuracy**: This file serves as the source of truth for the module's architecture. Ensure the Component Map and Philosophy sections remain accurate after your changes.

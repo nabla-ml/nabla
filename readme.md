@@ -1,9 +1,9 @@
 # NABLA
 
 > **⚠️ IMPORTANT: Architecture Under Heavy Restructuring**
-> 
+>
 > **You are viewing the `main` development branch** with a complete rewrite featuring distributed SPMD execution, multi-device training, and a new graph-based execution model.
-> 
+>
 > The stable release (v25.7, single-device) is available on the [nabla/v25.7 branch](https://github.com/nabla-ml/nabla/tree/nabla/v25.7). See Installation section below.
 
 ---
@@ -21,11 +21,13 @@ For tutorials and API reference, visit: [nablaml.com](https://nablaml.com/index.
 ### For Users: Stable Release (v25.7)
 
 Install from PyPI:
+
 ```bash
 pip install nabla-ml
 ```
 
 Example - Simple MLP training:
+
 ```python
 import nabla as nb
 

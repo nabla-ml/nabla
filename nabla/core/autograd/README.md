@@ -186,9 +186,9 @@ def _accumulate_cotangent(cotangent_map, target_impl, cot_tensor):
 
 ## File Map
 
-| File                 | Purpose                                                                          |
-| :------------------- | :------------------------------------------------------------------------------- |
-| [api.py](api.py)     | User-facing `grad`, `value_and_grad`                                             |
+| File | Purpose |
+| :--- | :--- |
+| [api.py](api.py) | User-facing `grad`, `value_and_grad` |
 | [utils.py](utils.py) | `BackwardEngine`, `backward_on_trace`, `_reduce_to_shape`, `_accumulate_cotangent` |
 
 ## Maintenance Guide

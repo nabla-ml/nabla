@@ -6,7 +6,7 @@
 
 ## The Dual-Object Model
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                        User Code                                        │
 │                            │                                            │
@@ -53,8 +53,9 @@ a, b, c = split(x, 3)  # 3 Tensors from 1 operation
 # All three need to reference the same OpNode for backward pass
 ```
 
-**Solution**: 
-- `TensorImpl` holds the shared `output_refs` 
+**Solution**:
+
+- `TensorImpl` holds the shared `output_refs`
 - All sibling outputs point to the SAME `OpNode` object
 - Each has different `output_index` (0, 1, 2)
 
@@ -67,7 +68,7 @@ c._impl.output_index  # 2
 
 ## Lazy vs Realized State
 
-```
+```text
                  UNREALIZED                              REALIZED
                  ──────────                              ────────
   _values:       [TensorValue, ...]       →              [TensorValue, ...]
@@ -95,7 +96,7 @@ The `values_epoch` field detects stale values. `_get_valid_values()` returns emp
 TensorImpl provides multiple shape views:
 
 | Property | Description | Example |
-|----------|-------------|---------|
+| :--- | :--- | :--- |
 | `physical_local_shape(shard_idx)` | Per-shard storage shape (includes batch_dims) | `[B, M/2, N]` |
 | `logical_local_shape(shard_idx)` | Per-shard shape (excludes batch_dims) | `[M/2, N]` |
 | `physical_global_shape` | Full storage shape (reconstructed from sharding) | `[B, M, N]` |
@@ -122,13 +123,14 @@ tensor._impl.is_leaf  # → bool
 ## Component Map
 
 | File | Purpose | Key Exports |
-|------|---------|-------------|
+| :--- | :--- | :--- |
 | [api.py](api.py) | User-facing Tensor class | `Tensor`, factory methods (`zeros`, `ones`, etc.) |
 | [impl.py](impl.py) | Internal TensorImpl state | `TensorImpl` |
 
 ## Maintenance Guide
 
 > **AI Agents - Critical Rules**:
+>
 > 1. **output_refs sharing**: Multi-output ops must share the same OpNode instance
 > 2. **values_epoch**: Always check/update when manipulating `_values`
 > 3. **Shapes**: Remember `batch_dims` offset when computing shapes

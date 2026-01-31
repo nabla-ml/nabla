@@ -8,7 +8,7 @@
 
 When you call any operation (e.g., `add(x, y)` or `x + y`), `Operation.__call__()` in [base.py](base.py) orchestrates six phases. Here's exactly what happens, mapped to the actual code:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                      Operation.__call__() - The 6 Phases                    │
 │                                                                             │
@@ -136,7 +136,7 @@ During **rehydration** (replaying the trace for backward pass), we only have acc
 
 ## Operation Class Hierarchy
 
-```
+```text
 Operation (base class - defines __call__ lifecycle)
 │
 ├── UnaryOperation        # Single input: relu, exp, neg
@@ -156,7 +156,7 @@ Operation (base class - defines __call__ lifecycle)
 ### Key Methods Every Operation Can Implement
 
 | Method | Required | Purpose | Code Location |
-|--------|----------|---------|---------------|
+| :--- | :--- | :--- | :--- |
 | `name` | ✅ | String identifier | Property |
 | `kernel(*args, **kwargs)` | ✅ | MAX primitive (per-shard) | Called in shard loop |
 | `execute(args, kwargs)` | Has default | Custom execution logic | Override if needed |
@@ -177,17 +177,20 @@ y = matmul(A, B)  # A: [M, K] sharded on K, B: [K, N]
 **Phase 1 (Metadata)**: Collects batch_dims=0, traced=True, sharded=True
 
 **Phase 2 (Adaptation)**:
+
 - `infer_output_sharding` uses rule `"m k, k n -> m n"`
 - Factor `k` is sharded → appears in reduce_axes
 - If B's K dim has different sharding → `reshard_inputs` inserts communication
 
 **Phase 3 (Physical Execution)**:
+
 - Loops over shards, calls `matmul.kernel(A_shard, B_shard)`
 - Each shard computes partial `[M, N]` result
 
 **Phase 4 (Packaging)**: Wraps shard results into output Tensor
 
 **Phase 5 (Post-Op Collectives)**:
+
 - `reduce_axes={'k_axis'}` is non-empty
 - `apply_auto_reduction` calls grouped all-reduce
 - Produces correct global `[M, N]` result
@@ -199,7 +202,7 @@ y = matmul(A, B)  # A: [M, K] sharded on K, B: [K, N]
 ## Component Map
 
 | File | Purpose | Key Exports |
-|------|---------|-------------|
+| :--- | :--- | :--- |
 | [base.py](base.py) | **`__call__` lifecycle**, base classes | `Operation`, `BinaryOperation`, `UnaryOperation`, `ReduceOperation`, `LogicalAxisOperation` |
 | [execution_utils.py](execution_utils.py) | **Post-op helpers** | `apply_auto_reduction`, `apply_jvp` |
 | [binary.py](binary.py) | Binary ops | `add`, `sub`, `mul`, `div`, `matmul`, `pow` |
@@ -218,6 +221,7 @@ y = matmul(A, B)  # A: [M, K] sharded on K, B: [K, N]
 ## Maintenance Guide
 
 > **AI Agents - Critical Rules**:
+>
 > 1. **`execute` contract**: MUST receive original kwargs and adapt internally. Breaking this breaks rehydration.
 > 2. **`_setup_output_refs`**: Stores `resharded_args`, not original args. Backward pass needs correctly sharded inputs.
 > 3. **`adapt_kwargs`**: Only positive axis indices need translation. Negative indices index from end in both logical and physical.
