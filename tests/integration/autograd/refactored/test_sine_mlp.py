@@ -1,5 +1,4 @@
 import os
-# Set DEBUG_LAZY_EVAL to False BEFORE any other imports
 os.environ["NABLA_DEBUG"] = "0"
 
 import nabla as nb
@@ -21,7 +20,6 @@ def main():
     print("Setting up Sine Curve MLP training...")
     
     # 1. Generate data: Sine curve from 0 to 1
-    # x in [0, 1], y = (sin(4 * pi * x) + 1) / 2
     num_samples = 5
     x_np = np.linspace(0, 1, num_samples).reshape(-1, 1).astype(np.float32)
     y_np = (np.sin(4 * np.pi * x_np) + 1) / 2.0
@@ -30,7 +28,6 @@ def main():
     y = nb.Tensor.from_dlpack(y_np)
     
     # 2. Initialize MLP parameters
-    # Input: 1, Hidden: 32, 32, Output: 1
     layers = [1, 64, 64, 1]
     params = []
     np.random.seed(42)
@@ -43,8 +40,8 @@ def main():
         b_np = np.zeros((1, out_dim)).astype(np.float32)
         
         # Realize them immediately
-        w = nb.Tensor.from_dlpack(w_np).realize()
-        b = nb.Tensor.from_dlpack(b_np).realize()
+        w = nb.Tensor.from_dlpack(w_np)
+        b = nb.Tensor.from_dlpack(b_np)
         params.extend([w, b])
     
     # Enable tracing for parameters
@@ -59,7 +56,7 @@ def main():
     def loss_fn(params, x, y):
         preds = mlp(x, params)
         diff = preds - y
-        return ops.mean(diff * diff)
+        return ops.mean(diff * diff).realize()
     
     vg_fn = value_and_grad(loss_fn, argnums=0)
     
@@ -80,15 +77,12 @@ def main():
         if epoch % 1 == 0:
             duration = time.perf_counter() - t_start
             print(f"Epoch {epoch:3d}, Loss: {loss.item():.6f}, Time: {duration:.4f}s")
-            # Print grad norms to check learning
-            grad_norm = sum([np.linalg.norm(g.to_numpy()) for g in grads])
-            print(f"  Grad norm: {grad_norm:.6f}")
             
     print("Training complete.")
     
     # Final params should be realized
     for p in params:
-        p.realize()
+        p
         
     # Check predictions
     final_preds = mlp(x, params).to_numpy()
