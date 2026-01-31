@@ -161,7 +161,100 @@ class ReshapeOp(ShapeOp):
         return super().__call__(x, shape=shape)
 
     def kernel(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
+        # Nanobind expects a tuple of native ints. The shape received here
+        # is the LOCAL physical shape, transformed by _transform_shard_kwargs.
+        shape = tuple(int(d) for d in shape)
         return ops.reshape(x, shape)
+
+    def _resolve_shape(self, x_shape: tuple[int, ...], target_shape: tuple[int, ...]) -> tuple[int, ...]:
+        """Resolve -1 in target_shape based on input x_shape volume."""
+        if -1 not in target_shape:
+            return target_shape
+            
+        input_size = 1
+        for d in x_shape:
+            input_size *= int(d)
+            
+        resolved = list(target_shape)
+        known_size = 1
+        neg_idx = -1
+        for i, d in enumerate(resolved):
+            if d == -1:
+                if neg_idx != -1:
+                    raise ValueError("Only one dimension can be -1")
+                neg_idx = i
+            else:
+                known_size *= int(d)
+                
+        if known_size > 0:
+            resolved[neg_idx] = input_size // known_size
+            
+        return tuple(resolved)
+
+    def _transform_shard_kwargs(
+        self, kwargs: dict, output_sharding, shard_idx: int, args: tuple
+    ) -> dict:
+        """Convert global target shape to local shape for each shard."""
+        from ...core.sharding.spec import compute_local_shape
+        from ...core import Tensor
+
+        global_shape = kwargs.get("shape")
+        if global_shape is None or output_sharding is None:
+            return kwargs
+
+        # Resolve -1 if present using the global shape of the input tensor
+        if -1 in global_shape and len(args) > 0:
+             x = args[0]
+             if isinstance(x, Tensor):
+                 # x.shape returns the global logical shape
+                 global_shape = self._resolve_shape(x.shape, global_shape)
+        
+        local_shape = compute_local_shape(
+            global_shape, output_sharding, device_id=shard_idx
+        )
+        return {**kwargs, "shape": local_shape}
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for reshape, handling inferred dims (-1)."""
+        from ...core.sharding import spmd, spec
+        
+        x = args[0]
+        # kwargs['shape'] passed here might already include batch dimensions if vmapped.
+        target_shape = kwargs.get("shape")
+        
+        # 1. Resolve Global Physical Shape (handle -1)
+        # We always resolve against the input's physical global shape (which includes batch dims).
+        # This handles both standard and VMap cases uniformly.
+        resolved_shape = target_shape
+        input_shape = None
+
+        if hasattr(x, "physical_global_shape"):
+            input_shape = x.physical_global_shape
+        elif hasattr(x, "shape"): # Fallback
+             input_shape = x.shape
+        
+        if input_shape is not None and -1 in target_shape:
+             resolved_shape = self._resolve_shape(input_shape, target_shape)
+
+        # 2. Compute Local Physical Shape for each shard
+        # We assume output_sharding matches the rank of resolved_shape.
+        
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        shapes = []
+        if output_sharding and mesh:
+            for i in range(num_shards):
+                local = spec.compute_local_shape(
+                    resolved_shape, output_sharding, device_id=i
+                )
+                shapes.append(tuple(int(d) for d in local))
+        else:
+            shapes = [tuple(int(d) for d in resolved_shape)] * num_shards
+
+        return shapes, x.dtype
 
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
         return len(kwargs.get("shape"))
@@ -238,21 +331,6 @@ class ReshapeOp(ShapeOp):
         return OpShardingRuleTemplate([in_mapping], [out_mapping]).instantiate(
             input_shapes, output_shapes
         )
-
-    def _transform_shard_kwargs(
-        self, kwargs: dict, output_sharding, shard_idx: int, args: tuple
-    ) -> dict:
-        """Convert global target shape to local shape for each shard."""
-        from ...core.sharding.spec import compute_local_shape
-
-        global_shape = kwargs.get("shape")
-        if global_shape is None or output_sharding is None:
-            return kwargs
-
-        local_shape = compute_local_shape(
-            global_shape, output_sharding, device_id=shard_idx
-        )
-        return {**kwargs, "shape": local_shape}
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for reshape: reshape cotangent back to input shape."""
@@ -345,6 +423,29 @@ class SliceUpdateOp(Operation):
 
         return result
 
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for slice_update (same as input x)."""
+        from ...core.sharding import spmd
+
+        x = args[0]
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        shapes = []
+        for i in range(num_shards):
+            idx = i if i < x.num_shards else 0
+            s = x.physical_local_shape(idx)
+            if s is not None:
+                shapes.append(tuple(int(d) for d in s))
+            else:
+                raise RuntimeError(
+                    f"Could not determine physical shape for input x in {self.name}"
+                )
+
+        return shapes, x.dtype
+
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
         return len(input_shapes[0])
 
@@ -421,6 +522,32 @@ class SliceTensorOp(Operation):
     ) -> TensorValue:
         return ops.slice_tensor(x, slices)
 
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for slice_tensor."""
+        from ...core.sharding import spmd
+
+        x = args[0]
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        shapes = []
+        for i in range(num_shards):
+            # SliceTensorOp uses _transform_shard_kwargs to determine local slice
+            local_kwargs = self._transform_shard_kwargs(
+                kwargs, output_sharding, i, args
+            )
+            local_size = local_kwargs.get("size")
+            if local_size is not None:
+                shapes.append(tuple(int(d) for d in local_size))
+            else:
+                raise RuntimeError(
+                    f"Could not determine local physical shape for {self.name}"
+                )
+
+        return shapes, x.dtype
+
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
         return len(input_shapes[0])
 
@@ -494,10 +621,13 @@ class SliceTensorOp(Operation):
         local_start_indices = []
         local_sizes = []
 
+        batch_dims = getattr(x, "batch_dims", 0)
+
         for dim_idx, (g_start, g_size) in enumerate(zip(global_start, global_size)):
+            phys_idx = batch_dims + dim_idx
             dim_spec = (
-                input_sharding.dim_specs[dim_idx]
-                if dim_idx < len(input_sharding.dim_specs)
+                input_sharding.dim_specs[phys_idx]
+                if phys_idx < len(input_sharding.dim_specs)
                 else None
             )
             global_len = int(input_global_shape[dim_idx])
@@ -573,6 +703,41 @@ class ConcatenateOp(AxisOp):
 
     def kernel(self, tensors: list[TensorValue], *, axis: int = 0) -> TensorValue:
         return ops.concat(tensors, axis)
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for concatenate."""
+        from ...core.sharding import spmd
+
+        tensors = args[0]
+        axis = kwargs.get("axis", 0)
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        shapes = []
+        for i in range(num_shards):
+            total_axis_size = 0
+            ref_shape = None
+            for t in tensors:
+                idx = i if i < t.num_shards else 0
+                s = t.physical_local_shape(idx)
+                if s is not None:
+                    norm_axis = axis if axis >= 0 else len(s) + axis
+                    total_axis_size += int(s[norm_axis])
+                    if ref_shape is None:
+                        ref_shape = list(int(d) for d in s)
+                else:
+                    raise RuntimeError(
+                        f"Could not determine physical shape for input in {self.name}"
+                    )
+
+            if ref_shape is not None:
+                ref_shape[norm_axis] = total_axis_size
+                shapes.append(tuple(ref_shape))
+
+        return shapes, tensors[0].dtype
 
     def sharding_rule(
         self,
@@ -706,6 +871,35 @@ class BroadcastToPhysicalOp(Operation):
     @property
     def name(self) -> str:
         return "broadcast_to_physical"
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for broadcast_to_physical."""
+        from ...core.sharding import spmd, spec
+
+        x = args[0]
+        target_shape = kwargs.get("shape")
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        if target_shape is None:
+            raise RuntimeError(
+                f"Could not determine target shape for {self.name}"
+            )
+
+        shapes = []
+        if output_sharding and mesh:
+            for i in range(num_shards):
+                local = spec.compute_local_shape(
+                    target_shape, output_sharding, device_id=i
+                )
+                shapes.append(tuple(int(d) for d in local))
+        else:
+            shapes = [tuple(int(d) for d in target_shape)] * num_shards
+
+        return shapes, x.dtype
 
     def kernel(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
         return ops.broadcast_to(x, shape)

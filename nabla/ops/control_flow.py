@@ -123,6 +123,36 @@ class WhereOp(Operation):
     def name(self) -> str:
         return "where"
 
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for where (same as broadcasted inputs)."""
+        from ..core.sharding import spmd
+
+        condition, x, y = args
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        shapes = []
+        for i in range(num_shards):
+            idx_x = i if i < x.num_shards else 0
+            s = x.physical_local_shape(idx_x)
+            if s is None:
+                # Fallback to condition or y if x isn't available
+                idx_c = i if i < condition.num_shards else 0
+                s = condition.physical_local_shape(idx_c)
+            if s is None:
+                idx_y = i if i < y.num_shards else 0
+                s = y.physical_local_shape(idx_y)
+            if s is None:
+                raise RuntimeError(
+                    f"Could not determine physical shape for {self.name}"
+                )
+            shapes.append(tuple(int(d) for d in s))
+
+        return shapes, x.dtype
+
     def kernel(
         self, condition: graph.TensorValue, x: graph.TensorValue, y: graph.TensorValue
     ) -> graph.TensorValue:
@@ -148,6 +178,12 @@ class CondOp(Operation):
     @property
     def name(self) -> str:
         return "cond"
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]] | None, Any]:
+        """Cond output shapes depend on branch functions; skip explicit inference."""
+        return None, None
 
     def __call__(
         self,
@@ -217,6 +253,12 @@ class WhileLoopOp(Operation):
     @property
     def name(self) -> str:
         return "while_loop"
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]] | None, Any]:
+        """While-loop output shapes depend on body; skip explicit inference."""
+        return None, None
 
     def __call__(self, cond_fn: Callable, body_fn: Callable, init_val: Any) -> Any:
         from max import graph as g
@@ -327,6 +369,12 @@ class ScanOp(Operation):
     @property
     def name(self) -> str:
         return "scan"
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]] | None, Any]:
+        """Scan output shapes depend on function; skip explicit inference."""
+        return None, None
 
     def kernel(self, *args, **kwargs) -> Any:
         raise NotImplementedError(

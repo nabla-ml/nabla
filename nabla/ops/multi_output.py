@@ -65,6 +65,38 @@ class SplitOp(AxisOp):
         result_list = ops.split(x, split_sizes, axis)
         return tuple(result_list)
 
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[list[tuple[int, ...]]], list[Any]]:
+        """Infer physical shapes for split (multi-output)."""
+        from ..core.sharding import spmd
+
+        x = args[0]
+        num_splits = kwargs.get("num_splits")
+        axis = kwargs.get("axis", 0)
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        all_outputs_shapes = []
+        for _ in range(num_splits):
+            out_shapes = []
+            for shard_idx in range(num_shards):
+                idx = shard_idx if shard_idx < x.num_shards else 0
+                s = x.physical_local_shape(idx)
+                if s is not None:
+                    in_shape = list(int(d) for d in s)
+                    norm_axis = axis if axis >= 0 else len(in_shape) + axis
+                    in_shape[norm_axis] //= num_splits
+                    out_shapes.append(tuple(in_shape))
+                else:
+                    raise RuntimeError(
+                        f"Could not determine physical shape in {self.name}"
+                    )
+            all_outputs_shapes.append(out_shapes)
+
+        return all_outputs_shapes, [x.dtype] * num_splits
+
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for split: concatenate cotangents along split axis."""
         from .view.shape import concatenate
@@ -126,6 +158,50 @@ class ChunkOp(AxisOp):
     @property
     def name(self) -> str:
         return "chunk"
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[list[tuple[int, ...]]], list[Any]]:
+        """Infer physical shapes for chunk (multi-output)."""
+        from ..core.sharding import spmd
+
+        x = args[0]
+        chunks = kwargs.get("chunks")
+        axis = kwargs.get("axis", 0)
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        all_outputs_shapes = []
+        for shard_idx in range(num_shards):
+            idx = shard_idx if shard_idx < x.num_shards else 0
+            s = x.physical_local_shape(idx)
+            if s is None:
+                raise RuntimeError(
+                    f"Could not determine physical shape in {self.name}"
+                )
+
+            in_shape = list(int(d) for d in s)
+            norm_axis = axis if axis >= 0 else len(in_shape) + axis
+            axis_size = in_shape[norm_axis]
+
+            div = axis_size // chunks
+            rem = axis_size % chunks
+
+            split_sizes = []
+            for i in range(chunks):
+                size = div + 1 if i < rem else div
+                if size > 0:
+                    split_sizes.append(size)
+
+            for out_idx, size in enumerate(split_sizes):
+                out_shape = list(in_shape)
+                out_shape[norm_axis] = size
+                if len(all_outputs_shapes) <= out_idx:
+                    all_outputs_shapes.append([])
+                all_outputs_shapes[out_idx].append(tuple(out_shape))
+
+        return all_outputs_shapes, [x.dtype] * len(all_outputs_shapes)
 
     def __call__(self, x: Tensor, **kwargs: Any) -> list[Tensor]:
         from ..core.sharding.spec import DimSpec
@@ -233,6 +309,40 @@ class UnbindOp(AxisOp):
     def name(self) -> str:
         return "unbind"
 
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[list[tuple[int, ...]]], list[Any]]:
+        """Infer physical shapes for unbind (multi-output)."""
+        from ..core.sharding import spmd
+
+        x = args[0]
+        axis = kwargs.get("axis", 0)
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        all_outputs_shapes = []
+        for shard_idx in range(num_shards):
+            idx = shard_idx if shard_idx < x.num_shards else 0
+            s = x.physical_local_shape(idx)
+            if s is None:
+                raise RuntimeError(
+                    f"Could not determine physical shape in {self.name}"
+                )
+
+            in_shape = list(int(d) for d in s)
+            norm_axis = axis if axis >= 0 else len(in_shape) + axis
+            axis_size = in_shape[norm_axis]
+
+            out_shape = [d for i, d in enumerate(in_shape) if i != norm_axis]
+
+            for out_idx in range(axis_size):
+                if len(all_outputs_shapes) <= out_idx:
+                    all_outputs_shapes.append([])
+                all_outputs_shapes[out_idx].append(tuple(out_shape))
+
+        return all_outputs_shapes, [x.dtype] * len(all_outputs_shapes)
+
     def kernel(self, x: TensorValue, *, axis: int = 0) -> tuple[TensorValue, ...]:
         """Remove dimension and return slices."""
         shape = list(x.type.shape)
@@ -298,6 +408,12 @@ class MinMaxOp(Operation):
     @property
     def name(self) -> str:
         return "minmax"
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]] | None, Any]:
+        """MinMaxOp returns a dict; skip explicit physical shape inference."""
+        return None, None
 
     def __call__(self, x: Tensor, **kwargs: Any) -> dict[str, Tensor]:
         """Compute global min and max by reducing all axes."""

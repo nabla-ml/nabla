@@ -83,6 +83,52 @@ class ShardOp(Operation):
 
         return self._simulate_shard_execution(x, global_shape, spec, mesh)
 
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for shard operation."""
+        from ...core.sharding import spmd, spec
+        from ...core.sharding.spec import compute_global_shape, compute_local_shape
+
+        x = args[0]
+        mesh = (
+            kwargs.get("mesh")
+            or (args[1] if len(args) > 1 else None)
+            or (output_sharding.mesh if output_sharding else None)
+        )
+
+        num_shards = len(mesh.devices) if mesh else 1
+
+        # Determine global physical shape of the input
+        global_shape = None
+        from ...core import Tensor
+
+        if isinstance(x, Tensor):
+            local = x.physical_local_shape(0)
+            if local is not None and x.sharding:
+                global_shape = compute_global_shape(tuple(local), x.sharding)
+            elif local is not None:
+                global_shape = tuple(int(d) for d in local)
+            else:
+                global_shape = tuple(int(d) for d in x.shape)
+
+        if global_shape is None and "global_shape" in kwargs:
+            global_shape = kwargs["global_shape"]
+
+        if global_shape is None:
+            # Last resort
+            global_shape = tuple(int(d) for d in x.shape)
+
+        shapes = []
+        if output_sharding and mesh:
+            for i in range(num_shards):
+                local = compute_local_shape(global_shape, output_sharding, device_id=i)
+                shapes.append(tuple(int(d) for d in local))
+        else:
+            shapes = [tuple(int(d) for d in global_shape)] * num_shards
+
+        return shapes, x.dtype
+
     def execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for ShardOp.
 

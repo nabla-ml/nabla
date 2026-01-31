@@ -172,20 +172,92 @@ class Operation(ABC):
             if output_sharding is None:
                 output_sharding = predicted_output_spec
 
+            # Explicit Shape Inference (Required)
+            if type(self).compute_physical_shape is Operation.compute_physical_shape:
+                raise RuntimeError(
+                    f"{self.__class__.__name__} must implement compute_physical_shape "
+                    "for physical execution."
+                )
+
+            output_physical_shapes = None
+            output_dtype = None
+            output_physical_shapes, output_dtype = self.compute_physical_shape(
+                resharded_args, adapted_kwargs, output_sharding
+            )
+            # Validation: check if inferred physical shapes match actual ones
+            if output_physical_shapes is not None:
+                from max import graph as g
+
+                first_shard = shard_graph_values[0] if shard_graph_values else None
+                if isinstance(first_shard, (list, tuple)):
+                    # Multi-output: output_physical_shapes should be list of lists
+                    # [(a0, b0), (a1, b1)] -> ([a0, a1], [b0, b1])
+                    unzipped = list(zip(*shard_graph_values))
+                    for i, (out_inferred_shapes, out_shards) in enumerate(
+                        zip(output_physical_shapes, unzipped)
+                    ):
+                        for j, (inferred_shape, actual_value) in enumerate(
+                            zip(out_inferred_shapes, out_shards)
+                        ):
+                            if isinstance(actual_value, (g.TensorValue, g.BufferValue)):
+                                actual_shape = tuple(
+                                    int(d) for d in actual_value.type.shape
+                                )
+                                if inferred_shape != actual_shape:
+                                    raise RuntimeError(
+                                        f"Shape Mismatch in {self.name} (Multi-output) Phase 4:\n"
+                                        f"  Output Index: {i}, Shard Index: {j}\n"
+                                        f"  Inferred: {inferred_shape}, Actual: {actual_shape}"
+                                    )
+                else:
+                    # Single output
+                    for i, (inferred_shape, actual_value) in enumerate(
+                        zip(output_physical_shapes, shard_graph_values)
+                    ):
+                        if isinstance(actual_value, (g.TensorValue, g.BufferValue)):
+                            actual_shape = tuple(
+                                int(d) for d in actual_value.type.shape
+                            )
+                            if inferred_shape != actual_shape:
+                                raise RuntimeError(
+                                    f"Shape Mismatch in {self.name} Phase 4:\n"
+                                    f"  Shard Index: {i}\n"
+                                    f"  Inferred: {inferred_shape}, Actual: {actual_shape}"
+                                )
+
             # Handle structured outputs (tuples/lists from multi-output ops like split)
             first_shard = shard_graph_values[0] if shard_graph_values else None
             if isinstance(first_shard, (list, tuple)):
                 # Unzip: [(a0, b0), (a1, b1)] -> ([a0, a1], [b0, b1])
                 unzipped = list(zip(*shard_graph_values))
                 outputs = []
-                for res_shards in unzipped:
+                for i, res_shards in enumerate(unzipped):
+                    # Multi-output shape/dtype/sharding support
+                    shapes = None
+                    dtype = output_dtype
+                    if (
+                        isinstance(output_physical_shapes, list)
+                        and len(output_physical_shapes) > i
+                    ):
+                        shapes = output_physical_shapes[i]
+                    if isinstance(output_dtype, list) and len(output_dtype) > i:
+                        dtype = output_dtype[i]
+
+                    spec = output_sharding
+                    if isinstance(output_sharding, (list, tuple)) and len(
+                        output_sharding
+                    ) > i:
+                        spec = output_sharding[i]
+
                     outputs.append(
                         spmd.create_sharded_output(
                             list(res_shards),
-                            output_sharding,
+                            spec,
                             any_traced,
                             max_batch_dims,
                             mesh=res_mesh,
+                            physical_shapes=shapes,
+                            dtype=dtype,
                         )
                     )
                 output = tuple(outputs) if isinstance(first_shard, tuple) else outputs
@@ -210,6 +282,8 @@ class Operation(ABC):
                     any_traced,
                     max_batch_dims,
                     mesh=res_mesh,
+                    physical_shapes=output_physical_shapes,
+                    dtype=output_dtype,
                 )
 
             # 5. SPMD: Post-Op Collectives (Automatic Reductions)
@@ -241,6 +315,17 @@ class Operation(ABC):
         raise RuntimeError(
             f"Operation '{self.name}' reached unreachable code path. "
             f"This is a bug in the execution model."
+        )
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]] | None, Any]:
+        """Infer per-shard physical shapes for outputs.
+
+        Subclasses must override this when used with physical execution.
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement compute_physical_shape"
         )
 
     def adapt_kwargs(self, args: tuple, kwargs: dict, batch_dims: int) -> dict:
@@ -343,6 +428,58 @@ class Operation(ABC):
 
 class BinaryOperation(Operation):
     """Base for binary element-wise ops with batch_dims-aware broadcasting."""
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for binary elementwise ops (same as input 0)."""
+        from ..core import Tensor
+        from ..core.sharding import spmd
+
+        x = args[0]
+        y = args[1]
+        
+        # We rely on previous broadcasting steps to ensure x and y have compatible shapes
+        # Or at least compatible for the operation logic.
+        # For elementwise binary, inputs are typically broadcasted to match.
+        
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+        
+        shapes = []
+        for i in range(num_shards):
+            # Prefer x, but if x is scalar/smaller rank, y might determine shape?
+            # In BinaryOperation.__call__, inputs are broadcasted to target_physical.
+            # So args passed here (resharded_args) should have correct shapes.
+            
+            # Handle replicated inputs (1 shard) used in multi-shard mesh
+            idx_x = i if i < x.num_shards else 0
+            s = x.physical_local_shape(idx_x)
+            
+            if s is None:
+                 # Fallback to y if x doesn't help? or error?
+                 if isinstance(y, Tensor):
+                     idx_y = i if i < y.num_shards else 0
+                     s = y.physical_local_shape(idx_y)
+            
+            if s is not None:
+                shapes.append(tuple(int(d) for d in s))
+            else:
+                 # Should not happen if inputs are realized/valid
+                 raise RuntimeError(f"Could not determine physical shape for {self.name}")
+
+        # Dtype promotion
+        # Simple rule: preserve float32, etc.
+        # Max usually follows numpy promotion.
+        # For simple cases (same dtype), return x.dtype.
+        # If different, we might need logic.
+        # Let's assume same dtype for now or pick wider.
+        dtype = x.dtype
+        if hasattr(y, "dtype") and y.dtype != dtype:
+             # Very basic promotion: float > int
+             pass 
+
+        return shapes, dtype
 
     def compute_cost(
         self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]
@@ -520,6 +657,44 @@ class AxisOp(Operation):
 class ReduceOperation(AxisOp):
     """Base for reduction operations (sum, mean, max, min, etc.)."""
 
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for reduction operations."""
+        from ..core.sharding import spmd
+
+        x = args[0]
+        # Kwargs are already adapted in Operation.__call__
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        shapes = []
+        for i in range(num_shards):
+            idx = i if i < x.num_shards else 0
+            s = x.physical_local_shape(idx)
+            if s is not None:
+                in_shape = tuple(int(d) for d in s)
+                # Normalize axis relative to the physical rank
+                norm_axis = axis if axis >= 0 else len(in_shape) + axis
+                if keepdims:
+                    out_shape = tuple(
+                        1 if i == norm_axis else d for i, d in enumerate(in_shape)
+                    )
+                else:
+                    out_shape = tuple(
+                        d for i, d in enumerate(in_shape) if i != norm_axis
+                    )
+                shapes.append(out_shape)
+            else:
+                raise RuntimeError(
+                    f"Could not determine physical shape for {self.name}"
+                )
+
+        return shapes, x.dtype
+
     def compute_cost(
         self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]
     ) -> float:
@@ -628,6 +803,27 @@ class ReduceOperation(AxisOp):
 class UnaryOperation(Operation):
     """Base for unary element-wise operations."""
 
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for unary elementwise ops (same as input)."""
+        from ..core.sharding import spmd
+
+        x = args[0]
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+        
+        shapes = []
+        for i in range(num_shards):
+            idx = i if i < x.num_shards else 0
+            s = x.physical_local_shape(idx)
+            if s is not None:
+                shapes.append(tuple(int(d) for d in s))
+            else:
+                 raise RuntimeError(f"Could not determine physical shape for {self.name}")
+        
+        return shapes, x.dtype
+
     def compute_cost(
         self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]
     ) -> float:
@@ -656,6 +852,33 @@ class UnaryOperation(Operation):
 
 class ShapeOp(Operation):
     """Base for ops that take LOGICAL shape kwargs."""
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for shape operations."""
+        from ..core.sharding import spmd, spec
+
+        x = args[0]
+        # Kwargs are already adapted in Operation.__call__
+        global_phys_shape = kwargs.get("shape")
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        shapes = []
+        if output_sharding and mesh:
+            for i in range(num_shards):
+                # Use sharding spec to determine local physical shape from global physical shape
+                local = spec.compute_local_shape(
+                    global_phys_shape, output_sharding, device_id=i
+                )
+                shapes.append(tuple(int(d) for d in local))
+        else:
+            # Unsharded / replicated case
+            shapes = [tuple(int(d) for d in global_phys_shape)] * num_shards
+
+        return shapes, x.dtype
 
     def adapt_kwargs(self, args: tuple, kwargs: dict, batch_dims: int) -> dict:
         if batch_dims == 0:

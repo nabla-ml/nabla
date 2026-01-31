@@ -22,6 +22,54 @@ class GatherOp(Operation):
     def name(self) -> str:
         return "gather"
 
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for gather."""
+        from ...core.sharding import spmd
+
+        x = args[0]
+        indices = args[1]
+        axis = kwargs.get("axis", 0)
+        batch_dims = kwargs.get("batch_dims", 0)
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        shapes = []
+        for i in range(num_shards):
+            idx_x = i if i < x.num_shards else 0
+            idx_i = i if i < indices.num_shards else 0
+
+            s_x = x.physical_local_shape(idx_x)
+            s_i = indices.physical_local_shape(idx_i)
+            if s_x is None or s_i is None:
+                raise RuntimeError(
+                    f"Could not determine physical shape for {self.name}"
+                )
+
+            x_shape = [int(d) for d in s_x]
+            i_shape = [int(d) for d in s_i]
+
+            if batch_dims and batch_dims > 0:
+                # gather_nd path: output = x[:batch_dims] + indices[batch_dims:] + x[batch_dims+1:]
+                if batch_dims >= len(x_shape):
+                    raise ValueError(
+                        f"batch_dims {batch_dims} out of range for {self.name}"
+                    )
+                out_shape = (
+                    x_shape[:batch_dims]
+                    + i_shape[batch_dims:]
+                    + x_shape[batch_dims + 1 :]
+                )
+            else:
+                norm_axis = axis if axis >= 0 else len(x_shape) + axis
+                out_shape = x_shape[:norm_axis] + i_shape + x_shape[norm_axis + 1 :]
+
+            shapes.append(tuple(out_shape))
+
+        return shapes, x.dtype
+
     def __call__(self, x: Tensor, indices: Tensor, *, axis: int = 0) -> Tensor:
         """Call gather with logical axis translation."""
         data_batch_dims = x.batch_dims
@@ -109,6 +157,28 @@ class ScatterOp(Operation):
     @property
     def name(self) -> str:
         return "scatter"
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for scatter (same as input x)."""
+        from ...core.sharding import spmd
+
+        x = args[0]
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        shapes = []
+        for i in range(num_shards):
+            idx = i if i < x.num_shards else 0
+            s = x.physical_local_shape(idx)
+            if s is None:
+                raise RuntimeError(
+                    f"Could not determine physical shape for {self.name}"
+                )
+            shapes.append(tuple(int(d) for d in s))
+
+        return shapes, x.dtype
 
     def __call__(
         self, x: Tensor, indices: Tensor, updates: Tensor, *, axis: int = 0

@@ -19,6 +19,42 @@ class CollectiveOperation(Operation):
     Handles value hydration, graph execution (kernel), and output wrapping/sharding update.
     """
 
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for collective operations (global shape preservation)."""
+        from ...core.sharding import spmd, spec
+
+        x = args[0]
+        mesh = self._derive_mesh(x, kwargs)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        # Determine global physical shape of input
+        from ...core import Tensor
+
+        global_shape = None
+        if isinstance(x, Tensor):
+            local = x.physical_local_shape(0)
+            if local is not None and x.sharding:
+                global_shape = spec.compute_global_shape(tuple(local), x.sharding)
+            elif local is not None:
+                global_shape = tuple(int(d) for d in local)
+            else:
+                global_shape = tuple(int(d) for d in x.shape)
+
+        if global_shape is None:
+            global_shape = tuple(int(d) for d in x.shape)
+
+        shapes = []
+        if output_sharding and mesh:
+            for i in range(num_shards):
+                local = spec.compute_local_shape(global_shape, output_sharding, device_id=i)
+                shapes.append(tuple(int(d) for d in local))
+        else:
+            shapes = [tuple(int(d) for d in global_shape)] * num_shards
+
+        return shapes, x.dtype
+
     # Legacy execute and kernel_all methods have been removed.
     # All communication operations now implement execute.
 

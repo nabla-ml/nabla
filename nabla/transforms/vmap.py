@@ -229,7 +229,7 @@ def _batch_tensor(
         t = p_ops.incr_batch_dims(t)
 
         if old_batch_dims > 0:
-            t = p_ops.moveaxis(t, source=old_batch_dims, destination=0)
+            t = p_ops.moveaxis_physical(t, source=old_batch_dims, destination=0)
 
         if spmd_axis_name is not None and mesh is not None:
             from ..core.sharding.spec import DimSpec
@@ -251,7 +251,9 @@ def _batch_tensor(
             norm_axis = axis if axis >= 0 else logical_rank + axis
             physical_axis = old_batch_dims + norm_axis
 
-            t = p_ops.moveaxis(tensor, source=physical_axis, destination=old_batch_dims)
+            t = p_ops.moveaxis_physical(
+                tensor, source=physical_axis, destination=old_batch_dims
+            )
         else:
             t = tensor
 
@@ -274,7 +276,7 @@ def _batch_tensor(
         t = p_ops.incr_batch_dims(t)
 
         if old_batch_dims > 0:
-            t = p_ops.moveaxis(t, source=old_batch_dims, destination=0)
+            t = p_ops.moveaxis_physical(t, source=old_batch_dims, destination=0)
 
     return t
 
@@ -296,7 +298,9 @@ def _unbatch_tensor(
     current_batch_dims = tensor.batch_dims
 
     if current_batch_dims > 1:
-        t = p_ops.moveaxis(tensor, source=0, destination=current_batch_dims - 1)
+        t = p_ops.moveaxis_physical(
+            tensor, source=0, destination=current_batch_dims - 1
+        )
     else:
         t = tensor
 
@@ -313,7 +317,7 @@ def _unbatch_tensor(
 
         source = new_batch_dims
         destination = new_batch_dims + norm_axis
-        t = p_ops.moveaxis(t, source=source, destination=destination)
+        t = p_ops.moveaxis_physical(t, source=source, destination=destination)
 
     return t
 

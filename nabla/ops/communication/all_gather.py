@@ -23,6 +23,45 @@ class AllGatherOp(CollectiveOperation):
     def name(self) -> str:
         return "all_gather"
 
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for all_gather (gather along axis)."""
+        from ...core.sharding import spmd
+
+        x = args[0]
+        axis = kwargs.get("axis")
+        physical_axis = kwargs.get("physical_axis")
+        if physical_axis is None and axis is not None:
+            physical_axis = self._get_physical_axis(x, axis)
+
+        mesh = self._derive_mesh(x, kwargs) or spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else x.num_shards
+
+        shapes = []
+        for i in range(num_shards):
+            idx = i if i < x.num_shards else 0
+            s = x.physical_local_shape(idx)
+            if s is None:
+                s = x.shape
+
+            out_shape = list(int(d) for d in s)
+            if (
+                x.sharding
+                and physical_axis is not None
+                and 0 <= physical_axis < len(x.sharding.dim_specs)
+            ):
+                dim_spec = x.sharding.dim_specs[physical_axis]
+                if dim_spec.axes and mesh:
+                    axis_factor = 1
+                    for ax in dim_spec.axes:
+                        axis_factor *= mesh.get_axis_size(ax)
+                    out_shape[physical_axis] *= axis_factor
+
+            shapes.append(tuple(out_shape))
+
+        return shapes, x.dtype
+
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for all_gather: reshard back to input's sharding."""
         x = primals[0] if isinstance(primals, (list, tuple)) else primals
@@ -245,6 +284,31 @@ class GatherAllAxesOp(Operation):
     @property
     def name(self) -> str:
         return "gather_all_axes"
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for gather_all_axes (full global shape)."""
+        from ...core.sharding import spmd
+
+        x = args[0]
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        # Determine global physical shape (handles uneven shards if present)
+        if hasattr(x, "physical_global_shape") and x.physical_global_shape is not None:
+            global_shape = tuple(int(d) for d in x.physical_global_shape)
+        else:
+            local = x.physical_local_shape(0)
+            if local is None:
+                raise RuntimeError(
+                    f"Could not determine physical shape for {self.name}"
+                )
+            global_shape = tuple(int(d) for d in local)
+
+        shapes = [tuple(int(d) for d in global_shape)] * num_shards
+
+        return shapes, x.dtype
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for gather_all_axes: reshard back to input's sharding."""

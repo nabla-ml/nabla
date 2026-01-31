@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
-from .base import BinaryOperation, Operation
+from .base import BinaryOperation, Operation, UnaryOperation
 
 if TYPE_CHECKING:
     pass
@@ -101,13 +101,16 @@ class LogicalOrOp(BinaryOperation):
         return ops.logical_or(args[0], args[1])
 
 
-class LogicalNotOp(Operation):
+class LogicalNotOp(UnaryOperation):
     @property
     def name(self) -> str:
         return "logical_not"
 
     def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.logical_not(x)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        return (None,)
 
 
 equal = EqualOp()

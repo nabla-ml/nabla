@@ -253,6 +253,10 @@ class Tensor(DLPackArray, HasTensorValue):
         return self._impl.is_sharded
 
     @property
+    def num_shards(self) -> int:
+        return self._impl.num_shards
+
+    @property
     def is_realized(self) -> bool:
         return self._impl.is_realized
 

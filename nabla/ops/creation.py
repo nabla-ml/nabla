@@ -21,6 +21,20 @@ class ConstantOp(Operation):
     def name(self) -> str:
         return "constant"
 
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shape for constant (scalar)."""
+        from ..core.sharding import spmd
+
+        dtype = args[1] if len(args) > 1 else kwargs.get("dtype")
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        shapes = [tuple()] * num_shards
+        return shapes, dtype
+
     def kernel(
         self,
         value: NestedArray | Number,
@@ -60,6 +74,31 @@ class FullOp(Operation):
     def name(self) -> str:
         return "full"
 
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for full."""
+        from ..core.sharding import spmd, spec
+
+        shape = args[0] if len(args) > 0 else kwargs.get("shape")
+        dtype = args[2] if len(args) > 2 else kwargs.get("dtype")
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        if shape is None:
+            raise RuntimeError("full requires a shape")
+
+        shapes = []
+        if output_sharding and mesh:
+            for i in range(num_shards):
+                local = spec.compute_local_shape(shape, output_sharding, device_id=i)
+                shapes.append(tuple(int(d) for d in local))
+        else:
+            shapes = [tuple(int(d) for d in shape)] * num_shards
+
+        return shapes, dtype
+
     def kernel(
         self,
         shape: ShapeLike,
@@ -96,6 +135,31 @@ class ZerosOp(Operation):
     def name(self) -> str:
         return "zeros"
 
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for zeros."""
+        from ..core.sharding import spmd, spec
+
+        shape = args[0] if len(args) > 0 else kwargs.get("shape")
+        dtype = args[1] if len(args) > 1 else kwargs.get("dtype")
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        if shape is None:
+            raise RuntimeError("zeros requires a shape")
+
+        shapes = []
+        if output_sharding and mesh:
+            for i in range(num_shards):
+                local = spec.compute_local_shape(shape, output_sharding, device_id=i)
+                shapes.append(tuple(int(d) for d in local))
+        else:
+            shapes = [tuple(int(d) for d in shape)] * num_shards
+
+        return shapes, dtype
+
     def kernel(
         self,
         shape: ShapeLike,
@@ -131,6 +195,31 @@ class OnesOp(Operation):
     def name(self) -> str:
         return "ones"
 
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for ones."""
+        from ..core.sharding import spmd, spec
+
+        shape = args[0] if len(args) > 0 else kwargs.get("shape")
+        dtype = args[1] if len(args) > 1 else kwargs.get("dtype")
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        if shape is None:
+            raise RuntimeError("ones requires a shape")
+
+        shapes = []
+        if output_sharding and mesh:
+            for i in range(num_shards):
+                local = spec.compute_local_shape(shape, output_sharding, device_id=i)
+                shapes.append(tuple(int(d) for d in local))
+        else:
+            shapes = [tuple(int(d) for d in shape)] * num_shards
+
+        return shapes, dtype
+
     def kernel(
         self,
         shape: ShapeLike,
@@ -165,6 +254,34 @@ class ArangeOp(Operation):
     @property
     def name(self) -> str:
         return "arange"
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for arange (1D)."""
+        import math
+        from ..core.sharding import spmd
+
+        start = args[0] if len(args) > 0 else kwargs.get("start", 0)
+        stop = args[1] if len(args) > 1 else kwargs.get("stop")
+        step = args[2] if len(args) > 2 else kwargs.get("step", 1)
+        dtype = args[3] if len(args) > 3 else kwargs.get("dtype")
+
+        if stop is None:
+            stop = start
+            start = 0
+
+        if step == 0:
+            raise ValueError("arange step must be non-zero")
+
+        length = math.ceil((stop - start) / step)
+        length = max(0, int(length))
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        shapes = [(length,)] * num_shards
+        return shapes, dtype
 
     def kernel(
         self,
@@ -202,6 +319,31 @@ class UniformOp(Operation):
     def name(self) -> str:
         return "uniform"
 
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for uniform."""
+        from ..core.sharding import spmd, spec
+
+        shape = args[0] if len(args) > 0 else kwargs.get("shape")
+        dtype = args[3] if len(args) > 3 else kwargs.get("dtype")
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        if shape is None:
+            raise RuntimeError("uniform requires a shape")
+
+        shapes = []
+        if output_sharding and mesh:
+            for i in range(num_shards):
+                local = spec.compute_local_shape(shape, output_sharding, device_id=i)
+                shapes.append(tuple(int(d) for d in local))
+        else:
+            shapes = [tuple(int(d) for d in shape)] * num_shards
+
+        return shapes, dtype
+
     def kernel(
         self,
         shape: ShapeLike,
@@ -238,6 +380,31 @@ class GaussianOp(Operation):
     @property
     def name(self) -> str:
         return "gaussian"
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for gaussian."""
+        from ..core.sharding import spmd, spec
+
+        shape = args[0] if len(args) > 0 else kwargs.get("shape")
+        dtype = args[3] if len(args) > 3 else kwargs.get("dtype")
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        if shape is None:
+            raise RuntimeError("gaussian requires a shape")
+
+        shapes = []
+        if output_sharding and mesh:
+            for i in range(num_shards):
+                local = spec.compute_local_shape(shape, output_sharding, device_id=i)
+                shapes.append(tuple(int(d) for d in local))
+        else:
+            shapes = [tuple(int(d) for d in shape)] * num_shards
+
+        return shapes, dtype
 
     def kernel(
         self,

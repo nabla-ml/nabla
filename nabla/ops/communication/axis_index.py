@@ -22,6 +22,34 @@ class AxisIndexOp(CollectiveOperation):
     def name(self) -> str:
         return "axis_index"
 
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for axis_index (scalar per shard)."""
+        from max.dtype import DType
+
+        mesh = self._derive_mesh(None, kwargs)
+        if mesh is None and len(args) >= 1:
+            mesh = args[0]
+        num_shards = len(mesh.devices) if mesh else 1
+
+        shapes = [(1,) for _ in range(num_shards)]
+        return shapes, DType.int32
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for axis_index (scalar per shard)."""
+        from max.dtype import DType
+
+        mesh = self._derive_mesh(None, kwargs)
+        if mesh is None and len(args) >= 1:
+            mesh = args[0]
+
+        num_shards = len(mesh.devices) if mesh else 1
+        shapes = [(1,)] * num_shards
+        return shapes, DType.int32
+
     def execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
         """Return the device's position along a mesh axis (Physical)."""
         from ...core import GRAPH, Tensor

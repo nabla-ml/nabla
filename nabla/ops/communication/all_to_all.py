@@ -26,6 +26,42 @@ class AllToAllOp(CollectiveOperation):
     def name(self) -> str:
         return "all_to_all"
 
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for all_to_all (split then concat)."""
+        from ...core.sharding import spmd
+
+        x = args[0]
+        split_axis = kwargs.get("split_axis", 0)
+        concat_axis = kwargs.get("concat_axis", 0)
+
+        mesh = self._derive_mesh(x, kwargs) or spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else x.num_shards
+
+        phys_split_axis = self._get_physical_axis(x, split_axis)
+        phys_concat_axis = self._get_physical_axis(x, concat_axis)
+
+        shapes = []
+        for i in range(num_shards):
+            idx = i if i < x.num_shards else 0
+            s = x.physical_local_shape(idx)
+            if s is None:
+                s = x.shape
+
+            out_shape = list(int(d) for d in s)
+            if phys_split_axis != phys_concat_axis:
+                if out_shape[phys_split_axis] % num_shards != 0:
+                    raise ValueError(
+                        f"all_to_all split axis size {out_shape[phys_split_axis]} not divisible by {num_shards}"
+                    )
+                out_shape[phys_split_axis] //= num_shards
+                out_shape[phys_concat_axis] *= num_shards
+
+            shapes.append(tuple(out_shape))
+
+        return shapes, x.dtype
+
     # _get_shifted_axes helper removed in favor of centralized _get_physical_axis
 
     def infer_sharding_spec(self, args: Any, mesh: DeviceMesh, kwargs: dict) -> Any:

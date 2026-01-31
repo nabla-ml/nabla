@@ -158,6 +158,41 @@ class ReduceSumPhysicalOp(Operation):
     def name(self) -> str:
         return "reduce_sum_physical"
 
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for reduce_sum_physical."""
+        from ..core.sharding import spmd
+
+        x = args[0]
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        shapes = []
+        for i in range(num_shards):
+            idx = i if i < x.num_shards else 0
+            s = x.physical_local_shape(idx)
+            if s is None:
+                raise RuntimeError(
+                    f"Could not determine physical shape for {self.name}"
+                )
+            in_shape = tuple(int(d) for d in s)
+            norm_axis = axis if axis >= 0 else len(in_shape) + axis
+            if keepdims:
+                out_shape = tuple(
+                    1 if i == norm_axis else d for i, d in enumerate(in_shape)
+                )
+            else:
+                out_shape = tuple(
+                    d for i, d in enumerate(in_shape) if i != norm_axis
+                )
+            shapes.append(out_shape)
+
+        return shapes, x.dtype
+
     def kernel(
         self, x: TensorValue, *, axis: int, keepdims: bool = False
     ) -> TensorValue:
@@ -208,6 +243,41 @@ class MeanPhysicalOp(Operation):
     def name(self) -> str:
         return "mean_physical"
 
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for mean_physical."""
+        from ..core.sharding import spmd
+
+        x = args[0]
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        shapes = []
+        for i in range(num_shards):
+            idx = i if i < x.num_shards else 0
+            s = x.physical_local_shape(idx)
+            if s is None:
+                raise RuntimeError(
+                    f"Could not determine physical shape for {self.name}"
+                )
+            in_shape = tuple(int(d) for d in s)
+            norm_axis = axis if axis >= 0 else len(in_shape) + axis
+            if keepdims:
+                out_shape = tuple(
+                    1 if i == norm_axis else d for i, d in enumerate(in_shape)
+                )
+            else:
+                out_shape = tuple(
+                    d for i, d in enumerate(in_shape) if i != norm_axis
+                )
+            shapes.append(out_shape)
+
+        return shapes, x.dtype
+
     def kernel(
         self, x: TensorValue, *, axis: int, keepdims: bool = False
     ) -> TensorValue:
@@ -257,6 +327,41 @@ class ReduceMaxPhysicalOp(Operation):
     @property
     def name(self) -> str:
         return "reduce_max_physical"
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for reduce_max_physical."""
+        from ..core.sharding import spmd
+
+        x = args[0]
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        shapes = []
+        for i in range(num_shards):
+            idx = i if i < x.num_shards else 0
+            s = x.physical_local_shape(idx)
+            if s is None:
+                raise RuntimeError(
+                    f"Could not determine physical shape for {self.name}"
+                )
+            in_shape = tuple(int(d) for d in s)
+            norm_axis = axis if axis >= 0 else len(in_shape) + axis
+            if keepdims:
+                out_shape = tuple(
+                    1 if i == norm_axis else d for i, d in enumerate(in_shape)
+                )
+            else:
+                out_shape = tuple(
+                    d for i, d in enumerate(in_shape) if i != norm_axis
+                )
+            shapes.append(out_shape)
+
+        return shapes, x.dtype
 
     @property
     def collective_reduce_type(self) -> str:
@@ -340,6 +445,41 @@ class ReduceMinPhysicalOp(Operation):
     @property
     def name(self) -> str:
         return "reduce_min_physical"
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for reduce_min_physical."""
+        from ..core.sharding import spmd
+
+        x = args[0]
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        shapes = []
+        for i in range(num_shards):
+            idx = i if i < x.num_shards else 0
+            s = x.physical_local_shape(idx)
+            if s is None:
+                raise RuntimeError(
+                    f"Could not determine physical shape for {self.name}"
+                )
+            in_shape = tuple(int(d) for d in s)
+            norm_axis = axis if axis >= 0 else len(in_shape) + axis
+            if keepdims:
+                out_shape = tuple(
+                    1 if i == norm_axis else d for i, d in enumerate(in_shape)
+                )
+            else:
+                out_shape = tuple(
+                    d for i, d in enumerate(in_shape) if i != norm_axis
+                )
+            shapes.append(out_shape)
+
+        return shapes, x.dtype
 
     @property
     def collective_reduce_type(self) -> str:

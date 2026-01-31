@@ -46,6 +46,8 @@ class TensorImpl:
         "output_refs",
         "output_index",
         "graph_values_epoch",
+        "_physical_shapes",
+        "_dtype",
         "__weakref__",
     )
 
@@ -60,6 +62,8 @@ class TensorImpl:
     batch_dims: int
     output_refs: OpNode | None
     output_index: int
+    _physical_shapes: list[tuple[int, ...]] | None
+    _dtype: DType | None
 
     def __init__(
         self,
@@ -73,6 +77,8 @@ class TensorImpl:
         is_traced: bool = False,
         batch_dims: int = 0,
         sharding_constraint: ShardingSpec | None = None,
+        physical_shapes: list[tuple[int, ...]] | None = None,
+        dtype: DType | None = None,
     ):
         self._graph_values = (
             values if isinstance(values, list) else ([values] if values else [])
@@ -93,6 +99,8 @@ class TensorImpl:
         self.output_refs = None
         self.output_index = 0
         self.graph_values_epoch = -1
+        self._physical_shapes = physical_shapes
+        self._dtype = dtype
 
     def _validate_sharding(self) -> None:
         """Validate consistency of shards and sharding spec."""
@@ -167,6 +175,9 @@ class TensorImpl:
 
     def physical_local_shape(self, shard_idx: int = 0) -> graph.Shape | None:
         """Storage shape for a specific shard (includes batch dims)."""
+        if self._physical_shapes and shard_idx < len(self._physical_shapes):
+            return graph.Shape(self._physical_shapes[shard_idx])
+
         if self._buffers and shard_idx < len(self._buffers):
             return graph.Shape(self._buffers[shard_idx].shape)
 
@@ -301,6 +312,8 @@ class TensorImpl:
 
     @property
     def dtype(self) -> DType:
+        if self._dtype is not None:
+            return self._dtype
         try:
             return self.primary_value.dtype
         except RuntimeError:

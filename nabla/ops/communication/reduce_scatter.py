@@ -22,6 +22,54 @@ class ReduceScatterOp(CollectiveOperation):
     def name(self) -> str:
         return "reduce_scatter"
 
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for reduce_scatter (reduce then split axis)."""
+        from ...core.sharding import spmd
+
+        x = args[0]
+        axis = kwargs.get("axis")
+        if axis is None and len(args) > 1:
+            axis = args[1]
+        if axis is None:
+            axis = 0
+
+        mesh = self._derive_mesh(x, kwargs) or spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else x.num_shards
+
+        physical_axis = self._get_physical_axis(x, axis)
+
+        scatter_axes = set()
+        if x.sharding and physical_axis < len(x.sharding.dim_specs):
+            scatter_axes = set(x.sharding.dim_specs[physical_axis].axes or [])
+        if not scatter_axes and mesh:
+            scatter_axes = set(mesh.axis_names)
+
+        scatter_factor = 1
+        if mesh and scatter_axes:
+            for ax in scatter_axes:
+                scatter_factor *= mesh.get_axis_size(ax)
+
+        shapes = []
+        for i in range(num_shards):
+            idx = i if i < x.num_shards else 0
+            s = x.physical_local_shape(idx)
+            if s is None:
+                s = x.shape
+
+            out_shape = list(int(d) for d in s)
+            if scatter_factor > 1 and 0 <= physical_axis < len(out_shape):
+                if out_shape[physical_axis] % scatter_factor != 0:
+                    raise ValueError(
+                        f"reduce_scatter axis size {out_shape[physical_axis]} not divisible by {scatter_factor}"
+                    )
+                out_shape[physical_axis] //= scatter_factor
+
+            shapes.append(tuple(out_shape))
+
+        return shapes, x.dtype
+
     @classmethod
     def estimate_cost(
         cls,

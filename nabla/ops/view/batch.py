@@ -33,6 +33,28 @@ class IncrBatchDimsOp(Operation):
     def name(self) -> str:
         return "incr_batch_dims"
 
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Physical shape is unchanged; only batch_dims metadata changes."""
+        from ...core.sharding import spmd
+
+        x = args[0]
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        shapes = []
+        for i in range(num_shards):
+            idx = i if i < x.num_shards else 0
+            s = x.physical_local_shape(idx)
+            if s is None:
+                raise RuntimeError(
+                    f"Could not determine physical shape for {self.name}"
+                )
+            shapes.append(tuple(int(d) for d in s))
+
+        return shapes, x.dtype
+
     def kernel(self, x: TensorValue) -> TensorValue:
         return x
 
@@ -51,6 +73,28 @@ class DecrBatchDimsOp(Operation):
     @property
     def name(self) -> str:
         return "decr_batch_dims"
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Physical shape is unchanged; only batch_dims metadata changes."""
+        from ...core.sharding import spmd
+
+        x = args[0]
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        shapes = []
+        for i in range(num_shards):
+            idx = i if i < x.num_shards else 0
+            s = x.physical_local_shape(idx)
+            if s is None:
+                raise RuntimeError(
+                    f"Could not determine physical shape for {self.name}"
+                )
+            shapes.append(tuple(int(d) for d in s))
+
+        return shapes, x.dtype
 
     def kernel(self, x: TensorValue) -> TensorValue:
         return x
@@ -72,6 +116,41 @@ class MoveAxisPhysicalOp(Operation):
     @property
     def name(self) -> str:
         return "moveaxis_physical"
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for moveaxis_physical."""
+        from ...core.sharding import spmd
+
+        x = args[0]
+        source = kwargs.get("source")
+        destination = kwargs.get("destination")
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        shapes = []
+        for i in range(num_shards):
+            idx = i if i < x.num_shards else 0
+            s = x.physical_local_shape(idx)
+            if s is None:
+                raise RuntimeError(
+                    f"Could not determine physical shape for {self.name}"
+                )
+
+            in_shape = list(int(d) for d in s)
+            rank = len(in_shape)
+            norm_source = source if source >= 0 else rank + source
+            norm_dest = destination if destination >= 0 else rank + destination
+
+            order = list(range(rank))
+            order.pop(norm_source)
+            order.insert(norm_dest, norm_source)
+            out_shape = tuple(in_shape[j] for j in order)
+            shapes.append(out_shape)
+
+        return shapes, x.dtype
 
     def kernel(self, x: TensorValue, *, source: int, destination: int) -> TensorValue:
         rank = len(x.type.shape)
@@ -134,6 +213,35 @@ class BroadcastBatchDimsOp(Operation):
     @property
     def name(self) -> str:
         return "broadcast_batch_dims"
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for broadcast_batch_dims."""
+        from ...core.sharding import spmd, spec
+
+        x = args[0]
+        target_shape = kwargs.get("shape")
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        if target_shape is None:
+            raise RuntimeError(
+                f"Could not determine target shape for {self.name}"
+            )
+
+        shapes = []
+        if output_sharding and mesh:
+            for i in range(num_shards):
+                local = spec.compute_local_shape(
+                    target_shape, output_sharding, device_id=i
+                )
+                shapes.append(tuple(int(d) for d in local))
+        else:
+            shapes = [tuple(int(d) for d in target_shape)] * num_shards
+
+        return shapes, x.dtype
 
     def kernel(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
         return ops.broadcast_to(x, shape)

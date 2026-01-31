@@ -140,6 +140,45 @@ class MatmulOp(Operation):
     def kernel(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
         return ops.matmul(args[0], args[1])
 
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], Any]:
+        """Infer physical shapes for Matmul: (... M K) @ (... K N) -> (... M N)."""
+        from ..core.sharding import spmd
+
+        x = args[0]
+        y = args[1]
+        
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+        
+        shapes = []
+        for i in range(num_shards):
+            idx_x = i if i < x.num_shards else 0
+            idx_y = i if i < y.num_shards else 0
+            
+            sx = x.physical_local_shape(idx_x)
+            sy = y.physical_local_shape(idx_y)
+            
+            if sx is not None and sy is not None:
+                # sx: ... M K, sy: ... K N (after broadcasting in __call__)
+                # res: ... M N
+                # Logic: sx[:-1] + sy[-1:]
+                
+                # Handling 1D cases (vector-matrix etc) might be tricky if not normalized.
+                # But Operation.__call__ receives RESHARDED args which come from __call__ logic.
+                # In MatmulOp.__call__, we unsqueeze 1D inputs!
+                # But wait, __call__ calls super().__call__ (Operation.__call__) with UNSQUEEZED inputs.
+                # So inputs passed to execute/compute_physical_shape ARE AT LEAST 2D.
+                # So slicing [-1] is safe.
+                
+                res_shape = tuple(int(d) for d in sx[:-1]) + tuple(int(d) for d in sy[-1:])
+                shapes.append(res_shape)
+            else:
+                 raise RuntimeError(f"Could not determine physical shape for {self.name}")
+
+        return shapes, x.dtype
+
     def execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for Matmul."""
         from ..core import GRAPH
