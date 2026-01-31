@@ -62,7 +62,7 @@ Every operation (e.g., `add`, `matmul`, `relu`) goes through the same six-phase 
 │                                                                             │
 │  Phase 6: TRACING (Graph Recording)                                         │
 │  ───────────────────────────────────                                        │
-│  • Call _setup_output_refs() to create OpNode node containing:          │
+│  • Call _setup_output_refs() to create OpNode node containing:              │
 │    - Weak refs to output TensorImpls                                        │
 │    - The operation instance                                                 │
 │    - The input arguments (as TensorImpls)                                   │
