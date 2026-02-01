@@ -169,6 +169,8 @@ def benchmark_nabla():
         new_params = [p - g * lr for p, g in zip(params, grads)]
         nb.realize_all(loss, *new_params)
         params = new_params
+        for p in params:
+            p.is_traced = True
     
     # Reset params
     params = []
@@ -186,6 +188,8 @@ def benchmark_nabla():
         nb.realize_all(loss, *new_params)
         times.append(time.perf_counter() - t0)
         params = new_params
+        for p in params:
+            p.is_traced = True
     
     print(f"Nabla:   First: {times[0]*1000:.3f}ms, Mean (after warmup): {np.mean(times[warmup:])*1000:.3f}ms, Final loss: {loss.item():.6f}")
     return times

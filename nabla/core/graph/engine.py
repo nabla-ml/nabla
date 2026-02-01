@@ -372,11 +372,17 @@ class ComputeGraph:
         return (model, inputs) if return_model else None
 
     def _cleanup_trace(self, targets: list[Tensor]) -> None:
-        """Clean up trace references."""
+        """Clean up trace references to prevent unbounded memory growth.
+        
+        Once a tensor is realized, we can clear internal graph values but
+        we must preserve output_refs for tensors that may be used as inputs
+        to future operations. We only clear output_refs on the targets themselves.
+        """
         from ..common import pytree
         from ..tensor.impl import TensorImpl
 
         visited: set[int] = set()
+        target_impl_ids = {id(t._impl) for t in targets}
         
         def clean(impl: TensorImpl) -> None:
             if id(impl) in visited:
@@ -384,13 +390,22 @@ class ComputeGraph:
             visited.add(id(impl))
             impl._graph_values = []
             impl.graph_values_epoch = -1
+            
             if impl.output_refs:
                 for arg in pytree.tree_leaves(impl.output_refs.op_args):
                     if isinstance(arg, TensorImpl):
                         clean(arg)
-
+                        
+        # Traverse and clean graph values
         for t in targets:
             clean(t._impl)
+            
+        # Only clear output_refs on the targets themselves (not their inputs)
+        # This breaks the chain for realized outputs while preserving 
+        # reusability of inputs
+        for t in targets:
+            t._impl.output_refs = None
+            t._impl.output_index = None
 
     def _replay_trace_to_build_graph(self, targets: list[Tensor]) -> None:
         """Walk OpNode DAG and execute operations to build MAX graph."""

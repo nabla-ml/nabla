@@ -25,59 +25,119 @@ def ensure_tensor(x: Any) -> Tensor:
     return Tensor.constant(x)
 
 
+# Cache for _make_hashable to avoid recomputing for same objects
+_HASHABLE_CACHE: dict[int, Any] = {}
+_HASHABLE_CACHE_SIZE = 1024  # Limit cache size to avoid memory bloat
+
+
+def _clear_hashable_cache() -> None:
+    """Clear the hashable cache. Call periodically to avoid memory bloat."""
+    _HASHABLE_CACHE.clear()
+
+
 def _make_hashable(obj: Any) -> Any:
-    """Convert objects to stable, hashable keys for graph caching."""
+    """Convert objects to stable, hashable keys for graph caching.
+    
+    Optimized with caching for Tensor objects since they're frequently hashed.
+    """
     from ..core import Tensor
 
     if isinstance(obj, Tensor):
+        # Check cache first - use id() for Tensor objects
+        obj_id = id(obj)
+        cached = _HASHABLE_CACHE.get(obj_id)
+        if cached is not None:
+            return cached
+        
         sharding = obj.sharding
         sharding_key = None
         if sharding is not None:
-            mesh = getattr(sharding, "mesh", None)
+            mesh = sharding.mesh  # Direct attribute access, avoid getattr
             mesh_key = None
             if mesh is not None:
                 mesh_key = (
-                    getattr(mesh, "name", None),
-                    tuple(getattr(mesh, "shape", ()) or ()),
-                    tuple(getattr(mesh, "axis_names", ()) or ()),
+                    mesh.name if hasattr(mesh, "name") else None,
+                    tuple(mesh.shape) if hasattr(mesh, "shape") and mesh.shape else (),
+                    tuple(mesh.axis_names) if hasattr(mesh, "axis_names") and mesh.axis_names else (),
                 )
 
-            dim_specs = []
-            for ds in getattr(sharding, "dim_specs", []) or []:
-                dim_specs.append(
-                    (
-                        tuple(getattr(ds, "axes", ()) or ()),
-                        bool(getattr(ds, "partial", False)),
-                    )
+            dim_specs_list = sharding.dim_specs
+            if dim_specs_list:
+                dim_specs = tuple(
+                    (tuple(ds.axes) if ds.axes else (), bool(ds.partial))
+                    for ds in dim_specs_list
                 )
+            else:
+                dim_specs = ()
 
+            replicated = sharding.replicated_axes
+            partial_sum = sharding.partial_sum_axes
             sharding_key = (
                 mesh_key,
-                tuple(dim_specs),
-                tuple(sorted(getattr(sharding, "replicated_axes", set()) or set())),
-                tuple(sorted(getattr(sharding, "partial_sum_axes", set()) or set())),
+                dim_specs,
+                tuple(sorted(replicated)) if replicated else (),
+                tuple(sorted(partial_sum)) if partial_sum else (),
             )
 
-        physical_shapes = getattr(obj._impl, "_physical_shapes", None)
-        shard_dtypes = getattr(obj._impl, "_shard_dtypes", None)
-        shard_devices = getattr(obj._impl, "_shard_devices", None)
+        impl = obj._impl
+        physical_shapes = impl._physical_shapes
+        shard_dtypes = impl._shard_dtypes
+        shard_devices = impl._shard_devices
 
-        return (
+        result = (
             "tensor",
             str(obj.dtype),
-            tuple(int(d) for d in obj.shape),  # Convert Dim to int
+            tuple(int(d) for d in obj.shape),
             sharding_key,
             tuple(physical_shapes) if physical_shapes else None,
             tuple(shard_dtypes) if shard_dtypes else None,
             tuple(str(d) for d in shard_devices) if shard_devices else None,
         )
+        
+        # Cache result (with size limit)
+        if len(_HASHABLE_CACHE) < _HASHABLE_CACHE_SIZE:
+            _HASHABLE_CACHE[obj_id] = result
+        
+        return result
+    
+    # Fast path for primitives (most common case for kwargs)
+    if isinstance(obj, (int, float, str, bool, type(None))):
+        return obj
     if isinstance(obj, (list, tuple)):
         return tuple(_make_hashable(x) for x in obj)
     if isinstance(obj, dict):
         return tuple(sorted((k, _make_hashable(v)) for k, v in obj.items()))
-    if isinstance(obj, (int, float, str, bool, type(None))):
-        return obj
     return str(obj)
+
+
+def _get_tensor_hash(x: Any) -> Any:
+    """Get hash from tensor - shape/dtype/sharding for realized, OpNode hash+index for unrealized.
+    
+    Optimized module-level function to avoid closure overhead in hot path.
+    """
+    from ..core import Tensor
+    
+    if isinstance(x, Tensor):
+        impl = x._impl
+        buffers = impl._buffers
+        output_refs = impl.output_refs
+        
+        # Fast path: get sharding key only if sharding exists
+        sharding = x.sharding
+        sharding_key = _make_hashable(sharding) if sharding else None
+        
+        if buffers:
+            # Realized tensor - hash based on shape/dtype/sharding (data-independent)
+            shape_tuple = tuple(int(d) for d in x.shape)
+            return ("realized", str(x.dtype), shape_tuple, sharding_key)
+        elif output_refs is not None and output_refs._op_hash is not None:
+            # Unrealized tensor - use its OpNode's hash AND its output index
+            return (output_refs._op_hash, impl.output_index, sharding_key)
+        else:
+            # Leaf tensor without storage (shouldn't happen in normal flow)
+            shape_tuple = tuple(int(d) for d in x.shape)
+            return ("leaf", str(x.dtype), shape_tuple, sharding_key)
+    return _make_hashable(x)
 
 
 class Operation(ABC):
@@ -194,30 +254,9 @@ class Operation(ABC):
             resharded_args = spmd.reshard_inputs(args, input_shardings, mesh)
 
             # Compute hash AFTER resharding - use resharded_args for cache key
-            def get_tensor_hash(x):
-                """Get hash from tensor - shape/dtype/sharding for realized, OpNode hash+index for unrealized."""
-                if isinstance(x, Tensor):
-                    # Check if tensor has physical storage (realized)
-                    buffers = x._impl._buffers
-                    has_output_refs = x._impl.output_refs is not None
-                    
-                    sharding_key = _make_hashable(x.sharding) if x.sharding else None
-                    
-                    if buffers:
-                        # Realized tensor - hash based on shape/dtype/sharding (data-independent)
-                        shape_tuple = tuple(int(d) for d in x.shape)
-                        return ("realized", str(x.dtype), shape_tuple, sharding_key)
-                    elif has_output_refs and x._impl.output_refs._op_hash is not None:
-                        # Unrealized tensor - use its OpNode's hash AND its output index
-                        return (x._impl.output_refs._op_hash, x._impl.output_index, sharding_key)
-                    else:
-                        # Leaf tensor without storage (shouldn't happen in normal flow)
-                        shape_tuple = tuple(int(d) for d in x.shape)
-                        return ("leaf", str(x.dtype), shape_tuple, sharding_key)
-                return _make_hashable(x)
-            
-            arg_hashes = tuple(get_tensor_hash(x) for x in resharded_args)
-            kwarg_hashes = tuple(sorted((k, get_tensor_hash(v)) for k, v in (adapted_kwargs or kwargs).items()))
+            # Use module-level _get_tensor_hash to avoid closure overhead
+            arg_hashes = tuple(_get_tensor_hash(x) for x in resharded_args)
+            kwarg_hashes = tuple(sorted((k, _get_tensor_hash(v)) for k, v in (adapted_kwargs or kwargs).items()))
             op_hash = (self.name, arg_hashes, kwarg_hashes)
 
             # 3. Physical Execution (DEFERRED)
