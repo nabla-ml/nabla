@@ -98,9 +98,9 @@ class SplitOp(AxisOp):
         dtypes = [[x.dtype] * num_shards] * num_splits
         if mesh:
             if mesh.is_distributed:
-                devs = [d for d in mesh.devices]
+                devs = [d for d in mesh.device_refs]
             else:
-                devs = [mesh.devices[0]] * num_shards
+                devs = [mesh.device_refs[0]] * num_shards
             devices = [devs] * num_splits
         else:
             devices = [[x.device] * num_shards] * num_splits
@@ -215,9 +215,9 @@ class ChunkOp(AxisOp):
         dtypes = [[x.dtype] * num_shards] * num_splits
         if mesh:
             if mesh.is_distributed:
-                devs = [d for d in mesh.devices]
+                devs = [d for d in mesh.device_refs]
             else:
-                devs = [mesh.devices[0]] * num_shards
+                devs = [mesh.device_refs[0]] * num_shards
             devices = [devs] * num_splits
         else:
             devices = [[x.device] * num_shards] * num_splits
@@ -366,9 +366,9 @@ class UnbindOp(AxisOp):
         dtypes = [[x.dtype] * num_shards] * num_splits
         if mesh:
             if mesh.is_distributed:
-                devs = [d for d in mesh.devices]
+                devs = [d for d in mesh.device_refs]
             else:
-                devs = [mesh.devices[0]] * num_shards
+                devs = [mesh.device_refs[0]] * num_shards
             devices = [devs] * num_splits
         else:
             devices = [[x.device] * num_shards] * num_splits

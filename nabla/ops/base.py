@@ -218,16 +218,20 @@ class Operation(ABC):
                                         f"  Output Index: {i}, Shard Index: {j}\n"
                                         f"  Inferred: {inferred_dtype}, Actual: {actual_dtype}"
                                     )
-                                # Device check might need normalization
-                                def norm(d):
-                                    if hasattr(d, "type") and hasattr(d, "id"):
-                                        return f"{d.type}:{d.id}"
-                                    s = str(d).replace("Device(type=", "").replace(",id=", ":").replace(")", "")
-                                    if s.isdigit():
-                                        return f"cpu:{s}"
-                                    return s
+                                # Use rigorous DeviceRef comparison
+                                def to_dev_ref(d):
+                                    from max.graph import DeviceRef
+                                    from max.driver import Device as DriverDevice
+                                    if isinstance(d, DeviceRef):
+                                        return d
+                                    if isinstance(d, DriverDevice):
+                                        return DeviceRef.from_device(d)
+                                    if isinstance(d, int):
+                                         # Assume CPU for simulation if int provided
+                                         return DeviceRef.CPU()
+                                    return d
 
-                                if norm(inferred_device) != norm(actual_device):
+                                if to_dev_ref(inferred_device) != to_dev_ref(actual_device):
                                      raise RuntimeError(
                                         f"Device Mismatch in {self.name} (Multi-output) Phase 4:\n"
                                         f"  Output Index: {i}, Shard Index: {j}\n"
@@ -256,15 +260,19 @@ class Operation(ABC):
                                     f"  Shard Index: {i}\n"
                                     f"  Inferred: {inferred_dtype}, Actual: {actual_dtype}"
                                 )
-                            def norm(d):
-                                if hasattr(d, "type") and hasattr(d, "id"):
-                                    return f"{d.type}:{d.id}"
-                                s = str(d).replace("Device(type=", "").replace(",id=", ":").replace(")", "")
-                                if s.isdigit():
-                                    return f"cpu:{s}"
-                                return s
+                            # Use rigorous DeviceRef comparison
+                            def to_dev_ref(d):
+                                from max.graph import DeviceRef
+                                from max.driver import Device as DriverDevice
+                                if isinstance(d, DeviceRef):
+                                    return d
+                                if isinstance(d, DriverDevice):
+                                    return DeviceRef.from_device(d)
+                                if isinstance(d, int):
+                                     return DeviceRef.CPU()
+                                return d
 
-                            if norm(inferred_device) != norm(actual_device):
+                            if to_dev_ref(inferred_device) != to_dev_ref(actual_device):
                                  raise RuntimeError(
                                     f"Device Mismatch in {self.name} Phase 4:\n"
                                     f"  Shard Index: {i}\n"
@@ -535,9 +543,9 @@ class BinaryOperation(Operation):
         # Device placement
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.devices]
+                devices = [d for d in mesh.device_refs]
             else:
-                devices = [mesh.devices[0]] * num_shards
+                devices = [mesh.device_refs[0]] * num_shards
         else:
             devices = [x.device] * num_shards
 
@@ -758,9 +766,9 @@ class ReduceOperation(AxisOp):
         dtypes = [x.dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.devices]
+                devices = [d for d in mesh.device_refs]
             else:
-                devices = [mesh.devices[0]] * num_shards
+                devices = [mesh.device_refs[0]] * num_shards
         else:
             devices = [x.device] * num_shards
 
@@ -896,9 +904,9 @@ class UnaryOperation(Operation):
         dtypes = [x.dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.devices]
+                devices = [d for d in mesh.device_refs]
             else:
-                devices = [mesh.devices[0]] * num_shards
+                devices = [mesh.device_refs[0]] * num_shards
         else:
             devices = [x.device] * num_shards
 
@@ -961,9 +969,9 @@ class ShapeOp(Operation):
         dtypes = [x.dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.devices]
+                devices = [d for d in mesh.device_refs]
             else:
-                devices = [mesh.devices[0]] * num_shards
+                devices = [mesh.device_refs[0]] * num_shards
         else:
             devices = [x.device] * num_shards
 

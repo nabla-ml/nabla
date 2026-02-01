@@ -43,9 +43,9 @@ class AllReduceOp(CollectiveOperation):
         dtypes = [x.dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.devices]
+                devices = [d for d in mesh.device_refs]
             else:
-                devices = [mesh.devices[0]] * num_shards
+                devices = [mesh.device_refs[0]] * num_shards
         else:
             devices = [x.device] * (num_shards or 1)
 
@@ -307,9 +307,9 @@ class PMeanOp(CollectiveOperation):
         dtypes = [x.dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.devices]
+                devices = [d for d in mesh.device_refs]
             else:
-                devices = [mesh.devices[0]] * num_shards
+                devices = [mesh.device_refs[0]] * num_shards
         else:
             devices = [x.device] * (num_shards or 1)
 

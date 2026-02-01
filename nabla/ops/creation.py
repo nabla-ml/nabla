@@ -37,9 +37,9 @@ class ConstantOp(Operation):
         dtypes = [dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.devices]
+                devices = [d for d in mesh.device_refs]
             else:
-                devices = [mesh.devices[0]] * num_shards
+                devices = [mesh.device_refs[0]] * num_shards
         else:
             devices = [device] * num_shards
 
@@ -111,9 +111,9 @@ class FullOp(Operation):
         dtypes = [dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.devices]
+                devices = [d for d in mesh.device_refs]
             else:
-                devices = [mesh.devices[0]] * num_shards
+                devices = [mesh.device_refs[0]] * num_shards
         else:
             devices = [device] * num_shards
 
@@ -182,9 +182,9 @@ class ZerosOp(Operation):
         dtypes = [dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.devices]
+                devices = [d for d in mesh.device_refs]
             else:
-                devices = [mesh.devices[0]] * num_shards
+                devices = [mesh.device_refs[0]] * num_shards
         else:
             devices = [device] * num_shards
 
@@ -252,9 +252,9 @@ class OnesOp(Operation):
         dtypes = [dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.devices]
+                devices = [d for d in mesh.device_refs]
             else:
-                devices = [mesh.devices[0]] * num_shards
+                devices = [mesh.device_refs[0]] * num_shards
         else:
             devices = [device] * num_shards
 
@@ -326,9 +326,9 @@ class ArangeOp(Operation):
         dtypes = [dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.devices]
+                devices = [d for d in mesh.device_refs]
             else:
-                devices = [mesh.devices[0]] * num_shards
+                devices = [mesh.device_refs[0]] * num_shards
         else:
             devices = [device] * num_shards
 
@@ -397,9 +397,9 @@ class UniformOp(Operation):
         dtypes = [dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.devices]
+                devices = [d for d in mesh.device_refs]
             else:
-                devices = [mesh.devices[0]] * num_shards
+                devices = [mesh.device_refs[0]] * num_shards
         else:
             devices = [device] * num_shards
 
@@ -469,9 +469,9 @@ class GaussianOp(Operation):
         dtypes = [dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.devices]
+                devices = [d for d in mesh.device_refs]
             else:
-                devices = [mesh.devices[0]] * num_shards
+                devices = [mesh.device_refs[0]] * num_shards
         else:
             devices = [device] * num_shards
 

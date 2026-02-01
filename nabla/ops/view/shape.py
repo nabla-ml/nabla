@@ -257,9 +257,9 @@ class ReshapeOp(ShapeOp):
         dtypes = [x.dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.devices]
+                devices = [d for d in mesh.device_refs]
             else:
-                devices = [mesh.devices[0]] * num_shards
+                devices = [mesh.device_refs[0]] * num_shards
         else:
             devices = [x.device] * (num_shards or 1)
 
@@ -456,9 +456,9 @@ class SliceUpdateOp(Operation):
         dtypes = [x.dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.devices]
+                devices = [d for d in mesh.device_refs]
             else:
-                devices = [mesh.devices[0]] * num_shards
+                devices = [mesh.device_refs[0]] * num_shards
         else:
             devices = [x.device] * (num_shards or 1)
 
@@ -567,9 +567,9 @@ class SliceTensorOp(Operation):
         dtypes = [x.dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.devices]
+                devices = [d for d in mesh.device_refs]
             else:
-                devices = [mesh.devices[0]] * num_shards
+                devices = [mesh.device_refs[0]] * num_shards
         else:
             devices = [x.device] * (num_shards or 1)
 
@@ -767,9 +767,9 @@ class ConcatenateOp(AxisOp):
         dtypes = [tensors[0].dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.devices]
+                devices = [d for d in mesh.device_refs]
             else:
-                devices = [mesh.devices[0]] * num_shards
+                devices = [mesh.device_refs[0]] * num_shards
         else:
             devices = [tensors[0].device] * (num_shards or 1)
 
@@ -938,9 +938,9 @@ class BroadcastToPhysicalOp(Operation):
         dtypes = [x.dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.devices]
+                devices = [d for d in mesh.device_refs]
             else:
-                devices = [mesh.devices[0]] * num_shards
+                devices = [mesh.device_refs[0]] * num_shards
         else:
             devices = [x.device] * (num_shards or 1)
 
