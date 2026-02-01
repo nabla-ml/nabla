@@ -301,7 +301,11 @@ def backward_on_trace(
     if not trace._computed:
         trace.compute()
 
-    trace.refresh_graph_values()
+    # NOTE: refresh_graph_values() is no longer needed with lazy evaluation.
+    # The old eager execution model required populating _graph_values before 
+    # running VJP rules. Now, VJP rules just create new lazy tensors that will
+    # be compiled together when realize() is called on the final gradients.
+    # trace.refresh_graph_values()
 
     engine = BackwardEngine(trace, cotangents, create_graph=create_graph)
     return engine.run()

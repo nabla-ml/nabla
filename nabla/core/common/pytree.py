@@ -171,8 +171,35 @@ def tree_leaves(
     tree: Any,
     is_leaf: Callable[[Any], bool] | None = None,
 ) -> list:
-    """Get all leaves from a pytree."""
-    leaves, _ = tree_flatten(tree, is_leaf)
+    """Get all leaves from a pytree (optimized version - doesn't build treedef)."""
+    leaves = []
+    
+    def _collect(node: Any) -> None:
+        if is_leaf is not None and is_leaf(node):
+            leaves.append(node)
+            return
+
+        if node is None:
+            return
+
+        if isinstance(node, list):
+            for v in node:
+                _collect(v)
+            return
+
+        if isinstance(node, tuple):
+            for v in node:
+                _collect(v)
+            return
+
+        if isinstance(node, dict):
+            for k in sorted(node.keys()):
+                _collect(node[k])
+            return
+
+        leaves.append(node)
+    
+    _collect(tree)
     return leaves
 
 

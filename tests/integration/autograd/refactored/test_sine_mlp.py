@@ -57,9 +57,10 @@ def main():
     def loss_fn(params, x, y):
         preds = mlp(x, params)
         diff = preds - y
-        return ops.mean(diff * diff).realize()
+        return ops.mean(diff * diff)  # Don't realize here - let batching handle it
     
-    vg_fn = value_and_grad(loss_fn, argnums=0)
+    # Use realize=False to defer compilation until we batch all operations
+    vg_fn = value_and_grad(loss_fn, argnums=0, realize=False)
     
     print(f"Starting training for {epochs} epochs (lr={lr})...")
     for epoch in range(epochs):
@@ -67,11 +68,11 @@ def main():
         
         loss, grads = vg_fn(params, x, y)
         
-        # Compute updated parameters (as nodes)
+        # Compute updated parameters (as lazy nodes)
         new_params = [p - g * lr for p, g in zip(params, grads)]
         
-        # Realize everything at once to avoid multiple compilations
-        nb.GRAPH.evaluate(loss, new_params)
+        # Realize everything at once in a SINGLE compilation/execution
+        nb.realize_all(loss, *new_params)
         
         params = new_params
         

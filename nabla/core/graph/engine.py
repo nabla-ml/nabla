@@ -106,7 +106,7 @@ class ComputeGraph:
         _GRAPH_EPOCH += 1
         self.epoch = _GRAPH_EPOCH
         self._reset(None, 0)
-        gc.collect()
+        # gc.collect()  # Removed: too expensive for hot paths
 
     def add_input(self, tensor: Tensor) -> None:
         """Registers a realized tensor's storages as graph inputs."""
@@ -171,7 +171,7 @@ class ComputeGraph:
 
         sys.last_value = None
         sys.last_traceback = None
-        gc.collect()
+        # gc.collect()  # Removed: too expensive for hot paths
 
         # Collect target tensors
         seen: set[int] = set()
@@ -212,16 +212,16 @@ class ComputeGraph:
         op_hashes = [get_tensor_key(t) for t in targets]
         cache_key = tuple(op_hashes) if op_hashes else None
         
-        # if DEBUG_LAZY_EVAL:
-        #     print(f"\n[CACHE] Key hash: {hash(cache_key)} | Cache size: {len(_GRAPH_CACHE)}")
+        if DEBUG_LAZY_EVAL:
+            print(f"\n[CACHE] Key hash: {hash(cache_key)} | Cache size: {len(_GRAPH_CACHE)}")
 
         # === CHECK CACHE ===
         if cache_key is not None:
             entry = _GRAPH_CACHE.get(cache_key)
             if entry is not None:
                 cached_model, kept_indices = entry
-                # if DEBUG_LAZY_EVAL:
-                #     print(f"[CACHE] HIT! key_hash={hash(cache_key)}")
+                if DEBUG_LAZY_EVAL:
+                    print(f"[CACHE] HIT! key_hash={hash(cache_key)}")
                 
                 # Gather ALL candidate buffers from the trace in the order they would be added.
                 # Since we don't have a fresh graph yet, we simulate the input ordering.
@@ -233,8 +233,8 @@ class ComputeGraph:
                 # Filter to only the ones recorded during MISS
                 inputs = [all_buffers[i] for i in kept_indices]
                 
-                # if DEBUG_LAZY_EVAL:
-                #     print(f"[CACHE] inputs: {[(tuple(inp.shape), str(inp.dtype), id(inp)) for inp in inputs]}")
+                if DEBUG_LAZY_EVAL:
+                    print(f"[CACHE] inputs: {[(tuple(inp.shape), str(inp.dtype), id(inp)) for inp in inputs]}")
                 
                 seed_val, *results = cached_model(*inputs)
                 
@@ -261,8 +261,8 @@ class ComputeGraph:
                 return (cached_model, inputs) if return_model else None
 
         # === CACHE MISS - Build and compile graph ===
-        # if DEBUG_LAZY_EVAL:
-        #     print(f"[CACHE] MISS - storing. key_hash={hash(cache_key)}")
+        if DEBUG_LAZY_EVAL:
+            print(f"[CACHE] MISS - storing. key_hash={hash(cache_key)}")
 
         # Bump epoch and create fresh MAX graph
         global _GRAPH_EPOCH

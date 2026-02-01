@@ -15,12 +15,21 @@ if TYPE_CHECKING:
 
 def get_mesh_from_args(args: tuple) -> DeviceMesh | None:
     """Extract DeviceMesh from first tensor with sharding spec."""
-    from .. import pytree
     from ..tensor import Tensor
 
-    for a in pytree.tree_leaves(args):
+    # Fast path: most common case is simple tuple of tensors
+    # Check top-level args first without tree traversal
+    for a in args:
         if isinstance(a, Tensor) and a.sharding:
             return a.sharding.mesh
+    
+    # Only do tree traversal if we haven't found mesh and args might be nested
+    for a in args:
+        if isinstance(a, (list, tuple, dict)):
+            from .. import pytree
+            for leaf in pytree.tree_leaves((a,)):
+                if isinstance(leaf, Tensor) and leaf.sharding:
+                    return leaf.sharding.mesh
     return None
 
 
@@ -42,6 +51,7 @@ def reshard_inputs(
     from ..tensor import Tensor
 
     leaves = [a for a in pytree.tree_leaves(args) if isinstance(a, Tensor)]
+    
     if len(leaves) != len(required_specs):
         return args
 
@@ -100,6 +110,7 @@ def infer_output_sharding(
     from .spec import DimSpec, ShardingSpec
 
     leaves = [a for a in pytree.tree_leaves(args) if isinstance(a, Tensor)]
+    
     if not leaves:
         return None, [], False
 

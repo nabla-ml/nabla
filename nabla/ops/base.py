@@ -153,12 +153,17 @@ class Operation(ABC):
             from ..core.sharding import spmd
 
             # 1. Collect Metadata (for Adaptation logic)
+            # Optimized: inline iteration instead of tree_map to avoid closure overhead
             max_batch_dims = 0
             any_traced = False
             any_sharded = False
-
-            def collect_metadata(x):
-                nonlocal max_batch_dims, any_traced, any_sharded
+            any_has_tangent = False
+            
+            # Fast path: most ops have simple tensor args (not nested)
+            # Use stack-based iteration to avoid tree_map overhead
+            stack = list(args)
+            while stack:
+                x = stack.pop()
                 if isinstance(x, Tensor):
                     if x.batch_dims > max_batch_dims:
                         max_batch_dims = x.batch_dims
@@ -166,8 +171,12 @@ class Operation(ABC):
                         any_traced = True
                     if x.is_sharded:
                         any_sharded = True
-
-            pytree.tree_map(collect_metadata, args)
+                    if x.tangent is not None:
+                        any_has_tangent = True
+                elif isinstance(x, (list, tuple)):
+                    stack.extend(x)
+                elif isinstance(x, dict):
+                    stack.extend(x.values())
 
             # 2. Adaptation: Reshard Inputs
             mesh = spmd.get_mesh_from_args(args) if any_sharded else None
@@ -251,12 +260,7 @@ class Operation(ABC):
                 output = apply_auto_reduction(self, output, mesh, reduce_axes)
 
             # 7. Post-Processing (JVP)
-            # Check for tangents in ORIGINAL args (before resharding)
-            any_has_tangent = False
-            for x in pytree.tree_leaves(args):
-                if isinstance(x, Tensor) and x.tangent is not None:
-                    any_has_tangent = True
-
+            # any_has_tangent was already computed in metadata collection above
             if any_has_tangent:
                 from .execution_utils import apply_jvp
 
@@ -344,29 +348,40 @@ class Operation(ABC):
         """Set up OpNode for tracing support."""
         from ..core import Tensor, pytree
 
-        output_impls = [
-            x._impl for x in pytree.tree_leaves(output) if isinstance(x, Tensor)
-        ]
-
-        if not output_impls:
-            return
+        # Fast path: most outputs are single tensors
+        if isinstance(output, Tensor):
+            output_impls = [output._impl]
+            output_tree_def = pytree.PyTreeDef(pytree._K_LEAF, None, (), 1)
+        else:
+            output_impls = [
+                x._impl for x in pytree.tree_leaves(output) if isinstance(x, Tensor)
+            ]
+            if not output_impls:
+                return
+            _, output_tree_def = pytree.tree_flatten(output, is_leaf=pytree.is_tensor)
 
         from ..core import OpNode
 
-        _, output_tree_def = pytree.tree_flatten(output, is_leaf=pytree.is_tensor)
-        output_refs = tuple(output_impls)
-
+        # Optimized to_impl: only use tree_map if args contain nested structures
         def to_impl(x: Any) -> Any:
             return x._impl if isinstance(x, Tensor) else x
+        
+        # Fast path for simple tuple of tensors (very common case)
+        if isinstance(args, tuple) and all(isinstance(a, Tensor) or not isinstance(a, (list, dict, tuple)) for a in args):
+            stored_args = tuple(to_impl(a) for a in args)
+        else:
+            stored_args = pytree.tree_map(to_impl, args)
 
-        stored_args = pytree.tree_map(to_impl, args)
-
-        stored_logical_kwargs = (
-            pytree.tree_map(to_impl, logical_kwargs) if logical_kwargs else None
-        )
+        # Fast path for kwargs (usually None or simple dict)
+        if logical_kwargs is None:
+            stored_logical_kwargs = None
+        elif isinstance(logical_kwargs, dict) and all(not isinstance(v, (list, tuple)) for v in logical_kwargs.values()):
+            stored_logical_kwargs = {k: to_impl(v) for k, v in logical_kwargs.items()}
+        else:
+            stored_logical_kwargs = pytree.tree_map(to_impl, logical_kwargs)
 
         output_refs = OpNode(
-            _refs=output_refs,
+            _refs=tuple(output_impls),
             tree_def=output_tree_def,
             op=self,
             op_args=stored_args,
