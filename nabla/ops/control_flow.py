@@ -139,47 +139,88 @@ class CondOp(Operation):
         return super().__call__(pred, true_fn, false_fn, *operands)
 
     def compute_physical_shape(self, args: tuple, kwargs: dict, output_sharding: Any = None):
+        """Infer output shapes by tracing true_fn symbolically (no graph building).
+        
+        Since cond requires both branches to return identical shapes/dtypes,
+        we only need to trace one branch. The trace creates promise tensors
+        with shape metadata - we read that metadata directly without building
+        any MAX graph operations.
+        """
         from ..core.sharding import spmd
         from ..core.tensor import Tensor
-        import max.graph as g
 
         pred, true_fn, false_fn, *operands = args
         mesh = spmd.get_mesh_from_args(operands)
         num_shards = len(mesh.devices) if mesh else 1
 
-        with g.Graph("scratch"):
-            def clean_wrap(t):
-                if not isinstance(t, Tensor): return t
-                new_t = Tensor(impl=t._impl)
-                new_t._impl._graph_values = []
-                new_t._impl.graph_values_epoch = -1
-                return new_t
-
-            clean_operands = pytree.tree_map(clean_wrap, operands)
-            res = true_fn(*clean_operands)
-            flat_res, _ = pytree.tree_flatten(res, is_leaf=lambda x: isinstance(x, Tensor))
-            GRAPH._replay_trace_to_build_graph(flat_res)
+        # Call true_fn to get output structure with shape metadata.
+        # This creates promise tensors via our lazy tracing system.
+        # We do NOT call _replay_trace_to_build_graph - just read the metadata.
+        res = true_fn(*operands)
+        flat_res, _ = pytree.tree_flatten(res, is_leaf=lambda x: isinstance(x, Tensor))
+        
+        all_shapes, all_dtypes, all_devices = [], [], []
+        for leaf in flat_res:
+            if not isinstance(leaf, Tensor):
+                # Non-tensor output (rare, but handle it)
+                all_shapes.append([()])
+                all_dtypes.append([None])
+                all_devices.append([None])
+                continue
+                
+            # Read shape from the tensor's physical metadata (set during __call__)
+            leaf_shapes = leaf._impl._physical_shapes
+            leaf_dtypes = leaf._impl._shard_dtypes
+            leaf_devices = leaf._impl._shard_devices
             
-            all_shapes, all_dtypes, all_devices = [], [], []
-            for leaf in flat_res:
-                shapes, dtypes, devices = [], [], []
-                for i in range(num_shards):
-                    vals = leaf._impl._get_valid_graph_values()
-                    if vals:
-                        v = vals[0]
-                        shapes.append(tuple(int(d) for d in v.type.shape))
-                        dtypes.append(leaf.dtype)
-                    else:
-                        shapes.append((1,))
-                        dtypes.append(getattr(leaf, 'dtype', None))
-                    devices.append(None)
-                all_shapes.append(shapes)
-                all_dtypes.append(dtypes)
-                all_devices.append(devices)
+            if leaf_shapes and leaf_dtypes:
+                all_shapes.append(leaf_shapes)
+                all_dtypes.append(leaf_dtypes)
+                all_devices.append(leaf_devices or [None] * num_shards)
+            else:
+                # Fallback: use logical shape replicated across shards
+                shape = tuple(int(d) for d in leaf.shape)
+                all_shapes.append([shape] * num_shards)
+                all_dtypes.append([leaf.dtype] * num_shards)
+                all_devices.append([None] * num_shards)
 
         if len(flat_res) == 1:
             return all_shapes[0], all_dtypes[0], all_devices[0]
         return all_shapes, all_dtypes, all_devices
+
+    def infer_sharding_spec(self, args: tuple, mesh, kwargs: dict = None):
+        """Cond: output sharding matches the traced branch output sharding.
+        
+        Since both branches must return identical shapes/dtypes, we trace true_fn
+        and use its output sharding specs.
+        """
+        from ..core.tensor import Tensor
+        
+        pred, true_fn, false_fn, *operands = args
+        
+        # Trace true_fn to get output structure
+        res = true_fn(*operands)
+        flat_res = pytree.tree_leaves(res)
+        
+        # Collect specs from output tensors
+        output_specs = []
+        for leaf in flat_res:
+            if isinstance(leaf, Tensor) and leaf.sharding:
+                output_specs.append(leaf.sharding.clone())
+            else:
+                output_specs.append(None)
+        
+        # Input specs: just for operands (pred and fns don't have sharding)
+        input_specs = [None, None, None]  # pred, true_fn, false_fn
+        for op in operands:
+            if isinstance(op, Tensor) and op.sharding:
+                input_specs.append(op.sharding.clone())
+            else:
+                input_specs.append(None)
+        
+        if len(output_specs) == 1:
+            return output_specs[0], input_specs, False
+        return output_specs, input_specs, False
 
     def sharding_rule(self, input_shapes, output_shapes, **kwargs):
         from ..core.sharding.propagation import OpShardingRuleTemplate
@@ -204,13 +245,28 @@ class CondOp(Operation):
             GRAPH._replay_trace_to_build_graph(flat_res)
             return [t._impl.primary_value if isinstance(t, Tensor) else t for t in flat_res]
 
-        import max.graph as g
-        with g.Graph("scratch"):
-            scratch_res = true_fn(*wrapped_operands)
-            out_structure = pytree.tree_structure(scratch_res)
-            flat_scratch = pytree.tree_flatten(scratch_res, is_leaf=lambda x: isinstance(x, Tensor))[0]
-            GRAPH._replay_trace_to_build_graph(flat_scratch)
-            out_types = [t._impl.primary_value.type if isinstance(t, Tensor) else g.Type(type(t), ()) for t in flat_scratch] # simplified type extraction
+        # Get output structure and types by tracing true_fn.
+        # We DON'T call _replay_trace_to_build_graph here - just read metadata.
+        # The actual graph building happens inside trace_and_replay when ops.cond calls the lambdas.
+        scratch_res = true_fn(*wrapped_operands)
+        out_structure = pytree.tree_structure(scratch_res)
+        flat_scratch = pytree.tree_flatten(scratch_res, is_leaf=lambda x: isinstance(x, Tensor))[0]
+        
+        # Build out_types from the promise tensors' metadata (shapes/dtypes set during __call__)
+        out_types = []
+        for t in flat_scratch:
+            if isinstance(t, Tensor):
+                # Use physical shape from the traced tensor
+                phys_shapes = t._impl._physical_shapes
+                if phys_shapes:
+                    shape = phys_shapes[0]  # Use first shard's shape
+                else:
+                    shape = tuple(int(d) for d in t.shape)
+                # Get device - use tensor's device or default to CPU
+                device = t.device if t.device else graph.DeviceRef.CPU()
+                out_types.append(graph.TensorType(t.dtype, shape, device))
+            else:
+                out_types.append(graph.Type(type(t), ()))
 
         res_flat = ops.cond(pred_shard, out_types, lambda: trace_and_replay(true_fn), lambda: trace_and_replay(false_fn))
         return pytree.tree_unflatten(out_structure, res_flat)
