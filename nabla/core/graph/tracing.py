@@ -371,9 +371,9 @@ def trace(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Trace:
 
         traced_obj = Trace(args, outputs)
         traced_obj.compute()
-        print("\n--- TRACE CAPTURED ---")
-        print(traced_obj)
-        print("----------------------\n")
+        # print("\n--- TRACE CAPTURED ---")
+        # print(traced_obj)
+        # print("----------------------\n")
         return traced_obj
 
     finally:

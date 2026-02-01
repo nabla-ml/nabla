@@ -166,7 +166,6 @@ class ComputeGraph:
         return_model: bool = False,
     ) -> Any:
         """Main entry point: Evaluates specific tensors and their dependencies."""
-        print("\n[DEBUG] HELLO FROM EVALUATE")
 
         from ..common.pytree import tree_leaves
         from ..common import pytree
