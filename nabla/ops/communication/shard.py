@@ -52,7 +52,7 @@ class ShardOp(Operation):
                 spec = ShardingSpec(
                     mesh,
                     kwargs["dim_specs"],
-                    replicated_axes=kwargs.get("replicated_axes", set()),
+                    replicated_axes=kwargs.get("replicated_axes") or set(),
                 )
             else:
                 # Should we raise? Or return defaults?
@@ -157,17 +157,9 @@ class ShardOp(Operation):
         with GRAPH.graph:
             x = args[0]
 
-            # Handle positional arguments for mesh/dim_specs
-            if len(args) > 1:
-                mesh = args[1]
-            else:
-                mesh = kwargs.get("mesh")
-
-            if len(args) > 2:
-                dim_specs = args[2]
-            else:
-                dim_specs = kwargs.get("dim_specs")
-
+            # Handle keyword arguments for mesh/dim_specs
+            mesh = kwargs.get("mesh")
+            dim_specs = kwargs.get("dim_specs")
             replicated_axes = kwargs.get("replicated_axes") or set()
 
             # We need to construct the target spec to check idempotency and return it
@@ -205,8 +197,10 @@ class ShardOp(Operation):
                 x_input = g.TensorValue(x)
 
             # _shard_logic expects a single value input usually (replicated)
+            # Filter out mesh/dim_specs/replicated_axes from kwargs to avoid duplicate args
+            filtered_kwargs = {k: v for k, v in kwargs.items() if k not in ('mesh', 'dim_specs', 'replicated_axes')}
             shard_graph_values = self._shard_logic(
-                x_input, mesh, dim_specs, global_shape=global_shape, **kwargs
+                x_input, mesh, dim_specs, global_shape=global_shape, **filtered_kwargs
             )
 
             return (shard_graph_values, target_spec, mesh)
@@ -353,14 +347,14 @@ def shard(
 
     if not isinstance(x, Tensor) or not x.sharding:
         # If not a tensor or not sharded, treat as fresh slicing (legacy behavior)
-        return shard_op(x, mesh, dim_specs, replicated_axes=replicated_axes, **kwargs)
+        return shard_op(x, mesh=mesh, dim_specs=dim_specs, replicated_axes=replicated_axes, **kwargs)
 
     # === Transition Logic (merged from ReshardOp) ===
     from_spec = x.sharding
     to_spec = target_spec
 
     if not needs_reshard(from_spec, to_spec):
-        return shard_op(x, mesh, dim_specs, replicated_axes=replicated_axes, **kwargs)
+        return shard_op(x, mesh=mesh, dim_specs=dim_specs, replicated_axes=replicated_axes, **kwargs)
 
     result = x
 
@@ -402,4 +396,4 @@ def shard(
     # 3. Contraction (ShardOp)
     # We pass _bypass_idempotency=True to force the shard op even if specs look similar
     # (though usually the shape change prevents that confusion, explicit is better)
-    return shard_op(result, mesh, dim_specs, replicated_axes=replicated_axes, **kwargs)
+    return shard_op(result, mesh=mesh, dim_specs=dim_specs, replicated_axes=replicated_axes, **kwargs)

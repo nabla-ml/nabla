@@ -297,6 +297,11 @@ def get_shard_args(
             this_sharding = per_input_shardings[input_idx[0]]
         input_idx[0] += 1
 
+        from ..graph.engine import GRAPH
+
+        if x._impl.graph_values_epoch != GRAPH.epoch:
+            x._impl._graph_values = []
+
         x.hydrate()
         vals = x.values
 
@@ -322,8 +327,20 @@ def create_sharded_output(
 
     from ..tensor import Tensor
 
+    # Handle empty results for promise tensors (deferred execution)
     if not results:
-        raise ValueError("Empty shard results")
+        if physical_shapes is None:
+            raise ValueError("Empty shard results require physical_shapes metadata")
+        output = Tensor._create_unsafe(
+            values=[],
+            is_traced=is_traced,
+            batch_dims=batch_dims,
+            physical_shapes=physical_shapes,
+            shard_dtypes=shard_dtypes,
+            shard_devices=shard_devices,
+        )
+        output.sharding = sharding
+        return output
 
     first = results[0]
     if not isinstance(first, (g.TensorValue, g.BufferValue)):

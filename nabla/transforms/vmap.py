@@ -244,7 +244,7 @@ def _batch_tensor(
 
             dim_specs[0] = DimSpec([spmd_axis_name])
 
-            t = comm_ops.shard_op(t, mesh, dim_specs)
+            t = comm_ops.shard_op(t, mesh=mesh, dim_specs=dim_specs)
     else:
         if axis != 0:
             logical_rank = len(tensor.shape)
@@ -271,7 +271,7 @@ def _batch_tensor(
 
             dim_specs[old_batch_dims] = DimSpec([spmd_axis_name])
 
-            t = comm_ops.shard_op(t, mesh, dim_specs)
+            t = comm_ops.shard_op(t, mesh=mesh, dim_specs=dim_specs)
 
         t = p_ops.incr_batch_dims(t)
 

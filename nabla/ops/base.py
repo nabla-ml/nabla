@@ -140,6 +140,9 @@ class Operation(ABC):
 
             # 2. Adaptation: Reshard Inputs
             mesh = spmd.get_mesh_from_args(args) if any_sharded else None
+            # Also check kwargs for mesh (e.g., shard/reshard ops pass mesh as kwarg)
+            if mesh is None and kwargs.get("mesh") is not None:
+                mesh = kwargs["mesh"]
 
             adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)
             args = spmd.ensure_specs(args, mesh)
@@ -150,129 +153,47 @@ class Operation(ABC):
             # Perform the data movement (Logical Adaptation)
             resharded_args = spmd.reshard_inputs(args, input_shardings, mesh)
 
-            # 3. Physical Execution
-            with GRAPH.graph:
-                raw_result = self.execute(resharded_args, kwargs)
-
-            # 4. Packaging (Wrapping raw values into nabla.Tensor)
-            shard_graph_values = None
-            output_sharding = None
-            res_mesh = mesh
-
-            if isinstance(raw_result, tuple) and len(raw_result) == 3:
-                shard_graph_values, output_sharding, res_mesh = raw_result
-            elif hasattr(raw_result, "shard_graph_values"):
-                shard_graph_values = raw_result.shard_graph_values
-                output_sharding = getattr(raw_result, "output_sharding", None)
-                res_mesh = getattr(raw_result, "mesh", mesh)
-            else:
-                shard_graph_values = raw_result
-
-            # Use predicted spec if physical execution didn't return one
-            if output_sharding is None:
-                output_sharding = predicted_output_spec
-
-            # Explicit Shape Inference (Required)
+            # 3. Physical Execution (DEFERRED)
+            # Instead of executing now, just compute shape metadata
             if type(self).compute_physical_shape is Operation.compute_physical_shape:
                 raise RuntimeError(
                     f"{self.__class__.__name__} must implement compute_physical_shape "
                     "for physical execution."
                 )
 
-            output_physical_shapes = None
             output_physical_shapes, output_shard_dtypes, output_shard_devices = (
                 self.compute_physical_shape(
-                    resharded_args, adapted_kwargs, output_sharding
+                    resharded_args, adapted_kwargs, predicted_output_spec
                 )
             )
-            # Validation: check if inferred physical metadata matches actual values
-            from .execution_utils import validate_physical_metadata
-            validate_physical_metadata(
-                self,
-                shard_graph_values,
-                output_physical_shapes,
-                output_shard_dtypes,
-                output_shard_devices,
+
+            # 4. Packaging (Create promise tensor with metadata only, no graph values yet)
+            output = spmd.create_sharded_output(
+                [],  # Empty - will be populated during evaluate()
+                predicted_output_spec,
+                any_traced,
+                max_batch_dims,
+                mesh=mesh,
+                physical_shapes=output_physical_shapes,
+                shard_dtypes=output_shard_dtypes,
+                shard_devices=output_shard_devices,
             )
+            output._impl.graph_values_epoch = -1  # Mark as unrealized
+            GRAPH.add_unrealized(output)
 
-            # Handle structured outputs (tuples/lists from multi-output ops like split)
-            first_shard = shard_graph_values[0] if shard_graph_values else None
-            if isinstance(first_shard, (list, tuple)):
-                # Unzip: [(a0, b0), (a1, b1)] -> ([a0, a1], [b0, b1])
-                unzipped = list(zip(*shard_graph_values))
-                outputs = []
-                for i, res_shards in enumerate(unzipped):
-                    # Multi-output shape/dtype/sharding support
-                    shapes = None
-                    dtypes = None
-                    devices = None
-                    if (
-                        isinstance(output_physical_shapes, list)
-                        and len(output_physical_shapes) > i
-                    ):
-                        shapes = output_physical_shapes[i]
-                    if isinstance(output_shard_dtypes, list) and len(output_shard_dtypes) > i:
-                        dtypes = output_shard_dtypes[i]
-                    if isinstance(output_shard_devices, list) and len(output_shard_devices) > i:
-                        devices = output_shard_devices[i]
-
-                    spec = output_sharding
-                    if isinstance(output_sharding, (list, tuple)) and len(
-                        output_sharding
-                    ) > i:
-                        spec = output_sharding[i]
-
-                    outputs.append(
-                        spmd.create_sharded_output(
-                            list(res_shards),
-                            spec,
-                            any_traced,
-                            max_batch_dims,
-                            mesh=res_mesh,
-                            physical_shapes=shapes,
-                            shard_dtypes=dtypes,
-                            shard_devices=devices,
-                        )
-                    )
-                output = tuple(outputs) if isinstance(first_shard, tuple) else outputs
-            elif isinstance(first_shard, dict):
-                # Handle dict output
-                keys = first_shard.keys()
-                outputs = {}
-                for k in keys:
-                    res_shards = [r[k] for r in shard_graph_values]
-                    outputs[k] = spmd.create_sharded_output(
-                        res_shards,
-                        output_sharding,
-                        any_traced,
-                        max_batch_dims,
-                        mesh=res_mesh,
-                    )
-                output = outputs
-            else:
-                output = spmd.create_sharded_output(
-                    shard_graph_values,
-                    output_sharding,
-                    any_traced,
-                    max_batch_dims,
-                    mesh=res_mesh,
-                    physical_shapes=output_physical_shapes,
-                    shard_dtypes=output_shard_dtypes,
-                    shard_devices=output_shard_devices,
-                )
+            # 6. Tracing - set up OpNode for THIS op FIRST
+            # Store resharded_args (not original args) so rehydration has correctly sharded inputs
+            self._setup_output_refs(output, resharded_args, kwargs)
 
             # 5. SPMD: Post-Op Collectives (Automatic Reductions)
+            # This may wrap output with an all_reduce op (which sets up its own refs)
             if reduce_axes and mesh:
                 from .execution_utils import apply_auto_reduction
 
                 output = apply_auto_reduction(self, output, mesh, reduce_axes)
 
-            # 5. Tracing
-            # Store resharded_args (not original args) so rehydration has correctly sharded inputs
-            self._setup_output_refs(output, resharded_args, kwargs)
-
-            # 6. Post-Processing (JVP)
-            # Check for tangents in ORIGINAL args
+            # 7. Post-Processing (JVP)
+            # Check for tangents in ORIGINAL args (before resharding)
             any_has_tangent = False
             for x in pytree.tree_leaves(args):
                 if isinstance(x, Tensor) and x.tangent is not None:

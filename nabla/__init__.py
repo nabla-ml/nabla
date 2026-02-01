@@ -295,4 +295,10 @@ __all__ = [
     "get_num_shards",
     "xpr",
     "capture_trace",
+    "_clear_caches",
 ]
+
+
+def _clear_caches() -> None:
+    """Clear all caches and state for fresh start (useful for testing)."""
+    GRAPH.clear_all()

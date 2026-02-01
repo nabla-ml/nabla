@@ -78,7 +78,7 @@ class ComputeGraph:
     sources: dict[_core.Value[Any], driver.Tensor]
     unrealized: weakref.WeakValueDictionary[int, Tensor]
     epoch: int
-    _graph_hash: int
+    _graph_key: list[Any]
     _input_refs: list[Tensor]
     _skip_finalize: bool
 
@@ -86,14 +86,14 @@ class ComputeGraph:
         global _GRAPH_EPOCH
         _GRAPH_EPOCH += 1
         self.epoch = _GRAPH_EPOCH
-        self._graph_hash = 0
+        self._graph_key = []
         self._input_refs = []
         self._skip_finalize = False
         self._reset(context, seed)
 
     def update_hash(self, key: Any) -> None:
         """Updates the rolling graph hash with a new operation key."""
-        self._graph_hash = hash((self._graph_hash, key))
+        self._graph_key.append(key)
 
     def _reset(self, context: mlir.Context | None, seed: int) -> None:
         """Resets the internal graph state."""
@@ -102,10 +102,23 @@ class ComputeGraph:
         self.unrealized = weakref.WeakValueDictionary()
         self.graph = graph.Graph("main", input_types=[], context=self.context)
         self._input_refs = []
-        self._graph_hash = 0
+        self._graph_key = []
         self._skip_finalize = False
         with self.graph:
             ops.random.set_seed(seed)
+
+    def clear_all(self) -> None:
+        """Clears tracing state for fresh start (useful for testing).
+        
+        NOTE: Does NOT clear _GRAPH_CACHE - that's the JIT cache for performance!
+        Incrementing epoch effectively invalidates stale references without
+        losing compiled graphs.
+        """
+        global _GRAPH_EPOCH
+        _GRAPH_EPOCH += 1
+        self.epoch = _GRAPH_EPOCH
+        self._reset(None, 0)
+        gc.collect()
 
     def add_input(self, tensor: Tensor) -> None:
         """Registers a realized tensor's storages as graph inputs."""
@@ -199,7 +212,126 @@ class ComputeGraph:
         # Skip finalize when only evaluating leaf inputs (used by rehydration)
         self._skip_finalize = all(t._impl.output_refs is None for t in targets)
 
+        # === NEW: Trace Replay to Build MAX Graph ===
+        # Walk OpNode DAG and execute operations to populate _graph_values
+        if not self._skip_finalize:
+            self._replay_trace_to_build_graph(targets)
+
         return self._evaluate_normal(targets, return_model=return_model)
+
+    def _replay_trace_to_build_graph(self, targets: list[Tensor]) -> None:
+        """Walk OpNode DAG and execute operations to build MAX graph."""
+        from ..common import pytree
+        from ..tensor.api import Tensor
+        from ..tensor.impl import TensorImpl
+
+        if DEBUG_LAZY_EVAL:
+            print("[LAZY EVAL] Replaying trace to build MAX graph...")
+
+        # Collect all OpNodes in topological order via DFS
+        visited_opnode_ids: set[int] = set()
+        opnodes_topo: list[Any] = []  # OpNode list
+
+        def dfs_opnode(opnode) -> None:
+            opnode_id = id(opnode)
+            if opnode_id in visited_opnode_ids:
+                return
+            
+            # Visit dependencies first (inputs)
+            for arg in pytree.tree_leaves(opnode.op_args):
+                if isinstance(arg, TensorImpl) and arg.output_refs:
+                    dfs_opnode(arg.output_refs)
+            
+            visited_opnode_ids.add(opnode_id)
+            opnodes_topo.append(opnode)
+
+        # Start DFS from target OpNodes
+        for target in targets:
+            if target._impl.output_refs:
+                dfs_opnode(target._impl.output_refs)
+
+        if DEBUG_LAZY_EVAL:
+            print(f"[LAZY EVAL] Found {len(opnodes_topo)} operations to replay")
+
+        # Execute each OpNode in topological order
+        for opnode in opnodes_topo:
+            # Check if outputs already have valid graph values
+            outputs_valid = all(
+                ref.graph_values_epoch == self.epoch and ref._graph_values
+                for ref in opnode._refs if ref is not None
+            )
+            
+            if outputs_valid:
+                if DEBUG_LAZY_EVAL:
+                    print(f"[LAZY EVAL] Skipping {opnode.op.name} (already valid)")
+                continue
+
+            # Ensure all inputs have graph values
+            def ensure_graph_values(x):
+                if isinstance(x, TensorImpl):
+                    if x.graph_values_epoch != self.epoch or not x._graph_values:
+                        if x.is_realized:
+                            # Realized leaf tensor - add as input
+                            tensor_wrapper = Tensor(impl=x)
+                            self.add_input(tensor_wrapper)
+                        elif x.output_refs is None:
+                            raise RuntimeError(
+                                f"Tensor {id(x)} has no graph values and no output_refs to compute them"
+                            )
+                        # else: will be computed by earlier OpNode in topo order
+
+            for arg in pytree.tree_leaves(opnode.op_args):
+                ensure_graph_values(arg)
+
+            # Convert TensorImpl args back to Tensor wrappers for execute()
+            def to_tensor(x):
+                if isinstance(x, TensorImpl):
+                    return Tensor(impl=x)
+                return x
+
+            op_args = pytree.tree_map(to_tensor, opnode.op_args)
+            op_kwargs = opnode.op_kwargs or {}
+
+            if DEBUG_LAZY_EVAL:
+                print(f"[LAZY EVAL] Executing {opnode.op.name}")
+
+            # Execute operation to get graph values
+            with self.graph:
+                raw_result = opnode.op.execute(op_args, op_kwargs)
+
+            # Extract shard_graph_values from result
+            if isinstance(raw_result, tuple) and len(raw_result) == 3:
+                shard_graph_values, output_sharding, res_mesh = raw_result
+            elif hasattr(raw_result, "shard_graph_values"):
+                shard_graph_values = raw_result.shard_graph_values
+                output_sharding = getattr(raw_result, "output_sharding", None)
+                res_mesh = getattr(raw_result, "mesh", None)
+            else:
+                shard_graph_values = raw_result
+
+            # Populate graph values for output tensors
+            if isinstance(shard_graph_values, (list, tuple)) and not isinstance(shard_graph_values[0] if shard_graph_values else None, (list, tuple, dict)):
+                # Single output case
+                if len(opnode._refs) == 1 and opnode._refs[0] is not None:
+                    opnode._refs[0]._graph_values = shard_graph_values
+                    opnode._refs[0].graph_values_epoch = self.epoch
+            else:
+                # Multi-output case - structured outputs
+                if isinstance(shard_graph_values[0] if shard_graph_values else None, (list, tuple)):
+                    # Unzip shard results
+                    unzipped = list(zip(*shard_graph_values)) if shard_graph_values else []
+                    for i, ref in enumerate(opnode._refs):
+                        if ref is not None and i < len(unzipped):
+                            ref._graph_values = list(unzipped[i])
+                            ref.graph_values_epoch = self.epoch
+                elif isinstance(shard_graph_values[0] if shard_graph_values else None, dict):
+                    # Dict outputs - map by key
+                    keys = shard_graph_values[0].keys() if shard_graph_values else []
+                    for ref in opnode._refs:
+                        if ref is not None:
+                            # Find matching key - this requires storing key info in OpNode
+                            # For now, assume single dict output
+                            pass
 
     def _evaluate_normal(self, unrealized: list[Tensor], return_model: bool) -> Any:
         """Standard compilation path handling both single-device and eager-sharded execution."""
@@ -287,7 +419,8 @@ class ComputeGraph:
                 raise RuntimeError("Missing storage for graph input")
             inputs.append(storage)
 
-        cached_model = _GRAPH_CACHE.get(self._graph_hash)
+        cache_key = tuple(self._graph_key)
+        cached_model = _GRAPH_CACHE.get(cache_key)
         if cached_model is not None:
             model = cached_model
             try:
@@ -298,7 +431,7 @@ class ComputeGraph:
             try:
                 model = _session().load(self.graph)
                 seed_val, *results = model(*inputs)
-                _GRAPH_CACHE[self._graph_hash] = model
+                _GRAPH_CACHE[cache_key] = model
             except BaseException as e:
                 self.graph._erase_output_if_present()
                 if DEBUG_LAZY_EVAL:

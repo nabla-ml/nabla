@@ -123,7 +123,7 @@ class TestShardOp:
         result = x.shard(mesh_1d_2, [DimSpec(["dp"]), DimSpec([])])
 
         assert result.is_sharded
-        assert len(result._values) == 2
+        assert result.num_shards == 2
 
         assert_allclose(result, np_x)
 

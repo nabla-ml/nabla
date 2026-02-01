@@ -39,18 +39,24 @@ def apply_auto_reduction(
     from ..core.sharding import spmd
     from ..core.sharding.spec import DimSpec, ShardingSpec
     from .communication import all_reduce_op
+    from .communication.all_reduce import all_reduce
 
     def apply_grouped_all_reduce(t):
         if not isinstance(t, Tensor):
             return t
 
-        t.hydrate()
-        if not t._graph_values:
-            return t
+        # For deferred execution (promise tensors with no graph values),
+        # just call the regular all_reduce op which will create a traced op
+        if not t._impl._graph_values:
+            # Call the regular all_reduce op - it's a traced op that creates its own OpNode
+            return all_reduce(t, mesh=mesh, reduce_axes=reduce_axes, reduce_op=op.collective_reduce_type)
 
         with GRAPH.graph:
             reduced_graph_values = all_reduce_op.simulate_grouped_execution(
-                t.values, mesh, reduce_axes, reduce_op=op.collective_reduce_type
+                t.values,
+                mesh,
+                reduce_axes,
+                reduce_op=op.collective_reduce_type,
             )
 
         current_spec = t.sharding

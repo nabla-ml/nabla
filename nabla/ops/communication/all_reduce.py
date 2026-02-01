@@ -194,16 +194,13 @@ class AllReduceOp(CollectiveOperation):
         if not input_tensor.sharding:
             return cotangent
 
-        from ...core.sharding import spmd
+        from .reshard import reshard
 
-        cotangent.hydrate()
-
-        return spmd.create_sharded_output(
-            cotangent.values,
-            input_tensor.sharding,
-            cotangent.is_traced,
-            cotangent.batch_dims,
+        return reshard(
+            cotangent,
             input_tensor.sharding.mesh,
+            input_tensor.sharding.dim_specs,
+            replicated_axes=input_tensor.sharding.replicated_axes,
         )
 
     def _compute_output_spec(self, input_tensor, results, **kwargs):

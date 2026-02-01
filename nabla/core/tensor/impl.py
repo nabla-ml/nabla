@@ -318,4 +318,7 @@ class TensorImpl:
             device = self.primary_value.device
             return device if isinstance(device, Device) else device.to_device()
         except RuntimeError:
+            # Promise tensor - use stored shard_devices
+            if self._shard_devices:
+                return self._shard_devices[0]
             raise
