@@ -38,7 +38,7 @@ class AllToAllOp(CollectiveOperation):
 
         mesh = self._derive_mesh(x, kwargs) or spmd.get_mesh_from_args(args)
         num_shards = len(mesh.devices) if mesh else x.num_shards
-
+        
         phys_split_axis = self._get_physical_axis(x, split_axis)
         phys_concat_axis = self._get_physical_axis(x, concat_axis)
 
@@ -46,6 +46,9 @@ class AllToAllOp(CollectiveOperation):
         for i in range(num_shards):
             idx = i if i < x.num_shards else 0
             s = x.physical_local_shape(idx)
+            if s is None:
+                s = x.shape
+
             if s is None:
                 s = x.shape
 
@@ -59,6 +62,7 @@ class AllToAllOp(CollectiveOperation):
                 out_shape[phys_concat_axis] *= num_shards
 
             shapes.append(tuple(out_shape))
+
 
         dtypes = [x.dtype] * num_shards
         if mesh:
@@ -142,6 +146,9 @@ class AllToAllOp(CollectiveOperation):
 
         if num_devices <= 1:
             return shard_graph_values
+
+        print(f"[DEBUG A2A logic] num_devices={num_devices}, shard_vals_len={len(shard_graph_values)}")
+
 
         chunks_per_device = []
         for val in shard_graph_values:

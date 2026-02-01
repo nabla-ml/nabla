@@ -121,7 +121,12 @@ class TensorImpl:
     def num_shards(self) -> int:
         if self._buffers is not None:
             return len(self._buffers)
-        return len(self._graph_values) if self._graph_values else 1
+        if self._graph_values:
+            return len(self._graph_values)
+        if self._physical_shapes:
+            return len(self._physical_shapes)
+        return 1
+
 
     @property
     def is_sharded(self) -> bool:

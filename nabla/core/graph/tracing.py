@@ -369,9 +369,13 @@ def trace(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Trace:
 
         outputs = fn(*args, **kwargs)
 
-        traced = Trace(args, outputs)
-        traced.compute()
-        return traced
+        traced_obj = Trace(args, outputs)
+        traced_obj.compute()
+        print("\n--- TRACE CAPTURED ---")
+        print(traced_obj)
+        print("----------------------\n")
+        return traced_obj
+
     finally:
 
         for t in input_tensors:

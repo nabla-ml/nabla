@@ -519,11 +519,14 @@ class BinaryOperation(Operation):
         from ..core.sharding import spmd
 
         mesh = spmd.get_mesh_from_args(args)
-
+        
         with GRAPH.graph:
             shard_results = spmd.execute_on_shards(
                 self.kernel, args, kwargs, mesh, op=self
             )
+
+
+
 
         # Infer output sharding from inputs
         output_sharding, _, _ = spmd.infer_output_sharding(

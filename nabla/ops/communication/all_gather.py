@@ -200,8 +200,6 @@ class AllGatherOp(CollectiveOperation):
 
         return (gathered_graph_values, output_spec, mesh)
 
-        return (gathered_graph_values, output_spec, mesh)
-
     def _gather_logic(
         self,
         shard_graph_values: list[TensorValue],
@@ -313,9 +311,9 @@ class GatherAllAxesOp(Operation):
                 raise RuntimeError(
                     f"Could not determine physical shape for {self.name}"
                 )
-            global_shape = tuple(int(d) for d in local)
-
         shapes = [tuple(int(d) for d in global_shape)] * num_shards
+
+
 
         dtypes = [x.dtype] * num_shards
         if mesh:
@@ -379,6 +377,7 @@ class GatherAllAxesOp(Operation):
             )
             num_shards = len(mesh.devices) if mesh else 1
             results = [gathered_shard] * num_shards
+
 
         rank = len(sharded_tensor.sharding.dim_specs)
         output_spec = create_replicated_spec(mesh, rank)

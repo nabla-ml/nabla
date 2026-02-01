@@ -43,7 +43,10 @@ class CollectiveOperation(Operation):
                 global_shape = tuple(int(d) for d in x.shape)
 
         if global_shape is None:
-            global_shape = tuple(int(d) for d in x.shape)
+            if hasattr(x, "physical_global_shape") and x.physical_global_shape is not None:
+                global_shape = tuple(int(d) for d in x.physical_global_shape)
+            else:
+                global_shape = tuple(int(d) for d in x.shape)
 
         shapes = []
         if output_sharding and mesh:

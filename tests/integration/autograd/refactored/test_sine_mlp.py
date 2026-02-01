@@ -29,7 +29,7 @@ def main():
     y = nb.Tensor.from_dlpack(y_np)
     
     # 2. Initialize MLP parameters
-    layers = [1, 64, 64, 1]
+    layers = [1, 4,8,8,8,8,8,8,8,8,4, 1]
     params = []
     np.random.seed(42)
     for i in range(len(layers) - 1):

@@ -31,7 +31,10 @@ class ShardOp(Operation):
             # If input was not sharded (replicated), we gather/replicate the cotangent
             from .all_gather import gather_all_axes
 
-            return gather_all_axes(cotangent)
+            res = gather_all_axes(cotangent)
+            return res
+
+
 
         # Use the smart shard function (defined below) to handle transition.
         # Note: reshard name is deprecated, we use universal shard() now.
@@ -100,26 +103,30 @@ class ShardOp(Operation):
         num_shards = len(mesh.devices) if mesh else 1
 
         # Determine global physical shape of the input
-        global_shape = None
-        from ...core import Tensor
-
-        if isinstance(x, Tensor):
-            local = x.physical_local_shape(0)
-            if local is not None and x.sharding:
-                global_shape = compute_global_shape(tuple(local), x.sharding)
-            elif local is not None:
-                global_shape = tuple(int(d) for d in local)
-            else:
-                global_shape = tuple(int(d) for d in x.shape)
-
-        if global_shape is None and "global_shape" in kwargs:
-            global_shape = kwargs["global_shape"]
+        # Explicit global_shape override takes precedence
+        global_shape = kwargs.get("global_shape")
 
         if global_shape is None:
-            # Last resort
-            global_shape = tuple(int(d) for d in x.shape)
+            from ...core import Tensor
 
+            if isinstance(x, Tensor):
+                if x.physical_global_shape is not None:
+                    global_shape = tuple(int(d) for d in x.physical_global_shape)
+                else:
+                    local = x.physical_local_shape(0)
+                    if local is not None and x.sharding:
+                        global_shape = compute_global_shape(tuple(local), x.sharding)
+                    elif local is not None:
+                        global_shape = tuple(int(d) for d in local)
+            
+            if global_shape is None:
+                 # Fallback to logical shape (last resort)
+                 global_shape = tuple(int(d) for d in x.shape)
+
+        
         shapes = []
+
+
         if output_sharding and mesh:
             for i in range(num_shards):
                 local = compute_local_shape(global_shape, output_sharding, device_id=i)
@@ -148,6 +155,7 @@ class ShardOp(Operation):
             ShardingSpec,
             needs_reshard,
             compute_global_shape,
+            compute_local_shape,
         )
         from ...core.sharding import spmd
         from ...core import Tensor
@@ -155,6 +163,7 @@ class ShardOp(Operation):
         from max import graph as g
 
         with GRAPH.graph:
+
             x = args[0]
 
             # Handle keyword arguments for mesh/dim_specs
@@ -171,8 +180,10 @@ class ShardOp(Operation):
                     return (x.values, target_spec, mesh)
 
             # 2. Global Shape Determination
-            global_shape = None
-            if isinstance(x, Tensor):
+            # Explicit global_shape override takes precedence (used for AllReduce VJP reconstruction)
+            global_shape = kwargs.get("global_shape")
+
+            if global_shape is None and isinstance(x, Tensor):
                 local = x.physical_local_shape(0)
                 if local is not None and x.sharding:
                     global_shape = compute_global_shape(tuple(local), x.sharding)
@@ -182,28 +193,39 @@ class ShardOp(Operation):
                 if global_shape is None:
                     global_shape = tuple(int(d) for d in x.shape)
 
-            if global_shape is None and "global_shape" in kwargs:
-                global_shape = kwargs["global_shape"]
 
             # 3. Kernel Execution (Slicing)
             x_input = x
             if isinstance(x, Tensor):
                 vals = x.values
                 if vals:
+                    # OPTIMIZATION: If the current physical shape already matches 
+                    # the predicted local shape for the target, we can skip slicing.
+                    target_local_shape = tuple(int(d) for d in compute_local_shape(global_shape, target_spec, device_id=0))
+                    current_local_shape = tuple(int(d) for d in x.physical_local_shape(0))
+                    if current_local_shape == target_local_shape:
+                        return (x.values, target_spec, mesh)
+
                     x_input = vals[0]
                 else:
                     raise ValueError("ShardOp input tensor missing values.")
             elif not isinstance(x, g.TensorValue):
                 x_input = g.TensorValue(x)
 
+
             # _shard_logic expects a single value input usually (replicated)
-            # Filter out mesh/dim_specs/replicated_axes from kwargs to avoid duplicate args
-            filtered_kwargs = {k: v for k, v in kwargs.items() if k not in ('mesh', 'dim_specs', 'replicated_axes')}
+            # Filter out mesh/dim_specs/replicated_axes/global_shape from kwargs to avoid duplicate args
+            filtered_kwargs = {k: v for k, v in kwargs.items() if k not in ('mesh', 'dim_specs', 'replicated_axes', 'global_shape')}
+            
             shard_graph_values = self._shard_logic(
                 x_input, mesh, dim_specs, global_shape=global_shape, **filtered_kwargs
             )
 
             return (shard_graph_values, target_spec, mesh)
+
+
+
+
 
     def _simulate_shard_execution(self, x, global_shape, spec, mesh):
         """Execute sharding manually for all devices (simulation)."""

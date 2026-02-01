@@ -25,8 +25,11 @@ class AllReduceOp(CollectiveOperation):
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
-        """Infer physical shapes for all_reduce (local shape preserved)."""
+        """Infer physical shapes for all_reduce."""
         from ...core.sharding import spmd
+        from ...core.sharding.spec import compute_local_shape
+
+
 
         x = args[0]
         mesh = self._derive_mesh(x, kwargs) or spmd.get_mesh_from_args(args)
@@ -40,7 +43,9 @@ class AllReduceOp(CollectiveOperation):
                 s = x.shape
             shapes.append(tuple(int(d) for d in s))
 
+
         dtypes = [x.dtype] * num_shards
+
         if mesh:
             if mesh.is_distributed:
                 devices = [d for d in mesh.device_refs]
@@ -96,10 +101,17 @@ class AllReduceOp(CollectiveOperation):
         with GRAPH.graph:
             values = sharded_tensor.values
 
+            # Handle replicated input simulation
+            if mesh and len(values) == 1 and len(mesh.devices) > 1:
+                 # In simulation, a single value for a distributed mesh implies replication.
+                 # We expand it to simulate the reduction across the mesh.
+                 values = [values[0]] * len(mesh.devices)
+
             # Ported logic from kernel
             reduced_graph_values = self._reduce_logic(
                 values, mesh=mesh, reduce_op=reduce_op, reduce_axes=reduce_axes
             )
+
 
         # 4. Compute Output Spec
         output_spec = self._compute_output_spec(
@@ -194,14 +206,33 @@ class AllReduceOp(CollectiveOperation):
         if not input_tensor.sharding:
             return cotangent
 
-        from .reshard import reshard
+        # VJP for all_reduce (sum) propagates the gradient to all inputs.
+        # Since all_reduce acts as a sum reduction over shards, the gradient w.r.t
+        # each input shard is equal to the gradient w.r.t the output shard 
+        # (which acts as the sum).
+        # We need to construct a tensor with the INPUT's sharding spec,
+        # but with the COTANGENT's values as the physical content.
+        # We bypass reshard() because reshard() would attempt to slice the cotangent
+        # based on global shape, but here the cotangent ALREADY represents the 
+        # correct physical content for the input shards.
 
+        from .reshard import reshard
         return reshard(
             cotangent,
             input_tensor.sharding.mesh,
             input_tensor.sharding.dim_specs,
             replicated_axes=input_tensor.sharding.replicated_axes,
+            global_shape=input_tensor.physical_global_shape,
         )
+
+
+
+
+
+
+
+
+
 
     def _compute_output_spec(self, input_tensor, results, **kwargs):
         """Output clears partial flags but preserves axes mappings for non-partial dims."""

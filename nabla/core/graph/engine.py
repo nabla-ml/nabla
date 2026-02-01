@@ -101,11 +101,13 @@ class ComputeGraph:
             ops.random.set_seed(seed)
 
     def clear_all(self) -> None:
-        """Clears tracing state for fresh start."""
-        global _GRAPH_EPOCH
+        """Clears tracing state and compiled model cache for fresh start."""
+        global _GRAPH_EPOCH, _GRAPH_CACHE
         _GRAPH_EPOCH += 1
         self.epoch = _GRAPH_EPOCH
+        _GRAPH_CACHE.clear()
         self._reset(None, 0)
+
         # gc.collect()  # Removed: too expensive for hot paths
 
     def add_input(self, tensor: Tensor) -> None:
@@ -164,6 +166,8 @@ class ComputeGraph:
         return_model: bool = False,
     ) -> Any:
         """Main entry point: Evaluates specific tensors and their dependencies."""
+        print("\n[DEBUG] HELLO FROM EVALUATE")
+
         from ..common.pytree import tree_leaves
         from ..common import pytree
         from ..tensor.api import Tensor

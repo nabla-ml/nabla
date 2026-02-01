@@ -338,6 +338,15 @@ def create_sharded_output(
 
     from ..tensor import Tensor
 
+    # Create default replicated sharding if mesh provided but no spec
+    if sharding is None and mesh is not None and (len(results) > 1 or (not results and len(mesh.devices) > 1)):
+        from .spec import DimSpec, ShardingSpec
+        
+        first_shape = results[0].type.shape if results else (physical_shapes[0] if physical_shapes else None)
+        if first_shape is not None:
+            rank = len(first_shape)
+            sharding = ShardingSpec(mesh, [DimSpec([], is_open=True) for _ in range(rank)])
+
     # Handle empty results for promise tensors (deferred execution)
     if not results:
         if physical_shapes is None:
@@ -352,16 +361,6 @@ def create_sharded_output(
         )
         output.sharding = sharding
         return output
-
-    first = results[0]
-    if not isinstance(first, (g.TensorValue, g.BufferValue)):
-        return first
-
-    if sharding is None and len(results) > 1 and mesh is not None:
-        from .spec import DimSpec, ShardingSpec
-
-        rank = len(first.type.shape)
-        sharding = ShardingSpec(mesh, [DimSpec([], is_open=True) for _ in range(rank)])
 
     output = Tensor._create_unsafe(
         values=results,
