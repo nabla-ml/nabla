@@ -1,5 +1,6 @@
 import os
-os.environ["NABLA_DEBUG"] = "0"
+# Comment out to allow NABLA_DEBUG from environment
+# os.environ["NABLA_DEBUG"] = "0"
 
 import nabla as nb
 from nabla import ops
@@ -49,7 +50,7 @@ def main():
         p.is_traced = True
         
     lr = 0.01
-    epochs = 30
+    epochs = 100
     
     from nabla.core.autograd import value_and_grad
     

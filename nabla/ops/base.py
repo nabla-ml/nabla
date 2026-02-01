@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import os
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
@@ -29,7 +30,47 @@ def _make_hashable(obj: Any) -> Any:
     from ..core import Tensor
 
     if isinstance(obj, Tensor):
-        return ("tensor", str(obj.dtype), tuple(obj.shape), str(obj.sharding))
+        sharding = obj.sharding
+        sharding_key = None
+        if sharding is not None:
+            mesh = getattr(sharding, "mesh", None)
+            mesh_key = None
+            if mesh is not None:
+                mesh_key = (
+                    getattr(mesh, "name", None),
+                    tuple(getattr(mesh, "shape", ()) or ()),
+                    tuple(getattr(mesh, "axis_names", ()) or ()),
+                )
+
+            dim_specs = []
+            for ds in getattr(sharding, "dim_specs", []) or []:
+                dim_specs.append(
+                    (
+                        tuple(getattr(ds, "axes", ()) or ()),
+                        bool(getattr(ds, "partial", False)),
+                    )
+                )
+
+            sharding_key = (
+                mesh_key,
+                tuple(dim_specs),
+                tuple(sorted(getattr(sharding, "replicated_axes", set()) or set())),
+                tuple(sorted(getattr(sharding, "partial_sum_axes", set()) or set())),
+            )
+
+        physical_shapes = getattr(obj._impl, "_physical_shapes", None)
+        shard_dtypes = getattr(obj._impl, "_shard_dtypes", None)
+        shard_devices = getattr(obj._impl, "_shard_devices", None)
+
+        return (
+            "tensor",
+            str(obj.dtype),
+            tuple(int(d) for d in obj.shape),  # Convert Dim to int
+            sharding_key,
+            tuple(physical_shapes) if physical_shapes else None,
+            tuple(shard_dtypes) if shard_dtypes else None,
+            tuple(str(d) for d in shard_devices) if shard_devices else None,
+        )
     if isinstance(obj, (list, tuple)):
         return tuple(_make_hashable(x) for x in obj)
     if isinstance(obj, dict):
@@ -106,16 +147,6 @@ class Operation(ABC):
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
 
-        # Update rolling hash for caching based on op identity and arguments
-        from ..core import GRAPH
-
-        op_key = (
-            self.name,
-            tuple(_make_hashable(x) for x in args),
-            tuple(sorted((k, _make_hashable(v)) for k, v in kwargs.items())),
-        )
-        GRAPH.update_hash(op_key)
-
         # === New Path: Physical Execution ===
         if hasattr(self, "execute"):
             from ..core import GRAPH, Tensor, pytree
@@ -153,6 +184,33 @@ class Operation(ABC):
             # Perform the data movement (Logical Adaptation)
             resharded_args = spmd.reshard_inputs(args, input_shardings, mesh)
 
+            # Compute hash AFTER resharding - use resharded_args for cache key
+            def get_tensor_hash(x):
+                """Get hash from tensor - shape/dtype/sharding for realized, OpNode hash+index for unrealized."""
+                if isinstance(x, Tensor):
+                    # Check if tensor has physical storage (realized)
+                    buffers = x._impl._buffers
+                    has_output_refs = x._impl.output_refs is not None
+                    
+                    sharding_key = _make_hashable(x.sharding) if x.sharding else None
+                    
+                    if buffers:
+                        # Realized tensor - hash based on shape/dtype/sharding (data-independent)
+                        shape_tuple = tuple(int(d) for d in x.shape)
+                        return ("realized", str(x.dtype), shape_tuple, sharding_key)
+                    elif has_output_refs and x._impl.output_refs._op_hash is not None:
+                        # Unrealized tensor - use its OpNode's hash AND its output index
+                        return (x._impl.output_refs._op_hash, x._impl.output_index, sharding_key)
+                    else:
+                        # Leaf tensor without storage (shouldn't happen in normal flow)
+                        shape_tuple = tuple(int(d) for d in x.shape)
+                        return ("leaf", str(x.dtype), shape_tuple, sharding_key)
+                return _make_hashable(x)
+            
+            arg_hashes = tuple(get_tensor_hash(x) for x in resharded_args)
+            kwarg_hashes = tuple(sorted((k, get_tensor_hash(v)) for k, v in (adapted_kwargs or kwargs).items()))
+            op_hash = (self.name, arg_hashes, kwarg_hashes)
+
             # 3. Physical Execution (DEFERRED)
             # Instead of executing now, just compute shape metadata
             if type(self).compute_physical_shape is Operation.compute_physical_shape:
@@ -179,11 +237,11 @@ class Operation(ABC):
                 shard_devices=output_shard_devices,
             )
             output._impl.graph_values_epoch = -1  # Mark as unrealized
-            GRAPH.add_unrealized(output)
+            GRAPH.add_unrealized(output._impl)
 
-            # 6. Tracing - set up OpNode for THIS op FIRST
+            # 6. Tracing - set up OpNode for THIS op FIRST (with hash)
             # Store resharded_args (not original args) so rehydration has correctly sharded inputs
-            self._setup_output_refs(output, resharded_args, kwargs)
+            self._setup_output_refs(output, resharded_args, kwargs, op_hash=op_hash)
 
             # 5. SPMD: Post-Op Collectives (Automatic Reductions)
             # This may wrap output with an all_reduce op (which sets up its own refs)
@@ -281,6 +339,7 @@ class Operation(ABC):
         output: Any,
         args: tuple,
         logical_kwargs: dict,
+        op_hash: tuple[Any, ...] | None = None,
     ) -> None:
         """Set up OpNode for tracing support."""
         from ..core import Tensor, pytree
@@ -312,6 +371,7 @@ class Operation(ABC):
             op=self,
             op_args=stored_args,
             op_kwargs=stored_logical_kwargs,
+            _op_hash=op_hash,
         )
 
         for idx, impl in enumerate(output_impls):

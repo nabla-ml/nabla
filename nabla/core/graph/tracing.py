@@ -31,6 +31,7 @@ class OpNode:
         op: Producing Operation.
         op_args: Original input arguments.
         op_kwargs: Original logical keyword arguments.
+        _op_hash: Operation hash for cache key computation.
     """
 
     _refs: tuple[TensorImpl, ...]
@@ -38,6 +39,7 @@ class OpNode:
     op: Operation
     op_args: tuple[Any, ...]
     op_kwargs: dict[str, Any] | None
+    _op_hash: tuple[Any, ...] | None = None
 
     def __post_init__(self):
         """Validate that refs and tree_def are consistent."""
@@ -185,13 +187,20 @@ class Trace:
             if isinstance(inp, (Tensor, TensorImpl)):
                 add_leaf(inp._impl if isinstance(inp, Tensor) else inp)
 
-        # 2. Realize leaves individually and add to current graph.
+        # 2. Realize all unrealized leaves together to reduce compilation cycles.
         leaf_tensors = [Tensor(impl=impl) for impl in leaf_impls]
-        for t in leaf_tensors:
-            if t.is_realized:
-                GRAPH.add_input(t)
+        unrealized_leaves = [t for t in leaf_tensors if not t.real]
+        
+        if unrealized_leaves:
+            # Evaluate all found unrealized leaves in a single graph
+            if len(unrealized_leaves) > 1:
+                GRAPH.evaluate(unrealized_leaves[0], *unrealized_leaves[1:])
             else:
-                GRAPH.evaluate(t)
+                GRAPH.evaluate(unrealized_leaves[0])
+        
+        for t in leaf_tensors:
+            if t.real:
+                GRAPH.add_input(t)
 
         # 4. Iterate through nodes and call kernel_all to recompute intermediates.
         for i, output_refs in enumerate(self.nodes):

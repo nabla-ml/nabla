@@ -463,7 +463,7 @@ class Tensor(DLPackArray, HasTensorValue):
     @real.setter
     def real(self, real: bool) -> None:
         if not real and self._in_global_compute_graph:
-            GRAPH.add_unrealized(self)
+            GRAPH.add_unrealized(self._impl)
         self._real = real
 
     def __tensorvalue__(self) -> graph.TensorValue:

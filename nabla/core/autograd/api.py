@@ -54,6 +54,15 @@ def grad(
             else:
                 grad_leaves.append(None)
 
+        # Group and evaluate all gradients at once to optimize compilation
+        non_none_grads = [g for g in grad_leaves if isinstance(g, Tensor) and not g.real]
+        if non_none_grads:
+            from ..graph.engine import GRAPH
+            if len(non_none_grads) > 1:
+                GRAPH.evaluate(non_none_grads[0], *non_none_grads[1:])
+            else:
+                GRAPH.evaluate(non_none_grads[0])
+
         # Unflatten
         grads_struct = pytree.tree_unflatten(pytree.tree_structure(args), grad_leaves)
 
@@ -100,6 +109,17 @@ def value_and_grad(
                 grad_leaves.append(grads_map[inp])
             else:
                 grad_leaves.append(None)
+
+        # Group and evaluate everything at once: primal output + all gradients
+        all_targets = [output] if isinstance(output, Tensor) and not output.real else []
+        all_targets.extend([g for g in grad_leaves if isinstance(g, Tensor) and not g.real])
+
+        if all_targets:
+            from ..graph.engine import GRAPH
+            if len(all_targets) > 1:
+                GRAPH.evaluate(all_targets[0], *all_targets[1:])
+            else:
+                GRAPH.evaluate(all_targets[0])
 
         grads_struct = pytree.tree_unflatten(pytree.tree_structure(args), grad_leaves)
 
