@@ -24,6 +24,8 @@ class SplitOp(AxisOp):
     def name(self) -> str:
         return "split"
 
+    output_container_type = tuple
+
     def __call__(self, x: Tensor, **kwargs: Any) -> tuple[Tensor, ...]:
         from ..core.sharding.spec import DimSpec
 
@@ -168,6 +170,8 @@ class ChunkOp(AxisOp):
     @property
     def name(self) -> str:
         return "chunk"
+
+    output_container_type = list
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
@@ -329,6 +333,29 @@ class UnbindOp(AxisOp):
     @property
     def name(self) -> str:
         return "unbind"
+
+    def __call__(self, x: Tensor, **kwargs: Any) -> tuple[Tensor, ...]:
+        from ..core.sharding.spec import DimSpec
+
+        rank = len(x.shape)
+        batch_dims = x.batch_dims
+        axis = kwargs.get("axis", 0)
+
+        if axis < 0:
+            axis = rank + axis
+
+        phys_axis = batch_dims + axis
+
+        spec = x.sharding
+        if spec and phys_axis < len(spec.dim_specs):
+            ds = spec.dim_specs[phys_axis]
+            if ds.axes:
+                new_dim_specs = list(spec.dim_specs)
+                new_dim_specs[phys_axis] = DimSpec([])
+
+                x = x.with_sharding(spec.mesh, new_dim_specs)
+
+        return super().__call__(x, **kwargs)
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None

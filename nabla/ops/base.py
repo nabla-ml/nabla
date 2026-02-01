@@ -257,7 +257,11 @@ class Operation(ABC):
             # Use module-level _get_tensor_hash to avoid closure overhead
             arg_hashes = tuple(_get_tensor_hash(x) for x in resharded_args)
             kwarg_hashes = tuple(sorted((k, _get_tensor_hash(v)) for k, v in (adapted_kwargs or kwargs).items()))
-            op_hash = (self.name, arg_hashes, kwarg_hashes)
+            
+            # Context-aware hashing: results are only valid within the same MAX Graph context
+            curr_graph = GRAPH.graph
+            graph_id = id(curr_graph)
+            op_hash = (self.name, graph_id, arg_hashes, kwarg_hashes)
 
             # 3. Physical Execution (DEFERRED)
             # Instead of executing now, just compute shape metadata
@@ -273,19 +277,53 @@ class Operation(ABC):
                 )
             )
 
-            # 4. Packaging (Create promise tensor with metadata only, no graph values yet)
-            output = spmd.create_sharded_output(
-                [],  # Empty - will be populated during evaluate()
-                predicted_output_spec,
-                any_traced,
-                max_batch_dims,
-                mesh=mesh,
-                physical_shapes=output_physical_shapes,
-                shard_dtypes=output_shard_dtypes,
-                shard_devices=output_shard_devices,
+            # 4. Packaging (Create promise tensor(s) with metadata only, no graph values yet)
+            # Check if compute_physical_shape returned multi-output metadata
+            is_multi_output = (
+                isinstance(output_physical_shapes, list) and 
+                output_physical_shapes and 
+                isinstance(output_physical_shapes[0], list)
             )
-            output._impl.graph_values_epoch = -1  # Mark as unrealized
-            GRAPH.add_unrealized(output._impl)
+
+            if is_multi_output:
+                # Handle multi-output operations (e.g., split, chunk, unbind)
+                outputs = []
+                for i in range(len(output_physical_shapes)):
+                    out_sharding = predicted_output_spec[i] if isinstance(predicted_output_spec, (list, tuple)) else predicted_output_spec
+                    out_dtypes = output_shard_dtypes[i] if isinstance(output_shard_dtypes, list) and len(output_shard_dtypes) > i else output_shard_dtypes
+                    out_devices = output_shard_devices[i] if isinstance(output_shard_devices, list) and len(output_shard_devices) > i else output_shard_devices
+                    
+                    o = spmd.create_sharded_output(
+                        [],
+                        out_sharding,
+                        any_traced,
+                        max_batch_dims,
+                        mesh=mesh,
+                        physical_shapes=output_physical_shapes[i],
+                        shard_dtypes=out_dtypes,
+                        shard_devices=out_devices,
+                    )
+                    o._impl.graph_values_epoch = -1
+                    GRAPH.add_unrealized(o._impl)
+                    outputs.append(o)
+                
+                # Determine container type (tuple or list) based on op or default to tuple
+                container_type = getattr(self, "output_container_type", tuple)
+                output = container_type(outputs)
+            else:
+                # Single output case
+                output = spmd.create_sharded_output(
+                    [],  # Empty - will be populated during evaluate()
+                    predicted_output_spec,
+                    any_traced,
+                    max_batch_dims,
+                    mesh=mesh,
+                    physical_shapes=output_physical_shapes,
+                    shard_dtypes=output_shard_dtypes,
+                    shard_devices=output_shard_devices,
+                )
+                output._impl.graph_values_epoch = -1  # Mark as unrealized
+                GRAPH.add_unrealized(output._impl)
 
             # 6. Tracing - set up OpNode for THIS op FIRST (with hash)
             # Store resharded_args (not original args) so rehydration has correctly sharded inputs
@@ -295,8 +333,12 @@ class Operation(ABC):
             # This may wrap output with an all_reduce op (which sets up its own refs)
             if reduce_axes and mesh:
                 from .execution_utils import apply_auto_reduction
-
-                output = apply_auto_reduction(self, output, mesh, reduce_axes)
+                
+                # apply_auto_reduction expects a single tensor usually, but lets check
+                if is_multi_output:
+                    output = container_type(apply_auto_reduction(self, o, mesh, reduce_axes) for o in output)
+                else:
+                    output = apply_auto_reduction(self, output, mesh, reduce_axes)
 
             # 7. Post-Processing (JVP)
             # any_has_tangent was already computed in metadata collection above
@@ -391,6 +433,9 @@ class Operation(ABC):
         if isinstance(output, Tensor):
             output_impls = [output._impl]
             output_tree_def = pytree.PyTreeDef(pytree._K_LEAF, None, (), 1)
+        elif isinstance(output, (list, tuple)) and all(isinstance(x, Tensor) for x in output):
+            output_impls = [x._impl for x in output]
+            output_tree_def = pytree.tree_structure(output)
         else:
             output_impls = [
                 x._impl for x in pytree.tree_leaves(output) if isinstance(x, Tensor)
