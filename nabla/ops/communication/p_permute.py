@@ -28,7 +28,7 @@ class PPermuteOp(CollectiveOperation):
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], Any]:
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for ppermute (local shape preserved)."""
         from ...core.sharding import spmd
 
@@ -44,7 +44,16 @@ class PPermuteOp(CollectiveOperation):
                 s = x.shape
             shapes.append(tuple(int(d) for d in s))
 
-        return shapes, x.dtype
+        dtypes = [x.dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [x.device] * (num_shards or 1)
+
+        return shapes, dtypes, devices
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for ppermute: permute back with inverse table."""

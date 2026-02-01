@@ -314,7 +314,8 @@ def create_sharded_output(
     batch_dims: int,
     mesh: DeviceMesh | None = None,
     physical_shapes: list[tuple[int, ...]] | None = None,
-    dtype: Any | None = None,
+    shard_dtypes: list[Any] | None = None,
+    shard_devices: list[Any] | None = None,
 ) -> Tensor:
     """Build sharded Tensor from per-shard TensorValues."""
     from max import graph as g
@@ -339,7 +340,8 @@ def create_sharded_output(
         is_traced=is_traced,
         batch_dims=batch_dims,
         physical_shapes=physical_shapes,
-        dtype=dtype,
+        shard_dtypes=shard_dtypes,
+        shard_devices=shard_devices,
     )
     output.sharding = sharding
 

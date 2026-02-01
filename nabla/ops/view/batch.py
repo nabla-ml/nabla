@@ -53,7 +53,16 @@ class IncrBatchDimsOp(Operation):
                 )
             shapes.append(tuple(int(d) for d in s))
 
-        return shapes, x.dtype
+        dtypes = [x.dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [x.device] * num_shards
+
+        return shapes, dtypes, devices
 
     def kernel(self, x: TensorValue) -> TensorValue:
         return x
@@ -94,7 +103,16 @@ class DecrBatchDimsOp(Operation):
                 )
             shapes.append(tuple(int(d) for d in s))
 
-        return shapes, x.dtype
+        dtypes = [x.dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [x.device] * num_shards
+
+        return shapes, dtypes, devices
 
     def kernel(self, x: TensorValue) -> TensorValue:
         return x
@@ -150,7 +168,16 @@ class MoveAxisPhysicalOp(Operation):
             out_shape = tuple(in_shape[j] for j in order)
             shapes.append(out_shape)
 
-        return shapes, x.dtype
+        dtypes = [x.dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [x.device] * num_shards
+
+        return shapes, dtypes, devices
 
     def kernel(self, x: TensorValue, *, source: int, destination: int) -> TensorValue:
         rank = len(x.type.shape)
@@ -241,7 +268,16 @@ class BroadcastBatchDimsOp(Operation):
         else:
             shapes = [tuple(int(d) for d in target_shape)] * num_shards
 
-        return shapes, x.dtype
+        dtypes = [x.dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [x.device] * num_shards
+
+        return shapes, dtypes, devices
 
     def kernel(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
         return ops.broadcast_to(x, shape)

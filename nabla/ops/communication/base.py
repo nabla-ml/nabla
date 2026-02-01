@@ -21,7 +21,7 @@ class CollectiveOperation(Operation):
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], Any]:
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for collective operations (global shape preservation)."""
         from ...core.sharding import spmd, spec
 
@@ -53,7 +53,16 @@ class CollectiveOperation(Operation):
         else:
             shapes = [tuple(int(d) for d in global_shape)] * num_shards
 
-        return shapes, x.dtype
+        dtypes = [x.dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [x.device] * num_shards
+
+        return shapes, dtypes, devices
 
     # Legacy execute and kernel_all methods have been removed.
     # All communication operations now implement execute.

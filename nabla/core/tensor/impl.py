@@ -20,18 +20,7 @@ if TYPE_CHECKING:
 
 
 class TensorImpl:
-    """Graph node containing tensor data and autograd structure.
-
-    Attributes:
-        _graph_values: Graph values for lazy execution (one per shard).
-        _buffers: Realized driver.Tensors (one per shard).
-        sharding: Sharding specification.
-        is_traced: Whether this node is traced.
-        tangent: Tangent for JVP.
-        cotangent: Cotangent for VJP.
-        batch_dims: Number of batch dimensions.
-        output_refs: Provenance for autograd.
-    """
+    """Graph node containing tensor data and autograd structure."""
 
     __slots__ = (
         "_graph_values",
@@ -47,7 +36,8 @@ class TensorImpl:
         "output_index",
         "graph_values_epoch",
         "_physical_shapes",
-        "_dtype",
+        "_shard_dtypes",
+        "_shard_devices",
         "__weakref__",
     )
 
@@ -63,7 +53,8 @@ class TensorImpl:
     output_refs: OpNode | None
     output_index: int
     _physical_shapes: list[tuple[int, ...]] | None
-    _dtype: DType | None
+    _shard_dtypes: list[DType] | None
+    _shard_devices: list[Device] | None
 
     def __init__(
         self,
@@ -78,7 +69,8 @@ class TensorImpl:
         batch_dims: int = 0,
         sharding_constraint: ShardingSpec | None = None,
         physical_shapes: list[tuple[int, ...]] | None = None,
-        dtype: DType | None = None,
+        shard_dtypes: list[DType] | None = None,
+        shard_devices: list[Device] | None = None,
     ):
         self._graph_values = (
             values if isinstance(values, list) else ([values] if values else [])
@@ -100,7 +92,8 @@ class TensorImpl:
         self.output_index = 0
         self.graph_values_epoch = -1
         self._physical_shapes = physical_shapes
-        self._dtype = dtype
+        self._shard_dtypes = shard_dtypes
+        self._shard_devices = shard_devices
 
     def _validate_sharding(self) -> None:
         """Validate consistency of shards and sharding spec."""
@@ -312,8 +305,8 @@ class TensorImpl:
 
     @property
     def dtype(self) -> DType:
-        if self._dtype is not None:
-            return self._dtype
+        if self._shard_dtypes:
+            return self._shard_dtypes[0]
         try:
             return self.primary_value.dtype
         except RuntimeError:

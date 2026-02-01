@@ -67,7 +67,7 @@ class SplitOp(AxisOp):
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[list[tuple[int, ...]]], list[Any]]:
+    ) -> tuple[list[list[tuple[int, ...]]], list[list[Any]], list[list[Any]]]:
         """Infer physical shapes for split (multi-output)."""
         from ..core.sharding import spmd
 
@@ -95,7 +95,17 @@ class SplitOp(AxisOp):
                     )
             all_outputs_shapes.append(out_shapes)
 
-        return all_outputs_shapes, [x.dtype] * num_splits
+        dtypes = [[x.dtype] * num_shards] * num_splits
+        if mesh:
+            if mesh.is_distributed:
+                devs = [d for d in mesh.devices]
+            else:
+                devs = [mesh.devices[0]] * num_shards
+            devices = [devs] * num_splits
+        else:
+            devices = [[x.device] * num_shards] * num_splits
+
+        return all_outputs_shapes, dtypes, devices
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for split: concatenate cotangents along split axis."""
@@ -161,7 +171,7 @@ class ChunkOp(AxisOp):
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[list[tuple[int, ...]]], list[Any]]:
+    ) -> tuple[list[list[tuple[int, ...]]], list[list[Any]], list[list[Any]]]:
         """Infer physical shapes for chunk (multi-output)."""
         from ..core.sharding import spmd
 
@@ -201,7 +211,18 @@ class ChunkOp(AxisOp):
                     all_outputs_shapes.append([])
                 all_outputs_shapes[out_idx].append(tuple(out_shape))
 
-        return all_outputs_shapes, [x.dtype] * len(all_outputs_shapes)
+        num_splits = len(all_outputs_shapes)
+        dtypes = [[x.dtype] * num_shards] * num_splits
+        if mesh:
+            if mesh.is_distributed:
+                devs = [d for d in mesh.devices]
+            else:
+                devs = [mesh.devices[0]] * num_shards
+            devices = [devs] * num_splits
+        else:
+            devices = [[x.device] * num_shards] * num_splits
+
+        return all_outputs_shapes, dtypes, devices
 
     def __call__(self, x: Tensor, **kwargs: Any) -> list[Tensor]:
         from ..core.sharding.spec import DimSpec
@@ -311,7 +332,7 @@ class UnbindOp(AxisOp):
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[list[tuple[int, ...]]], list[Any]]:
+    ) -> tuple[list[list[tuple[int, ...]]], list[list[Any]], list[list[Any]]]:
         """Infer physical shapes for unbind (multi-output)."""
         from ..core.sharding import spmd
 
@@ -341,7 +362,18 @@ class UnbindOp(AxisOp):
                     all_outputs_shapes.append([])
                 all_outputs_shapes[out_idx].append(tuple(out_shape))
 
-        return all_outputs_shapes, [x.dtype] * len(all_outputs_shapes)
+        num_splits = len(all_outputs_shapes)
+        dtypes = [[x.dtype] * num_shards] * num_splits
+        if mesh:
+            if mesh.is_distributed:
+                devs = [d for d in mesh.devices]
+            else:
+                devs = [mesh.devices[0]] * num_shards
+            devices = [devs] * num_splits
+        else:
+            devices = [[x.device] * num_shards] * num_splits
+
+        return all_outputs_shapes, dtypes, devices
 
     def kernel(self, x: TensorValue, *, axis: int = 0) -> tuple[TensorValue, ...]:
         """Remove dimension and return slices."""
@@ -413,7 +445,7 @@ class MinMaxOp(Operation):
         self, args: tuple, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]] | None, Any]:
         """MinMaxOp returns a dict; skip explicit physical shape inference."""
-        return None, None
+        return None, None, None
 
     def __call__(self, x: Tensor, **kwargs: Any) -> dict[str, Tensor]:
         """Compute global min and max by reducing all axes."""

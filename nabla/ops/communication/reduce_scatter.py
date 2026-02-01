@@ -24,7 +24,7 @@ class ReduceScatterOp(CollectiveOperation):
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], Any]:
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for reduce_scatter (reduce then split axis)."""
         from ...core.sharding import spmd
 
@@ -68,7 +68,16 @@ class ReduceScatterOp(CollectiveOperation):
 
             shapes.append(tuple(out_shape))
 
-        return shapes, x.dtype
+        dtypes = [x.dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [x.device] * (num_shards or 1)
+
+        return shapes, dtypes, devices
 
     @classmethod
     def estimate_cost(

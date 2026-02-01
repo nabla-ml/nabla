@@ -24,7 +24,7 @@ class GatherOp(Operation):
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], Any]:
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for gather."""
         from ...core.sharding import spmd
 
@@ -68,7 +68,16 @@ class GatherOp(Operation):
 
             shapes.append(tuple(out_shape))
 
-        return shapes, x.dtype
+        dtypes = [x.dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [x.device] * num_shards
+
+        return shapes, dtypes, devices
 
     def __call__(self, x: Tensor, indices: Tensor, *, axis: int = 0) -> Tensor:
         """Call gather with logical axis translation."""
@@ -160,7 +169,7 @@ class ScatterOp(Operation):
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], Any]:
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for scatter (same as input x)."""
         from ...core.sharding import spmd
 
@@ -178,7 +187,16 @@ class ScatterOp(Operation):
                 )
             shapes.append(tuple(int(d) for d in s))
 
-        return shapes, x.dtype
+        dtypes = [x.dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [x.device] * num_shards
+
+        return shapes, dtypes, devices
 
     def __call__(
         self, x: Tensor, indices: Tensor, updates: Tensor, *, axis: int = 0

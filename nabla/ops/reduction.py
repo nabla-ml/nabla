@@ -160,8 +160,8 @@ class ReduceSumPhysicalOp(Operation):
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], Any]:
-        """Infer physical shapes for reduce_sum_physical."""
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
+        """Infer physical shapes for this physical reduction op."""
         from ..core.sharding import spmd
 
         x = args[0]
@@ -191,7 +191,16 @@ class ReduceSumPhysicalOp(Operation):
                 )
             shapes.append(out_shape)
 
-        return shapes, x.dtype
+        dtypes = [x.dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [x.device] * num_shards
+
+        return shapes, dtypes, devices
 
     def kernel(
         self, x: TensorValue, *, axis: int, keepdims: bool = False
@@ -245,7 +254,7 @@ class MeanPhysicalOp(Operation):
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], Any]:
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for mean_physical."""
         from ..core.sharding import spmd
 
@@ -276,7 +285,16 @@ class MeanPhysicalOp(Operation):
                 )
             shapes.append(out_shape)
 
-        return shapes, x.dtype
+        dtypes = [x.dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [x.device] * num_shards
+
+        return shapes, dtypes, devices
 
     def kernel(
         self, x: TensorValue, *, axis: int, keepdims: bool = False
@@ -330,7 +348,7 @@ class ReduceMaxPhysicalOp(Operation):
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], Any]:
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for reduce_max_physical."""
         from ..core.sharding import spmd
 
@@ -361,7 +379,16 @@ class ReduceMaxPhysicalOp(Operation):
                 )
             shapes.append(out_shape)
 
-        return shapes, x.dtype
+        dtypes = [x.dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [x.device] * num_shards
+
+        return shapes, dtypes, devices
 
     @property
     def collective_reduce_type(self) -> str:
@@ -448,7 +475,7 @@ class ReduceMinPhysicalOp(Operation):
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], Any]:
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for reduce_min_physical."""
         from ..core.sharding import spmd
 
@@ -479,7 +506,16 @@ class ReduceMinPhysicalOp(Operation):
                 )
             shapes.append(out_shape)
 
-        return shapes, x.dtype
+        dtypes = [x.dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [x.device] * num_shards
+
+        return shapes, dtypes, devices
 
     @property
     def collective_reduce_type(self) -> str:

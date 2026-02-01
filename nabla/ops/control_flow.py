@@ -125,7 +125,7 @@ class WhereOp(Operation):
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], Any]:
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for where (same as broadcasted inputs)."""
         from ..core.sharding import spmd
 
@@ -151,7 +151,16 @@ class WhereOp(Operation):
                 )
             shapes.append(tuple(int(d) for d in s))
 
-        return shapes, x.dtype
+        dtypes = [x.dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [x.device] * num_shards
+
+        return shapes, dtypes, devices
 
     def kernel(
         self, condition: graph.TensorValue, x: graph.TensorValue, y: graph.TensorValue
@@ -183,7 +192,7 @@ class CondOp(Operation):
         self, args: tuple, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]] | None, Any]:
         """Cond output shapes depend on branch functions; skip explicit inference."""
-        return None, None
+        return None, None, None
 
     def __call__(
         self,
@@ -258,7 +267,7 @@ class WhileLoopOp(Operation):
         self, args: tuple, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]] | None, Any]:
         """While-loop output shapes depend on body; skip explicit inference."""
-        return None, None
+        return None, None, None
 
     def __call__(self, cond_fn: Callable, body_fn: Callable, init_val: Any) -> Any:
         from max import graph as g
@@ -374,7 +383,7 @@ class ScanOp(Operation):
         self, args: tuple, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]] | None, Any]:
         """Scan output shapes depend on function; skip explicit inference."""
-        return None, None
+        return None, None, None
 
     def kernel(self, *args, **kwargs) -> Any:
         raise NotImplementedError(

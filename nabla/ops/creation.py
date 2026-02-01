@@ -23,7 +23,7 @@ class ConstantOp(Operation):
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], Any]:
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shape for constant (scalar)."""
         from ..core.sharding import spmd
 
@@ -32,8 +32,18 @@ class ConstantOp(Operation):
         mesh = spmd.get_mesh_from_args(args)
         num_shards = len(mesh.devices) if mesh else 1
 
-        shapes = [tuple()] * num_shards
-        return shapes, dtype
+        shapes = [()] * num_shards
+        device = args[2] if len(args) > 2 else kwargs.get("device")
+        dtypes = [dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [device] * num_shards
+
+        return shapes, dtypes, devices
 
     def kernel(
         self,
@@ -76,7 +86,7 @@ class FullOp(Operation):
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], Any]:
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for full."""
         from ..core.sharding import spmd, spec
 
@@ -97,7 +107,17 @@ class FullOp(Operation):
         else:
             shapes = [tuple(int(d) for d in shape)] * num_shards
 
-        return shapes, dtype
+        device = args[3] if len(args) > 3 else kwargs.get("device")
+        dtypes = [dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [device] * num_shards
+
+        return shapes, dtypes, devices
 
     def kernel(
         self,
@@ -137,7 +157,7 @@ class ZerosOp(Operation):
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], Any]:
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for zeros."""
         from ..core.sharding import spmd, spec
 
@@ -158,7 +178,17 @@ class ZerosOp(Operation):
         else:
             shapes = [tuple(int(d) for d in shape)] * num_shards
 
-        return shapes, dtype
+        device = args[2] if len(args) > 2 else kwargs.get("device")
+        dtypes = [dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [device] * num_shards
+
+        return shapes, dtypes, devices
 
     def kernel(
         self,
@@ -197,7 +227,7 @@ class OnesOp(Operation):
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], Any]:
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for ones."""
         from ..core.sharding import spmd, spec
 
@@ -218,7 +248,17 @@ class OnesOp(Operation):
         else:
             shapes = [tuple(int(d) for d in shape)] * num_shards
 
-        return shapes, dtype
+        device = args[2] if len(args) > 2 else kwargs.get("device")
+        dtypes = [dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [device] * num_shards
+
+        return shapes, dtypes, devices
 
     def kernel(
         self,
@@ -257,7 +297,7 @@ class ArangeOp(Operation):
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], Any]:
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for arange (1D)."""
         import math
         from ..core.sharding import spmd
@@ -281,7 +321,18 @@ class ArangeOp(Operation):
         num_shards = len(mesh.devices) if mesh else 1
 
         shapes = [(length,)] * num_shards
-        return shapes, dtype
+        
+        device = args[4] if len(args) > 4 else kwargs.get("device")
+        dtypes = [dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [device] * num_shards
+
+        return shapes, dtypes, devices
 
     def kernel(
         self,
@@ -321,7 +372,7 @@ class UniformOp(Operation):
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], Any]:
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for uniform."""
         from ..core.sharding import spmd, spec
 
@@ -342,7 +393,17 @@ class UniformOp(Operation):
         else:
             shapes = [tuple(int(d) for d in shape)] * num_shards
 
-        return shapes, dtype
+        device = args[4] if len(args) > 4 else kwargs.get("device")
+        dtypes = [dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [device] * num_shards
+
+        return shapes, dtypes, devices
 
     def kernel(
         self,
@@ -383,7 +444,7 @@ class GaussianOp(Operation):
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], Any]:
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for gaussian."""
         from ..core.sharding import spmd, spec
 
@@ -404,7 +465,17 @@ class GaussianOp(Operation):
         else:
             shapes = [tuple(int(d) for d in shape)] * num_shards
 
-        return shapes, dtype
+        device = args[4] if len(args) > 4 else kwargs.get("device")
+        dtypes = [dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [device] * num_shards
+
+        return shapes, dtypes, devices
 
     def kernel(
         self,

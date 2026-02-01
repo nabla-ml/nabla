@@ -13,11 +13,43 @@ from max.graph import TensorValue, ops
 
 from .base import BinaryOperation, Operation, UnaryOperation
 
+
+class ComparisonOp(BinaryOperation):
+    """Base for binary comparison operations."""
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
+        from max.dtype import DType
+
+        shapes, _, devices = super().compute_physical_shape(
+            args, kwargs, output_sharding
+        )
+        num_shards = len(shapes)
+        dtypes = [DType.bool] * num_shards
+        return shapes, dtypes, devices
+
+
+class ComparisonUnaryOp(UnaryOperation):
+    """Base for unary comparison (logical) operations."""
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
+        from max.dtype import DType
+
+        shapes, _, devices = super().compute_physical_shape(
+            args, kwargs, output_sharding
+        )
+        num_shards = len(shapes)
+        dtypes = [DType.bool] * num_shards
+        return shapes, dtypes, devices
+
 if TYPE_CHECKING:
     pass
 
 
-class EqualOp(BinaryOperation):
+class EqualOp(ComparisonOp):
     @property
     def name(self) -> str:
         return "equal"
@@ -30,7 +62,7 @@ class EqualOp(BinaryOperation):
         return (None, None)
 
 
-class NotEqualOp(BinaryOperation):
+class NotEqualOp(ComparisonOp):
     @property
     def name(self) -> str:
         return "not_equal"
@@ -39,7 +71,7 @@ class NotEqualOp(BinaryOperation):
         return ops.not_equal(args[0], args[1])
 
 
-class GreaterOp(BinaryOperation):
+class GreaterOp(ComparisonOp):
     @property
     def name(self) -> str:
         return "greater"
@@ -52,7 +84,7 @@ class GreaterOp(BinaryOperation):
         return (None, None)
 
 
-class GreaterEqualOp(BinaryOperation):
+class GreaterEqualOp(ComparisonOp):
     @property
     def name(self) -> str:
         return "greater_equal"
@@ -61,7 +93,7 @@ class GreaterEqualOp(BinaryOperation):
         return ops.greater_equal(args[0], args[1])
 
 
-class LessOp(BinaryOperation):
+class LessOp(ComparisonOp):
     @property
     def name(self) -> str:
         return "less"
@@ -74,7 +106,7 @@ class LessOp(BinaryOperation):
         return (None, None)
 
 
-class LessEqualOp(BinaryOperation):
+class LessEqualOp(ComparisonOp):
     @property
     def name(self) -> str:
         return "less_equal"
@@ -83,7 +115,7 @@ class LessEqualOp(BinaryOperation):
         return ops.greater_equal(args[1], args[0])
 
 
-class LogicalAndOp(BinaryOperation):
+class LogicalAndOp(ComparisonOp):
     @property
     def name(self) -> str:
         return "logical_and"
@@ -92,7 +124,7 @@ class LogicalAndOp(BinaryOperation):
         return ops.logical_and(args[0], args[1])
 
 
-class LogicalOrOp(BinaryOperation):
+class LogicalOrOp(ComparisonOp):
     @property
     def name(self) -> str:
         return "logical_or"
@@ -101,7 +133,7 @@ class LogicalOrOp(BinaryOperation):
         return ops.logical_or(args[0], args[1])
 
 
-class LogicalNotOp(UnaryOperation):
+class LogicalNotOp(ComparisonUnaryOp):
     @property
     def name(self) -> str:
         return "logical_not"

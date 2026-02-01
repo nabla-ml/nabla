@@ -177,7 +177,16 @@ class MatmulOp(Operation):
             else:
                  raise RuntimeError(f"Could not determine physical shape for {self.name}")
 
-        return shapes, x.dtype
+        dtypes = [x.dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [x.device] * num_shards
+
+        return shapes, dtypes, devices
 
     def execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for Matmul."""

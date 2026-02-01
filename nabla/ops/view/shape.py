@@ -254,7 +254,16 @@ class ReshapeOp(ShapeOp):
         else:
             shapes = [tuple(int(d) for d in resolved_shape)] * num_shards
 
-        return shapes, x.dtype
+        dtypes = [x.dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [x.device] * (num_shards or 1)
+
+        return shapes, dtypes, devices
 
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
         return len(kwargs.get("shape"))
@@ -425,7 +434,7 @@ class SliceUpdateOp(Operation):
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], Any]:
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for slice_update (same as input x)."""
         from ...core.sharding import spmd
 
@@ -444,7 +453,16 @@ class SliceUpdateOp(Operation):
                     f"Could not determine physical shape for input x in {self.name}"
                 )
 
-        return shapes, x.dtype
+        dtypes = [x.dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [x.device] * (num_shards or 1)
+
+        return shapes, dtypes, devices
 
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
         return len(input_shapes[0])
@@ -524,7 +542,7 @@ class SliceTensorOp(Operation):
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], Any]:
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for slice_tensor."""
         from ...core.sharding import spmd
 
@@ -546,7 +564,16 @@ class SliceTensorOp(Operation):
                     f"Could not determine local physical shape for {self.name}"
                 )
 
-        return shapes, x.dtype
+        dtypes = [x.dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [x.device] * (num_shards or 1)
+
+        return shapes, dtypes, devices
 
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
         return len(input_shapes[0])
@@ -706,7 +733,7 @@ class ConcatenateOp(AxisOp):
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], Any]:
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for concatenate."""
         from ...core.sharding import spmd
 
@@ -737,7 +764,16 @@ class ConcatenateOp(AxisOp):
                 ref_shape[norm_axis] = total_axis_size
                 shapes.append(tuple(ref_shape))
 
-        return shapes, tensors[0].dtype
+        dtypes = [tensors[0].dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [tensors[0].device] * (num_shards or 1)
+
+        return shapes, dtypes, devices
 
     def sharding_rule(
         self,
@@ -874,7 +910,7 @@ class BroadcastToPhysicalOp(Operation):
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], Any]:
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for broadcast_to_physical."""
         from ...core.sharding import spmd, spec
 
@@ -899,7 +935,16 @@ class BroadcastToPhysicalOp(Operation):
         else:
             shapes = [tuple(int(d) for d in target_shape)] * num_shards
 
-        return shapes, x.dtype
+        dtypes = [x.dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [x.device] * (num_shards or 1)
+
+        return shapes, dtypes, devices
 
     def kernel(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
         return ops.broadcast_to(x, shape)

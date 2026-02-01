@@ -85,7 +85,7 @@ class ShardOp(Operation):
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], Any]:
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for shard operation."""
         from ...core.sharding import spmd, spec
         from ...core.sharding.spec import compute_global_shape, compute_local_shape
@@ -127,7 +127,16 @@ class ShardOp(Operation):
         else:
             shapes = [tuple(int(d) for d in global_shape)] * num_shards
 
-        return shapes, x.dtype
+        dtypes = [x.dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.devices]
+            else:
+                devices = [mesh.devices[0]] * num_shards
+        else:
+            devices = [x.device] * num_shards
+
+        return shapes, dtypes, devices
 
     def execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for ShardOp.
