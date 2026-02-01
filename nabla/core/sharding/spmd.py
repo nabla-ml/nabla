@@ -347,21 +347,6 @@ def create_sharded_output(
             rank = len(first_shape)
             sharding = ShardingSpec(mesh, [DimSpec([], is_open=True) for _ in range(rank)])
 
-    # Handle empty results for promise tensors (deferred execution)
-    if not results:
-        if physical_shapes is None:
-            raise ValueError("Empty shard results require physical_shapes metadata")
-        output = Tensor._create_unsafe(
-            values=[],
-            is_traced=is_traced,
-            batch_dims=batch_dims,
-            physical_shapes=physical_shapes,
-            shard_dtypes=shard_dtypes,
-            shard_devices=shard_devices,
-        )
-        output.sharding = sharding
-        return output
-
     output = Tensor._create_unsafe(
         values=results,
         is_traced=is_traced,
