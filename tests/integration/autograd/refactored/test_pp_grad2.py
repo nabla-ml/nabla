@@ -91,8 +91,9 @@ def test_pp_grad_with_bias():
     w_spec = [DimSpec.from_raw(d) for d in P("stage", None, None)]
     b_spec = [DimSpec.from_raw(d) for d in P("stage", None)]
 
-    w_sharded = ops.shard(nb.Tensor.from_dlpack(w_np), mesh, w_spec).realize()
-    b_sharded = ops.shard(nb.Tensor.from_dlpack(b_np), mesh, b_spec).realize()
+    # Create sharded tensors (lazy - no compilation yet)
+    w_sharded = ops.shard(nb.Tensor.from_dlpack(w_np), mesh, w_spec)
+    b_sharded = ops.shard(nb.Tensor.from_dlpack(b_np), mesh, b_spec)
 
     # Pad inputs with zeros for flush phase (Total steps = MB + STAGES)
     padding = np.zeros((STAGES, MICRO_BATCH_SIZE, DIM), dtype=np.float32)
@@ -102,11 +103,14 @@ def test_pp_grad_with_bias():
     # Initial State (Zeros) - used as the carry across pipeline steps
     state_sharded = ops.shard(
         nb.zeros((STAGES, MICRO_BATCH_SIZE, DIM), dtype=DType.float32), mesh, w_spec
-    ).realize()
+    )
 
     # Injection Mask (Stage 0)
     mask_np = np.eye(STAGES, 1).reshape(STAGES, 1, 1).astype(bool)
-    mask_0_sharded = ops.shard(nb.Tensor.from_dlpack(mask_np), mesh, w_spec).realize()
+    mask_0_sharded = ops.shard(nb.Tensor.from_dlpack(mask_np), mesh, w_spec)
+
+    # Batch realize all sharded tensors in a single compilation
+    nb.realize_all(w_sharded, b_sharded, state_sharded, mask_0_sharded)
 
     # 3. Communication & VMap Setup
     idx = mesh.axis_names.index("stage")
@@ -142,19 +146,20 @@ def test_pp_grad_with_bias():
     from nabla.core.autograd import grad
 
     # We differentiate w.r.t. x (arg 0), weights (arg 1) and biases (arg 2)
-    grad_fn = grad(pipeline_loss, argnums=(0, 1, 2))
+    # Use realize=False to defer compilation until we gather results
+    grad_fn = grad(pipeline_loss, argnums=(0, 1, 2), realize=False)
 
     x_grad_sharded, w_grad_sharded, b_grad_sharded = grad_fn(
         x_padded_nb, w_sharded, b_sharded, state_sharded, mask_0_sharded, y_nb
     )
 
-    # Convert to numpy
-    x_grad_all_np = x_grad_sharded.to_numpy()
+    # Convert to numpy (batched gather + realize for efficiency)
+    # Since realize=False above, this batches grad computation + gather into one compilation
+    x_grad_all_np, w_grad_np, b_grad_np = nb.Tensor.to_numpy_all(
+        x_grad_sharded, w_grad_sharded, b_grad_sharded
+    )
     # Only compare the non-padded part (first MICRO_BATCHES steps)
     x_grad_np = x_grad_all_np[:MICRO_BATCHES]
-
-    w_grad_np = w_grad_sharded.to_numpy()
-    b_grad_np = b_grad_sharded.to_numpy()
 
     # 6. Verify against JAX
     print("Running Reference (JAX)...")

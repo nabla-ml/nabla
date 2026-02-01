@@ -14,7 +14,8 @@ from ..tensor.api import Tensor
 
 
 def grad(
-    fun: Callable, argnums: int | tuple[int, ...] = 0, create_graph: bool = False
+    fun: Callable, argnums: int | tuple[int, ...] = 0, create_graph: bool = False,
+    realize: bool = True
 ) -> Callable:
     """Creates a function that evaluates the gradient of `fun`.
 
@@ -22,6 +23,8 @@ def grad(
         fun: Function to be differentiated. Must return a scalar.
         argnums: Index or indices of arguments to differentiate with respect to.
         create_graph: Whether to trace the backward computations (enabling higher-order derivs)
+        realize: If True (default), immediately realize gradients. If False, return lazy
+                 tensors that can be batched with other operations before realization.
 
     Returns:
         A function with the same signature as `fun` that returns the gradient
@@ -55,13 +58,14 @@ def grad(
                 grad_leaves.append(None)
 
         # Group and evaluate all gradients at once to optimize compilation
-        non_none_grads = [g for g in grad_leaves if isinstance(g, Tensor) and not g.real]
-        if non_none_grads:
-            from ..graph.engine import GRAPH
-            if len(non_none_grads) > 1:
-                GRAPH.evaluate(non_none_grads[0], *non_none_grads[1:])
-            else:
-                GRAPH.evaluate(non_none_grads[0])
+        if realize:
+            non_none_grads = [g for g in grad_leaves if isinstance(g, Tensor) and not g.real]
+            if non_none_grads:
+                from ..graph.engine import GRAPH
+                if len(non_none_grads) > 1:
+                    GRAPH.evaluate(non_none_grads[0], *non_none_grads[1:])
+                else:
+                    GRAPH.evaluate(non_none_grads[0])
 
         # Unflatten
         grads_struct = pytree.tree_unflatten(pytree.tree_structure(args), grad_leaves)
@@ -86,8 +90,21 @@ def grad(
 
 
 def value_and_grad(
-    fun: Callable, argnums: int | tuple[int, ...] = 0, create_graph: bool = False
+    fun: Callable, argnums: int | tuple[int, ...] = 0, create_graph: bool = False,
+    realize: bool = True
 ) -> Callable:
+    """Creates a function that returns both the value and gradients of `fun`.
+
+    Args:
+        fun: Function to be differentiated. Must return a scalar.
+        argnums: Index or indices of arguments to differentiate with respect to.
+        create_graph: Whether to trace the backward computations (enabling higher-order derivs)
+        realize: If True (default), immediately realize outputs and gradients. If False, return lazy
+                 tensors that can be batched with other operations before realization.
+
+    Returns:
+        A function with the same signature as `fun` that returns (value, gradients).
+    """
     def wrapper(*args, **kwargs):
         t = trace(fun, *args, **kwargs)
         output = t.outputs
@@ -111,15 +128,16 @@ def value_and_grad(
                 grad_leaves.append(None)
 
         # Group and evaluate everything at once: primal output + all gradients
-        all_targets = [output] if isinstance(output, Tensor) and not output.real else []
-        all_targets.extend([g for g in grad_leaves if isinstance(g, Tensor) and not g.real])
+        if realize:
+            all_targets = [output] if isinstance(output, Tensor) and not output.real else []
+            all_targets.extend([g for g in grad_leaves if isinstance(g, Tensor) and not g.real])
 
-        if all_targets:
-            from ..graph.engine import GRAPH
-            if len(all_targets) > 1:
-                GRAPH.evaluate(all_targets[0], *all_targets[1:])
-            else:
-                GRAPH.evaluate(all_targets[0])
+            if all_targets:
+                from ..graph.engine import GRAPH
+                if len(all_targets) > 1:
+                    GRAPH.evaluate(all_targets[0], *all_targets[1:])
+                else:
+                    GRAPH.evaluate(all_targets[0])
 
         grads_struct = pytree.tree_unflatten(pytree.tree_structure(args), grad_leaves)
 

@@ -33,7 +33,7 @@ from .graph import (
     print_trace_graph,
     trace,
 )
-from .tensor import Tensor, TensorImpl
+from .tensor import Tensor, TensorImpl, realize_all
 from .autograd import grad, value_and_grad
 
 __all__ = [
@@ -65,4 +65,5 @@ __all__ = [
     "trace",
     "grad",
     "value_and_grad",
+    "realize_all",
 ]

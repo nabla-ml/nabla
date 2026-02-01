@@ -620,6 +620,44 @@ class Tensor(DLPackArray, HasTensorValue):
 
     numpy = to_numpy
 
+    @staticmethod
+    def to_numpy_all(*tensors: Tensor) -> tuple:
+        """Convert multiple tensors to numpy arrays in a single batched compilation.
+
+        This is more efficient than calling `.to_numpy()` on each tensor individually,
+        as it combines all gather and realize operations into a single compilation.
+
+        Args:
+            *tensors: Variable number of tensors to convert.
+
+        Returns:
+            Tuple of numpy arrays, one per input tensor.
+
+        Example:
+            >>> x_np, w_np, b_np = Tensor.to_numpy_all(x_grad, w_grad, b_grad)
+        """
+        from ..graph.engine import GRAPH
+
+        # First, gather all tensors (lazy operations)
+        gathered = [t.gather() for t in tensors]
+
+        # Batch realize all gathered tensors
+        unrealized = [g for g in gathered if not g.real]
+        if unrealized:
+            if len(unrealized) > 1:
+                GRAPH.evaluate(unrealized[0], *unrealized[1:])
+            else:
+                GRAPH.evaluate(unrealized[0])
+
+        # Convert to numpy
+        results = []
+        for g in gathered:
+            if not g._impl._buffers:
+                raise RuntimeError("Failed to realize tensor for NumPy export")
+            results.append(g._impl._buffers[0].to(CPU()).to_numpy())
+
+        return tuple(results)
+
     def num_elements(self) -> int:
         elts = 1
         for dim in self.shape:
@@ -701,6 +739,37 @@ def _ensure_tensor(value: TensorValueLike, like: Tensor) -> Tensor:
     return Tensor.constant(value, dtype=like.dtype, device=like.device)
 
 
+def realize_all(*tensors: Tensor) -> tuple[Tensor, ...]:
+    """Realize multiple tensors in a single batched compilation.
+
+    This is more efficient than calling `.realize()` on each tensor individually,
+    as it combines all pending computations into a single graph compilation.
+
+    Args:
+        *tensors: Variable number of tensors to realize.
+
+    Returns:
+        Tuple of realized tensors (same tensors, now with computed values).
+
+    Example:
+        >>> w = ops.shard(w_data, mesh, spec)
+        >>> b = ops.shard(b_data, mesh, spec)
+        >>> w, b = nb.realize_all(w, b)  # Single compilation instead of two
+    """
+    from ..graph.engine import GRAPH
+
+    # Filter to only unrealized tensors
+    unrealized = [t for t in tensors if isinstance(t, Tensor) and not t.real]
+
+    if unrealized:
+        if len(unrealized) > 1:
+            GRAPH.evaluate(unrealized[0], *unrealized[1:])
+        else:
+            GRAPH.evaluate(unrealized[0])
+
+    return tensors
+
+
 __all__ = [
     "Tensor",
     "TensorImpl",
@@ -709,4 +778,5 @@ __all__ = [
     "default_device",
     "default_dtype",
     "defaults_like",
+    "realize_all",
 ]

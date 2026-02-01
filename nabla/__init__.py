@@ -13,6 +13,7 @@ from .core import (
     defaults,
     defaults_like,
     driver_tensor_type,
+    realize_all,
     tensor_leaves,
     traced,
     tree_flatten,
@@ -296,6 +297,7 @@ __all__ = [
     "xpr",
     "capture_trace",
     "_clear_caches",
+    "realize_all",
 ]
 
 
