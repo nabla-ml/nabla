@@ -1,12 +1,16 @@
-# Nabla Architecture
+# Nabla Module Architecture
 
-> **Purpose**: This document explains the core concepts and lifecycles in Nabla. Start here to understand how everything fits together, then follow links for implementation details.
+> **See [../readme.md](../readme.md)** for getting started, setup instructions, and architecture overview.
+>
+> This document covers **internal implementation details** for contributors working on the nabla module.
+
+---
 
 ## Core Philosophy
 
 Nabla is a **tensor library with automatic differentiation** built on three pillars:
 
-1. **Eager Metadata, Deferred Graph Building**: Shapes, dtypes, and sharding specs are computed immediately during operations (you can query `.shape` right away). However, MAX graph construction is **deferred by default**—tensors are created as "promises" that only build their graph nodes when `evaluate()` is triggered.
+1. **Eager Metadata, Deferred Graph Building**: Shapes, dtypes, and sharding specs are computed immediately. MAX graph construction is **deferred by default**—tensors are created as "promises" that only build graph nodes when `evaluate()` is triggered.
 
 2. **Transparent Distributed Execution**: Write single-device code. Nabla automatically handles sharding, communication, and SPMD execution across devices.
 

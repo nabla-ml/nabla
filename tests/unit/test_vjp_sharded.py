@@ -18,7 +18,7 @@ from nabla.ops.control_flow import where
 from nabla.ops.creation import zeros_like
 from nabla.ops.reduction import reduce_sum
 from nabla.transforms import vmap
-from tests.unit_v2.common import (
+from tests.unit.common import (
     assert_allclose,
     assert_shape,
     make_jax_array,
