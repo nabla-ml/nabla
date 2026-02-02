@@ -78,9 +78,6 @@ class TestCommunicationRigorous:
         grad_u = nb.grad(loss_fn)(u)
         # print(f"\n[DEBUG] grad_u shape: {grad_u.shape}, sharding: {grad_u.sharding}")
 
-
-
-
         res_val = np_u[:2] + np_u[2:]
         expected = jnp.concatenate([2 * res_val, 2 * res_val])
 

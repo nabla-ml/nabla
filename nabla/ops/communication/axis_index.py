@@ -34,7 +34,7 @@ class AxisIndexOp(CollectiveOperation):
 
         num_shards = len(mesh.devices) if mesh else 1
         shapes = [(1,)] * num_shards
-        
+
         dtypes = [DType.int32] * num_shards
         if mesh:
             if mesh.is_distributed:
@@ -42,7 +42,7 @@ class AxisIndexOp(CollectiveOperation):
             else:
                 devices = [mesh.device_refs[0]] * num_shards
         else:
-            devices = [None] * num_shards # Scalars/unplaced
+            devices = [None] * num_shards  # Scalars/unplaced
 
         return shapes, dtypes, devices
 

@@ -339,7 +339,9 @@ class Tensor(DLPackArray, HasTensorValue):
     ) -> Tensor:
         from ...ops import creation
 
-        return creation.full(shape, value, dtype=dtype, device=device, is_traced=is_traced)
+        return creation.full(
+            shape, value, dtype=dtype, device=device, is_traced=is_traced
+        )
 
     @classmethod
     def zeros(

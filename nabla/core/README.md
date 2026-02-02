@@ -6,11 +6,11 @@
 
 ## How the Core Modules Work Together
 
-Understanding Nabla requires seeing how these components interact during operation execution:
+Understanding Nabla requires seeing how these components interact during the deferred execution flow:
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                     Core Module Interaction Flow                            │
+│              Core Module Interaction (Default Deferred Mode)                │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │   User Code                                                                 │
@@ -23,20 +23,20 @@ Understanding Nabla requires seeing how these components interact during operati
 │          │ calls operation (e.g., x + y)                                    │
 │          ▼                                                                  │
 │   ┌──────────────┐                                                          │
-│   │   SHARDING   │  Infers output sharding from input shardings             │
-│   │   (spmd.py)  │  Determines if inputs need resharding                    │
-│   └──────┬───────┘  Inserts AllGather/AllReduce if needed                   │
+│   │ OPERATION    │  __call__() computes shapes via compute_physical_shape   │
+│   │ (ops/base)   │  Creates "promise tensor" (graph_values_epoch = -1)      │
+│   └──────┬───────┘  Records OpNode with op_hash for cache key               │
 │          │                                                                  │
 │          ▼                                                                  │
 │   ┌──────────────┐                                                          │
-│   │    GRAPH     │  Executes kernel() per shard inside graph context        │
-│   │   (engine)   │  Records OpNode node for tracing                         │
-│   └──────┬───────┘                                                          │
+│   │    GRAPH     │  GRAPH.add_unrealized() tracks promise tensors           │
+│   │   (engine)   │  Later: evaluate() checks cache, builds graph if miss    │
+│   └──────┬───────┘  _replay_trace_to_build_graph() walks OpNode DAG         │
 │          │                                                                  │
 │          ▼                                                                  │
 │   ┌──────────────┐                                                          │
-│   │  AUTOGRAD    │  (Later) Walks OpNode backward to compute gradients      │
-│   │  (backward)  │  Uses trace rehydration to restore intermediate values   │
+│   │  AUTOGRAD    │  backward_on_trace() computes gradients                  │
+│   │  (backward)  │  if EAGER_MAX_GRAPH: refresh_graph_values() first        │
 │   └──────────────┘                                                          │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -52,10 +52,12 @@ Understanding Nabla requires seeing how these components interact during operati
 
 ```text
 Tensor (user-facing)              TensorImpl (internal state)
-├── .shape, .dtype, .device       ├── _values: list[TensorValue]  # lazy graph nodes
-├── .numpy(), .item()             ├── _storages: list[driver.Tensor]  # realized data
-├── arithmetic operators          ├── sharding: ShardingSpec
-└── wraps ─────────────────────► ├── output_refs: OpNode  # parent op info
+├── .shape, .dtype, .device       ├── _graph_values: list[TensorValue]  # MAX graph nodes
+├── .numpy(), .item()             ├── _buffers: list[driver.Tensor]     # realized data
+├── arithmetic operators          ├── _physical_shapes: list[tuple]     # per-shard shapes
+└── wraps ─────────────────────► ├── graph_values_epoch: int           # -1 = promise!
+                                  ├── sharding: ShardingSpec
+                                  ├── output_refs: OpNode               # parent op info
                                   ├── traced: bool
                                   └── batch_dims: int
 ```
@@ -63,70 +65,67 @@ Tensor (user-facing)              TensorImpl (internal state)
 **OpNode**: When an operation produces outputs, all sibling outputs share the SAME `OpNode` object. This contains:
 
 - The operation that created them
-- The input arguments (as TensorImpls)
-- Weak references to all output TensorImpls
+- The input arguments (as TensorImpls)  
+- The **original** kwargs (critical for rehydration!)
+- The `_op_hash` for cache key computation
 
 This enables backward traversal: from any tensor, follow `output_refs.op_args` to find its inputs.
 
-### 2. Graph Epochs and Rehydration
+### 2. Graph Epochs and Promise Tensors
 
-**Problem**: After `evaluate()` compiles and runs a graph, the old `_values` become stale. But autodiff needs intermediate values.
+**Problem**: In default mode, operations don't build MAX graph nodes immediately. How do we track what needs to be built later?
 
-**Solution**: Epochs + Rehydration
+**Solution**: Promise tensors + epoch-based staleness detection
 
-**Epochs**: Each graph compilation increments `GRAPH.epoch`. TensorImpl stores `values_epoch` to detect staleness.
+**Promise Tensor Pattern** (default mode, `NABLA_EAGER_MAX_GRAPH=0`):
+```python
+y = x + 1  # In package_outputs():
 
-**Rehydration** (`Trace.refresh_graph_values()`): Before backward pass, replay all operations:
+y._impl._physical_shapes = [(4, 8)]     # Known from compute_physical_shape
+y._impl._shard_dtypes = [float32]       # Known
+y._impl._shard_devices = [GPU:0]        # Known  
+y._impl._graph_values = []              # EMPTY - no MAX nodes yet
+y._impl.graph_values_epoch = -1         # Special marker: "PROMISE"
+y._impl.output_refs = OpNode(...)       # Recorded for trace replay
 
-1. Find leaf tensors (constants, inputs) → ensure realized
-2. Add leaves to current graph epoch
-3. For each operation in topological order:
-   - Call `op.execute()` to recompute _values
-   - Update output TensorImpls with fresh values
+GRAPH.add_unrealized(y._impl)           # Track in _unrealized_impls set
+```
 
-This is why `execute` receives ORIGINAL kwargs and performs adaptation internally—rehydration doesn't have access to pre-computed adapted kwargs.
+**Epoch-Based Staleness**:
+- Each `evaluate()` call increments `GRAPH.epoch`
+- TensorImpl stores `graph_values_epoch` when `_graph_values` were set
+- If `impl.graph_values_epoch != GRAPH.epoch`, values are stale
+- `_get_valid_graph_values()` returns `[]` for stale tensors
+
+**Rehydration** (`Trace.refresh_graph_values()`): Before backward pass (in `EAGER_MAX_GRAPH` mode), replay all operations to restore `_graph_values` for intermediate tensors that need them.
 
 ### 3. Lazy Evaluation Model
 
 ```text
-                    ┌─────────────┐
-                    │   Tensor    │
-                    │  created    │
-                    └──────┬──────┘
-                           │
-        ┌──────────────────┼──────────────────┐
-        │                  │                  │
-        ▼                  ▼                  ▼
-   UNREALIZED         OPERATION          REALIZED
-   (has _values)        called          (has _storages)
-        │                  │                  │
-        │                  │                  │
-        │     _values      │                  │
-        │◄─────────────────┤                  │
-        │                  │                  │
-        │                  │                  │
-        └──────────────────┼──────────────────┘
-                           │
-                     .numpy() or
-                     print() called
-                           │
-                           ▼
-                    ┌─────────────┐
-                    │  GRAPH      │
-                    │  compiles   │
-                    │  & executes │
-                    └─────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          Tensor State Transitions                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌───────────────┐                        ┌───────────────┐                 │
+│  │   PROMISE     │     GRAPH.evaluate()   │   REALIZED    │                 │
+│  │   TENSOR      │  ──────────────────►   │   TENSOR      │                 │
+│  ├───────────────┤     (cache check,      ├───────────────┤                 │
+│  │ _graph_values │      build graph,      │ _buffers =    │                 │
+│  │   = []        │      compile, run)     │   [data...]   │                 │
+│  │ epoch = -1    │                        │ epoch = N     │                 │
+│  │ output_refs   │                        │ output_refs   │                 │
+│  │   = OpNode    │                        │   = None      │                 │
+│  └───────────────┘                        └───────────────┘                 │
+│                                                                             │
+│  Key: evaluate() clears output_refs after execution                         │
+│       This prevents memory leaks and marks tensor as "terminal"             │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Key insight**: Most tensors stay "unrealized" (only `_values`, no `_storages`) until you explicitly need data. This enables graph optimization before execution.
+**Why deferred by default?** Cache efficiency. If the same computation structure runs again, we skip graph building entirely and just replay the cached compiled model.
 
-### 4. Physical Execution Context
-
-Operations call `kernel()` inside `GRAPH.graph` context. This:
-
-- Provides access to lazy tensor values without triggering recursive compilation
-- Allows graph node creation for the current epoch
-- Required for any code that manipulates `_values`
+---
 
 ## Module Architecture
 
@@ -135,7 +134,7 @@ Strict import hierarchy to avoid circular dependencies:
 ```text
 Level 0: common/     (pytree, context managers - no deps)
          │
-Level 1: graph/      (Graph, imports common)
+Level 1: graph/      (ComputeGraph, imports common)
          │
 Level 2: tensor/     (Tensor, TensorImpl - imports graph)
          │
@@ -148,10 +147,10 @@ Level 4: autograd/   (grad, backward - imports all above)
 
 | Submodule | Purpose | Key Concepts | Documentation |
 | :--- | :--- | :--- | :--- |
-| **[tensor/](tensor/README.md)** | State management | Tensor/TensorImpl facade, lazy realization | Dual object model |
-| **[graph/](graph/README.md)** | Execution engine | GRAPH singleton, OpNode, Trace, rehydration | Graph recording, epochs |
+| **[tensor/](tensor/README.md)** | State management | Tensor/TensorImpl facade, promise tensors | Dual object model |
+| **[graph/](graph/README.md)** | Execution engine | GRAPH singleton, OpNode, evaluate(), caching | Graph recording, epochs |
 | **[sharding/](sharding/README.md)** | SPMD distribution | Factor propagation, DeviceMesh, resharding | Automatic communication |
-| **[autograd/](autograd/README.md)** | Differentiation | BackwardEngine, VJP rules, cotangent accumulation | Trace-based gradients |
+| **[autograd/](autograd/README.md)** | Differentiation | BackwardEngine, VJP rules, refresh_graph_values | Trace-based gradients |
 | **[common/](common/README.md)** | Utilities | pytree operations, context managers | Shared infrastructure |
 
 ## Exported Symbols
@@ -163,7 +162,7 @@ From `nabla.core`:
 Tensor, TensorImpl, OpNode
 
 # Graph Engine  
-Graph, GRAPH, Trace, trace
+ComputeGraph, GRAPH, Trace, trace
 
 # Defaults & Context
 defaults, default_device, default_dtype, defaults_like
@@ -178,5 +177,8 @@ tree_map, tree_flatten, tree_unflatten, tree_leaves, tree_structure, PyTreeDef
 > **Note to AI Agents**:
 >
 > 1. **Import Hierarchy**: Respect the levels above. Adding imports that go "up" creates cycles.
-> 2. **Rehydration**: If changing operation execution, ensure `execute` can work during rehydration (receives original kwargs).
+> 2. **Promise tensors**: `graph_values_epoch = -1` marks unrealized. Use `GRAPH.add_unrealized()` to track.
+> 3. **Rehydration**: If changing operation execution, ensure `execute` receives original kwargs (not adapted).
+> 4. **OpNode**: Any change to how operations record outputs affects both caching and autodiff. Test both.
+> 5. **refresh_graph_values()**: Critical for EAGER_MAX_GRAPH backward pass. Don't remove without understanding why it exists.
 > 3. **OpNode**: Any change to how operations record their outputs affects autodiff. Test gradients.

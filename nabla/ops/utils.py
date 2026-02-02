@@ -23,6 +23,7 @@ def ensure_tensor(x: Any) -> Any:
 
     return Tensor.constant(x)
 
+
 # Cache for _make_hashable to avoid recomputing for same objects
 _HASHABLE_CACHE: dict[int, Any] = {}
 _HASHABLE_CACHE_SIZE = 1024  # Limit cache size to avoid memory bloat
@@ -35,7 +36,7 @@ def _clear_hashable_cache() -> None:
 
 def _make_hashable(obj: Any) -> Any:
     """Convert objects to stable, hashable keys for graph caching.
-    
+
     Optimized with caching for Tensor objects since they're frequently hashed.
     """
     from ..core import Tensor
@@ -46,7 +47,7 @@ def _make_hashable(obj: Any) -> Any:
         cached = _HASHABLE_CACHE.get(obj_id)
         if cached is not None:
             return cached
-        
+
         sharding = obj.sharding
         sharding_key = None
         if sharding is not None:
@@ -56,7 +57,11 @@ def _make_hashable(obj: Any) -> Any:
                 mesh_key = (
                     mesh.name if hasattr(mesh, "name") else None,
                     tuple(mesh.shape) if hasattr(mesh, "shape") and mesh.shape else (),
-                    tuple(mesh.axis_names) if hasattr(mesh, "axis_names") and mesh.axis_names else (),
+                    (
+                        tuple(mesh.axis_names)
+                        if hasattr(mesh, "axis_names") and mesh.axis_names
+                        else ()
+                    ),
                 )
 
             dim_specs_list = sharding.dim_specs
@@ -91,13 +96,13 @@ def _make_hashable(obj: Any) -> Any:
             tuple(shard_dtypes) if shard_dtypes else None,
             tuple(str(d) for d in shard_devices) if shard_devices else None,
         )
-        
+
         # Cache result (with size limit)
         if len(_HASHABLE_CACHE) < _HASHABLE_CACHE_SIZE:
             _HASHABLE_CACHE[obj_id] = result
-        
+
         return result
-    
+
     # Fast path for primitives (most common case for kwargs)
     if isinstance(obj, (int, float, str, bool, type(None))):
         return obj
@@ -110,20 +115,20 @@ def _make_hashable(obj: Any) -> Any:
 
 def _get_tensor_hash(x: Any) -> Any:
     """Get hash from tensor - shape/dtype/sharding for realized, OpNode hash+index for unrealized.
-    
+
     Optimized module-level function to avoid closure overhead in hot path.
     """
     from ..core import Tensor
-    
+
     if isinstance(x, Tensor):
         impl = x._impl
         buffers = impl._buffers
         output_refs = impl.output_refs
-        
+
         # Fast path: get sharding key only if sharding exists
         sharding = x.sharding
         sharding_key = _make_hashable(sharding) if sharding else None
-        
+
         if buffers:
             # Realized tensor - hash based on shape/dtype/sharding (data-independent)
             shape_tuple = tuple(int(d) for d in x.shape)
@@ -292,11 +297,12 @@ def apply_jvp(op: Any, args: tuple, output: Any) -> None:
 def collect_metadata(args: tuple) -> tuple[int, bool, bool, bool]:
     """Analyze arguments to collect metadata needed for execution adaptation."""
     from ..core import Tensor
+
     max_batch_dims = 0
     any_traced = False
     any_sharded = False
     any_has_tangent = False
-    
+
     # Fast path: most ops have simple tensor args (not nested)
     # Use stack-based iteration to avoid tree_map overhead
     stack = list(args)
@@ -323,6 +329,7 @@ def adapt_and_reshard(
 ) -> tuple[tuple, dict, Any, Any, Any]:
     """Perform logical adaptation and input resharding."""
     from ..core.sharding import spmd
+
     mesh = spmd.get_mesh_from_args(args) if any_sharded else None
     # Also check kwargs for mesh (e.g., shard/reshard ops pass mesh as kwarg)
     if mesh is None and kwargs.get("mesh") is not None:
@@ -330,17 +337,19 @@ def adapt_and_reshard(
 
     adapted_kwargs = op.adapt_kwargs(args, kwargs, max_batch_dims)
     args_with_specs = spmd.ensure_specs(args, mesh)
-    predicted_output_spec, input_shardings, reduce_axes = (
-        spmd.infer_output_sharding(op, args_with_specs, mesh, adapted_kwargs or {})
+    predicted_output_spec, input_shardings, reduce_axes = spmd.infer_output_sharding(
+        op, args_with_specs, mesh, adapted_kwargs or {}
     )
 
     # Perform the data movement (Logical Adaptation)
     resharded_args = spmd.reshard_inputs(args_with_specs, input_shardings, mesh)
-    
+
     return resharded_args, adapted_kwargs, predicted_output_spec, mesh, reduce_axes
 
 
-def compute_structural_hash(op_name: str, resharded_args: tuple, adapted_kwargs: dict) -> tuple:
+def compute_structural_hash(
+    op_name: str, resharded_args: tuple, adapted_kwargs: dict
+) -> tuple:
     """Compute structural hash for operation caching."""
     # Compute hash AFTER resharding - use resharded_args for cache key
     arg_hashes = tuple(_get_tensor_hash(x) for x in resharded_args)
@@ -355,11 +364,12 @@ def eager_execute(
 ) -> Any:
     """Execute operation eagerly if enabled by configuration."""
     from ..config import EAGER_MAX_GRAPH
+
     if not EAGER_MAX_GRAPH:
         return None
 
     from ..core import GRAPH, Tensor, pytree
-    
+
     # PRE-EXECUTION: Ensure all inputs are valid in the current graph context.
     seen_impls = set()
     inputs_to_hydrate = []
@@ -371,7 +381,7 @@ def eager_execute(
             if id(impl) in seen_impls:
                 return
             seen_impls.add(id(impl))
-            
+
             if impl.graph_values_epoch != GRAPH.epoch:
                 if impl.is_realized:
                     inputs_to_hydrate.append(x)
@@ -380,18 +390,18 @@ def eager_execute(
 
     pytree.tree_map(check_input_validity, resharded_args)
     pytree.tree_map(check_input_validity, adapted_kwargs)
-    
+
     # 1. Bring realized tensors into current graph
     for t in inputs_to_hydrate:
         GRAPH.add_input(t)
-    
+
     # 2. Replay trace for unrealized tensors (stale promises)
     if inputs_to_replay:
         GRAPH._replay_trace_to_build_graph(inputs_to_replay)
 
     # Build graph immediately
     try:
-        # Note: We pass original kwargs, as some ops (like ReduceOperation) 
+        # Note: We pass original kwargs, as some ops (like ReduceOperation)
         # adapt them internally during execute().
         return op.execute(resharded_args, kwargs)
     except Exception as e:
@@ -403,15 +413,21 @@ def verify_eager_shapes(
 ) -> None:
     """Verify that eager execution produced the expected physical shapes."""
     from ..config import VERIFY_EAGER_SHAPES
+
     if not VERIFY_EAGER_SHAPES or execution_results is None:
         return
 
     shard_vals = execution_results[0]
-    
+
     def verify_shape_fn(val, expected_shape, shard_idx):
-        if val is None: return 
+        if val is None:
+            return
         actual = tuple(int(d) for d in val.type.shape)
-        expected = tuple(int(d) for d in expected_shape) if expected_shape is not None else None
+        expected = (
+            tuple(int(d) for d in expected_shape)
+            if expected_shape is not None
+            else None
+        )
         if actual != expected:
             raise RuntimeError(
                 f"Shape mismatch in {op.name} (Shard {shard_idx}): "
@@ -419,18 +435,22 @@ def verify_eager_shapes(
                 f"This indicates a bug in {op.__class__.__name__}.compute_physical_shape."
             )
 
-    if (isinstance(output_physical_shapes, list) and 
-        output_physical_shapes and 
-        isinstance(output_physical_shapes[0], list)):
+    if (
+        isinstance(output_physical_shapes, list)
+        and output_physical_shapes
+        and isinstance(output_physical_shapes[0], list)
+    ):
         # Multi-output
         for shard_idx, vals_tuple in enumerate(shard_vals):
             if len(vals_tuple) != len(output_physical_shapes):
-                 raise RuntimeError(
-                     f"Output count mismatch for {op.name} (Shard {shard_idx}): "
-                     f"Expected {len(output_physical_shapes)} outputs, got {len(vals_tuple)}."
+                raise RuntimeError(
+                    f"Output count mismatch for {op.name} (Shard {shard_idx}): "
+                    f"Expected {len(output_physical_shapes)} outputs, got {len(vals_tuple)}."
                 )
             for out_idx, val in enumerate(vals_tuple):
-                verify_shape_fn(val, output_physical_shapes[out_idx][shard_idx], shard_idx)
+                verify_shape_fn(
+                    val, output_physical_shapes[out_idx][shard_idx], shard_idx
+                )
     else:
         # Single output
         for shard_idx, val in enumerate(shard_vals):
@@ -439,14 +459,14 @@ def verify_eager_shapes(
 
 def package_outputs(
     op: Any,
-    execution_results: Any, 
+    execution_results: Any,
     output_physical_shapes: Any,
     output_shard_dtypes: Any,
     output_shard_devices: Any,
     predicted_output_spec: Any,
     mesh: Any,
     any_traced: bool,
-    max_batch_dims: int
+    max_batch_dims: int,
 ) -> Any:
     """Create resulting Tensor(s) with appropriate metadata and graph references."""
     from ..core import GRAPH
@@ -454,49 +474,71 @@ def package_outputs(
     from ..config import EAGER_MAX_GRAPH
 
     is_multi_output = (
-        isinstance(output_physical_shapes, list) and 
-        output_physical_shapes and 
-        isinstance(output_physical_shapes[0], list)
+        isinstance(output_physical_shapes, list)
+        and output_physical_shapes
+        and isinstance(output_physical_shapes[0], list)
     )
 
     if is_multi_output:
         outputs = []
         num_outputs = len(output_physical_shapes)
-        
+
         if EAGER_MAX_GRAPH and execution_results:
-             transposed_results = list(zip(*execution_results[0]))
+            transposed_results = list(zip(*execution_results[0]))
         else:
-             transposed_results = [[] for _ in range(num_outputs)]
+            transposed_results = [[] for _ in range(num_outputs)]
 
         for i in range(num_outputs):
-            out_sharding = predicted_output_spec[i] if isinstance(predicted_output_spec, (list, tuple)) else predicted_output_spec
-            out_dtypes = output_shard_dtypes[i] if isinstance(output_shard_dtypes, list) and len(output_shard_dtypes) > i else output_shard_dtypes
-            out_devices = output_shard_devices[i] if isinstance(output_shard_devices, list) and len(output_shard_devices) > i else output_shard_devices
-            
+            out_sharding = (
+                predicted_output_spec[i]
+                if isinstance(predicted_output_spec, (list, tuple))
+                else predicted_output_spec
+            )
+            out_dtypes = (
+                output_shard_dtypes[i]
+                if isinstance(output_shard_dtypes, list)
+                and len(output_shard_dtypes) > i
+                else output_shard_dtypes
+            )
+            out_devices = (
+                output_shard_devices[i]
+                if isinstance(output_shard_devices, list)
+                and len(output_shard_devices) > i
+                else output_shard_devices
+            )
+
             o = spmd.create_sharded_output(
                 list(transposed_results[i]) if EAGER_MAX_GRAPH else [],
-                out_sharding, any_traced, max_batch_dims, mesh=mesh,
+                out_sharding,
+                any_traced,
+                max_batch_dims,
+                mesh=mesh,
                 physical_shapes=output_physical_shapes[i],
-                shard_dtypes=out_dtypes, shard_devices=out_devices,
+                shard_dtypes=out_dtypes,
+                shard_devices=out_devices,
             )
-            
+
             if EAGER_MAX_GRAPH:
                 o._impl.graph_values_epoch = GRAPH.epoch
             else:
                 o._impl.graph_values_epoch = -1
                 GRAPH.add_unrealized(o._impl)
             outputs.append(o)
-        
+
         container_type = getattr(op, "output_container_type", tuple)
         return container_type(outputs)
     else:
         output = spmd.create_sharded_output(
             execution_results[0] if EAGER_MAX_GRAPH and execution_results else [],
-            predicted_output_spec, any_traced, max_batch_dims, mesh=mesh,
+            predicted_output_spec,
+            any_traced,
+            max_batch_dims,
+            mesh=mesh,
             physical_shapes=output_physical_shapes,
-            shard_dtypes=output_shard_dtypes, shard_devices=output_shard_devices,
+            shard_dtypes=output_shard_dtypes,
+            shard_devices=output_shard_devices,
         )
-        
+
         if EAGER_MAX_GRAPH:
             output._impl.graph_values_epoch = GRAPH.epoch
         else:
@@ -512,12 +554,14 @@ def apply_auto_reduction(op: Any, output: Any, mesh: Any, reduce_axes: Any) -> A
 
     from .communication.all_reduce import all_reduce
     from ..core import pytree, Tensor
-    
+
     def _apply_fn(t):
         if isinstance(t, Tensor):
             return all_reduce(
-                t, mesh=mesh, reduce_axes=reduce_axes, 
-                reduce_op=op.collective_reduce_type
+                t,
+                mesh=mesh,
+                reduce_axes=reduce_axes,
+                reduce_op=op.collective_reduce_type,
             )
         return t
 

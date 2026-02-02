@@ -149,7 +149,6 @@ class BackwardEngine:
     def _process_node(self, node: OpNode):
         from ..common import pytree
 
-
         from ..tensor.impl import TensorImpl
 
         alive_outputs = node.get_alive_outputs()
@@ -307,6 +306,7 @@ def backward_on_trace(
     # VJP operations will immediately try to build their graph nodes, requiring
     # all inputs (primals) to have valid graph values in the CURRENT epoch.
     from ...config import EAGER_MAX_GRAPH
+
     if EAGER_MAX_GRAPH:
         trace.refresh_graph_values()
 

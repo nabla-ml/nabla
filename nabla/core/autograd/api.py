@@ -14,8 +14,10 @@ from ..tensor.api import Tensor
 
 
 def grad(
-    fun: Callable, argnums: int | tuple[int, ...] = 0, create_graph: bool = False,
-    realize: bool = True
+    fun: Callable,
+    argnums: int | tuple[int, ...] = 0,
+    create_graph: bool = False,
+    realize: bool = True,
 ) -> Callable:
     """Creates a function that evaluates the gradient of `fun`.
 
@@ -59,9 +61,12 @@ def grad(
 
         # Group and evaluate all gradients at once to optimize compilation
         if realize:
-            non_none_grads = [g for g in grad_leaves if isinstance(g, Tensor) and not g.real]
+            non_none_grads = [
+                g for g in grad_leaves if isinstance(g, Tensor) and not g.real
+            ]
             if non_none_grads:
                 from ..graph.engine import GRAPH
+
                 if len(non_none_grads) > 1:
                     GRAPH.evaluate(non_none_grads[0], *non_none_grads[1:])
                 else:
@@ -90,8 +95,10 @@ def grad(
 
 
 def value_and_grad(
-    fun: Callable, argnums: int | tuple[int, ...] = 0, create_graph: bool = False,
-    realize: bool = True
+    fun: Callable,
+    argnums: int | tuple[int, ...] = 0,
+    create_graph: bool = False,
+    realize: bool = True,
 ) -> Callable:
     """Creates a function that returns both the value and gradients of `fun`.
 
@@ -105,6 +112,7 @@ def value_and_grad(
     Returns:
         A function with the same signature as `fun` that returns (value, gradients).
     """
+
     def wrapper(*args, **kwargs):
         t = trace(fun, *args, **kwargs)
         output = t.outputs
@@ -129,11 +137,16 @@ def value_and_grad(
 
         # Group and evaluate everything at once: primal output + all gradients
         if realize:
-            all_targets = [output] if isinstance(output, Tensor) and not output.real else []
-            all_targets.extend([g for g in grad_leaves if isinstance(g, Tensor) and not g.real])
+            all_targets = (
+                [output] if isinstance(output, Tensor) and not output.real else []
+            )
+            all_targets.extend(
+                [g for g in grad_leaves if isinstance(g, Tensor) and not g.real]
+            )
 
             if all_targets:
                 from ..graph.engine import GRAPH
+
                 if len(all_targets) > 1:
                     GRAPH.evaluate(all_targets[0], *all_targets[1:])
                 else:

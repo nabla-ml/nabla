@@ -175,6 +175,7 @@ class Trace:
                 return
             seen_leaf_impls.add(iid)
             leaf_impls.append(impl)
+
         for ref in self.nodes:
             for arg in tree_leaves(ref.op_args):
                 if isinstance(arg, (Tensor, TensorImpl)):
@@ -190,14 +191,14 @@ class Trace:
         # 2. Realize all unrealized leaves together to reduce compilation cycles.
         leaf_tensors = [Tensor(impl=impl) for impl in leaf_impls]
         unrealized_leaves = [t for t in leaf_tensors if not t.real]
-        
+
         if unrealized_leaves:
             # Evaluate all found unrealized leaves in a single graph
             if len(unrealized_leaves) > 1:
                 GRAPH.evaluate(unrealized_leaves[0], *unrealized_leaves[1:])
             else:
                 GRAPH.evaluate(unrealized_leaves[0])
-        
+
         for t in leaf_tensors:
             if t.real:
                 GRAPH.add_input(t)

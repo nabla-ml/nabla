@@ -254,9 +254,7 @@ class BroadcastBatchDimsOp(Operation):
         num_shards = len(mesh.devices) if mesh else 1
 
         if target_shape is None:
-            raise RuntimeError(
-                f"Could not determine target shape for {self.name}"
-            )
+            raise RuntimeError(f"Could not determine target shape for {self.name}")
 
         shapes = []
         if output_sharding and mesh:

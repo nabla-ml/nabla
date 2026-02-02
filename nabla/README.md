@@ -6,7 +6,7 @@
 
 Nabla is a **tensor library with automatic differentiation** built on three pillars:
 
-1. **Eager Execution, Lazy Compilation**: Operations execute immediately (you see results right away), but the underlying MAX graph compilation is deferred until you actually need concrete values (`.numpy()`, `print()`).
+1. **Eager Metadata, Deferred Graph Building**: Shapes, dtypes, and sharding specs are computed immediately during operations (you can query `.shape` right away). However, MAX graph construction is **deferred by default**—tensors are created as "promises" that only build their graph nodes when `evaluate()` is triggered.
 
 2. **Transparent Distributed Execution**: Write single-device code. Nabla automatically handles sharding, communication, and SPMD execution across devices.
 
@@ -14,115 +14,208 @@ Nabla is a **tensor library with automatic differentiation** built on three pill
 
 ---
 
-## Key Lifecycles
+## Execution Modes
 
-Understanding Nabla requires understanding three lifecycles: **Operation Execution**, **Tracing & Rehydration**, and **Gradient Computation**.
+Nabla supports **two execution modes**, controlled by the `NABLA_EAGER_MAX_GRAPH` environment variable:
 
-### 1. Operation Execution Lifecycle (`__call__`)
-
-Every operation (e.g., `add`, `matmul`, `relu`) goes through the same six-phase lifecycle in `Operation.__call__()`. This is the heart of Nabla's execution model:
+### Default Mode: Deferred Graph Building (`NABLA_EAGER_MAX_GRAPH=0`)
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                        Operation.__call__() Lifecycle                       │
+│                     Default: Deferred Graph Building                        │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  Phase 1: METADATA COLLECTION                                               │
-│  ─────────────────────────────                                              │
-│  • Scan all input tensors to gather: max_batch_dims, any_traced, any_sharded│
-│  • These flags determine which subsequent phases are needed                 │
+│  y = x + 1              ← Operation.__call__() runs:                        │
+│                           • Computes output shapes, dtypes, devices         │
+│                           • Does NOT call op.execute() (no MAX graph yet)   │
+│                           • Creates "promise tensor" (graph_values_epoch=-1)│
+│                           • Registers via GRAPH.add_unrealized(y._impl)     │
+│                           • Records OpNode for later replay                 │
 │                                                                             │
-│  Phase 2: ADAPTATION (Resharding Inputs)                                    │
-│  ───────────────────────────────────────                                    │
-│  • Call op.adapt_kwargs() to translate logical kwargs → physical kwargs     │
-│    (e.g., axis=0 in logical space → axis=batch_dims+0 in physical space)    │
-│  • Call spmd.infer_output_sharding() to determine:                          │
-│    - What sharding the output will have                                     │
-│    - What sharding each input MUST have for correct execution               │
-│    - Which axes need collective reduction (contracting dimensions)          │
-│  • Call spmd.reshard_inputs() to insert AllGather/AllToAll if inputs don't  │
-│    match required shardings                                                 │
+│  z = y * 2              ← Same: shapes computed, no MAX graph, promise      │
 │                                                                             │
-│  Phase 3: PHYSICAL EXECUTION                                                │
-│  ─────────────────────────────                                              │
-│  • Call op.execute(resharded_args, kwargs)                                  │
-│  • This loops over each shard in the mesh and calls op.kernel() per shard   │
-│  • Returns raw TensorValues (one per shard) + output sharding info          │
-│                                                                             │
-│  Phase 4: PACKAGING                                                         │
-│  ─────────────────────                                                      │
-│  • Wrap raw shard values into nabla.Tensor objects                          │
-│  • Handle structured outputs (tuples, lists, dicts from multi-output ops)   │
-│  • Attach sharding metadata to output tensors                               │
-│                                                                             │
-│  Phase 5: POST-OP COLLECTIVES                                               │
-│  ────────────────────────────                                               │
-│  • If output has partial sums (from contracting sharded dimensions),        │
-│    execute AllReduce immediately to produce correct global result           │
-│                                                                             │
-│  Phase 6: TRACING (Graph Recording)                                         │
-│  ───────────────────────────────────                                        │
-│  • Call _setup_output_refs() to create OpNode node containing:              │
-│    - Weak refs to output TensorImpls                                        │
-│    - The operation instance                                                 │
-│    - The input arguments (as TensorImpls)                                   │
-│    - Original kwargs (for rehydration)                                      │
-│  • This enables backward traversal for autodiff                             │
-│                                                                             │
-│  Phase 7: JVP (Forward-Mode Autodiff)                                       │
-│  ─────────────────────────────────────                                      │
-│  • If any input has a tangent, call op.jvp_rule() to propagate tangents     │
-│  • Attach computed tangent to output tensor                                 │
+│  print(z.numpy())       ← GRAPH.evaluate(z) triggered:                      │
+│                           1. Check cache for compiled model (by op_hash)    │
+│                           2. Cache HIT → Skip graph building entirely!      │
+│                           3. Cache MISS → Build graph via _replay_trace()   │
+│                           4. Compile & execute on device                    │
+│                           5. Store results, clear trace references          │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Key insight**: Phases 1-5 execute eagerly (real computation happens). Phase 6 records for later replay. Phase 7 handles forward-mode differentiation.
+**Why defer graph building?** MAX graph construction has overhead. If we hit the compiled model cache (same computation structure), we skip graph building entirely and just replay the cached model with new data. This is a significant performance win for hot paths.
 
-→ **Detailed reference**: [ops/README.md](ops/README.md) explains each phase with code pointers.
+**Why compute shapes eagerly?** Even though graph building is deferred:
+- Users need `.shape`, `.dtype`, `.device` immediately for control flow and debugging
+- Sharding propagation requires shape information to determine data movement
+- Type checking and broadcasting validation must happen at operation time
+
+### Eager Mode: Immediate Graph Building (`NABLA_EAGER_MAX_GRAPH=1`)
+
+```bash
+export NABLA_EAGER_MAX_GRAPH=1
+export NABLA_VERIFY_EAGER_SHAPES=1  # Optional: validate shape inference
+```
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     Eager: Immediate Graph Building                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  y = x + 1              ← Operation.__call__() runs:                        │
+│                           • Computes output shapes (same as default)        │
+│                           • ALSO calls op.execute() to build MAX graph      │
+│                           • Stores _graph_values immediately                │
+│                           • Sets graph_values_epoch = GRAPH.epoch           │
+│                           • Records OpNode                                  │
+│                                                                             │
+│  print(z.numpy())       ← GRAPH.evaluate(z) triggered:                      │
+│                           • Graph already built, just compile & execute     │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**When to use eager mode?** Useful for debugging shape mismatches (with `NABLA_VERIFY_EAGER_SHAPES=1`), or when you want to inspect the MAX graph during development.
 
 ---
 
-### 2. Tracing & Rehydration Lifecycle
+## Key Lifecycles
 
-**Tracing** captures what operations happened. **Rehydration** replays those operations to restore graph values.
+Understanding Nabla requires understanding three lifecycles: **Operation Execution**, **Graph Evaluation**, and **Gradient Computation**.
+
+### 1. Operation Execution Lifecycle (`__call__`)
+
+Every operation (e.g., `add`, `matmul`, `relu`) goes through a **9-step pipeline** in `Operation.__call__()`. The key insight: **steps 1-4 always run** (metadata), while **step 5 is conditional** on the execution mode.
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           Trace Lifecycle                                   │
+│                        Operation.__call__() Pipeline                        │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  FORWARD PASS (Tracing)                                                     │
+│  Step 1: METADATA COLLECTION                                                │
+│  ───────────────────────────                                                │
+│  max_batch_dims, any_traced, any_sharded, any_has_tangent = collect_metadata│
+│  Purpose: Determine execution context from inputs (vmap, autodiff, SPMD)    │
+│                                                                             │
+│  Step 2: ADAPTATION & RESHARDING                                            │
+│  ───────────────────────────────                                            │
+│  resharded_args, adapted_kwargs, predicted_output_spec, mesh, reduce_axes = │
+│      adapt_and_reshard(self, args, kwargs, any_sharded, max_batch_dims)     │
+│  Purpose: Translate logical→physical kwargs, predict output sharding,      │
+│           insert AllGather/AllToAll if inputs need resharding               │
+│                                                                             │
+│  Step 3: COMPUTE STRUCTURAL HASH                                            │
+│  ───────────────────────────────                                            │
+│  op_hash = compute_structural_hash(self.name, resharded_args, adapted_kwargs)│
+│  Purpose: Create cache key for compiled model lookup (critical for perf!)   │
+│                                                                             │
+│  Step 4: COMPUTE PHYSICAL SHAPES ⚠️ ALWAYS RUNS                             │
+│  ───────────────────────────────                                            │
+│  output_physical_shapes, output_shard_dtypes, output_shard_devices =        │
+│      self.compute_physical_shape(resharded_args, adapted_kwargs, ...)       │
+│  Purpose: Infer output metadata WITHOUT building MAX graph nodes            │
+│  Why always? Users need .shape immediately; sharding needs shapes too       │
+│                                                                             │
+│  Step 5: EAGER EXECUTION (CONDITIONAL) ⚡                                    │
+│  ────────────────────────────────────────                                   │
+│  execution_results = eager_execute(self, resharded_args, kwargs, ...)       │
+│  • If EAGER_MAX_GRAPH=0: Returns None (graph building deferred)             │
+│  • If EAGER_MAX_GRAPH=1: Calls op.execute() to build MAX graph nodes        │
+│                                                                             │
+│  Step 6: PACKAGING (Create Tensor)                                          │
+│  ─────────────────────────────────                                          │
+│  output = package_outputs(self, execution_results, shapes, dtypes, ...)     │
+│  • If EAGER: output gets _graph_values, graph_values_epoch = current epoch  │
+│  • If DEFERRED: output is a "promise" with graph_values_epoch = -1          │
+│                 GRAPH.add_unrealized(output._impl) registers for later      │
+│                                                                             │
+│  Step 7: SETUP OUTPUT REFS (OpNode Creation)                                │
+│  ───────────────────────────────────────────                                │
+│  self._setup_output_refs(output, resharded_args, kwargs, op_hash=op_hash)   │
+│  Creates OpNode with: op, inputs, ORIGINAL kwargs, op_hash                  │
+│  This enables trace replay and backward traversal for autodiff              │
+│                                                                             │
+│  Step 8: AUTO-REDUCTION                                                     │
 │  ──────────────────────                                                     │
-│  1. User calls trace(fn, *args) or implicitly via grad(fn)                  │
-│  2. Input tensors marked as traced=True                                     │
-│  3. Function executes, each operation records OpNode via Phase 6            │
-│  4. Trace.compute() walks backward from outputs, collects nodes in topo     │
-│     order via DFS on OpNode.op_args                                         │
-│  5. Result: Trace object with .inputs, .outputs, .nodes (list of OpNode).   │
+│  output = apply_auto_reduction(self, output, mesh, reduce_axes)             │
+│  If contracting dimensions were sharded, insert AllReduce for partial sums  │
 │                                                                             │
-│  REHYDRATION (Graph Value Restoration)                                      │
-│  ──────────────────────────────────────                                     │
-│  When: Called before backward pass, or when replaying a trace               │
-│                                                                             │
-│  Why needed: Graph values (_values) are epoch-scoped. After evaluate(),     │
-│  the graph resets. Rehydration rebuilds _values for intermediate tensors.   │
-│                                                                             │
-│  How it works (Trace.refresh_graph_values()):                               │
-│  1. Find all leaf tensors (no output_refs) → ensure they're realized        │
-│  2. Add leaves to current graph epoch via GRAPH.add_input()                 │
-│  3. Iterate through nodes in topological order:                             │
-│     a. Reconstruct args by wrapping TensorImpls as Tensors                  │
-│     b. Call op.adapt_kwargs() for current batch_dims                        │
-│     c. Call op.execute(args, kwargs) to recompute values                    │
-│     d. Map produced values back to original output TensorImpls              │
-│  4. Now all intermediate tensors have valid _values in current epoch        │
-│                                                                             │
-│  Key design: execute receives ORIGINAL kwargs, not pre-adapted.             │
-│  It performs adaptation internally. This ensures rehydration correctness.   │
+│  Step 9: JVP PROPAGATION                                                    │
+│  ───────────────────────                                                    │
+│  if any_has_tangent: apply_jvp(self, args, output)                          │
+│  Forward-mode autodiff: propagate tangents through op.jvp_rule()            │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Key insight**: Steps 1-4, 6-9 always execute (metadata + tracing). Step 5 is where the execution mode matters—it determines whether MAX graph nodes are built immediately or deferred.
+
+→ **Detailed reference**: [ops/README.md](ops/README.md) explains each step with code pointers.
+
+---
+
+### 2. Graph Evaluation Lifecycle (`GRAPH.evaluate`)
+
+When you need concrete values (`.numpy()`, `print()`, or explicit `evaluate()`), the graph engine runs:
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        GRAPH.evaluate() Lifecycle                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. COLLECT TARGETS                                                         │
+│  ──────────────────                                                         │
+│  Flatten requested tensors, deduplicate by id(impl)                         │
+│                                                                             │
+│  2. COMPUTE CACHE KEY                                                       │
+│  ────────────────────                                                       │
+│  cache_key = tuple(get_tensor_key(t) for t in sorted_targets)               │
+│  • Unrealized tensors: keyed by (op_hash, output_index)                     │
+│  • Realized tensors: keyed by (dtype, shape, sharding)                      │
+│                                                                             │
+│  3. CACHE LOOKUP ⚡ (THE FAST PATH)                                         │
+│  ─────────────────                                                          │
+│  if cache_key in _GRAPH_CACHE:                                              │
+│      cached_model, kept_indices = _GRAPH_CACHE[cache_key]                   │
+│      → Gather input buffers using kept_indices                              │
+│      → Run cached_model(*inputs) directly                                   │
+│      → Store results to target tensors                                      │
+│      → Skip ALL graph building! 🚀                                          │
+│                                                                             │
+│  4. CACHE MISS: BUILD GRAPH                                                 │
+│  ──────────────────────────                                                 │
+│  GRAPH.epoch += 1  # Bump epoch (old _graph_values now stale)               │
+│  self.graph = Graph("main", ...)  # Fresh MAX graph                         │
+│  self._replay_trace_to_build_graph(targets)  # Walk OpNode DAG              │
+│                                                                             │
+│  5. _replay_trace_to_build_graph()                                          │
+│  ─────────────────────────────────                                          │
+│  • DFS through OpNode.op_args to collect nodes in topological order         │
+│  • For each OpNode:                                                         │
+│    - Ensure inputs have valid _graph_values (add_input for realized)        │
+│    - Call op.execute() to build MAX graph nodes                             │
+│    - Store _graph_values to output TensorImpls                              │
+│                                                                             │
+│  6. COMPILE & EXECUTE                                                       │
+│  ────────────────────                                                       │
+│  model = session.load(self.graph)  # Compile to executable                  │
+│  results = model(*inputs)          # Run on device                          │
+│                                                                             │
+│  7. STORE RESULTS & CACHE                                                   │
+│  ────────────────────────                                                   │
+│  • Store buffers to target._impl._buffers                                   │
+│  • Cache: _GRAPH_CACHE[cache_key] = (model, kept_indices)                   │
+│                                                                             │
+│  8. CLEANUP                                                                 │
+│  ─────────                                                                  │
+│  _finalize_evaluation()  # Bump epoch, reset graph state                    │
+│  _cleanup_trace(targets) # Clear output_refs and _graph_values on targets   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Why caching matters**: If you run the same computation structure with different data (e.g., training loop iterations), the cache key matches and you skip graph building entirely. This is why deferred graph building + caching is the default—hot paths are fast.
 
 → **Detailed reference**: [core/graph/README.md](core/graph/README.md) for tracing, [core/autograd/README.md](core/autograd/README.md) for backward pass.
 
@@ -139,16 +232,19 @@ Nabla uses **reverse-mode autodiff** via trace-based VJP (Vector-Jacobian Produc
 │                                                                             │
 │  User calls: grad(fn)(x) or value_and_grad(fn)(x)                           │
 │                                                                             │
-│  1. TRACE: Execute fn(x), capture Trace object                              │
+│  1. TRACE: Execute fn(x), capture Trace object with OpNodes                 │
 │                                                                             │
-│  2. REHYDRATE: Call trace.refresh_graph_values() to restore all             |
-|     intermediate _values                                                    │
+│  2. COMPUTE FORWARD: trace.compute() evaluates to get concrete outputs      │
 │                                                                             │
-│  3. INITIALIZE: Create cotangent_map with output cotangent (usually 1.0)    │
+│  3. REHYDRATE (if EAGER_MAX_GRAPH=1):                                       │
+│     trace.refresh_graph_values()                                            │
+│     Why? Forward pass built graph → evaluate() bumped epoch and cleared     │
+│     _graph_values → VJP ops need primals with valid graph values            │
+│     Solution: Replay trace to rebuild _graph_values in current epoch        │
 │                                                                             │
 │  4. BACKWARD ITERATION: For each node in reversed(trace.nodes):             │
 │     a. Skip if op has no vjp_rule or no output has cotangent                │
-│     b. Reconstruct primals and outputs as Tensors from TensorImpls          |
+│     b. Reconstruct primals and outputs as Tensors from TensorImpls          │
 │     c. Gather output cotangents from cotangent_map                          │
 │     d. Call op.vjp_rule(primals, cotangent, output) → input cotangents      │
 │     e. Reduce cotangents to match primal shapes (handle broadcasting)       │
@@ -160,13 +256,72 @@ Nabla uses **reverse-mode autodiff** via trace-based VJP (Vector-Jacobian Produc
 │                                                                             │
 │  Result: dict[input_tensor → gradient_tensor]                               │
 │                                                                             │
-│  Key insight: VJP rules compute d(loss)/d(input) given d(loss)/d(output)    │
-│  Each op's vjp_rule is the "chain rule" step for that operation.            │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Critical: Why `refresh_graph_values()` in EAGER_MAX_GRAPH mode?**
+
+When `EAGER_MAX_GRAPH=1`, operations build MAX graph nodes immediately. But when `evaluate()` runs (to get forward pass results), it:
+1. Compiles and executes the graph
+2. **Bumps the epoch** (`GRAPH.epoch += 1`)
+3. **Clears `_graph_values`** via `_cleanup_trace()`
+
+The backward pass then needs to call VJP rules, which are themselves operations that (in eager mode) immediately try to build graph nodes. These VJP ops need their input tensors (the forward primals) to have valid `_graph_values` in the **current** epoch. But they're stale/cleared!
+
+**Solution**: Before backward, call `trace.refresh_graph_values()` which:
+1. Finds all leaf tensors (inputs) and ensures they're realized
+2. Adds them to the current graph epoch
+3. **Replays all forward operations** to rebuild `_graph_values`
+
+This is why the code in `backward_on_trace()` has:
+```python
+if EAGER_MAX_GRAPH:
+    trace.refresh_graph_values()
+```
+
+→ **Detailed reference**: [core/autograd/README.md](core/autograd/README.md)
+
+---
+
+## The Promise Tensor Pattern
+
+A key architectural concept is the **promise tensor**—a tensor that knows its shape but hasn't built its MAX graph nodes yet:
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          Promise vs Realized Tensors                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  PROMISE TENSOR (deferred graph building)                                   │
+│  ────────────────────────────────────────                                   │
+│  y = x + 1  # In default mode                                               │
+│                                                                             │
+│  y._impl._physical_shapes = [(4, 8), (4, 8)]  # Known from compute_physical │
+│  y._impl._shard_dtypes = [float32, float32]   # Known                       │
+│  y._impl._shard_devices = [GPU:0, GPU:1]      # Known                       │
+│  y._impl._graph_values = []                    # EMPTY - no MAX nodes yet   │
+│  y._impl.graph_values_epoch = -1               # Special marker: "promise"  │
+│  y._impl.output_refs = OpNode(...)            # OpNode recorded for replay  │
+│                                                                             │
+│  GRAPH._unrealized_impls contains y._impl     # Tracked for later evaluate  │
+│                                                                             │
+│  ─────────────────────────────────────────────────────────────────────────  │
+│                                                                             │
+│  REALIZED TENSOR (after evaluate)                                           │
+│  ─────────────────────────────────                                          │
+│  y.numpy()  # Triggers GRAPH.evaluate(y)                                    │
+│                                                                             │
+│  y._impl._buffers = [driver.Tensor, driver.Tensor]  # Actual device memory  │
+│  y._impl.graph_values_epoch = GRAPH.epoch           # Current epoch         │
+│  y._impl.output_refs = None                         # Cleared after eval    │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-→ **Detailed reference**: [core/autograd/README.md](core/autograd/README.md)
+**Why this design?**
+1. **Cache efficiency**: Promise tensors carry `op_hash` for cache key computation
+2. **Lazy evaluation**: Defer work until actually needed
+3. **Memory efficiency**: Don't allocate device memory until necessary
 
 ---
 

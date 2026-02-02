@@ -321,7 +321,7 @@ class ArangeOp(Operation):
         num_shards = len(mesh.devices) if mesh else 1
 
         shapes = [(length,)] * num_shards
-        
+
         device = args[4] if len(args) > 4 else kwargs.get("device")
         dtypes = [dtype] * num_shards
         if mesh:

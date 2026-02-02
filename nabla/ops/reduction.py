@@ -186,9 +186,7 @@ class ReduceSumPhysicalOp(Operation):
                     1 if i == norm_axis else d for i, d in enumerate(in_shape)
                 )
             else:
-                out_shape = tuple(
-                    d for i, d in enumerate(in_shape) if i != norm_axis
-                )
+                out_shape = tuple(d for i, d in enumerate(in_shape) if i != norm_axis)
             shapes.append(out_shape)
 
         dtypes = [x.dtype] * num_shards
@@ -280,9 +278,7 @@ class MeanPhysicalOp(Operation):
                     1 if i == norm_axis else d for i, d in enumerate(in_shape)
                 )
             else:
-                out_shape = tuple(
-                    d for i, d in enumerate(in_shape) if i != norm_axis
-                )
+                out_shape = tuple(d for i, d in enumerate(in_shape) if i != norm_axis)
             shapes.append(out_shape)
 
         dtypes = [x.dtype] * num_shards
@@ -374,9 +370,7 @@ class ReduceMaxPhysicalOp(Operation):
                     1 if i == norm_axis else d for i, d in enumerate(in_shape)
                 )
             else:
-                out_shape = tuple(
-                    d for i, d in enumerate(in_shape) if i != norm_axis
-                )
+                out_shape = tuple(d for i, d in enumerate(in_shape) if i != norm_axis)
             shapes.append(out_shape)
 
         dtypes = [x.dtype] * num_shards
@@ -501,9 +495,7 @@ class ReduceMinPhysicalOp(Operation):
                     1 if i == norm_axis else d for i, d in enumerate(in_shape)
                 )
             else:
-                out_shape = tuple(
-                    d for i, d in enumerate(in_shape) if i != norm_axis
-                )
+                out_shape = tuple(d for i, d in enumerate(in_shape) if i != norm_axis)
             shapes.append(out_shape)
 
         dtypes = [x.dtype] * num_shards

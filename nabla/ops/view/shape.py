@@ -166,15 +166,17 @@ class ReshapeOp(ShapeOp):
         shape = tuple(int(d) for d in shape)
         return ops.reshape(x, shape)
 
-    def _resolve_shape(self, x_shape: tuple[int, ...], target_shape: tuple[int, ...]) -> tuple[int, ...]:
+    def _resolve_shape(
+        self, x_shape: tuple[int, ...], target_shape: tuple[int, ...]
+    ) -> tuple[int, ...]:
         """Resolve -1 in target_shape based on input x_shape volume."""
         if -1 not in target_shape:
             return target_shape
-            
+
         input_size = 1
         for d in x_shape:
             input_size *= int(d)
-            
+
         resolved = list(target_shape)
         known_size = 1
         neg_idx = -1
@@ -185,10 +187,10 @@ class ReshapeOp(ShapeOp):
                 neg_idx = i
             else:
                 known_size *= int(d)
-                
+
         if known_size > 0:
             resolved[neg_idx] = input_size // known_size
-            
+
         return tuple(resolved)
 
     def _transform_shard_kwargs(
@@ -204,11 +206,11 @@ class ReshapeOp(ShapeOp):
 
         # Resolve -1 if present using the global shape of the input tensor
         if -1 in global_shape and len(args) > 0:
-             x = args[0]
-             if isinstance(x, Tensor):
-                 # x.shape returns the global logical shape
-                 global_shape = self._resolve_shape(x.shape, global_shape)
-        
+            x = args[0]
+            if isinstance(x, Tensor):
+                # x.shape returns the global logical shape
+                global_shape = self._resolve_shape(x.shape, global_shape)
+
         local_shape = compute_local_shape(
             global_shape, output_sharding, device_id=shard_idx
         )
@@ -219,11 +221,11 @@ class ReshapeOp(ShapeOp):
     ) -> tuple[list[tuple[int, ...]], Any]:
         """Infer physical shapes for reshape, handling inferred dims (-1)."""
         from ...core.sharding import spmd, spec
-        
+
         x = args[0]
         # kwargs['shape'] passed here might already include batch dimensions if vmapped.
         target_shape = kwargs.get("shape")
-        
+
         # 1. Resolve Global Physical Shape (handle -1)
         # We always resolve against the input's physical global shape (which includes batch dims).
         # This handles both standard and VMap cases uniformly.
@@ -232,15 +234,15 @@ class ReshapeOp(ShapeOp):
 
         if hasattr(x, "physical_global_shape"):
             input_shape = x.physical_global_shape
-        elif hasattr(x, "shape"): # Fallback
-             input_shape = x.shape
-        
+        elif hasattr(x, "shape"):  # Fallback
+            input_shape = x.shape
+
         if input_shape is not None and -1 in target_shape:
-             resolved_shape = self._resolve_shape(input_shape, target_shape)
+            resolved_shape = self._resolve_shape(input_shape, target_shape)
 
         # 2. Compute Local Physical Shape for each shard
         # We assume output_sharding matches the rank of resolved_shape.
-        
+
         mesh = spmd.get_mesh_from_args(args)
         num_shards = len(mesh.devices) if mesh else 1
 
@@ -921,9 +923,7 @@ class BroadcastToPhysicalOp(Operation):
         num_shards = len(mesh.devices) if mesh else 1
 
         if target_shape is None:
-            raise RuntimeError(
-                f"Could not determine target shape for {self.name}"
-            )
+            raise RuntimeError(f"Could not determine target shape for {self.name}")
 
         shapes = []
         if output_sharding and mesh:

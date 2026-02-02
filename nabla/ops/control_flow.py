@@ -92,13 +92,15 @@ class WhereOp(Operation):
     def name(self) -> str:
         return "where"
 
-    def compute_physical_shape(self, args: tuple, kwargs: dict, output_sharding: Any = None):
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ):
         from ..core.sharding import spmd
-        
+
         condition, x, y = args
         mesh = spmd.get_mesh_from_args(args)
         num_shards = len(mesh.devices) if mesh else 1
-        
+
         shapes = []
         for i in range(num_shards):
             idx = i if i < x.num_shards else 0
@@ -106,20 +108,23 @@ class WhereOp(Operation):
             if s is not None:
                 shapes.append(tuple(int(d) for d in s))
             else:
-                # Fallback: use global shape  
+                # Fallback: use global shape
                 shapes.append(tuple(int(d) for d in x.shape))
-        
+
         dtypes = [x.dtype] * num_shards
         devices = [x.device] * num_shards if not mesh else list(mesh.device_refs)
-        
+
         return shapes, dtypes, devices
 
-    def kernel(self, condition: graph.TensorValue, x: graph.TensorValue, y: graph.TensorValue) -> graph.TensorValue:
+    def kernel(
+        self, condition: graph.TensorValue, x: graph.TensorValue, y: graph.TensorValue
+    ) -> graph.TensorValue:
         return ops.where(condition, x, y)
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         from .creation import zeros_like
         from .control_flow import where
+
         condition, x, y = primals
         grad_x = where(condition, cotangent, zeros_like(x))
         grad_y = where(condition, zeros_like(y), cotangent)
@@ -131,16 +136,21 @@ class CondOp(Operation):
     def name(self) -> str:
         return "cond"
 
-    def __call__(self, pred: Tensor | bool, true_fn: Callable, false_fn: Callable, *operands: Any) -> Any:
+    def __call__(
+        self, pred: Tensor | bool, true_fn: Callable, false_fn: Callable, *operands: Any
+    ) -> Any:
         from ..core.tensor import Tensor
+
         operands = pytree.tree_map(ensure_tensor, operands)
         if not isinstance(pred, Tensor):
             pred = ensure_tensor(pred)
         return super().__call__(pred, true_fn, false_fn, *operands)
 
-    def compute_physical_shape(self, args: tuple, kwargs: dict, output_sharding: Any = None):
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ):
         """Infer output shapes by tracing true_fn symbolically (no graph building).
-        
+
         Since cond requires both branches to return identical shapes/dtypes,
         we only need to trace one branch. The trace creates promise tensors
         with shape metadata - we read that metadata directly without building
@@ -158,7 +168,7 @@ class CondOp(Operation):
         # We do NOT call _replay_trace_to_build_graph - just read the metadata.
         res = true_fn(*operands)
         flat_res, _ = pytree.tree_flatten(res, is_leaf=lambda x: isinstance(x, Tensor))
-        
+
         all_shapes, all_dtypes, all_devices = [], [], []
         for leaf in flat_res:
             if not isinstance(leaf, Tensor):
@@ -167,12 +177,12 @@ class CondOp(Operation):
                 all_dtypes.append([None])
                 all_devices.append([None])
                 continue
-                
+
             # Read shape from the tensor's physical metadata (set during __call__)
             leaf_shapes = leaf._impl._physical_shapes
             leaf_dtypes = leaf._impl._shard_dtypes
             leaf_devices = leaf._impl._shard_devices
-            
+
             if leaf_shapes and leaf_dtypes:
                 all_shapes.append(leaf_shapes)
                 all_dtypes.append(leaf_dtypes)
@@ -190,18 +200,18 @@ class CondOp(Operation):
 
     def infer_sharding_spec(self, args: tuple, mesh, kwargs: dict = None):
         """Cond: output sharding matches the traced branch output sharding.
-        
+
         Since both branches must return identical shapes/dtypes, we trace true_fn
         and use its output sharding specs.
         """
         from ..core.tensor import Tensor
-        
+
         pred, true_fn, false_fn, *operands = args
-        
+
         # Trace true_fn to get output structure
         res = true_fn(*operands)
         flat_res = pytree.tree_leaves(res)
-        
+
         # Collect specs from output tensors
         output_specs = []
         for leaf in flat_res:
@@ -209,7 +219,7 @@ class CondOp(Operation):
                 output_specs.append(leaf.sharding.clone())
             else:
                 output_specs.append(None)
-        
+
         # Input specs: just for operands (pred and fns don't have sharding)
         input_specs = [None, None, None]  # pred, true_fn, false_fn
         for op in operands:
@@ -217,21 +227,27 @@ class CondOp(Operation):
                 input_specs.append(op.sharding.clone())
             else:
                 input_specs.append(None)
-        
+
         if len(output_specs) == 1:
             return output_specs[0], input_specs, False
         return output_specs, input_specs, False
 
     def sharding_rule(self, input_shapes, output_shapes, **kwargs):
         from ..core.sharding.propagation import OpShardingRuleTemplate
-        mappings = [{j: [f"t0_d{j}"] for j in range(len(shape))} for shape in input_shapes]
-        return OpShardingRuleTemplate(mappings, mappings).instantiate(input_shapes, output_shapes)
+
+        mappings = [
+            {j: [f"t0_d{j}"] for j in range(len(shape))} for shape in input_shapes
+        ]
+        return OpShardingRuleTemplate(mappings, mappings).instantiate(
+            input_shapes, output_shapes
+        )
 
     def kernel(self, pred_shard, true_fn, false_fn, *operand_shards):
         from ..core.tensor import Tensor
 
         def wrap(v):
-            if not hasattr(v, 'type'): return v
+            if not hasattr(v, "type"):
+                return v
             t = Tensor(value=v)
             t._impl.graph_values_epoch = GRAPH.epoch
             return t
@@ -240,17 +256,23 @@ class CondOp(Operation):
 
         def trace_and_replay(fn):
             res = fn(*wrapped_operands)
-            flat_res, _ = pytree.tree_flatten(res, is_leaf=lambda x: isinstance(x, Tensor))
+            flat_res, _ = pytree.tree_flatten(
+                res, is_leaf=lambda x: isinstance(x, Tensor)
+            )
             GRAPH._replay_trace_to_build_graph(flat_res)
-            return [t._impl.primary_value if isinstance(t, Tensor) else t for t in flat_res]
+            return [
+                t._impl.primary_value if isinstance(t, Tensor) else t for t in flat_res
+            ]
 
         # Get output structure and types by tracing true_fn.
         # We DON'T call _replay_trace_to_build_graph here - just read metadata.
         # The actual graph building happens inside trace_and_replay when ops.cond calls the lambdas.
         scratch_res = true_fn(*wrapped_operands)
         out_structure = pytree.tree_structure(scratch_res)
-        flat_scratch = pytree.tree_flatten(scratch_res, is_leaf=lambda x: isinstance(x, Tensor))[0]
-        
+        flat_scratch = pytree.tree_flatten(
+            scratch_res, is_leaf=lambda x: isinstance(x, Tensor)
+        )[0]
+
         # Build out_types from the promise tensors' metadata (shapes/dtypes set during __call__)
         out_types = []
         for t in flat_scratch:
@@ -267,7 +289,12 @@ class CondOp(Operation):
             else:
                 out_types.append(graph.Type(type(t), ()))
 
-        res_flat = ops.cond(pred_shard, out_types, lambda: trace_and_replay(true_fn), lambda: trace_and_replay(false_fn))
+        res_flat = ops.cond(
+            pred_shard,
+            out_types,
+            lambda: trace_and_replay(true_fn),
+            lambda: trace_and_replay(false_fn),
+        )
         return pytree.tree_unflatten(out_structure, res_flat)
 
 
@@ -282,10 +309,10 @@ class WhileLoopOp(Operation):
     def infer_sharding_spec(self, args: tuple, mesh, kwargs: dict = None):
         """While loop: output sharding matches init_val sharding."""
         from ..core.tensor import Tensor
-        
+
         cond_fn, body_fn, init_val = args
         flat_init = pytree.tree_leaves(init_val)
-        
+
         # Collect specs from init tensors
         output_specs = []
         input_specs = []
@@ -296,19 +323,23 @@ class WhileLoopOp(Operation):
             else:
                 output_specs.append(None)
                 input_specs.append(None)
-        
+
         # Single output: return single spec, multi: return list
         if len(output_specs) == 1:
             return output_specs[0], input_specs, False
         return output_specs, input_specs, False
 
-    def compute_physical_shape(self, args: tuple, kwargs: dict, output_sharding: Any = None):
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ):
         from ..core.tensor import Tensor
         from ..core.sharding import spmd
-        
+
         cond_fn, body_fn, init_val = args
-        flat_init, _ = pytree.tree_flatten(init_val, is_leaf=lambda x: isinstance(x, Tensor))
-        
+        flat_init, _ = pytree.tree_flatten(
+            init_val, is_leaf=lambda x: isinstance(x, Tensor)
+        )
+
         mesh = spmd.get_mesh_from_args(args)
         num_shards = len(mesh.devices) if mesh else 1
 
@@ -318,13 +349,17 @@ class WhileLoopOp(Operation):
                 phys_shapes = leaf._impl._physical_shapes
                 shard_dtypes = leaf._impl._shard_dtypes
                 shard_devices = leaf._impl._shard_devices
-                
+
                 # Handle replication for scalar/unsharded inputs on mesh
                 if phys_shapes and len(phys_shapes) == 1 and num_shards > 1:
                     phys_shapes = phys_shapes * num_shards
                     shard_dtypes = shard_dtypes * num_shards
-                    shard_devices = shard_devices * num_shards if shard_devices else [None] * num_shards
-                
+                    shard_devices = (
+                        shard_devices * num_shards
+                        if shard_devices
+                        else [None] * num_shards
+                    )
+
                 all_shapes.append(phys_shapes)
                 all_dtypes.append(shard_dtypes)
                 all_devices.append(shard_devices)
@@ -339,14 +374,20 @@ class WhileLoopOp(Operation):
 
     def sharding_rule(self, input_shapes, output_shapes, **kwargs):
         from ..core.sharding.propagation import OpShardingRuleTemplate
-        mappings = [{j: [f"t0_d{j}"] for j in range(len(shape))} for shape in input_shapes]
-        return OpShardingRuleTemplate(mappings, mappings).instantiate(input_shapes, output_shapes)
+
+        mappings = [
+            {j: [f"t0_d{j}"] for j in range(len(shape))} for shape in input_shapes
+        ]
+        return OpShardingRuleTemplate(mappings, mappings).instantiate(
+            input_shapes, output_shapes
+        )
 
     def kernel(self, cond_fn, body_fn, init_val_shard):
         from ..core.tensor import Tensor
 
         def wrap(v):
-            if not hasattr(v, 'type'): return v
+            if not hasattr(v, "type"):
+                return v
             t = Tensor(value=v)
             t._impl.graph_values_epoch = GRAPH.epoch
             return t
@@ -372,12 +413,17 @@ class WhileLoopOp(Operation):
             args_struct = pytree.tree_unflatten(init_structure, list(args_flat))
             wrapped_args = pytree.tree_map(wrap, args_struct)
             res = body_fn(wrapped_args)
-            flat_res, _ = pytree.tree_flatten(res, is_leaf=lambda x: isinstance(x, Tensor))
+            flat_res, _ = pytree.tree_flatten(
+                res, is_leaf=lambda x: isinstance(x, Tensor)
+            )
             tensors = [t for t in flat_res if isinstance(t, Tensor)]
-            if tensors: GRAPH._replay_trace_to_build_graph(tensors)
+            if tensors:
+                GRAPH._replay_trace_to_build_graph(tensors)
             return [unwrap(t) for t in flat_res]
 
-        res_flat = ops.while_loop(init_flat, trace_and_replay_cond, trace_and_replay_body)
+        res_flat = ops.while_loop(
+            init_flat, trace_and_replay_cond, trace_and_replay_body
+        )
         return pytree.tree_unflatten(init_structure, res_flat)
 
 
@@ -392,26 +438,46 @@ class ScanOp(Operation):
     def kernel(self, *args, **kwargs) -> Any:
         raise NotImplementedError("ScanOp is unrolled via __call__.")
 
-    def __call__(self, f: Callable, init: Any, xs: Any, length: int | None = None, reverse: bool = False) -> tuple[Any, Any]:
-        if reverse: raise NotImplementedError("Reverse scan not implemented")
+    def __call__(
+        self,
+        f: Callable,
+        init: Any,
+        xs: Any,
+        length: int | None = None,
+        reverse: bool = False,
+    ) -> tuple[Any, Any]:
+        if reverse:
+            raise NotImplementedError("Reverse scan not implemented")
         from ..ops import view
+
         xs_flat = pytree.tree_leaves(xs)
-        if not xs_flat: raise ValueError("scan requires non-empty xs")
+        if not xs_flat:
+            raise ValueError("scan requires non-empty xs")
         length = length or int(xs_flat[0].shape[0])
-        
+
         carry = init
         ys_list = []
         for i in range(length):
+
             def _slice_at_i(x):
-                slc = view.slice_tensor(x, start=[i] + [0]*(x.rank-1), size=[1] + [int(d) for d in x.shape[1:]])
+                slc = view.slice_tensor(
+                    x,
+                    start=[i] + [0] * (x.rank - 1),
+                    size=[1] + [int(d) for d in x.shape[1:]],
+                )
                 return view.squeeze(slc, 0)
+
             x_i = pytree.tree_map(_slice_at_i, xs)
             carry, y_i = f(carry, x_i)
             ys_list.append(y_i)
 
-        if not ys_list: return carry, None
+        if not ys_list:
+            return carry, None
         treedef = pytree.tree_structure(ys_list[0])
-        stacked_leaves = [view.stack([pytree.tree_leaves(y)[j] for y in ys_list], axis=0) for j in range(len(pytree.tree_leaves(ys_list[0])))]
+        stacked_leaves = [
+            view.stack([pytree.tree_leaves(y)[j] for y in ys_list], axis=0)
+            for j in range(len(pytree.tree_leaves(ys_list[0])))
+        ]
         return carry, pytree.tree_unflatten(treedef, stacked_leaves)
 
 
@@ -420,9 +486,23 @@ _cond_op = CondOp()
 _while_loop_op = WhileLoopOp()
 _scan_op = ScanOp()
 
-def where(condition: Tensor, x: Tensor, y: Tensor) -> Tensor: return _where_op(condition, x, y)
-def cond(pred: Tensor, true_fn: Callable, false_fn: Callable, *operands: Any) -> Any: return _cond_op(pred, true_fn, false_fn, *operands)
-def while_loop(cond_fn: Callable, body_fn: Callable, init_val: Any) -> Any: return _while_loop_op(cond_fn, body_fn, init_val)
-def scan(f: Callable, init: Any, xs: Any, length: int | None = None, reverse: bool = False) -> tuple[Any, Any]: return _scan_op(f, init, xs, length, reverse)
+
+def where(condition: Tensor, x: Tensor, y: Tensor) -> Tensor:
+    return _where_op(condition, x, y)
+
+
+def cond(pred: Tensor, true_fn: Callable, false_fn: Callable, *operands: Any) -> Any:
+    return _cond_op(pred, true_fn, false_fn, *operands)
+
+
+def while_loop(cond_fn: Callable, body_fn: Callable, init_val: Any) -> Any:
+    return _while_loop_op(cond_fn, body_fn, init_val)
+
+
+def scan(
+    f: Callable, init: Any, xs: Any, length: int | None = None, reverse: bool = False
+) -> tuple[Any, Any]:
+    return _scan_op(f, init, xs, length, reverse)
+
 
 __all__ = ["where", "cond", "while_loop", "scan"]

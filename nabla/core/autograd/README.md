@@ -24,16 +24,16 @@ Unlike PyTorch (which stores gradient tape per-tensor), Nabla uses **trace-based
 │  │   What happens:                                                     │    │
 │  │   • Mark input tensors as traced=True                               │    │
 │  │   • Execute loss_fn normally                                        │    │
-│  │   • Each operation records OpNode via _setup_output_refs        │    │
+│  │   • Each operation records OpNode via _setup_output_refs            │    │
 │  │   • trace.compute() walks backward from outputs via DFS             │    │
-│  │   • Result: t.nodes = list of OpNode in topological order       │    │
+│  │   • Result: t.nodes = list of OpNode in topological order           │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                     │                                       │
 │                                     ▼                                       │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │ STEP 2: REHYDRATE  (tracing.py → Trace.refresh_graph_values)                   │    │
+│  │ STEP 2: REHYDRATE  (tracing.py → Trace.refresh_graph_values)        │    │
 │  │                                                                     │    │
-│  │   t.refresh_graph_values()                                                     │    │
+│  │   t.refresh_graph_values()                                          │    │
 │  │                                                                     │    │
 │  │   Why needed: Graph _values are epoch-scoped. After evaluate(),     │    │
 │  │   they become stale. Rehydration restores them for current epoch.   │    │
@@ -43,11 +43,11 @@ Unlike PyTorch (which stores gradient tape per-tensor), Nabla uses **trace-based
 │  │   2. Add leaves to current graph epoch                              │    │
 │  │   3. For each node in topological order:                            │    │
 │  │      • Wrap TensorImpls as Tensors                                  │    │
-│  │      • Call op.execute(args, ORIGINAL_kwargs)              │    │
+│  │      • Call op.execute(args, ORIGINAL_kwargs)                       │    │
 │  │      • Map fresh _values back to original TensorImpls               │    │
 │  │                                                                     │    │
-│  │   Critical: execute receives original kwargs because       │    │
-│  │   that's all we stored in OpNode. It adapts internally.         │    │
+│  │   Critical: execute receives original kwargs because                │    │
+│  │   that's all we stored in OpNode. It adapts internally.             │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                     │                                       │
 │                                     ▼                                       │

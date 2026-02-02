@@ -34,8 +34,6 @@ class ShardOp(Operation):
             res = gather_all_axes(cotangent)
             return res
 
-
-
         # Use the smart shard function (defined below) to handle transition.
         # Note: reshard name is deprecated, we use universal shard() now.
         return shard(
@@ -118,14 +116,12 @@ class ShardOp(Operation):
                         global_shape = compute_global_shape(tuple(local), x.sharding)
                     elif local is not None:
                         global_shape = tuple(int(d) for d in local)
-            
+
             if global_shape is None:
-                 # Fallback to logical shape (last resort)
-                 global_shape = tuple(int(d) for d in x.shape)
+                # Fallback to logical shape (last resort)
+                global_shape = tuple(int(d) for d in x.shape)
 
-        
         shapes = []
-
 
         if output_sharding and mesh:
             for i in range(num_shards):
@@ -193,16 +189,22 @@ class ShardOp(Operation):
                 if global_shape is None:
                     global_shape = tuple(int(d) for d in x.shape)
 
-
             # 3. Kernel Execution (Slicing)
             x_input = x
             if isinstance(x, Tensor):
                 vals = x.values
                 if vals:
-                    # OPTIMIZATION: If the current physical shape already matches 
+                    # OPTIMIZATION: If the current physical shape already matches
                     # the predicted local shape for the target, we can skip slicing.
-                    target_local_shape = tuple(int(d) for d in compute_local_shape(global_shape, target_spec, device_id=0))
-                    current_local_shape = tuple(int(d) for d in x.physical_local_shape(0))
+                    target_local_shape = tuple(
+                        int(d)
+                        for d in compute_local_shape(
+                            global_shape, target_spec, device_id=0
+                        )
+                    )
+                    current_local_shape = tuple(
+                        int(d) for d in x.physical_local_shape(0)
+                    )
                     if current_local_shape == target_local_shape:
                         return (x.values, target_spec, mesh)
 
@@ -212,20 +214,19 @@ class ShardOp(Operation):
             elif not isinstance(x, g.TensorValue):
                 x_input = g.TensorValue(x)
 
-
             # _shard_logic expects a single value input usually (replicated)
             # Filter out mesh/dim_specs/replicated_axes/global_shape from kwargs to avoid duplicate args
-            filtered_kwargs = {k: v for k, v in kwargs.items() if k not in ('mesh', 'dim_specs', 'replicated_axes', 'global_shape')}
-            
+            filtered_kwargs = {
+                k: v
+                for k, v in kwargs.items()
+                if k not in ("mesh", "dim_specs", "replicated_axes", "global_shape")
+            }
+
             shard_graph_values = self._shard_logic(
                 x_input, mesh, dim_specs, global_shape=global_shape, **filtered_kwargs
             )
 
             return (shard_graph_values, target_spec, mesh)
-
-
-
-
 
     def _simulate_shard_execution(self, x, global_shape, spec, mesh):
         """Execute sharding manually for all devices (simulation)."""
@@ -369,14 +370,18 @@ def shard(
 
     if not isinstance(x, Tensor) or not x.sharding:
         # If not a tensor or not sharded, treat as fresh slicing (legacy behavior)
-        return shard_op(x, mesh=mesh, dim_specs=dim_specs, replicated_axes=replicated_axes, **kwargs)
+        return shard_op(
+            x, mesh=mesh, dim_specs=dim_specs, replicated_axes=replicated_axes, **kwargs
+        )
 
     # === Transition Logic (merged from ReshardOp) ===
     from_spec = x.sharding
     to_spec = target_spec
 
     if not needs_reshard(from_spec, to_spec):
-        return shard_op(x, mesh=mesh, dim_specs=dim_specs, replicated_axes=replicated_axes, **kwargs)
+        return shard_op(
+            x, mesh=mesh, dim_specs=dim_specs, replicated_axes=replicated_axes, **kwargs
+        )
 
     result = x
 
@@ -418,4 +423,10 @@ def shard(
     # 3. Contraction (ShardOp)
     # We pass _bypass_idempotency=True to force the shard op even if specs look similar
     # (though usually the shape change prevents that confusion, explicit is better)
-    return shard_op(result, mesh=mesh, dim_specs=dim_specs, replicated_axes=replicated_axes, **kwargs)
+    return shard_op(
+        result,
+        mesh=mesh,
+        dim_specs=dim_specs,
+        replicated_axes=replicated_axes,
+        **kwargs,
+    )

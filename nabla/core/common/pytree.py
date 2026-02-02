@@ -173,7 +173,7 @@ def tree_leaves(
 ) -> list:
     """Get all leaves from a pytree (optimized version - doesn't build treedef)."""
     leaves = []
-    
+
     def _collect(node: Any) -> None:
         if is_leaf is not None and is_leaf(node):
             leaves.append(node)
@@ -198,7 +198,7 @@ def tree_leaves(
             return
 
         leaves.append(node)
-    
+
     _collect(tree)
     return leaves
 

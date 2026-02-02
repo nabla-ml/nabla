@@ -191,9 +191,7 @@ class ChunkOp(AxisOp):
             idx = shard_idx if shard_idx < x.num_shards else 0
             s = x.physical_local_shape(idx)
             if s is None:
-                raise RuntimeError(
-                    f"Could not determine physical shape in {self.name}"
-                )
+                raise RuntimeError(f"Could not determine physical shape in {self.name}")
 
             in_shape = list(int(d) for d in s)
             norm_axis = axis if axis >= 0 else len(in_shape) + axis
@@ -374,9 +372,7 @@ class UnbindOp(AxisOp):
             idx = shard_idx if shard_idx < x.num_shards else 0
             s = x.physical_local_shape(idx)
             if s is None:
-                raise RuntimeError(
-                    f"Could not determine physical shape in {self.name}"
-                )
+                raise RuntimeError(f"Could not determine physical shape in {self.name}")
 
             in_shape = list(int(d) for d in s)
             norm_axis = axis if axis >= 0 else len(in_shape) + axis

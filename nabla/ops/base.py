@@ -95,25 +95,33 @@ class Operation(ABC):
         )
 
         return (shard_results, output_sharding, mesh)
+
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         # === New Path: Physical Execution ===
-        
+
         # 1. Collect Metadata (for Adaptation logic)
-        max_batch_dims, any_traced, any_sharded, any_has_tangent = collect_metadata(args)
+        max_batch_dims, any_traced, any_sharded, any_has_tangent = collect_metadata(
+            args
+        )
 
         # 2. Adaptation: Reshard Inputs
-        resharded_args, adapted_kwargs, predicted_output_spec, mesh, reduce_axes = \
+        resharded_args, adapted_kwargs, predicted_output_spec, mesh, reduce_axes = (
             adapt_and_reshard(self, args, kwargs, any_sharded, max_batch_dims)
+        )
 
         # 3. Compute Hash for Caching
         op_hash = compute_structural_hash(self.name, resharded_args, adapted_kwargs)
 
         # 4. Compute Physical Shapes (always needed)
         if type(self).compute_physical_shape is Operation.compute_physical_shape:
-            raise RuntimeError(f"{self.__class__.__name__} must implement compute_physical_shape")
+            raise RuntimeError(
+                f"{self.__class__.__name__} must implement compute_physical_shape"
+            )
 
         output_physical_shapes, output_shard_dtypes, output_shard_devices = (
-            self.compute_physical_shape(resharded_args, adapted_kwargs, predicted_output_spec)
+            self.compute_physical_shape(
+                resharded_args, adapted_kwargs, predicted_output_spec
+            )
         )
 
         # 5. Eager Execution (if enabled)
@@ -122,8 +130,15 @@ class Operation(ABC):
 
         # 6. Packaging (Create Tensor(s))
         output = package_outputs(
-            self, execution_results, output_physical_shapes, output_shard_dtypes, 
-            output_shard_devices, predicted_output_spec, mesh, any_traced, max_batch_dims
+            self,
+            execution_results,
+            output_physical_shapes,
+            output_shard_dtypes,
+            output_shard_devices,
+            predicted_output_spec,
+            mesh,
+            any_traced,
+            max_batch_dims,
         )
 
         # 7. Tracing & Post-Processing
@@ -212,7 +227,9 @@ class Operation(ABC):
         if isinstance(output, Tensor):
             output_impls = [output._impl]
             output_tree_def = pytree.PyTreeDef(pytree._K_LEAF, None, (), 1)
-        elif isinstance(output, (list, tuple)) and all(isinstance(x, Tensor) for x in output):
+        elif isinstance(output, (list, tuple)) and all(
+            isinstance(x, Tensor) for x in output
+        ):
             output_impls = [x._impl for x in output]
             output_tree_def = pytree.tree_structure(output)
         else:
@@ -228,9 +245,12 @@ class Operation(ABC):
         # Optimized to_impl: only use tree_map if args contain nested structures
         def to_impl(x: Any) -> Any:
             return x._impl if isinstance(x, Tensor) else x
-        
+
         # Fast path for simple tuple of tensors (very common case)
-        if isinstance(args, tuple) and all(isinstance(a, Tensor) or not isinstance(a, (list, dict, tuple)) for a in args):
+        if isinstance(args, tuple) and all(
+            isinstance(a, Tensor) or not isinstance(a, (list, dict, tuple))
+            for a in args
+        ):
             stored_args = tuple(to_impl(a) for a in args)
         else:
             stored_args = pytree.tree_map(to_impl, args)
@@ -238,7 +258,9 @@ class Operation(ABC):
         # Fast path for kwargs (usually None or simple dict)
         if logical_kwargs is None:
             stored_logical_kwargs = None
-        elif isinstance(logical_kwargs, dict) and all(not isinstance(v, (list, tuple)) for v in logical_kwargs.values()):
+        elif isinstance(logical_kwargs, dict) and all(
+            not isinstance(v, (list, tuple)) for v in logical_kwargs.values()
+        ):
             stored_logical_kwargs = {k: to_impl(v) for k, v in logical_kwargs.items()}
         else:
             stored_logical_kwargs = pytree.tree_map(to_impl, logical_kwargs)
@@ -272,35 +294,37 @@ class BinaryOperation(Operation):
 
         x = args[0]
         y = args[1]
-        
+
         # We rely on previous broadcasting steps to ensure x and y have compatible shapes
         # Or at least compatible for the operation logic.
         # For elementwise binary, inputs are typically broadcasted to match.
-        
+
         mesh = spmd.get_mesh_from_args(args)
         num_shards = len(mesh.devices) if mesh else 1
-        
+
         shapes = []
         for i in range(num_shards):
             # Prefer x, but if x is scalar/smaller rank, y might determine shape?
             # In BinaryOperation.__call__, inputs are broadcasted to target_physical.
             # So args passed here (resharded_args) should have correct shapes.
-            
+
             # Handle replicated inputs (1 shard) used in multi-shard mesh
             idx_x = i if i < x.num_shards else 0
             s = x.physical_local_shape(idx_x)
-            
+
             if s is None:
-                 # Fallback to y if x doesn't help? or error?
-                 if isinstance(y, Tensor):
-                     idx_y = i if i < y.num_shards else 0
-                     s = y.physical_local_shape(idx_y)
-            
+                # Fallback to y if x doesn't help? or error?
+                if isinstance(y, Tensor):
+                    idx_y = i if i < y.num_shards else 0
+                    s = y.physical_local_shape(idx_y)
+
             if s is not None:
                 shapes.append(tuple(int(d) for d in s))
             else:
-                 # Should not happen if inputs are realized/valid
-                 raise RuntimeError(f"Could not determine physical shape for {self.name}")
+                # Should not happen if inputs are realized/valid
+                raise RuntimeError(
+                    f"Could not determine physical shape for {self.name}"
+                )
 
         # Dtype promotion
         # Simple rule: preserve float32, etc.
@@ -310,11 +334,11 @@ class BinaryOperation(Operation):
         # Let's assume same dtype for now or pick wider.
         dtype = x.dtype
         if hasattr(y, "dtype") and y.dtype != dtype:
-             # Very basic promotion: float > int
-             pass 
+            # Very basic promotion: float > int
+            pass
 
         dtypes = [dtype] * num_shards
-        
+
         # Device placement
         if mesh:
             if mesh.is_distributed:
@@ -343,14 +367,11 @@ class BinaryOperation(Operation):
         from ..core.sharding import spmd
 
         mesh = spmd.get_mesh_from_args(args)
-        
+
         with GRAPH.graph:
             shard_results = spmd.execute_on_shards(
                 self.kernel, args, kwargs, mesh, op=self
             )
-
-
-
 
         # Infer output sharding from inputs
         output_sharding, _, _ = spmd.infer_output_sharding(
@@ -659,7 +680,7 @@ class UnaryOperation(Operation):
         x = args[0]
         mesh = spmd.get_mesh_from_args(args)
         num_shards = len(mesh.devices) if mesh else 1
-        
+
         shapes = []
         for i in range(num_shards):
             idx = i if i < x.num_shards else 0
@@ -667,8 +688,10 @@ class UnaryOperation(Operation):
             if s is not None:
                 shapes.append(tuple(int(d) for d in s))
             else:
-                 raise RuntimeError(f"Could not determine physical shape for {self.name}")
-        
+                raise RuntimeError(
+                    f"Could not determine physical shape for {self.name}"
+                )
+
         dtypes = [x.dtype] * num_shards
         if mesh:
             if mesh.is_distributed:

@@ -163,8 +163,6 @@ class ReduceScatterOp(CollectiveOperation):
                 values, physical_axis, mesh=mesh, scatter_axes=scatter_axes
             )
 
-
-
         # 3. Compute Output Spec
         # Use logical axis; _compute_output_spec converts it.
         output_spec = self._compute_output_spec(
@@ -238,8 +236,8 @@ class ReduceScatterOp(CollectiveOperation):
         # Simple case: all shards participate in the same reduce-scatter
         # Handle replicated input (single value for multiple shards)
         if len(shard_graph_values) == 1 and mesh and len(mesh.devices) > 1:
-             # Expand for simulation
-             shard_graph_values = [shard_graph_values[0]] * len(mesh.devices)
+            # Expand for simulation
+            shard_graph_values = [shard_graph_values[0]] * len(mesh.devices)
 
         full_result = shard_graph_values[0]
         for sv in shard_graph_values[1:]:
@@ -258,7 +256,6 @@ class ReduceScatterOp(CollectiveOperation):
             scattered.append(full_result[tuple(slices)])
 
         return scattered
-
 
     def _grouped_scatter(
         self,
@@ -328,11 +325,10 @@ class ReduceScatterOp(CollectiveOperation):
                 target_dim = self._get_physical_axis(input_tensor, kwargs_axis)
                 if target_dim < len(input_spec.dim_specs):
                     scatter_axes = set(input_spec.dim_specs[target_dim].axes or [])
-            
+
             # If still no scatter axes (input was replicated), scatter across ALL mesh axes
             if not scatter_axes and mesh:
                 scatter_axes = set(mesh.axis_names)
-
 
             kwargs_axis = kwargs.get("axis", 0)
             target_dim = self._get_physical_axis(input_tensor, kwargs_axis)

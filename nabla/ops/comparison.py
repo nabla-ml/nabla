@@ -45,6 +45,7 @@ class ComparisonUnaryOp(UnaryOperation):
         dtypes = [DType.bool] * num_shards
         return shapes, dtypes, devices
 
+
 if TYPE_CHECKING:
     pass
 

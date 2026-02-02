@@ -135,7 +135,7 @@ result = fast_fn(x2, y2)
 
 ## Trace Rehydration (Critical Concept)
 
-Rehydration is needed because graph `_values` are epoch-scoped. After `evaluate()`, old values become stale. Before backward pass (or trace replay), rehydration restores them:
+Rehydration is needed because graph `_graph_values` are epoch-scoped. After `evaluate()`, old values become stale. Before backward pass (or trace replay), rehydration restores them:
 
 ```python
 def refresh_graph_values(trace):
@@ -156,11 +156,18 @@ def refresh_graph_values(trace):
         for ref, new_impl in zip(output_refs._refs, result_impls):
             original_impl = ref()
             if original_impl:
-                original_impl._values = new_impl._values
-                original_impl.values_epoch = GRAPH.epoch
+                original_impl._graph_values = new_impl._graph_values
+                original_impl.graph_values_epoch = GRAPH.epoch
 ```
 
 **Why original kwargs**: `execute` adapts internally. This is the only way rehydration can work correctly.
+
+**When is this called?** In `backward_on_trace()` when `NABLA_EAGER_MAX_GRAPH=1`:
+```python
+if EAGER_MAX_GRAPH:
+    trace.refresh_graph_values()
+```
+This is necessary because the forward pass builds graph values, but `evaluate()` bumps the epoch and clears them. VJP operations need valid graph values in the current epoch.
 
 ---
 

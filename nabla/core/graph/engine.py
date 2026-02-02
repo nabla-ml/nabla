@@ -202,21 +202,27 @@ class ComputeGraph:
         # --- COMPUTE CACHE KEY ---
         # We sort targets to ensure deterministic cache keys regardless of registration order.
         def get_tensor_key(t: Tensor):
-            if t._impl.output_refs is not None and t._impl.output_refs._op_hash is not None:
+            if (
+                t._impl.output_refs is not None
+                and t._impl.output_refs._op_hash is not None
+            ):
                 # Unrealized: (sorting_bucket=0, op_hash, output_index)
                 return (0, t._impl.output_refs._op_hash, t._impl.output_index)
             # Realized: (sorting_bucket=1, dtype, shape, sharding)
             from ...ops.base import _make_hashable
+
             sharding_key = _make_hashable(t.sharding) if t.sharding else None
             return (1, str(t.dtype), tuple(int(d) for d in t.shape), sharding_key)
 
         targets.sort(key=lambda t: str(get_tensor_key(t)))
-        
+
         op_hashes = [get_tensor_key(t) for t in targets]
         cache_key = tuple(op_hashes) if op_hashes else None
-        
+
         if DEBUG_LAZY_EVAL:
-            print(f"\n[CACHE] Key hash: {hash(cache_key)} | Cache size: {len(_GRAPH_CACHE)}")
+            print(
+                f"\n[CACHE] Key hash: {hash(cache_key)} | Cache size: {len(_GRAPH_CACHE)}"
+            )
 
         # === CHECK CACHE ===
         if cache_key is not None:
@@ -225,40 +231,42 @@ class ComputeGraph:
                 cached_model, kept_indices = entry
                 if DEBUG_LAZY_EVAL:
                     print(f"[CACHE] HIT! key_hash={hash(cache_key)}")
-                
+
                 # Gather ALL candidate buffers from the trace in the order they would be added.
                 # Since we don't have a fresh graph yet, we simulate the input ordering.
                 all_candidate_tensors = self._get_input_tensors_ordered(targets)
                 all_buffers = []
                 for impl in all_candidate_tensors:
                     all_buffers.extend(impl._buffers)
-                
+
                 # Filter to only the ones recorded during MISS
                 inputs = [all_buffers[i] for i in kept_indices]
-                
+
                 if DEBUG_LAZY_EVAL:
-                    print(f"[CACHE] inputs: {[(tuple(inp.shape), str(inp.dtype), id(inp)) for inp in inputs]}")
-                
+                    print(
+                        f"[CACHE] inputs: {[(tuple(inp.shape), str(inp.dtype), id(inp)) for inp in inputs]}"
+                    )
+
                 seed_val, *results = cached_model(*inputs)
-                
+
                 # Store results to targets
                 result_idx = 0
                 for t in targets:
                     n_shards = t.num_shards
                     t_results = results[result_idx : result_idx + n_shards]
-                    
+
                     if n_shards > 1:
                         t._impl._buffers = list(t_results)
                     else:
                         t.storage = t_results[0]
-                    
+
                     t._value = None
                     t.real = True
                     t._impl._graph_values = []
                     result_idx += n_shards
                     # Remove from unrealized since it's now real
                     self.unrealized.pop(id(t), None)
-                
+
                 self._finalize_evaluation(seed_value=seed_val.item())
                 self._cleanup_trace(targets)
                 return (cached_model, inputs) if return_model else None
@@ -280,7 +288,7 @@ class ComputeGraph:
 
         # Replay trace to build MAX graph
         self._replay_trace_to_build_graph(targets)
-        
+
         # Build graph outputs
         all_graph_values = []
         value_map = []
@@ -322,7 +330,7 @@ class ComputeGraph:
 
         model = _session().load(self.graph)
         seed_val, *results = model(*inputs)
-        
+
         # Store results
         tensor_results: dict[int, list] = {}
         for (t, shard_idx), result in zip(value_map, results, strict=True):
@@ -354,9 +362,11 @@ class ComputeGraph:
             all_candidate_buffers = []
             for impl in all_candidate_tensors:
                 all_candidate_buffers.extend(impl._buffers)
-                
-            used_storages = [self.sources.get(inp._mlir_value) for inp in self.graph.inputs]
-            
+
+            used_storages = [
+                self.sources.get(inp._mlir_value) for inp in self.graph.inputs
+            ]
+
             kept_indices = []
             for storage in used_storages:
                 found = False
@@ -376,7 +386,7 @@ class ComputeGraph:
 
     def _cleanup_trace(self, targets: list[Tensor]) -> None:
         """Clean up trace references to prevent unbounded memory growth.
-        
+
         Once a tensor is realized, we can clear internal graph values but
         we must preserve output_refs for tensors that may be used as inputs
         to future operations. We only clear output_refs on the targets themselves.
@@ -386,25 +396,25 @@ class ComputeGraph:
 
         visited: set[int] = set()
         target_impl_ids = {id(t._impl) for t in targets}
-        
+
         def clean(impl: TensorImpl) -> None:
             if id(impl) in visited:
                 return
             visited.add(id(impl))
             impl._graph_values = []
             impl.graph_values_epoch = -1
-            
+
             if impl.output_refs:
                 for arg in pytree.tree_leaves(impl.output_refs.op_args):
                     if isinstance(arg, TensorImpl):
                         clean(arg)
-                        
+
         # Traverse and clean graph values
         for t in targets:
             clean(t._impl)
-            
+
         # Only clear output_refs on the targets themselves (not their inputs)
-        # This breaks the chain for realized outputs while preserving 
+        # This breaks the chain for realized outputs while preserving
         # reusability of inputs
         for t in targets:
             t._impl.output_refs = None
@@ -424,7 +434,11 @@ class ComputeGraph:
             if id(opnode) in visited:
                 return
             for arg in pytree.tree_leaves(opnode.op_args):
-                if isinstance(arg, TensorImpl) and not arg.is_realized and arg.output_refs:
+                if (
+                    isinstance(arg, TensorImpl)
+                    and not arg.is_realized
+                    and arg.output_refs
+                ):
                     dfs(arg.output_refs)
             visited.add(id(opnode))
             opnodes_topo.append(opnode)
@@ -436,8 +450,11 @@ class ComputeGraph:
         # Execute each OpNode
         for opnode in opnodes_topo:
             # Skip if outputs already valid
-            if all(ref.graph_values_epoch == self.epoch and ref._graph_values
-                   for ref in opnode._refs if ref is not None):
+            if all(
+                ref.graph_values_epoch == self.epoch and ref._graph_values
+                for ref in opnode._refs
+                if ref is not None
+            ):
                 continue
 
             # Ensure inputs have graph values
@@ -452,7 +469,7 @@ class ComputeGraph:
                 return Tensor(impl=x) if isinstance(x, TensorImpl) else x
 
             op_args = pytree.tree_map(to_tensor, opnode.op_args)
-            
+
             with self.graph:
                 raw_result = opnode.op.execute(op_args, opnode.op_kwargs or {})
 
@@ -465,14 +482,20 @@ class ComputeGraph:
                 shard_graph_values = raw_result
 
             # Store graph values to output refs
-            if isinstance(shard_graph_values, (list, tuple)) and \
-               not isinstance(shard_graph_values[0] if shard_graph_values else None, (list, tuple, dict)):
+            if isinstance(shard_graph_values, (list, tuple)) and not isinstance(
+                shard_graph_values[0] if shard_graph_values else None,
+                (list, tuple, dict),
+            ):
                 if len(opnode._refs) == 1 and opnode._refs[0] is not None:
                     opnode._refs[0]._graph_values = shard_graph_values
                     opnode._refs[0].graph_values_epoch = self.epoch
             else:
-                if isinstance(shard_graph_values[0] if shard_graph_values else None, (list, tuple)):
-                    unzipped = list(zip(*shard_graph_values)) if shard_graph_values else []
+                if isinstance(
+                    shard_graph_values[0] if shard_graph_values else None, (list, tuple)
+                ):
+                    unzipped = (
+                        list(zip(*shard_graph_values)) if shard_graph_values else []
+                    )
                     for i, ref in enumerate(opnode._refs):
                         if ref is not None and i < len(unzipped):
                             ref._graph_values = list(unzipped[i])
@@ -496,11 +519,16 @@ class ComputeGraph:
 
         # 1. Topological walk of OpNodes
         opnodes_topo: list[Any] = []
+
         def dfs(opnode) -> None:
             if id(opnode) in visited_nodes:
                 return
             for arg in pytree.tree_leaves(opnode.op_args):
-                if isinstance(arg, TensorImpl) and not arg.is_realized and arg.output_refs:
+                if (
+                    isinstance(arg, TensorImpl)
+                    and not arg.is_realized
+                    and arg.output_refs
+                ):
                     dfs(arg.output_refs)
             visited_nodes.add(id(opnode))
             opnodes_topo.append(opnode)

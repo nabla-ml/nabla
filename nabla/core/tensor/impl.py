@@ -73,7 +73,9 @@ class TensorImpl:
         shard_devices: list[Device] | None = None,
     ):
         self._graph_values = (
-            values if isinstance(values, list) else ([values] if values is not None else [])
+            values
+            if isinstance(values, list)
+            else ([values] if values is not None else [])
         )
         self._buffers = (
             storages
@@ -126,7 +128,6 @@ class TensorImpl:
         if self._physical_shapes:
             return len(self._physical_shapes)
         return 1
-
 
     @property
     def is_sharded(self) -> bool:
@@ -235,7 +236,7 @@ class TensorImpl:
 
         if shard_shapes is None and self._buffers:
             shard_shapes = [tuple(int(d) for d in s.shape) for s in self._buffers]
-        
+
         if shard_shapes is None and self._physical_shapes:
             shard_shapes = self._physical_shapes
 

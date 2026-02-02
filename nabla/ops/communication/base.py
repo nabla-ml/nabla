@@ -43,7 +43,10 @@ class CollectiveOperation(Operation):
                 global_shape = tuple(int(d) for d in x.shape)
 
         if global_shape is None:
-            if hasattr(x, "physical_global_shape") and x.physical_global_shape is not None:
+            if (
+                hasattr(x, "physical_global_shape")
+                and x.physical_global_shape is not None
+            ):
                 global_shape = tuple(int(d) for d in x.physical_global_shape)
             else:
                 global_shape = tuple(int(d) for d in x.shape)
@@ -51,7 +54,9 @@ class CollectiveOperation(Operation):
         shapes = []
         if output_sharding and mesh:
             for i in range(num_shards):
-                local = spec.compute_local_shape(global_shape, output_sharding, device_id=i)
+                local = spec.compute_local_shape(
+                    global_shape, output_sharding, device_id=i
+                )
                 shapes.append(tuple(int(d) for d in local))
         else:
             shapes = [tuple(int(d) for d in global_shape)] * num_shards

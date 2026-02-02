@@ -85,8 +85,6 @@ class TestVmapCommunicationComprehensive:
             x_sharded = x.shard(mesh, P("tp", None))
             return all_to_all(x_sharded, split_axis=0, concat_axis=1)
 
-
-
         np_x = jax.random.normal(jax.random.PRNGKey(103), (h1, h2), dtype=jnp.float32)
         x = tensor_from_jax(np_x)
 

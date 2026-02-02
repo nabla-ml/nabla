@@ -313,8 +313,6 @@ class GatherAllAxesOp(Operation):
                 )
         shapes = [tuple(int(d) for d in global_shape)] * num_shards
 
-
-
         dtypes = [x.dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
@@ -377,7 +375,6 @@ class GatherAllAxesOp(Operation):
             )
             num_shards = len(mesh.devices) if mesh else 1
             results = [gathered_shard] * num_shards
-
 
         rank = len(sharded_tensor.sharding.dim_specs)
         output_spec = create_replicated_spec(mesh, rank)

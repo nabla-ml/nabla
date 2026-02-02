@@ -22,11 +22,12 @@ def get_mesh_from_args(args: tuple) -> DeviceMesh | None:
     for a in args:
         if isinstance(a, Tensor) and a.sharding:
             return a.sharding.mesh
-    
+
     # Only do tree traversal if we haven't found mesh and args might be nested
     for a in args:
         if isinstance(a, (list, tuple, dict)):
             from .. import pytree
+
             for leaf in pytree.tree_leaves((a,)):
                 if isinstance(leaf, Tensor) and leaf.sharding:
                     return leaf.sharding.mesh
@@ -51,7 +52,7 @@ def reshard_inputs(
     from ..tensor import Tensor
 
     leaves = [a for a in pytree.tree_leaves(args) if isinstance(a, Tensor)]
-    
+
     if len(leaves) != len(required_specs):
         return args
 
@@ -110,7 +111,7 @@ def infer_output_sharding(
     from .spec import DimSpec, ShardingSpec
 
     leaves = [a for a in pytree.tree_leaves(args) if isinstance(a, Tensor)]
-    
+
     if not leaves:
         return None, [], False
 
@@ -339,13 +340,23 @@ def create_sharded_output(
     from ..tensor import Tensor
 
     # Create default replicated sharding if mesh provided but no spec
-    if sharding is None and mesh is not None and (len(results) > 1 or (not results and len(mesh.devices) > 1)):
+    if (
+        sharding is None
+        and mesh is not None
+        and (len(results) > 1 or (not results and len(mesh.devices) > 1))
+    ):
         from .spec import DimSpec, ShardingSpec
-        
-        first_shape = results[0].type.shape if results else (physical_shapes[0] if physical_shapes else None)
+
+        first_shape = (
+            results[0].type.shape
+            if results
+            else (physical_shapes[0] if physical_shapes else None)
+        )
         if first_shape is not None:
             rank = len(first_shape)
-            sharding = ShardingSpec(mesh, [DimSpec([], is_open=True) for _ in range(rank)])
+            sharding = ShardingSpec(
+                mesh, [DimSpec([], is_open=True) for _ in range(rank)]
+            )
 
     output = Tensor._create_unsafe(
         values=results,
