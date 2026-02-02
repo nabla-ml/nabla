@@ -1,5 +1,7 @@
 # Nabla: Distributed Deep Learning Framework
 
+![alt text](./assets/image-1.png)
+
 > **A JAX-inspired autodiff library with factor-based SPMD sharding, built on [Modular MAX](https://www.modular.com/max).**
 
 [![Development Status](https://img.shields.io/badge/status-pre--alpha-red)](https://github.com/nabla-ml/nabla)
