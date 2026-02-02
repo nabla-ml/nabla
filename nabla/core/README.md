@@ -53,7 +53,7 @@ Understanding Nabla requires seeing how these components interact during the def
 ```text
 Tensor (user-facing)              TensorImpl (internal state)
 ├── .shape, .dtype, .device       ├── _graph_values: list[TensorValue]  # MAX graph nodes
-├── .numpy(), .item()             ├── _buffers: list[driver.Tensor]     # realized data
+├── .numpy(), .item()             ├── _buffers: list[driver.Buffer]     # realized data
 ├── arithmetic operators          ├── _physical_shapes: list[tuple]     # per-shard shapes
 └── wraps ─────────────────────► ├── graph_values_epoch: int           # -1 = promise!
                                   ├── sharding: ShardingSpec

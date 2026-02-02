@@ -48,7 +48,15 @@ from .ops.binary import (
     mul,
     sub,
 )
-from .ops.communication import all_gather, all_reduce, shard
+from .ops.communication import (
+    all_gather,
+    all_reduce,
+    shard,
+    to_device,
+    cpu,
+    gpu,
+    accelerator,
+)
 from .ops.comparison import (
     EqualOp,
     GreaterEqualOp,
@@ -191,6 +199,10 @@ __all__ = [
     "shard",
     "all_gather",
     "all_reduce",
+    "to_device",
+    "cpu",
+    "gpu",
+    "accelerator",
     "where",
     "cond",
     "while_loop",

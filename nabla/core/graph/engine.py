@@ -37,13 +37,13 @@ def seed() -> Tensor:
     from ..tensor.api import Tensor
 
     if (s := _SEED.get(None)) is None:
-        s = driver.Tensor(ops.random.SeedType)
+        s = driver.Buffer(ops.random.SeedType)
         s[0] = 0
-        _SEED.set(Tensor(storage=s))
+        _SEED.set(Tensor(buffers=s))
     return _SEED.get()
 
 
-def driver_tensor_type(t: driver.Tensor) -> graph.TensorType:
+def driver_tensor_type(t: driver.Buffer) -> graph.TensorType:
     """Converts a driver tensor to a TensorType."""
     return graph.TensorType(t.dtype, t.shape, graph.DeviceRef.from_device(t.device))
 
@@ -75,7 +75,7 @@ class ComputeGraph:
     """Manages the DAG of operations, lazy evaluation, and compilation."""
 
     graph: graph.Graph
-    sources: dict[_core.Value[Any], driver.Tensor]
+    sources: dict[_core.Value[Any], driver.Buffer]
     unrealized: weakref.WeakValueDictionary[int, TensorImpl]
     epoch: int
     _input_refs: list[Tensor]
@@ -111,12 +111,12 @@ class ComputeGraph:
         # gc.collect()  # Removed: too expensive for hot paths
 
     def add_input(self, tensor: Tensor) -> None:
-        """Registers a realized tensor's storages as graph inputs."""
+        """Registers a realized tensor's bufferss as graph inputs."""
         if any(t is tensor for t in self._input_refs):
             return
 
-        storages = tensor._impl._buffers
-        if not storages:
+        bufferss = tensor._impl._buffers
+        if not bufferss:
             raise TypeError("Only realized tensors may be graph inputs.")
 
         self._input_refs.append(tensor)
@@ -126,12 +126,12 @@ class ComputeGraph:
         block = op.regions[0].front
 
         tensor_graph_values = []
-        for storage in storages:
+        for buffers in bufferss:
             with self.graph:
                 tensor_type = graph.TensorType(
-                    storage.dtype,
-                    storage.shape,
-                    graph.DeviceRef.from_device(storage.device),
+                    buffers.dtype,
+                    buffers.shape,
+                    graph.DeviceRef.from_device(buffers.device),
                 )
                 typ = tensor_type.as_buffer().to_mlir()
 
@@ -143,7 +143,7 @@ class ComputeGraph:
                 )
                 tensor_graph_values.append(buffer_val)
 
-            self.sources[buffer_val._mlir_value] = storage
+            self.sources[buffer_val._mlir_value] = buffers
 
         if len(tensor_graph_values) == 1:
             tensor._value = tensor_graph_values[0]
@@ -258,7 +258,7 @@ class ComputeGraph:
                     if n_shards > 1:
                         t._impl._buffers = list(t_results)
                     else:
-                        t.storage = t_results[0]
+                        t.buffers = t_results[0]
 
                     t._value = None
                     t.real = True
@@ -321,12 +321,12 @@ class ComputeGraph:
         _core.lower(module, [builtin.passes.RemoveDeadValues()])
         _remove_unused_arguments(self.graph)
 
-        inputs: list[driver.Tensor] = []
+        inputs: list[driver.Buffer] = []
         for inp in self.graph.inputs:
-            storage = self.sources.get(inp._mlir_value)
-            if storage is None:
-                raise RuntimeError("Missing storage for graph input")
-            inputs.append(storage)
+            buffers = self.sources.get(inp._mlir_value)
+            if buffers is None:
+                raise RuntimeError("Missing buffers for graph input")
+            inputs.append(buffers)
 
         model = _session().load(self.graph)
         seed_val, *results = model(*inputs)
@@ -348,8 +348,8 @@ class ComputeGraph:
                     t._impl._buffers = [r for _, r in shard_results]
                     t._impl._graph_values = []
                 else:
-                    _, storage = shard_results[0]
-                    t.storage = storage
+                    _, buffers = shard_results[0]
+                    t.buffers = buffers
                     t._value = None
                 t.real = True
                 # Remove from unrealized since it's now real
@@ -363,15 +363,15 @@ class ComputeGraph:
             for impl in all_candidate_tensors:
                 all_candidate_buffers.extend(impl._buffers)
 
-            used_storages = [
+            used_bufferss = [
                 self.sources.get(inp._mlir_value) for inp in self.graph.inputs
             ]
 
             kept_indices = []
-            for storage in used_storages:
+            for buffers in used_bufferss:
                 found = False
                 for i, s in enumerate(all_candidate_buffers):
-                    if s is storage:
+                    if s is buffers:
                         kept_indices.append(i)
                         found = True
                         break

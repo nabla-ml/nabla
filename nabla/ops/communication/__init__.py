@@ -19,6 +19,7 @@ from .p_permute import PPermuteOp, ppermute, ppermute_op
 from .reduce_scatter import ReduceScatterOp, reduce_scatter, reduce_scatter_op
 from .reshard import reshard
 from .shard import ShardOp, shard, shard_op
+from .transfer import TransferOp, to_device, cpu, gpu, accelerator
 
 __all__ = [
     "CollectiveOperation",
@@ -31,6 +32,7 @@ __all__ = [
     "PPermuteOp",
     "AllToAllOp",
     "AxisIndexOp",
+    "TransferOp",
     "shard",
     "all_gather",
     "gather_all_axes",
@@ -41,6 +43,10 @@ __all__ = [
     "all_to_all",
     "axis_index",
     "reshard",
+    "to_device",
+    "cpu",
+    "gpu",
+    "accelerator",
     "shard_op",
     "all_gather_op",
     "gather_all_axes_op",

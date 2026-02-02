@@ -131,7 +131,7 @@ class CompiledFunction(Generic[T]):
 
     def _build_signature_shape(self, tensor: Tensor, arg_idx: int) -> tuple:
         """Build cache key shape signature, applying dynamic_dims if specified."""
-        dims = list(tensor.storage.shape)
+        dims = list(tensor.buffers.shape)
 
         if arg_idx not in self.dynamic_dims:
             return tuple(dims)
@@ -145,7 +145,7 @@ class CompiledFunction(Generic[T]):
 
     def _build_input_shape(self, tensor: Tensor, arg_idx: int) -> graph.Shape | tuple:
         """Build input type shape for Graph construction."""
-        dims = list(tensor.storage.shape)
+        dims = list(tensor.buffers.shape)
 
         if arg_idx not in self.dynamic_dims:
             return tuple(dims)
@@ -297,7 +297,7 @@ class CompiledFunction(Generic[T]):
         _, *outputs = cached.model(*inputs)
 
         all_leaves: list[Any] = []
-        tensor_iter = iter(Tensor(storage=o) for o in outputs)
+        tensor_iter = iter(Tensor(buffers=o) for o in outputs)
         static_iter = iter(cached.output_static_graph_values)
 
         for is_tensor in cached.output_tensor_mask:

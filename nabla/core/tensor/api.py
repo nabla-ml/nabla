@@ -43,7 +43,7 @@ class Tensor(DLPackArray, HasTensorValue):
     def __init__(
         self,
         *,
-        storage: driver.Tensor | None = None,
+        buffers: driver.Buffer | None = None,
         value: graph.BufferValue | graph.TensorValue | None = None,
         impl: TensorImpl | None = None,
         is_traced: bool = False,
@@ -51,8 +51,8 @@ class Tensor(DLPackArray, HasTensorValue):
         if impl is not None:
             self._impl = impl
         else:
-            assert storage is not None or value is not None
-            self._impl = TensorImpl(storages=storage, values=value, is_traced=is_traced)
+            assert buffers is not None or value is not None
+            self._impl = TensorImpl(bufferss=buffers, values=value, is_traced=is_traced)
 
         if self._impl._graph_values and self._impl.graph_values_epoch == -1:
             self._impl.graph_values_epoch = GRAPH.epoch
@@ -60,21 +60,21 @@ class Tensor(DLPackArray, HasTensorValue):
         self.real = self._impl.is_realized
 
     @property
-    def _buffers(self) -> list[driver.Tensor] | None:
+    def _buffers(self) -> list[driver.Buffer] | None:
         return self._impl._buffers
 
     @_buffers.setter
-    def _buffers(self, value: list[driver.Tensor] | None) -> None:
+    def _buffers(self, value: list[driver.Buffer] | None) -> None:
         self._impl._buffers = value
 
     @property
-    def storage(self) -> driver.Tensor | None:
+    def buffers(self) -> driver.Buffer | None:
         if self._impl._buffers and len(self._impl._buffers) > 0:
             return self._impl._buffers[0]
         return None
 
-    @storage.setter
-    def storage(self, value: driver.Tensor | None) -> None:
+    @buffers.setter
+    def buffers(self, value: driver.Buffer | None) -> None:
         if value is None:
             self._impl._buffers = None
         else:
@@ -140,7 +140,7 @@ class Tensor(DLPackArray, HasTensorValue):
             print(f"  Sharding: {self.sharding}")
             print(f"  Realized: {self.is_realized}")
             print(
-                f"  Storages: {len(self._impl._buffers) if self._impl._buffers else 0}"
+                f"  Bufferss: {len(self._impl._buffers) if self._impl._buffers else 0}"
             )
             print(f"  Values Epoch: {self._impl.graph_values_epoch}")
             print(f"  GRAPH.epoch: {GRAPH.epoch}")
@@ -154,13 +154,13 @@ class Tensor(DLPackArray, HasTensorValue):
         ]
 
     def hydrate(self) -> Tensor:
-        """Populate values from storages for realized tensors."""
+        """Populate values from bufferss for realized tensors."""
         if not self._impl._graph_values and self._impl._buffers:
             GRAPH.add_input(self)
         return self
 
     @property
-    def _backing_value(self) -> driver.Tensor | graph.BufferValue | graph.TensorValue:
+    def _backing_value(self) -> driver.Buffer | graph.BufferValue | graph.TensorValue:
         return self._impl.primary_value
 
     @property
@@ -311,9 +311,33 @@ class Tensor(DLPackArray, HasTensorValue):
 
     @classmethod
     def from_dlpack(cls, array: DLPackArray) -> Tensor:
+        """Import tensor from DLPack-compatible array.
+
+        The resulting tensor will be placed on the default device. If the
+        source array is on a different device, it will be transferred.
+
+        Args:
+            array: DLPack-compatible array (numpy, torch, jax, etc.)
+
+        Returns:
+            Tensor on the default device
+        """
         if isinstance(array, Tensor):
             return array
-        return Tensor(storage=driver.Tensor.from_dlpack(array))
+
+        # Import from DLPack
+        buffer = driver.Buffer.from_dlpack(array)
+
+        # Get default device (using defaults helper)
+        from ..common.context import defaults
+
+        _, default_dev = defaults()
+
+        # Transfer to default device if needed
+        if buffer.device != default_dev:
+            buffer = buffer.to(default_dev)
+
+        return Tensor(buffers=buffer)
 
     @classmethod
     def constant(
@@ -418,7 +442,7 @@ class Tensor(DLPackArray, HasTensorValue):
         value = self._backing_value
         t = (
             driver_tensor_type(value)
-            if isinstance(value, driver.Tensor)
+            if isinstance(value, driver.Buffer)
             else value.type
         )
         return t.as_tensor() if isinstance(t, graph.BufferType) else t
@@ -453,10 +477,10 @@ class Tensor(DLPackArray, HasTensorValue):
         return self._impl.device
 
     @property
-    def driver_tensor(self) -> driver.Tensor:
-        if (storage := self.storage) is None:
+    def driver_tensor(self) -> driver.Buffer:
+        if (buffers := self.buffers) is None:
             raise TypeError("Can't get driver tensor for symbolic tensor")
-        return storage
+        return buffers
 
     @property
     def real(self) -> bool:
@@ -545,7 +569,7 @@ class Tensor(DLPackArray, HasTensorValue):
         # If sharded, gather first
         t = self.gather() if self.is_sharded else self
 
-        # Realize to ensure we have storage
+        # Realize to ensure we have buffers
         t.realize()
 
         # Create new tensor on CPU using numpy as intermediate

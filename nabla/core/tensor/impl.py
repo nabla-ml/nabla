@@ -42,7 +42,7 @@ class TensorImpl:
     )
 
     _graph_values: list[graph.BufferValue | graph.TensorValue]
-    _buffers: list[driver.Tensor] | None
+    _buffers: list[driver.Buffer] | None
     sharding: object | None
     sharding_constraint: object | None
     is_traced: bool
@@ -58,7 +58,7 @@ class TensorImpl:
 
     def __init__(
         self,
-        storages: driver.Tensor | list[driver.Tensor] | None = None,
+        bufferss: driver.Buffer | list[driver.Buffer] | None = None,
         values: (
             graph.BufferValue
             | graph.TensorValue
@@ -78,9 +78,9 @@ class TensorImpl:
             else ([values] if values is not None else [])
         )
         self._buffers = (
-            storages
-            if isinstance(storages, list)
-            else ([storages] if storages else None)
+            bufferss
+            if isinstance(bufferss, list)
+            else ([bufferss] if bufferss else None)
         )
 
         self.sharding = None
@@ -104,7 +104,7 @@ class TensorImpl:
 
         if n_vals > 0 and n_stores > 0 and n_vals != n_stores:
             raise ValueError(
-                f"Shard count mismatch: {n_vals} values vs {n_stores} storages"
+                f"Shard count mismatch: {n_vals} values vs {n_stores} bufferss"
             )
 
         if self.sharding is None:
@@ -112,7 +112,7 @@ class TensorImpl:
                 raise ValueError(f"Multiple values ({n_vals}) without sharding spec")
             if n_stores > 1:
                 raise ValueError(
-                    f"Multiple storages ({n_stores}) without sharding spec"
+                    f"Multiple bufferss ({n_stores}) without sharding spec"
                 )
 
     @property
@@ -173,7 +173,7 @@ class TensorImpl:
         return self._graph_values
 
     def physical_local_shape(self, shard_idx: int = 0) -> graph.Shape | None:
-        """Storage shape for a specific shard (includes batch dims)."""
+        """Buffers shape for a specific shard (includes batch dims)."""
         if self._buffers and shard_idx < len(self._buffers):
             return graph.Shape(self._buffers[shard_idx].shape)
 
@@ -195,7 +195,7 @@ class TensorImpl:
 
     @property
     def physical_shape(self) -> graph.Shape | None:
-        """Storage shape of shard 0 (includes batch dims)."""
+        """Buffers shape of shard 0 (includes batch dims)."""
         return self.physical_local_shape(0)
 
     @property
@@ -221,7 +221,7 @@ class TensorImpl:
         if local is None:
             raise RuntimeError(
                 f"Cannot determine physical shape for tensor (sharding={self.sharding}). "
-                "No valid values or storage available in current epoch."
+                "No valid values or buffers available in current epoch."
             )
 
         # Unsharded case: local shape IS the physical global shape
@@ -304,14 +304,14 @@ class TensorImpl:
         raise RuntimeError("No dtype source available")
 
     @property
-    def primary_value(self) -> driver.Tensor | graph.BufferValue | graph.TensorValue:
+    def primary_value(self) -> driver.Buffer | graph.BufferValue | graph.TensorValue:
         if self._buffers:
             return self._buffers[0]
 
         values = self._get_valid_graph_values()
         if values:
             return values[0]
-        raise RuntimeError("Tensor has no storage and no values")
+        raise RuntimeError("Tensor has no buffers and no values")
 
     @property
     def dtype(self) -> DType:

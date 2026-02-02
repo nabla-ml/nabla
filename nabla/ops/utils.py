@@ -137,7 +137,7 @@ def _get_tensor_hash(x: Any) -> Any:
             # Unrealized tensor - use its OpNode's hash AND its output index
             return (output_refs._op_hash, impl.output_index, sharding_key)
         else:
-            # Leaf tensor without storage (shouldn't happen in normal flow)
+            # Leaf tensor without buffers (shouldn't happen in normal flow)
             shape_tuple = tuple(int(d) for d in x.shape)
             return ("leaf", str(x.dtype), shape_tuple, sharding_key)
     return _make_hashable(x)

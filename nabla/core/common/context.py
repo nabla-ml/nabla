@@ -72,9 +72,22 @@ def _has_accelerator() -> bool:
 
 
 def _default_device() -> Device:
+    """Get default device for tensor creation.
+
+    Defaults to CPU to avoid device mismatch issues with numpy interop.
+    Set NABLA_DEFAULT_DEVICE=gpu to use accelerator by default.
+    """
+    import os
+
     if device := _DEFAULT_DEVICE.get(None):
         return device
-    return Accelerator() if _has_accelerator() else CPU()
+
+    # Check environment variable
+    env_device = os.environ.get("NABLA_DEFAULT_DEVICE", "cpu").lower()
+    if env_device == "gpu" and _has_accelerator():
+        return Accelerator()
+
+    return CPU()
 
 
 def defaults(

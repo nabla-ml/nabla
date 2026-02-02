@@ -27,7 +27,7 @@
 │  │                       TensorImpl (State)                        │    │
 │  │  ─────────────────────────────────────────────────────────────  │    │
 │  │  _values: list[TensorValue]    # Lazy graph nodes (per shard)   │    │
-│  │  _storages: list[driver.Tensor] # Realized data (per shard)     │    │
+│  │  _bufferss: list[driver.Buffer] # Realized data (per shard)     │    │
 │  │  values_epoch: int              # For staleness detection       │    │
 │  │                                                                 │    │
 │  │  sharding: ShardingSpec         # How tensor is distributed     │    │
@@ -72,7 +72,7 @@ c._impl.output_index  # 2
                  UNREALIZED                              REALIZED
                  ──────────                              ────────
   _values:       [TensorValue, ...]       →              [TensorValue, ...]
-  _storages:     None                     →              [driver.Tensor, ...]
+  _bufferss:     None                     →              [driver.Buffer, ...]
   
   Trigger: .numpy(), .item(), print(), GRAPH.evaluate()
 ```
@@ -97,9 +97,9 @@ TensorImpl provides multiple shape views:
 
 | Property | Description | Example |
 | :--- | :--- | :--- |
-| `physical_local_shape(shard_idx)` | Per-shard storage shape (includes batch_dims) | `[B, M/2, N]` |
+| `physical_local_shape(shard_idx)` | Per-shard buffers shape (includes batch_dims) | `[B, M/2, N]` |
 | `logical_local_shape(shard_idx)` | Per-shard shape (excludes batch_dims) | `[M/2, N]` |
-| `physical_global_shape` | Full storage shape (reconstructed from sharding) | `[B, M, N]` |
+| `physical_global_shape` | Full buffers shape (reconstructed from sharding) | `[B, M, N]` |
 | `global_shape` | User-facing logical shape | `[M, N]` |
 
 ## Navigation

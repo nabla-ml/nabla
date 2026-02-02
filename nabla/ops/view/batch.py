@@ -323,7 +323,7 @@ class BroadcastBatchDimsOp(Operation):
 
         # Update batch_dims to match the new batch shape
         output = Tensor._create_unsafe(
-            storages=result._buffers,
+            bufferss=result._buffers,
             values=result._graph_values,
             is_traced=result.is_traced,
             batch_dims=len(batch_shape),

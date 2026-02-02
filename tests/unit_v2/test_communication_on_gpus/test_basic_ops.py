@@ -27,8 +27,8 @@ try:
     data = np.arange(16, dtype=np.float32)
     sharded = create_sharded_tensor(data, mesh_2, [DimSpec(["x"], is_open=False)])
 
-    print(f"   Sharded tensor: {len(sharded._impl._storages)} shards")
-    for i, s in enumerate(sharded._impl._storages):
+    print(f"   Sharded tensor: {len(sharded._impl._bufferss)} shards")
+    for i, s in enumerate(sharded._impl._bufferss):
         print(f"     Shard {i}: device={s.device}, shape={s.shape}")
 
     # Use the .gather() method

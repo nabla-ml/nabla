@@ -315,7 +315,7 @@ A key architectural concept is the **promise tensor**—a tensor that knows its 
 │  ─────────────────────────────────                                          │
 │  y.numpy()  # Triggers GRAPH.evaluate(y)                                    │
 │                                                                             │
-│  y._impl._buffers = [driver.Tensor, driver.Tensor]  # Actual device memory  │
+│  y._impl._buffers = [driver.Buffer, driver.Buffer]  # Actual device memory  │
 │  y._impl.graph_values_epoch = GRAPH.epoch           # Current epoch         │
 │  y._impl.output_refs = None                         # Cleared after eval    │
 │                                                                             │
@@ -337,7 +337,7 @@ Every tensor has two representations that enable powerful features:
 | Aspect | Logical View | Physical View |
 | :--- | :--- | :--- |
 | **Shape** | Global shape (what user sees) | Per-shard local shape |
-| **Storage** | `Tensor` with sharding metadata | `TensorImpl._values` (list per shard) |
+| **Buffers** | `Tensor` with sharding metadata | `TensorImpl._values` (list per shard) |
 | **Purpose** | User API, shape reasoning | Actual computation |
 
 **Why this matters**:
