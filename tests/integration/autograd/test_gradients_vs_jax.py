@@ -20,7 +20,7 @@ from nabla.core.autograd import backward_on_trace
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "unit_v2"))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "unit"))
 from common import assert_allclose
 
 

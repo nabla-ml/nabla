@@ -150,7 +150,7 @@ Every operation on Tensor(s) flows through `Operation.__call__()`. Note that **m
 **When is an `OpNode` created? (Step 7)**
 We avoid the overhead of creating graph nodes unless absolutely necessary. An `OpNode` is only instantiated if:
 
-1. The tensor is actively being traced (e.g., inside `nabla.grad` or `nabla.jit`).
+1. The tensor is actively being traced (e.g., inside `nabla.grad`).
 2. We are in **Deferred IR** mode (see below), where we need the trace to build the graph later.
 
 In a standard eager inference run (Immediate IR mode), `OpNode` creation is skipped entirely, making dispatch extremely lightweight.
@@ -228,7 +228,7 @@ Nabla offers more than covered above:
 ### Interesting Test Cases
 
 * **DP+PP distributed MLP** (WIP): [tests/integration/autograd/refactored/test_pp_grad3.py](https://github.com/nabla-ml/nabla/tree/main/tests/integration/autograd/refactored/test_pp_grad3.py)
-* **vmap + sharding**: [tests/unit_v2/test_vmap_sharding.py](https://github.com/nabla-ml/nabla/tree/main/tests/unit_v2/test_vmap_sharding.py)
+* **vmap + sharding**: [tests/unit/test_vmap_sharding.py](https://github.com/nabla-ml/nabla/tree/main/tests/unit/test_vmap_sharding.py)
 * **vmapped gradients**: [tests/integration/autograd/refactored/test_vmapped.py](https://github.com/nabla-ml/nabla/tree/main/tests/integration/autograd/refactored/test_vmapped.py)
 * **Pipeline parallel transformer**: [tests/integration/test_pp_transformer.py](https://github.com/nabla-ml/nabla/tree/main/tests/integration/test_pp_transformer.py)
 
@@ -259,7 +259,7 @@ nabla/
 └── transforms/
     ├── vmap.py          # Automatic batching
     ├── shard_map.py     # SPMD distribution
-    └── compile.py       # JIT compilation
+    └── compile.py       # Static JIT compilation
 ```
 
 → Each submodule has its own `README.md`.

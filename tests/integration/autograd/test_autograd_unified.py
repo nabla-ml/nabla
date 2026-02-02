@@ -118,7 +118,7 @@ class AutogradTestCase:
 
         elif mesh is not None:
             # For sharded cases, we compare against expected values or eager nabla
-            # (Assuming eager nabla works correctly for sharded ops, which we test in unit_v2)
+            # (Assuming eager nabla works correctly for sharded ops, which we test in unit)
             pass
 
 
