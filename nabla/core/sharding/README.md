@@ -15,7 +15,7 @@ When you call an operation on sharded tensors, the sharding engine:
 3. **Reshards** inputs if they don't match (inserts communication)
 4. **Detects** contracting axes that need post-op reduction
 
-This happens **eagerly per-operation** in Phase 2 of `Operation.__call__()`.
+This happens **eagerly per-operation** in Step 2 of `Operation.__call__()`.
 
 ### Sharding Specs
 
@@ -85,7 +85,7 @@ Matmul rule: "m k, k n -> m n"
 │  4. Common prefix fallback                                              │
 │                                                                         │
 │  Detect contracting factors: in inputs but not outputs (factor 'k')     │
-│  → These become reduce_axes for Phase 5 of __call__                     │
+│  → These become reduce_axes for Step 8 of __call__                       │
 │                                                                         │
 │  PHASE 3: UPDATE                                                        │
 │  ─────────────                                                          │
@@ -108,7 +108,7 @@ Matmul rule: "m k, k n -> m n"
 If input sharding doesn't match what the operation needs:
 
 ```python
-# Called in __call__ Phase 2
+# Called in __call__ Step 2
 resharded_args = spmd.reshard_inputs(args, input_shardings, mesh)
 ```
 
@@ -123,7 +123,7 @@ This may insert:
 If contracting factors were sharded (reduce_axes non-empty):
 
 ```python
-# Called in __call__ Phase 5
+# Called in __call__ Step 8
 if reduce_axes and mesh:
     output = apply_auto_reduction(self, output, mesh, reduce_axes)
 ```
@@ -171,6 +171,32 @@ y = h @ w2       # Factor 'k' (hidden) sharded on "tp"!
 # → apply_auto_reduction inserts AllReduce
 # Output: [batch, out_features] replicated
 ```
+
+## Developing Custom Sharding Rules
+
+If you are implementing a custom `Operation`, you need to tell the solver how your axes map to factors. You do this by implementing `sharding_rule`:
+
+```python
+def sharding_rule(self, input_shapes, output_shapes, **kwargs):
+    from ..core.sharding.propagation import OpShardingRuleTemplate
+    
+    # Define factors for inputs and outputs (einsum-style)
+    # Example for Batched MatMul:
+    #   Input A: [batch(b), m, k]
+    #   Input B: [batch(b), k, n]
+    #   Output:  [batch(b), m, n]
+    
+    rule_str = "b m k, b k n -> b m n"
+    
+    return OpShardingRuleTemplate.from_string(rule_str).instantiate(
+        input_shapes, output_shapes
+    )
+```
+
+**How it works:**
+1.  **Parse**: The template parses `"b m k"` and assigns factors to dimensions.
+2.  **Constraint**: If User shards Input A's dim 0 (batch) on `"dp"`, then factor `b` is bound to `"dp"`.
+3.  **Propagate**: Since Output also has `b` at dim 0, Output dim 0 is automatically assigned `"dp"`.
 
 ## Component Map
 

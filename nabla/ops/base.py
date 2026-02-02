@@ -112,21 +112,37 @@ class Operation(ABC):
         # 3. Compute Hash for Caching
         op_hash = compute_structural_hash(self.name, resharded_args, adapted_kwargs)
 
-        # 4. Compute Physical Shapes (always needed)
-        if type(self).compute_physical_shape is Operation.compute_physical_shape:
-            raise RuntimeError(
-                f"{self.__class__.__name__} must implement compute_physical_shape"
-            )
-
-        output_physical_shapes, output_shard_dtypes, output_shard_devices = (
-            self.compute_physical_shape(
-                resharded_args, adapted_kwargs, predicted_output_spec
-            )
-        )
-
-        # 5. Eager Execution (if enabled)
+        # 4. Eager Execution (if enabled)
         execution_results = eager_execute(self, resharded_args, kwargs, adapted_kwargs)
-        verify_eager_shapes(self, execution_results, output_physical_shapes)
+
+        # 5. Determine Physical Metadata (Shapes, Dtypes, Devices)
+        from ..config import VERIFY_EAGER_SHAPES
+
+        if execution_results is None or VERIFY_EAGER_SHAPES:
+            # We must compute them manually if no physical execution happened,
+            # or if the user explicitly requested verification against the backend.
+            if type(self).compute_physical_shape is Operation.compute_physical_shape:
+                raise RuntimeError(
+                    f"{self.__class__.__name__} must implement compute_physical_shape"
+                )
+
+            output_physical_shapes, output_shard_dtypes, output_shard_devices = (
+                self.compute_physical_shape(
+                    resharded_args, adapted_kwargs, predicted_output_spec
+                )
+            )
+
+            # Optional cross-verification
+            if execution_results is not None:
+                verify_eager_shapes(self, execution_results, output_physical_shapes)
+        else:
+            # OPTIMIZATION: Trust the TensorValues produced by the backend.
+            # package_outputs will let the Tensors infer shape/dtype from their own values.
+            output_physical_shapes, output_shard_dtypes, output_shard_devices = (
+                None,
+                None,
+                None,
+            )
 
         # 6. Packaging (Create Tensor(s))
         output = package_outputs(

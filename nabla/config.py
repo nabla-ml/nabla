@@ -12,9 +12,9 @@ import os
 # This allows for immediate shape verification and graph inspection,
 # but execution (realizing values) is still deferred to evaluate().
 # Note: evaluate() may rebuild the graph from trace for optimization.
-EAGER_MAX_GRAPH: bool = os.environ.get("NABLA_EAGER_MAX_GRAPH", "0") == "1"
+EAGER_MAX_GRAPH: bool = os.environ.get("EAGER_MAX_GRAPH", "0") == "1"
 
 # Verify Eager Shapes
 # If True (and EAGER_MAX_GRAPH is True), verifies that computed physical shapes
 # match the actual shapes produced by eager execution.
-VERIFY_EAGER_SHAPES: bool = os.environ.get("NABLA_VERIFY_EAGER_SHAPES", "1") == "1"
+VERIFY_EAGER_SHAPES: bool = os.environ.get("VERIFY_EAGER_SHAPES", "1") == "1"

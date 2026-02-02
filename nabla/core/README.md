@@ -77,7 +77,7 @@ This enables backward traversal: from any tensor, follow `output_refs.op_args` t
 
 **Solution**: Promise tensors + epoch-based staleness detection
 
-**Promise Tensor Pattern** (default mode, `NABLA_EAGER_MAX_GRAPH=0`):
+**Promise Tensor Pattern** (default mode, `EAGER_MAX_GRAPH=0`):
 ```python
 y = x + 1  # In package_outputs():
 

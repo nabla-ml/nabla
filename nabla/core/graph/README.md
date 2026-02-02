@@ -22,7 +22,7 @@ z.numpy()  # GRAPH.evaluate(z) triggered → cache check → compile/run
 
 ### Promise Tensors and Unrealized Tracking
 
-In **default mode** (`NABLA_EAGER_MAX_GRAPH=0`), operations create **promise tensors**:
+In **default mode** (`EAGER_MAX_GRAPH=0`), operations create **promise tensors**:
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────┐

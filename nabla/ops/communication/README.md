@@ -98,9 +98,9 @@ Communication ops are inserted **eagerly** by the sharding engine:
 
 | Trigger | Inserted Op | Where |
 | :--- | :--- | :--- |
-| Contracting dim sharded → partial sums | `AllReduceOp` | `apply_auto_reduction` (Phase 5) |
-| Input needs to be replicated | `AllGatherOp` | `reshard_inputs` (Phase 2) |
-| Change sharded axis | `AllToAllOp` | `reshard_inputs` (Phase 2) |
+| Contracting dim sharded → partial sums | `AllReduceOp` | `apply_auto_reduction` (Step 8) |
+| Input needs to be replicated | `AllGatherOp` | `reshard_inputs` (Step 2) |
+| Change sharded axis | `AllToAllOp` | `reshard_inputs` (Step 2) |
 
 ```python
 # In apply_auto_reduction (execution_utils.py):

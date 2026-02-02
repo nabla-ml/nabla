@@ -6,7 +6,7 @@
 
 ## The `__call__` Pipeline
 
-When you call any operation (e.g., `add(x, y)` or `x + y`), `Operation.__call__()` in [base.py](base.py) orchestrates a **9-step pipeline**. The key architectural insight: **steps 1-4 always run** (metadata computation), while **step 5 is conditional** based on `NABLA_EAGER_MAX_GRAPH`.
+When you call any operation (e.g., `add(x, y)` or `x + y`), `Operation.__call__()` in [base.py](base.py) orchestrates a **9-step pipeline**. The key architectural insight: **steps 1-3 and 6-9 always run** (metadata + tracing), while **steps 4 and 5 are conditional**.
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -57,59 +57,49 @@ When you call any operation (e.g., `add(x, y)` or `x + y`), `Operation.__call__(
 │                                     │                                       │
 │                                     ▼                                       │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │ STEP 4: COMPUTE PHYSICAL SHAPES - ALWAYS RUNS  (base.py ~line 111)  │    │
-│  │                                                                     │    │
-│  │   if type(self).compute_physical_shape is Operation.compute_...:    │    │
-│  │       raise RuntimeError(f"{self.__class__} must implement ...")    │    │
-│  │                                                                     │    │
-│  │   output_physical_shapes, output_shard_dtypes, output_shard_devices │    │
-│  │       = self.compute_physical_shape(resharded_args, adapted_kwargs, │    │
-│  │                                     predicted_output_spec)          │    │
-│  │                                                                     │    │
-│  │   CRITICAL: This must NOT build MAX graph nodes!                    │    │
-│  │   It only computes metadata. Why always run?                        │    │
-│  │   • Users need .shape immediately for control flow                  │    │
-│  │   • Sharding propagation requires shapes                            │    │
-│  │   • Broadcasting validation must happen now                         │    │
-│  └─────────────────────────────────────────────────────────────────────┘    │
-│                                     │                                       │
-│                                     ▼                                       │
-│  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │ STEP 5: EAGER EXECUTION (CONDITIONAL) ⚡  (base.py ~line 119)        │    │
+│  │ STEP 4: EAGER EXECUTION (CONDITIONAL) ⚡  (base.py ~line 116)        │    │
 │  │                                                                     │    │
 │  │   execution_results = eager_execute(self, resharded_args, kwargs,   │    │
 │  │                                     adapted_kwargs)                 │    │
 │  │                                                                     │    │
-│  │   if NABLA_EAGER_MAX_GRAPH=0 (default):                             │    │
-│  │       → Returns None (graph building DEFERRED)                      │    │
-│  │       → No op.execute() called here                                 │    │
-│  │                                                                     │    │
-│  │   if NABLA_EAGER_MAX_GRAPH=1:                                       │    │
+│  │   if EAGER_MAX_GRAPH=1:                                       │    │
 │  │       → Calls op.execute(resharded_args, kwargs)                    │    │
-│  │       → Builds MAX graph nodes immediately                          │    │
 │  │       → Returns (shard_graph_values, output_sharding, mesh)         │    │
 │  │                                                                     │    │
-│  │   verify_eager_shapes() validates against step 4 if enabled         │    │
+│  │   if EAGER_MAX_GRAPH=0 (default):                             │    │
+│  │       → Returns None (graph building DEFERRED)                      │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                     │                                       │
 │                                     ▼                                       │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │ STEP 6: PACKAGING  (base.py ~line 122)                              │    │
+│  │ STEP 5: ANALYTICAL METADATA (CONDITIONAL) (base.py ~line 118)       │    │
+│  │                                                                     │    │
+│  │   if execution_results is None or VERIFY_EAGER_SHAPES:              │    │
+│  │       output_physical_shapes, output_shard_dtypes, ... =            │    │
+│  │           self.compute_physical_shape(...)                          │    │
+│  │   else:                                                             │    │
+│  │       → Set to None (Metadata trusted from backend values)          │    │
+│  │                                                                     │    │
+│  │   Purpose: Manually determine shapes if graph build is deferred     │    │
+│  │   or cross-verify backend results if VERIFY_EAGER_SHAPES=1.         │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                     │                                       │
+│                                     ▼                                       │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │ STEP 6: PACKAGING  (base.py ~line 148)                              │    │
 │  │                                                                     │    │
 │  │   output = package_outputs(self, execution_results,                 │    │
 │  │       output_physical_shapes, output_shard_dtypes, ...)             │    │
 │  │                                                                     │    │
-│  │   Creates Tensor with metadata from step 4:                         │    │
-│  │   • _physical_shapes, _shard_dtypes, _shard_devices always set      │    │
+│  │   Creates Tensor with metadata:                                     │    │
+│  │   • if step 5 set metadata → Metadata stored in TensorImpl          │    │
+│  │   • if step 5 skipped → Metadata lazily retrieved from backend values│    │
 │  │                                                                     │    │
-│  │   if EAGER_MAX_GRAPH (step 5 ran):                                  │    │
+│  │   if EAGER_MAX_GRAPH (step 4 ran):                                  │    │
 │  │       output._impl._graph_values = [TensorValue, ...]               │    │
-│  │       output._impl.graph_values_epoch = GRAPH.epoch                 │    │
 │  │                                                                     │    │
-│  │   if DEFERRED (step 5 returned None):                               │    │
-│  │       output._impl._graph_values = []                               │    │
+│  │   if DEFERRED (step 4 returned None):                               │    │
 │  │       output._impl.graph_values_epoch = -1  ← "PROMISE TENSOR"      │    │
-│  │       GRAPH.add_unrealized(output._impl)   ← Track for later eval   │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                     │                                       │
 │                                     ▼                                       │
@@ -175,7 +165,7 @@ MAX graph construction has overhead. The default deferred mode optimizes for **c
 │      loss = model(batch)            # Same computation structure            │
 │      grads = grad(loss_fn)(params)  # Same structure, different data        │
 │                                                                             │
-│  WITH EAGER GRAPH BUILDING (NABLA_EAGER_MAX_GRAPH=1):                       │
+│  WITH EAGER GRAPH BUILDING (EAGER_MAX_GRAPH=1):                       │
 │  • Every op.execute() builds MAX graph nodes                                │
 │  • evaluate() compiles the graph                                            │
 │  • Cache stores compiled model                                              │
@@ -192,11 +182,11 @@ MAX graph construction has overhead. The default deferred mode optimizes for **c
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**But shapes must still be eager** because:
+- User code needs `.shape` for control flow and debugging.
+- Sharding propagation needs shapes to plan data movement.
+- Type checking and broadcasting validation must happen immediately.
 
-- User code needs `.shape` for control flow and debugging
-- Sharding propagation needs shapes to plan data movement
-- Type checking and broadcasting validation must happen immediately
+In **Eager Mode**, we can skip this analytical step because the backend provides the shapes directly. This ensures that the Python-side view and backend-side reality never drift.
 
 ---
 
@@ -251,8 +241,6 @@ Operation (base class - defines __call__ pipeline)
 | `sharding_rule(input_shapes, output_shapes)`            | For SPMD          | Factor-based sharding                          | propagation.py                                |
 | `collective_reduce_type`                                | Has default="sum" | Reduction op type                              | For `apply_auto_reduction`                    |
 
-### The `compute_physical_shape` Contract
-
 Every operation **must** implement `compute_physical_shape`. This is how shapes are computed eagerly even when graph building is deferred:
 
 ```python
@@ -263,15 +251,10 @@ def compute_physical_shape(
     Infer per-shard physical shapes, dtypes, and devices for outputs.
 
     CRITICAL: Must NOT build MAX graph nodes! Only compute metadata.
-
-    Returns:
-        - output_physical_shapes: list of shapes, one per shard
-        - output_shard_dtypes: list of dtypes, one per shard
-        - output_shard_devices: list of devices, one per shard
     """
 ```
 
-**Why required?** In default mode, `op.execute()` isn't called during `__call__`. But users still need `.shape`, and sharding propagation needs shapes. This method provides that without the cost of graph building.
+**Optimization Path**: If `EAGER_MAX_GRAPH=1`, this method is **only** called if `VERIFY_EAGER_SHAPES=1` is enabled for cross-verification. Otherwise, Nabla trusts the shapes returned by the MAX backend directly, which is faster and more reliable. In **Deferred mode** (default), this method remains the primary way to compute shapes.
 
 ---
 
@@ -291,9 +274,9 @@ y = matmul(A, B)  # A: [M, K] sharded on K, B: [K, N]
 
 **Step 3 (Hash)**: `op_hash = ("matmul", (A_key, B_key), kwargs_key)`
 
-**Step 4 (Physical Shapes)**: `compute_physical_shape` returns `([M, N], [M, N], ...)` per shard
+**Step 4 (Eager Execution)**: `EAGER_MAX_GRAPH=0` → Returns `None` (no graph building!)
 
-**Step 5 (Eager Execution)**: `NABLA_EAGER_MAX_GRAPH=0` → Returns `None` (no graph building!)
+**Step 5 (Physical Shapes)**: `compute_physical_shape` returns `([M, N], [M, N], ...)` per shard
 
 **Step 6 (Packaging)**:
 

@@ -20,9 +20,9 @@ Nabla is a **tensor library with automatic differentiation** built on three pill
 
 ## Execution Modes
 
-Nabla supports **two execution modes**, controlled by the `NABLA_EAGER_MAX_GRAPH` environment variable:
+Nabla supports **two execution modes**, controlled by the `EAGER_MAX_GRAPH` environment variable:
 
-### Default Mode: Deferred Graph Building (`NABLA_EAGER_MAX_GRAPH=0`)
+### Default Mode: Deferred Graph Building (`EAGER_MAX_GRAPH=0`)
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -56,11 +56,11 @@ Nabla supports **two execution modes**, controlled by the `NABLA_EAGER_MAX_GRAPH
 - Sharding propagation requires shape information to determine data movement
 - Type checking and broadcasting validation must happen at operation time
 
-### Eager Mode: Immediate Graph Building (`NABLA_EAGER_MAX_GRAPH=1`)
+### Eager Mode: Immediate Graph Building (`EAGER_MAX_GRAPH=1`)
 
 ```bash
-export NABLA_EAGER_MAX_GRAPH=1
-export NABLA_VERIFY_EAGER_SHAPES=1  # Optional: validate shape inference
+export EAGER_MAX_GRAPH=1
+export VERIFY_EAGER_SHAPES=1  # Optional: validate shape inference
 ```
 
 ```text
@@ -81,7 +81,7 @@ export NABLA_VERIFY_EAGER_SHAPES=1  # Optional: validate shape inference
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**When to use eager mode?** Useful for debugging shape mismatches (with `NABLA_VERIFY_EAGER_SHAPES=1`), or when you want to inspect the MAX graph during development.
+**When to use eager mode?** Useful for debugging shape mismatches (with `VERIFY_EAGER_SHAPES=1`), or when you want to inspect the MAX graph during development.
 
 ---
 
@@ -91,7 +91,7 @@ Understanding Nabla requires understanding three lifecycles: **Operation Executi
 
 ### 1. Operation Execution Lifecycle (`__call__`)
 
-Every operation (e.g., `add`, `matmul`, `relu`) goes through a **9-step pipeline** in `Operation.__call__()`. The key insight: **steps 1-4 always run** (metadata), while **step 5 is conditional** on the execution mode.
+Every operation (e.g., `add`, `matmul`, `relu`) goes through a **9-step pipeline** in `Operation.__call__()`. The key insight: **steps 1-3 and 6-9 always run** (metadata + tracing), while **steps 4 and 5 are conditional**.
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -115,18 +115,21 @@ Every operation (e.g., `add`, `matmul`, `relu`) goes through a **9-step pipeline
 │  op_hash = compute_structural_hash(self.name,resharded_args,adapted_kwargs) │
 │  Purpose: Create cache key for compiled model lookup (critical for perf!)   │
 │                                                                             │
-│  Step 4: COMPUTE PHYSICAL SHAPES - ALWAYS RUNS!                             │
-│  ───────────────────────────────                                            │
-│  output_physical_shapes, output_shard_dtypes, output_shard_devices =        │
-│      self.compute_physical_shape(resharded_args, adapted_kwargs, ...)       │
-│  Purpose: Infer output metadata WITHOUT building MAX graph nodes            │
-│  Why always? Users need .shape immediately; sharding needs shapes too       │
-│                                                                             │
-│  Step 5: EAGER EXECUTION (CONDITIONAL) ⚡                                    │
+│  Step 4: EAGER EXECUTION (CONDITIONAL) ⚡                                    │
 │  ────────────────────────────────────────                                   │
 │  execution_results = eager_execute(self, resharded_args, kwargs, ...)       │
-│  • If EAGER_MAX_GRAPH=0: Returns None (graph building deferred)             │
 │  • If EAGER_MAX_GRAPH=1: Calls op.execute() to build MAX graph nodes        │
+│  • If EAGER_MAX_GRAPH=0: Returns None (graph building deferred)             │
+│                                                                             │
+│  Step 5: ANALYTICAL METADATA (CONDITIONAL)                                  │
+│  ─────────────────────────────────────────                                  │
+│  if execution_results is None or VERIFY_EAGER_SHAPES:                       │
+│      output_physical_shapes, ... = self.compute_physical_shape(...)         │
+│  else:                                                                      │
+│      output_physical_shapes = None (inferred from backend results)          │
+│                                                                             │
+│  Purpose: Manually determine shapes if graph build is deferred              │
+│           or cross-verify backend results.                                  │
 │                                                                             │
 │  Step 6: PACKAGING (Create Tensor)                                          │
 │  ─────────────────────────────────                                          │
@@ -154,7 +157,7 @@ Every operation (e.g., `add`, `matmul`, `relu`) goes through a **9-step pipeline
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Key insight**: Steps 1-4, 6-9 always execute (metadata + tracing). Step 5 is where the execution mode matters—it determines whether MAX graph nodes are built immediately or deferred.
+**Key insight**: Steps 1-3, 6-9 always execute (metadata + tracing). Steps 4 and 5 are where the execution mode matters—they determine whether MAX graph nodes are built immediately and how metadata is retrieved.
 
 → **Detailed reference**: [ops/README.md](ops/README.md) explains each step with code pointers.
 

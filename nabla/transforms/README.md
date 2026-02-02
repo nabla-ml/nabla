@@ -162,7 +162,7 @@ def refresh_graph_values(trace):
 
 **Why original kwargs**: `execute` adapts internally. This is the only way rehydration can work correctly.
 
-**When is this called?** In `backward_on_trace()` when `NABLA_EAGER_MAX_GRAPH=1`:
+**When is this called?** In `backward_on_trace()` when `EAGER_MAX_GRAPH=1`:
 
 ```python
 if EAGER_MAX_GRAPH:

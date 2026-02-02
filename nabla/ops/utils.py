@@ -473,27 +473,48 @@ def package_outputs(
     from ..core.sharding import spmd
     from ..config import EAGER_MAX_GRAPH
 
-    is_multi_output = (
-        isinstance(output_physical_shapes, list)
-        and output_physical_shapes
-        and isinstance(output_physical_shapes[0], list)
-    )
+    # Detect multi-output mode
+    is_multi_output = False
+    if output_physical_shapes is not None:
+        is_multi_output = (
+            isinstance(output_physical_shapes, list)
+            and output_physical_shapes
+            and isinstance(output_physical_shapes[0], list)
+        )
+    elif isinstance(predicted_output_spec, (list, tuple)):
+        is_multi_output = True
+    elif (
+        execution_results
+        and execution_results[0]
+        and isinstance(execution_results[0][0], (list, tuple))
+    ):
+        is_multi_output = True
 
     if is_multi_output:
-        outputs = []
-        num_outputs = len(output_physical_shapes)
+        # 1. Determine number of outputs
+        if output_physical_shapes is not None:
+            num_outputs = len(output_physical_shapes)
+        elif isinstance(predicted_output_spec, (list, tuple)):
+            num_outputs = len(predicted_output_spec)
+        else:
+            num_outputs = len(execution_results[0][0])
 
+        # 2. Transpose shard-major results to output-major if available
         if EAGER_MAX_GRAPH and execution_results:
             transposed_results = list(zip(*execution_results[0]))
         else:
             transposed_results = [[] for _ in range(num_outputs)]
 
+        outputs = []
         for i in range(num_outputs):
             out_sharding = (
                 predicted_output_spec[i]
                 if isinstance(predicted_output_spec, (list, tuple))
                 else predicted_output_spec
             )
+
+            # Use provided metadata if available, otherwise pass None and let Tensor infer from values
+            out_shapes = output_physical_shapes[i] if output_physical_shapes else None
             out_dtypes = (
                 output_shard_dtypes[i]
                 if isinstance(output_shard_dtypes, list)
@@ -513,7 +534,7 @@ def package_outputs(
                 any_traced,
                 max_batch_dims,
                 mesh=mesh,
-                physical_shapes=output_physical_shapes[i],
+                physical_shapes=out_shapes,
                 shard_dtypes=out_dtypes,
                 shard_devices=out_devices,
             )
