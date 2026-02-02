@@ -103,15 +103,15 @@ Every operation (e.g., `add`, `matmul`, `relu`) goes through a **9-step pipeline
 │  ───────────────────────────────                                            │
 │  resharded_args, adapted_kwargs, predicted_output_spec, mesh, reduce_axes = │
 │      adapt_and_reshard(self, args, kwargs, any_sharded, max_batch_dims)     │
-│  Purpose: Translate logical→physical kwargs, predict output sharding,      │
+│  Purpose: Translate logical→physical kwargs, predict output sharding,       │
 │           insert AllGather/AllToAll if inputs need resharding               │
 │                                                                             │
 │  Step 3: COMPUTE STRUCTURAL HASH                                            │
 │  ───────────────────────────────                                            │
-│  op_hash = compute_structural_hash(self.name, resharded_args, adapted_kwargs)│
+│  op_hash = compute_structural_hash(self.name,resharded_args,adapted_kwargs) │
 │  Purpose: Create cache key for compiled model lookup (critical for perf!)   │
 │                                                                             │
-│  Step 4: COMPUTE PHYSICAL SHAPES ⚠️ ALWAYS RUNS                             │
+│  Step 4: COMPUTE PHYSICAL SHAPES - ALWAYS RUNS!                             │
 │  ───────────────────────────────                                            │
 │  output_physical_shapes, output_shard_dtypes, output_shard_devices =        │
 │      self.compute_physical_shape(resharded_args, adapted_kwargs, ...)       │
@@ -175,14 +175,14 @@ When you need concrete values (`.numpy()`, `print()`, or explicit `evaluate()`),
 │  • Unrealized tensors: keyed by (op_hash, output_index)                     │
 │  • Realized tensors: keyed by (dtype, shape, sharding)                      │
 │                                                                             │
-│  3. CACHE LOOKUP ⚡ (THE FAST PATH)                                         │
+│  3. CACHE LOOKUP ⚡ (THE FAST PATH)                                          │
 │  ─────────────────                                                          │
 │  if cache_key in _GRAPH_CACHE:                                              │
 │      cached_model, kept_indices = _GRAPH_CACHE[cache_key]                   │
 │      → Gather input buffers using kept_indices                              │
 │      → Run cached_model(*inputs) directly                                   │
 │      → Store results to target tensors                                      │
-│      → Skip ALL graph building! 🚀                                          │
+│      → Skip ALL graph building!                                             │
 │                                                                             │
 │  4. CACHE MISS: BUILD GRAPH                                                 │
 │  ──────────────────────────                                                 │
