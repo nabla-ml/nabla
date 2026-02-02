@@ -6,7 +6,8 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
-> **⚠️ Active Development**: This is the `main` development branch with distributed SPMD execution and a new graph-based execution model. For the older stable single-device release (v25.7), see [`pip install nabla-ml`](#stable-release-v257).
+> 
+> **Active Development**: This is the `main` development branch with distributed SPMD execution and a new lazy, graph-based execution model. For the older single-device release (v25.7), see [`pip install nabla-ml`](#stable-release-v257).
 
 ---
 
@@ -29,7 +30,7 @@ with nabla.default_device(CPU()):  # Use Accelerator() for GPU
 
     # Compute loss
     loss = compute_loss(x, w)
-    print("Loss:", loss.numpy())
+    print("Loss:", loss)  # Implicitly triggers .realize()
 
     # Compute gradients
     grad_x, grad_w = nabla.grad(compute_loss, argnums=(0, 1))(x, w)
@@ -57,7 +58,7 @@ def compute_loss(x, w):
 
 # Compute with automatic communication
 loss = compute_loss(x_sharded, w_sharded)
-print("Loss:", loss.numpy())
+print("Loss:", loss)
 ```
 
 ---
@@ -67,7 +68,7 @@ print("Loss:", loss.numpy())
 ### Prerequisites
 
 - **Python 3.12+**
-- **Modular MAX SDK** (`modular>=26.1.0`)
+- **Modular MAX SDK** (automatically installed via `requirements.txt`)
 
 ### Clone and Install
 
@@ -117,14 +118,16 @@ pytest tests/
 ```
 Tensor (User API)              TensorImpl (Internal State)
 ├── .shape, .dtype             ├── _graph_values: list[TensorValue]
-├── .numpy()                   ├── _buffers: list[driver.Buffer]
+├── .realize()                 ├── _buffers: list[driver.Buffer]
 ├── arithmetic ops             ├── graph_values_epoch: int
 └── wraps ──────────────────►  ├── sharding: ShardingSpec
                                ├── output_refs: OpNode
                                └── batch_dims: int
 ```
 
-**Why two objects?** Multi-output operations (e.g., `split`) produce multiple `Tensor` objects sharing one `OpNode`. `TensorImpl` holds shared state; `Tensor` is the user handle.
+**Why two objects?** 
+1. **Multi-output support**: Operations like `split` produce multiple `Tensor` objects sharing one `OpNode`.
+2. **Lifetime Management**: Decouples the user-facing `Tensor` from the underlying `TensorImpl`. The engine manages `TensorImpl` lifetimes via weakrefs, ensuring efficient memory management even in complex cyclic graphs.
 
 → Deep dive: [nabla/core/tensor/README.md](nabla/core/tensor/README.md)
 
@@ -148,14 +151,18 @@ Every operation flows through `Operation.__call__()`:
 
 Steps 1-4 and 6-9 always run. Step 5 depends on execution mode.
 
+**Why Operation-based tracing?** We trace `OpNode`s (operations) rather than `Tensor`s. This cleanly handles operations with multiple outputs (like SVD or Split), which would be messy and complex with tensor-based tracing (tapes).
+
 → Deep dive: [nabla/ops/README.md](nabla/ops/README.md)
 
 ### Execution Modes
 
 | Mode | `NABLA_EAGER_MAX_GRAPH` | Behavior |
 |------|-------------------------|----------|
-| **Deferred** (default) | `0` | Graph building delayed until `.numpy()`. Enables compiled model caching. |
+| **Deferred** (default) | `0` | Graph building delayed until `.realize()`. Enables compiled model caching. |
 | **Eager** | `1` | MAX graph nodes built immediately. Useful for debugging. |
+
+> **Crucial Distinction**: "Eager" here refers only to **MAX graph building**. Nabla is **fundamentally lazy**—execution always involves compiling the graph to the MAX engine. Eager mode just builds that graph node-by-node, whereas Deferred mode builds it all at once during `evaluate()`.
 
 ```bash
 export NABLA_EAGER_MAX_GRAPH=1        # Enable eager mode
@@ -171,7 +178,7 @@ y = x @ w           →  y.shape available immediately
                        y._impl.graph_values_epoch = -1 (promise marker)
                        y._impl.output_refs = OpNode(op=MatmulOp, inputs=[x, w])
 
-y.numpy()           →  GRAPH.evaluate(y):
+y.realize()         →  GRAPH.evaluate(y):
                        1. Cache lookup by structural hash
                        2. HIT: run cached model, skip graph building
                        3. MISS: replay OpNode trace → build MAX graph → compile
@@ -192,7 +199,13 @@ nabla.grad(loss_fn)(x)  →  1. Trace forward, capturing OpNode DAG
 
 ### Factor-Based Sharding (SPMD)
 
-Nabla uses **semantic factors** for sharding propagation:
+Nabla uses **semantic factors** for sharding propagation, deeply inspired by **XLA's novel Shardy compiler system**.
+
+**Why Factor-Based?**
+- **Flexibility**: More expressive than traditional GSPMD-style sharding.
+- **Future-Proof**: Enables global sharding optimization based on constraints (propagation is just solving constraints).
+
+Example:
 
 ```
 Matmul factors: "m k, k n → m n"
@@ -216,7 +229,7 @@ Nabla offers more than covered above:
 | **vmap** | Automatic vectorization via `batch_dims` tracking | [transforms/vmap.py](nabla/transforms/vmap.py) |
 | **Dynamic dims** | Compile functions with symbolic dimension support | [transforms/compile.py](nabla/transforms/compile.py) |
 | **Control flow** | `cond`, `while_loop`, `scan` for differentiable control | [ops/control_flow.py](nabla/ops/control_flow.py) |
-| **Pytree utilities** | JAX-compatible tree operations | [core/common/pytree.py](nabla/core/common/pytree.py) |
+| **Pytree utilities** | General python-tree operations | [core/common/pytree.py](nabla/core/common/pytree.py) |
 
 **Current sharding model**: Explicit, user-controlled via `nabla.shard()`. You decide partition specs.
 
