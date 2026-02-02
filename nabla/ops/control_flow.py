@@ -234,7 +234,6 @@ class CondOp(Operation):
             if not hasattr(v, 'type'): return v
             t = Tensor(value=v)
             t._impl.graph_values_epoch = GRAPH.epoch
-            t._impl._graph_id = id(GRAPH.graph)
             return t
 
         wrapped_operands = [wrap(v) for v in operand_shards]
@@ -335,7 +334,6 @@ class WhileLoopOp(Operation):
             if not hasattr(v, 'type'): return v
             t = Tensor(value=v)
             t._impl.graph_values_epoch = GRAPH.epoch
-            t._impl._graph_id = id(GRAPH.graph)
             return t
 
         def unwrap(t):

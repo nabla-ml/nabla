@@ -35,7 +35,6 @@ class TensorImpl:
         "output_refs",
         "output_index",
         "graph_values_epoch",
-        "_graph_id",
         "_physical_shapes",
         "_shard_dtypes",
         "_shard_devices",
@@ -53,7 +52,6 @@ class TensorImpl:
     batch_dims: int
     output_refs: OpNode | None
     output_index: int
-    _graph_id: int | None
     _physical_shapes: list[tuple[int, ...]] | None
     _shard_dtypes: list[DType] | None
     _shard_devices: list[Device] | None
@@ -93,7 +91,6 @@ class TensorImpl:
         self.output_refs = None
         self.output_index = 0
         self.graph_values_epoch = -1
-        self._graph_id = None
         self._physical_shapes = physical_shapes
         self._shard_dtypes = shard_dtypes
         self._shard_devices = shard_devices

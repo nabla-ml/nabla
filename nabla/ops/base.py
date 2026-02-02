@@ -258,10 +258,11 @@ class Operation(ABC):
             arg_hashes = tuple(_get_tensor_hash(x) for x in resharded_args)
             kwarg_hashes = tuple(sorted((k, _get_tensor_hash(v)) for k, v in (adapted_kwargs or kwargs).items()))
             
-            # Context-aware hashing: results are only valid within the same MAX Graph context
-            curr_graph = GRAPH.graph
-            graph_id = id(curr_graph)
-            op_hash = (self.name, graph_id, arg_hashes, kwarg_hashes)
+            # Note: We intentionally exclude graph_id from the hash.
+            # The cache key should depend only on the computational structure (ops, shapes, dtypes),
+            # not on the specific MAX Graph instance. Graph instances change every epoch,
+            # but the compiled model can be reused if the structure matches.
+            op_hash = (self.name, arg_hashes, kwarg_hashes)
 
             # 3. Physical Execution (DEFERRED)
             # Instead of executing now, just compute shape metadata
