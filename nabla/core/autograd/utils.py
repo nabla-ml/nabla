@@ -303,11 +303,12 @@ def backward_on_trace(
     if not trace._computed:
         trace.compute()
 
-    # NOTE: refresh_graph_values() is no longer needed with lazy evaluation.
-    # The old eager execution model required populating _graph_values before 
-    # running VJP rules. Now, VJP rules just create new lazy tensors that will
-    # be compiled together when realize() is called on the final gradients.
-    # trace.refresh_graph_values()
+    # In Eager MAX Graph mode, we MUST rehydrate the graph values because
+    # VJP operations will immediately try to build their graph nodes, requiring
+    # all inputs (primals) to have valid graph values in the CURRENT epoch.
+    from ...config import EAGER_MAX_GRAPH
+    if EAGER_MAX_GRAPH:
+        trace.refresh_graph_values()
 
     engine = BackwardEngine(trace, cotangents, create_graph=create_graph)
     return engine.run()

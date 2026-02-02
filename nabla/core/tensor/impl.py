@@ -73,7 +73,7 @@ class TensorImpl:
         shard_devices: list[Device] | None = None,
     ):
         self._graph_values = (
-            values if isinstance(values, list) else ([values] if values else [])
+            values if isinstance(values, list) else ([values] if values is not None else [])
         )
         self._buffers = (
             storages
@@ -173,15 +173,16 @@ class TensorImpl:
 
     def physical_local_shape(self, shard_idx: int = 0) -> graph.Shape | None:
         """Storage shape for a specific shard (includes batch dims)."""
-        if self._physical_shapes and shard_idx < len(self._physical_shapes):
-            return graph.Shape(self._physical_shapes[shard_idx])
-
         if self._buffers and shard_idx < len(self._buffers):
             return graph.Shape(self._buffers[shard_idx].shape)
 
         values = self._get_valid_graph_values()
         if values and shard_idx < len(values):
             return values[shard_idx].type.shape
+
+        if self._physical_shapes and shard_idx < len(self._physical_shapes):
+            return graph.Shape(self._physical_shapes[shard_idx])
+
         return None
 
     def logical_local_shape(self, shard_idx: int = 0) -> graph.Shape | None:

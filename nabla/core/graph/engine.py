@@ -206,7 +206,7 @@ class ComputeGraph:
                 # Unrealized: (sorting_bucket=0, op_hash, output_index)
                 return (0, t._impl.output_refs._op_hash, t._impl.output_index)
             # Realized: (sorting_bucket=1, dtype, shape, sharding)
-            from ..ops.base import _make_hashable
+            from ...ops.base import _make_hashable
             sharding_key = _make_hashable(t.sharding) if t.sharding else None
             return (1, str(t.dtype), tuple(int(d) for d in t.shape), sharding_key)
 

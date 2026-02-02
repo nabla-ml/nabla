@@ -304,19 +304,34 @@ class WhileLoopOp(Operation):
 
     def compute_physical_shape(self, args: tuple, kwargs: dict, output_sharding: Any = None):
         from ..core.tensor import Tensor
+        from ..core.sharding import spmd
+        
         cond_fn, body_fn, init_val = args
         flat_init, _ = pytree.tree_flatten(init_val, is_leaf=lambda x: isinstance(x, Tensor))
         
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
         all_shapes, all_dtypes, all_devices = [], [], []
         for leaf in flat_init:
             if isinstance(leaf, Tensor):
-                all_shapes.append(leaf._impl._physical_shapes)
-                all_dtypes.append(leaf._impl._shard_dtypes)
-                all_devices.append(leaf._impl._shard_devices)
+                phys_shapes = leaf._impl._physical_shapes
+                shard_dtypes = leaf._impl._shard_dtypes
+                shard_devices = leaf._impl._shard_devices
+                
+                # Handle replication for scalar/unsharded inputs on mesh
+                if phys_shapes and len(phys_shapes) == 1 and num_shards > 1:
+                    phys_shapes = phys_shapes * num_shards
+                    shard_dtypes = shard_dtypes * num_shards
+                    shard_devices = shard_devices * num_shards if shard_devices else [None] * num_shards
+                
+                all_shapes.append(phys_shapes)
+                all_dtypes.append(shard_dtypes)
+                all_devices.append(shard_devices)
             else:
-                all_shapes.append([(1,)])
-                all_dtypes.append([None])
-                all_devices.append([None])
+                all_shapes.append([(1,)] * num_shards)
+                all_dtypes.append([None] * num_shards)
+                all_devices.append([None] * num_shards)
 
         if len(flat_init) == 1:
             return all_shapes[0], all_dtypes[0], all_devices[0]

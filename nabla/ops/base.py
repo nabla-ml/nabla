@@ -264,22 +264,112 @@ class Operation(ABC):
             # but the compiled model can be reused if the structure matches.
             op_hash = (self.name, arg_hashes, kwarg_hashes)
 
-            # 3. Physical Execution (DEFERRED)
-            # Instead of executing now, just compute shape metadata
+            # 3. Physical Execution (Lazy or Eager)
             if type(self).compute_physical_shape is Operation.compute_physical_shape:
                 raise RuntimeError(
                     f"{self.__class__.__name__} must implement compute_physical_shape "
                     "for physical execution."
                 )
 
+            # Always compute physical shapes metadata (needed for verification and lazy mode)
             output_physical_shapes, output_shard_dtypes, output_shard_devices = (
                 self.compute_physical_shape(
                     resharded_args, adapted_kwargs, predicted_output_spec
                 )
             )
 
-            # 4. Packaging (Create promise tensor(s) with metadata only, no graph values yet)
-            # Check if compute_physical_shape returned multi-output metadata
+            # Check Execution Mode
+            from ..config import EAGER_MAX_GRAPH
+            
+            execution_results = None
+            if EAGER_MAX_GRAPH:
+                # EAGER MODE: Build graph immediately
+                
+                # PRE-EXECUTION: Ensure all inputs are valid in the current graph context.
+                # Use a set to avoid duplicates
+                seen_impls = set()
+                inputs_to_hydrate = []
+                inputs_to_replay = []
+
+                def check_input_validity(x):
+                    if isinstance(x, Tensor):
+                        impl = x._impl
+                        if id(impl) in seen_impls:
+                            return
+                        seen_impls.add(id(impl))
+                        
+                        if impl.graph_values_epoch != GRAPH.epoch:
+                            if impl.is_realized:
+                                inputs_to_hydrate.append(x)
+                            elif impl.output_refs:
+                                inputs_to_replay.append(x)
+
+                pytree.tree_map(check_input_validity, resharded_args)
+                pytree.tree_map(check_input_validity, kwargs)
+                
+                # 1. Bring realized tensors into current graph
+                for t in inputs_to_hydrate:
+                    GRAPH.add_input(t)
+                
+                # 2. Replay trace for unrealized tensors (stale promises)
+                if inputs_to_replay:
+                    GRAPH._replay_trace_to_build_graph(inputs_to_replay)
+
+                # Note: We pass kwargs, assuming execute handles any necessary adaptation
+                try:
+                    execution_results = self.execute(resharded_args, kwargs)
+                except Exception as e:
+                    raise RuntimeError(f"Eager graph building failed for {self.name}: {e}") from e
+                
+                # Verify consistency between Manual Shape Computation and Eager Execution
+                from ..config import VERIFY_EAGER_SHAPES
+                
+                if VERIFY_EAGER_SHAPES:
+                    # execution_results is (shard_results, output_sharding, mesh)
+                    shard_vals = execution_results[0]
+                    
+                    # Helper to verify shape
+                    def verify_shape(val, expected_shape, shard_idx, name):
+                        if val is None: return 
+                        actual = tuple(int(d) for d in val.type.shape)
+                        expected = tuple(int(d) for d in expected_shape) if expected_shape is not None else None
+                        if actual != expected:
+                            raise RuntimeError(
+                                f"Shape mismatch in {self.name} (Shard {shard_idx}): "
+                                f"Execution produced {actual}, but compute_physical_shape predicted {expected}. "
+                                f"This indicates a bug in {self.__class__.__name__}.compute_physical_shape."
+                            )
+                    
+                    # Verification logic
+                    if isinstance(output_physical_shapes, list) and output_physical_shapes and isinstance(output_physical_shapes[0], list):
+                        # Multi-output: shard_vals is list of tuples
+                        # shard_vals: [(val1_s0, val2_s0), (val1_s1, val2_s1)]
+                        # output_physical_shapes: [[s0_out0, s1_out0], [s0_out1, s1_out1]] (Transposed???)
+        
+                        for shard_idx, vals_tuple in enumerate(shard_vals):
+                            if len(vals_tuple) != len(output_physical_shapes):
+                                 raise RuntimeError(
+                                     f"Output count mismatch for {self.name} (Shard {shard_idx}): "
+                                     f"Expected {len(output_physical_shapes)} outputs, got {len(vals_tuple)}."
+                                )
+                            for out_idx, val in enumerate(vals_tuple):
+                                try:
+                                    expected = output_physical_shapes[out_idx][shard_idx]
+                                except IndexError:
+                                    print(f"DEBUG ERROR: out_idx={out_idx}, shard_idx={shard_idx}")
+                                    print(f"  output_physical_shapes len={len(output_physical_shapes)}")
+                                    for i, s in enumerate(output_physical_shapes):
+                                        print(f"    idx {i}: len={len(s)} -> {s}")
+                                    raise
+                                verify_shape(val, expected, shard_idx, f"output {out_idx}")
+                    else:
+                        # Single output: shard_vals is list of vals
+                        for shard_idx, val in enumerate(shard_vals):
+                            expected = output_physical_shapes[shard_idx]
+                            verify_shape(val, expected, shard_idx, "output")
+
+            # 4. Packaging (Create Tensor(s))
+            # Check if multi-output
             is_multi_output = (
                 isinstance(output_physical_shapes, list) and 
                 output_physical_shapes and 
@@ -287,15 +377,26 @@ class Operation(ABC):
             )
 
             if is_multi_output:
-                # Handle multi-output operations (e.g., split, chunk, unbind)
+                # Handle multi-output
                 outputs = []
-                for i in range(len(output_physical_shapes)):
+                num_outputs = len(output_physical_shapes)
+                
+                # Pre-transpose results if eager: [(v1,v2),...] -> [[v1...], [v2...]]
+                if EAGER_MAX_GRAPH and execution_results:
+                     raw_shard_results = execution_results[0]
+                     transposed_results = list(zip(*raw_shard_results))
+                else:
+                     transposed_results = [[] for _ in range(num_outputs)]
+
+                for i in range(num_outputs):
                     out_sharding = predicted_output_spec[i] if isinstance(predicted_output_spec, (list, tuple)) else predicted_output_spec
                     out_dtypes = output_shard_dtypes[i] if isinstance(output_shard_dtypes, list) and len(output_shard_dtypes) > i else output_shard_dtypes
                     out_devices = output_shard_devices[i] if isinstance(output_shard_devices, list) and len(output_shard_devices) > i else output_shard_devices
                     
+                    val_list = list(transposed_results[i]) if EAGER_MAX_GRAPH else []
+                    
                     o = spmd.create_sharded_output(
-                        [],
+                        val_list,
                         out_sharding,
                         any_traced,
                         max_batch_dims,
@@ -304,17 +405,23 @@ class Operation(ABC):
                         shard_dtypes=out_dtypes,
                         shard_devices=out_devices,
                     )
-                    o._impl.graph_values_epoch = -1
-                    GRAPH.add_unrealized(o._impl)
+                    
+                    if EAGER_MAX_GRAPH:
+                        o._impl.graph_values_epoch = GRAPH.epoch # Realized (in graph)
+                    else:
+                        o._impl.graph_values_epoch = -1
+                        GRAPH.add_unrealized(o._impl)
+                        
                     outputs.append(o)
                 
-                # Determine container type (tuple or list) based on op or default to tuple
                 container_type = getattr(self, "output_container_type", tuple)
                 output = container_type(outputs)
             else:
                 # Single output case
+                val_list = execution_results[0] if EAGER_MAX_GRAPH and execution_results else []
+                
                 output = spmd.create_sharded_output(
-                    [],  # Empty - will be populated during evaluate()
+                    val_list,
                     predicted_output_spec,
                     any_traced,
                     max_batch_dims,
@@ -323,8 +430,12 @@ class Operation(ABC):
                     shard_dtypes=output_shard_dtypes,
                     shard_devices=output_shard_devices,
                 )
-                output._impl.graph_values_epoch = -1  # Mark as unrealized
-                GRAPH.add_unrealized(output._impl)
+                
+                if EAGER_MAX_GRAPH:
+                    output._impl.graph_values_epoch = GRAPH.epoch
+                else:
+                    output._impl.graph_values_epoch = -1
+                    GRAPH.add_unrealized(output._impl)
 
             # 6. Tracing - set up OpNode for THIS op FIRST (with hash)
             # Store resharded_args (not original args) so rehydration has correctly sharded inputs
@@ -333,13 +444,20 @@ class Operation(ABC):
             # 5. SPMD: Post-Op Collectives (Automatic Reductions)
             # This may wrap output with an all_reduce op (which sets up its own refs)
             if reduce_axes and mesh:
-                from .execution_utils import apply_auto_reduction
+                from .communication.all_reduce import all_reduce
+                from ..core import pytree, Tensor
                 
-                # apply_auto_reduction expects a single tensor usually, but lets check
-                if is_multi_output:
-                    output = container_type(apply_auto_reduction(self, o, mesh, reduce_axes) for o in output)
-                else:
-                    output = apply_auto_reduction(self, output, mesh, reduce_axes)
+                def _apply_reduction(t):
+                    if isinstance(t, Tensor):
+                        return all_reduce(
+                            t, 
+                            mesh=mesh, 
+                            reduce_axes=reduce_axes, 
+                            reduce_op=self.collective_reduce_type
+                        )
+                    return t
+
+                output = pytree.tree_map(_apply_reduction, output)
 
             # 7. Post-Processing (JVP)
             # any_has_tangent was already computed in metadata collection above
