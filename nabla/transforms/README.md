@@ -163,10 +163,12 @@ def refresh_graph_values(trace):
 **Why original kwargs**: `execute` adapts internally. This is the only way rehydration can work correctly.
 
 **When is this called?** In `backward_on_trace()` when `NABLA_EAGER_MAX_GRAPH=1`:
+
 ```python
 if EAGER_MAX_GRAPH:
     trace.refresh_graph_values()
 ```
+
 This is necessary because the forward pass builds graph values, but `evaluate()` bumps the epoch and clears them. VJP operations need valid graph values in the current epoch.
 
 ---

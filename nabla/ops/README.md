@@ -193,6 +193,7 @@ MAX graph construction has overhead. The default deferred mode optimizes for **c
 ```
 
 **But shapes must still be eager** because:
+
 - User code needs `.shape` for control flow and debugging
 - Sharding propagation needs shapes to plan data movement
 - Type checking and broadcasting validation must happen immediately
@@ -225,7 +226,7 @@ Operation (base class - defines __call__ pipeline)
 ├── UnaryOperation        # Single input: relu, exp, neg
 │   └── Default execute loops over shards
 │
-├── BinaryOperation       # Two inputs: add, mul, matmul  
+├── BinaryOperation       # Two inputs: add, mul, matmul
 │   └── Overrides __call__ to broadcast shapes BEFORE parent pipeline
 │
 ├── LogicalAxisOperation  # Ops with axis kwargs: reduce, transpose
@@ -238,17 +239,17 @@ Operation (base class - defines __call__ pipeline)
 
 ### Key Methods Every Operation Must/Can Implement
 
-| Method | Required | Purpose | Notes |
-| :--- | :--- | :--- | :--- |
-| `name` | ✅ | String identifier | Property |
-| `kernel(*args, **kwargs)` | ✅ | MAX primitive (per-shard) | Called by `execute()` in shard loop |
-| `compute_physical_shape(args, kwargs, output_sharding)` | ✅ **NEW** | Infer output shapes WITHOUT building MAX graph | Must return `(shapes, dtypes, devices)` |
-| `execute(args, kwargs)` | Has default | Custom execution logic | Override if needed. Receives ORIGINAL kwargs! |
-| `adapt_kwargs(args, kwargs, batch_dims)` | Has default | Translate logical→physical kwargs | Override for axis ops |
-| `vjp_rule(primals, cotangent, output)` | For autodiff | Backward gradient | See [core/autograd/](../core/autograd/) |
-| `jvp_rule(primals, tangents, output)` | For forward-mode | Forward tangent | [utils.py](utils.py) |
-| `sharding_rule(input_shapes, output_shapes)` | For SPMD | Factor-based sharding | propagation.py |
-| `collective_reduce_type` | Has default="sum" | Reduction op type | For `apply_auto_reduction` |
+| Method                                                  | Required          | Purpose                                        | Notes                                         |
+| :------------------------------------------------------ | :---------------- | :--------------------------------------------- | :-------------------------------------------- |
+| `name`                                                  | ✅                | String identifier                              | Property                                      |
+| `kernel(*args, **kwargs)`                               | ✅                | MAX primitive (per-shard)                      | Called by `execute()` in shard loop           |
+| `compute_physical_shape(args, kwargs, output_sharding)` | ✅ **NEW**        | Infer output shapes WITHOUT building MAX graph | Must return `(shapes, dtypes, devices)`       |
+| `execute(args, kwargs)`                                 | Has default       | Custom execution logic                         | Override if needed. Receives ORIGINAL kwargs! |
+| `adapt_kwargs(args, kwargs, batch_dims)`                | Has default       | Translate logical→physical kwargs              | Override for axis ops                         |
+| `vjp_rule(primals, cotangent, output)`                  | For autodiff      | Backward gradient                              | See [core/autograd/](../core/autograd/)       |
+| `jvp_rule(primals, tangents, output)`                   | For forward-mode  | Forward tangent                                | [utils.py](utils.py)                          |
+| `sharding_rule(input_shapes, output_shapes)`            | For SPMD          | Factor-based sharding                          | propagation.py                                |
+| `collective_reduce_type`                                | Has default="sum" | Reduction op type                              | For `apply_auto_reduction`                    |
 
 ### The `compute_physical_shape` Contract
 
@@ -260,12 +261,12 @@ def compute_physical_shape(
 ) -> tuple[list[tuple[int, ...]], list[DType], list[Device]]:
     """
     Infer per-shard physical shapes, dtypes, and devices for outputs.
-    
+
     CRITICAL: Must NOT build MAX graph nodes! Only compute metadata.
-    
+
     Returns:
         - output_physical_shapes: list of shapes, one per shard
-        - output_shard_dtypes: list of dtypes, one per shard  
+        - output_shard_dtypes: list of dtypes, one per shard
         - output_shard_devices: list of devices, one per shard
     """
 ```
@@ -283,6 +284,7 @@ y = matmul(A, B)  # A: [M, K] sharded on K, B: [K, N]
 **Step 1 (Metadata)**: Collects batch_dims=0, traced=True, sharded=True
 
 **Step 2 (Adaptation)**:
+
 - `infer_output_sharding` uses rule `"m k, k n -> m n"`
 - Factor `k` is sharded → appears in reduce_axes
 - If B's K dim has different sharding → `reshard_inputs` inserts communication
@@ -294,6 +296,7 @@ y = matmul(A, B)  # A: [M, K] sharded on K, B: [K, N]
 **Step 5 (Eager Execution)**: `NABLA_EAGER_MAX_GRAPH=0` → Returns `None` (no graph building!)
 
 **Step 6 (Packaging)**:
+
 - Creates output tensor with `_physical_shapes=[(M,N), ...]`
 - Sets `graph_values_epoch = -1` (promise tensor)
 - Calls `GRAPH.add_unrealized(output._impl)`
@@ -305,8 +308,9 @@ y = matmul(A, B)  # A: [M, K] sharded on K, B: [K, N]
 **Step 9 (JVP)**: Not applicable here
 
 **Later, when `y.numpy()` is called:**
+
 - `GRAPH.evaluate(y)` checks cache by `op_hash`
-- Cache MISS: `_replay_trace_to_build_graph()` calls `matmul.execute()` 
+- Cache MISS: `_replay_trace_to_build_graph()` calls `matmul.execute()`
 - Compiles and runs, stores to `y._impl._buffers`
 - Caches compiled model for next time
 
@@ -314,20 +318,20 @@ y = matmul(A, B)  # A: [M, K] sharded on K, B: [K, N]
 
 ## Component Map
 
-| File | Purpose | Key Exports |
-| :--- | :--- | :--- |
-| [base.py](base.py) | **`__call__` pipeline**, base classes | `Operation`, `BinaryOperation`, `UnaryOperation`, `ReduceOperation`, `LogicalAxisOperation` |
-| [utils.py](utils.py) | **Execution helpers** | `eager_execute`, `package_outputs`, `collect_metadata`, `apply_auto_reduction`, `apply_jvp` |
-| [binary.py](binary.py) | Binary ops | `add`, `sub`, `mul`, `div`, `matmul`, `pow` |
-| [unary.py](unary.py) | Unary ops | `relu`, `sigmoid`, `tanh`, `exp`, `log`, `neg`, `softmax` |
-| [reduction.py](reduction.py) | Reductions | `reduce_sum`, `mean`, `reduce_max`, `reduce_min` |
-| [creation.py](creation.py) | Tensor factories | `full`, `zeros`, `ones`, `arange`, `uniform`, `gaussian` |
-| [view/](view/README.md) | Shape ops | `reshape`, `transpose`, `squeeze`, `broadcast_to`, `gather`, `scatter` |
-| [communication/](communication/README.md) | Collectives | `all_reduce`, `all_gather`, `shard`, `reshard`, `reduce_scatter` |
-| [comparison.py](comparison.py) | Comparisons | `equal`, `not_equal`, `greater`, `less` |
-| [control_flow.py](control_flow.py) | Control flow | `where`, `cond`, `while_loop`, `scan` |
-| [multi_output.py](multi_output.py) | Multi-output | `split`, `chunk`, `unbind` |
-| [custom_op.py](custom_op.py) | Extensions | `call_custom_kernel` |
+| File                                      | Purpose                               | Key Exports                                                                                 |
+| :---------------------------------------- | :------------------------------------ | :------------------------------------------------------------------------------------------ |
+| [base.py](base.py)                        | **`__call__` pipeline**, base classes | `Operation`, `BinaryOperation`, `UnaryOperation`, `ReduceOperation`, `LogicalAxisOperation` |
+| [utils.py](utils.py)                      | **Execution helpers**                 | `eager_execute`, `package_outputs`, `collect_metadata`, `apply_auto_reduction`, `apply_jvp` |
+| [binary.py](binary.py)                    | Binary ops                            | `add`, `sub`, `mul`, `div`, `matmul`, `pow`                                                 |
+| [unary.py](unary.py)                      | Unary ops                             | `relu`, `sigmoid`, `tanh`, `exp`, `log`, `neg`, `softmax`                                   |
+| [reduction.py](reduction.py)              | Reductions                            | `reduce_sum`, `mean`, `reduce_max`, `reduce_min`                                            |
+| [creation.py](creation.py)                | Tensor factories                      | `full`, `zeros`, `ones`, `arange`, `uniform`, `gaussian`                                    |
+| [view/](view/README.md)                   | Shape ops                             | `reshape`, `transpose`, `squeeze`, `broadcast_to`, `gather`, `scatter`                      |
+| [communication/](communication/README.md) | Collectives                           | `all_reduce`, `all_gather`, `shard`, `reshard`, `reduce_scatter`                            |
+| [comparison.py](comparison.py)            | Comparisons                           | `equal`, `not_equal`, `greater`, `less`                                                     |
+| [control_flow.py](control_flow.py)        | Control flow                          | `where`, `cond`, `while_loop`, `scan`                                                       |
+| [multi_output.py](multi_output.py)        | Multi-output                          | `split`, `chunk`, `unbind`                                                                  |
+| [custom_op.py](custom_op.py)              | Extensions                            | `call_custom_kernel`                                                                        |
 
 ---
 

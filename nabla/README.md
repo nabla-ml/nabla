@@ -47,6 +47,7 @@ Nabla supports **two execution modes**, controlled by the `NABLA_EAGER_MAX_GRAPH
 **Why defer graph building?** MAX graph construction has overhead. If we hit the compiled model cache (same computation structure), we skip graph building entirely and just replay the cached model with new data. This is a significant performance win for hot paths.
 
 **Why compute shapes eagerly?** Even though graph building is deferred:
+
 - Users need `.shape`, `.dtype`, `.device` immediately for control flow and debugging
 - Sharding propagation requires shape information to determine data movement
 - Type checking and broadcasting validation must happen at operation time
@@ -262,6 +263,7 @@ Nabla uses **reverse-mode autodiff** via trace-based VJP (Vector-Jacobian Produc
 **Critical: Why `refresh_graph_values()` in EAGER_MAX_GRAPH mode?**
 
 When `EAGER_MAX_GRAPH=1`, operations build MAX graph nodes immediately. But when `evaluate()` runs (to get forward pass results), it:
+
 1. Compiles and executes the graph
 2. **Bumps the epoch** (`GRAPH.epoch += 1`)
 3. **Clears `_graph_values`** via `_cleanup_trace()`
@@ -269,11 +271,13 @@ When `EAGER_MAX_GRAPH=1`, operations build MAX graph nodes immediately. But when
 The backward pass then needs to call VJP rules, which are themselves operations that (in eager mode) immediately try to build graph nodes. These VJP ops need their input tensors (the forward primals) to have valid `_graph_values` in the **current** epoch. But they're stale/cleared!
 
 **Solution**: Before backward, call `trace.refresh_graph_values()` which:
+
 1. Finds all leaf tensors (inputs) and ensures they're realized
 2. Adds them to the current graph epoch
 3. **Replays all forward operations** to rebuild `_graph_values`
 
 This is why the code in `backward_on_trace()` has:
+
 ```python
 if EAGER_MAX_GRAPH:
     trace.refresh_graph_values()
@@ -319,6 +323,7 @@ A key architectural concept is the **promise tensor**—a tensor that knows its 
 ```
 
 **Why this design?**
+
 1. **Cache efficiency**: Promise tensors carry `op_hash` for cache key computation
 2. **Lazy evaluation**: Defer work until actually needed
 3. **Memory efficiency**: Don't allocate device memory until necessary
