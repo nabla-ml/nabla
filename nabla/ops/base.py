@@ -95,54 +95,45 @@ class Operation(ABC):
         )
 
         return (shard_results, output_sharding, mesh)
-
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-
         # === New Path: Physical Execution ===
-        if hasattr(self, "execute"):
-            # 1. Collect Metadata (for Adaptation logic)
-            max_batch_dims, any_traced, any_sharded, any_has_tangent = collect_metadata(args)
+        
+        # 1. Collect Metadata (for Adaptation logic)
+        max_batch_dims, any_traced, any_sharded, any_has_tangent = collect_metadata(args)
 
-            # 2. Adaptation: Reshard Inputs
-            resharded_args, adapted_kwargs, predicted_output_spec, mesh, reduce_axes = \
-                adapt_and_reshard(self, args, kwargs, any_sharded, max_batch_dims)
+        # 2. Adaptation: Reshard Inputs
+        resharded_args, adapted_kwargs, predicted_output_spec, mesh, reduce_axes = \
+            adapt_and_reshard(self, args, kwargs, any_sharded, max_batch_dims)
 
-            # 3. Compute Hash for Caching
-            op_hash = compute_structural_hash(self.name, resharded_args, adapted_kwargs)
+        # 3. Compute Hash for Caching
+        op_hash = compute_structural_hash(self.name, resharded_args, adapted_kwargs)
 
-            # 4. Compute Physical Shapes (always needed)
-            if type(self).compute_physical_shape is Operation.compute_physical_shape:
-                raise RuntimeError(f"{self.__class__.__name__} must implement compute_physical_shape")
+        # 4. Compute Physical Shapes (always needed)
+        if type(self).compute_physical_shape is Operation.compute_physical_shape:
+            raise RuntimeError(f"{self.__class__.__name__} must implement compute_physical_shape")
 
-            output_physical_shapes, output_shard_dtypes, output_shard_devices = (
-                self.compute_physical_shape(resharded_args, adapted_kwargs, predicted_output_spec)
-            )
-
-            # 5. Eager Execution (if enabled)
-            execution_results = eager_execute(self, resharded_args, kwargs, adapted_kwargs)
-            verify_eager_shapes(self, execution_results, output_physical_shapes)
-
-            # 6. Packaging (Create Tensor(s))
-            output = package_outputs(
-                self, execution_results, output_physical_shapes, output_shard_dtypes, 
-                output_shard_devices, predicted_output_spec, mesh, any_traced, max_batch_dims
-            )
-
-            # 7. Tracing & Post-Processing
-            self._setup_output_refs(output, resharded_args, kwargs, op_hash=op_hash)
-            output = apply_auto_reduction(self, output, mesh, reduce_axes)
-
-            if any_has_tangent:
-                apply_jvp(self, args, output)
-
-            return output
-
-        # This should never happen since all operations now have execute
-        # (either their own implementation or the default one from the base class)
-        raise RuntimeError(
-            f"Operation '{self.name}' reached unreachable code path. "
-            f"This is a bug in the execution model."
+        output_physical_shapes, output_shard_dtypes, output_shard_devices = (
+            self.compute_physical_shape(resharded_args, adapted_kwargs, predicted_output_spec)
         )
+
+        # 5. Eager Execution (if enabled)
+        execution_results = eager_execute(self, resharded_args, kwargs, adapted_kwargs)
+        verify_eager_shapes(self, execution_results, output_physical_shapes)
+
+        # 6. Packaging (Create Tensor(s))
+        output = package_outputs(
+            self, execution_results, output_physical_shapes, output_shard_dtypes, 
+            output_shard_devices, predicted_output_spec, mesh, any_traced, max_batch_dims
+        )
+
+        # 7. Tracing & Post-Processing
+        self._setup_output_refs(output, resharded_args, kwargs, op_hash=op_hash)
+        output = apply_auto_reduction(self, output, mesh, reduce_axes)
+
+        if any_has_tangent:
+            apply_jvp(self, args, output)
+
+        return output
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
@@ -464,18 +455,14 @@ class AxisOp(Operation):
 
         NOTE: This method receives RAW kwargs and performs adaptation internally.
         """
-        from ..core import GRAPH, Tensor, pytree
+        from ..core import GRAPH
         from ..core.sharding import spmd
 
-        # Compute batch_dims from args for kwargs adaptation
-        max_batch_dims = 0
-        for x in pytree.tree_leaves(args):
-            if isinstance(x, Tensor) and x.batch_dims > max_batch_dims:
-                max_batch_dims = x.batch_dims
+        # 1. Collect Metadata
+        max_batch_dims = collect_metadata(args)[0]
 
-        # Adapt kwargs (e.g., shift axis indices by batch_dims)
+        # 2. Adapt kwargs
         adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)
-
         mesh = spmd.get_mesh_from_args(args)
 
         with GRAPH.graph:
@@ -644,18 +631,12 @@ class ReduceOperation(AxisOp):
         NOTE: This method receives RAW kwargs and performs adaptation internally.
         This ensures consistency with trace rehydration.
         """
-        from ..core import GRAPH, Tensor, pytree
+        from ..core import GRAPH
         from ..core.sharding import spmd
 
-        # Compute batch_dims from args for kwargs adaptation
-        max_batch_dims = 0
-        for x in pytree.tree_leaves(args):
-            if isinstance(x, Tensor) and x.batch_dims > max_batch_dims:
-                max_batch_dims = x.batch_dims
-
-        # Adapt kwargs (e.g., shift axis indices by batch_dims)
+        # Collect Metadata and Adapt
+        max_batch_dims = collect_metadata(args)[0]
         adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)
-
         mesh = spmd.get_mesh_from_args(args)
 
         with GRAPH.graph:
@@ -821,18 +802,12 @@ class ShapeOp(Operation):
 
         NOTE: This method receives RAW kwargs and performs adaptation internally.
         """
-        from ..core import GRAPH, Tensor, pytree
+        from ..core import GRAPH
         from ..core.sharding import spmd
 
-        # Compute batch_dims from args for kwargs adaptation
-        max_batch_dims = 0
-        for x in pytree.tree_leaves(args):
-            if isinstance(x, Tensor) and x.batch_dims > max_batch_dims:
-                max_batch_dims = x.batch_dims
-
-        # Adapt kwargs (prepend batch shape to target shape)
+        # Collect Metadata and Adapt
+        max_batch_dims = collect_metadata(args)[0]
         adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)
-
         mesh = spmd.get_mesh_from_args(args)
 
         with GRAPH.graph:
