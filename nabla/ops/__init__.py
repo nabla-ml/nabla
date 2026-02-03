@@ -10,13 +10,20 @@ from .base import (
     Operation,
     ReduceOperation,
     UnaryOperation,
+)
+from .utils import (
+    _get_tensor_hash,
+    _make_hashable,
+    _clear_hashable_cache,
     ensure_tensor,
+    call_custom_kernel,
 )
 from .binary import AddOp, DivOp, MatmulOp, MulOp, SubOp, add, div, matmul, mul, sub
 from .communication import (
     AllGatherOp,
     AllReduceOp,
     AllToAllOp,
+    CollectiveOperation,
     PPermuteOp,
     ReduceScatterOp,
     ShardOp,
@@ -63,7 +70,6 @@ from .creation import (
     ones_like,
     full_like,
 )
-from .custom_op import call_custom_kernel
 from .multi_output import (
     ChunkOp,
     MinMaxOp,
@@ -123,6 +129,13 @@ from .view import (
     unsqueeze,
 )
 
+# Aliases for base classes
+UnaryOp = UnaryOperation
+BinaryOp = BinaryOperation
+ReduceOp = ReduceOperation
+CollectiveOp = CollectiveOperation
+
+
 __all__ = [
     "Operation",
     "BinaryOperation",
@@ -130,6 +143,11 @@ __all__ = [
     "ReduceOperation",
     "ShapeOp",
     "AxisOp",
+    "CollectiveOperation",
+    "UnaryOp",
+    "BinaryOp",
+    "ReduceOp",
+    "CollectiveOp",
     "ensure_tensor",
     "add",
     "mul",
