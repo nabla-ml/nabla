@@ -25,7 +25,7 @@ from .core import (
     untraced,
     with_batch_dims,
 )
-from .core.autograd.api import grad
+from .core.autograd.api import grad, value_and_grad
 from .core.sharding.spec import (
     DeviceMesh,
     DimSpec,
@@ -199,6 +199,9 @@ __all__ = [
     "reduce_max",
     "reduce_min",
     "mean",
+    "sum",
+    "max",
+    "min",
     "shard",
     "all_gather",
     "all_reduce",
@@ -254,9 +257,13 @@ __all__ = [
     "NegOp",
     "AbsOp",
     "LogOp",
+    "SinOp",
+    "CosOp",
     "SqrtOp",
     "log",
     "sqrt",
+    "sin",
+    "cos",
     "unsqueeze",
     "squeeze",
     "swap_axes",
@@ -276,6 +283,8 @@ __all__ = [
     "broadcast_to_physical",
     "reduce_sum_physical",
     "mean_physical",
+    "grad",
+    "value_and_grad",
     "vmap",
     "shard_map",
     "compile",
@@ -317,6 +326,10 @@ __all__ = [
     "GPU",
     "DType",
 ]
+
+sum = reduce_sum
+max = reduce_max
+min = reduce_min
 
 
 def _clear_caches() -> None:

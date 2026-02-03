@@ -89,12 +89,18 @@ class ComputeGraph:
         self._skip_finalize = False
         self._reset(context, seed)
 
-    def _reset(self, context: mlir.Context | None, seed: int) -> None:
-        """Resets the internal graph state."""
+    def _reset(self, context: mlir.Context | None, seed: int, input_types: list | None = None) -> None:
+        """Resets the internal graph state.
+        
+        Args:
+            context: MLIR context to use (creates new one if None)
+            seed: Random seed for the graph
+            input_types: Optional list of TensorTypes for graph inputs (for symbolic dims)
+        """
         self.context = context or mlir.Context()
         self.sources = {}
         self.unrealized = weakref.WeakValueDictionary()
-        self.graph = graph.Graph("main", input_types=[], context=self.context)
+        self.graph = graph.Graph("main", input_types=input_types or [], context=self.context)
         self._input_refs = []
         self._skip_finalize = False
         with self.graph:
@@ -110,14 +116,23 @@ class ComputeGraph:
 
         # gc.collect()  # Removed: too expensive for hot paths
 
-    def add_input(self, tensor: Tensor) -> None:
+    def add_input(self, tensor: Tensor, shape: Any | None = None) -> None:
         """Registers a realized tensor's bufferss as graph inputs."""
-        if any(t is tensor for t in self._input_refs):
-            return
-
-        bufferss = tensor._impl._buffers
+        impl = tensor._impl
+        bufferss = impl._buffers
         if not bufferss:
             raise TypeError("Only realized tensors may be graph inputs.")
+
+        # Check if this impl's buffer is already registered (use buffer identity, not tensor)
+        buf = bufferss[0]
+        for ref_tensor in self._input_refs:
+            ref_buffers = ref_tensor._impl._buffers
+            if ref_buffers and ref_buffers[0] is buf:
+                # Same buffer already registered - copy graph values to this impl
+                with self.graph:
+                    impl._graph_values = [gv[...] for gv in ref_tensor._impl._graph_values]
+                    impl.graph_values_epoch = self.epoch
+                return
 
         self._input_refs.append(tensor)
 
@@ -128,9 +143,12 @@ class ComputeGraph:
         tensor_graph_values = []
         for buffers in bufferss:
             with self.graph:
+                # Use provided shape (e.g. symbolic) or fall back to physical buffer shape
+                input_shape = shape if shape is not None else buffers.shape
+                
                 tensor_type = graph.TensorType(
                     buffers.dtype,
-                    buffers.shape,
+                    input_shape,
                     graph.DeviceRef.from_device(buffers.device),
                 )
                 typ = tensor_type.as_buffer().to_mlir()
@@ -145,15 +163,38 @@ class ComputeGraph:
 
             self.sources[buffer_val._mlir_value] = buffers
 
+        # Initialize graph values and load them (essential for use in ops)
         if len(tensor_graph_values) == 1:
             tensor._value = tensor_graph_values[0]
             with self.graph:
-                tensor._impl._graph_values = [tensor_graph_values[0][...]]
-                tensor._impl.graph_values_epoch = self.epoch
+                impl._graph_values = [tensor_graph_values[0][...]]
+                impl.graph_values_epoch = self.epoch
         else:
             with self.graph:
-                tensor._impl._graph_values = [bv[...] for bv in tensor_graph_values]
-                tensor._impl.graph_values_epoch = self.epoch
+                impl._graph_values = [bv[...] for bv in tensor_graph_values]
+                impl.graph_values_epoch = self.epoch
+
+    def add_constant(self, tensor: Tensor) -> None:
+        """Adds a realized tensor's data as a constant in the graph (not an input).
+        
+        Use this for intermediate tensors that are accessed during eager graph building
+        but shouldn't be function arguments.
+        """
+        impl = tensor._impl
+        buffers = impl._buffers
+        if not buffers:
+            raise TypeError("Only realized tensors may be added as constants.")
+
+        with self.graph:
+            const_values = []
+            for buf in buffers:
+                # Convert buffer to numpy and create a graph constant
+                np_data = buf.to_numpy()
+                const_val = ops.constant(np_data)
+                const_values.append(const_val)
+            
+            impl._graph_values = const_values
+            impl.graph_values_epoch = self.epoch
 
     def add_unrealized(self, impl: TensorImpl) -> None:
         """Registers a tensor implementation as pending computation."""

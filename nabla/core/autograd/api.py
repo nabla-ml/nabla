@@ -145,12 +145,16 @@ def value_and_grad(
             )
 
             if all_targets:
+                from ... import config as nabla_config
                 from ..graph.engine import GRAPH
 
-                if len(all_targets) > 1:
-                    GRAPH.evaluate(all_targets[0], *all_targets[1:])
-                else:
-                    GRAPH.evaluate(all_targets[0])
+                # In EAGER_MAX_GRAPH mode (compile tracing), ops have already built
+                # their graph values. Calling evaluate() would reset the graph.
+                if not nabla_config.EAGER_MAX_GRAPH:
+                    if len(all_targets) > 1:
+                        GRAPH.evaluate(all_targets[0], *all_targets[1:])
+                    else:
+                        GRAPH.evaluate(all_targets[0])
 
         grads_struct = pytree.tree_unflatten(pytree.tree_structure(args), grad_leaves)
 

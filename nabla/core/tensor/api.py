@@ -154,9 +154,32 @@ class Tensor(DLPackArray, HasTensorValue):
         ]
 
     def hydrate(self) -> Tensor:
-        """Populate values from bufferss for realized tensors."""
+        """Populate graph values from buffers for realized tensors.
+        
+        If the tensor is already registered as a graph input, uses that.
+        In EAGER_MAX_GRAPH mode, adds buffer data as a constant for intermediate
+        tensors accessed during eager graph building.
+        """
+        from ... import config as nabla_config
+        
         if not self._impl._graph_values and self._impl._buffers:
-            GRAPH.add_input(self)
+            # Check if this tensor is already registered as a graph input
+            if any(t is self for t in GRAPH._input_refs):
+                # Already registered - just need to set up graph values
+                # This shouldn't normally happen, but handle it gracefully
+                GRAPH.add_input(self)
+            elif any(t._impl._buffers and t._impl._buffers[0] is self._impl._buffers[0] 
+                     for t in GRAPH._input_refs):
+                # A different tensor object but same underlying buffer is already an input
+                # Find it and copy its graph values
+                for t in GRAPH._input_refs:
+                    if t._impl._buffers and t._impl._buffers[0] is self._impl._buffers[0]:
+                        self._impl._graph_values = t._impl._graph_values
+                        self._impl.graph_values_epoch = t._impl.graph_values_epoch
+                        break
+            elif nabla_config.EAGER_MAX_GRAPH:
+                # Only add as constant in EAGER mode (compile tracing)
+                GRAPH.add_constant(self)
         return self
 
     @property
