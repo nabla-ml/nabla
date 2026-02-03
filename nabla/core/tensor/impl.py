@@ -13,6 +13,12 @@ from max import driver, graph
 from max.driver import Device
 from max.dtype import DType
 
+# Formatting constants for rich representation
+RESET = "\033[0m"
+C_VAR = "\033[96m"
+C_KEYWORD = "\033[1m"
+C_BATCH = "\033[90m"
+
 if TYPE_CHECKING:
     from ...ops import Operation
     from ..graph.tracing import OpNode
@@ -268,9 +274,181 @@ class TensorImpl:
     def local_shape(self) -> graph.Shape | None:
         return self.physical_local_shape(0)
 
+    @staticmethod
+    def _format_type(impl: TensorImpl) -> str:
+        """Get a concise string representation of the dtype."""
+        try:
+            dtype_obj = impl.dtype
+            dtype_str = str(dtype_obj)
+        except Exception:
+            # Fallback for unrealized/partially initialized tensors
+            try:
+                if impl._shard_dtypes:
+                    dtype_str = str(impl._shard_dtypes[0])
+                elif impl._buffers:
+                    dtype_str = str(impl._buffers[0].dtype)
+                else:
+                    vals = impl._get_valid_graph_values()
+                    if vals:
+                        dtype_str = str(vals[0].type.dtype)
+                    else:
+                        dtype_str = "unknown"
+            except Exception:
+                dtype_str = "unknown"
+
+        return (
+            dtype_str.lower()
+            .replace("dtype.", "")
+            .replace("float", "f")
+            .replace("int", "i")
+        )
+
+    @staticmethod
+    def _format_shape_part(shape: tuple | list | None, batch_dims: int = 0) -> str:
+        """Format a shape tuple with batch dims colored."""
+        if shape is None:
+            return "[?]"
+
+        clean = [int(d) if hasattr(d, "__int__") else str(d) for d in shape]
+
+        if batch_dims > 0 and batch_dims <= len(clean):
+            batch_part = clean[:batch_dims]
+            logical_part = clean[batch_dims:]
+
+            b_str = str(batch_part).replace("[", "").replace("]", "")
+            l_str = str(logical_part).replace("[", "").replace("]", "")
+
+            if logical_part:
+                return f"[{C_BATCH}{b_str}{RESET} | {l_str}]"
+            else:
+                return f"[{C_BATCH}{b_str}{RESET}]"
+
+        return str(clean).replace(" ", "")
+
+    @staticmethod
+    def _format_spec_factors(sharding: Any) -> str:
+        """Format sharding factors: (<dp, tp>)"""
+        if not sharding:
+            return ""
+
+        all_partial_axes = set()
+        if hasattr(sharding, "partial_sum_axes"):
+            all_partial_axes.update(sharding.partial_sum_axes)
+
+        factors = []
+        if hasattr(sharding, "dim_specs"):
+            for dim in sharding.dim_specs:
+                if getattr(dim, "partial", False):
+                    all_partial_axes.update(dim.axes)
+
+                if not dim.axes:
+                    factors.append("*")
+                else:
+                    factors.append(", ".join(dim.axes))
+
+        partial_sum_str = ""
+        if all_partial_axes:
+            ordered_partial = sorted(list(all_partial_axes))
+            axes_joined = ", ".join(f"'{a}'" for a in ordered_partial)
+            partial_sum_str = f" | partial={{{axes_joined}}}"
+
+        return f"(<{', '.join(factors)}>{partial_sum_str})"
+
+    def format_metadata(self, include_data: bool = False) -> str:
+        """Format complete tensor metadata: dtype[global](factors)(local=[local])"""
+        dtype = self._format_type(self)
+        batch_dims = getattr(self, "batch_dims", 0)
+
+        # Try to get shapes without triggering errors
+        local_shape = None
+        try:
+            local_shape = self.physical_local_shape(0)
+        except Exception:
+            pass
+
+        local_str = self._format_shape_part(local_shape, batch_dims)
+        global_str = "[?]"
+        factors_str = ""
+
+        if self.sharding:
+            factors_str = self._format_spec_factors(self.sharding)
+            try:
+                if local_shape is not None:
+                    from ..sharding.spec import compute_global_shape
+
+                    shard_shapes = self._physical_shapes
+                    if not shard_shapes and self._buffers:
+                        shard_shapes = [s.shape for s in self._buffers]
+                    elif not shard_shapes:
+                        vals = self._get_valid_graph_values()
+                        if vals:
+                            shard_shapes = [v.type.shape for v in vals]
+
+                    g_shape = compute_global_shape(
+                        tuple(local_shape), self.sharding, shard_shapes=shard_shapes
+                    )
+                    global_str = self._format_shape_part(g_shape, batch_dims)
+            except Exception:
+                pass
+        else:
+            global_str = local_str
+
+        # Add " (traced)" if is_traced is true
+        traced_str = " (traced)" if self.is_traced else ""
+
+        header = ""
+        if self.sharding:
+            header = f"{dtype}{global_str}{factors_str}(local={local_str}){traced_str}"
+        else:
+            header = f"{dtype}{global_str}{traced_str}"
+
+        if not include_data:
+            return header
+
+        try:
+            from max.driver import CPU
+            import numpy as np
+
+            if self._buffers:
+                # Reduced view settings: max 6 elements per dim (3 at start, 3 at end), no row wrapping
+                print_opts = {
+                    "edgeitems": 3,
+                    "threshold": 6,
+                    "max_line_width": 1000,  # Corrected from linewidth
+                    "precision": 4,
+                    "suppress_small": True,
+                }
+
+                if self.is_sharded:
+                    shard_reprs = []
+                    for i, buf in enumerate(self._buffers):
+                        arr = buf.to(CPU()).to_numpy()
+                        arr_str = np.array2string(arr, **print_opts)
+                        prefix = f"shard({i}): "
+                        lines = arr_str.split("\n")
+                        first_line = prefix + lines[0]
+                        indent = " " * len(prefix)
+                        other_lines = [indent + line for line in lines[1:]]
+                        shard_reprs.append("\n".join([first_line] + other_lines))
+                    
+                    shards_block = "\n".join(shard_reprs)
+                    indented_shards = "\n".join("  " + line for line in shards_block.split("\n"))
+                    data_str = f"[\n{indented_shards}\n]"
+                else:
+                    arr = self._buffers[0].to(CPU()).to_numpy()
+                    data_str = np.array2string(arr, **print_opts)
+            else:
+                data_str = "[unrealized]"
+        except Exception as e:
+            data_str = f"[data unavailable: {e}]"
+
+        return f"{data_str} : {header}"
+
     def __repr__(self) -> str:
-        shards_str = f", shards={self.num_shards}" if self.is_sharded else ""
-        return f"TensorImpl(op={self.op_name}, is_traced={self.is_traced}, parents={len(self.parents)}, batch_dims={self.batch_dims}{shards_str})"
+        return self.format_metadata(include_data=True)
+
+    def __str__(self) -> str:
+        return self.format_metadata(include_data=True)
 
     def get_unrealized_shape(self) -> graph.Shape:
         values = self._get_valid_graph_values()

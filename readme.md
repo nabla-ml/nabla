@@ -1,4 +1,4 @@
-# Nabla: Distributed Deep Learning Framework
+# Nabla: Distributed Deep Learning ⽕ Framework
 
 ![alt text](./assets/title_image.png)
 
@@ -19,25 +19,23 @@
 
 ```python
 import nabla
-from max.driver import Accelerator, CPU
 
-# Run on CPU or GPU
-with nabla.default_device(Accelerator()):  # Alternatively, use CPU()
-    x = nabla.uniform((4, 8))
-    w = nabla.uniform((8, 16))
+# Use Accelerator (GPU) or CPU for execution
+with nabla.default_device(nabla.Accelerator()):
+    x = nabla.uniform((4, 8))
+    w = nabla.uniform((8, 16))
 
-    # Define loss function
-    def compute_loss(x, w):
-        return nabla.mean(nabla.relu(x @ w))
+    # Define loss function
+    def compute_loss(x, w):
+        return nabla.mean(nabla.relu(x @ w))
 
-    # Compute loss
-    loss = compute_loss(x, w)
-    print("Loss:", loss)  # Implicitly triggers .realize()
+    # Compute loss (implicit .realize() on print)
+    loss = compute_loss(x, w)
+    print("Loss:", loss)
 
-    # Compute gradients
-    grad_x, grad_w = nabla.grad(compute_loss, argnums=(0, 1))(x, w)
-    print("Gradients:", grad_x.shape, grad_w.shape)
-
+    # Compute gradients via backward replay
+    grad_x, grad_w = nabla.grad(compute_loss, argnums=(0, 1))(x, w)
+    print("Gradients:", grad_x.shape, grad_w.shape)
 ```
 
 ### SPMD Sharding
@@ -45,24 +43,24 @@ with nabla.default_device(Accelerator()):  # Alternatively, use CPU()
 ```python
 import nabla
 
-# Define 2×4 device mesh
-mesh = nabla.DeviceMesh("mesh", (2, 4), ("dp", "tp"))
+# Define 2×4 device mesh (Logical DP × TP)
+mesh = nabla.DeviceMesh("my_mini_pod", (2, 4), ("dp", "tp"))
 
 # Create and shard tensors
 x = nabla.uniform((32, 128))
 w = nabla.uniform((128, 256))
 
-x_sharded = nabla.shard(x, mesh, nabla.P("dp", None))  # data parallel
-w_sharded = nabla.shard(w, mesh, nabla.P(None, "tp"))  # tensor parallel
+# Shard x on 'dp' (rows), w on 'tp' (columns)
+x_sharded = nabla.shard(x, mesh, nabla.P("dp", None))
+w_sharded = nabla.shard(w, mesh, nabla.P(None, "tp"))
 
 # Define loss function
 def compute_loss(x, w):
-    return nabla.mean(nabla.relu(x @ w))
+    return nabla.mean(nabla.relu(x @ w))
 
-# Compute with automatic communication
+# Compute - automatic communication (AllReduce) is inserted for 'tp' sum
 loss = compute_loss(x_sharded, w_sharded)
-print("Loss:", loss)
-
+print("Loss (Sharded):", loss)
 ```
 
 ---
@@ -111,7 +109,7 @@ xcodebuild -downloadComponent MetalToolchain  # if "cannot execute tool 'metal'
 | --- | --- |
 | **Lazy Execution** | Shapes/dtypes are computed immediately, but the MAX-Graph is compiled/executed only on `.realize()`. |
 | **Trace-Based Autodiff** | Gradients computed by replaying `OpNode` traces backward (only traced when needed). |
-| **Factor-Based SPMD** | Sharding uses semantic factors (`m`, `k`, `n`) not raw dimension indices. |
+| **Factor-Based SPMD** | Shardy-inspired sharding, leveraging semantic factor propagation. |
 
 ### Tensor / TensorImpl (Dual Object Model)
 
@@ -120,7 +118,7 @@ Tensor (User API)              TensorImpl (Internal State)
 ├── .shape(s), .device(s)      ├── _graph_values: list[max.TensorValue]
 ├── .realize()                 ├── _buffers: list[max.Buffer]
 ├── arithmetic ops             ├── output_refs: OpNode
-└── wraps ──────────────────►  ├── sharding: ShardingSpec
+└── wraps    ──────────────►   ├── sharding: ShardingSpec
                                ├── is_traced: bool
                                └── batch_dims: int
 

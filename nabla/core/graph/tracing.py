@@ -399,99 +399,22 @@ class GraphPrinter:
         return f"%{prefix}{self.name_counters[prefix]}"
 
     def _format_type(self, node: TensorImpl) -> str:
-        try:
-            dtype = "?"
-            if hasattr(node, "dtype") and node.dtype:
-                dtype = str(node.dtype)
-            elif hasattr(node, "_buffers") and node._buffers:
-                dtype = str(node._buffers[0].dtype)
-            elif hasattr(node, "_graph_values") and node._graph_values:
-                dtype = str(node._graph_values[0].type.dtype)
-            return (
-                dtype.lower()
-                .replace("dtype.", "")
-                .replace("float", "f")
-                .replace("int", "i")
-            )
-        except Exception:
-            return "?"
+        from ..tensor.impl import TensorImpl
+        return TensorImpl._format_type(node)
 
     def _format_shape_part(self, shape: tuple | list, batch_dims: int = 0) -> str:
         """Format a shape tuple with batch dims colors: [2, 3 | 4, 5]"""
-        if shape is None:
-            return "[?]"
-
-        clean = [int(d) if hasattr(d, "__int__") else str(d) for d in shape]
-
-        if batch_dims > 0 and batch_dims <= len(clean):
-            batch_part = clean[:batch_dims]
-            logical_part = clean[batch_dims:]
-
-            b_str = str(batch_part).replace("[", "").replace("]", "")
-            l_str = str(logical_part).replace("[", "").replace("]", "")
-
-            if logical_part:
-                return f"[{C_BATCH}{b_str}{RESET} | {l_str}]"
-            else:
-                return f"[{C_BATCH}{b_str}{RESET}]"
-
-        return str(clean).replace(" ", "")
+        from ..tensor.impl import TensorImpl
+        return TensorImpl._format_shape_part(None, shape, batch_dims)
 
     def _format_spec_factors(self, sharding: Any) -> str:
         """Format sharding factors: (<dp, tp>)"""
-        if not sharding:
-            return ""
-
-        all_partial_axes = set()
-        if hasattr(sharding, "partial_sum_axes"):
-            all_partial_axes.update(sharding.partial_sum_axes)
-
-        factors = []
-        for dim in sharding.dim_specs:
-            if dim.partial:
-                all_partial_axes.update(dim.axes)
-
-            if not dim.axes:
-                factors.append("*")
-            else:
-                factors.append(", ".join(dim.axes))
-
-        partial_sum_str = ""
-        if all_partial_axes:
-            ordered_partial = sorted(list(all_partial_axes))
-            axes_joined = ", ".join(f"'{a}'" for a in ordered_partial)
-            partial_sum_str = f" | partial={{{axes_joined}}}"
-
-        return f"(<{', '.join(factors)}>{partial_sum_str})"
+        from ..tensor.impl import TensorImpl
+        return TensorImpl._format_spec_factors(sharding)
 
     def _format_full_info(self, node: TensorImpl) -> str:
         """Format: dtype[global](factors)(local=[local])"""
-        dtype = self._format_type(node)
-        batch_dims = getattr(node, "batch_dims", 0)
-
-        local_shape = node.physical_local_shape(0)
-        local_str = self._format_shape_part(local_shape, batch_dims)
-
-        global_str = "[?]"
-        factors_str = ""
-
-        if node.sharding:
-            factors_str = self._format_spec_factors(node.sharding)
-            try:
-
-                if local_shape is not None:
-                    g_shape = compute_global_shape(tuple(local_shape), node.sharding)
-                    global_str = self._format_shape_part(g_shape, batch_dims)
-            except Exception:
-                pass
-        else:
-
-            global_str = local_str
-
-        if node.sharding:
-            return f"{dtype}{global_str}{factors_str}(local={local_str})"
-        else:
-            return f"{dtype}{global_str}"
+        return node.format_metadata(include_data=False)
 
     def _format_mesh_def(self, mesh: Any) -> str:
         """Format mesh definition: @mesh(shape=(2,2), devices=[...], axes=(dp, tp))"""

@@ -614,12 +614,18 @@ class Tensor(DLPackArray, HasTensorValue):
         yield "device", self.device
 
     def __repr__(self):
-        if not self._in_global_compute_graph:
-            return super().__repr__()
+        """Unambiguous representation (triggers realization)."""
         self.realize()
-        dt = self.driver_tensor.to(CPU())
-        values = [dt[idx].item() for idx in dt._iterate_indices()]
-        return f"{self.type}: [{', '.join(str(v) for v in values)}]"
+        content = self._impl.format_metadata(include_data=True)
+        if "\n" in content:
+            # Multi-line: indent for premium look
+            indented = "\n".join("  " + line for line in content.split("\n"))
+            return f"Tensor(\n{indented}\n)"
+        return f"Tensor({content})"
+
+    def __str__(self):
+        """Readable representation (triggers realization)."""
+        return self.__repr__()
 
     def __deepcopy__(self, memo: object) -> Tensor:
         return self

@@ -164,6 +164,9 @@ from .transforms.compile import CompilationStats, CompiledFunction, compile
 from .transforms.shard_map import shard_map
 from .transforms.vmap import vmap
 
+from max.driver import Accelerator, CPU
+from max.dtype import DType
+
 __all__ = [
     "defaults",
     "default_device",
@@ -310,6 +313,9 @@ __all__ = [
     "capture_trace",
     "_clear_caches",
     "realize_all",
+    "CPU",
+    "GPU",
+    "DType",
 ]
 
 
