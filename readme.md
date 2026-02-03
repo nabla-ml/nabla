@@ -17,8 +17,11 @@
 
 ### 1. Forward Pass & Autodiff
 
+Define Python functions and compute gradients using trace-based automatic differentiation. [Read more](nabla/core/autograd/README.md)
+
 ```python
 import nabla
+
 # Use Accelerator (GPU) or CPU for execution
 with nabla.default_device(nabla.Accelerator()):
     x = nabla.uniform((4, 8))
@@ -39,6 +42,8 @@ with nabla.default_device(nabla.Accelerator()):
 
 ### 2. Simple SPMD Sharding
 
+Shard tensors on a logical mesh; operations automatically propagate sharding constraints. [Read more](nabla/core/sharding/README.md)
+
 ```python
 # Define 2×4 device mesh (Logical DP × TP)
 mesh = nabla.DeviceMesh("my_mini_pod", (2, 4), ("dp", "tp"))
@@ -57,7 +62,7 @@ print("Loss (Sharded):", loss)
 
 ### 3. Seamless Mojo Integration
 
-Nabla's core strength is its ability to drop down to **Mojo** for high-performance custom kernels, bridging the gap between high-level Python and bare-metal execution.
+Nabla's core strength is its ability to drop down to **Mojo** for high-performance custom kernels, bridging the gap between high-level Python and bare-metal execution. [Read more](nabla/ops/README.md)
 
 **Mojo Kernel (`kernels/add_one.mojo`)**
 ```mojo
@@ -84,7 +89,7 @@ y = AddOneOp()(x)
 
 ### 4. Distributed Pipeline Parallelism (GPipe)
 
-Nabla simplifies complex distributed patterns. Here is a simplified logic for a **GPipe schedule**, using `vmap` for parallel stage execution and `ppermute` for data movement.
+Define complex distributed schedules like **GPipe** using `vmap` for parallel execution and `ppermute` for explicit data movement. [Read more](nabla/transforms/README.md)
 
 ```python
 # Parallel execution across 'num_stages'
@@ -105,7 +110,7 @@ def pipeline_step(current_state, fresh_input, weights, mask_0):
 
 ### 5. Dynamic Shape Compilation
 
-Compile once, run with varying input sizes. Nabla supports symbolic dimensions, reducing compilation overhead.
+Compile functions once with symbolic dimensions to handle varying input sizes without recompilation.
 
 ```python
 # Compile once for ANY batch size (dim 0)
