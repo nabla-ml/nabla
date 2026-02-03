@@ -2,9 +2,9 @@
 
 ![alt text](./assets/title_image.png)
 
-> **A JAX-inspired autodiff library with factor-based SPMD sharding, built on [Modular MAX](https://www.modular.com/max).**
+> **A JAX-inspired autodiff library with factor-based SPMD sharding, built on [Mojo & MAX](https://www.modular.com/max).**
 
-> 
+> 
 > **Active Development**: This is the `main` development branch with distributed SPMD execution and a refined lazy, MAX-native execution model. For the older single-device release (v25.7), see [`pip install nabla-ml`](#stable-release-v257).
 
 [![Development Status](https://img.shields.io/badge/status-alpha-orange)](https://github.com/nabla-ml/nabla)
@@ -13,13 +13,12 @@
 
 ---
 
-## Quick Examples
+## Feature Showcase
 
-### Forward Pass & Autodiff
+### 1. Forward Pass & Autodiff
 
 ```python
 import nabla
-
 # Use Accelerator (GPU) or CPU for execution
 with nabla.default_device(nabla.Accelerator()):
     x = nabla.uniform((4, 8))
@@ -38,42 +37,111 @@ with nabla.default_device(nabla.Accelerator()):
     print("Gradients:", grad_x.shape, grad_w.shape)
 ```
 
-### SPMD Sharding
+### 2. Simple SPMD Sharding
 
 ```python
-import nabla
-
 # Define 2×4 device mesh (Logical DP × TP)
 mesh = nabla.DeviceMesh("my_mini_pod", (2, 4), ("dp", "tp"))
 
-# Create and shard tensors
-x = nabla.uniform((32, 128))
-w = nabla.uniform((128, 256))
-
 # Shard x on 'dp' (rows), w on 'tp' (columns)
-x_sharded = nabla.shard(x, mesh, nabla.P("dp", None))
-w_sharded = nabla.shard(w, mesh, nabla.P(None, "tp"))
+x = nabla.shard(nabla.uniform((32, 128)), mesh, nabla.P("dp", None))
+w = nabla.shard(nabla.uniform((128, 256)), mesh, nabla.P(None, "tp"))
 
-# Define loss function
 def compute_loss(x, w):
     return nabla.mean(nabla.relu(x @ w))
 
-# Compute - automatic communication (AllReduce) is inserted for 'tp' sum
-loss = compute_loss(x_sharded, w_sharded)
+# Automatic AllReduce is inserted for 'tp' sum
+loss = compute_loss(x, w)
 print("Loss (Sharded):", loss)
 ```
+
+### 3. Seamless Mojo Integration
+
+Nabla's core strength is its ability to drop down to **Mojo** for high-performance custom kernels, bridging the gap between high-level Python and bare-metal execution.
+
+**Mojo Kernel (`kernels/add_one.mojo`)**
+```mojo
+import compiler
+
+@compiler.register("add_one_custom")
+struct AddOne:
+    fn execute(output: OutputTensor, x: InputTensor, ctx: Context):
+        # Raw metal performance using SIMD
+        for i in range(tensor.num_elements()):
+             tensor[i] += 1.0 
+```
+
+**Python Usage**
+```python
+class AddOneOp(nabla.Operation):
+    def kernel(self, x, **kwargs):
+        # Directly invoke the compiled Mojo kernel
+        return nabla.call_custom_kernel("add_one_custom", "./kernels", values=x)
+
+x = nabla.Tensor([1., 2., 3.])
+y = AddOneOp()(x) 
+```
+
+### 4. Distributed Pipeline Parallelism (GPipe)
+
+Nabla simplifies complex distributed patterns. Here is a simplified logic for a **GPipe schedule**, using `vmap` for parallel stage execution and `ppermute` for data movement.
+
+```python
+# Parallel execution across 'num_stages'
+@nabla.vmap(in_axes=(0, 0), spmd_axis_name="stage")
+def stage_compute(x, w): 
+    return nabla.relu(x @ w)
+
+def pipeline_step(current_state, fresh_input, weights, mask_0):
+    # 1. Compute: Run all stages in parallel
+    computed = stage_compute(current_state, weights)
+
+    # 2. Communicate: Shift activations to the next stage (i -> i+1)
+    shifted = nabla.ppermute(computed, perm=[(i, (i + 1) % stages) for i in range(stages)])
+
+    # 3. Control: Stage 0 takes fresh input; others take shifted data
+    return nabla.where(mask_0, fresh_input, shifted)
+```
+
+### 5. Dynamic Shape Compilation
+
+Compile once, run with varying input sizes. Nabla supports symbolic dimensions, reducing compilation overhead.
+
+```python
+# Compile once for ANY batch size (dim 0)
+@nabla.compile(dynamic_dims={0: {0: "batch"}})
+def square(x):
+    return x * x
+
+x_small = nabla.uniform((2, 10))
+x_large = nabla.uniform((128, 10))
+
+res1 = square(x_small) # Triggers compilation
+res2 = square(x_large) # Reuses compiled graph!
+```
+
+---
+
+## Architecture Overview
+
+Nabla relies on three core principles:
+
+1.  **Lazy Execution**: Shapes are computed eagerly, but the computation graph is built and compiled only when `.realize()` is called.
+    *   [Read more: Operation Pipeline](nabla/README.md)
+2.  **Trace-Based Autodiff**: Gradients are computed by tracing the forward pass and replaying operations in reverse.
+    *   [Read more: Autograd Engine](nabla/core/autograd/README.md)
+3.  **Factor-Based SPMD**: Sharding is propagated using "semantic factors" (e.g., batch, heads) rather than physical mesh axes.
+    *   [Read more: Sharding & Solver](nabla/core/sharding/README.md)
 
 ---
 
 ## Development Setup
 
 ### Prerequisites
-
 * **Python 3.12+**
-* **Modular MAX SDK** (automatically installed via `requirements.txt`)
+* **Modular MAX SDK** (via `requirements.txt`)
 
-### Clone and Install
-
+### Installation
 ```bash
 git clone https://github.com/nabla-ml/nabla.git
 cd nabla
@@ -81,229 +149,29 @@ python -m venv venv
 source venv/bin/activate
 pip install -r requirements-dev.txt
 pip install -e ".[dev]"
-
 ```
 
-### GPU Setup
-
-**AMD/NVIDIA (Linux)**: Works out of the box with Modular MAX.
-
-**Apple Silicon (macOS)**: Requires Xcode with Metal toolchain:
-
-```bash
-# Verify developer directory
-xcode-select -p  # Should be /Applications/Xcode.app/Contents/Developer
-sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer  # if not
-
-# Install Metal toolchain (if missing)
-xcrun -sdk macosx metal  # Should output "no input files"
-xcodebuild -downloadComponent MetalToolchain  # if "cannot execute tool 'metal'"
-
-```
-
----
-
-## Architecture Overview
-
-| Principle | Description |
-| --- | --- |
-| **Lazy Execution** | Shapes/dtypes are computed immediately, but the MAX-Graph is compiled/executed only on `.realize()`. |
-| **Trace-Based Autodiff** | Gradients computed by replaying `OpNode` traces backward (only traced when needed). |
-| **Factor-Based SPMD** | Shardy-inspired sharding, leveraging semantic factor propagation. |
-
-### Tensor / TensorImpl (Dual Object Model)
-
-```
-Tensor (User API)              TensorImpl (Internal State)
-├── .shape(s), .device(s)      ├── _graph_values: list[max.TensorValue]
-├── .realize()                 ├── _buffers: list[max.Buffer]
-├── arithmetic ops             ├── output_refs: OpNode
-└── wraps    ──────────────►   ├── sharding: ShardingSpec
-                               ├── is_traced: bool
-                               └── batch_dims: int
-
-```
-
-**Why two objects for the same thing?** -> **Lifetime Management**: Decouples the user-facing `Tensor` from the underlying `TensorImpl`. The engine manages `TensorImpl` lifetimes via weakrefs, ensuring efficient memory management even in complex cyclic graphs.
-
-→ Deep dive: [nabla/core/tensor/README.md](https://github.com/nabla-ml/nabla/tree/main/nabla/core/tensor/README.md)
-
-### Operation Execution (The Pipeline)
-
-Every operation on Tensor(s) flows through `Operation.__call__()`. Note that **most steps are optional** and only run when necessary (e.g., during training or distributed execution).
-
-```
-┌────────────────────────────────────────────────────────────────────────────┐
-│  1. METADATA (Always) Collect batch_dims, tracing state, sharding info     │
-│  2. RESHARD  (Cond)   Insert comms if input sharding !match op requirement │
-│  3. HASH     (Always) Compute structural hash for compiled model cache     │
-│  4. BUILD IR (Cond)   Build MAX graph nodes (if in Immediate Mode)         │
-│  5. SHAPE    (Cond)   Infer output shapes (if in Deferred Mode)            │
-│  6. PACKAGE  (Always) Create output Tensor from shapes/TensorValues        │
-│  7. TRACE    (Cond)   Create OpNode (if is_traced OR Deferred Mode)        │
-│  8. REDUCE   (Cond)   Insert AllReduce if contracting dims were sharded    │
-│  9. JVP      (Cond)   Propagate tangents (if forward-mode AD active)       │
-└────────────────────────────────────────────────────────────────────────────┘
-
-```
-
-**When is an `OpNode` created? (Step 7)**
-We avoid the overhead of creating graph nodes unless absolutely necessary. An `OpNode` is only instantiated if:
-
-1. The tensor is actively being traced (e.g., inside `nabla.grad`).
-2. We are in **Deferred IR** mode (see below), where we need the trace to build the graph later.
-
-In a standard eager inference run (Immediate IR mode), `OpNode` creation is skipped entirely, making dispatch extremely lightweight.
-
-### Graph Construction Modes
-
-Nabla is **fundamentally lazy**—execution always involves compiling a graph for the MAX engine. However, you can control *when* the Intermediate Representation (IR) is constructed.
-
-| Mode | Env Var | Behavior |
-| --- | --- | --- |
-| **Deferred IR** (default) | `EAGER_MAX_GRAPH=0` | MAX Graph building is delayed until `.realize()`. We trace a lightweight `OpNode` graph first. Enables faster model caching and whole-graph optimizations. |
-| **Immediate IR** | `EAGER_MAX_GRAPH=1` | MAX graph nodes (TensorValues) are built immediately during the forward pass. Useful for debugging shapes/dtypes at the exact line of failure. |
-
-```bash
-export EAGER_MAX_GRAPH=1     
-export VERIFY_EAGER_SHAPES=1   
-
-```
-
-→ Deep dive: [nabla/ops/README.md](https://github.com/nabla-ml/nabla/tree/main/nabla/ops/README.md)
-
-### Factor-Based Sharding (SPMD)
-
-Nabla uses **semantic factors** for sharding propagation (inspired by XLA's Shardy), rather than raw dimension indices. This decouples the *physical mesh* from the *logical operation*.
-
-**The Translation Bridge:**
-
-1. **User**: Shards a tensor axis on mesh dimension `"dp"` (e.g., `x.shard(mesh, P("dp", None))`).
-2. **Op Rule**: The operation (e.g., Matmul) maps that input axis to a semantic factor (e.g., `m`).
-3. **Solver**: The engine propagates that factor to the output.
-
-**Example: Matrix Multiplication**
-Rule: `"m k, k n → m n"`
-
-| Factor | Semantics | User Input | Engine Action |
-| --- | --- | --- | --- |
-| **`m`** | Batch/Rows | Sharded on `"dp"` | **Propagates**: Output `m` is also on `"dp"`. |
-| **`k`** | Contracting | Sharded on `"tp"` | **Solves**: Insert `AllReduce` (sum partials). |
-| **`n`** | Columns | Replicated | **Propagates**: Output `n` is replicated. |
-
-**Three-Phase Propagation:**
-**COLLECT** (Input Dims → Factors) → **RESOLVE** (Solve Conflicts) → **UPDATE** (Factors → Output Dims).
-
-→ **Deep Dive**: [nabla/core/sharding/README.md](https://github.com/nabla-ml/nabla/tree/main/nabla/core/sharding/README.md)
-
----
-
-### Example Feature: Gradient Computation
-
-```
-nabla.grad(loss_fn)(x)  →  1. Trace forward, capturing OpNode DAG
-                           2. Evaluate forward to get loss value
-                           3. Backward: reversed(trace), call op.vjp_rule() per node
-                           4. Accumulate cotangents (sum for multi-use tensors)
-
-```
-
-→ Deep dive: [nabla/core/autograd/README.md](https://github.com/nabla-ml/nabla/tree/main/nabla/core/autograd/README.md)
-
-## Additional Features
-
-Nabla offers more than covered above:
-
-| Feature | Description | See |
-| --- | --- | --- |
-| **vmap** | Automatic vectorization via `batch_dims` tracking | [transforms/vmap.py](https://github.com/nabla-ml/nabla/tree/main/nabla/transforms/vmap.py) |
-| **Dynamic dims** | Compile functions with symbolic dimension support | [transforms/compile.py](https://github.com/nabla-ml/nabla/tree/main/nabla/transforms/compile.py) |
-| **Control flow** | `cond`, `while_loop`, `scan` for differentiable control | [ops/control_flow.py](https://github.com/nabla-ml/nabla/tree/main/nabla/ops/control_flow.py) |
-| **Pytree utilities** | General python-tree operations | [core/common/pytree.py](https://github.com/nabla-ml/nabla/tree/main/nabla/core/common/pytree.py) |
-
-**Current sharding model**: Explicit, user-controlled via `nabla.shard()`. The user decides partition specs.
-
-**WIP**: `shard_map` transform — define sharding constraints, let nabla handle propagation automatically. See [nabla/transforms/shard_map.py](https://github.com/nabla-ml/nabla/tree/main/nabla/transforms/shard_map.py).
-
-### Interesting Test Cases
-
-* **DP+PP distributed MLP** (WIP): [tests/integration/autograd/refactored/test_pp_grad3.py](https://github.com/nabla-ml/nabla/tree/main/tests/integration/autograd/refactored/test_pp_grad3.py)
-* **vmap + sharding**: [tests/unit/test_vmap_sharding.py](https://github.com/nabla-ml/nabla/tree/main/tests/unit/test_vmap_sharding.py)
-* **vmapped gradients**: [tests/integration/autograd/refactored/test_vmapped.py](https://github.com/nabla-ml/nabla/tree/main/tests/integration/autograd/refactored/test_vmapped.py)
-* **Pipeline parallel transformer**: [tests/integration/test_pp_transformer.py](https://github.com/nabla-ml/nabla/tree/main/tests/integration/test_pp_transformer.py)
-
----
-
-## Module Structure
-
-```
-nabla/
-├── config.py            # Global environment settings
-├── core/
-│   ├── tensor/          # Tensor/TensorImpl dual model
-│   ├── graph/           # GRAPH singleton, OpNode, tracing
-│   ├── autograd/        # trace-based backward engine
-│   ├── sharding/        # DeviceMesh, factor propagation
-│   └── common/          # Pytree, context management
-├── ops/
-│   ├── base.py          # Operation.__call__() pipeline
-│   ├── binary.py        # add, matmul, etc.
-│   ├── unary.py         # relu, exp, etc.
-│   ├── creation.py      # full, zeros, ones
-│   ├── reduction.py     # mean, reduce_sum
-│   ├── view/            # reshape, transpose, indexing
-│   ├── communication/   # AllReduce, shard, all_gather
-│   ├── control_flow.py  # cond, scan, while_loop
-│   ├── multi_output.py  # split, unbind
-│   └── custom_op.py     # custom MAX-kernel integration
-└── transforms/
-    ├── vmap.py          # Automatic batching
-    ├── shard_map.py     # SPMD distribution
-    └── compile.py       # Static JIT compilation
-```
-
-→ Each submodule has its own `README.md`.
+**GPU Support**: 
+*   **Linux (AMD/NVIDIA)**: Supported natively via Modular MAX.
+*   **macOS (Apple Silicon)**: Requires Xcode Metal toolchain (`xcode-select --install`).
 
 ---
 
 ## Stable Release (v25.7)
 
-<details>
-<summary>pip install nabla-ml (single-device, stable API)</summary>
-
+For the simpler, single-device version:
 ```bash
 pip install nabla-ml
-
 ```
-
-From [nabla/v25.7 branch](https://github.com/nabla-ml/nabla/tree/nabla/v25.7):
-
-```python
-import nabla
-
-def loss_fn(params, x, y):
-    for i in range(0, len(params) - 2, 2):
-        x = nabla.relu(x @ params[i] + params[i + 1])
-    return nabla.mean((x @ params[-2] + params[-1] - y) ** 2)
-
-@nabla.jit(auto_device=True)
-def train_step(params, x, y, lr):
-    loss, grads = nabla.value_and_grad(loss_fn)(params, x, y)
-    return loss, [p - g * lr for p, g in zip(params, grads)]
-
-```
-
-</details>
+(See [v25.7 branch](https://github.com/nabla-ml/nabla/tree/nabla/v25.7))
 
 ---
 
 ## Contributing
 
-Contributions welcome! For significant changes, please open an Issue first to discuss.
-
-* **Bug fixes / docs**: Submit PR directly
-* **New features**: Discuss in Issues before implementing
-* **New ops**: Follow the pattern in [nabla/ops/README.md](https://github.com/nabla-ml/nabla/tree/main/nabla/ops/README.md)
+* **Bugs/Docs**: Submit PR directly.
+* **Features**: Open an Issue first.
+* **New Ops**: See [nabla/ops/README.md](https://github.com/nabla-ml/nabla/tree/main/nabla/ops/README.md).
 
 ## License
 

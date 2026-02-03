@@ -56,6 +56,7 @@ from .ops.communication import (
     cpu,
     gpu,
     accelerator,
+    ppermute,
 )
 from .ops.comparison import (
     EqualOp,
@@ -160,6 +161,7 @@ from .ops.view import (
     unsqueeze,
     unsqueeze_physical,
 )
+from .ops.utils import call_custom_kernel
 from .transforms.compile import CompilationStats, CompiledFunction, compile
 from .transforms.shard_map import shard_map
 from .transforms.vmap import vmap
@@ -325,6 +327,8 @@ __all__ = [
     "CPU",
     "GPU",
     "DType",
+    "ppermute",
+    "call_custom_kernel",
 ]
 
 sum = reduce_sum
