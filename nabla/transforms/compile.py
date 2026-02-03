@@ -75,6 +75,9 @@ class _CachedModel:
     output_static_values: list[Any]
     output_shard_counts: list[int]
     output_shardings: list[Any]
+    # Fast path metadata for cache hits
+    tensor_indices: list[int]  # Which positions in flat args are tensors
+    input_treedef: Any  # Cached input tree structure
 
 
 class CompiledFunction(Generic[T]):
@@ -109,25 +112,42 @@ class CompiledFunction(Generic[T]):
     def __call__(self, *args: Any, **kwargs: Any) -> T:
         """Main entry point: check cache, trace if miss, execute cached model."""
         
-        # Step 1: Flatten inputs and identify tensors
+        # Fast path: try to use cached metadata if available
+        if self._cache:
+            # Get the most recently used cached model to check structure
+            last_cached = next(reversed(self._cache.values()))
+            flat, treedef = tree_flatten((args, kwargs))
+            
+            # Fast check: if tree structure matches, reuse tensor indices
+            if treedef == last_cached.input_treedef:
+                tensor_indices = last_cached.tensor_indices
+                # Build key with cached indices (skip list comprehension)
+                key = self._build_cache_key(flat, tensor_indices, treedef)
+                
+                if key in self._cache:
+                    self._cache.move_to_end(key)
+                    # Super fast path: direct execution with known indices
+                    return self._execute_cached_fast(self._cache[key], flat)
+        
+        # Slow path: need to discover tensor positions
         flat, treedef = tree_flatten((args, kwargs))
         tensor_indices = [i for i, x in enumerate(flat) if isinstance(x, Tensor)]
         
-        # Step 2: Ensure all input tensors are realized
+        # Ensure all input tensors are realized
         unrealized = [flat[i] for i in tensor_indices if not flat[i].is_realized]
         if unrealized:
             GRAPH.evaluate(*unrealized)
 
-        # Step 3: Build cache key (shape + dtype + sharding, respecting dynamic_dims)
+        # Build cache key
         key = self._build_cache_key(flat, tensor_indices, treedef)
 
-        # Step 4: Check cache
+        # Check cache
         if key in self._cache:
             self._cache.move_to_end(key)
             return self._execute_cached(key, flat, tensor_indices)
 
-        # Step 5: Cache miss - trace and compile
-        return self._trace_and_compile(args, kwargs, flat, tensor_indices, key)
+        # Cache miss - trace and compile
+        return self._trace_and_compile(args, kwargs, flat, tensor_indices, key, treedef)
 
     def _build_cache_key(
         self, flat: list[Any], tensor_indices: list[int], treedef: Any
@@ -221,6 +241,7 @@ class CompiledFunction(Generic[T]):
         flat: list[Any],
         tensor_indices: list[int],
         key: _CacheKey,
+        treedef: Any,
     ) -> T:
         """Trace the function and compile it."""
         from .. import config as nabla_config
@@ -332,6 +353,8 @@ class CompiledFunction(Generic[T]):
                 output_static_values=static_outputs,
                 output_shard_counts=output_shard_counts,
                 output_shardings=output_shardings,
+                tensor_indices=tensor_indices,
+                input_treedef=treedef,
             )
             self._add_to_cache(key, cached, t0)
 
@@ -349,6 +372,44 @@ class CompiledFunction(Generic[T]):
             self._cache.popitem(last=False)
         self._stats.total_compile_time_ms += (time.perf_counter() - t0) * 1000
         self._stats.misses += 1
+
+    def _execute_cached_fast(self, cached: _CachedModel, flat: list[Any]) -> T:
+        """Ultra-fast cached execution - skip tensor index lookup."""
+        t0 = time.perf_counter()
+        
+        # Extract buffers directly using cached indices
+        inputs = []
+        for i in cached.tensor_indices:
+            inputs.extend(flat[i]._impl._buffers)
+
+        # Run the model
+        _, *outputs = cached.model(*inputs)
+
+        # Reconstruct outputs
+        all_leaves = []
+        out_buf_iter = iter(outputs)
+        shard_counts_iter = iter(cached.output_shard_counts)
+        shardings_iter = iter(cached.output_shardings)
+        static_iter = iter(cached.output_static_values)
+
+        for is_tensor in cached.output_tensor_mask:
+            if is_tensor:
+                n_shards = next(shard_counts_iter)
+                sharding = next(shardings_iter)
+                shard_bufs = [next(out_buf_iter) for _ in range(n_shards)]
+
+                if n_shards == 1:
+                    t = Tensor(buffers=shard_bufs[0])
+                else:
+                    t = Tensor._create_unsafe(bufferss=shard_bufs)
+                t.sharding = sharding
+                all_leaves.append(t)
+            else:
+                all_leaves.append(next(static_iter))
+
+        self._stats.total_cached_exec_time_ms += (time.perf_counter() - t0) * 1000
+        self._stats.hits += 1
+        return tree_unflatten(cached.output_treedef, all_leaves)
 
     def _execute_cached(
         self, key: _CacheKey, flat: list[Any], tensor_indices: list[int]
