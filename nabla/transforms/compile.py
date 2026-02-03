@@ -4,15 +4,13 @@
 # ===----------------------------------------------------------------------=== #
 """Compile transform: JIT compilation with caching for nabla functions.
 
-The compile decorator traces a function, builds a MAX graph, and caches
-the compiled model for subsequent calls with matching signatures.
+Traces a function to build a MAX graph, then caches the compiled model.
+Subsequent calls with matching signatures use the cached version.
 
-Key Design Principles:
-1. Build cache key from tensor specs (shape, dtype, sharding) with dynamic dim support
-2. Set EAGER_MAX_GRAPH=True during tracing so ops build the graph immediately  
-3. Use GRAPH.add_input with optional symbolic shapes for dynamic dimensions
-4. Rely on existing hydrate/add_input deduplication to avoid duplicate graph inputs
-5. After tracing, compile and execute; cache the model for future calls
+Key mechanisms:
+- EAGER_MAX_GRAPH=True: ops build graph immediately during trace
+- Dynamic dimensions: use SymbolicDim for batch-independent compilation  
+- Smart caching: deduplicates inputs via buffer identity checks
 """
 
 from __future__ import annotations
@@ -110,38 +108,28 @@ class CompiledFunction(Generic[T]):
         self._cache.clear()
 
     def __call__(self, *args: Any, **kwargs: Any) -> T:
-        """Main entry point: check cache, trace if miss, execute cached model."""
+        """Main entry: check cache, trace if miss, execute."""
+        flat, treedef = tree_flatten((args, kwargs))
         
-        # Fast path: try to use cached metadata if available
+        # Fast path: reuse structure from last cached call
         if self._cache:
-            # Get the most recently used cached model to check structure
             last_cached = next(reversed(self._cache.values()))
-            flat, treedef = tree_flatten((args, kwargs))
-            
-            # Fast check: if tree structure matches, reuse tensor indices
             if treedef == last_cached.input_treedef:
-                tensor_indices = last_cached.tensor_indices
-                # Build key with cached indices (skip list comprehension)
-                key = self._build_cache_key(flat, tensor_indices, treedef)
-                
+                key = self._build_cache_key(flat, last_cached.tensor_indices, treedef)
                 if key in self._cache:
                     self._cache.move_to_end(key)
-                    # Super fast path: direct execution with known indices
                     return self._execute_cached_fast(self._cache[key], flat)
         
-        # Slow path: need to discover tensor positions
-        flat, treedef = tree_flatten((args, kwargs))
+        # Slow path: discover tensor positions
         tensor_indices = [i for i, x in enumerate(flat) if isinstance(x, Tensor)]
         
-        # Ensure all input tensors are realized
+        # Realize unrealized tensors before caching
         unrealized = [flat[i] for i in tensor_indices if not flat[i].is_realized]
         if unrealized:
             GRAPH.evaluate(*unrealized)
 
-        # Build cache key
+        # Build key and check cache
         key = self._build_cache_key(flat, tensor_indices, treedef)
-
-        # Check cache
         if key in self._cache:
             self._cache.move_to_end(key)
             return self._execute_cached(key, flat, tensor_indices)
@@ -169,68 +157,54 @@ class CompiledFunction(Generic[T]):
 
     def _tensor_signature(self, tensor: Tensor, arg_idx: int) -> tuple:
         """Build tensor signature for cache key, applying dynamic_dims."""
-        # Build shape with symbolic markers for dynamic dims
+        # Apply symbolic markers to dynamic dimensions
         shape = list(tensor.shape)
         if arg_idx in self.dynamic_dims:
-            dim_map = self.dynamic_dims[arg_idx]
-            for dim_idx, sym_name in dim_map.items():
+            for dim_idx, sym_name in self.dynamic_dims[arg_idx].items():
                 if dim_idx < len(shape):
                     shape[dim_idx] = f"${sym_name}"
         
-        # Include sharding info for correctness
-        sharding_key = None
-        if tensor.sharding is not None:
-            sharding = tensor.sharding
-            mesh = sharding.mesh if hasattr(sharding, 'mesh') else None
-            mesh_key = None
-            if mesh is not None:
-                mesh_key = (
-                    getattr(mesh, 'name', None),
-                    tuple(mesh.shape) if hasattr(mesh, 'shape') and mesh.shape else (),
-                    tuple(mesh.axis_names) if hasattr(mesh, 'axis_names') and mesh.axis_names else (),
-                )
-            dim_specs = sharding.dim_specs if hasattr(sharding, 'dim_specs') else []
-            dim_specs_key = tuple(
-                (tuple(ds.axes) if ds.axes else (), bool(ds.partial))
-                for ds in dim_specs
-            ) if dim_specs else ()
-            sharding_key = (mesh_key, dim_specs_key)
-        
+        # Extract sharding key
+        sharding_key = self._extract_sharding_key(tensor.sharding) if tensor.sharding else None
         return (tuple(shape), str(tensor.dtype), sharding_key)
 
-    def _build_symbolic_shape(self, tensor: Tensor, arg_idx: int) -> list | None:
-        """Build shape for MAX graph with SymbolicDim if dynamic_dims specified."""
-        if arg_idx not in self.dynamic_dims:
-            return None  # Use default shape
+    def _extract_sharding_key(self, sharding) -> tuple:
+        """Extract hashable sharding info."""
+        mesh = getattr(sharding, 'mesh', None)
+        mesh_key = None
+        if mesh is not None:
+            mesh_key = (
+                getattr(mesh, 'name', None),
+                tuple(mesh.shape) if hasattr(mesh, 'shape') and mesh.shape else (),
+                tuple(mesh.axis_names) if hasattr(mesh, 'axis_names') and mesh.axis_names else (),
+            )
         
-        dims = list(tensor.shape)
-        dim_map = self.dynamic_dims[arg_idx]
-        result = []
-        for i, d in enumerate(dims):
-            if i in dim_map:
-                result.append(SymbolicDim(dim_map[i]))
-            else:
-                result.append(int(d))
-        return result
+        dim_specs = getattr(sharding, 'dim_specs', [])
+        dim_specs_key = tuple(
+            (tuple(ds.axes) if ds.axes else (), bool(ds.partial))
+            for ds in dim_specs
+        ) if dim_specs else ()
+        
+        return (mesh_key, dim_specs_key)
 
     def _build_input_types(self, flat: list[Any], tensor_indices: list[int]) -> list:
-        """Build TensorType list for graph creation with proper symbolic dims."""
+        """Build TensorType list for graph with symbolic dims where specified."""
         from max.graph import TensorType, DeviceRef
         
         input_types = []
         for arg_idx, flat_idx in enumerate(tensor_indices):
             tensor = flat[flat_idx]
-            
-            # Get shape (with symbolic dims if specified)
-            sym_shape = self._build_symbolic_shape(tensor, arg_idx)
-            shape = sym_shape if sym_shape is not None else list(tensor.shape)
-            
-            # Get dtype and device from buffer
             buf = tensor._impl._buffers[0]
-            dtype = buf.dtype
-            device_ref = DeviceRef.from_device(buf.device)
             
-            input_types.append(TensorType(dtype, shape, device_ref))
+            # Build shape with SymbolicDim for dynamic dimensions
+            shape = list(tensor.shape)
+            if arg_idx in self.dynamic_dims:
+                shape = [
+                    SymbolicDim(self.dynamic_dims[arg_idx][i]) if i in self.dynamic_dims[arg_idx] else int(d)
+                    for i, d in enumerate(shape)
+                ]
+            
+            input_types.append(TensorType(buf.dtype, shape, DeviceRef.from_device(buf.device)))
         
         return input_types
 
@@ -243,127 +217,123 @@ class CompiledFunction(Generic[T]):
         key: _CacheKey,
         treedef: Any,
     ) -> T:
-        """Trace the function and compile it."""
+        """Trace function and compile to MAX graph."""
         from .. import config as nabla_config
-        from ..core.common.context import _session
 
-        # Safety: reject sharded + dynamic for now
-        if self.dynamic_dims:
-            for i in tensor_indices:
-                if flat[i].is_sharded:
-                    raise NotImplementedError(
-                        "Compilation of sharded tensors with dynamic dimensions is not yet supported."
-                    )
+        # Validate: no sharded + dynamic dims yet
+        if self.dynamic_dims and any(flat[i].is_sharded for i in tensor_indices):
+            raise NotImplementedError(
+                "Compilation of sharded tensors with dynamic dimensions is not yet supported."
+            )
 
-        # Save original config
-        orig_eager = nabla_config.EAGER_MAX_GRAPH
-        orig_verify = nabla_config.VERIFY_EAGER_SHAPES
+        # Save/set config for tracing
+        orig_eager, orig_verify = nabla_config.EAGER_MAX_GRAPH, nabla_config.VERIFY_EAGER_SHAPES
         t0 = time.perf_counter()
 
         try:
-            # Set eager mode for tracing (ops build graph immediately)
-            nabla_config.EAGER_MAX_GRAPH = True
-            nabla_config.VERIFY_EAGER_SHAPES = False
-
-            # Build input types upfront (critical for symbolic dims!)
-            input_types = self._build_input_types(flat, tensor_indices) if self.dynamic_dims else None
+            nabla_config.EAGER_MAX_GRAPH = True  # Ops build graph during trace
+            nabla_config.VERIFY_EAGER_SHAPES = False  # Skip shape checks
             
-            # Reset graph with proper input types
+            # Prepare graph with input types
+            input_types = self._build_input_types(flat, tensor_indices) if self.dynamic_dims else None
             GRAPH._reset(GRAPH.context, 0, input_types=input_types)
 
-            # Register input tensors - link buffers to graph inputs
-            if input_types:
-                # When input_types are provided, graph already has the inputs
-                # We just need to set up the tensor graph values and source mapping
-                for arg_idx, flat_idx in enumerate(tensor_indices):
-                    tensor = flat[flat_idx]
-                    impl = tensor._impl
-                    buf = impl._buffers[0]
-                    
-                    graph_input = GRAPH.graph.inputs[arg_idx]
-                    GRAPH.sources[graph_input._mlir_value] = buf
-                    GRAPH._input_refs.append(tensor)
-                    
-                    # Set the tensor's graph values
-                    with GRAPH.graph:
-                        impl._graph_values = [graph_input[...]]
-                        impl.graph_values_epoch = GRAPH.epoch
-            else:
-                # Standard path without symbolic dims
-                for arg_idx, flat_idx in enumerate(tensor_indices):
-                    tensor = flat[flat_idx]
-                    GRAPH.add_input(tensor)
+            # Register inputs
+            self._register_inputs(flat, tensor_indices, input_types)
 
-            # Execute the function (ops will build graph eagerly)
+            # Trace: run function to build graph
             result = self.__wrapped__(*args, **kwargs)
 
-            # Flatten outputs
-            flat_out, out_treedef = tree_flatten(result)
-            output_mask = [isinstance(x, Tensor) for x in flat_out]
-            output_tensors = [x for x in flat_out if isinstance(x, Tensor)]
-            static_outputs = [x for x in flat_out if not isinstance(x, Tensor)]
-
-            if not output_tensors:
-                # No tensor outputs - just return (rare case)
-                self._stats.misses += 1
-                return result
-
-            # Finalize graph outputs
-            with GRAPH.graph:
-                ops.random.set_seed(0)
-                
-                all_graph_values = []
-                for tensor in output_tensors:
-                    if not tensor._impl._graph_values:
-                        # Output is a pass-through of input (no ops applied)
-                        GRAPH.add_input(tensor)
-                    all_graph_values.extend(tensor._impl._graph_values)
-                
-                seed_out = ops.random._peek_seed()
-                GRAPH.graph.output(seed_out, *all_graph_values)
-
-            # Compile the graph
-            model = _session().load(GRAPH.graph)
-
-            # Execute immediately to get result buffers
-            inputs = [GRAPH.sources[inp._mlir_value] for inp in GRAPH.graph.inputs]
-            seed_val, *result_buffers = model(*inputs)
-
-            # Assign buffers to output tensors
-            buf_idx = 0
-            output_shard_counts = []
-            output_shardings = []
-            
-            for tensor in output_tensors:
-                n_shards = len(tensor._impl._graph_values) or 1
-                output_shard_counts.append(n_shards)
-                output_shardings.append(tensor.sharding)
-                
-                if n_shards == 1:
-                    tensor.buffers = result_buffers[buf_idx]
-                else:
-                    tensor._impl._buffers = result_buffers[buf_idx : buf_idx + n_shards]
-                buf_idx += n_shards
-
-            # Cache the compiled model
-            cached = _CachedModel(
-                model=model,
-                output_treedef=out_treedef,
-                output_tensor_mask=output_mask,
-                output_static_values=static_outputs,
-                output_shard_counts=output_shard_counts,
-                output_shardings=output_shardings,
-                tensor_indices=tensor_indices,
-                input_treedef=treedef,
-            )
-            self._add_to_cache(key, cached, t0)
-
-            return result
+            # Extract outputs and compile
+            return self._finalize_compilation(result, key, treedef, tensor_indices, t0)
 
         finally:
-            # Restore original config
             nabla_config.EAGER_MAX_GRAPH = orig_eager
             nabla_config.VERIFY_EAGER_SHAPES = orig_verify
+
+    def _register_inputs(self, flat: list[Any], tensor_indices: list[int], input_types: list | None) -> None:
+        """Register input tensors with the graph."""
+        if input_types:
+            # Symbolic dims: link existing graph inputs to buffers
+            for arg_idx, flat_idx in enumerate(tensor_indices):
+                tensor = flat[flat_idx]
+                impl = tensor._impl
+                buf = impl._buffers[0]
+                
+                graph_input = GRAPH.graph.inputs[arg_idx]
+                GRAPH.sources[graph_input._mlir_value] = buf
+                GRAPH._input_refs.append(tensor)
+                
+                with GRAPH.graph:
+                    impl._graph_values = [graph_input[...]]
+                    impl.graph_values_epoch = GRAPH.epoch
+        else:
+            # Standard path: add_input creates graph nodes
+            for flat_idx in tensor_indices:
+                GRAPH.add_input(flat[flat_idx])
+
+    def _finalize_compilation(
+        self, result: T, key: _CacheKey, treedef: Any, tensor_indices: list[int], t0: float
+    ) -> T:
+        """Finalize graph, compile, execute, and cache."""
+        from ..core.common.context import _session
+
+        # Extract outputs
+        flat_out, out_treedef = tree_flatten(result)
+        output_mask = [isinstance(x, Tensor) for x in flat_out]
+        output_tensors = [x for x in flat_out if isinstance(x, Tensor)]
+        static_outputs = [x for x in flat_out if not isinstance(x, Tensor)]
+
+        if not output_tensors:
+            self._stats.misses += 1
+            return result
+
+        # Set graph outputs
+        with GRAPH.graph:
+            ops.random.set_seed(0)
+            
+            all_graph_values = []
+            for tensor in output_tensors:
+                if not tensor._impl._graph_values:
+                    GRAPH.add_input(tensor)  # Pass-through
+                all_graph_values.extend(tensor._impl._graph_values)
+            
+            seed_out = ops.random._peek_seed()
+            GRAPH.graph.output(seed_out, *all_graph_values)
+
+        # Compile and execute
+        model = _session().load(GRAPH.graph)
+        inputs = [GRAPH.sources[inp._mlir_value] for inp in GRAPH.graph.inputs]
+        seed_val, *result_buffers = model(*inputs)
+
+        # Assign result buffers to output tensors
+        buf_idx = 0
+        output_shard_counts, output_shardings = [], []
+        
+        for tensor in output_tensors:
+            n_shards = len(tensor._impl._graph_values) or 1
+            output_shard_counts.append(n_shards)
+            output_shardings.append(tensor.sharding)
+            
+            if n_shards == 1:
+                tensor.buffers = result_buffers[buf_idx]
+            else:
+                tensor._impl._buffers = result_buffers[buf_idx : buf_idx + n_shards]
+            buf_idx += n_shards
+
+        # Cache the model
+        cached = _CachedModel(
+            model=model,
+            output_treedef=out_treedef,
+            output_tensor_mask=output_mask,
+            output_static_values=static_outputs,
+            output_shard_counts=output_shard_counts,
+            output_shardings=output_shardings,
+            tensor_indices=tensor_indices,
+            input_treedef=treedef,
+        )
+        self._add_to_cache(key, cached, t0)
+        return result
 
     def _add_to_cache(self, key: _CacheKey, cached: _CachedModel, t0: float) -> None:
         """Add to cache with LRU eviction."""
@@ -374,15 +344,25 @@ class CompiledFunction(Generic[T]):
         self._stats.misses += 1
 
     def _execute_cached_fast(self, cached: _CachedModel, flat: list[Any]) -> T:
-        """Ultra-fast cached execution - skip tensor index lookup."""
+        """Fast execution using cached tensor_indices."""
+        return self._execute_cached_impl(cached, flat, tensor_indices=cached.tensor_indices)
+
+    def _execute_cached(
+        self, key: _CacheKey, flat: list[Any], tensor_indices: list[int]
+    ) -> T:
+        """Execute cached model with given tensor indices."""
+        return self._execute_cached_impl(self._cache[key], flat, tensor_indices=tensor_indices)
+
+    def _execute_cached_impl(self, cached: _CachedModel, flat: list[Any], tensor_indices: list[int]) -> T:
+        """Core execution logic for cached models."""
         t0 = time.perf_counter()
-        
-        # Extract buffers directly using cached indices
+
+        # Gather input buffers in order
         inputs = []
-        for i in cached.tensor_indices:
+        for i in tensor_indices:
             inputs.extend(flat[i]._impl._buffers)
 
-        # Run the model
+        # Execute model
         _, *outputs = cached.model(*inputs)
 
         # Reconstruct outputs
@@ -398,52 +378,7 @@ class CompiledFunction(Generic[T]):
                 sharding = next(shardings_iter)
                 shard_bufs = [next(out_buf_iter) for _ in range(n_shards)]
 
-                if n_shards == 1:
-                    t = Tensor(buffers=shard_bufs[0])
-                else:
-                    t = Tensor._create_unsafe(bufferss=shard_bufs)
-                t.sharding = sharding
-                all_leaves.append(t)
-            else:
-                all_leaves.append(next(static_iter))
-
-        self._stats.total_cached_exec_time_ms += (time.perf_counter() - t0) * 1000
-        self._stats.hits += 1
-        return tree_unflatten(cached.output_treedef, all_leaves)
-
-    def _execute_cached(
-        self, key: _CacheKey, flat: list[Any], tensor_indices: list[int]
-    ) -> T:
-        """Execute a cached compiled model."""
-        t0 = time.perf_counter()
-        cached = self._cache[key]
-
-        # Gather input buffers in order
-        inputs = []
-        for i in tensor_indices:
-            tensor = flat[i]
-            inputs.extend(tensor._impl._buffers)
-
-        # Run the cached model
-        _, *outputs = cached.model(*inputs)
-
-        # Reconstruct output structure
-        all_leaves = []
-        out_buf_iter = iter(outputs)
-        shard_counts_iter = iter(cached.output_shard_counts)
-        shardings_iter = iter(cached.output_shardings)
-        static_iter = iter(cached.output_static_values)
-
-        for is_tensor in cached.output_tensor_mask:
-            if is_tensor:
-                n_shards = next(shard_counts_iter)
-                sharding = next(shardings_iter)
-                shard_bufs = [next(out_buf_iter) for _ in range(n_shards)]
-
-                if n_shards == 1:
-                    t = Tensor(buffers=shard_bufs[0])
-                else:
-                    t = Tensor._create_unsafe(bufferss=shard_bufs)
+                t = Tensor(buffers=shard_bufs[0]) if n_shards == 1 else Tensor._create_unsafe(bufferss=shard_bufs)
                 t.sharding = sharding
                 all_leaves.append(t)
             else:
