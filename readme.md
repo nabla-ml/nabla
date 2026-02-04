@@ -15,7 +15,7 @@
 
 ## Feature Showcase
 
-### 1. Forward Pass & Autodiff
+### 1. Tensors & Autodiff
 
 Define Python functions and compute gradients using trace-based automatic differentiation. [Read more](nabla/core/autograd/README.md)
 
@@ -40,7 +40,7 @@ with nabla.default_device(nabla.Accelerator()):
     print("Gradients:", grad_x.shape, grad_w.shape)
 ```
 
-### 2. Simple SPMD Sharding
+### 2. SPMD Sharding
 
 Shard tensors on a logical mesh; operations automatically propagate sharding constraints. [Read more](nabla/core/sharding/README.md)
 
