@@ -60,31 +60,48 @@ loss = compute_loss(x, w)
 print("Loss (Sharded):", loss)
 ```
 
-### 3. Seamless Mojo Integration
+### 3. Mojo Integration
 
 Nabla's core strength is its ability to drop down to **Mojo** for high-performance custom kernels, bridging the gap between high-level Python and bare-metal execution. [Read more](nabla/ops/README.md)
 
-**Mojo Kernel (`kernels/add_one.mojo`)**
+**Mojo Kernel (`kernels/add_one_custom.mojo`)**
 ```mojo
-import compiler
-
 @compiler.register("add_one_custom")
-struct AddOne:
-    fn execute(output: OutputTensor, x: InputTensor, ctx: Context):
-        # Raw metal performance using SIMD
-        for i in range(tensor.num_elements()):
-             tensor[i] += 1.0 
+struct AddOneCustom:
+    @staticmethod
+    def execute[target: StaticString](
+        output: OutputTensor,
+        x: InputTensor[dtype = output.dtype, rank = output.rank],
+        ctx: DeviceContextPtr,
+    ):
+        @parameter
+        fn elementwise_add_one[W: Int](idx: IndexList[x.rank]) -> SIMD[x.dtype, W]:
+            return x.load[W](idx) + 1
+
+        foreach[elementwise_add_one, target=target](output, ctx)
 ```
 
 **Python Usage**
 ```python
-class AddOneOp(nabla.Operation):
+import nabla
+
+class AddOneOp(nabla.UnaryOperation):
+    @property
+    def name(self) -> str:
+        return "add_one_custom"
+
     def kernel(self, x, **kwargs):
         # Directly invoke the compiled Mojo kernel
-        return nabla.call_custom_kernel("add_one_custom", "./kernels", values=x)
+        return nabla.call_custom_kernel(
+            func_name="add_one_custom",
+            kernel_path="./kernels",
+            values=x,
+            out_types=x.type
+        )
 
-x = nabla.Tensor([1., 2., 3.])
-y = AddOneOp()(x) 
+x = nabla.Tensor.constant([1., 2., 3.])
+y = AddOneOp()(x)
+print(y) # [2., 3., 4.]
 ```
 
 ### 4. Distributed Pipeline Parallelism (GPipe)

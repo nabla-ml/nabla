@@ -12,15 +12,14 @@ from utils.index import IndexList
 @compiler.register("add_one_custom")
 struct AddOneCustom:
     @staticmethod
-    fn execute[
+    def execute[
         target: StaticString
     ](
         output: OutputTensor,
         x: InputTensor[dtype = output.dtype, rank = output.rank],
         ctx: DeviceContextPtr,
-    ) raises:
+    ):
         @parameter
-        @always_inline
         fn elementwise_add_one[
             width: Int
         ](idx: IndexList[x.rank]) -> SIMD[x.dtype, width]:
