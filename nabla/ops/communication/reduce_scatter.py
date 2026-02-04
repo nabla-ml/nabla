@@ -180,51 +180,44 @@ class ReduceScatterOp(CollectiveOperation):
     ) -> list[TensorValue]:
         """Core reduce-scatter implementation (MAX ops or simulation)."""
 
+        # 1. Distributed Execution Path
         if mesh and mesh.is_distributed:
-            from max.dtype import DType
+            if hasattr(ops, "reducescatter") and hasattr(ops.reducescatter, "sum"):
+                return ops.reducescatter.sum(shard_graph_values, mesh.get_signal_buffers(), axis=axis)
+
+            # Robust fallback via native allgather: 
+            # 1. Every device gets all chunks.
+            # 2. Every device reduces all chunks locally.
+            # 3. Every device slices its own disjoint result portion.
             from max.graph.ops.allgather import allgather as max_allgather
-            from max.graph.type import BufferType
+            gathered_results = max_allgather(shard_graph_values, mesh.get_signal_buffers(), axis=axis)
 
-            # Robust implementation via allgather (since native allreduce is broken)
-            BUFFER_SIZE = 65536
-            signal_buffers = [
-                ops.buffer_create(BufferType(DType.uint8, (BUFFER_SIZE,), dev))
-                for dev in mesh.device_refs
-            ]
-
-            # 1. Gather all inputs (concatenated)
-            gathered_list = max_allgather(shard_graph_values, signal_buffers, axis=axis)
-            gathered_tensor = gathered_list[0]  # All devices get same data
-
-            # 2. Split into original input chunks
+            num_shards = len(shard_graph_values)
             chunk_shape = shard_graph_values[0].type.shape
             chunk_axis_size = int(chunk_shape[axis])
-            num_shards = len(shard_graph_values)
 
-            input_chunks = []
-            for i in range(num_shards):
+            def _slice_axis(tensor, start, end):
                 slices = [slice(None)] * len(chunk_shape)
-                slices[axis] = slice(i * chunk_axis_size, (i + 1) * chunk_axis_size)
-                input_chunks.append(gathered_tensor[tuple(slices)])
+                slices[axis] = slice(start, end)
+                return tensor[tuple(slices)]
 
-            # 3. Reduce (Sum)
-            reduced = input_chunks[0]
-            for chunk in input_chunks[1:]:
-                reduced = ops.add(reduced, chunk)
+            results = []
+            for device_idx, gathered in enumerate(gathered_results):
+                # Local reduction of all chunks
+                reduced = _slice_axis(gathered, 0, chunk_axis_size)
+                for i in range(1, num_shards):
+                    chunk = _slice_axis(gathered, i * chunk_axis_size, (i + 1) * chunk_axis_size)
+                    reduced = ops.add(reduced, chunk)
 
-            # 4. Scatter (Split result into output chunks)
-            # Result shape is same as input chunk shape
-            output_axis_size = chunk_axis_size // num_shards
+                # Pick the device-specific portion of the reduced result
+                out_size = chunk_axis_size // num_shards
+                results.append(
+                    _slice_axis(reduced, device_idx * out_size, (device_idx + 1) * out_size)
+                )
 
-            scattered = []
-            for i in range(num_shards):
-                slices = [slice(None)] * len(chunk_shape)
-                slices[axis] = slice(i * output_axis_size, (i + 1) * output_axis_size)
-                scattered.append(reduced[tuple(slices)])
+            return results
 
-            return scattered
-
-        # Simulation mode: handle grouped execution for multi-axis meshes
+        # 2. CPU Simulation Path (Grouped/Sharded execution)
         if scatter_axes and mesh and len(mesh.axis_names) > 1:
             # Group shards by their coordinates on axes NOT being scattered
             other_axes = [ax for ax in mesh.axis_names if ax not in scatter_axes]

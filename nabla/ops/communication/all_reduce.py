@@ -127,64 +127,47 @@ class AllReduceOp(CollectiveOperation):
         if not shard_graph_values:
             return []
 
+        # 1. Distributed Execution Path
         if mesh and mesh.is_distributed and len(shard_graph_values) > 1:
-            from max.dtype import DType
+            if reduce_op == "sum" and hasattr(ops, "allreduce") and hasattr(ops.allreduce, "sum"):
+                return ops.allreduce.sum(shard_graph_values, mesh.get_signal_buffers())
+
+            # Fallback for complex reductions (MAX/MIN/PROD) using native allgather
             from max.graph.ops.allgather import allgather as max_allgather
-            from max.graph.type import BufferType
-
-            BUFFER_SIZE = 65536
-            signal_buffers = [
-                ops.buffer_create(BufferType(DType.uint8, (BUFFER_SIZE,), dev))
-                for dev in mesh.device_refs
-            ]
-
-            gathered = max_allgather(shard_graph_values, signal_buffers, axis=0)
+            gathered = max_allgather(shard_graph_values, mesh.get_signal_buffers(), axis=0)
 
             result_graph_values = []
+            num_shards = len(shard_graph_values)
             chunk_size = shard_graph_values[0].type.shape[0]
 
             for gathered_tensor in gathered:
-                chunks = []
-                for i in range(len(shard_graph_values)):
-                    start = i * chunk_size
-                    end = (i + 1) * chunk_size
-                    chunk = gathered_tensor[start:end]
-                    chunks.append(chunk)
-
+                chunks = [gathered_tensor[i * chunk_size : (i + 1) * chunk_size] for i in range(num_shards)]
+                
                 reduced = chunks[0]
                 for chunk in chunks[1:]:
-                    if reduce_op == "sum":
-                        reduced = ops.add(reduced, chunk)
-                    elif reduce_op == "max":
-                        reduced = ops.max(reduced, chunk)
-                    elif reduce_op == "min":
-                        reduced = ops.min(reduced, chunk)
-                    elif reduce_op == "prod":
-                        reduced = ops.mul(reduced, chunk)
-                    else:
-                        raise ValueError(f"Unknown reduction op: {reduce_op}")
-
+                    if reduce_op == "sum": reduced = ops.add(reduced, chunk)
+                    elif reduce_op == "max": reduced = ops.max(reduced, chunk)
+                    elif reduce_op == "min": reduced = ops.min(reduced, chunk)
+                    elif reduce_op == "prod": reduced = ops.mul(reduced, chunk)
+                    else: raise ValueError(f"Unknown reduction op: {reduce_op}")
                 result_graph_values.append(reduced)
 
             return result_graph_values
 
+        # 2. CPU Simulation Path (Local execution)
         if reduce_axes and mesh and not mesh.is_distributed:
             return self.simulate_grouped_execution(
                 shard_graph_values, mesh, reduce_axes, reduce_op=reduce_op
             )
 
+        # 3. Simple Fallback (Single shard or generic)
         result = shard_graph_values[0]
         for sv in shard_graph_values[1:]:
-            if reduce_op == "sum":
-                result = ops.add(result, sv)
-            elif reduce_op == "max":
-                result = ops.max(result, sv)
-            elif reduce_op == "min":
-                result = ops.min(result, sv)
-            elif reduce_op == "prod":
-                result = ops.mul(result, sv)
-            else:
-                raise ValueError(f"Unknown reduction op: {reduce_op}")
+            if reduce_op == "sum": result = ops.add(result, sv)
+            elif reduce_op == "max": result = ops.max(result, sv)
+            elif reduce_op == "min": result = ops.min(result, sv)
+            elif reduce_op == "prod": result = ops.mul(result, sv)
+            else: raise ValueError(f"Unknown reduction op: {reduce_op}")
 
         return [result] * len(shard_graph_values)
 

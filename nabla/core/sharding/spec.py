@@ -135,6 +135,33 @@ class DeviceMesh:
         for i in range(len(shape) - 2, -1, -1):
             self.phys_strides[i] = shape[i + 1] * self.phys_strides[i + 1]
 
+        self._signal_buffers = {}  # Cache: (buffer_size, device_hash) -> list[Value]
+
+    def get_signal_buffers(self, buffer_size: int = 65536) -> list:
+        """Get or create cached signal buffers for collective operations.
+        
+        Args:
+            buffer_size: Size of the signal buffer in bytes.
+            
+        Returns:
+            list: List of MAX buffer values, one per participating device.
+        """
+        from max.dtype import DType
+        from max.graph import ops
+        from max.graph.type import BufferType
+
+        # Use id(self) as part of cache key to ensure mesh-specific buffers
+        cache_key = (buffer_size, tuple(self.device_refs))
+        if cache_key in self._signal_buffers:
+            return self._signal_buffers[cache_key]
+
+        buffers = [
+            ops.buffer_create(BufferType(DType.uint8, (buffer_size,), dev))
+            for dev in self.device_refs
+        ]
+        self._signal_buffers[cache_key] = buffers
+        return buffers
+
     @property
     def is_distributed(self) -> bool:
         """Check if mesh has unique device refs (true distributed vs simulated)."""

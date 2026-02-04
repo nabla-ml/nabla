@@ -209,18 +209,12 @@ class AllGatherOp(CollectiveOperation):
     ) -> list[TensorValue]:
         """Core gather implementation (MAX ops or simulation)."""
 
+        # 1. Distributed Execution Path
         if mesh and mesh.is_distributed:
-            from max.dtype import DType
             from max.graph.ops.allgather import allgather as max_allgather
-            from max.graph.type import BufferType
+            return max_allgather(shard_graph_values, mesh.get_signal_buffers(), axis=axis)
 
-            BUFFER_SIZE = 65536
-            signal_buffers = [
-                ops.buffer_create(BufferType(DType.uint8, (BUFFER_SIZE,), dev))
-                for dev in mesh.device_refs
-            ]
-            return max_allgather(shard_graph_values, signal_buffers, axis=axis)
-
+        # 2. CPU Simulation Path (Local execution)
         if mesh is None or (sharded_axis_name is None and len(mesh.axis_names) <= 1):
             if len(shard_graph_values) <= 1:
                 return (

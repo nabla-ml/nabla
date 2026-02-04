@@ -100,9 +100,7 @@ class AllToAllOp(CollectiveOperation):
         split_axis = kwargs.get("split_axis", 0)
         concat_axis = kwargs.get("concat_axis", 0)
 
-        # Calculate physical axes
-        phys_split_axis = self._get_physical_axis(sharded_tensor, split_axis)
-        phys_concat_axis = self._get_physical_axis(sharded_tensor, concat_axis)
+        # 1. Derive Metadata
         mesh = self._derive_mesh(sharded_tensor, kwargs)
 
         # Calculate physical axes
@@ -146,10 +144,6 @@ class AllToAllOp(CollectiveOperation):
         if num_devices <= 1:
             return shard_graph_values
 
-        print(
-            f"[DEBUG A2A logic] num_devices={num_devices}, shard_vals_len={len(shard_graph_values)}"
-        )
-
         chunks_per_device = []
         for val in shard_graph_values:
             shape = val.type.shape
@@ -161,33 +155,23 @@ class AllToAllOp(CollectiveOperation):
                     f"Split axis size {axis_size} not divisible by {num_devices} devices"
                 )
 
-            chunks = []
-            for i in range(num_devices):
-                slices = [slice(None)] * len(shape)
-                slices[split_axis] = slice(i * chunk_size, (i + 1) * chunk_size)
-                chunks.append(val[tuple(slices)])
-
+            # Split each shard into chunks for every destination device
+            chunks = [val[tuple(slice(i*chunk_size, (i+1)*chunk_size) if d == split_axis else slice(None) 
+                      for d in range(len(shape)))] for i in range(num_devices)]
             chunks_per_device.append(chunks)
 
-        received_per_device = []
+        # Transpose communication: send chunks to their respective devices
+        results = []
         for dst in range(num_devices):
             received = []
             for src in range(num_devices):
                 chunk = chunks_per_device[src][dst]
-
                 if mesh and mesh.is_distributed:
                     chunk = ops.transfer_to(chunk, mesh.device_refs[dst])
-
                 received.append(chunk)
-            received_per_device.append(received)
-
-        results = []
-        for dst in range(num_devices):
-            if tiled:
-                concatenated = ops.concat(received_per_device[dst], axis=concat_axis)
-            else:
-                concatenated = ops.stack(received_per_device[dst], axis=concat_axis)
-            results.append(concatenated)
+            
+            # Reassemble on destination
+            results.append(ops.concat(received, axis=concat_axis) if tiled else ops.stack(received, axis=concat_axis))
 
         return results
 

@@ -231,6 +231,47 @@ class ShardOp(Operation):
     def _simulate_shard_execution(self, x, global_shape, spec, mesh):
         """Execute sharding manually for all devices (simulation)."""
         num_shards = len(mesh.devices)
+
+        # OPTIMIZATION 1: Use native distributed broadcast for replication
+        if mesh.is_distributed and spec.is_fully_replicated() and num_shards > 1:
+            from max.graph.ops import distributed_broadcast
+
+            # Ensure root is on the first device of the mesh
+            root_device = mesh.device_refs[0]
+            root_val = x
+            if hasattr(x, "type") and x.type.device != root_device:
+                root_val = ops.transfer_to(x, root_device)
+
+            signal_buffers = mesh.get_signal_buffers()
+            return distributed_broadcast(root_val, signal_buffers)
+
+        # OPTIMIZATION 2: Use shard_and_stack for simple 1D distributed sharding
+        if mesh.is_distributed and num_shards > 1:
+            sharded_dims = [d for d, s in enumerate(spec.dim_specs) if s.axes]
+            if len(sharded_dims) == 1:
+                sharded_dim = sharded_dims[0]
+                dim_spec = spec.dim_specs[sharded_dim]
+
+                # Check if this dimension is sharded across the entire mesh
+                axis_factor = 1
+                for ax in dim_spec.axes:
+                    axis_factor *= mesh.get_axis_size(ax)
+
+                if (
+                    axis_factor == num_shards
+                    and int(global_shape[sharded_dim]) % num_shards == 0
+                ):
+                    from max.graph.ops import shard_and_stack
+
+                    # shard_and_stack handles the communication efficiently
+                    # We pass [x] as a list of one tensor, which returns [1, ...] shapes
+                    stacked_shards = shard_and_stack(
+                        [x], mesh.device_refs, axis=sharded_dim
+                    )
+
+                    # Remove the extra stack dimension (size 1) on each device
+                    return [ops.squeeze(s, axis=0) for s in stacked_shards]
+
         shard_graph_values = []
         for shard_idx in range(num_shards):
             val = self._slice_for_device(x, global_shape, spec, shard_idx, mesh)
@@ -430,3 +471,28 @@ def shard(
         replicated_axes=replicated_axes,
         **kwargs,
     )
+
+
+def broadcast(x, mesh: DeviceMesh = None, root: int = 0):
+    """Replicate a tensor across all devices in a mesh (Collective).
+
+    If the tensor is already sharded, this will perform the necessary
+    AllGather operations to replicate it.
+    """
+    from ...core import Tensor
+    from ...core.sharding.spec import DimSpec
+
+    if mesh is None and isinstance(x, Tensor) and x.sharding:
+        mesh = x.sharding.mesh
+
+    if mesh is None:
+        from ...core.sharding import spmd
+
+        mesh = spmd.get_mesh_from_args((x,))
+
+    if mesh is None:
+        return x
+
+    # Define a fully replicated spec for the tensor's shape
+    dim_specs = [DimSpec([]) for _ in range(len(x.shape))]
+    return shard(x, mesh, dim_specs)

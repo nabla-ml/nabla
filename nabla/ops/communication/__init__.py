@@ -18,7 +18,7 @@ from .base import CollectiveOperation
 from .p_permute import PPermuteOp, ppermute, ppermute_op
 from .reduce_scatter import ReduceScatterOp, reduce_scatter, reduce_scatter_op
 from .reshard import reshard
-from .shard import ShardOp, shard, shard_op
+from .shard import ShardOp, broadcast, shard, shard_op
 from .transfer import TransferOp, to_device, cpu, gpu, accelerator
 
 __all__ = [
