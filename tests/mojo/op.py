@@ -12,21 +12,14 @@ if TYPE_CHECKING:
     from nabla.core import Tensor
 
 class AddOneCustomOp(UnaryOperation):
-    @property
-    def name(self) -> str:
-        return "add_one_custom"
+    name = "my_kernel"
 
     def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
         """Invokes the custom Mojo kernel."""
         # Path relative to this file: ./kernels/
         kernel_dir = Path(__file__).parent / "kernels"
 
-        return call_custom_kernel(
-            func_name="add_one_custom",
-            kernel_path=kernel_dir,
-            values=x,
-            out_types=x.type,
-        )
+        return call_custom_kernel("my_kernel", kernel_dir, x, x.type)
 
 def add_one_custom(x: "Tensor") -> "Tensor":
     """Custom op that adds one to each element using a Mojo kernel."""

@@ -9,8 +9,8 @@ from tensor import InputTensor, OutputTensor, foreach
 from utils.index import IndexList
 
 
-@compiler.register("add_one_custom")
-struct AddOneCustom:
+@compiler.register("my_kernel")
+struct MyKernel:
     @staticmethod
     def execute[
         target: StaticString
@@ -20,9 +20,7 @@ struct AddOneCustom:
         ctx: DeviceContextPtr,
     ):
         @parameter
-        fn elementwise_add_one[
-            width: Int
-        ](idx: IndexList[x.rank]) -> SIMD[x.dtype, width]:
+        fn add_one[width: Int](idx: IndexList[x.rank]) -> SIMD[x.dtype, width]:
             return x.load[width](idx) + 1
 
-        foreach[elementwise_add_one, target=target](output, ctx)
+        foreach[add_one, target=target](output, ctx)
