@@ -262,3 +262,15 @@ def accelerator(x: Tensor, device_id: int = 0) -> Tensor:
     from max.driver import Accelerator
 
     return to_device(x, Accelerator(device_id))
+
+
+transfer_to = to_device
+
+__all__ = [
+    "TransferOp",
+    "to_device",
+    "transfer_to",
+    "cpu",
+    "gpu",
+    "accelerator",
+]

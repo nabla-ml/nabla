@@ -70,6 +70,33 @@ OPS["min"] = Operation(
     standard_get_args,
 )
 
+OPS["argmax"] = Operation(
+    "argmax",
+    "REDUCTION",
+    nb.argmax,
+    jnp.argmax,
+    [OpConfig("Argmax", ranks=(2,), params={"axis": 0})],
+    standard_get_args,
+)
+
+OPS["argmin"] = Operation(
+    "argmin",
+    "REDUCTION",
+    nb.argmin,
+    jnp.argmin,
+    [OpConfig("Argmin", ranks=(2,), params={"axis": 0})],
+    standard_get_args,
+)
+
+OPS["cumsum"] = Operation(
+    "cumsum",
+    "REDUCTION",
+    nb.cumsum,
+    jnp.cumsum,
+    [OpConfig("Cumsum", ranks=(2,), params={"axis": 0})],
+    standard_get_args,
+)
+
 
 @pytest.mark.parametrize("op_name", OPS.keys())
 @pytest.mark.parametrize("config_idx", [0, 1, 2])
@@ -169,6 +196,9 @@ REDUCTION_OPS = {
     "mean": (nb.mean, jnp.mean),
     "max": (nb.reduce_max, jnp.max),
     "min": (nb.reduce_min, jnp.min),
+    "argmax": (nb.argmax, jnp.argmax),
+    "argmin": (nb.argmin, jnp.argmin),
+    "cumsum": (nb.cumsum, jnp.cumsum),
 }
 
 # Minimal configs for cross-shard tests (fast execution)

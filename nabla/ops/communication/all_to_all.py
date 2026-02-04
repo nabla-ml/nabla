@@ -175,7 +175,7 @@ class AllToAllOp(CollectiveOperation):
 
         return results
 
-    def _compute_output_spec(self, input_tensor, results, **kwargs):
+    def _compute_output_spec(self, input_tensor, results, input_sharding=None, **kwargs):
         """Output sharding: Swap sharding from split_axis to concat_axis is implied?
         Actually:
         Input sharded on concat_axis (usually).
@@ -189,10 +189,10 @@ class AllToAllOp(CollectiveOperation):
         """
         from ...core.sharding.spec import DimSpec, ShardingSpec
 
-        mesh = input_tensor.sharding.mesh if input_tensor.sharding else None
-        input_spec = input_tensor.sharding
+        input_sharding = input_sharding or input_tensor.sharding
+        mesh = input_sharding.mesh if input_sharding else None
 
-        if mesh and input_spec:
+        if mesh and input_sharding:
             split_axis = kwargs.get("split_axis", 0)
             concat_axis = kwargs.get("concat_axis", 0)
 
@@ -201,7 +201,7 @@ class AllToAllOp(CollectiveOperation):
 
             new_dim_specs = [
                 DimSpec(list(ds.axes), is_open=ds.is_open)
-                for ds in input_spec.dim_specs
+                for ds in input_sharding.dim_specs
             ]
 
             # If sharding mismatch, just return None or raise. AllToAll assumes valid input spec.

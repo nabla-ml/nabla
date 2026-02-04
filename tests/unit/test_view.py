@@ -8,7 +8,8 @@ import jax.numpy as jnp
 import pytest
 
 import nabla as nb
-from nabla.ops.view import slice_tensor
+import nabla as nb
+from nabla.ops.view import slice_tensor, pad, as_interleaved_complex, view_as_real_interleaved
 
 from .common import (
     OpConfig,
@@ -63,6 +64,23 @@ OPS["reshape"] = Operation(
         ),
     ],
     get_reshape_args,
+)
+
+OPS["flatten"] = Operation(
+    "flatten",
+    "VIEW",
+    nb.flatten,
+    lambda x, start_dim=0, end_dim=-1: jnp.reshape(
+        x,
+        x.shape[:start_dim]
+        + (-1,)
+        + (x.shape[end_dim + 1 :] if end_dim != -1 else ()),
+    ),
+    [
+        OpConfig("Flatten_All", ranks=(3,)),
+        OpConfig("Flatten_1_2", ranks=(4,), params={"start_dim": 1, "end_dim": 2}),
+    ],
+    standard_get_args,
 )
 
 OPS["squeeze"] = Operation(
@@ -142,6 +160,29 @@ OPS["moveaxis"] = Operation(
     standard_get_args,
 )
 
+OPS["rebind"] = Operation(
+    "rebind",
+    "VIEW",
+    nb.rebind,
+    lambda x, shape: x,  # JAX identity essentially for shape rebind
+    [
+        OpConfig("Rebind_Same", ranks=(2,), params={"shape": (2, 4)}, primal_shapes=((2, 4),), supports_vmap=False),
+    ],
+    standard_get_args,
+)
+
+OPS["pad"] = Operation(
+    "pad",
+    "VIEW",
+    nb.pad,
+    lambda x, pad_width, mode="constant", constant_values=0: jnp.pad(x, pad_width, mode=mode, constant_values=constant_values),
+    [
+        OpConfig("Pad_1D", ranks=(1,), params={"pad_width": ((1, 1),)}),
+        OpConfig("Pad_2D", ranks=(2,), params={"pad_width": ((1, 1), (2, 2))}),
+    ],
+    standard_get_args,
+)
+
 
 def jax_slice_tensor_wrapper(x, start, size):
     return jax.lax.dynamic_slice(x, start, size)
@@ -168,6 +209,17 @@ OPS["slice_tensor"] = Operation(
             supports_vmap=False,
             supports_sharding=False,
         ),
+    ],
+    standard_get_args,
+)
+
+OPS["complex_view"] = Operation(
+    "as_interleaved_complex",
+    "VIEW",
+    nb.as_interleaved_complex,
+    lambda x: x[..., 0] + 1j * x[..., 1],
+    [
+        OpConfig("Complex_Basic", primal_shapes=((4, 2),)),
     ],
     standard_get_args,
 )

@@ -855,3 +855,99 @@ class ShapeOp(Operation):
             )
 
         return (shard_results, None, mesh)
+
+
+class CreationOperation(Operation):
+    """Base for operations that create new tensors (e.g. zeros, ones, random).
+
+    Creation operations don't follow the standard element-wise sharding;
+    instead, they generate data directly on each shard.
+    """
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
+        """Infer physical shapes for creation operations."""
+        from ..core.sharding import spmd, spec
+
+        shape = kwargs.get("shape")
+        if shape is None and len(args) > 0:
+            if self.name == "constant":
+                # For constant(value), the shape comes from the value itself
+                value = args[0]
+                import numpy as np
+                if isinstance(value, (list, tuple, np.ndarray)):
+                    shape = np.shape(value)
+                else:
+                    shape = ()
+            else:
+                shape = args[0]
+
+        dtype = kwargs.get("dtype")
+        if dtype is None and len(args) > 1:
+            dtype = args[1]
+
+        device = kwargs.get("device")
+        if device is None and len(args) > 2:
+            device = args[2]
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        if shape is None:
+            raise RuntimeError(f"{self.name} requires a shape")
+        else:
+            shapes = []
+            if output_sharding and mesh:
+                for i in range(num_shards):
+                    local = spec.compute_local_shape(shape, output_sharding, device_id=i)
+                    shapes.append(tuple(int(d) for d in local))
+            else:
+                shapes = [tuple(int(d) for d in shape)] * num_shards
+
+        dtypes = [dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.device_refs]
+            else:
+                devices = [mesh.device_refs[0]] * num_shards
+        else:
+            devices = [device] * num_shards
+
+        return shapes, dtypes, devices
+
+    def execute(self, args: tuple, kwargs: dict) -> Any:
+        """Physical execution for CreationOperation.
+
+        Creation ops don't pull from input shards - they create new ones.
+        If it's a random operation, we generate independent samples on each shard.
+        Otherwise, if it's constant-based, we can generate once or per-shard.
+        """
+        from ..core import GRAPH
+        from ..core.sharding import spmd
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        with GRAPH.graph:
+            if "random" in self.__class__.__module__ or self.name in (
+                "uniform",
+                "gaussian",
+            ):
+                # Random ops must be called per-shard to get different seeds/states
+                shard_results = [self.kernel(*args, **kwargs) for _ in range(num_shards)]
+            else:
+                # Deterministic creation: call once and replicate results (MAX handles broadcast if needed)
+                result = self.kernel(*args, **kwargs)
+                shard_results = [result] * num_shards
+
+        # Infer output sharding (which was computed during adapt_and_reshard)
+        output_sharding, _, _ = spmd.infer_output_sharding(
+            self, args, mesh, kwargs or {}
+        )
+
+        return (shard_results, output_sharding, mesh)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        # Creation ops usually have no differentiable inputs
+        return tuple(None for _ in range(len(primals)))

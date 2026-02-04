@@ -146,6 +146,15 @@ class LogicalNotOp(ComparisonUnaryOp):
         return (None,)
 
 
+class LogicalXorOp(ComparisonOp):
+    @property
+    def name(self) -> str:
+        return "logical_xor"
+
+    def kernel(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
+        return ops.logical_xor(args[0], args[1])
+
+
 equal = EqualOp()
 not_equal = NotEqualOp()
 greater = GreaterOp()
@@ -155,6 +164,7 @@ less_equal = LessEqualOp()
 logical_and = LogicalAndOp()
 logical_or = LogicalOrOp()
 logical_not = LogicalNotOp()
+logical_xor = LogicalXorOp()
 
 __all__ = [
     "equal",
@@ -166,4 +176,5 @@ __all__ = [
     "logical_and",
     "logical_or",
     "logical_not",
+    "logical_xor",
 ]

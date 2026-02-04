@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
-from .base import Operation, ReduceOperation
+from .base import AxisOp, Operation, ReduceOperation
 
 if TYPE_CHECKING:
     from ..core.tensor import Tensor
@@ -716,6 +716,210 @@ def reduce_min_physical(x: Tensor, axis: int, keepdims: bool = False) -> Tensor:
     if not keepdims:
         result = _squeeze_physical_op(result, axis=axis)
     return result
+
+
+
+class ArgmaxOp(AxisOp):
+    """Indices of the maximum value along an axis."""
+
+    @property
+    def name(self) -> str:
+        return "argmax"
+
+    def kernel(self, x: TensorValue, *, axis: int) -> TensorValue:
+        rank = len(x.shape)
+        if axis < 0:
+            axis += rank
+        
+        if axis != rank - 1:
+            perm = list(range(rank))
+            perm[axis], perm[-1] = perm[-1], perm[axis]
+            x = ops.permute(x, tuple(perm))
+            # After swapping, the dimension to reduce is at -1
+            res = ops.argmax(x, axis=-1)
+            return ops.squeeze(res, -1)
+            
+        res = ops.argmax(x, axis=axis)
+        return ops.squeeze(res, axis)
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
+        from max.dtype import DType
+        from ..core.sharding import spmd
+
+        x = args[0]
+        axis = kwargs.get("axis", -1)
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        shapes = []
+        for i in range(num_shards):
+            idx = i if i < x.num_shards else 0
+            s = x.physical_local_shape(idx)
+            if s is None:
+                raise RuntimeError("Could not determine physical shape")
+            in_shape = tuple(int(d) for d in s)
+            norm_axis = axis if axis >= 0 else len(in_shape) + axis
+            out_shape = tuple(d for i, d in enumerate(in_shape) if i != norm_axis)
+            shapes.append(out_shape)
+
+        return shapes, [DType.int64] * num_shards, [x.device] * num_shards
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        return (None,)
+
+    def infer_output_shape(
+        self, input_shapes: list[tuple[int, ...]], **kwargs: Any
+    ) -> tuple[int, ...]:
+        axis = kwargs.get("axis", -1)
+        in_shape = input_shapes[0]
+        if axis < 0:
+            axis = len(in_shape) + axis
+        return tuple(d for i, d in enumerate(in_shape) if i != axis)
+
+
+class ArgminOp(AxisOp):
+    """Indices of the minimum value along an axis."""
+
+    @property
+    def name(self) -> str:
+        return "argmin"
+
+    def kernel(self, x: TensorValue, *, axis: int) -> TensorValue:
+        rank = len(x.shape)
+        if axis < 0:
+            axis += rank
+        
+        if axis != rank - 1:
+            perm = list(range(rank))
+            perm[axis], perm[-1] = perm[-1], perm[axis]
+            x = ops.permute(x, tuple(perm))
+            return ops.squeeze(ops.argmin(x, axis=-1), -1)
+
+        return ops.squeeze(ops.argmin(x, axis=axis), axis)
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
+        from max.dtype import DType
+        from ..core.sharding import spmd
+
+        x = args[0]
+        axis = kwargs.get("axis", -1)
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        shapes = []
+        for i in range(num_shards):
+            idx = i if i < x.num_shards else 0
+            s = x.physical_local_shape(idx)
+            if s is None:
+                raise RuntimeError("Could not determine physical shape")
+            in_shape = tuple(int(d) for d in s)
+            norm_axis = axis if axis >= 0 else len(in_shape) + axis
+            out_shape = tuple(d for i, d in enumerate(in_shape) if i != norm_axis)
+            shapes.append(out_shape)
+
+        return shapes, [DType.int64] * num_shards, [x.device] * num_shards
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        return (None,)
+
+    def infer_output_shape(
+        self, input_shapes: list[tuple[int, ...]], **kwargs: Any
+    ) -> tuple[int, ...]:
+        axis = kwargs.get("axis", -1)
+        in_shape = input_shapes[0]
+        if axis < 0:
+            axis = len(in_shape) + axis
+        return tuple(d for i, d in enumerate(in_shape) if i != axis)
+
+
+class CumsumOp(AxisOp):
+    """Cumulative sum along an axis."""
+
+    @property
+    def name(self) -> str:
+        return "cumsum"
+
+    def kernel(
+        self, x: TensorValue, *, axis: int, exclusive: bool = False, reverse: bool = False
+    ) -> TensorValue:
+        return ops.cumsum(x, axis=axis, exclusive=exclusive, reverse=reverse)
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
+        x = args[0]
+        shapes = []
+        for i in range(x.num_shards):
+            shapes.append(tuple(int(d) for d in x.physical_local_shape(i)))
+        return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP: flip(cumsum(flip(cotangent, axis), axis), axis)."""
+        axis = output.op_kwargs.get("axis", -1)
+
+        from ..ops.view.axes import flip
+
+        return flip(cumsum(flip(cotangent, axis=axis), axis=axis), axis=axis)
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP: cumsum(tangent, axis)."""
+        axis = output.op_kwargs.get("axis", -1)
+        return cumsum(tangents, axis=axis)
+
+    def sharding_rule(
+        self,
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        **kwargs: Any,
+    ) -> Any:
+        # Cumsum is elementwise identity in terms of rank/factors
+        from ..core.sharding.propagation import OpShardingRuleTemplate
+
+        rank = len(input_shapes[0])
+        mapping = {i: [f"d{i}"] for i in range(rank)}
+        return OpShardingRuleTemplate([mapping], [mapping]).instantiate(
+            input_shapes, output_shapes
+        )
+
+    def infer_output_shape(
+        self, input_shapes: list[tuple[int, ...]], **kwargs: Any
+    ) -> tuple[int, ...]:
+        return input_shapes[0]
+
+
+_argmax_op = ArgmaxOp()
+_argmin_op = ArgminOp()
+_cumsum_op = CumsumOp()
+
+
+def argmax(x: Tensor, axis: int = -1, keepdims: bool = False) -> Tensor:
+    from .view import squeeze
+
+    res = _argmax_op(x, axis=axis)
+    if keepdims:
+        from .view import unsqueeze
+
+        res = unsqueeze(res, axis=axis)
+    return res
+
+
+def argmin(x: Tensor, axis: int = -1, keepdims: bool = False) -> Tensor:
+    res = _argmin_op(x, axis=axis)
+    if keepdims:
+        from .view import unsqueeze
+
+        res = unsqueeze(res, axis=axis)
+    return res
+
+
+def cumsum(
+    x: Tensor, axis: int = -1, exclusive: bool = False, reverse: bool = False
+) -> Tensor:
+    return _cumsum_op(x, axis=axis, exclusive=exclusive, reverse=reverse)
 
 
 __all__ = [

@@ -328,15 +328,172 @@ div = DivOp()
 matmul = MatmulOp()
 
 
+class ModOp(BinaryOperation):
+    """Elementwise modulus (remainder)."""
+
+    @property
+    def name(self) -> str:
+        return "mod"
+
+    def kernel(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
+        return ops.mod(args[0], args[1])
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP: (cotangent, -cotangent * floor(lhs / rhs))."""
+        lhs, rhs = primals
+        from ..ops.unary import floor, neg
+        from . import div, mul
+
+        grad_lhs = cotangent
+        grad_rhs = neg(mul(cotangent, floor(div(lhs, rhs))))
+        return (grad_lhs, grad_rhs)
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP: tangent_lhs - tangent_rhs * floor(lhs / rhs)."""
+        lhs, rhs = primals
+        tl, tr = tangents
+        from ..ops.unary import floor
+        from . import div, mul, sub
+
+        return sub(tl, mul(tr, floor(div(lhs, rhs))))
+
+
+class PowOp(BinaryOperation):
+    """Elementwise exponentiation: lhs ^ rhs."""
+
+    @property
+    def name(self) -> str:
+        return "pow"
+
+    def kernel(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
+        return ops.pow(args[0], args[1])
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP: (cotangent * rhs * lhs^(rhs-1), cotangent * output * log(lhs))."""
+        lhs, rhs = primals
+        from ..ops.unary import log
+        from . import mul, pow, sub
+
+        grad_lhs = mul(cotangent, mul(rhs, pow(lhs, sub(rhs, 1.0))))
+        grad_rhs = mul(cotangent, mul(output, log(lhs)))
+        return (grad_lhs, grad_rhs)
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP: rhs * lhs^(rhs-1) * tangent_lhs + output * log(lhs) * tangent_rhs."""
+        lhs, rhs = primals
+        tl, tr = tangents
+        from ..ops.unary import log
+        from . import add, mul, pow, sub
+
+        term1 = mul(rhs, mul(pow(lhs, sub(rhs, 1.0)), tl))
+        term2 = mul(output, mul(log(lhs), tr))
+        return add(term1, term2)
+
+
+class OuterOp(BinaryOperation):
+    """Outer product of two vectors."""
+
+    @property
+    def name(self) -> str:
+        return "outer"
+
+    def kernel(self, *args: TensorValue, **kwargs: Any) -> TensorValue:
+        x, y = args
+        if len(x.shape) > 1 or len(y.shape) > 1:
+            # Handle vmapped case: x is (B, N), y is (B, M) -> output (B, N, M)
+            # We want x.unsqueeze(-1) * y.unsqueeze(-2)
+            x_up = ops.unsqueeze(x, axis=-1)
+            y_up = ops.unsqueeze(y, axis=-2)
+            return ops.mul(x_up, y_up)
+        return ops.outer(x, y)
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
+        lhs, rhs = args
+        num_shards = max(lhs.num_shards, rhs.num_shards)
+        shapes = []
+        for i in range(num_shards):
+            idx_l = i if i < lhs.num_shards else 0
+            idx_r = i if i < rhs.num_shards else 0
+            sl = lhs.physical_local_shape(idx_l)
+            sr = rhs.physical_local_shape(idx_r)
+            
+            # Use global shape if local is missing (replicated fallback)
+            if sl is None:
+                sl = lhs.physical_global_shape or lhs.shape
+            if sr is None:
+                sr = rhs.physical_global_shape or rhs.shape
+                
+            prefix = tuple(int(d) for d in sl[:-1])
+            shapes.append(prefix + (int(sl[-1]), int(sr[-1])))
+        return shapes, [lhs.dtype] * num_shards, [lhs.device] * num_shards
+
+    def infer_output_shape(
+        self, input_shapes: list[tuple[int, ...]], **kwargs: Any
+    ) -> tuple[int, ...]:
+        lhs, rhs = input_shapes
+        prefix = lhs[:-1]
+        return prefix + (lhs[-1], rhs[-1])
+
+    def sharding_rule(
+        self,
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        **kwargs: Any,
+    ) -> Any:
+        from ..core.sharding.propagation import OpShardingRuleTemplate
+
+        rank_l = len(input_shapes[0])
+        rank_r = len(input_shapes[1])
+        prefix_rank = rank_l - 1
+        prefix_factors = [f"p{i}" for i in range(prefix_rank)]
+        in_l = prefix_factors + ["i"]
+        in_r = prefix_factors + ["j"]
+        out = prefix_factors + ["i", "j"]
+
+        in_mapping_l = {i: [in_l[i]] for i in range(rank_l)}
+        in_mapping_r = {i: [in_r[i]] for i in range(rank_r)}
+        out_mapping = {i: [out[i]] for i in range(len(out))}
+
+        return OpShardingRuleTemplate(
+            [in_mapping_l, in_mapping_r], [out_mapping]
+        ).instantiate(input_shapes, output_shapes)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP: (matmul(cotangent, rhs), matmul(transpose(cotangent), lhs))."""
+        lhs, rhs = primals
+        from ..ops.view.axes import swap_axes
+        from . import matmul
+
+        # cotangent shape: (M, N), rhs shape: (N,)
+        # grad_lhs = cotangent @ rhs -> (M,)
+        # grad_rhs = cotangent.T @ lhs -> (N,)
+        grad_lhs = matmul(cotangent, rhs)
+        grad_rhs = matmul(swap_axes(cotangent, -2, -1), lhs)
+        return (grad_lhs, grad_rhs)
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP: outer(tangent_lhs, rhs) + outer(lhs, tangent_rhs)."""
+        lhs, rhs = primals
+        tl, tr = tangents
+        from . import add
+
+        return add(outer(tl, rhs), outer(lhs, tr))
+
+
+mod = ModOp()
+pow = PowOp()
+outer = OuterOp()
+
+
 __all__ = [
-    "AddOp",
-    "MulOp",
-    "SubOp",
-    "DivOp",
-    "MatmulOp",
     "add",
     "mul",
     "sub",
     "div",
     "matmul",
+    "mod",
+    "pow",
+    "outer",
 ]

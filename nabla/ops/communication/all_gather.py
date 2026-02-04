@@ -117,9 +117,10 @@ class AllGatherOp(CollectiveOperation):
         # CollectiveOperation.infer_sharding_spec handles the logic now that we implemented _compute_output_spec
         return super().infer_sharding_spec(args, mesh, kwargs)
 
-    def _compute_output_spec(self, input_tensor, results, **kwargs):
+    def _compute_output_spec(self, input_tensor, results, input_sharding=None, **kwargs):
         """Compute output sharding spec for AllGather."""
-        if not input_tensor.sharding:
+        input_sharding = input_sharding or input_tensor.sharding
+        if not input_sharding:
             return None
 
         # Helper handles logical->physical mapping including vmap batch dims
@@ -131,12 +132,12 @@ class AllGatherOp(CollectiveOperation):
 
         from ...core.sharding.spec import DimSpec, ShardingSpec
 
-        new_dim_specs = list(input_tensor.sharding.dim_specs)
+        new_dim_specs = list(input_sharding.dim_specs)
 
         if physical_axis is not None and 0 <= physical_axis < len(new_dim_specs):
             new_dim_specs[physical_axis] = DimSpec([])  # Replicated
 
-        return ShardingSpec(input_tensor.sharding.mesh, new_dim_specs)
+        return ShardingSpec(input_sharding.mesh, new_dim_specs)
 
     def execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
         """Gather shards along an axis to produce replicated full tensors (Physical).

@@ -331,6 +331,468 @@ sqrt = SqrtOp()
 _softmax_native = _SoftmaxNativeOp()
 
 
+class AcosOp(UnaryOperation):
+    """Arccosine: acos(x)."""
+
+    @property
+    def name(self) -> str:
+        return "acos"
+
+    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+        return ops.acos(x)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP: -cotangent / sqrt(1 - x^2)."""
+        x = primals
+        from . import neg, sqrt
+        from ..ops.binary import div, mul, sub
+
+        return neg(div(cotangent, sqrt(sub(1.0, mul(x, x)))))
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP: -tangent / sqrt(1 - x^2)."""
+        x = primals
+        t = tangents
+        from . import neg, sqrt
+        from ..ops.binary import div, mul, sub
+
+        return neg(div(t, sqrt(sub(1.0, mul(x, x)))))
+
+
+class AtanhOp(UnaryOperation):
+    """Inverse hyperbolic tangent: atanh(x)."""
+
+    @property
+    def name(self) -> str:
+        return "atanh"
+
+    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+        return ops.atanh(x)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP: cotangent / (1 - x^2)."""
+        x = primals
+        from ..ops.binary import div, mul, sub
+
+        return div(cotangent, sub(1.0, mul(x, x)))
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP: tangent / (1 - x^2)."""
+        x = primals
+        t = tangents
+        from ..ops.binary import div, mul, sub
+
+        return div(t, sub(1.0, mul(x, x)))
+
+
+class CosOp(UnaryOperation):
+    """Cosine: cos(x)."""
+
+    @property
+    def name(self) -> str:
+        return "cos"
+
+    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+        return ops.cos(x)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP: -cotangent * sin(x)."""
+        x = primals
+        from . import neg, sin
+        from ..ops.binary import mul
+
+        return neg(mul(cotangent, sin(x)))
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP: -tangent * sin(x)."""
+        x = primals
+        t = tangents
+        from . import neg, sin
+        from ..ops.binary import mul
+
+        return neg(mul(t, sin(x)))
+
+
+class ErfOp(UnaryOperation):
+    """Error function: erf(x)."""
+
+    @property
+    def name(self) -> str:
+        return "erf"
+
+    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+        return ops.erf(x)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP: cotangent * (2 / sqrt(pi)) * exp(-x^2)."""
+        x = primals
+        import math
+
+        from . import exp, neg
+        from ..ops.binary import mul
+
+        factor = 2.0 / math.sqrt(math.pi)
+        return mul(cotangent, mul(factor, exp(neg(mul(x, x)))))
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP: tangent * (2 / sqrt(pi)) * exp(-x^2)."""
+        x = primals
+        t = tangents
+        import math
+
+        from . import exp, neg
+        from ..ops.binary import mul
+
+        factor = 2.0 / math.sqrt(math.pi)
+        return mul(t, mul(factor, exp(neg(mul(x, x)))))
+
+
+class FloorOp(UnaryOperation):
+    """Floor (round down): floor(x)."""
+
+    @property
+    def name(self) -> str:
+        return "floor"
+
+    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+        return ops.floor(x)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        from ..ops.creation import zeros_like
+
+        return (zeros_like(cotangent),)
+
+
+class IsInfOp(UnaryOperation):
+    """Check for infinity: is_inf(x)."""
+
+    @property
+    def name(self) -> str:
+        return "is_inf"
+
+    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+        return ops.is_inf(x)
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
+        from max.dtype import DType
+
+        shapes, _, devices = super().compute_physical_shape(
+            args, kwargs, output_sharding
+        )
+        return shapes, [DType.bool] * len(shapes), devices
+
+
+class IsNanOp(UnaryOperation):
+    """Check for NaN: is_nan(x)."""
+
+    @property
+    def name(self) -> str:
+        return "is_nan"
+
+    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+        return ops.is_nan(x)
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
+        from max.dtype import DType
+
+        shapes, _, devices = super().compute_physical_shape(
+            args, kwargs, output_sharding
+        )
+        return shapes, [DType.bool] * len(shapes), devices
+
+
+class Log1pOp(UnaryOperation):
+    """Log(1 + x): log1p(x)."""
+
+    @property
+    def name(self) -> str:
+        return "log1p"
+
+    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+        return ops.log1p(x)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP: cotangent / (1 + x)."""
+        x = primals
+        from ..ops.binary import add, div
+
+        return div(cotangent, add(1.0, x))
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP: tangent / (1 + x)."""
+        x = primals
+        t = tangents
+        from ..ops.binary import add, div
+
+        return div(t, add(1.0, x))
+
+
+class RsqrtOp(UnaryOperation):
+    """Reciprocal square root: 1 / sqrt(x)."""
+
+    @property
+    def name(self) -> str:
+        return "rsqrt"
+
+    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+        return ops.rsqrt(x)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP: -0.5 * cotangent * output^3."""
+        from ..ops.binary import mul
+
+        return mul(-0.5, mul(cotangent, mul(output, mul(output, output))))
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP: -0.5 * tangent * output^3."""
+        from ..ops.binary import mul
+
+        return mul(-0.5, mul(tangents, mul(output, mul(output, output))))
+
+
+class SiluOp(UnaryOperation):
+    """Sigmoid Linear Unit (swish): x * sigmoid(x)."""
+
+    @property
+    def name(self) -> str:
+        return "silu"
+
+    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+        return ops.silu(x)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP: cotangent * (sigmoid(x) + output * (1 - sigmoid(x)))."""
+        x = primals
+        from . import sigmoid
+        from ..ops.binary import add, mul, sub
+
+        sig_x = sigmoid(x)
+        return mul(cotangent, add(sig_x, mul(output, sub(1.0, sig_x))))
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP: tangent * (sigmoid(x) + output * (1 - sigmoid(x)))."""
+        x = primals
+        t = tangents
+        from . import sigmoid
+        from ..ops.binary import add, mul, sub
+
+        sig_x = sigmoid(x)
+        return mul(t, add(sig_x, mul(output, sub(1.0, sig_x))))
+
+
+class SinOp(UnaryOperation):
+    """Sine: sin(x)."""
+
+    @property
+    def name(self) -> str:
+        return "sin"
+
+    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+        return ops.sin(x)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP: cotangent * cos(x)."""
+        x = primals
+        from . import cos
+        from ..ops.binary import mul
+
+        return mul(cotangent, cos(x))
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP: tangent * cos(x)."""
+        x = primals
+        t = tangents
+        from . import cos
+        from ..ops.binary import mul
+
+        return mul(t, cos(x))
+
+
+class TruncOp(UnaryOperation):
+    """Truncation (round towards zero): trunc(x)."""
+
+    @property
+    def name(self) -> str:
+        return "trunc"
+
+    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+        return ops.trunc(x)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        from ..ops.creation import zeros_like
+
+        return (zeros_like(cotangent),)
+
+
+class GeluOp(UnaryOperation):
+    """Gaussian Error Linear Unit (GELU)."""
+
+    @property
+    def name(self) -> str:
+        return "gelu"
+
+    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+        approximate = kwargs.get("approximate", "none")
+        return ops.gelu(x, approximate=approximate)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP: cotangent * (0.5 * (1 + erf(x / sqrt(2))) + x * exp(-x^2 / 2) / sqrt(2 * pi))."""
+        x = primals
+        import math
+
+        from . import erf, exp, neg
+        from ..ops.binary import add, div, mul
+
+        sqrt2 = math.sqrt(2.0)
+        sqrt2pi = math.sqrt(2.0 * math.pi)
+
+        cdf = mul(0.5, add(1.0, erf(div(x, sqrt2))))
+        pdf = div(exp(neg(div(mul(x, x), 2.0))), sqrt2pi)
+
+        deriv = add(cdf, mul(x, pdf))
+        return mul(cotangent, deriv)
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP: tangent * deriv."""
+        x = primals
+        t = tangents
+        import math
+
+        from . import erf, exp, neg
+        from ..ops.binary import add, div, mul
+
+        sqrt2 = math.sqrt(2.0)
+        sqrt2pi = math.sqrt(2.0 * math.pi)
+
+        cdf = mul(0.5, add(1.0, erf(div(x, sqrt2))))
+        pdf = div(exp(neg(div(mul(x, x), 2.0))), sqrt2pi)
+
+        deriv = add(cdf, mul(x, pdf))
+        return mul(t, deriv)
+
+
+class _LogSoftmaxNativeOp(AxisOp, UnaryOperation):
+    """LogSoftmax activation function: log(exp(x) / sum(exp(x)))."""
+
+    @property
+    def name(self) -> str:
+        return "logsoftmax"
+
+    def __call__(self, x: Tensor, axis: int = -1) -> Tensor:
+        return super().__call__(x, axis=axis)
+
+    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+        axis = kwargs.get("axis", -1)
+        return ops.logsoftmax(x, axis=axis)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP: cotangent - softmax(x) * sum(cotangent, axis, keepdims=True)."""
+        from ..ops.binary import mul, sub
+        from ..ops.reduction import reduce_sum
+
+        axis = output.op_kwargs.get("axis", -1)
+        # output is logsoftmax(x), so softmax(x) is exp(output)
+        soft = exp(output)
+        sum_cot = reduce_sum(cotangent, axis=axis, keepdims=True)
+        return sub(cotangent, mul(soft, sum_cot))
+
+
+class RoundOp(UnaryOperation):
+    """Round to nearest integer: round(x)."""
+
+    @property
+    def name(self) -> str:
+        return "round"
+
+    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+        return ops.round(x)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        from ..ops.creation import zeros_like
+
+        return (zeros_like(cotangent),)
+
+
+class CastOp(UnaryOperation):
+    """Cast a tensor to a different data type."""
+
+    @property
+    def name(self) -> str:
+        return "cast"
+
+    def kernel(self, x: TensorValue, *, dtype: DType) -> TensorValue:
+        return ops.cast(x, dtype)
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
+        x = args[0]
+        dtype = kwargs.get("dtype")
+        return (
+            [x.physical_local_shape(i) for i in range(x.num_shards)],
+            [dtype] * x.num_shards,
+            [x.device] * x.num_shards,
+        )
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        # primals = (x,)
+        x = primals
+        return (cast(cotangent, dtype=x.dtype),)
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        dtype = output.op_kwargs.get("dtype")
+        return cast(tangents, dtype=dtype)
+
+
+acos = AcosOp()
+atanh = AtanhOp()
+cos = CosOp()
+erf = ErfOp()
+floor = FloorOp()
+is_inf = IsInfOp()
+is_nan = IsNanOp()
+log1p = Log1pOp()
+rsqrt = RsqrtOp()
+silu = SiluOp()
+sin = SinOp()
+trunc = TruncOp()
+gelu = GeluOp()
+round = RoundOp()
+cast = CastOp()
+_logsoftmax_native = _LogSoftmaxNativeOp()
+
+
+def logsoftmax(x: Tensor, axis: int = -1) -> Tensor:
+    """LogSoftmax implementation with sharding support."""
+    from ..ops.binary import sub
+    from ..ops.reduction import reduce_max, reduce_sum
+    from ..ops.unary import exp, log
+
+    is_axis_sharded = False
+    if x.sharding:
+        rank = len(x.shape)
+        if axis < 0:
+            axis += rank
+        phys_axis = x.batch_dims + axis
+        if phys_axis < len(x.sharding.dim_specs):
+            spec = x.sharding.dim_specs[phys_axis]
+            if spec.axes:
+                is_axis_sharded = True
+
+    if is_axis_sharded:
+        max_val = reduce_max(x, axis=axis, keepdims=True)
+        shifted = sub(x, max_val)
+        exp_val = exp(shifted)
+        sum_val = reduce_sum(exp_val, axis=axis, keepdims=True)
+        return sub(shifted, log(sum_val))
+
+    return _logsoftmax_native(x, axis=axis)
+
+
 def softmax(x: Tensor, axis: int = -1) -> Tensor:
     """A composition of existing nabla ops"""
     from ..ops.binary import div, sub
@@ -360,14 +822,6 @@ def softmax(x: Tensor, axis: int = -1) -> Tensor:
 
 
 __all__ = [
-    "ReluOp",
-    "SigmoidOp",
-    "TanhOp",
-    "ExpOp",
-    "NegOp",
-    "AbsOp",
-    "LogOp",
-    "SqrtOp",
     "relu",
     "sigmoid",
     "tanh",
@@ -376,5 +830,21 @@ __all__ = [
     "abs",
     "log",
     "sqrt",
+    "acos",
+    "atanh",
+    "cos",
+    "erf",
+    "floor",
+    "is_inf",
+    "is_nan",
+    "log1p",
+    "rsqrt",
+    "silu",
+    "sin",
+    "trunc",
+    "gelu",
+    "round",
+    "cast",
     "softmax",
+    "logsoftmax",
 ]

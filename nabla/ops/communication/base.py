@@ -86,15 +86,19 @@ class CollectiveOperation(Operation):
         input_tensor = args[0]
         input_sharding = input_tensor.sharding
 
-        # Validation: check if we should proceed (must have sharding)
+        # Validation: check if we should proceed
         if not input_sharding:
-            # If no input sharding, typically no output sharding unless op creates it.
-            # Most comm ops require input sharding.
-            return None, [None] * len(args), False
+            if mesh:
+                # If no input sharding but we have a mesh, 
+                # treat input as replicated to allow inference to proceed.
+                from ...core.sharding import spec
+                rank = len(input_tensor.physical_global_shape or input_tensor.shape)
+                input_sharding = spec.ShardingSpec(mesh, [spec.DimSpec([]) for _ in range(rank)])
+            else:
+                return None, [None] * len(args), False
 
         # Compute output sharding using the subclass logic
-        # We pass None for results locally since this is logical inference
-        output_sharding = self._compute_output_spec(input_tensor, None, **kwargs)
+        output_sharding = self._compute_output_spec(input_tensor, None, input_sharding=input_sharding, **kwargs)
 
         # Default: preserve input sharding for all args
         input_shardings = [
@@ -178,9 +182,9 @@ class CollectiveOperation(Operation):
             return True
         return False
 
-    def _compute_output_spec(self, input_tensor, results, **kwargs):
+    def _compute_output_spec(self, input_tensor, results, input_sharding=None, **kwargs):
         """Compute output sharding spec. Default: preserve input spec."""
-        return input_tensor.sharding
+        return input_sharding or input_tensor.sharding
 
     def communication_cost(
         self,

@@ -65,6 +65,30 @@ OPS["matmul"] = Operation(
     ],
     standard_get_args,
 )
+OPS["mod"] = Operation(
+    "mod",
+    "BINARY",
+    nb.mod,
+    jnp.mod,
+    [OpConfig("Rank2", ranks=(2, 2))],
+    standard_get_args,
+)
+OPS["pow"] = Operation(
+    "pow",
+    "BINARY",
+    nb.pow,
+    jnp.power,
+    [OpConfig("Rank2", ranks=(2, 2))],
+    standard_get_args,
+)
+OPS["outer"] = Operation(
+    "outer",
+    "BINARY",
+    nb.outer,
+    jnp.outer,
+    [OpConfig("Outer", primal_shapes=((4,), (4,)))],
+    standard_get_args,
+)
 
 
 @pytest.mark.parametrize("op_name", OPS.keys())

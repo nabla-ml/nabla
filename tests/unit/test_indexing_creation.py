@@ -10,6 +10,7 @@ import jax.numpy as jnp
 import pytest
 
 import nabla as nb
+from nabla import P
 
 from .common import (
     OpConfig,
@@ -89,6 +90,30 @@ OPS["arange"] = Operation(
     jnp.arange,
     [OpConfig("Range", params={"start": 0, "stop": 5})],
     get_creation_args,
+)
+OPS["hann_window"] = Operation(
+    "hann_window",
+    "CREATION",
+    nb.hann_window,
+    lambda window_length, **kwargs: jnp.hanning(window_length),  # close enough for testing
+    [OpConfig("Hann", params={"window_length": 8, "periodic": False})],
+    get_creation_args,
+)
+OPS["triu"] = Operation(
+    "triu",
+    "CREATION",
+    nb.triu,
+    jnp.triu,
+    [OpConfig("Triu", ranks=(2,), params={"k": 0})],
+    standard_get_args,
+)
+OPS["tril"] = Operation(
+    "tril",
+    "CREATION",
+    nb.tril,
+    jnp.tril,
+    [OpConfig("Tril", ranks=(2,), params={"k": 0})],
+    standard_get_args,
 )
 
 OPS["gather"] = Operation(
@@ -353,3 +378,28 @@ class TestGatherScatterRoundTrip:
 
         assert_shape(result, (8, 4))
         assert_allclose(result, expected)
+
+
+class TestRandomSharding:
+    """Test that random ops produce independent values on different shards."""
+
+    def test_uniform_sharding_independence(self, mesh_1d):
+        """Uniform on 1D mesh should have different values per shard."""
+        shape = (8,)
+        # Create a sharded uniform tensor
+        res = nb.uniform(shape, low=0.0, high=1.0)
+        res_sharded = res.shard(mesh_1d, P("dp"))
+        
+        # Realize it
+        val = res_sharded.numpy()
+        
+        # Split into shards (manually for 1D mesh)
+        mid = len(val) // 2
+        shard0 = val[:mid]
+        shard1 = val[mid:]
+        
+        # They should NOT be equal (very low probability they are exactly same)
+        assert not jnp.allclose(shard0, shard1)
+        
+        # But they should be in range
+        assert jnp.all(val >= 0.0) and jnp.all(val <= 1.0)

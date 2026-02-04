@@ -68,6 +68,64 @@ OPS["softmax"] = Operation(
     [OpConfig("Rank2_Axis-1", ranks=(2,), params={"axis": -1})],
     standard_get_args,
 )
+OPS["logsoftmax"] = Operation(
+    "logsoftmax",
+    "UNARY",
+    nb.logsoftmax,
+    jax.nn.log_softmax,
+    [OpConfig("Rank2_Axis-1", ranks=(2,), params={"axis": -1})],
+    standard_get_args,
+)
+OPS["cos"] = Operation(
+    "cos", "UNARY", nb.cos, jnp.cos, [OpConfig("Rank2", ranks=(2,))], standard_get_args
+)
+OPS["sin"] = Operation(
+    "sin", "UNARY", nb.sin, jnp.sin, [OpConfig("Rank2", ranks=(2,))], standard_get_args
+)
+OPS["acos"] = Operation(
+    "acos", "UNARY", nb.acos, jnp.acos, [OpConfig("Rank2", ranks=(2,))], standard_get_args
+)
+OPS["atanh"] = Operation(
+    "atanh", "UNARY", nb.atanh, jnp.atanh, [OpConfig("Rank2", ranks=(2,))], standard_get_args
+)
+OPS["erf"] = Operation(
+    "erf", "UNARY", nb.erf, jax.lax.erf, [OpConfig("Rank2", ranks=(2,))], standard_get_args
+)
+OPS["floor"] = Operation(
+    "floor", "UNARY", nb.floor, jnp.floor, [OpConfig("Rank2", ranks=(2,))], standard_get_args
+)
+OPS["log1p"] = Operation(
+    "log1p", "UNARY", nb.log1p, jnp.log1p, [OpConfig("Rank2", ranks=(2,))], standard_get_args
+)
+OPS["rsqrt"] = Operation(
+    "rsqrt", "UNARY", nb.rsqrt, jax.lax.rsqrt, [OpConfig("Rank2", ranks=(2,))], standard_get_args
+)
+OPS["silu"] = Operation(
+    "silu", "UNARY", nb.silu, jax.nn.silu, [OpConfig("Rank2", ranks=(2,))], standard_get_args
+)
+OPS["trunc"] = Operation(
+    "trunc", "UNARY", nb.trunc, jnp.trunc, [OpConfig("Rank2", ranks=(2,))], standard_get_args
+)
+OPS["gelu"] = Operation(
+    "gelu", "UNARY", nb.gelu, jax.nn.gelu, [OpConfig("Rank2", ranks=(2,))], standard_get_args
+)
+OPS["round"] = Operation(
+    "round", "UNARY", nb.round, jnp.round, [OpConfig("Rank2", ranks=(2,))], standard_get_args
+)
+OPS["is_inf"] = Operation(
+    "is_inf", "UNARY", nb.is_inf, jnp.isinf, [OpConfig("Rank2", ranks=(2,))], standard_get_args
+)
+OPS["is_nan"] = Operation(
+    "is_nan", "UNARY", nb.is_nan, jnp.isnan, [OpConfig("Rank2", ranks=(2,))], standard_get_args
+)
+OPS["cast"] = Operation(
+    "cast",
+    "UNARY",
+    nb.cast,
+    lambda x, dtype: x.astype(dtype.name),
+    [OpConfig("Cast_f32", ranks=(2,), params={"dtype": nb.DType.float32})],
+    standard_get_args,
+)
 
 
 @pytest.mark.parametrize("op_name", OPS.keys())

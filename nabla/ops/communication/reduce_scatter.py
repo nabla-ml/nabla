@@ -299,15 +299,15 @@ class ReduceScatterOp(CollectiveOperation):
 
         return new_results
 
-    def _compute_output_spec(self, input_tensor, results, **kwargs):
+    def _compute_output_spec(self, input_tensor, results, input_sharding=None, **kwargs):
         """Output sharding: the scatter axis becomes sharded on the scatter_axes."""
         from ...core.sharding.spec import DimSpec, ShardingSpec
 
-        mesh = input_tensor.sharding.mesh if input_tensor.sharding else None
-        input_spec = input_tensor.sharding
+        input_sharding = input_sharding or input_tensor.sharding
+        mesh = input_sharding.mesh if input_sharding else None
 
-        if mesh and input_spec:
-            rank = len(input_spec.dim_specs)
+        if mesh and input_sharding:
+            rank = len(input_sharding.dim_specs)
             new_dim_specs = []
 
             # Use only the axes that are actually being scattered across
@@ -316,8 +316,8 @@ class ReduceScatterOp(CollectiveOperation):
                 # Fallback: use the axes from the input sharding on the target dim
                 kwargs_axis = kwargs.get("axis", 0)
                 target_dim = self._get_physical_axis(input_tensor, kwargs_axis)
-                if target_dim < len(input_spec.dim_specs):
-                    scatter_axes = set(input_spec.dim_specs[target_dim].axes or [])
+                if target_dim < len(input_sharding.dim_specs):
+                    scatter_axes = set(input_sharding.dim_specs[target_dim].axes or [])
 
             # If still no scatter axes (input was replicated), scatter across ALL mesh axes
             if not scatter_axes and mesh:
@@ -328,7 +328,7 @@ class ReduceScatterOp(CollectiveOperation):
 
             for d in range(rank):
                 input_d_spec = (
-                    input_spec.dim_specs[d] if d < len(input_spec.dim_specs) else None
+                    input_sharding.dim_specs[d] if d < len(input_sharding.dim_specs) else None
                 )
 
                 if d == target_dim:

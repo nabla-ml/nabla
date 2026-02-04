@@ -11,7 +11,7 @@ import pytest
 import nabla as nb
 from nabla.core.sharding.spec import DeviceMesh, P
 from nabla.ops.communication import all_reduce, reduce_scatter, all_gather, all_to_all
-from .common import assert_allclose, tensor_from_jax, to_jax
+from .common import assert_allclose, tensor_from_jax, to_jax, make_jax_array
 
 
 class TestCommunicationRigorous:
@@ -81,4 +81,46 @@ class TestCommunicationRigorous:
         res_val = np_u[:2] + np_u[2:]
         expected = jnp.concatenate([2 * res_val, 2 * res_val])
 
+        assert_allclose(grad_u, expected)
+
+    def test_distributed_broadcast_grad(self):
+        """Test gradient of distributed_broadcast (VJP = all_reduce sum)."""
+        H = 4
+        mesh = DeviceMesh("mesh_db", (2,), ("tp",))
+
+        def f(u):
+            # Input is replicated
+            res = nb.distributed_broadcast(u, mesh=mesh)
+            # Output is still replicated (conceptually) but on many devices
+            return nb.reduce_sum(res * res)
+
+        np_u = jax.random.normal(jax.random.PRNGKey(45), (H,), dtype=jnp.float32)
+        u = tensor_from_jax(np_u)
+
+        grad_u = nb.grad(f)(u)
+
+        # distributed_broadcast(u) = u (conceptually, replicated)
+        # grad = 2 * u * num_devices (because of all_reduce sum in VJP)
+        expected = 2 * np_u * 2
+        assert_allclose(grad_u, expected)
+
+    def test_all_to_all_grad(self):
+        """Test gradient of all_to_all."""
+        H = 8
+        mesh = DeviceMesh("mesh_a2a_grad", (2,), ("tp",))
+
+        def f(u):
+            u_s = u.shard(mesh, P("tp"))
+            # u_s is (8,) sharded on tp -> [4, 4]
+            # all_to_all on axis 0: it splits axis 0 and concours axis 0?
+            # actually all_to_all(split_axis, concat_axis)
+            res = nb.all_to_all(u_s, split_axis=0, concat_axis=0)
+            return nb.reduce_sum(res * res)
+
+        np_u = jax.random.normal(jax.random.PRNGKey(46), (H,), dtype=jnp.float32)
+        u = tensor_from_jax(np_u)
+
+        grad_u = nb.grad(f)(u)
+        # all_to_all is its own VJP (roughly)
+        expected = 2 * np_u
         assert_allclose(grad_u, expected)

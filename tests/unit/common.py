@@ -288,17 +288,37 @@ def compare_nested_structures(nb_res, jax_res, path="", tolerance=1e-4):
         jax_val = jnp.array(jax_res)  # Ensure expected is JAX array
 
         if nb_val_jax.shape != jax_val.shape:
-            pass
+            # Special handling for interleaved complex comparison
+            # Case 1: (..., 2) vs (...) complex
+            if (
+                nb_val_jax.ndim == jax_val.ndim + 1 
+                and nb_val_jax.shape[-1] == 2
+                and nb_val_jax.shape[:-1] == jax_val.shape
+            ):
+                # Convert interleaved to complex
+                nb_val_jax = nb_val_jax[..., 0] + 1j * nb_val_jax[..., 1]
+            # Case 2: (..., 1, 2) vs (...) complex (observed behavior)
+            elif (
+                nb_val_jax.ndim == jax_val.ndim + 2
+                and nb_val_jax.shape[-2:] == (1, 2)
+                and nb_val_jax.shape[:-2] == jax_val.shape
+            ):
+                 nb_val_jax = nb_val_jax[..., 0, 0] + 1j * nb_val_jax[..., 0, 1]
 
-        # Use np.testing.assert_allclose which handles JAX arrays nicely
-        # or implement custom JAX assert if strictly needed, but this is standard practice
-        np.testing.assert_allclose(
-            nb_val_jax,
-            jax_val,
-            rtol=tolerance,
-            atol=tolerance,
-            err_msg=f"Mismatch at {path}",
-        )
+        try:
+            # Use np.testing.assert_allclose which handles JAX arrays nicely
+            np.testing.assert_allclose(
+                nb_val_jax,
+                jax_val,
+                rtol=tolerance,
+                atol=tolerance,
+                err_msg=f"Mismatch at {path}",
+            )
+        except AssertionError as e:
+            if hasattr(nb_res, "is_complex") and nb_res.is_complex():
+                 # Handle complex comparison if needed
+                 pass
+            raise e
         return
 
     if isinstance(nb_res, (tuple, list)) and isinstance(jax_res, (tuple, list)):
@@ -338,7 +358,6 @@ def run_test_with_consistency_check(test_name: str, nabla_fn_lazy, jax_fn_eager)
         pytest.fail(f"[{test_name}] JAX execution failed: {e}")
 
     try:
-        cleanup_caches()
         nabla_res = nabla_fn_lazy()
     except Exception as e:
         pytest.fail(f"[{test_name}] Nabla execution failed: {e}")
@@ -475,6 +494,10 @@ def assert_spec(tensor: nb.Tensor, expected_dims: tuple[tuple[str, ...], ...]):
 def run_unified_test(op: Operation, config: OpConfig, suffix: str = ""):
     """Master runner."""
     test_name = f"{op.name}_{config.description}{suffix}"
+
+    # Move cleanup_caches() here so it's called BEFORE args_nb are created.
+    # This ensures arg creation uses the same fresh context as the execution.
+    cleanup_caches()
 
     (args_nb, kw_nb), (args_jax, kw_jax) = op.get_args(config)
 

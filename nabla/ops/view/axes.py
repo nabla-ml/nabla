@@ -358,9 +358,13 @@ __all__ = [
     "MoveAxisOp",
     "UnsqueezePhysicalOp",
     "SqueezePhysicalOp",
+    "FlipOp",
+    "PermuteOp",
     "moveaxis",
     "unsqueeze_physical",
     "squeeze_physical",
+    "flip",
+    "permute",
 ]
 
 
@@ -652,3 +656,118 @@ def unsqueeze_physical(x: Tensor, axis: int = 0) -> Tensor:
 
 def squeeze_physical(x: Tensor, axis: int = 0) -> Tensor:
     return _squeeze_physical_op(x, axis=axis)
+
+
+class FlipOp(AxisOp):
+    """Flip a tensor along a specified axis."""
+
+    @property
+    def name(self) -> str:
+        return "flip"
+
+    def kernel(self, x: TensorValue, *, axis: int) -> TensorValue:
+        return ops.flip(x, axis)
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
+        x = args[0]
+        return (
+            [x.physical_local_shape(i) for i in range(x.num_shards)],
+            [x.dtype] * x.num_shards,
+            [x.device] * x.num_shards,
+        )
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        # Flip is its own inverse
+        axis = output.op_kwargs.get("axis")
+        return flip(cotangent, axis=axis)
+
+    def sharding_rule(
+        self,
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        **kwargs: Any,
+    ) -> Any:
+        # Flip is elementwise, sharding is preserved
+        from ...core.sharding.propagation import OpShardingRuleTemplate
+
+        rank = len(input_shapes[0])
+        mapping = {i: [f"d{i}"] for i in range(rank)}
+        return OpShardingRuleTemplate([mapping], [mapping]).instantiate(
+            input_shapes, output_shapes
+        )
+
+    def infer_output_shape(
+        self, input_shapes: list[tuple[int, ...]], **kwargs: Any
+    ) -> tuple[int, ...]:
+        return input_shapes[0]
+
+
+class PermuteOp(Operation):
+    """Permute the dimensions of a tensor according to a given order."""
+
+    @property
+    def name(self) -> str:
+        return "permute"
+
+    def kernel(self, x: TensorValue, *, order: tuple[int, ...]) -> TensorValue:
+        return ops.permute(x, order)
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
+        x = args[0]
+        order = kwargs.get("order")
+        shapes = []
+        for i in range(x.num_shards):
+            local_shape = x.physical_local_shape(i)
+            shapes.append(tuple(local_shape[j] for j in order))
+        return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        order = output.op_kwargs.get("order")
+        # Inverse permutation
+        inv_order = [0] * len(order)
+        for i, p in enumerate(order):
+            inv_order[p] = i
+        return permute(cotangent, order=tuple(inv_order))
+
+    def sharding_rule(
+        self,
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        **kwargs: Any,
+    ) -> Any:
+        from ...core.sharding.propagation import OpShardingRuleTemplate
+
+        order = kwargs.get("order")
+        rank = len(input_shapes[0])
+        in_factors = [f"d{i}" for i in range(rank)]
+        out_factors = [in_factors[i] for i in order]
+
+        in_mapping = {i: [in_factors[i]] for i in range(rank)}
+        out_mapping = {i: [out_factors[i]] for i in range(rank)}
+
+        return OpShardingRuleTemplate([in_mapping], [out_mapping]).instantiate(
+            input_shapes, output_shapes
+        )
+
+    def infer_output_shape(
+        self, input_shapes: list[tuple[int, ...]], **kwargs: Any
+    ) -> tuple[int, ...]:
+        in_shape = input_shapes[0]
+        order = kwargs.get("order")
+        return tuple(in_shape[i] for i in order)
+
+
+_flip_op = FlipOp()
+_permute_op = PermuteOp()
+
+
+def flip(x: Tensor, axis: int) -> Tensor:
+    return _flip_op(x, axis=axis)
+
+
+def permute(x: Tensor, order: tuple[int, ...]) -> Tensor:
+    return _permute_op(x, order=order)

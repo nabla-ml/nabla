@@ -354,6 +354,10 @@ class ReshapeOp(ShapeOp):
         return reshape(tangents, target_shape)
 
 
+
+
+
+
 class SliceUpdateOp(Operation):
     @property
     def name(self) -> str:
@@ -1072,6 +1076,142 @@ class BroadcastToPhysicalOp(Operation):
         return {**kwargs, "shape": local_shape}
 
 
+
+
+class RebindOp(Operation):
+    """Rebind a tensor to a new symbolic shape/layout."""
+
+    @property
+    def name(self) -> str:
+        return "rebind"
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
+        # rebind doesn't change physical data, just metadata
+        x = args[0]
+        return (
+            [tuple(x.physical_local_shape(i)) for i in range(x.num_shards)],
+            [x.dtype] * x.num_shards,
+            [x.device] * x.num_shards,
+        )
+
+    def kernel(self, x: TensorValue, *, shape: tuple[int, ...], **kwargs) -> TensorValue:
+        return ops.rebind(x, shape, **kwargs)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        return (cotangent,)
+
+
+class PadOp(Operation):
+    """Pad a tensor with a constant value."""
+
+    @property
+    def name(self) -> str:
+        return "pad"
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
+        x = args[0]
+        paddings = kwargs.get("paddings")  # List of (before, after)
+        
+        shapes = []
+        for i in range(x.num_shards):
+            in_local = x.physical_local_shape(i)
+            # This is complex: sharding might split the padding?
+            # MAX ops.pad usually takes global paddings if not manually split.
+            # For now, let's assume it's replicated or handles offsets.
+            # If sharded, only the boundary shards get real padding?
+            # Actually, we should probably follow a similar pattern to slice_tensor.
+            
+            out_local = []
+            for d, (before, after) in enumerate(paddings):
+                # Ensure we work with ints to avoid Dim context issues
+                sz = int(in_local[d]) if in_local is not None else 0
+                out_local.append(sz + int(before) + int(after))
+            shapes.append(tuple(out_local))
+            
+        return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
+
+    def kernel(self, x: TensorValue, *, paddings: list[tuple[int, int]], mode: str = 'constant', value: float = 0.0) -> TensorValue:
+        flat_paddings = []
+        
+        # Handle vmap rank mismatch
+        # If input has higher rank than paddings imply, prepend (0, 0) for batch dims.
+        # paddings list has N elements for N dimensions.
+        input_rank = len(x.shape)
+        paddings_rank = len(paddings)
+        if input_rank > paddings_rank:
+            extra_dims = input_rank - paddings_rank
+            for _ in range(extra_dims):
+                flat_paddings.extend([0, 0])
+        
+        for p in paddings:
+            flat_paddings.extend([int(p[0]), int(p[1])])
+            
+        return ops.pad(x, flat_paddings, mode=mode, value=value)
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        # VJP for pad is slicing back the original region
+        paddings = output.op_kwargs.get("paddings")
+        x = primals[0] if isinstance(primals, (list, tuple)) else primals
+        
+        start = [p[0] for p in paddings]
+        size = [int(d) for d in x.shape]
+        
+        from .shape import slice_tensor
+        return (slice_tensor(cotangent, start=start, size=size),)
+
+
+_reshape_op = ReshapeOp()
+_slice_tensor_op = SliceTensorOp()
+_concatenate_op = ConcatenateOp()
+_rebind_op = RebindOp()
+_pad_op = PadOp()
+_broadcast_to_physical_op = BroadcastToPhysicalOp()
+
+
+def broadcast_to_physical(x: Tensor, shape: tuple[int, ...]) -> Tensor:
+    return _broadcast_to_physical_op(x, shape=shape)
+
+
+def flatten(x: Tensor, start_dim: int = 0, end_dim: int = -1) -> Tensor:
+    """Flatten a range of dimensions into a single dimension using reshape."""
+    shape = x.shape
+    rank = len(shape)
+    if start_dim < 0: start_dim += rank
+    if end_dim < 0: end_dim += rank
+    if start_dim >= end_dim: return x
+
+    new_shape = list(shape[:start_dim])
+    flat_dim = 1
+    for i in range(start_dim, end_dim + 1):
+        # Cast to int to resolve any lazy Dim objects before arithmetic
+        flat_dim *= int(shape[i])
+    new_shape.append(flat_dim)
+    new_shape.extend(shape[end_dim + 1 :])
+
+    return reshape(x, tuple(new_shape))
+
+
+def rebind(x: Tensor, shape: tuple[int, ...], **kwargs) -> Tensor:
+    return _rebind_op(x, shape=shape, **kwargs)
+
+
+def pad(
+    x: Tensor,
+    paddings: list[tuple[int, int]] = None,
+    mode: str = "constant",
+    value: float = 0.0,
+    **kwargs,
+) -> Tensor:
+    paddings = paddings if paddings is not None else kwargs.get("pad_width")
+    if paddings is None:
+        raise ValueError("pad() requires paddings or pad_width")
+    return _pad_op(x, paddings=paddings, mode=mode, value=value)
+
+
 __all__ = [
     "broadcast_to",
     "reshape",
@@ -1081,10 +1221,7 @@ __all__ = [
     "BroadcastToPhysicalOp",
     "broadcast_to_physical",
     "SliceTensorOp",
+    "flatten",
+    "rebind",
+    "pad",
 ]
-
-_broadcast_to_physical_op = BroadcastToPhysicalOp()
-
-
-def broadcast_to_physical(x: Tensor, shape: tuple[int, ...]) -> Tensor:
-    return _broadcast_to_physical_op(x, shape=shape)

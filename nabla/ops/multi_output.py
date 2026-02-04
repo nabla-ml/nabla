@@ -501,10 +501,6 @@ minmax = MinMaxOp()
 
 
 __all__ = [
-    "SplitOp",
-    "ChunkOp",
-    "UnbindOp",
-    "MinMaxOp",
     "split",
     "chunk",
     "unbind",

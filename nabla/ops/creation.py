@@ -5,45 +5,23 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from max.driver import Device
 from max.dtype import DType
 from max.graph import DeviceRef, ShapeLike, TensorType, TensorValue, ops
 from max.graph.ops.constant import NestedArray, Number
 
 from ..core import defaults
-from .base import Operation
+from .base import CreationOperation, Operation
 
 
-class ConstantOp(Operation):
+class ConstantOp(CreationOperation):
     """Create a tensor from a constant value."""
 
     @property
     def name(self) -> str:
         return "constant"
-
-    def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
-        """Infer physical shape for constant (scalar)."""
-        from ..core.sharding import spmd
-
-        dtype = args[1] if len(args) > 1 else kwargs.get("dtype")
-
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
-
-        shapes = [()] * num_shards
-        device = args[2] if len(args) > 2 else kwargs.get("device")
-        dtypes = [dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [device] * num_shards
-
-        return shapes, dtypes, devices
 
     def kernel(
         self,
@@ -53,71 +31,16 @@ class ConstantOp(Operation):
     ) -> TensorValue:
         return ops.constant(value, dtype, device)
 
-    def execute(self, args: tuple, kwargs: dict) -> Any:
-        """Physical execution for ConstantOp.
-
-        Creation ops don't use sharding - they create new data.
-        We just call kernel once and replicate across all shards if needed.
-        """
-        from ..core import GRAPH
-        from ..core.sharding import spmd
-        from typing import Any
-
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
-
-        with GRAPH.graph:
-            result = self.kernel(*args, **kwargs)
-            shard_results = [result] * num_shards
-
-        return (shard_results, None, mesh)
-
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        # Constant has no differentiable inputs
         return (None, None, None)
 
 
-class FullOp(Operation):
+class FullOp(CreationOperation):
     """Create a tensor filled with a constant value."""
 
     @property
     def name(self) -> str:
         return "full"
-
-    def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
-        """Infer physical shapes for full."""
-        from ..core.sharding import spmd, spec
-
-        shape = args[0] if len(args) > 0 else kwargs.get("shape")
-        dtype = args[2] if len(args) > 2 else kwargs.get("dtype")
-
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
-
-        if shape is None:
-            raise RuntimeError("full requires a shape")
-
-        shapes = []
-        if output_sharding and mesh:
-            for i in range(num_shards):
-                local = spec.compute_local_shape(shape, output_sharding, device_id=i)
-                shapes.append(tuple(int(d) for d in local))
-        else:
-            shapes = [tuple(int(d) for d in shape)] * num_shards
-
-        device = args[3] if len(args) > 3 else kwargs.get("device")
-        dtypes = [dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [device] * num_shards
-
-        return shapes, dtypes, devices
 
     def kernel(
         self,
@@ -129,66 +52,13 @@ class FullOp(Operation):
         const = ops.constant(value, dtype, device)
         return ops.broadcast_to(const, shape)
 
-    def execute(self, args: tuple, kwargs: dict) -> Any:
-        """Physical execution for FullOp."""
-        from ..core import GRAPH
-        from ..core.sharding import spmd
-        from typing import Any
 
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
-
-        with GRAPH.graph:
-            result = self.kernel(*args, **kwargs)
-            shard_results = [result] * num_shards
-
-        return (shard_results, None, mesh)
-
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        return (None, None, None, None)
-
-
-class ZerosOp(Operation):
+class ZerosOp(CreationOperation):
     """Create a tensor filled with zeros."""
 
     @property
     def name(self) -> str:
         return "zeros"
-
-    def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
-        """Infer physical shapes for zeros."""
-        from ..core.sharding import spmd, spec
-
-        shape = args[0] if len(args) > 0 else kwargs.get("shape")
-        dtype = args[1] if len(args) > 1 else kwargs.get("dtype")
-
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
-
-        if shape is None:
-            raise RuntimeError("zeros requires a shape")
-
-        shapes = []
-        if output_sharding and mesh:
-            for i in range(num_shards):
-                local = spec.compute_local_shape(shape, output_sharding, device_id=i)
-                shapes.append(tuple(int(d) for d in local))
-        else:
-            shapes = [tuple(int(d) for d in shape)] * num_shards
-
-        device = args[2] if len(args) > 2 else kwargs.get("device")
-        dtypes = [dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [device] * num_shards
-
-        return shapes, dtypes, devices
 
     def kernel(
         self,
@@ -199,66 +69,13 @@ class ZerosOp(Operation):
         const = ops.constant(0, dtype, device)
         return ops.broadcast_to(const, shape)
 
-    def execute(self, args: tuple, kwargs: dict) -> Any:
-        """Physical execution for ZerosOp."""
-        from ..core import GRAPH
-        from ..core.sharding import spmd
-        from typing import Any
 
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
-
-        with GRAPH.graph:
-            result = self.kernel(*args, **kwargs)
-            shard_results = [result] * num_shards
-
-        return (shard_results, None, mesh)
-
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        return (None, None, None)
-
-
-class OnesOp(Operation):
+class OnesOp(CreationOperation):
     """Create a tensor filled with ones."""
 
     @property
     def name(self) -> str:
         return "ones"
-
-    def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
-        """Infer physical shapes for ones."""
-        from ..core.sharding import spmd, spec
-
-        shape = args[0] if len(args) > 0 else kwargs.get("shape")
-        dtype = args[1] if len(args) > 1 else kwargs.get("dtype")
-
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
-
-        if shape is None:
-            raise RuntimeError("ones requires a shape")
-
-        shapes = []
-        if output_sharding and mesh:
-            for i in range(num_shards):
-                local = spec.compute_local_shape(shape, output_sharding, device_id=i)
-                shapes.append(tuple(int(d) for d in local))
-        else:
-            shapes = [tuple(int(d) for d in shape)] * num_shards
-
-        device = args[2] if len(args) > 2 else kwargs.get("device")
-        dtypes = [dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [device] * num_shards
-
-        return shapes, dtypes, devices
 
     def kernel(
         self,
@@ -269,26 +86,8 @@ class OnesOp(Operation):
         const = ops.constant(1, dtype, device)
         return ops.broadcast_to(const, shape)
 
-    def execute(self, args: tuple, kwargs: dict) -> Any:
-        """Physical execution for OnesOp."""
-        from ..core import GRAPH
-        from ..core.sharding import spmd
-        from typing import Any
 
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
-
-        with GRAPH.graph:
-            result = self.kernel(*args, **kwargs)
-            shard_results = [result] * num_shards
-
-        return (shard_results, None, mesh)
-
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        return (None, None, None)
-
-
-class ArangeOp(Operation):
+class ArangeOp(CreationOperation):
     """Create a tensor with evenly spaced values."""
 
     @property
@@ -300,6 +99,7 @@ class ArangeOp(Operation):
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for arange (1D)."""
         import math
+
         from ..core.sharding import spmd
 
         start = args[0] if len(args) > 0 else kwargs.get("start", 0)
@@ -344,66 +144,13 @@ class ArangeOp(Operation):
     ) -> TensorValue:
         return ops.range(start, stop, step, dtype=dtype, device=device)
 
-    def execute(self, args: tuple, kwargs: dict) -> Any:
-        """Physical execution for ArangeOp."""
-        from ..core import GRAPH
-        from ..core.sharding import spmd
-        from typing import Any
 
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
-
-        with GRAPH.graph:
-            result = self.kernel(*args, **kwargs)
-            shard_results = [result] * num_shards
-
-        return (shard_results, None, mesh)
-
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        return (None, None, None, None, None)
-
-
-class UniformOp(Operation):
+class UniformOp(CreationOperation):
     """Create a tensor with uniform random values."""
 
     @property
     def name(self) -> str:
         return "uniform"
-
-    def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
-        """Infer physical shapes for uniform."""
-        from ..core.sharding import spmd, spec
-
-        shape = args[0] if len(args) > 0 else kwargs.get("shape")
-        dtype = args[3] if len(args) > 3 else kwargs.get("dtype")
-
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
-
-        if shape is None:
-            raise RuntimeError("uniform requires a shape")
-
-        shapes = []
-        if output_sharding and mesh:
-            for i in range(num_shards):
-                local = spec.compute_local_shape(shape, output_sharding, device_id=i)
-                shapes.append(tuple(int(d) for d in local))
-        else:
-            shapes = [tuple(int(d) for d in shape)] * num_shards
-
-        device = args[4] if len(args) > 4 else kwargs.get("device")
-        dtypes = [dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [device] * num_shards
-
-        return shapes, dtypes, devices
 
     def kernel(
         self,
@@ -416,56 +163,46 @@ class UniformOp(Operation):
         tensor_type = TensorType(dtype, shape, device=DeviceRef.from_device(device))
         return ops.random.uniform(tensor_type, range=(low, high))
 
-    def execute(self, args: tuple, kwargs: dict) -> Any:
-        """Physical execution for UniformOp.
 
-        Random ops create independent samples on each shard.
-        """
-        from ..core import GRAPH
-        from ..core.sharding import spmd
-        from typing import Any
-
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
-
-        with GRAPH.graph:
-            # Each shard gets independent random values
-            shard_results = [self.kernel(*args, **kwargs) for _ in range(num_shards)]
-
-        return (shard_results, None, mesh)
-
-
-class GaussianOp(Operation):
+class GaussianOp(CreationOperation):
     """Create a tensor with Gaussian (normal) random values."""
 
     @property
     def name(self) -> str:
         return "gaussian"
 
+    def kernel(
+        self,
+        shape: ShapeLike,
+        mean: float,
+        std: float,
+        dtype: DType,
+        device: Device,
+    ) -> TensorValue:
+        tensor_type = TensorType(dtype, shape, device=DeviceRef.from_device(device))
+        return ops.random.gaussian(tensor_type, mean=mean, std=std)
+
+
+class HannWindowOp(CreationOperation):
+    """Create a 1D Hann window tensor."""
+
+    @property
+    def name(self) -> str:
+        return "hann_window"
+
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
-        """Infer physical shapes for gaussian."""
-        from ..core.sharding import spmd, spec
+        window_length = args[0] if len(args) > 0 else kwargs.get("window_length")
+        dtype = kwargs.get("dtype", DType.float32)
+        device = args[1] if len(args) > 1 else kwargs.get("device")
 
-        shape = args[0] if len(args) > 0 else kwargs.get("shape")
-        dtype = args[3] if len(args) > 3 else kwargs.get("dtype")
+        from ..core.sharding import spmd
 
         mesh = spmd.get_mesh_from_args(args)
         num_shards = len(mesh.devices) if mesh else 1
 
-        if shape is None:
-            raise RuntimeError("gaussian requires a shape")
-
-        shapes = []
-        if output_sharding and mesh:
-            for i in range(num_shards):
-                local = spec.compute_local_shape(shape, output_sharding, device_id=i)
-                shapes.append(tuple(int(d) for d in local))
-        else:
-            shapes = [tuple(int(d) for d in shape)] * num_shards
-
-        device = args[4] if len(args) > 4 else kwargs.get("device")
+        shapes = [(window_length,)] * num_shards
         dtypes = [dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
@@ -479,32 +216,111 @@ class GaussianOp(Operation):
 
     def kernel(
         self,
-        shape: ShapeLike,
-        mean: float,
-        std: float,
-        dtype: DType,
+        window_length: int,
         device: Device,
+        periodic: bool = True,
+        dtype: DType = DType.float32,
     ) -> TensorValue:
-        tensor_type = TensorType(dtype, shape, device=DeviceRef.from_device(device))
-        return ops.random.gaussian(tensor_type, mean=mean, std=std)
+        return ops.hann_window(window_length, device, periodic=periodic, dtype=dtype)
 
-    def execute(self, args: tuple, kwargs: dict) -> Any:
-        """Physical execution for GaussianOp.
 
-        Random ops create independent samples on each shard.
-        """
-        from ..core import GRAPH
-        from ..core.sharding import spmd
-        from typing import Any
+class TriOp(Operation):
+    """Base for Triu and Tril."""
 
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
+        x = args[0]
+        return (
+            [tuple(x.physical_local_shape(i)) for i in range(x.num_shards)],
+            [x.dtype] * x.num_shards,
+            [x.device] * x.num_shards,
+        )
 
-        with GRAPH.graph:
-            # Each shard gets independent random values
-            shard_results = [self.kernel(*args, **kwargs) for _ in range(num_shards)]
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        k = output.op_kwargs.get("k", 0)
+        return (self.__class__()(cotangent, k=k),)
 
-        return (shard_results, None, mesh)
+
+class TriuOp(TriOp):
+    """Upper triangular part of a matrix."""
+
+    @property
+    def name(self) -> str:
+        return "triu"
+
+    def kernel(self, x: TensorValue, *, k: int = 0) -> TensorValue:
+        # Fallback to band_part if triu is missing
+        # Upper triangle: keep everything from diagonal k upwards
+        # lower=-1 (ignore), upper=0 (diagonal) -- wait, band_part(x, num_lower, num_upper)
+        # Keeps elements where in_band(m, n) = (num_lower < 0 || (m-n) <= num_lower)) &&
+        #                                      (num_upper < 0 || (n-m) <= num_upper)
+        # For triu(k): keep j >= i + k => j - i >= k => (i - j) <= -k.
+        # This roughly maps to num_lower = -k? No, that's unintuitive.
+        # XLA/TF semantics: band_part(x, num_lower, num_upper)
+        # Retains: num_lower <= (i - j) <= num_upper. (assuming m=i, n=j)
+        # triu(k): j >= i + k  => 0 >= i - j + k => i - j <= -k.
+        # So we want (i - j) <= -k.
+        #num_lower = 0 # No wait, we keep everything "above" diagonal. So i is small, j is large.
+        # i-j is negative.
+        # So we want lower bound on i-j? We want to discard things where i-j > -k.
+        try:
+             return ops.triu(x, k)
+        except AttributeError:
+             # Fallback: band_part(x, 0, -1) keeps upper triangle (k=0)
+             # ops.band_part(input, num_lower, num_upper)
+             # To Implement triu(k): num_lower = -k? No.
+             # We want to KEEP if j >= i + k.
+             # This means i - j <= -k.
+             # band_part keeps num_lower <= i - j <= num_upper.
+             # So we set num_upper = -1 (infinity), and num_lower?
+             # Actually, simpler:
+             # triu(k) is everything *above* the k-th diagonal.
+             # This corresponds to band_part(x, 0, -1) for k=0? No wait.
+             # Let's check max ops.
+             return ops.band_part(x, -k, -1) # wait, if k=0, band_part(0, -1) -> main diagonal and up? 
+             # If k=1 (superdiagonal), we want j >= i+1. i-j <= -1.
+             # band_part(x, -1, -1) would mean -1 <= i-j. That keeps lower stuff.
+             # Correct mapping for triu(x, k):
+             # band_part(x, num_lower, num_upper)
+             # We want (j >= i + k) => (j - i >= k).
+             # band_part keeps (i - j <= num_lower) AND (j - i <= num_upper).
+             # Wait, TF says: (num_lower < 0 || (m-n) <= num_lower) && (num_upper < 0 || (n-m) <= num_upper)
+             
+             # Let's assume `ops.band_part` follows standard XLA/TF.
+             # triu(x, k): mask where j >= i + k.
+             # band_part(x, -k-1??, -1)?
+             # Actually easiest way is usually multiply by mask if `ops.band_part` is confusing.
+             # But let's try strict substitution. 
+             # triu(k=0): j >= i. i <= j. Keep upper.
+             # band_part(x, 0, -1):
+             #   (m-n) <= 0 => m <= n (i<=j). Correct for k=0.
+             # triu(k=1): j >= i+1. i <= j-1.
+             # band_part(x, -1, -1)?
+             #   (m-n) <= -1 => m <= n-1 => i <= j-1. Correct.
+             return ops.band_part(x, -k, -1)
+
+
+class TrilOp(TriOp):
+    """Lower triangular part of a matrix."""
+
+    @property
+    def name(self) -> str:
+        return "tril"
+
+    def kernel(self, x: TensorValue, *, k: int = 0) -> TensorValue:
+        try:
+            return ops.tril(x, k)
+        except AttributeError:
+             # tril(k): j <= i + k.
+             # j - i <= k. (i - j) >= -k.
+             # band_part(x, num_lower, num_upper)
+             # We want to KEEP if j <= i + k.
+             # band_part keeps (m-n <= num_lower) and (n-m <= num_upper).
+             # n-m <= k.
+             # So num_upper = k.
+             # num_lower = -1 (infinity).
+             return ops.band_part(x, -1, k)
 
 
 _constant_op = ConstantOp()
@@ -514,6 +330,9 @@ _ones_op = OnesOp()
 _arange_op = ArangeOp()
 _uniform_op = UniformOp()
 _gaussian_op = GaussianOp()
+_hann_window_op = HannWindowOp()
+_triu_op = TriuOp()
+_tril_op = TrilOp()
 
 
 def constant(
@@ -522,13 +341,10 @@ def constant(
     dtype: DType | None = None,
     device: Device | None = None,
 ):
-    """Create a tensor from a constant value.
-
-    Args:
-        value: Scalar, array, or nested sequence.
-    """
+    """Create a tensor from a constant value."""
     import numpy as np
-    from ..core.tensor.api import Tensor
+
+    from ..core import Tensor
 
     if dtype is None:
         if isinstance(value, np.ndarray):
@@ -543,22 +359,16 @@ def constant(
         elif isinstance(value, bool):
             dtype = DType.bool
 
-    # If it's not a simple number, convert to a realized tensor via DLPack
-    # to avoid embedding large data as constants in the MAX graph.
     if not isinstance(value, (int, float, bool, complex)) and not (
         isinstance(value, np.ndarray) and value.ndim == 0
     ):
-        # Convert lists/tuples to numpy array first
         if isinstance(value, (list, tuple)):
             value = np.array(value)
             if dtype:
-                # Map MAX DType to numpy dtype if needed
                 try:
-                    # DType.float32.name -> "float32", which numpy accepts
                     value = value.astype(dtype.name)
                 except Exception:
                     pass
-
         return Tensor.from_dlpack(value)
 
     dtype, device = defaults(dtype, device)
@@ -655,106 +465,101 @@ def gaussian(
 normal = gaussian
 
 
+def hann_window(
+    window_length: int,
+    *,
+    periodic: bool = True,
+    dtype: DType | None = None,
+    device: Device | None = None,
+):
+    """Create a 1D Hann window tensor."""
+    dtype, device = defaults(dtype, device)
+    return _hann_window_op(window_length, device, periodic=periodic, dtype=dtype)
+
+
+def triu(x: Any, k: int = 0) -> Any:
+    """Upper triangular part of a matrix."""
+    return _triu_op(x, k=k)
+
+
+def tril(x: Any, k: int = 0) -> Any:
+    """Lower triangular part of a matrix."""
+    return _tril_op(x, k=k)
+
+
 def zeros_like(x: Any) -> Any:
     """Create a tensor of zeros with the same shape/dtype/device/sharding as x."""
-    from ..core.tensor.api import Tensor
+    from ..core import Tensor
 
     if not isinstance(x, Tensor):
         return zeros(x.shape, dtype=x.dtype, device=x.device)
 
-    # Use physical global shape (handles batch_dims cases)
-    # The _impl access is safe because we check isinstance(Tensor)
-    shape = x._impl.physical_global_shape
+    # Use physical global shape to preserve rank (includes batch_dims)
+    shape = x.physical_global_shape
+    res = zeros(shape, dtype=x.dtype, device=x.device)
+    res.batch_dims = x.batch_dims
 
-    # Use global logical shape so that shard() can correctly slice it down
-    # (MAX compiler optimizes zeros(global) -> shard -> zeros(local))
-    result = zeros(shape, dtype=x.dtype, device=x.device)
+    if x.sharding:
+        from .communication.shard import shard
 
-    # Inherit batch_dims
-    result.batch_dims = x.batch_dims
-
-    # If x is sharded, shard the result the same way
-    if x.sharding and x.sharding.mesh:
-        from .communication import shard
-
-        result = shard(
-            result,
+        res = shard(
+            res,
             x.sharding.mesh,
             x.sharding.dim_specs,
             replicated_axes=x.sharding.replicated_axes,
         )
-
-    return result
+    return res
 
 
 def ones_like(x: Any) -> Any:
     """Create a tensor of ones with the same shape/dtype/device/sharding as x."""
-    from ..core.tensor.api import Tensor
+    from ..core import Tensor
 
     if not isinstance(x, Tensor):
         return ones(x.shape, dtype=x.dtype, device=x.device)
 
-    # Use physical global shape
-    shape = x._impl.physical_global_shape
+    # Use physical global shape to preserve rank (includes batch_dims)
+    shape = x.physical_global_shape
+    res = ones(shape, dtype=x.dtype, device=x.device)
+    res.batch_dims = x.batch_dims
 
-    # Use global logical shape
-    result = ones(shape, dtype=x.dtype, device=x.device)
+    if x.sharding:
+        from .communication.shard import shard
 
-    # Inherit batch_dims
-    result.batch_dims = x.batch_dims
-
-    # If x is sharded, shard the result the same way
-    if x.sharding and x.sharding.mesh:
-        from .communication import shard
-
-        result = shard(
-            result,
+        res = shard(
+            res,
             x.sharding.mesh,
             x.sharding.dim_specs,
             replicated_axes=x.sharding.replicated_axes,
         )
-
-    return result
+    return res
 
 
 def full_like(x: Any, value: Number) -> Any:
-    """Create a tensor filled with value with the same shape/dtype/device/sharding as x."""
-    from ..core.tensor.api import Tensor
+    """Create a tensor filled with value, matching x's properties."""
+    from ..core import Tensor
 
     if not isinstance(x, Tensor):
         return full(x.shape, value, dtype=x.dtype, device=x.device)
 
-    # Use physical global shape
-    shape = x._impl.physical_global_shape
+    # Use physical global shape to preserve rank (includes batch_dims)
+    shape = x.physical_global_shape
+    res = full(shape, value, dtype=x.dtype, device=x.device)
+    res.batch_dims = x.batch_dims
 
-    # Use global logical shape
-    result = full(shape, value, dtype=x.dtype, device=x.device)
+    if x.sharding:
+        from .communication.shard import shard
 
-    # Inherit batch_dims
-    result.batch_dims = x.batch_dims
-
-    # If x is sharded, shard the result the same way
-    if x.sharding and x.sharding.mesh:
-        from .communication import shard
-
-        result = shard(
-            result,
+        res = shard(
+            res,
             x.sharding.mesh,
             x.sharding.dim_specs,
             replicated_axes=x.sharding.replicated_axes,
         )
-
-    return result
+    return res
 
 
 __all__ = [
-    "ConstantOp",
-    "FullOp",
-    "ZerosOp",
-    "OnesOp",
-    "ArangeOp",
-    "UniformOp",
-    "GaussianOp",
     "constant",
     "full",
     "zeros",
@@ -763,6 +568,9 @@ __all__ = [
     "uniform",
     "gaussian",
     "normal",
+    "hann_window",
+    "triu",
+    "tril",
     "zeros_like",
     "ones_like",
     "full_like",
