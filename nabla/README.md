@@ -1,6 +1,6 @@
 # Nabla Module Architecture
 
-> **See [../readme.md](../readme.md)** for getting started, setup instructions, and architecture overview.
+> **See [../README.md](../README.md)** for getting started, setup instructions, and architecture overview.
 >
 > This document covers **internal implementation details** for contributors working on the nabla module.
 

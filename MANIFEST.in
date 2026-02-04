@@ -1,7 +1,7 @@
 # Include important project files
 include README.md
 include LICENSE
-include readme.md
+include README.md
 include pyproject.toml
 include CITATION.cff
 include changelog.md
