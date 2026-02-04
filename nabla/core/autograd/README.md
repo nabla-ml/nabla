@@ -6,7 +6,7 @@
 
 ## How Gradients Are Computed
 
-Unlike PyTorch (which stores gradient tape per-tensor), Nabla uses **trace-based** autodiff:
+Nabla uses **trace-based** autodiff:
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
