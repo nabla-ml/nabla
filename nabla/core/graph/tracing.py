@@ -152,6 +152,63 @@ class Trace:
         self.nodes = nodes
         self._computed = True
 
+    def compute_for_backward(self) -> None:
+        """Compute subgraph topology for backward pass.
+        
+        Unlike compute(), this method:
+        1. Traverses the ENTIRE graph back to leaves (ignores self._input_tensor_ids).
+        2. Collects all TensorImpls encountered that have requires_grad=True.
+        3. Only stops at true leaves (no output_refs).
+        """
+        if self._computed:
+            return
+
+        visited: set[int] = set()
+        nodes: list[OpNode] = []
+        gradient_leaves: list[TensorImpl] = []
+
+        from ..tensor.api import Tensor
+
+        output_leaves = [
+            t._impl for t in tree_leaves(self.outputs) if isinstance(t, Tensor)
+        ]
+        
+        def dfs(refs: OpNode) -> None:
+            refs_id = id(refs)
+            if refs_id in visited:
+                return
+
+            arg_leaves = []
+            for arg in tree_leaves(refs.op_args):
+                if isinstance(arg, Tensor):
+                    arg_leaves.append(arg._impl)
+                elif isinstance(arg, TensorImpl):
+                    arg_leaves.append(arg)
+
+            for arg in arg_leaves:
+                # 1. Collect gradient leaves (any tensor with requires_grad=True)
+                if arg.requires_grad and arg not in gradient_leaves:
+                    gradient_leaves.append(arg)
+
+                # 2. Continue DFS if it's not a root leaf (has a producing op)
+                if arg.output_refs is not None:
+                    dfs(arg.output_refs)
+
+            visited.add(refs_id)
+            nodes.append(refs)
+
+        for leaf in output_leaves:
+            # We also check the starting leaves themselves for requires_grad
+            if leaf.requires_grad and leaf not in gradient_leaves:
+                gradient_leaves.append(leaf)
+                
+            if leaf.output_refs is not None:
+                dfs(leaf.output_refs)
+
+        self.nodes = nodes
+        self.gradient_leaves = gradient_leaves
+        self._computed = True
+
     def refresh_graph_values(self) -> None:
         """Rehydrate all TensorImpl._graph_values by replaying operations.
 

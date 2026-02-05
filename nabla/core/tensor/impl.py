@@ -34,6 +34,7 @@ class TensorImpl:
         "sharding",
         "sharding_constraint",
         "is_traced",
+        "requires_grad",
         "tangent",
         "cotangent",
         "dual",
@@ -52,6 +53,7 @@ class TensorImpl:
     sharding: object | None
     sharding_constraint: object | None
     is_traced: bool
+    requires_grad: bool
     tangent: TensorImpl | None
     cotangent: TensorImpl | None
     dual: TensorImpl | None
@@ -92,6 +94,7 @@ class TensorImpl:
         self.sharding = None
         self.sharding_constraint = sharding_constraint
         self.is_traced = is_traced
+        self.requires_grad = False  # Separate from is_traced; marks gradient leaves
         self.tangent = None
         self.cotangent = None
         self.dual = None
@@ -102,6 +105,11 @@ class TensorImpl:
         self._physical_shapes = physical_shapes
         self._shard_dtypes = shard_dtypes
         self._shard_devices = shard_devices
+
+    @property
+    def is_leaf(self) -> bool:
+        """True if this tensor wasn't produced by an operation (gradient leaf)."""
+        return self.output_refs is None
 
     def _validate_sharding(self) -> None:
         """Validate consistency of shards and sharding spec."""

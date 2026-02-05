@@ -104,7 +104,7 @@ def test_pp_inference_clean():
     traced = nb.core.graph.tracing.trace(
         trace_wrapper, x_padded_nb, w_sharded, state_sharded, mask_0_sharded
     )
-    print("Graph Traced.", traced)
+    # print("Graph Traced.", traced)
 
     results_np = nb.core.tree_map(lambda x: x.to_numpy(), traced.outputs)
     preds_all = results_np[0]

@@ -159,6 +159,7 @@ class Operation(ABC):
 
         # 7. Tracing & Post-Processing
         self._setup_output_refs(output, resharded_args, kwargs, op_hash=op_hash)
+
         output = apply_auto_reduction(self, output, mesh, reduce_axes)
 
         if any_has_tangent:
@@ -239,6 +240,7 @@ class Operation(ABC):
         """Set up OpNode for tracing support."""
         from ..core import Tensor, pytree
 
+        # Fast path: most outputs are single tensors
         # Fast path: most outputs are single tensors
         if isinstance(output, Tensor):
             output_impls = [output._impl]

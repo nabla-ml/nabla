@@ -296,7 +296,11 @@ def apply_jvp(op: Any, args: tuple, output: Any) -> None:
 
 
 def collect_metadata(args: tuple) -> tuple[int, bool, bool, bool]:
-    """Analyze arguments to collect metadata needed for execution adaptation."""
+    """Analyze arguments to collect metadata needed for execution adaptation.
+    
+    Returns:
+        Tuple of (max_batch_dims, any_traced, any_sharded, any_has_tangent)
+    """
     from ..core import Tensor
 
     max_batch_dims = 0

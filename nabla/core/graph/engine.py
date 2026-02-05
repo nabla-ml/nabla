@@ -445,21 +445,21 @@ class ComputeGraph:
             impl._graph_values = []
             impl.graph_values_epoch = -1
 
-            if impl.output_refs:
-                for arg in pytree.tree_leaves(impl.output_refs.op_args):
+            # Thorough cleanup: if this branch isn't being traced for autograd,
+            # clear the output_refs link to allow the OpNode and its inputs
+            # to be garbage collected immediately.
+            if impl.output_refs and not impl.is_traced:
+                refs = impl.output_refs
+                impl.output_refs = None
+                impl.output_index = None
+                
+                for arg in pytree.tree_leaves(refs.op_args):
                     if isinstance(arg, TensorImpl):
                         clean(arg)
 
-        # Traverse and clean graph values
+        # Traverse and clean
         for t in targets:
             clean(t._impl)
-
-        # Only clear output_refs on the targets themselves (not their inputs)
-        # This breaks the chain for realized outputs while preserving
-        # reusability of inputs
-        for t in targets:
-            t._impl.output_refs = None
-            t._impl.output_index = None
 
     def _replay_trace_to_build_graph(self, targets: list[Tensor]) -> None:
         """Walk OpNode DAG and execute operations to build MAX graph."""

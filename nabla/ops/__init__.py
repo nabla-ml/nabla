@@ -134,6 +134,8 @@ from .view import (
     view_as_real_interleaved,
 )
 
+transpose = swap_axes
+
 # Aliases for base classes
 UnaryOp = UnaryOperation
 BinaryOp = BinaryOperation
@@ -225,6 +227,7 @@ __all__ = [
     "unsqueeze",
     "squeeze",
     "swap_axes",
+    "transpose",
     "flip",
     "permute",
     "broadcast_to",

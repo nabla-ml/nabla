@@ -133,8 +133,18 @@ class SqueezeOp(AxisOp):
     def name(self) -> str:
         return "squeeze"
 
-    def kernel(self, x: TensorValue, *, axis: int = 0) -> TensorValue:
-        return ops.squeeze(x, axis)
+    def kernel(self, x: TensorValue, *, axis: int | tuple[int, ...] | None = 0) -> TensorValue:
+        if axis is None:
+            return ops.squeeze(x)
+        if isinstance(axis, int):
+            return ops.squeeze(x, axis)
+        
+        # Squeeze multiple axes by chaining
+        axes = sorted([a if a >= 0 else len(x.shape) + a for a in axis], reverse=True)
+        res = x
+        for a in axes:
+            res = ops.squeeze(res, a)
+        return res
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
@@ -155,8 +165,16 @@ class SqueezeOp(AxisOp):
             s = x.physical_local_shape(idx)
             if s is not None:
                 in_shape = list(int(d) for d in s)
-                norm_axis = axis if axis >= 0 else len(in_shape) + axis
-                in_shape.pop(norm_axis)
+                if axis is None:
+                    axes = [idx for idx, d in enumerate(in_shape) if d == 1]
+                elif isinstance(axis, int):
+                    axes = [axis if axis >= 0 else len(in_shape) + axis]
+                else:
+                    axes = [a if a >= 0 else len(in_shape) + a for a in axis]
+                
+                # Sort descending to pop correctly
+                for a in sorted(axes, reverse=True):
+                    in_shape.pop(a)
                 shapes.append(tuple(in_shape))
             else:
                 raise RuntimeError(
@@ -187,7 +205,18 @@ class SqueezeOp(AxisOp):
 
         axis = kwargs.get("axis", 0)
         out_factors = list(factors)
-        out_factors.pop(axis)
+        if axis is None:
+            # Squeeze all size-1 dims
+            in_shape = input_shapes[0]
+            axes = [i for i, d in enumerate(in_shape) if d == 1]
+        elif isinstance(axis, int):
+            axes = [axis if axis >= 0 else len(factors) + axis]
+        else:
+            axes = [a if a >= 0 else len(factors) + a for a in axis]
+            
+        for a in sorted(axes, reverse=True):
+            out_factors.pop(a)
+            
         out_str = " ".join(out_factors)
 
         return OpShardingRuleTemplate.parse(
@@ -195,7 +224,14 @@ class SqueezeOp(AxisOp):
         ).instantiate(input_shapes, output_shapes)
 
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
-        return len(input_shapes[0]) - 1
+        axis = kwargs.get("axis", 0)
+        if axis is None:
+            in_shape = input_shapes[0]
+            squeezed_count = sum(1 for d in in_shape if d == 1)
+            return len(in_shape) - squeezed_count
+        if isinstance(axis, int):
+            return len(input_shapes[0]) - 1
+        return len(input_shapes[0]) - len(axis)
 
     def infer_sharding_spec(
         self, args: tuple, mesh: Any, kwargs: dict = None
@@ -355,6 +391,7 @@ __all__ = [
     "unsqueeze",
     "squeeze",
     "swap_axes",
+    "transpose",
     "MoveAxisOp",
     "UnsqueezePhysicalOp",
     "SqueezePhysicalOp",
@@ -378,6 +415,9 @@ def squeeze(x: Tensor, axis: int = 0) -> Tensor:
 
 def swap_axes(x: Tensor, axis1: int, axis2: int) -> Tensor:
     return _swap_axes_op(x, axis1=axis1, axis2=axis2)
+
+
+transpose = swap_axes
 
 
 class MoveAxisOp(AxisOp):

@@ -195,6 +195,28 @@ class Tensor(DLPackArray, HasTensorValue):
         self._impl.is_traced = value
 
     @property
+    def requires_grad(self) -> bool:
+        """Whether this tensor requires gradient computation (PyTorch style)."""
+        return self._impl.requires_grad
+
+    @requires_grad.setter
+    def requires_grad(self, value: bool) -> None:
+        self._impl.requires_grad = value
+        # When requiring grad, also enable tracing so ops record the graph
+        if value:
+            self._impl.is_traced = True
+
+    def requires_grad_(self, value: bool = True) -> Tensor:
+        """In-place style alias for setting requires_grad (PyTorch style)."""
+        self.requires_grad = value
+        return self
+
+    @property
+    def is_leaf(self) -> bool:
+        """True if this tensor wasn't created by an operation (gradient leaf)."""
+        return self._impl.is_leaf
+
+    @property
     def batch_dims(self) -> int:
         """Number of batch dimensions."""
         return self._impl.batch_dims
@@ -212,6 +234,61 @@ class Tensor(DLPackArray, HasTensorValue):
         """Enable tracing on this tensor for autograd."""
         self._impl.is_traced = True
         return self
+
+    def detach(self) -> Tensor:
+        """Returns a new Tensor, detached from the current graph (PyTorch style)."""
+        # In Nabla, this just returns a new Tensor sharing the same buffers/values
+        # but with is_traced=False.
+        impl = self._impl
+        new_impl = TensorImpl(
+            bufferss=impl._buffers,
+            values=impl._graph_values,
+            is_traced=False,
+            batch_dims=impl.batch_dims,
+        )
+        new_impl.sharding = impl.sharding
+        return Tensor(impl=new_impl)
+
+    @property
+    def grad(self) -> Tensor | None:
+        """Gradient of this tensor (populated by backward())."""
+        if self._impl.cotangent is not None:
+            return Tensor(impl=self._impl.cotangent)
+        return None
+
+    @grad.setter
+    def grad(self, value: Tensor | None) -> None:
+        if value is None:
+            self._impl.cotangent = None
+        else:
+            self._impl.cotangent = value._impl
+
+    def backward(
+        self,
+        gradient: Tensor | None = None,
+        retain_graph: bool = False,
+        create_graph: bool = False,
+    ) -> None:
+        """Compute gradients of this tensor w.r.t. graph leaves (PyTorch style).
+        
+        Populates .grad on all tensors with requires_grad=True that this tensor
+        depends on. All gradients are batch-realized for efficiency.
+        
+        Args:
+            gradient: Gradient w.r.t. this tensor. Required for non-scalar tensors.
+            retain_graph: Unused (maintained for PyTorch API compatibility).
+            create_graph: If True, graph of the derivatives will be constructed,
+                allowing to compute higher order derivatives.
+        
+        Example:
+            >>> x = nb.Tensor([1.0, 2.0, 3.0])
+            >>> x.requires_grad = True
+            >>> y = (x ** 2).sum()
+            >>> y.backward()
+            >>> print(x.grad)  # [2.0, 4.0, 6.0]
+        """
+        from ..autograd.utils import backward
+        backward(self, cotangents=gradient, create_graph=create_graph)
 
     @property
     def dual(self) -> Tensor | None:
@@ -430,6 +507,37 @@ class Tensor(DLPackArray, HasTensorValue):
 
         return creation.arange(start, stop, step, dtype=dtype, device=device)
 
+    def new_zeros(
+        self, shape: ShapeLike, *, dtype: DType | None = None, device: Device | None = None
+    ) -> Tensor:
+        """Create a new tensor of zeros with same device/dtype as self by default."""
+        return Tensor.zeros(shape, dtype=dtype or self.dtype, device=device or self.device)
+
+    def new_ones(
+        self, shape: ShapeLike, *, dtype: DType | None = None, device: Device | None = None
+    ) -> Tensor:
+        """Create a new tensor of ones with same device/dtype as self by default."""
+        return Tensor.ones(shape, dtype=dtype or self.dtype, device=device or self.device)
+
+    def new_full(
+        self,
+        shape: ShapeLike,
+        fill_value: Number,
+        *,
+        dtype: DType | None = None,
+        device: Device | None = None,
+    ) -> Tensor:
+        """Create a new tensor filled with value with same device/dtype as self by default."""
+        return Tensor.full(
+            shape, fill_value, dtype=dtype or self.dtype, device=device or self.device
+        )
+
+    def new_empty(
+        self, shape: ShapeLike, *, dtype: DType | None = None, device: Device | None = None
+    ) -> Tensor:
+        """Create a new uninitialized tensor (defaults to zeros in Nabla)."""
+        return self.new_zeros(shape, dtype=dtype, device=device)
+
     @classmethod
     def uniform(
         cls,
@@ -475,6 +583,15 @@ class Tensor(DLPackArray, HasTensorValue):
         return self._impl.ndim
 
     @property
+    def ndim(self) -> int:
+        """Number of dimensions (PyTorch style)."""
+        return self._impl.ndim
+
+    def dim(self) -> int:
+        """Alias for rank (PyTorch style)."""
+        return self.rank
+
+    @property
     def shape(self) -> graph.Shape:
         """Returns the global logical shape of the tensor (excludes batch dims)."""
 
@@ -483,6 +600,12 @@ class Tensor(DLPackArray, HasTensorValue):
             return gs
 
         return graph.Shape(self._backing_value.shape)
+
+    def size(self, dim: int | None = None) -> graph.Shape | int:
+        """Returns the shape or size of a specific dimension (PyTorch style)."""
+        if dim is not None:
+            return self.shape[dim]
+        return self.shape
 
     def shard_shape(self, shard_idx: int = 0) -> graph.Shape:
         """Returns the shape of a specific shard."""
@@ -573,6 +696,7 @@ class Tensor(DLPackArray, HasTensorValue):
 
         return self
 
+
     def cpu(self) -> Tensor:
         """Move tensor to CPU, gathering shards if needed.
 
@@ -599,15 +723,255 @@ class Tensor(DLPackArray, HasTensorValue):
         data = t.to_numpy()  # This already moves to CPU
         return Tensor.from_dlpack(data)
 
-    def sum(self, axis: int = 0, keepdims: bool = False) -> Tensor:
+    def cuda(self, device: int | str = 0) -> Tensor:
+        """Move tensor to GPU (shortcut for PyTorch users)."""
+        target = f"gpu:{device}" if isinstance(device, int) else device
+        if not target.startswith("gpu"):
+            target = f"gpu:{target}"
+        return self.to(target)
+
+    def sum(self, axis: int | tuple[int, ...] | None = None, keepdims: bool = False) -> Tensor:
         from ...ops import reduction
 
         return reduction.reduce_sum(self, axis=axis, keepdims=keepdims)
 
-    def mean(self, axis: int = 0, keepdims: bool = False) -> Tensor:
+    def mean(self, axis: int | tuple[int, ...] | None = None, keepdims: bool = False) -> Tensor:
         from ...ops import reduction
 
         return reduction.mean(self, axis=axis, keepdims=keepdims)
+
+    def max(self, axis: int | tuple[int, ...] | None = None, keepdims: bool = False) -> Tensor:
+        from ...ops import reduction
+
+        return reduction.reduce_max(self, axis=axis, keepdims=keepdims)
+
+    def min(self, axis: int | tuple[int, ...] | None = None, keepdims: bool = False) -> Tensor:
+        from ...ops import reduction
+
+        return reduction.reduce_min(self, axis=axis, keepdims=keepdims)
+
+    def argmax(self, axis: int | None = None, keepdims: bool = False) -> Tensor:
+        from ...ops import reduction
+
+        return reduction.argmax(self, axis=axis, keepdims=keepdims)
+
+    def argmin(self, axis: int | None = None, keepdims: bool = False) -> Tensor:
+        from ...ops import reduction
+
+        return reduction.argmin(self, axis=axis, keepdims=keepdims)
+
+    def cumsum(self, axis: int) -> Tensor:
+        from ...ops import reduction
+
+        return reduction.cumsum(self, axis=axis)
+
+    # --- Unary Operations ---
+
+    def abs(self) -> Tensor:
+        from ...ops import unary
+
+        return unary.abs(self)
+
+    def exp(self) -> Tensor:
+        from ...ops import unary
+
+        return unary.exp(self)
+
+    def log(self) -> Tensor:
+        from ...ops import unary
+
+        return unary.log(self)
+
+    def relu(self) -> Tensor:
+        from ...ops import unary
+
+        return unary.relu(self)
+
+    def sigmoid(self) -> Tensor:
+        from ...ops import unary
+
+        return unary.sigmoid(self)
+
+    def softmax(self, axis: int = -1) -> Tensor:
+        from ...ops import unary
+
+        return unary.softmax(self, axis=axis)
+
+    def logsoftmax(self, axis: int = -1) -> Tensor:
+        from ...ops import unary
+
+        return unary.logsoftmax(self, axis=axis)
+
+    def sqrt(self) -> Tensor:
+        from ...ops import unary
+
+        return unary.sqrt(self)
+
+    def tanh(self) -> Tensor:
+        from ...ops import unary
+
+        return unary.tanh(self)
+
+    def acos(self) -> Tensor:
+        from ...ops import unary
+
+        return unary.acos(self)
+
+    def atanh(self) -> Tensor:
+        from ...ops import unary
+
+        return unary.atanh(self)
+
+    def cos(self) -> Tensor:
+        from ...ops import unary
+
+        return unary.cos(self)
+
+    def erf(self) -> Tensor:
+        from ...ops import unary
+
+        return unary.erf(self)
+
+    def floor(self) -> Tensor:
+        from ...ops import unary
+
+        return unary.floor(self)
+
+    def is_inf(self) -> Tensor:
+        from ...ops import unary
+
+        return unary.is_inf(self)
+
+    def is_nan(self) -> Tensor:
+        from ...ops import unary
+
+        return unary.is_nan(self)
+
+    def log1p(self) -> Tensor:
+        from ...ops import unary
+
+        return unary.log1p(self)
+
+    def rsqrt(self) -> Tensor:
+        from ...ops import unary
+
+        return unary.rsqrt(self)
+
+    def silu(self) -> Tensor:
+        from ...ops import unary
+
+        return unary.silu(self)
+
+    def sin(self) -> Tensor:
+        from ...ops import unary
+
+        return unary.sin(self)
+
+    def trunc(self) -> Tensor:
+        from ...ops import unary
+
+        return unary.trunc(self)
+
+    def gelu(self, approximate: str | bool = "none") -> Tensor:
+        from ...ops import unary
+
+        return unary.gelu(self, approximate=approximate)
+
+    def round(self) -> Tensor:
+        from ...ops import unary
+
+        return unary.round(self)
+
+    def cast(self, dtype: DType) -> Tensor:
+        from ...ops import unary
+
+        return unary.cast(self, dtype=dtype)
+
+    def type_as(self, other: Tensor) -> Tensor:
+        """Cast this tensor to the same dtype as `other`."""
+        return self.cast(other.dtype)
+
+    # --- View & Shape Operations ---
+
+    def reshape(self, shape: ShapeLike) -> Tensor:
+        from ...ops import view
+
+        return view.reshape(self, shape)
+
+    def view(self, *shape: int | ShapeLike) -> Tensor:
+        """Alias for reshape() (PyTorch style)."""
+        if len(shape) == 1 and isinstance(shape[0], (list, tuple, graph.Shape)):
+            return self.reshape(shape[0])
+        return self.reshape(list(shape))
+
+    def squeeze(self, axis: int | tuple[int, ...] | None = None) -> Tensor:
+        from ...ops import view
+
+        return view.squeeze(self, axis=axis)
+
+    def unsqueeze(self, axis: int) -> Tensor:
+        from ...ops import view
+
+        return view.unsqueeze(self, axis=axis)
+
+    def swap_axes(self, axis1: int, axis2: int) -> Tensor:
+        from ...ops import view
+
+        return view.swap_axes(self, axis1=axis1, axis2=axis2)
+
+    def transpose(self, axis1: int, axis2: int) -> Tensor:
+        from ...ops import view
+
+        return view.swap_axes(self, axis1=axis1, axis2=axis2)
+
+    def permute(self, *order: int) -> Tensor:
+        from ...ops import view
+
+        if len(order) == 1 and isinstance(order[0], (tuple, list)):
+            order = tuple(order[0])
+        return view.permute(self, order=order)
+
+    def flatten(self, start_dim: int = 0, end_dim: int = -1) -> Tensor:
+        from ...ops import view
+
+        return view.flatten(self, start_dim=start_dim, end_dim=end_dim)
+
+    def broadcast_to(self, shape: ShapeLike) -> Tensor:
+        from ...ops import view
+
+        return view.broadcast_to(self, shape)
+
+    def expand(self, *shape: int) -> Tensor:
+        """Alias for broadcast_to (PyTorch style)."""
+        if len(shape) == 1 and isinstance(shape[0], (list, tuple)):
+            return self.broadcast_to(shape[0])
+        return self.broadcast_to(list(shape))
+
+    def flip(self, axis: int | tuple[int, ...]) -> Tensor:
+        from ...ops import view
+
+        return view.flip(self, axis=axis)
+
+    @property
+    def T(self) -> Tensor:
+        """Transpose last two dimensions (PyTorch style)."""
+        if self.rank < 2:
+            return self
+        return self.transpose(-1, -2)
+
+    # --- Communication & Management ---
+
+    def to(self, target: Device | str | DType) -> Tensor:
+        """Move tensor to a device or cast to a dtype.
+        
+        Args:
+            target: Target Device object, device string (e.g. 'cpu', 'gpu:0'), or DType.
+        """
+        if isinstance(target, DType):
+            return self.cast(target)
+            
+        from ...ops import communication as comm
+        return comm.to_device(self, target)
 
     def __bool__(self) -> bool:
         return bool(self.item())
@@ -675,6 +1039,10 @@ class Tensor(DLPackArray, HasTensorValue):
 
     numpy = to_numpy
 
+    def tolist(self) -> list:
+        """Convert tensor to a Python list (PyTorch style)."""
+        return self.to_numpy().tolist()
+
     @staticmethod
     def to_numpy_all(*tensors: Tensor) -> tuple:
         """Convert multiple tensors to numpy arrays in a single batched compilation.
@@ -718,6 +1086,10 @@ class Tensor(DLPackArray, HasTensorValue):
         for dim in self.shape:
             elts *= int(dim)
         return elts
+
+    def numel(self) -> int:
+        """Alias for num_elements() (PyTorch style)."""
+        return self.num_elements()
 
     def __neg__(self) -> Tensor:
         from ...ops import unary as unary_ops
@@ -785,6 +1157,146 @@ class Tensor(DLPackArray, HasTensorValue):
         from ...ops import binary as binary_ops
 
         return binary_ops.matmul(_ensure_tensor(lhs, self), self)
+
+    def __pow__(self, rhs: TensorValueLike) -> Tensor:
+        from ...ops import binary as binary_ops
+
+        return binary_ops.pow(self, _ensure_tensor(rhs, self))
+
+    def __rpow__(self, lhs: TensorValueLike) -> Tensor:
+        from ...ops import binary as binary_ops
+
+        return binary_ops.pow(_ensure_tensor(lhs, self), self)
+
+    def __mod__(self, rhs: TensorValueLike) -> Tensor:
+        from ...ops import binary as binary_ops
+
+        return binary_ops.mod(self, _ensure_tensor(rhs, self))
+
+    def __rmod__(self, lhs: TensorValueLike) -> Tensor:
+        from ...ops import binary as binary_ops
+
+        return binary_ops.mod(_ensure_tensor(lhs, self), self)
+
+    # --- Comparison Operators ---
+
+    def __eq__(self, rhs: TensorValueLike) -> Tensor:
+        from ...ops import comparison as comp_ops
+
+        return comp_ops.equal(self, _ensure_tensor(rhs, self))
+
+    def __ne__(self, rhs: TensorValueLike) -> Tensor:
+        from ...ops import comparison as comp_ops
+
+        return comp_ops.not_equal(self, _ensure_tensor(rhs, self))
+
+    def __lt__(self, rhs: TensorValueLike) -> Tensor:
+        from ...ops import comparison as comp_ops
+
+        return comp_ops.less(self, _ensure_tensor(rhs, self))
+
+    def __le__(self, rhs: TensorValueLike) -> Tensor:
+        from ...ops import comparison as comp_ops
+
+        return comp_ops.less_equal(self, _ensure_tensor(rhs, self))
+
+    def __gt__(self, rhs: TensorValueLike) -> Tensor:
+        from ...ops import comparison as comp_ops
+
+        return comp_ops.greater(self, _ensure_tensor(rhs, self))
+
+    def __ge__(self, rhs: TensorValueLike) -> Tensor:
+        from ...ops import comparison as comp_ops
+
+        return comp_ops.greater_equal(self, _ensure_tensor(rhs, self))
+
+    # --- Logical Operators ---
+
+    def __and__(self, rhs: TensorValueLike) -> Tensor:
+        from ...ops import comparison as comp_ops
+
+        return comp_ops.logical_and(self, _ensure_tensor(rhs, self))
+
+    def __or__(self, rhs: TensorValueLike) -> Tensor:
+        from ...ops import comparison as comp_ops
+
+        return comp_ops.logical_or(self, _ensure_tensor(rhs, self))
+
+    def __xor__(self, rhs: TensorValueLike) -> Tensor:
+        from ...ops import comparison as comp_ops
+
+        return comp_ops.logical_xor(self, _ensure_tensor(rhs, self))
+
+    # --- Indexing ---
+
+    def __getitem__(self, key: Any) -> Tensor:
+        """Basic slicing and integer indexing."""
+        from ...ops import view
+
+        shape = self.shape
+
+        # Standardize key to a tuple
+        if not isinstance(key, tuple):
+            key = (key,)
+
+        # 1. Expand Ellipsis
+        if Ellipsis in key:
+            if sum(1 for k in key if k is Ellipsis) > 1:
+                raise ValueError("An index can only have a single ellipsis ('...')")
+            
+            ellipsis_idx = key.index(Ellipsis)
+            num_expanded = len(self.shape) - (len(key) - 1)
+            key = (
+                key[:ellipsis_idx]
+                + (slice(None),) * max(0, num_expanded)
+                + key[ellipsis_idx + 1 :]
+            )
+
+        start = []
+        size = []
+        squeeze_axes = []
+
+        for i, k in enumerate(key):
+            if i >= len(shape):
+                break
+            dim_size = int(shape[i])
+            if isinstance(k, int):
+                if k < 0:
+                    k += dim_size
+                start.append(k)
+                size.append(1)
+                squeeze_axes.append(i)
+            elif isinstance(k, slice):
+                s_start = k.start if k.start is not None else 0
+                if s_start < 0:
+                    s_start += dim_size
+                s_stop = k.stop if k.stop is not None else dim_size
+                if s_stop < 0:
+                    s_stop += dim_size
+                s_step = k.step if k.step is not None else 1
+                if s_step != 1:
+                    raise NotImplementedError(
+                        "Slicing with step != 1 is not yet supported."
+                    )
+
+                s_start = max(0, min(dim_size, s_start))
+                s_stop = max(0, min(dim_size, s_stop))
+
+                start.append(s_start)
+                size.append(max(0, s_stop - s_start))
+            else:
+                raise TypeError(f"Invalid index type: {type(k)}")
+
+        # Pad remaining dimensions
+        while len(start) < len(shape):
+            idx = len(start)
+            start.append(0)
+            size.append(int(shape[idx]))
+
+        res = view.slice_tensor(self, start=tuple(start), size=tuple(size))
+        if squeeze_axes:
+            res = view.squeeze(res, axis=tuple(squeeze_axes))
+        return res
 
 
 def _ensure_tensor(value: TensorValueLike, like: Tensor) -> Tensor:

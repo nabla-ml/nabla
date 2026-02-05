@@ -25,6 +25,7 @@ from .core import (
     with_batch_dims,
 )
 from .core.autograd.api import grad, value_and_grad
+from .core.autograd.utils import backward
 from .core.sharding.spec import (
     DeviceMesh,
     DimSpec,
@@ -157,6 +158,7 @@ from .ops.view import (
     squeeze_physical,
     stack,
     swap_axes,
+    transpose,
     unsqueeze,
     unsqueeze_physical,
     flip,
@@ -167,6 +169,8 @@ from .ops.view import (
     as_interleaved_complex,
     view_as_real_interleaved,
 )
+
+transpose = swap_axes
 from .ops.utils import call_custom_kernel
 from .transforms.compile import CompilationStats, CompiledFunction, compile
 from .transforms.shard_map import shard_map
@@ -266,6 +270,8 @@ __all__ = [
     "unsqueeze",
     "squeeze",
     "swap_axes",
+    "transpose",
+    "flip",
     "moveaxis",
     "broadcast_to",
     "reshape",
@@ -293,6 +299,7 @@ __all__ = [
     "mean_physical",
     "grad",
     "value_and_grad",
+    "backward",
     "vmap",
     "shard_map",
     "compile",
