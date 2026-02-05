@@ -481,6 +481,11 @@ def package_outputs(
             isinstance(output_physical_shapes, list)
             and output_physical_shapes
             and isinstance(output_physical_shapes[0], list)
+            # Ensure it's not a list of ints/StaticDims (single output shard)
+            and not isinstance(
+                output_physical_shapes[0][0], (int, float, str, type(None))
+            )
+            and type(output_physical_shapes[0][0]).__name__ != "StaticDim"
         )
     elif isinstance(predicted_output_spec, (list, tuple)):
         is_multi_output = True

@@ -231,11 +231,11 @@ class TriOp(Operation):
         self, args: tuple, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         x = args[0]
-        return (
-            [tuple(x.physical_local_shape(i)) for i in range(x.num_shards)],
-            [x.dtype] * x.num_shards,
-            [x.device] * x.num_shards,
-        )
+        shapes = [
+            tuple(int(d) for d in x.physical_local_shape(i))
+            for i in range(x.num_shards)
+        ]
+        return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         k = output.op_kwargs.get("k", 0)

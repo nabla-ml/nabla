@@ -107,7 +107,15 @@ OPS["trunc"] = Operation(
     "trunc", "UNARY", nb.trunc, jnp.trunc, [OpConfig("Rank2", ranks=(2,))], standard_get_args
 )
 OPS["gelu"] = Operation(
-    "gelu", "UNARY", nb.gelu, jax.nn.gelu, [OpConfig("Rank2", ranks=(2,))], standard_get_args
+    "gelu",
+    "UNARY",
+    nb.gelu,
+    jax.nn.gelu,
+    [
+        OpConfig("Rank2_Exact", ranks=(2,), params={"approximate": False}),
+        OpConfig("Rank2_Approx", ranks=(2,), params={"approximate": True}),
+    ],
+    standard_get_args,
 )
 OPS["round"] = Operation(
     "round", "UNARY", nb.round, jnp.round, [OpConfig("Rank2", ranks=(2,))], standard_get_args

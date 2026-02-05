@@ -339,7 +339,15 @@ class AcosOp(UnaryOperation):
         return "acos"
 
     def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
-        return ops.acos(x)
+        res = ops.acos(x)
+        # acos is only defined for |x| <= 1. MAX's ops.acos currently returns 0.0
+        # for values outside this range, which is inconsistent with JAX and other
+        # Nabla ops (like log, sqrt, atanh). We enforce NaN for correctness.
+        abs_x = ops.abs(x)
+        one = ops.constant(1.0, x.type.dtype, x.type.device)
+        mask = ops.greater(abs_x, one)
+        nan = ops.constant(float("nan"), x.type.dtype, x.type.device)
+        return ops.where(mask, ops.broadcast_to(nan, x.type.shape), res)
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP: -cotangent / sqrt(1 - x^2)."""
@@ -636,8 +644,12 @@ class GeluOp(UnaryOperation):
         return "gelu"
 
     def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
-        approximate = kwargs.get("approximate", "none")
-        return ops.gelu(x, approximate=approximate)
+        approx = kwargs.get("approximate", "none")
+        if approx is True:
+            approx = "tanh"
+        elif approx is False:
+            approx = "none"
+        return ops.gelu(x, approximate=approx)
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP: cotangent * (0.5 * (1 + erf(x / sqrt(2))) + x * exp(-x^2 / 2) / sqrt(2 * pi))."""
@@ -730,13 +742,11 @@ class CastOp(UnaryOperation):
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
-        x = args[0]
-        dtype = kwargs.get("dtype")
-        return (
-            [x.physical_local_shape(i) for i in range(x.num_shards)],
-            [dtype] * x.num_shards,
-            [x.device] * x.num_shards,
+        shapes, _, devices = super().compute_physical_shape(
+            args, kwargs, output_sharding
         )
+        dtype = kwargs.get("dtype")
+        return shapes, [dtype] * len(shapes), devices
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         # primals = (x,)

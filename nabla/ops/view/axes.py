@@ -672,11 +672,11 @@ class FlipOp(AxisOp):
         self, args: tuple, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         x = args[0]
-        return (
-            [x.physical_local_shape(i) for i in range(x.num_shards)],
-            [x.dtype] * x.num_shards,
-            [x.device] * x.num_shards,
-        )
+        shapes = [
+            tuple(int(d) for d in x.physical_local_shape(i))
+            for i in range(x.num_shards)
+        ]
+        return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         # Flip is its own inverse
@@ -722,7 +722,7 @@ class PermuteOp(Operation):
         shapes = []
         for i in range(x.num_shards):
             local_shape = x.physical_local_shape(i)
-            shapes.append(tuple(local_shape[j] for j in order))
+            shapes.append(tuple(int(local_shape[j]) for j in order))
         return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
