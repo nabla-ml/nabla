@@ -372,7 +372,7 @@ def constant(
         return Tensor.from_dlpack(value)
 
     dtype, device = defaults(dtype, device)
-    return _constant_op(value, dtype, device)
+    return _constant_op(value, dtype=dtype, device=device)
 
 
 def full(
@@ -385,7 +385,7 @@ def full(
 ):
     """Create a tensor filled with a constant value."""
     dtype, device = defaults(dtype, device)
-    t = _full_op(shape, value, dtype, device)
+    t = _full_op(shape, value, dtype=dtype, device=device)
     if is_traced:
         t.is_traced = True
     return t
@@ -400,7 +400,7 @@ def zeros(
 ):
     """Create a tensor filled with zeros."""
     dtype, device = defaults(dtype, device)
-    t = _zeros_op(shape, dtype, device)
+    t = _zeros_op(shape, dtype=dtype, device=device)
     if is_traced:
         t.is_traced = True
     return t
@@ -415,7 +415,7 @@ def ones(
 ):
     """Create a tensor filled with ones."""
     dtype, device = defaults(dtype, device)
-    t = _ones_op(shape, dtype, device)
+    t = _ones_op(shape, dtype=dtype, device=device)
     if is_traced:
         t.is_traced = True
     return t
@@ -433,7 +433,7 @@ def arange(
     dtype, device = defaults(dtype, device)
     if stop is None:
         start, stop = 0, start
-    return _arange_op(start, stop, step, dtype, device)
+    return _arange_op(start, stop, step, dtype=dtype, device=device)
 
 
 def uniform(
@@ -446,7 +446,7 @@ def uniform(
 ):
     """Create a tensor with uniform random values."""
     dtype, device = defaults(dtype, device)
-    return _uniform_op(shape, low, high, dtype, device)
+    return _uniform_op(shape, low, high, dtype=dtype, device=device)
 
 
 def gaussian(
@@ -459,7 +459,7 @@ def gaussian(
 ):
     """Create a tensor with Gaussian (normal) random values."""
     dtype, device = defaults(dtype, device)
-    return _gaussian_op(shape, mean, std, dtype, device)
+    return _gaussian_op(shape, mean, std, dtype=dtype, device=device)
 
 
 normal = gaussian
@@ -474,7 +474,7 @@ def hann_window(
 ):
     """Create a 1D Hann window tensor."""
     dtype, device = defaults(dtype, device)
-    return _hann_window_op(window_length, device, periodic=periodic, dtype=dtype)
+    return _hann_window_op(window_length, device=device, periodic=periodic, dtype=dtype)
 
 
 def triu(x: Any, k: int = 0) -> Any:

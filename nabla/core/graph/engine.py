@@ -448,7 +448,10 @@ class ComputeGraph:
             # Thorough cleanup: if this branch isn't being traced for autograd,
             # clear the output_refs link to allow the OpNode and its inputs
             # to be garbage collected immediately.
-            if impl.output_refs and not impl.is_traced:
+            # IMPORTANT: Only clear output_refs if the tensor is now realized,
+            # otherwise we lose the trace for unrealized tensors that may be
+            # used in future computations.
+            if impl.output_refs and not impl.is_traced and impl.is_realized:
                 refs = impl.output_refs
                 impl.output_refs = None
                 impl.output_index = None

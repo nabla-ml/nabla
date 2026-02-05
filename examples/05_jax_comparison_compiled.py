@@ -1,4 +1,16 @@
-"""Comprehensive MLP training test with compile - comparing to JAX JIT."""
+# ===----------------------------------------------------------------------=== #
+# Nabla 2026
+# SPDX-License-Identifier: Apache-2.0
+# ===----------------------------------------------------------------------=== #
+"""MLP training with @nb.compile vs eager vs JAX.
+
+Trains a deep MLP on a complex sine curve. Compares:
+- Nabla compiled (@nb.compile)
+- Nabla eager (lazy with batched realize)
+- JAX with @jit
+
+Demonstrates compilation speedup and performance parity with JAX.
+"""
 import nabla as nb
 import numpy as np
 import time
@@ -11,71 +23,53 @@ try:
     HAS_JAX = True
 except ImportError:
     HAS_JAX = False
-    print("⚠ JAX not available - skipping JAX comparison")
 
 np.random.seed(42)
 
-# Create sine curve dataset - MORE COMPLEX
-n_samples = 500  # Much larger dataset
+n_samples = 500
 X_np = np.linspace(0, 1, n_samples).reshape(-1, 1).astype(np.float32)
-y_np = (np.sin(8 * np.pi * X_np) + 1) / 2.0  # 4 periods, normalized to [0, 1]
+y_np = (np.sin(8 * np.pi * X_np) + 1) / 2.0
 
 X = nb.Tensor.from_dlpack(X_np)
 y = nb.Tensor.from_dlpack(y_np)
 
 print("=" * 70)
-print("MLP Training: Fitting Complex Sine Curve (4 periods)")
+print("MLP Training: Fitting Complex Sine Curve")
 print("=" * 70)
-print(f"Dataset: {n_samples} samples")
-print(f"Input: x in [0, 1]")
-print(f"Target: (sin(8π * x) + 1) / 2 in [0, 1]")
-print()
+print(f"Dataset: {n_samples} samples, fitting (sin(8π*x) + 1)/2")
 
-# LARGER, MORE COMPLEX architecture
-layers = [1, 16, 32, 64, 64, 64, 64, 32, 16, 1]  # Much wider and deeper
+layers = [1, 16, 32, 64, 64, 64, 64, 32, 16, 1]
 params = {}
 
 for i in range(len(layers) - 1):
-    in_dim = layers[i]
-    out_dim = layers[i + 1]
-    # Glorot initialization
+    in_dim, out_dim = layers[i], layers[i + 1]
     limit = np.sqrt(6.0 / (in_dim + out_dim))
     w_np = np.random.uniform(-limit, limit, (in_dim, out_dim)).astype(np.float32)
     b_np = np.zeros((out_dim,), dtype=np.float32)
-    
-    w = nb.Tensor.from_dlpack(w_np)
-    b = nb.Tensor.from_dlpack(b_np)
-    
-    params[f'layer{i+1}'] = {'w': w, 'b': b}
+    params[f'layer{i+1}'] = {
+        'w': nb.Tensor.from_dlpack(w_np),
+        'b': nb.Tensor.from_dlpack(b_np)
+    }
 
 total_params = sum((layers[i] * layers[i+1] + layers[i+1]) for i in range(len(layers) - 1))
-print(f"Architecture: {' -> '.join(map(str, layers))}")
-print(f"Total params: {total_params}")
-print()
+print(f"Architecture: {' -> '.join(map(str, layers))} ({total_params} params)\n")
 
 def mlp_forward(params, x):
-    """MLP with ReLU activations, matching test_sine_mlp.py structure."""
     h = x
-    # All layers except last use ReLU
     for i in range(1, len(layers)):
-        layer_name = f'layer{i}'
-        h = h @ params[layer_name]['w'] + params[layer_name]['b']
-        if i < len(layers) - 1:  # No activation on output layer
+        h = h @ params[f'layer{i}']['w'] + params[f'layer{i}']['b']
+        if i < len(layers) - 1:
             h = nb.relu(h)
     return h
 
 def loss_fn(params, x, y):
-    """MSE loss."""
     pred = mlp_forward(params, x)
     diff = pred - y
     return nb.mean(diff * diff)
 
-# Compiled train step
 @nb.compile
 def train_step_compiled(params, x, y):
     loss, grads = nb.value_and_grad(loss_fn)(params, x, y)
-    
-    # Update parameters with SGD
     lr = 0.01
     new_params = {}
     for layer_name in params.keys():
@@ -85,46 +79,32 @@ def train_step_compiled(params, x, y):
         }
     return loss, new_params
 
-# Non-compiled version for comparison (LAZY MODE - proper batching)
 def train_step_eager(params, x, y):
-    # Use realize=False to defer execution
     loss, grads = nb.value_and_grad(loss_fn, realize=False)(params, x, y)
-    
     lr = 0.01
-    # Compute new params as lazy nodes (no realization yet)
     new_params = {}
     for layer_name in params.keys():
         new_params[layer_name] = {
             'w': params[layer_name]['w'] - grads[layer_name]['w'] * lr,
             'b': params[layer_name]['b'] - grads[layer_name]['b'] * lr,
         }
-    
-    # CRITICAL: Batch realize ALL outputs in ONE operation!
-    # This is the key to efficient lazy evaluation
+    # Batch realize all outputs
     all_outputs = [loss]
     for layer_params in new_params.values():
         all_outputs.extend(layer_params.values())
     nb.realize_all(*all_outputs)
-    
     return loss, new_params
 
 print("=" * 70)
-print("MLP Training with Full Pytree Parameters (weights + biases)")
-print("=" * 70)
-
-# Test 1: Compiled version
-print("=" * 70)
-print("TEST 1: Compiled train_step (with @nb.compile)")
+print("TEST 1: Compiled (@nb.compile)")
 print("=" * 70)
 
 params_compiled = params
 n_steps = 200
 
-# Warmup
 loss, params_compiled = train_step_compiled(params_compiled, X, y)
-print(f"Warmup (trace): loss = {loss.to_numpy():.6f}")
+print(f"Warmup: loss = {loss.to_numpy():.6f}")
 
-# Timed training
 start = time.perf_counter()
 losses_compiled = []
 for i in range(n_steps):
@@ -134,25 +114,19 @@ for i in range(n_steps):
         print(f"  Step {i+1:3d}: loss = {loss.to_numpy():.6f}")
 
 elapsed_compiled = time.perf_counter() - start
-print(f"\nCompiled version:")
-print(f"  Time: {elapsed_compiled:.4f}s ({n_steps/elapsed_compiled:.1f} steps/sec)")
-print(f"  Final loss: {losses_compiled[-1]:.6f}")
-print(f"  Loss reduction: {losses_compiled[0]:.6f} -> {losses_compiled[-1]:.6f} ({(1 - losses_compiled[-1]/losses_compiled[0])*100:.1f}% reduction)")
-print(f"  Compile stats: {train_step_compiled.stats}")
+print(f"\nTime: {elapsed_compiled:.4f}s ({n_steps/elapsed_compiled:.1f} steps/sec)")
+print(f"Loss: {losses_compiled[0]:.6f} -> {losses_compiled[-1]:.6f}")
+print(f"Compile stats: {train_step_compiled.stats}")
 
-# Test 2: Eager version (no compile)
-print()
-print("=" * 70)
-print("TEST 2: Eager train_step (no compile)")
+print("\n" + "=" * 70)
+print("TEST 2: Eager (no compile)")
 print("=" * 70)
 
 params_eager = params
 
-# Warmup
 loss, params_eager = train_step_eager(params_eager, X, y)
 print(f"Warmup: loss = {loss.to_numpy():.6f}")
 
-# Timed training
 start = time.perf_counter()
 losses_eager = []
 for i in range(n_steps):
@@ -162,29 +136,23 @@ for i in range(n_steps):
         print(f"  Step {i+1:3d}: loss = {loss.to_numpy():.6f}")
 
 elapsed_eager = time.perf_counter() - start
-print(f"\nEager version:")
-print(f"  Time: {elapsed_eager:.4f}s ({n_steps/elapsed_eager:.1f} steps/sec)")
-print(f"  Final loss: {losses_eager[-1]:.6f}")
-print(f"  Loss reduction: {losses_eager[0]:.6f} -> {losses_eager[-1]:.6f} ({(1 - losses_eager[-1]/losses_eager[0])*100:.1f}% reduction)")
+print(f"\nTime: {elapsed_eager:.4f}s ({n_steps/elapsed_eager:.1f} steps/sec)")
+print(f"Loss: {losses_eager[0]:.6f} -> {losses_eager[-1]:.6f}")
 
-# Comparison
-print()
-print("=" * 70)
+print("\n" + "=" * 70)
 print("COMPARISON")
 print("=" * 70)
 speedup = elapsed_eager / elapsed_compiled
-print(f"Speedup: {speedup:.2f}x faster with compile!")
+print(f"Speedup: {speedup:.2f}x with compile")
 print(f"  Compiled: {elapsed_compiled:.4f}s")
 print(f"  Eager:    {elapsed_eager:.4f}s")
-print()
 
-# Verify correctness (losses should be very similar)
 loss_diff = abs(losses_compiled[-1] - losses_eager[-1])
-print(f"Final loss difference: {loss_diff:.8f} (should be very small)")
+print(f"\nLoss difference: {loss_diff:.8f}")
 if loss_diff < 1e-4:
-    print("✓ Compiled and eager versions produce same results!")
+    print("✓ Compiled and eager match!")
 else:
-    print("⚠ Warning: Compiled and eager versions differ!")
+    print("⚠ Compiled and eager differ!")
 
 # Test 3: JAX JIT comparison
 if HAS_JAX:
