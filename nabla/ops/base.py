@@ -77,21 +77,28 @@ class Operation(ABC):
         This is the standard pattern used by most operations. Operations with
         specialized execution logic (communication ops, reductions, etc.) can override.
 
+        NOTE: This method receives RAW (logical) kwargs and performs adaptation
+        internally via adapt_kwargs, just like AxisOp.execute does.
+
         Returns:
             tuple: (shard_results, output_sharding, mesh)
         """
         from ..core import GRAPH
         from ..core.sharding import spmd
 
+        # Adapt kwargs for physical execution (batch_dims offset, etc.)
+        max_batch_dims = collect_metadata(args)[0]
+        adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)
+
         mesh = spmd.get_mesh_from_args(args)
 
         with GRAPH.graph:
             shard_results = spmd.execute_on_shards(
-                self.kernel, args, kwargs, mesh, op=self
+                self.kernel, args, adapted_kwargs, mesh, op=self
             )
 
         output_sharding, _, _ = spmd.infer_output_sharding(
-            self, args, mesh, kwargs or {}
+            self, args, mesh, adapted_kwargs or {}
         )
 
         return (shard_results, output_sharding, mesh)

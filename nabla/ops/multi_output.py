@@ -118,6 +118,13 @@ class SplitOp(AxisOp):
         axis = target.op_kwargs.get("axis", 0)
         return concatenate(cotangent, axis=axis)
 
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP for split: split tangent along the same axis."""
+        target = output[0] if isinstance(output, (list, tuple)) else output
+        axis = target.op_kwargs.get("axis", 0)
+        num_splits = target.op_kwargs.get("num_splits")
+        return split(tangents, num_splits=num_splits, axis=axis)
+
     def sharding_rule(
         self,
         input_shapes: list[tuple[int, ...]],
@@ -276,6 +283,13 @@ class ChunkOp(AxisOp):
         axis = target.op_kwargs.get("axis", 0)
         return concatenate(cotangent, axis=axis)
 
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP for chunk: chunk tangent along the same axis."""
+        target = output[0] if isinstance(output, (list, tuple)) else output
+        axis = target.op_kwargs.get("axis", 0)
+        chunks = target.op_kwargs.get("chunks")
+        return chunk(tangents, chunks=chunks, axis=axis)
+
     def sharding_rule(
         self,
         input_shapes: list[tuple[int, ...]],
@@ -416,6 +430,12 @@ class UnbindOp(AxisOp):
         target = output[0] if isinstance(output, (list, tuple)) else output
         axis = target.op_kwargs.get("axis", 0)
         return stack(cotangent, axis=axis)
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP for unbind: unbind tangent along the same axis."""
+        target = output[0] if isinstance(output, (list, tuple)) else output
+        axis = target.op_kwargs.get("axis", 0)
+        return unbind(tangents, axis=axis)
 
     def sharding_rule(
         self,

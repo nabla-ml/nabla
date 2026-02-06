@@ -41,6 +41,7 @@ from nabla.core.sharding.spec import DeviceMesh, DimSpec, ShardingSpec
 
 from .common import (
     compare_nested_structures,
+    cleanup_caches,
     get_test_data_for_shapes,
     get_shape_for_rank,
     make_jax_array,
@@ -60,6 +61,7 @@ TOLERANCE = 1e-4
 
 def _get_args(op, config):
     """Return (nabla_args, nabla_kwargs, jax_args, jax_kwargs)."""
+    cleanup_caches()
     (args_nb, kw_nb), (args_jax, kw_jax) = op.get_args(config)
     kw_jax_fixed = {
         k.replace("axes", "axis") if op.name not in ("transpose", "unsqueeze") else k: v
@@ -84,6 +86,17 @@ def _is_scalar_output(result):
     if hasattr(result, 'shape'):
         return result.shape == () or (hasattr(result, 'ndim') and result.ndim == 0)
     return False
+
+
+def _is_list_input(config):
+    return getattr(config, "is_list_input", False)
+
+
+def _batch_list_input(args_nb, args_jax):
+    nb_list = [nb.stack([a, a]) for a in args_nb[0]]
+    jax_list = [jnp.stack([a, a]) for a in args_jax[0]]
+    in_axes = ([0] * len(nb_list),)
+    return (nb_list,), (jax_list,), in_axes
 
 
 # ---------------------------------------------------------------------------
@@ -112,7 +125,10 @@ def _unary_config_pairs():
 def _differentiable_pairs():
     """All ops that are differentiable (skip comparison/creation)."""
     pairs = []
+    nondiff_inputs = {"where", "gather", "scatter"}
     for op in ALL_OPS:
+        if op.name in nondiff_inputs:
+            continue
         for config in op.configs:
             pairs.append(pytest.param(op, config, id=f"{op.name}_{config.description}"))
     return pairs
@@ -171,6 +187,7 @@ class TestJVP:
     @pytest.mark.parametrize("op,config", _differentiable_pairs())
     def test_jvp(self, op, config):
         args_nb, kw_nb, args_jax, kw_jax = _get_args(op, config)
+        list_input = _is_list_input(config)
 
         def nb_fn(*a):
             return op.nabla_fn(*a, **kw_nb)
@@ -178,8 +195,13 @@ class TestJVP:
         def jax_fn(*a):
             return op.jax_fn(*a, **kw_jax)
 
-        tangents_jax = tuple(jnp.ones_like(a) for a in args_jax)
-        tangents_nb = tuple(tensor_from_jax(t) for t in tangents_jax)
+        if list_input:
+            tangents_jax_list = [jnp.ones_like(a) for a in args_jax[0]]
+            tangents_jax = (tangents_jax_list,)
+            tangents_nb = ([tensor_from_jax(t) for t in tangents_jax_list],)
+        else:
+            tangents_jax = tuple(jnp.ones_like(a) for a in args_jax)
+            tangents_nb = tuple(tensor_from_jax(t) for t in tangents_jax)
 
         primals_out_nb, tangents_out_nb = jvp(nb_fn, args_nb, tangents_nb)
         primals_out_jax, tangents_out_jax = jax.jvp(jax_fn, args_jax, tangents_jax)
@@ -196,22 +218,28 @@ class TestJVP:
 class TestVmap:
     @pytest.mark.parametrize("op,config", _op_config_pairs())
     def test_vmap(self, op, config):
+        if not getattr(config, "supports_vmap", True):
+            pytest.skip("vmap not supported for this op/config")
         args_nb, kw_nb, args_jax, kw_jax = _get_args(op, config)
+        list_input = _is_list_input(config)
 
-        in_axes = []
-        batched_nb = []
-        batched_jax = []
-        for a_nb, a_jax in zip(args_nb, args_jax, strict=False):
-            if hasattr(a_nb, 'shape'):
-                batched_nb.append(nb.stack([a_nb, a_nb]))
-                batched_jax.append(jnp.stack([a_jax, a_jax]))
-                in_axes.append(0)
-            else:
-                batched_nb.append(a_nb)
-                batched_jax.append(a_jax)
-                in_axes.append(None)
+        if list_input:
+            batched_nb, batched_jax, in_axes = _batch_list_input(args_nb, args_jax)
+        else:
+            in_axes = []
+            batched_nb = []
+            batched_jax = []
+            for a_nb, a_jax in zip(args_nb, args_jax, strict=False):
+                if hasattr(a_nb, 'shape'):
+                    batched_nb.append(nb.stack([a_nb, a_nb]))
+                    batched_jax.append(jnp.stack([a_jax, a_jax]))
+                    in_axes.append(0)
+                else:
+                    batched_nb.append(a_nb)
+                    batched_jax.append(a_jax)
+                    in_axes.append(None)
 
-        in_axes = tuple(in_axes)
+            in_axes = tuple(in_axes)
         nb_vmapped = vmap(partial(op.nabla_fn, **kw_nb), in_axes=in_axes)
         jax_vmapped = jax.vmap(partial(op.jax_fn, **kw_jax), in_axes=in_axes)
 
@@ -228,7 +256,10 @@ class TestVmap:
 class TestVmapVJP:
     @pytest.mark.parametrize("op,config", _differentiable_pairs())
     def test_vmap_vjp(self, op, config):
+        if not getattr(config, "supports_vmap", True):
+            pytest.skip("vmap not supported for this op/config")
         args_nb, kw_nb, args_jax, kw_jax = _get_args(op, config)
+        list_input = _is_list_input(config)
 
         def nb_grad_fn(*a):
             fn = lambda *x: op.nabla_fn(*x, **kw_nb)
@@ -242,9 +273,12 @@ class TestVmapVJP:
             cot = jax.tree.map(_ones_like_jax, out)
             return pb(cot)
 
-        in_axes = tuple(0 if hasattr(a, 'shape') else None for a in args_nb)
-        batched_nb = tuple(nb.stack([a, a]) if hasattr(a, 'shape') else a for a in args_nb)
-        batched_jax = tuple(jnp.stack([a, a]) if hasattr(a, 'shape') else a for a in args_jax)
+        if list_input:
+            batched_nb, batched_jax, in_axes = _batch_list_input(args_nb, args_jax)
+        else:
+            in_axes = tuple(0 if hasattr(a, 'shape') else None for a in args_nb)
+            batched_nb = tuple(nb.stack([a, a]) if hasattr(a, 'shape') else a for a in args_nb)
+            batched_jax = tuple(jnp.stack([a, a]) if hasattr(a, 'shape') else a for a in args_jax)
 
         nb_res = vmap(nb_grad_fn, in_axes=in_axes)(*batched_nb)
         jax_res = jax.vmap(jax_grad_fn, in_axes=in_axes)(*batched_jax)
@@ -262,23 +296,35 @@ class TestVmapVJP:
 class TestVmapJVP:
     @pytest.mark.parametrize("op,config", _differentiable_pairs())
     def test_vmap_jvp(self, op, config):
+        if not getattr(config, "supports_vmap", True):
+            pytest.skip("vmap not supported for this op/config")
         args_nb, kw_nb, args_jax, kw_jax = _get_args(op, config)
+        list_input = _is_list_input(config)
 
         def nb_jvp_fn(*a):
             fn = lambda *x: op.nabla_fn(*x, **kw_nb)
-            tangents = tuple(nb.ones_like(x) for x in a)
+            if list_input:
+                tangents = ([nb.ones_like(x) for x in a[0]],)
+            else:
+                tangents = tuple(nb.ones_like(x) for x in a)
             _, t_out = jvp(fn, a, tangents)
             return t_out
 
         def jax_jvp_fn(*a):
             fn = lambda *x: op.jax_fn(*x, **kw_jax)
-            tangents = tuple(jnp.ones_like(x) for x in a)
+            if list_input:
+                tangents = ([jnp.ones_like(x) for x in a[0]],)
+            else:
+                tangents = tuple(jnp.ones_like(x) for x in a)
             _, t_out = jax.jvp(fn, a, tangents)
             return t_out
 
-        in_axes = tuple(0 if hasattr(a, 'shape') else None for a in args_nb)
-        batched_nb = tuple(nb.stack([a, a]) if hasattr(a, 'shape') else a for a in args_nb)
-        batched_jax = tuple(jnp.stack([a, a]) if hasattr(a, 'shape') else a for a in args_jax)
+        if list_input:
+            batched_nb, batched_jax, in_axes = _batch_list_input(args_nb, args_jax)
+        else:
+            in_axes = tuple(0 if hasattr(a, 'shape') else None for a in args_nb)
+            batched_nb = tuple(nb.stack([a, a]) if hasattr(a, 'shape') else a for a in args_nb)
+            batched_jax = tuple(jnp.stack([a, a]) if hasattr(a, 'shape') else a for a in args_jax)
 
         nb_res = vmap(nb_jvp_fn, in_axes=in_axes)(*batched_nb)
         jax_res = jax.vmap(jax_jvp_fn, in_axes=in_axes)(*batched_jax)
@@ -345,6 +391,15 @@ def _maybe_shard_arg(op, idx: int, arg: nb.Tensor, mesh: DeviceMesh) -> nb.Tenso
     return _shard_axis0(arg, mesh)
 
 
+def _maybe_shard_arg_tree(op, idx: int, arg, mesh: DeviceMesh):
+    if isinstance(arg, list):
+        return [
+            _maybe_shard_arg(op, idx, a, mesh) if hasattr(a, "shape") else a
+            for a in arg
+        ]
+    return _maybe_shard_arg(op, idx, arg, mesh) if hasattr(arg, "shape") else arg
+
+
 def _shardable_pairs():
     """Ops × configs where first dim is divisible by 2 (mesh axis 'x' size)."""
     pairs = []
@@ -362,9 +417,11 @@ def _shardable_pairs():
 class TestShardedBaseline:
     @pytest.mark.parametrize("op,config", _shardable_pairs())
     def test_sharded_forward(self, op, config):
+        if not getattr(config, "supports_sharding", True):
+            pytest.skip("sharding not supported for this op/config")
         args_nb, kw_nb, args_jax, kw_jax = _get_args(op, config)
         sharded_nb = tuple(
-            _maybe_shard_arg(op, i, a, MESH) if hasattr(a, 'shape') else a
+            _maybe_shard_arg_tree(op, i, a, MESH)
             for i, a in enumerate(args_nb)
         )
         nb_res = op.nabla_fn(*sharded_nb, **kw_nb)
@@ -375,9 +432,11 @@ class TestShardedBaseline:
 class TestShardedVJP:
     @pytest.mark.parametrize("op,config", _shardable_pairs())
     def test_sharded_vjp(self, op, config):
+        if not getattr(config, "supports_sharding", True):
+            pytest.skip("sharding not supported for this op/config")
         args_nb, kw_nb, args_jax, kw_jax = _get_args(op, config)
         sharded_nb = tuple(
-            _maybe_shard_arg(op, i, a, MESH) if hasattr(a, 'shape') else a
+            _maybe_shard_arg_tree(op, i, a, MESH)
             for i, a in enumerate(args_nb)
         )
 

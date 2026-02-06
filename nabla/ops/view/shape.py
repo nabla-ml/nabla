@@ -403,6 +403,10 @@ class SliceUpdateOp(Operation):
 
         # Functional implementation
         rank = len(x.shape)
+        if start is not None and size is not None and len(start) < rank:
+            pad = rank - len(start)
+            start = (0,) * pad + tuple(start)
+            size = [int(x.shape[i]) for i in range(pad)] + list(size)
         paddings = []
 
         # We need update shape for ones_like
@@ -512,6 +516,15 @@ class SliceUpdateOp(Operation):
         du = slice_tensor(cotangent, start=start, size=size)
 
         return (dx, du, None, None)
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        start = output.op_kwargs.get("start")
+        size = output.op_kwargs.get("size")
+        tx, t_update = tangents
+
+        from .shape import slice_update
+
+        return slice_update(tx, t_update, start=start, size=size)
 
 
 class SliceTensorOp(Operation):

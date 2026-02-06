@@ -404,6 +404,22 @@ class OuterOp(BinaryOperation):
             return ops.mul(x_up, y_up)
         return ops.outer(x, y)
 
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        x, y = primals
+        from ..ops.reduction import reduce_sum
+        from . import mul
+
+        grad_x = reduce_sum(mul(cotangent, y), axis=-1)
+        grad_y = reduce_sum(mul(cotangent, x), axis=-2)
+        return (grad_x, grad_y)
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        x, y = primals
+        tx, ty = tangents
+        from . import add, outer
+
+        return add(outer(tx, y), outer(x, ty))
+
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:

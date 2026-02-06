@@ -761,6 +761,14 @@ class PermuteOp(Operation):
     def name(self) -> str:
         return "permute"
 
+    def adapt_kwargs(self, args: tuple, kwargs: dict, batch_dims: int) -> dict:
+        order = kwargs.get("order")
+        if order is None:
+            return kwargs
+        if batch_dims > 0:
+            order = tuple(range(batch_dims)) + tuple(batch_dims + i for i in order)
+        return {**kwargs, "order": order}
+
     def kernel(self, x: TensorValue, *, order: tuple[int, ...]) -> TensorValue:
         return ops.permute(x, order)
 
