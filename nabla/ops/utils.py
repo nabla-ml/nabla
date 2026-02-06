@@ -269,6 +269,10 @@ def apply_jvp(op: Any, args: tuple, output: Any) -> None:
     It computes the JVP using the operation's jvp_rule and attaches the result
     tangent to the output.
 
+    Tangents are temporarily stripped from inputs before calling jvp_rule to
+    prevent recursive JVP — the ops *inside* jvp_rule should execute without
+    re-triggering tangent propagation.
+
     Args:
         op: The operation instance (needed for jvp_rule)
         args: Input arguments (may have tangents attached)
@@ -276,13 +280,53 @@ def apply_jvp(op: Any, args: tuple, output: Any) -> None:
     """
     from ..core import Tensor, pytree
 
+    # 1. Extract tangents and temporarily detach them from primals.
+    saved_tangents: list[tuple[Any, Any]] = []  # (impl, old_tangent)
+
     tangents = pytree.tree_map(
         lambda x: (
             Tensor(impl=x.tangent) if isinstance(x, Tensor) and x.tangent else None
         ),
         args,
     )
-    output_tangent = op.jvp_rule(args, tangents, output)
+
+    # Strip tangents so inner ops don't see them.
+    def _strip(x):
+        if isinstance(x, Tensor) and x.tangent is not None:
+            saved_tangents.append((x._impl, x.tangent))
+            x._impl.tangent = None
+        return x
+    pytree.tree_map(_strip, args)
+
+    # Replace missing tangents with zeros for tensor primals so jvp_rules can
+    # assume tangents are always tensors for tensor inputs.
+    def _fill_missing_tangents(primal, tangent):
+        if isinstance(primal, Tensor) and tangent is None:
+            from ..ops.creation import zeros_like
+
+            return zeros_like(primal)
+        return tangent
+
+    tangents = pytree.tree_map(_fill_missing_tangents, args, tangents)
+
+    # Unwrap single-element tuples — jvp_rules for unary ops expect a single
+    # tensor, not a 1-element tuple. This matches BackwardEngine's _unwrap_single
+    # convention used for vjp_rule.
+    def _unwrap(x):
+        if isinstance(x, (list, tuple)) and len(x) == 1:
+            return x[0]
+        return x
+
+    unwrapped_primals = _unwrap(args)
+    unwrapped_tangents = _unwrap(tangents)
+
+    try:
+        output_tangent = op.jvp_rule(unwrapped_primals, unwrapped_tangents, output)
+    finally:
+        # 2. Restore tangents on primals.
+        for impl, old_tangent in saved_tangents:
+            impl.tangent = old_tangent
+
     if output_tangent is not None:
         pytree.tree_map(
             lambda o, t: (

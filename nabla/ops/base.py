@@ -157,13 +157,14 @@ class Operation(ABC):
             max_batch_dims,
         )
 
-        # 7. Tracing & Post-Processing
+        # 7. Tracing Setup (store op_kwargs on output so jvp_rule can read them)
         self._setup_output_refs(output, resharded_args, kwargs, op_hash=op_hash)
 
-        output = apply_auto_reduction(self, output, mesh, reduce_axes)
-
+        # 8. JVP tangent propagation (after output refs are set)
         if any_has_tangent:
             apply_jvp(self, args, output)
+
+        output = apply_auto_reduction(self, output, mesh, reduce_axes)
 
         return output
 
@@ -423,6 +424,13 @@ class BinaryOperation(Operation):
         else:
             global_phys = y.physical_global_shape or y.local_shape
             batch_shape = tuple(int(d) for d in global_phys[:y_batch_dims])
+
+        max_batch_dims = max(x_batch_dims, y_batch_dims)
+        if max_batch_dims > 0:
+            if x.batch_dims < max_batch_dims:
+                x = view_ops.broadcast_batch_dims(x, batch_shape)
+            if y.batch_dims < max_batch_dims:
+                y = view_ops.broadcast_batch_dims(y, batch_shape)
 
         target_physical = batch_shape + target_logical
 

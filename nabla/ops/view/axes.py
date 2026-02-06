@@ -333,11 +333,14 @@ class SwapAxesOp(AxisOp):
         return shapes, dtypes, devices
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        """VJP for swap_axes: swap back."""
-        # Transpose is self-inverse
         axis1 = output.op_kwargs.get("axis1")
         axis2 = output.op_kwargs.get("axis2")
         return swap_axes(cotangent, axis1=axis1, axis2=axis2)
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        axis1 = output.op_kwargs.get("axis1")
+        axis2 = output.op_kwargs.get("axis2")
+        return swap_axes(tangents, axis1=axis1, axis2=axis2)
 
     def __call__(self, x, *, axis1: int, axis2: int):
         return super().__call__(x, axis1=axis1, axis2=axis2)
@@ -488,8 +491,12 @@ class MoveAxisOp(AxisOp):
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         source = output.op_kwargs.get("source")
         destination = output.op_kwargs.get("destination")
-        # Inverse: move from destination back to source
         return moveaxis(cotangent, source=destination, destination=source)
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        source = output.op_kwargs.get("source")
+        destination = output.op_kwargs.get("destination")
+        return moveaxis(tangents, source=source, destination=destination)
 
     def sharding_rule(
         self,
@@ -719,9 +726,12 @@ class FlipOp(AxisOp):
         return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        # Flip is its own inverse
         axis = output.op_kwargs.get("axis")
         return flip(cotangent, axis=axis)
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        axis = output.op_kwargs.get("axis")
+        return flip(tangents, axis=axis)
 
     def sharding_rule(
         self,
@@ -767,11 +777,14 @@ class PermuteOp(Operation):
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         order = output.op_kwargs.get("order")
-        # Inverse permutation
         inv_order = [0] * len(order)
         for i, p in enumerate(order):
             inv_order[p] = i
         return permute(cotangent, order=tuple(inv_order))
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        order = output.op_kwargs.get("order")
+        return permute(tangents, order=order)
 
     def sharding_rule(
         self,

@@ -29,9 +29,10 @@ class AddOp(BinaryOperation):
 
     def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
         """JVP for addition: tangent_x + tangent_y."""
+        tx, ty = tangents
         from . import add
 
-        return add(tangents[0], tangents[1])
+        return add(tx, ty)
 
 
 class MulOp(BinaryOperation):
@@ -54,7 +55,6 @@ class MulOp(BinaryOperation):
         x, y = primals
         tx, ty = tangents
         from . import add, mul
-
         return add(mul(x, ty), mul(tx, y))
 
 
@@ -74,9 +74,10 @@ class SubOp(BinaryOperation):
 
     def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
         """JVP for subtraction: tangent_x - tangent_y."""
+        tx, ty = tangents
         from . import sub
 
-        return sub(tangents[0], tangents[1])
+        return sub(tx, ty)
 
 
 class DivOp(BinaryOperation):
@@ -102,7 +103,6 @@ class DivOp(BinaryOperation):
         x, y = primals
         tx, ty = tangents
         from . import div, mul, sub
-
         return div(sub(mul(y, tx), mul(x, ty)), mul(y, y))
 
 
@@ -317,7 +317,6 @@ class MatmulOp(Operation):
         x, y = primals
         tx, ty = tangents
         from . import add, matmul
-
         return add(matmul(x, ty), matmul(tx, y))
 
 
@@ -352,9 +351,8 @@ class ModOp(BinaryOperation):
         """JVP: tangent_lhs - tangent_rhs * floor(lhs / rhs)."""
         lhs, rhs = primals
         tl, tr = tangents
-        from ..ops.unary import floor
+        from ..ops.unary import floor, neg
         from . import div, mul, sub
-
         return sub(tl, mul(tr, floor(div(lhs, rhs))))
 
 
@@ -384,7 +382,6 @@ class PowOp(BinaryOperation):
         tl, tr = tangents
         from ..ops.unary import log
         from . import add, mul, pow, sub
-
         term1 = mul(rhs, mul(pow(lhs, sub(rhs, 1.0)), tl))
         term2 = mul(output, mul(log(lhs), tr))
         return add(term1, term2)

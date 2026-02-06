@@ -4,7 +4,21 @@
 # ===----------------------------------------------------------------------=== #
 
 from .compile import CompilationStats, CompiledFunction, compile
+from .jacfwd import jacfwd
+from .jacrev import jacrev
+from .jvp import jvp
 from .shard_map import shard_map
+from .vjp import vjp
 from .vmap import vmap
 
-__all__ = ["vmap", "shard_map", "compile", "CompiledFunction", "CompilationStats"]
+__all__ = [
+    "vjp",
+    "jvp",
+    "jacrev",
+    "jacfwd",
+    "vmap",
+    "shard_map",
+    "compile",
+    "CompiledFunction",
+    "CompilationStats",
+]

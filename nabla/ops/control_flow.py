@@ -130,6 +130,14 @@ class WhereOp(Operation):
         grad_y = where(condition, zeros_like(y), cotangent)
         return (None, grad_x, grad_y)
 
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        from .control_flow import where
+
+        condition = primals[0]
+        t_x = tangents[1]
+        t_y = tangents[2]
+        return where(condition, t_x, t_y)
+
 
 class CondOp(Operation):
     @property

@@ -118,8 +118,7 @@ class BroadcastToOp(ShapeOp):
         return result
 
     def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
-        """JVP for broadcast_to: broadcast the tangent."""
-        target_shape = output.op_kwargs.get("shape")
+        target_shape = tuple(int(d) for d in output.shape)
         return broadcast_to(tangents, target_shape)
 
 
@@ -619,6 +618,13 @@ class SliceTensorOp(Operation):
 
         return (grad, None, None)
 
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        start = output.op_kwargs.get("start")
+        size = output.op_kwargs.get("size")
+        from .shape import slice_tensor
+
+        return slice_tensor(tangents, start=start, size=size)
+
     def _transform_shard_kwargs(
         self, kwargs: dict, output_sharding: Any, shard_idx: int, args: tuple
     ) -> dict:
@@ -861,6 +867,10 @@ class ConcatenateOp(AxisOp):
 
         return cotangent_slices
 
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        axis = output.op_kwargs.get("axis", 0)
+        return concatenate(tangents, axis=axis)
+
 
 _broadcast_to_op = BroadcastToOp()
 _reshape_op = ReshapeOp()
@@ -976,7 +986,8 @@ class BroadcastToPhysicalOp(Operation):
         result = super().__call__(x, shape=shape)
 
         if added_dims > 0:
-            pass
+            # New leading physical dims correspond to batch dims.
+            result._impl.batch_dims = x.batch_dims + added_dims
 
         return result
 
@@ -1153,15 +1164,19 @@ class PadOp(Operation):
         return ops.pad(x, flat_paddings, mode=mode, value=value)
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        # VJP for pad is slicing back the original region
         paddings = output.op_kwargs.get("paddings")
         x = primals[0] if isinstance(primals, (list, tuple)) else primals
-        
+
         start = [p[0] for p in paddings]
         size = [int(d) for d in x.shape]
-        
+
         from .shape import slice_tensor
         return (slice_tensor(cotangent, start=start, size=size),)
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        paddings = output.op_kwargs.get("paddings")
+        mode = output.op_kwargs.get("mode", "constant")
+        return pad(tangents, paddings=paddings, mode=mode, value=0.0)
 
 
 _reshape_op = ReshapeOp()

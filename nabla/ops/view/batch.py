@@ -321,15 +321,32 @@ class BroadcastBatchDimsOp(Operation):
 
         result = super().__call__(x, shape=physical_shape)
 
-        # Update batch_dims to match the new batch shape
-        output = Tensor._create_unsafe(
-            bufferss=result._buffers,
-            values=result._graph_values,
-            is_traced=result.is_traced,
-            batch_dims=len(batch_shape),
-        )
-        output.sharding = result.sharding
-        return output
+        # Update batch_dims to match the new batch shape.
+        result._impl.batch_dims = len(batch_shape)
+        return result
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        """VJP: sum over added batch dimensions."""
+        x = primals
+        added = output.batch_dims - x.batch_dims
+        if added <= 0:
+            return cotangent
+
+        from ..reduction import reduce_sum_physical
+        from .batch import decr_batch_dims
+
+        result = cotangent
+        for _ in range(added):
+            result = reduce_sum_physical(result, axis=0, keepdims=False)
+            if result.batch_dims > 0:
+                result = decr_batch_dims(result)
+        return result
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        """JVP: broadcast tangent across batch dimensions."""
+        phys = output.physical_global_shape
+        batch_shape = tuple(int(d) for d in phys[: output.batch_dims])
+        return broadcast_batch_dims(tangents, batch_shape)
 
 
 # Singleton instances

@@ -49,11 +49,10 @@ class ReduceSumOp(ReduceOperation):
         return broadcast_to(cotangent, tuple(x.shape))
 
     def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
-        """JVP for reduce_sum: sum the tangents along the same axis."""
         t = tangents
-        # Sum of tangents is the JVP
         axis = output.op_kwargs.get("axis", 0)
-        return reduce_sum(t, axis=axis, keepdims=True)
+        keepdims = output.op_kwargs.get("keepdims", False)
+        return reduce_sum(t, axis=axis, keepdims=keepdims)
 
 
 class MeanOp(ReduceOperation):
@@ -69,16 +68,17 @@ class MeanOp(ReduceOperation):
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for mean: broadcast cotangent / axis_size."""
         x = primals
-
-        # Get axis from kwargs if available (from trace)
         axis = output.op_kwargs.get("axis", 0)
-
         axis_size = x.shape[axis]
         from ..ops.view.shape import broadcast_to
 
-        # Create target shape for broadcasting cotangent back to x's shape
         target_shape = tuple(int(d) for d in x.shape)
         return broadcast_to(cotangent, target_shape) / axis_size
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        axis = output.op_kwargs.get("axis", 0)
+        keepdims = output.op_kwargs.get("keepdims", False)
+        return mean(tangents, axis=axis, keepdims=keepdims)
 
     def __call__(self, x, *, axis: int, keepdims: bool = False):
         return super().__call__(x, axis=axis, keepdims=keepdims)
@@ -126,17 +126,28 @@ class ReduceMaxOp(ReduceOperation):
         return ops._reduce_max(x, axis=axis)
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        """VJP for reduce_max: one-hot mask where input == max."""
         x = primals
         from ..ops.comparison import equal
         from ..ops.view.shape import broadcast_to
         from ..ops.binary import mul
 
-        # Broadcast output back to input shape for comparison
         max_broadcasted = broadcast_to(output, tuple(x.shape))
-        mask = equal(x, max_broadcasted)  # 1.0 where x == max, 0.0 elsewhere
+        mask = equal(x, max_broadcasted)
         cotangent_broadcasted = broadcast_to(cotangent, tuple(x.shape))
         return mul(cotangent_broadcasted, mask)
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        x = primals
+        from ..ops.comparison import equal
+        from ..ops.view.shape import broadcast_to
+        from ..ops.binary import mul
+        from ..ops.reduction import reduce_sum
+
+        axis = output.op_kwargs.get("axis", 0)
+        keepdims = output.op_kwargs.get("keepdims", False)
+        max_broadcasted = broadcast_to(output, tuple(x.shape))
+        mask = equal(x, max_broadcasted)
+        return reduce_sum(mul(tangents, mask), axis=axis, keepdims=keepdims)
 
     def infer_output_shape(
         self, input_shapes: list[tuple[int, ...]], **kwargs: Any

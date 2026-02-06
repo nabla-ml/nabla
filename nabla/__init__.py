@@ -173,7 +173,11 @@ from .ops.view import (
 transpose = swap_axes
 from .ops.utils import call_custom_kernel
 from .transforms.compile import CompilationStats, CompiledFunction, compile
+from .transforms.jacfwd import jacfwd
+from .transforms.jacrev import jacrev
+from .transforms.jvp import jvp
 from .transforms.shard_map import shard_map
+from .transforms.vjp import vjp
 from .transforms.vmap import vmap
 
 from max.driver import Accelerator, CPU
@@ -300,6 +304,10 @@ __all__ = [
     "grad",
     "value_and_grad",
     "backward",
+    "vjp",
+    "jvp",
+    "jacrev",
+    "jacfwd",
     "vmap",
     "shard_map",
     "compile",

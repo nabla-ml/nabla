@@ -240,20 +240,22 @@ class _SoftmaxNativeOp(AxisOp, UnaryOperation):
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for softmax: ∂s_i/∂x_j = s_i(δ_ij - s_j)."""
-        # grad_x = output * (cotangent - sum(cotangent * output, axis, keepdims=True))
         from ..ops.binary import mul, sub
         from ..ops.reduction import reduce_sum
 
         axis = output.op_kwargs.get("axis", -1)
-
-        # Element-wise product of cotangent and softmax output
         cot_mul_out = mul(cotangent, output)
-
-        # Sum along the softmax axis
         sum_cot_mul_out = reduce_sum(cot_mul_out, axis=axis, keepdims=True)
-
-        # Final VJP logic
         return mul(output, sub(cotangent, sum_cot_mul_out))
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        from ..ops.binary import mul, sub
+        from ..ops.reduction import reduce_sum
+
+        axis = output.op_kwargs.get("axis", -1)
+        t_mul_out = mul(tangents, output)
+        sum_t_mul_out = reduce_sum(t_mul_out, axis=axis, keepdims=True)
+        return mul(output, sub(tangents, sum_t_mul_out))
 
     def compute_cost(
         self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]
@@ -470,6 +472,11 @@ class FloorOp(UnaryOperation):
 
         return (zeros_like(cotangent),)
 
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        from ..ops.creation import zeros_like
+
+        return zeros_like(output)
+
 
 class IsInfOp(UnaryOperation):
     """Check for infinity: is_inf(x)."""
@@ -635,6 +642,11 @@ class TruncOp(UnaryOperation):
 
         return (zeros_like(cotangent),)
 
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        from ..ops.creation import zeros_like
+
+        return zeros_like(output)
+
 
 class GeluOp(UnaryOperation):
     """Gaussian Error Linear Unit (GELU)."""
@@ -702,15 +714,22 @@ class _LogSoftmaxNativeOp(AxisOp, UnaryOperation):
         return ops.logsoftmax(x, axis=axis)
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        """VJP: cotangent - softmax(x) * sum(cotangent, axis, keepdims=True)."""
         from ..ops.binary import mul, sub
         from ..ops.reduction import reduce_sum
 
         axis = output.op_kwargs.get("axis", -1)
-        # output is logsoftmax(x), so softmax(x) is exp(output)
         soft = exp(output)
         sum_cot = reduce_sum(cotangent, axis=axis, keepdims=True)
         return sub(cotangent, mul(soft, sum_cot))
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        from ..ops.binary import mul, sub
+        from ..ops.reduction import reduce_sum
+
+        axis = output.op_kwargs.get("axis", -1)
+        soft = exp(output)
+        sum_t = reduce_sum(tangents, axis=axis, keepdims=True)
+        return sub(tangents, mul(soft, sum_t))
 
 
 class RoundOp(UnaryOperation):
@@ -727,6 +746,11 @@ class RoundOp(UnaryOperation):
         from ..ops.creation import zeros_like
 
         return (zeros_like(cotangent),)
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        from ..ops.creation import zeros_like
+
+        return zeros_like(output)
 
 
 class CastOp(UnaryOperation):
