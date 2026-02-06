@@ -728,8 +728,8 @@ class _LogSoftmaxNativeOp(AxisOp, UnaryOperation):
 
         axis = output.op_kwargs.get("axis", -1)
         soft = exp(output)
-        sum_t = reduce_sum(tangents, axis=axis, keepdims=True)
-        return sub(tangents, mul(soft, sum_t))
+        sum_st = reduce_sum(mul(soft, tangents), axis=axis, keepdims=True)
+        return sub(tangents, sum_st)
 
 
 class RoundOp(UnaryOperation):

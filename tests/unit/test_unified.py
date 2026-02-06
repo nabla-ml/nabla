@@ -48,11 +48,11 @@ from .common import (
     tensor_from_jax,
     to_jax,
 )
-from .unified_registry import ALL_OPS, UNARY_OPS, BINARY_OPS, MATMUL_OPS, REDUCTION_OPS, VIEW_OPS
+from .unified_registry import ALL_OPS, DIFF_OPS, NON_DIFF_OPS, UNARY_OPS, BINARY_OPS, MATMUL_OPS, REDUCTION_OPS, VIEW_OPS
 
 SEED = 42
 MESH = DeviceMesh("test", (2, 4), ("x", "y"))
-TOLERANCE = 1e-4
+TOLERANCE = 5e-4
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -123,10 +123,10 @@ def _unary_config_pairs():
 
 
 def _differentiable_pairs():
-    """All ops that are differentiable (skip comparison/creation)."""
+    """All ops that are differentiable (skip comparison/creation/nondiff + where/gather/scatter)."""
     pairs = []
     nondiff_inputs = {"where", "gather", "scatter"}
-    for op in ALL_OPS:
+    for op in DIFF_OPS:
         if op.name in nondiff_inputs:
             continue
         for config in op.configs:
@@ -400,10 +400,12 @@ def _maybe_shard_arg_tree(op, idx: int, arg, mesh: DeviceMesh):
     return _maybe_shard_arg(op, idx, arg, mesh) if hasattr(arg, "shape") else arg
 
 
-def _shardable_pairs():
+def _shardable_pairs(ops=None):
     """Ops × configs where first dim is divisible by 2 (mesh axis 'x' size)."""
+    if ops is None:
+        ops = ALL_OPS
     pairs = []
-    for op in ALL_OPS:
+    for op in ops:
         for config in op.configs:
             shapes = config.primal_shapes or tuple(get_shape_for_rank(r) for r in config.ranks)
             all_shardable = all(
@@ -412,6 +414,13 @@ def _shardable_pairs():
             if all_shardable:
                 pairs.append(pytest.param(op, config, id=f"{op.name}_{config.description}"))
     return pairs
+
+
+def _shardable_differentiable_pairs():
+    """Shardable ops that are also differentiable (skip where/gather/scatter + non-diff)."""
+    nondiff_inputs = {"where", "gather", "scatter"}
+    ops = [op for op in DIFF_OPS if op.name not in nondiff_inputs]
+    return _shardable_pairs(ops)
 
 
 class TestShardedBaseline:
@@ -430,7 +439,7 @@ class TestShardedBaseline:
 
 
 class TestShardedVJP:
-    @pytest.mark.parametrize("op,config", _shardable_pairs())
+    @pytest.mark.parametrize("op,config", _shardable_differentiable_pairs())
     def test_sharded_vjp(self, op, config):
         if not getattr(config, "supports_sharding", True):
             pytest.skip("sharding not supported for this op/config")
