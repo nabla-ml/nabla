@@ -77,11 +77,19 @@ def vjp(
         """Pullback: maps output cotangent → input cotangents."""
         grads_map = backward_on_trace(t, cotangent)
 
+        # Non-differentiable dtypes: gradients are meaningless for these.
+        from max.dtype import DType
+        _NON_DIFF_DTYPES = {DType.bool, DType.int8, DType.int16, DType.int32, DType.int64,
+                            DType.uint8, DType.uint16, DType.uint32, DType.uint64}
+
         # Collect gradients for each primal arg, preserving pytree structure.
         input_leaves = pytree.tree_leaves(primals)
         grad_leaves = []
         for inp in input_leaves:
-            if isinstance(inp, Tensor) and inp in grads_map:
+            # Non-differentiable dtypes (bool, int) → None, no meaningful gradient.
+            if isinstance(inp, Tensor) and inp.dtype in _NON_DIFF_DTYPES:
+                grad_leaves.append(None)
+            elif isinstance(inp, Tensor) and inp in grads_map:
                 grad_leaves.append(grads_map[inp])
             elif isinstance(inp, Tensor):
                 from ..ops.creation import zeros_like

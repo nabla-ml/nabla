@@ -568,6 +568,14 @@ class SliceTensorOp(Operation):
         mesh = spmd.get_mesh_from_args(args)
         num_shards = len(mesh.devices) if mesh else 1
 
+        # Get batch prefix from input's physical shape
+        batch_dims = x.batch_dims if hasattr(x, "batch_dims") else 0
+        batch_prefix = ()
+        if batch_dims > 0:
+            phys = x.physical_local_shape(0)
+            if phys is not None:
+                batch_prefix = tuple(int(d) for d in phys[:batch_dims])
+
         shapes = []
         for i in range(num_shards):
             # SliceTensorOp uses _transform_shard_kwargs to determine local slice
@@ -576,7 +584,8 @@ class SliceTensorOp(Operation):
             )
             local_size = local_kwargs.get("size")
             if local_size is not None:
-                shapes.append(tuple(int(d) for d in local_size))
+                logical_shape = tuple(int(d) for d in local_size)
+                shapes.append(batch_prefix + logical_shape)
             else:
                 raise RuntimeError(
                     f"Could not determine local physical shape for {self.name}"
@@ -1138,21 +1147,22 @@ class PadOp(Operation):
         self, args: tuple, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         x = args[0]
-        paddings = kwargs.get("paddings")  # List of (before, after)
+        paddings = kwargs.get("paddings")  # List of (before, after) for LOGICAL dims
+        
+        # Get batch prefix from input's physical shape
+        batch_dims = x.batch_dims if hasattr(x, "batch_dims") else 0
         
         shapes = []
         for i in range(x.num_shards):
             in_local = x.physical_local_shape(i)
-            # This is complex: sharding might split the padding?
-            # MAX ops.pad usually takes global paddings if not manually split.
-            # For now, let's assume it's replicated or handles offsets.
-            # If sharded, only the boundary shards get real padding?
-            # Actually, we should probably follow a similar pattern to slice_tensor.
             
-            out_local = []
+            # Start with batch dims (unchanged by padding)
+            out_local = [int(in_local[d]) for d in range(batch_dims)] if in_local is not None else []
+            
+            # Apply paddings to logical dims only
             for d, (before, after) in enumerate(paddings):
-                # Ensure we work with ints to avoid Dim context issues
-                sz = int(in_local[d]) if in_local is not None else 0
+                phys_d = batch_dims + d
+                sz = int(in_local[phys_d]) if in_local is not None else 0
                 out_local.append(sz + int(before) + int(after))
             shapes.append(tuple(out_local))
             
@@ -1175,6 +1185,27 @@ class PadOp(Operation):
             flat_paddings.extend([int(p[0]), int(p[1])])
             
         return ops.pad(x, flat_paddings, mode=mode, value=value)
+
+    def infer_sharding_spec(
+        self,
+        args: tuple,
+        mesh: Any,
+        kwargs: dict = None,
+    ) -> tuple[Any | None, list[Any | None], bool]:
+        """Force replicated: pad doesn't support sharded dims that are being padded."""
+        from ...core.sharding.spmd import create_replicated_spec
+        from ...core import Tensor, pytree
+
+        leaves = [a for a in pytree.tree_leaves(args) if isinstance(a, Tensor)]
+        input_specs = []
+        for t in leaves:
+            rank = len(t.shape)
+            input_specs.append(create_replicated_spec(mesh, rank))
+
+        output_rank = len(leaves[0].shape)
+        output_spec = create_replicated_spec(mesh, output_rank)
+
+        return output_spec, input_specs, False
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         paddings = output.op_kwargs.get("paddings")
