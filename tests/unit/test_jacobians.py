@@ -338,11 +338,6 @@ class TestJacfwdBasic:
 
         _close(jac_nb, jac_jax)
 
-    @pytest.mark.xfail(
-        reason="Framework bug: vmap(jvp) + reduce_sum(axis=None) on 2D+ inputs "
-               "fails during graph compilation (squeeze shape mismatch)",
-        strict=True,
-    )
     def test_jacfwd_matrix_function(self):
         """f: R^(n,m) -> R, Jacobian shape matches input (n, m)."""
         cleanup_caches()
@@ -462,10 +457,6 @@ class TestJacConsistency:
             to_jax(jac_rev), to_jax(jac_fwd), rtol=1e-3, atol=1e-3
         )
 
-    @pytest.mark.xfail(
-        reason="Framework bug: vmap(jvp) + reduce_sum(axis=None) on 2D+ inputs",
-        strict=True,
-    )
     def test_consistency_matrix_input(self):
         """Both transforms agree for f: R^(n,m) -> R."""
         cleanup_caches()

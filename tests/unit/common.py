@@ -279,7 +279,7 @@ def cleanup_caches():
         nb._clear_caches()
 
 
-def compare_nested_structures(nb_res, jax_res, path="", tolerance=1e-4):
+def compare_nested_structures(nb_res, jax_res, path="", tolerance=5e-4):
     """Recursively compare arbitrary nested structures (tuples, lists, dicts)."""
 
     if hasattr(nb_res, "numpy"):

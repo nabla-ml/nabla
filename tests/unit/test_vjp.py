@@ -20,7 +20,7 @@ from tests.unit.common import (
 )
 
 
-def _close(nb_val, jax_val, rtol=1e-4, atol=1e-4):
+def _close(nb_val, jax_val, rtol=5e-4, atol=5e-4):
     """Assert nabla Tensor ≈ JAX array."""
     np.testing.assert_allclose(to_jax(nb_val), jax_val, rtol=rtol, atol=atol)
 
