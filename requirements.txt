@@ -2,4 +2,4 @@
 numpy>=2.0.0
 # MAX nightly for distributed_broadcast and latest ops
 --extra-index-url https://whl.modular.com/nightly/simple/
-max>=26.2.0.dev2026020405
+max>=26.2.0.dev2026020706
