@@ -80,24 +80,7 @@ class ReduceScatterOp(CollectiveOperation):
         input_specs: list[ShardingSpec] = None,
         output_specs: list[ShardingSpec] = None,
     ) -> float:
-        if not axes:
-            return 0.0
-
-        n_devices = 1
-        for axis in axes:
-            n_devices *= mesh.get_axis_size(axis)
-
-        if n_devices <= 1:
-            return 0.0
-
-        bandwidth = getattr(mesh, "bandwidth", 1.0)
-        cost = (n_devices - 1) / n_devices * size_bytes / bandwidth
-        return cost
-
-    def infer_sharding_spec(self, args: Any, mesh: DeviceMesh, kwargs: dict) -> Any:
-        """Infer sharding for ReduceScatter (Adaptation Layer)."""
-        # CollectiveOperation.infer_sharding_spec handles validation and calls _compute_output_spec
-        return super().infer_sharding_spec(args, mesh, kwargs)
+        return CollectiveOperation._ring_cost(size_bytes, mesh, axes)
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for reduce_scatter: all_gather the gradients."""

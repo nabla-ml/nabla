@@ -68,11 +68,6 @@ class AllToAllOp(CollectiveOperation):
 
     # _get_shifted_axes helper removed in favor of centralized _get_physical_axis
 
-    def infer_sharding_spec(self, args: Any, mesh: DeviceMesh, kwargs: dict) -> Any:
-        """Infer sharding for AllToAll (Adaptation Layer)."""
-        # CollectiveOperation.infer_sharding_spec handles validation and calls _compute_output_spec
-        return super().infer_sharding_spec(args, mesh, kwargs)
-
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for all_to_all: another all_to_all with swapped axes."""
         split_axis = output.op_kwargs.get("split_axis")

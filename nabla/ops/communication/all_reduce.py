@@ -25,24 +25,7 @@ class AllReduceOp(CollectiveOperation):
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
-        """Infer physical shapes for all_reduce."""
-        from ...core.sharding import spmd
-        from ...core.sharding.spec import compute_local_shape
-
-        x = args[0]
-        mesh = self._derive_mesh(x, kwargs) or spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else x.num_shards
-
-        shapes = []
-        for i in range(num_shards):
-            idx = i if i < x.num_shards else 0
-            s = x.physical_local_shape(idx)
-            if s is None:
-                s = x.shape
-            shapes.append(tuple(int(d) for d in s))
-
-        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
-        return shapes, dtypes, devices
+        return self._compute_local_preserved_shapes(args, kwargs)
 
     @classmethod
     def estimate_cost(
@@ -53,21 +36,7 @@ class AllReduceOp(CollectiveOperation):
         input_specs: list[ShardingSpec] = None,
         output_specs: list[ShardingSpec] = None,
     ) -> float:
-        """Estimate AllReduce cost."""
-        if not axes:
-            return 0.0
-
-        n_devices = 1
-        for axis in axes:
-            n_devices *= mesh.get_axis_size(axis)
-
-        if n_devices <= 1:
-            return 0.0
-
-        bandwidth = getattr(mesh, "bandwidth", 1.0)
-
-        cost = 2.0 * (n_devices - 1) / n_devices * size_bytes / bandwidth
-        return cost
+        return CollectiveOperation._ring_cost(size_bytes, mesh, axes, factor=2.0)
 
     def execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
         """Sum-reduce across shards (Physical)."""
@@ -280,23 +249,7 @@ class PMeanOp(CollectiveOperation):
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
-        """Infer physical shapes for pmean (local shape preserved)."""
-        from ...core.sharding import spmd
-
-        x = args[0]
-        mesh = self._derive_mesh(x, kwargs) or spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else x.num_shards
-
-        shapes = []
-        for i in range(num_shards):
-            idx = i if i < x.num_shards else 0
-            s = x.physical_local_shape(idx)
-            if s is None:
-                s = x.shape
-            shapes.append(tuple(int(d) for d in s))
-
-        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
-        return shapes, dtypes, devices
+        return self._compute_local_preserved_shapes(args, kwargs)
 
     def execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
         """Compute mean across shards (Physical)."""

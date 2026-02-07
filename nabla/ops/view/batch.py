@@ -26,6 +26,36 @@ if TYPE_CHECKING:
     from ...core.tensor import Tensor
 
 
+def _identity_physical_shape(op, args, kwargs):
+    """Return input shard shapes unchanged (shared by Incr/DecrBatchDimsOp)."""
+    from ...core.sharding import spmd
+
+    x = args[0]
+    mesh = spmd.get_mesh_from_args(args)
+    num_shards = len(mesh.devices) if mesh else 1
+
+    shapes = []
+    for i in range(num_shards):
+        idx = i if i < x.num_shards else 0
+        s = x.physical_local_shape(idx)
+        if s is None:
+            raise RuntimeError(
+                f"Could not determine physical shape for {op.name}"
+            )
+        shapes.append(tuple(int(d) for d in s))
+
+    dtypes = [x.dtype] * num_shards
+    if mesh:
+        if mesh.is_distributed:
+            devices = [d for d in mesh.devices]
+        else:
+            devices = [mesh.devices[0]] * num_shards
+    else:
+        devices = [x.device] * num_shards
+
+    return shapes, dtypes, devices
+
+
 class IncrBatchDimsOp(Operation):
     """Increment batch_dims counter without changing data layout."""
 
@@ -37,32 +67,7 @@ class IncrBatchDimsOp(Operation):
         self, args: tuple, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], Any]:
         """Physical shape is unchanged; only batch_dims metadata changes."""
-        from ...core.sharding import spmd
-
-        x = args[0]
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
-
-        shapes = []
-        for i in range(num_shards):
-            idx = i if i < x.num_shards else 0
-            s = x.physical_local_shape(idx)
-            if s is None:
-                raise RuntimeError(
-                    f"Could not determine physical shape for {self.name}"
-                )
-            shapes.append(tuple(int(d) for d in s))
-
-        dtypes = [x.dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.devices]
-            else:
-                devices = [mesh.devices[0]] * num_shards
-        else:
-            devices = [x.device] * num_shards
-
-        return shapes, dtypes, devices
+        return _identity_physical_shape(self, args, kwargs)
 
     def kernel(self, x: TensorValue) -> TensorValue:
         return x
@@ -87,32 +92,7 @@ class DecrBatchDimsOp(Operation):
         self, args: tuple, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], Any]:
         """Physical shape is unchanged; only batch_dims metadata changes."""
-        from ...core.sharding import spmd
-
-        x = args[0]
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
-
-        shapes = []
-        for i in range(num_shards):
-            idx = i if i < x.num_shards else 0
-            s = x.physical_local_shape(idx)
-            if s is None:
-                raise RuntimeError(
-                    f"Could not determine physical shape for {self.name}"
-                )
-            shapes.append(tuple(int(d) for d in s))
-
-        dtypes = [x.dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.devices]
-            else:
-                devices = [mesh.devices[0]] * num_shards
-        else:
-            devices = [x.device] * num_shards
-
-        return shapes, dtypes, devices
+        return _identity_physical_shape(self, args, kwargs)
 
     def kernel(self, x: TensorValue) -> TensorValue:
         return x
@@ -165,8 +145,7 @@ class MoveAxisPhysicalOp(Operation):
             order = list(range(rank))
             order.pop(norm_source)
             order.insert(norm_dest, norm_source)
-            out_shape = tuple(in_shape[j] for j in order)
-            shapes.append(out_shape)
+            shapes.append(tuple(in_shape[j] for j in order))
 
         dtypes = [x.dtype] * num_shards
         if mesh:

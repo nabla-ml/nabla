@@ -354,6 +354,28 @@ class Operation(ABC):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(name={self.name!r})"
 
+    @staticmethod
+    def _broadcast_shapes(
+        s1: tuple[int, ...], s2: tuple[int, ...]
+    ) -> tuple[int, ...]:
+        """Compute broadcast shape of two shapes (numpy-style right-aligned)."""
+        if len(s1) > len(s2):
+            s2 = (1,) * (len(s1) - len(s2)) + s2
+        elif len(s2) > len(s1):
+            s1 = (1,) * (len(s2) - len(s1)) + s1
+
+        result = []
+        for d1, d2 in zip(s1, s2, strict=False):
+            if d1 == d2:
+                result.append(d1)
+            elif d1 == 1:
+                result.append(d2)
+            elif d2 == 1:
+                result.append(d1)
+            else:
+                raise ValueError(f"Cannot broadcast shapes {s1} and {s2}")
+        return tuple(result)
+
 
 class BinaryOperation(Operation):
     """Base for binary element-wise ops with batch_dims-aware broadcasting."""
@@ -459,27 +481,6 @@ class BinaryOperation(Operation):
             y = view_ops.broadcast_to_physical(y, target_physical)
 
         return super().__call__(x, y)
-
-    def _broadcast_shapes(
-        self, s1: tuple[int, ...], s2: tuple[int, ...]
-    ) -> tuple[int, ...]:
-        """Compute broadcast shape of two shapes (numpy-style right-aligned)."""
-        if len(s1) > len(s2):
-            s2 = (1,) * (len(s1) - len(s2)) + s2
-        elif len(s2) > len(s1):
-            s1 = (1,) * (len(s2) - len(s1)) + s1
-
-        result = []
-        for d1, d2 in zip(s1, s2, strict=False):
-            if d1 == d2:
-                result.append(d1)
-            elif d1 == 1:
-                result.append(d2)
-            elif d2 == 1:
-                result.append(d1)
-            else:
-                raise ValueError(f"Cannot broadcast shapes {s1} and {s2}")
-        return tuple(result)
 
 
 class AxisOp(Operation):

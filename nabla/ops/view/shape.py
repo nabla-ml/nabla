@@ -17,6 +17,28 @@ if TYPE_CHECKING:
     from ...core import Tensor
 
 
+def _shape_kwarg_to_local(kwargs, output_sharding, shard_idx):
+    """Convert global 'shape' kwarg to local shape for a given shard."""
+    from ...core.sharding.spec import compute_local_shape
+
+    global_shape = kwargs.get("shape")
+    if global_shape is None or output_sharding is None:
+        return kwargs
+    local_shape = compute_local_shape(global_shape, output_sharding, device_id=shard_idx)
+    return {**kwargs, "shape": local_shape}
+
+
+def _force_replicated_sharding(args, mesh):
+    """Return (output_spec, input_specs, False) forcing everything replicated."""
+    from ...core.sharding.spmd import create_replicated_spec
+    from ...core import Tensor, pytree
+
+    leaves = [a for a in pytree.tree_leaves(args) if isinstance(a, Tensor)]
+    input_specs = [create_replicated_spec(mesh, len(t.shape)) for t in leaves]
+    output_spec = create_replicated_spec(mesh, len(leaves[0].shape))
+    return output_spec, input_specs, False
+
+
 class BroadcastToOp(ShapeOp):
     @property
     def name(self) -> str:
@@ -84,17 +106,7 @@ class BroadcastToOp(ShapeOp):
     def _transform_shard_kwargs(
         self, kwargs: dict, output_sharding, shard_idx: int, args: tuple
     ) -> dict:
-        """Convert global target shape to local shape for each shard."""
-        from ...core.sharding.spec import compute_local_shape
-
-        global_shape = kwargs.get("shape")
-        if global_shape is None or output_sharding is None:
-            return kwargs
-
-        local_shape = compute_local_shape(
-            global_shape, output_sharding, device_id=shard_idx
-        )
-        return {**kwargs, "shape": local_shape}
+        return _shape_kwarg_to_local(kwargs, output_sharding, shard_idx)
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for broadcast_to: sum over broadcasted dimensions."""
@@ -467,20 +479,7 @@ class SliceUpdateOp(Operation):
         kwargs: dict = None,
     ) -> tuple[Any | None, list[Any | None], bool]:
         """Explicitly force everything to be Replicated."""
-        from ...core.sharding.spmd import create_replicated_spec
-        from ...core import Tensor, pytree
-
-        leaves = [a for a in pytree.tree_leaves(args) if isinstance(a, Tensor)]
-        input_specs = []
-        for t in leaves:
-            rank = len(t.shape)
-            input_specs.append(create_replicated_spec(mesh, rank))
-
-        # Output is also replicated
-        output_rank = len(leaves[0].shape)
-        output_spec = create_replicated_spec(mesh, output_rank)
-
-        return output_spec, input_specs, False
+        return _force_replicated_sharding(args, mesh)
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         # primals = (x, update)
@@ -1056,17 +1055,7 @@ class BroadcastToPhysicalOp(Operation):
     def _transform_shard_kwargs(
         self, kwargs: dict, output_sharding, shard_idx: int, args: tuple
     ) -> dict:
-        """Convert global target shape to local shape for each shard."""
-        from ...core.sharding.spec import compute_local_shape
-
-        global_shape = kwargs.get("shape")
-        if global_shape is None or output_sharding is None:
-            return kwargs
-
-        local_shape = compute_local_shape(
-            global_shape, output_sharding, device_id=shard_idx
-        )
-        return {**kwargs, "shape": local_shape}
+        return _shape_kwarg_to_local(kwargs, output_sharding, shard_idx)
 
 
 
@@ -1153,19 +1142,7 @@ class PadOp(Operation):
         kwargs: dict = None,
     ) -> tuple[Any | None, list[Any | None], bool]:
         """Force replicated: pad doesn't support sharded dims that are being padded."""
-        from ...core.sharding.spmd import create_replicated_spec
-        from ...core import Tensor, pytree
-
-        leaves = [a for a in pytree.tree_leaves(args) if isinstance(a, Tensor)]
-        input_specs = []
-        for t in leaves:
-            rank = len(t.shape)
-            input_specs.append(create_replicated_spec(mesh, rank))
-
-        output_rank = len(leaves[0].shape)
-        output_spec = create_replicated_spec(mesh, output_rank)
-
-        return output_spec, input_specs, False
+        return _force_replicated_sharding(args, mesh)
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         paddings = output.op_kwargs.get("paddings")

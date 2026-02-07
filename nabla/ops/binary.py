@@ -200,7 +200,7 @@ class MatmulOp(Operation):
         if x_batch_logical != y_batch_logical:
             # Standard numpy matmul broadcasting for batch dims
             # We can use BinaryOperation's helper if we had access, or just simple align
-            target_batch = self._broadcast_batch_shapes(
+            target_batch = self._broadcast_shapes(
                 x_batch_logical, y_batch_logical
             )
 
@@ -213,7 +213,7 @@ class MatmulOp(Operation):
         y_physical_batch = y.physical_global_shape[:-2]
 
         if x_physical_batch != y_physical_batch:
-            target_batch = self._broadcast_batch_shapes(
+            target_batch = self._broadcast_shapes(
                 x_physical_batch, y_physical_batch
             )
             if x_physical_batch != target_batch:
@@ -232,27 +232,6 @@ class MatmulOp(Operation):
             result = view_ops.squeeze(result, axis=-1)
 
         return result
-
-    def _broadcast_batch_shapes(
-        self, s1: tuple[int, ...], s2: tuple[int, ...]
-    ) -> tuple[int, ...]:
-        s1 = tuple(s1)
-        s2 = tuple(s2)
-        if len(s1) > len(s2):
-            s2 = (1,) * (len(s1) - len(s2)) + s2
-        elif len(s2) > len(s1):
-            s1 = (1,) * (len(s2) - len(s1)) + s1
-        res = []
-        for d1, d2 in zip(s1, s2):
-            if d1 == d2:
-                res.append(d1)
-            elif d1 == 1:
-                res.append(d2)
-            elif d2 == 1:
-                res.append(d1)
-            else:
-                raise ValueError(f"Batch shapes {s1} and {s2} incompatible")
-        return tuple(res)
 
     def sharding_rule(
         self,

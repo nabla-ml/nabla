@@ -19,6 +19,43 @@ class CollectiveOperation(Operation):
     Handles value hydration, graph execution (kernel), and output wrapping/sharding update.
     """
 
+    def _compute_local_preserved_shapes(
+        self, args: tuple, kwargs: dict
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
+        """Compute physical shapes when each shard preserves its local shape (e.g., all_reduce, ppermute)."""
+        from ...core.sharding import spmd
+
+        x = args[0]
+        mesh = self._derive_mesh(x, kwargs) or spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else x.num_shards
+
+        shapes = []
+        for i in range(num_shards):
+            idx = i if i < x.num_shards else 0
+            s = x.physical_local_shape(idx)
+            if s is None:
+                s = x.shape
+            shapes.append(tuple(int(d) for d in s))
+
+        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
+        return shapes, dtypes, devices
+
+    @staticmethod
+    def _ring_cost(size_bytes: int, mesh, axes: list[str], factor: float = 1.0) -> float:
+        """Compute ring-algorithm cost for collective ops.
+
+        factor=1.0 for all_gather/reduce_scatter, factor=2.0 for all_reduce.
+        """
+        if not axes:
+            return 0.0
+        n_devices = 1
+        for axis in axes:
+            n_devices *= mesh.get_axis_size(axis)
+        if n_devices <= 1:
+            return 0.0
+        bandwidth = getattr(mesh, "bandwidth", 1.0)
+        return factor * (n_devices - 1) / n_devices * size_bytes / bandwidth
+
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:

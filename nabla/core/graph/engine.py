@@ -468,15 +468,14 @@ class ComputeGraph:
         for t in targets:
             clean(t._impl)
 
-    def _replay_trace_to_build_graph(self, targets: list[Tensor]) -> None:
-        """Walk OpNode DAG and execute operations to build MAX graph."""
+    @staticmethod
+    def _topo_sort_opnodes(targets: list) -> list:
+        """Topologically sort OpNodes reachable from *targets*."""
         from ..common import pytree
-        from ..tensor.api import Tensor
         from ..tensor.impl import TensorImpl
 
-        # Collect OpNodes in topological order
         visited: set[int] = set()
-        opnodes_topo: list[Any] = []
+        result: list = []
 
         def dfs(opnode) -> None:
             if id(opnode) in visited:
@@ -489,11 +488,20 @@ class ComputeGraph:
                 ):
                     dfs(arg.output_refs)
             visited.add(id(opnode))
-            opnodes_topo.append(opnode)
+            result.append(opnode)
 
         for t in targets:
             if t._impl.output_refs:
                 dfs(t._impl.output_refs)
+        return result
+
+    def _replay_trace_to_build_graph(self, targets: list[Tensor]) -> None:
+        """Walk OpNode DAG and execute operations to build MAX graph."""
+        from ..common import pytree
+        from ..tensor.api import Tensor
+        from ..tensor.impl import TensorImpl
+
+        opnodes_topo = self._topo_sort_opnodes(targets)
 
         # Execute each OpNode
         for opnode in opnodes_topo:
@@ -561,31 +569,10 @@ class ComputeGraph:
         from ..common import pytree
         from ..tensor.impl import TensorImpl
 
-        visited_nodes: set[int] = set()
         visited_impls: set[int] = set()
         ordered_inputs: list[TensorImpl] = []
 
-        # 1. Topological walk of OpNodes
-        opnodes_topo: list[Any] = []
-
-        def dfs(opnode) -> None:
-            if id(opnode) in visited_nodes:
-                return
-            for arg in pytree.tree_leaves(opnode.op_args):
-                if (
-                    isinstance(arg, TensorImpl)
-                    and not arg.is_realized
-                    and arg.output_refs
-                ):
-                    dfs(arg.output_refs)
-            visited_nodes.add(id(opnode))
-            opnodes_topo.append(opnode)
-
-        for t in targets:
-            if t._impl.output_refs:
-                dfs(t._impl.output_refs)
-
-        # 2. Simulate add_input calls in execution order
+        opnodes_topo = self._topo_sort_opnodes(targets)
         # Important: this must match EXACTLY the order in _replay_trace_to_build_graph
         for opnode in opnodes_topo:
             for arg in pytree.tree_leaves(opnode.op_args):

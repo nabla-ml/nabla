@@ -15,6 +15,30 @@ if TYPE_CHECKING:
     from ...core import Tensor
 
 
+def _axis_compute_shapes(op, args, kwargs, transform_fn):
+    """Shared boilerplate for axis-op compute_physical_shape.
+
+    *transform_fn(in_shape_list, kwargs)* mutates/returns the output shape list.
+    """
+    from ...core.sharding import spmd
+
+    x = args[0]
+    mesh = spmd.get_mesh_from_args(args)
+    num_shards = len(mesh.devices) if mesh else 1
+
+    shapes = []
+    for i in range(num_shards):
+        idx = i if i < x.num_shards else 0
+        in_shape = x.physical_local_shape_ints(idx)
+        if in_shape is None:
+            raise RuntimeError(
+                f"Could not determine physical shape for {op.name}"
+            )
+        shapes.append(tuple(transform_fn(list(in_shape), kwargs)))
+    dtypes, devices = op._build_shard_metadata(x, mesh, num_shards)
+    return shapes, dtypes, devices
+
+
 class UnsqueezeOp(AxisOp):
     axis_offset_for_insert = True
 
@@ -29,31 +53,12 @@ class UnsqueezeOp(AxisOp):
         self, args: tuple, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], Any]:
         """Infer physical shapes for unsqueeze."""
-        from ...core.sharding import spmd
-
-        x = args[0]
-        # Kwargs are already adapted in Operation.__call__
-        axis = kwargs.get("axis", 0)
-
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
-
-        shapes = []
-        for i in range(num_shards):
-            idx = i if i < x.num_shards else 0
-            in_shape = x.physical_local_shape_ints(idx)
-            if in_shape is not None:
-                in_shape = list(in_shape)
-                norm_axis = axis if axis >= 0 else len(in_shape) + 1 + axis
-                in_shape.insert(norm_axis, 1)
-                shapes.append(tuple(in_shape))
-            else:
-                raise RuntimeError(
-                    f"Could not determine physical shape for {self.name}"
-                )
-
-        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
-        return shapes, dtypes, devices
+        def _transform(s, kw):
+            axis = kw.get("axis", 0)
+            norm = axis if axis >= 0 else len(s) + 1 + axis
+            s.insert(norm, 1)
+            return s
+        return _axis_compute_shapes(self, args, kwargs, _transform)
 
     def sharding_rule(
         self,
@@ -142,39 +147,18 @@ class SqueezeOp(AxisOp):
         self, args: tuple, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], Any]:
         """Infer physical shapes for squeeze."""
-        from ...core.sharding import spmd
-
-        x = args[0]
-        # Kwargs are already adapted in Operation.__call__
-        axis = kwargs.get("axis", 0)
-
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
-
-        shapes = []
-        for i in range(num_shards):
-            idx = i if i < x.num_shards else 0
-            in_shape = x.physical_local_shape_ints(idx)
-            if in_shape is not None:
-                in_shape = list(in_shape)
-                if axis is None:
-                    axes = [idx for idx, d in enumerate(in_shape) if d == 1]
-                elif isinstance(axis, int):
-                    axes = [axis if axis >= 0 else len(in_shape) + axis]
-                else:
-                    axes = [a if a >= 0 else len(in_shape) + a for a in axis]
-                
-                # Sort descending to pop correctly
-                for a in sorted(axes, reverse=True):
-                    in_shape.pop(a)
-                shapes.append(tuple(in_shape))
+        def _transform(s, kw):
+            axis = kw.get("axis", 0)
+            if axis is None:
+                axes = [i for i, d in enumerate(s) if d == 1]
+            elif isinstance(axis, int):
+                axes = [axis if axis >= 0 else len(s) + axis]
             else:
-                raise RuntimeError(
-                    f"Could not determine physical shape for {self.name}"
-                )
-
-        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
-        return shapes, dtypes, devices
+                axes = [a if a >= 0 else len(s) + a for a in axis]
+            for a in sorted(axes, reverse=True):
+                s.pop(a)
+            return s
+        return _axis_compute_shapes(self, args, kwargs, _transform)
 
     def sharding_rule(
         self,
@@ -277,36 +261,14 @@ class SwapAxesOp(AxisOp):
         self, args: tuple, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], Any]:
         """Infer physical shapes for swap_axes."""
-        from ...core.sharding import spmd
-
-        x = args[0]
-        # Kwargs are already adapted in Operation.__call__
-        axis1 = kwargs.get("axis1", 0)
-        axis2 = kwargs.get("axis2", 1)
-
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
-
-        shapes = []
-        for i in range(num_shards):
-            idx = i if i < x.num_shards else 0
-            in_shape = x.physical_local_shape_ints(idx)
-            if in_shape is not None:
-                in_shape = list(in_shape)
-                norm_axis1 = axis1 if axis1 >= 0 else len(in_shape) + axis1
-                norm_axis2 = axis2 if axis2 >= 0 else len(in_shape) + axis2
-                in_shape[norm_axis1], in_shape[norm_axis2] = (
-                    in_shape[norm_axis2],
-                    in_shape[norm_axis1],
-                )
-                shapes.append(tuple(in_shape))
-            else:
-                raise RuntimeError(
-                    f"Could not determine physical shape for {self.name}"
-                )
-
-        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
-        return shapes, dtypes, devices
+        def _transform(s, kw):
+            a1 = kw.get("axis1", 0)
+            a2 = kw.get("axis2", 1)
+            n1 = a1 if a1 >= 0 else len(s) + a1
+            n2 = a2 if a2 >= 0 else len(s) + a2
+            s[n1], s[n2] = s[n2], s[n1]
+            return s
+        return _axis_compute_shapes(self, args, kwargs, _transform)
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         axis1 = output.op_kwargs.get("axis1")
@@ -422,36 +384,17 @@ class MoveAxisOp(AxisOp):
         self, args: tuple, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], Any]:
         """Infer physical shapes for moveaxis."""
-        from ...core.sharding import spmd
-
-        x = args[0]
-        source = kwargs.get("source")
-        destination = kwargs.get("destination")
-
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
-
-        shapes = []
-        for i in range(num_shards):
-            idx = i if i < x.num_shards else 0
-            in_shape = x.physical_local_shape_ints(idx)
-            if in_shape is not None:
-                in_shape = list(in_shape)
-                rank = len(in_shape)
-                norm_source = source if source >= 0 else rank + source
-                norm_dest = destination if destination >= 0 else rank + destination
-                order = list(range(rank))
-                order.pop(norm_source)
-                order.insert(norm_dest, norm_source)
-                out_shape = tuple(in_shape[j] for j in order)
-                shapes.append(out_shape)
-            else:
-                raise RuntimeError(
-                    f"Could not determine physical shape for {self.name}"
-                )
-
-        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
-        return shapes, dtypes, devices
+        def _transform(s, kw):
+            src = kw.get("source")
+            dst = kw.get("destination")
+            rank = len(s)
+            ns = src if src >= 0 else rank + src
+            nd = dst if dst >= 0 else rank + dst
+            order = list(range(rank))
+            order.pop(ns)
+            order.insert(nd, ns)
+            return [s[j] for j in order]
+        return _axis_compute_shapes(self, args, kwargs, _transform)
 
     def __call__(self, x: Tensor, *, source: int, destination: int) -> Tensor:
         return super().__call__(x, source=source, destination=destination)
@@ -508,30 +451,12 @@ class UnsqueezePhysicalOp(Operation):
         self, args: tuple, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], Any]:
         """Infer physical shapes for unsqueeze_physical."""
-        from ...core.sharding import spmd
-
-        x = args[0]
-        axis = kwargs.get("axis", 0)
-
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
-
-        shapes = []
-        for i in range(num_shards):
-            idx = i if i < x.num_shards else 0
-            in_shape = x.physical_local_shape_ints(idx)
-            if in_shape is not None:
-                in_shape = list(in_shape)
-                norm_axis = axis if axis >= 0 else len(in_shape) + axis
-                in_shape.insert(norm_axis, 1)
-                shapes.append(tuple(in_shape))
-            else:
-                raise RuntimeError(
-                    f"Could not determine physical shape for {self.name}"
-                )
-
-        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
-        return shapes, dtypes, devices
+        def _transform(s, kw):
+            axis = kw.get("axis", 0)
+            norm = axis if axis >= 0 else len(s) + axis
+            s.insert(norm, 1)
+            return s
+        return _axis_compute_shapes(self, args, kwargs, _transform)
 
     def __call__(self, x: Tensor, *, axis: int = 0) -> Tensor:
         return super().__call__(x, axis=axis)
@@ -580,30 +505,12 @@ class SqueezePhysicalOp(Operation):
         self, args: tuple, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], Any]:
         """Infer physical shapes for squeeze_physical."""
-        from ...core.sharding import spmd
-
-        x = args[0]
-        axis = kwargs.get("axis", 0)
-
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
-
-        shapes = []
-        for i in range(num_shards):
-            idx = i if i < x.num_shards else 0
-            in_shape = x.physical_local_shape_ints(idx)
-            if in_shape is not None:
-                in_shape = list(in_shape)
-                norm_axis = axis if axis >= 0 else len(in_shape) + axis
-                in_shape.pop(norm_axis)
-                shapes.append(tuple(in_shape))
-            else:
-                raise RuntimeError(
-                    f"Could not determine physical shape for {self.name}"
-                )
-
-        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
-        return shapes, dtypes, devices
+        def _transform(s, kw):
+            axis = kw.get("axis", 0)
+            norm = axis if axis >= 0 else len(s) + axis
+            s.pop(norm)
+            return s
+        return _axis_compute_shapes(self, args, kwargs, _transform)
 
     def __call__(self, x: Tensor, *, axis: int = 0) -> Tensor:
         return super().__call__(x, axis=axis)

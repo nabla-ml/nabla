@@ -87,27 +87,7 @@ class AllGatherOp(CollectiveOperation):
         input_specs: list[ShardingSpec] = None,
         output_specs: list[ShardingSpec] = None,
     ) -> float:
-        """Estimate AllGather cost."""
-        if not axes:
-            return 0.0
-
-        n_devices = 1
-        for axis in axes:
-            n_devices *= mesh.get_axis_size(axis)
-
-        if n_devices <= 1:
-            return 0.0
-
-        local_bytes = size_bytes // n_devices
-
-        bandwidth = getattr(mesh, "bandwidth", 1.0)
-        cost = (n_devices - 1) / n_devices * size_bytes / bandwidth
-        return cost
-
-    def infer_sharding_spec(self, args: Any, mesh: DeviceMesh, kwargs: dict) -> Any:
-        """Infer sharding for AllGather (Adaptation Layer)."""
-        # CollectiveOperation.infer_sharding_spec handles the logic now that we implemented _compute_output_spec
-        return super().infer_sharding_spec(args, mesh, kwargs)
+        return CollectiveOperation._ring_cost(size_bytes, mesh, axes)
 
     def _compute_output_spec(self, input_tensor, results, input_sharding=None, **kwargs):
         """Compute output sharding spec for AllGather."""
