@@ -114,11 +114,6 @@ class TensorImpl:
         self._shard_dtypes = shard_dtypes
         self._shard_devices = shard_devices
 
-    @property
-    def is_leaf(self) -> bool:
-        """True if this tensor wasn't produced by an operation (gradient leaf)."""
-        return self.output_refs is None
-
     def _validate_sharding(self) -> None:
         """Validate consistency of shards and sharding spec."""
         n_vals = len(self._graph_values)

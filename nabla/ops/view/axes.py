@@ -52,15 +52,7 @@ class UnsqueezeOp(AxisOp):
                     f"Could not determine physical shape for {self.name}"
                 )
 
-        dtypes = [x.dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [x.device] * (num_shards or 1)
-
+        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
         return shapes, dtypes, devices
 
     def sharding_rule(
@@ -181,15 +173,7 @@ class SqueezeOp(AxisOp):
                     f"Could not determine physical shape for {self.name}"
                 )
 
-        dtypes = [x.dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [x.device] * (num_shards or 1)
-
+        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
         return shapes, dtypes, devices
 
     def sharding_rule(
@@ -321,15 +305,7 @@ class SwapAxesOp(AxisOp):
                     f"Could not determine physical shape for {self.name}"
                 )
 
-        dtypes = [x.dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [x.device] * (num_shards or 1)
-
+        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
         return shapes, dtypes, devices
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
@@ -474,15 +450,7 @@ class MoveAxisOp(AxisOp):
                     f"Could not determine physical shape for {self.name}"
                 )
 
-        dtypes = [x.dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [x.device] * (num_shards or 1)
-
+        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
         return shapes, dtypes, devices
 
     def __call__(self, x: Tensor, *, source: int, destination: int) -> Tensor:
@@ -562,15 +530,7 @@ class UnsqueezePhysicalOp(Operation):
                     f"Could not determine physical shape for {self.name}"
                 )
 
-        dtypes = [x.dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [x.device] * (num_shards or 1)
-
+        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
         return shapes, dtypes, devices
 
     def __call__(self, x: Tensor, *, axis: int = 0) -> Tensor:
@@ -642,15 +602,7 @@ class SqueezePhysicalOp(Operation):
                     f"Could not determine physical shape for {self.name}"
                 )
 
-        dtypes = [x.dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [x.device] * (num_shards or 1)
-
+        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
         return shapes, dtypes, devices
 
     def __call__(self, x: Tensor, *, axis: int = 0) -> Tensor:

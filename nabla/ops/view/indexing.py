@@ -15,6 +15,15 @@ if TYPE_CHECKING:
     from ...core import Tensor
 
 
+def _adapt_axis_kwargs(kwargs: dict, batch_dims: int) -> dict:
+    """Translate logical axis to physical axis for gather/scatter."""
+    if batch_dims == 0:
+        return kwargs
+    axis = kwargs.get("axis", 0)
+    adapted_axis = axis + batch_dims if axis >= 0 else axis
+    return {**kwargs, "axis": adapted_axis, "batch_dims": batch_dims}
+
+
 class GatherOp(Operation):
     """Gather elements from data tensor along an axis using indices."""
 
@@ -23,15 +32,7 @@ class GatherOp(Operation):
         return "gather"
 
     def adapt_kwargs(self, args: tuple, kwargs: dict, batch_dims: int) -> dict:
-        """Translate logical axis to physical axis for execution."""
-        if batch_dims == 0:
-            return kwargs
-        axis = kwargs.get("axis", 0)
-        if axis >= 0:
-            adapted_axis = axis + batch_dims
-        else:
-            adapted_axis = axis  # Negative indices already count from end
-        return {**kwargs, "axis": adapted_axis, "batch_dims": batch_dims}
+        return _adapt_axis_kwargs(kwargs, batch_dims)
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
@@ -72,14 +73,7 @@ class GatherOp(Operation):
 
             shapes.append(tuple(out_shape))
 
-        dtypes = [x.dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [x.device] * num_shards
+        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
 
         return shapes, dtypes, devices
 
@@ -212,15 +206,7 @@ class ScatterOp(Operation):
         return "scatter"
 
     def adapt_kwargs(self, args: tuple, kwargs: dict, batch_dims: int) -> dict:
-        """Translate logical axis to physical axis for execution."""
-        if batch_dims == 0:
-            return kwargs
-        axis = kwargs.get("axis", 0)
-        if axis >= 0:
-            adapted_axis = axis + batch_dims
-        else:
-            adapted_axis = axis  # Negative indices already count from end
-        return {**kwargs, "axis": adapted_axis, "batch_dims": batch_dims}
+        return _adapt_axis_kwargs(kwargs, batch_dims)
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
@@ -242,14 +228,7 @@ class ScatterOp(Operation):
                 )
             shapes.append(tuple(int(d) for d in s))
 
-        dtypes = [x.dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [x.device] * num_shards
+        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
 
         return shapes, dtypes, devices
 

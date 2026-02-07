@@ -168,30 +168,11 @@ class MatmulOp(Operation):
                     f"Could not determine physical shape for {self.name}"
                 )
 
-        dtypes = [x.dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [x.device] * num_shards
+        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
 
         return shapes, dtypes, devices
 
-    def execute(self, args: tuple, kwargs: dict) -> Any:
-        """Physical execution for Matmul."""
-        from ..core import GRAPH
-        from ..core.sharding import spmd
-
-        mesh = spmd.get_mesh_from_args(args)
-
-        with GRAPH.graph:
-            shard_results = spmd.execute_on_shards(
-                self.kernel, args, kwargs, mesh, op=self
-            )
-
-        return (shard_results, None, mesh)
+    _infer_output_sharding: bool = False
 
     def __call__(self, x: Tensor, y: Tensor) -> Tensor:
         from . import view as view_ops
@@ -390,22 +371,6 @@ class OuterOp(BinaryOperation):
             y_up = ops.unsqueeze(y, axis=-2)
             return ops.mul(x_up, y_up)
         return ops.outer(x, y)
-
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        x, y = primals
-        from ..ops.reduction import reduce_sum
-        from . import mul
-
-        grad_x = reduce_sum(mul(cotangent, y), axis=-1)
-        grad_y = reduce_sum(mul(cotangent, x), axis=-2)
-        return (grad_x, grad_y)
-
-    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
-        x, y = primals
-        tx, ty = tangents
-        from . import add, outer
-
-        return add(outer(tx, y), outer(x, ty))
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None

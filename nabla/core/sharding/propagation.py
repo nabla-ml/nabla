@@ -338,42 +338,6 @@ class OpShardingRuleTemplate:
 
         return OpShardingRule(self.input_mappings, self.output_mappings, factor_sizes)
 
-        for mapping, shape in all_mappings_and_shapes:
-            for dim_idx, factors in mapping.items():
-                if dim_idx >= len(shape) or len(factors) <= 1:
-                    continue
-                dim_size = shape[dim_idx]
-
-                known_product = 1
-                unknown_factors = []
-
-                for f in factors:
-                    if f in factor_sizes:
-                        known_product *= factor_sizes[f]
-                    else:
-                        unknown_factors.append(f)
-
-                if not unknown_factors:
-                    if known_product != dim_size:
-                        raise ValueError(
-                            f"Factor product {known_product} != dim size {dim_size} "
-                            f"for factors {factors}"
-                        )
-                elif len(unknown_factors) == 1:
-                    if dim_size % known_product != 0:
-                        raise ValueError(
-                            f"Cannot infer factor '{unknown_factors[0]}': "
-                            f"dim_size {dim_size} not divisible by {known_product}"
-                        )
-                    factor_sizes[unknown_factors[0]] = dim_size // known_product
-                else:
-                    raise ValueError(
-                        f"Cannot infer multiple unknown factors {unknown_factors} "
-                        f"for dimension of size {dim_size}"
-                    )
-
-        return OpShardingRule(self.input_mappings, self.output_mappings, factor_sizes)
-
     def to_einsum_notation(self) -> str:
         return OpShardingRule(
             self.input_mappings, self.output_mappings, {}
@@ -647,8 +611,6 @@ def _update_from_factors(
 
     return did_change
 
-    return did_change
-
 
 def propagate_sharding(
     rule: OpShardingRule,
@@ -677,70 +639,21 @@ def propagate_sharding(
     if _update_from_factors(input_specs, rule.input_mappings, state):
         changed = True
 
-        def propagate_sharding(
-            rule: OpShardingRule,
-            input_specs: list[ShardingSpec],
-            output_specs: list[ShardingSpec],
-            strategy: PropagationStrategy = PropagationStrategy.BASIC,
-            max_priority: int | None = None,
-        ) -> bool:
-            """Propagate shardings between inputs/outputs. Returns True if changed."""
-            if not input_specs and not output_specs:
-                return False
+    # Infer Partial Sums for outputs
+    contracting_factors = rule.get_contracting_factors()
+    partial_axes = set()
+    for f in contracting_factors:
+        f_state = state.get(f)
+        if f_state and f_state.axes:
+            partial_axes.update(f_state.axes)
 
-            mesh = input_specs[0].mesh if input_specs else output_specs[0].mesh
-
-            state = FactorShardingState()
-            _collect_to_factors(
-                input_specs,
-                rule.input_mappings,
-                rule,
-                mesh,
-                state,
-                strategy,
-                max_priority,
-            )
-            _collect_to_factors(
-                output_specs,
-                rule.output_mappings,
-                rule,
-                mesh,
-                state,
-                strategy,
-                max_priority,
-            )
-
-            changed = False
-            if _update_from_factors(output_specs, rule.output_mappings, state):
-                changed = True
-            if _update_from_factors(input_specs, rule.input_mappings, state):
+    if partial_axes:
+        for out_spec in output_specs:
+            if not partial_axes.issubset(out_spec.partial_sum_axes):
+                out_spec.partial_sum_axes.update(partial_axes)
                 changed = True
 
-                # Infer Partial Sums for outputs
-
-                contracting_factors = rule.get_contracting_factors()
-
-                partial_axes = set()
-
-                for f in contracting_factors:
-
-                    f_state = state.get(f)
-
-                    if f_state and f_state.axes:
-
-                        partial_axes.update(f_state.axes)
-
-                if partial_axes:
-
-                    for out_spec in output_specs:
-
-                        if not partial_axes.issubset(out_spec.partial_sum_axes):
-
-                            out_spec.partial_sum_axes.update(partial_axes)
-
-                            changed = True
-
-                return changed
+    return changed
 
 
 def run_hierarchical_propagation_pass(

@@ -19,6 +19,87 @@ from .view import SqueezePhysicalOp
 _squeeze_physical_op = SqueezePhysicalOp()
 
 
+class PhysicalReduceOp(Operation):
+    """Base for physical reduction operations (sum, mean, max, min).
+
+    Subclasses only need to define `name` and `kernel()`, and optionally
+    override `collective_reduce_type`.
+    """
+
+    _infer_output_sharding: bool = False
+
+    def compute_physical_shape(
+        self, args: tuple, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
+        from ..core.sharding import spmd
+
+        x = args[0]
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+
+        shapes = []
+        for i in range(num_shards):
+            idx = i if i < x.num_shards else 0
+            in_shape = x.physical_local_shape_ints(idx)
+            if in_shape is None:
+                raise RuntimeError(
+                    f"Could not determine physical shape for {self.name}"
+                )
+            norm_axis = axis if axis >= 0 else len(in_shape) + axis
+            if keepdims:
+                out_shape = tuple(
+                    1 if j == norm_axis else d for j, d in enumerate(in_shape)
+                )
+            else:
+                out_shape = tuple(
+                    d for j, d in enumerate(in_shape) if j != norm_axis
+                )
+            shapes.append(out_shape)
+
+        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
+        return shapes, dtypes, devices
+
+    def sharding_rule(
+        self,
+        input_shapes: list[tuple[int, ...]],
+        output_shapes: list[tuple[int, ...]],
+        **kwargs,
+    ):
+        """Reduce: (d0, d1, ...) -> (d0, 1, ...) with reduce_dim kept as size 1."""
+        from ..core.sharding.propagation import OpShardingRuleTemplate
+
+        rank = len(input_shapes[0])
+        axis = kwargs.get("axis", 0)
+
+        factors = [f"d{i}" for i in range(rank)]
+        in_str = " ".join(factors)
+
+        out_factors = list(factors)
+        if 0 <= axis < rank:
+            out_factors[axis] = "1"
+        out_str = " ".join(out_factors)
+
+        return OpShardingRuleTemplate.parse(
+            f"{in_str} -> {out_str}", input_shapes
+        ).instantiate(input_shapes, output_shapes)
+
+    def infer_output_shape(
+        self, input_shapes: list[tuple[int, ...]], **kwargs
+    ) -> tuple[int, ...]:
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+        in_shape = input_shapes[0]
+        if axis < 0:
+            axis = len(in_shape) + axis
+        if keepdims:
+            return tuple(1 if i == axis else d for i, d in enumerate(in_shape))
+        else:
+            return tuple(d for i, d in enumerate(in_shape) if i != axis)
+
+
 class ReduceSumOp(ReduceOperation):
     @property
     def name(self) -> str:
@@ -28,18 +109,6 @@ class ReduceSumOp(ReduceOperation):
         self, x: TensorValue, *, axis: int, keepdims: bool = False
     ) -> TensorValue:
         return ops.sum(x, axis)
-
-    def infer_output_shape(
-        self, input_shapes: list[tuple[int, ...]], **kwargs: Any
-    ) -> tuple[int, ...]:
-        """Compute output shape for reduction."""
-        axis = kwargs.get("axis", 0)
-        keepdims = kwargs.get("keepdims", False)
-        in_shape = input_shapes[0]
-        if axis < 0:
-            axis = len(in_shape) + axis
-        if keepdims:
-            return tuple(1 if i == axis else d for i, d in enumerate(in_shape))
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
         """VJP for reduce_sum: broadcast cotangent back to input shape."""
@@ -83,33 +152,6 @@ class MeanOp(ReduceOperation):
     def __call__(self, x, *, axis: int, keepdims: bool = False):
         return super().__call__(x, axis=axis, keepdims=keepdims)
 
-    def compute_cost(
-        self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]
-    ) -> float:
-        """Mean: 1 sum + 1 div per output element."""
-        if not input_shapes:
-            return 0.0
-        num_elements = 1
-        for d in input_shapes[0]:
-            num_elements *= d
-        return float(num_elements) + (
-            float(num_elements) / input_shapes[0][0] if input_shapes[0] else 0
-        )
-
-    def infer_output_shape(
-        self, input_shapes: list[tuple[int, ...]], **kwargs: Any
-    ) -> tuple[int, ...]:
-        """Compute output shape for reduction."""
-        axis = kwargs.get("axis", 0)
-        keepdims = kwargs.get("keepdims", False)
-        in_shape = input_shapes[0]
-        if axis < 0:
-            axis = len(in_shape) + axis
-        if keepdims:
-            return tuple(1 if i == axis else d for i, d in enumerate(in_shape))
-        else:
-            return tuple(d for i, d in enumerate(in_shape) if i != axis)
-
 
 class ReduceMaxOp(ReduceOperation):
     @property
@@ -149,248 +191,34 @@ class ReduceMaxOp(ReduceOperation):
         mask = equal(x, max_broadcasted)
         return reduce_sum(mul(tangents, mask), axis=axis, keepdims=keepdims)
 
-    def infer_output_shape(
-        self, input_shapes: list[tuple[int, ...]], **kwargs: Any
-    ) -> tuple[int, ...]:
-        """Compute output shape for reduction."""
-        axis = kwargs.get("axis", 0)
-        keepdims = kwargs.get("keepdims", False)
-        in_shape = input_shapes[0]
-        if axis < 0:
-            axis = len(in_shape) + axis
-        if keepdims:
-            return tuple(1 if i == axis else d for i, d in enumerate(in_shape))
-        else:
-            return tuple(d for i, d in enumerate(in_shape) if i != axis)
 
 
-class ReduceSumPhysicalOp(Operation):
+class ReduceSumPhysicalOp(PhysicalReduceOp):
     @property
     def name(self) -> str:
         return "reduce_sum_physical"
 
-    def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
-        """Infer physical shapes for this physical reduction op."""
-        from ..core.sharding import spmd
-
-        x = args[0]
-        axis = kwargs.get("axis", 0)
-        keepdims = kwargs.get("keepdims", False)
-
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
-
-        shapes = []
-        for i in range(num_shards):
-            idx = i if i < x.num_shards else 0
-            in_shape = x.physical_local_shape_ints(idx)
-            if in_shape is None:
-                raise RuntimeError(
-                    f"Could not determine physical shape for {self.name}"
-                )
-            norm_axis = axis if axis >= 0 else len(in_shape) + axis
-            if keepdims:
-                out_shape = tuple(
-                    1 if i == norm_axis else d for i, d in enumerate(in_shape)
-                )
-            else:
-                out_shape = tuple(d for i, d in enumerate(in_shape) if i != norm_axis)
-            shapes.append(out_shape)
-
-        dtypes = [x.dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [x.device] * num_shards
-
-        return shapes, dtypes, devices
-
     def kernel(
         self, x: TensorValue, *, axis: int, keepdims: bool = False
     ) -> TensorValue:
-
         return ops.sum(x, axis=axis)
 
-    def sharding_rule(
-        self,
-        input_shapes: list[tuple[int, ...]],
-        output_shapes: list[tuple[int, ...]],
-        **kwargs,
-    ):
-        """Reduce: (d0, d1, ...) -> (d0, 1, ...) with reduce_dim kept as size 1."""
-        from ..core.sharding.propagation import OpShardingRuleTemplate
 
-        rank = len(input_shapes[0])
-        axis = kwargs.get("axis", 0)
-
-        factors = [f"d{i}" for i in range(rank)]
-        in_str = " ".join(factors)
-
-        out_factors = list(factors)
-        if 0 <= axis < rank:
-            out_factors[axis] = "1"
-        out_str = " ".join(out_factors)
-
-        return OpShardingRuleTemplate.parse(
-            f"{in_str} -> {out_str}", input_shapes
-        ).instantiate(input_shapes, output_shapes)
-
-    def infer_output_shape(
-        self, input_shapes: list[tuple[int, ...]], **kwargs
-    ) -> tuple[int, ...]:
-        """Compute output shape for reduction."""
-        axis = kwargs.get("axis", 0)
-        keepdims = kwargs.get("keepdims", False)
-        in_shape = input_shapes[0]
-        if axis < 0:
-            axis = len(in_shape) + axis
-        if keepdims:
-            return tuple(1 if i == axis else d for i, d in enumerate(in_shape))
-        else:
-            return tuple(d for i, d in enumerate(in_shape) if i != axis)
-
-
-class MeanPhysicalOp(Operation):
+class MeanPhysicalOp(PhysicalReduceOp):
     @property
     def name(self) -> str:
         return "mean_physical"
 
-    def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
-        """Infer physical shapes for mean_physical."""
-        from ..core.sharding import spmd
-
-        x = args[0]
-        axis = kwargs.get("axis", 0)
-        keepdims = kwargs.get("keepdims", False)
-
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
-
-        shapes = []
-        for i in range(num_shards):
-            idx = i if i < x.num_shards else 0
-            in_shape = x.physical_local_shape_ints(idx)
-            if in_shape is None:
-                raise RuntimeError(
-                    f"Could not determine physical shape for {self.name}"
-                )
-            norm_axis = axis if axis >= 0 else len(in_shape) + axis
-            if keepdims:
-                out_shape = tuple(
-                    1 if i == norm_axis else d for i, d in enumerate(in_shape)
-                )
-            else:
-                out_shape = tuple(d for i, d in enumerate(in_shape) if i != norm_axis)
-            shapes.append(out_shape)
-
-        dtypes = [x.dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [x.device] * num_shards
-
-        return shapes, dtypes, devices
-
     def kernel(
         self, x: TensorValue, *, axis: int, keepdims: bool = False
     ) -> TensorValue:
-
         return ops.mean(x, axis=axis)
 
-    def sharding_rule(
-        self,
-        input_shapes: list[tuple[int, ...]],
-        output_shapes: list[tuple[int, ...]],
-        **kwargs,
-    ):
-        """Reduce: (d0, d1, ...) -> (d0, 1, ...) with reduce_dim kept as size 1."""
-        from ..core.sharding.propagation import OpShardingRuleTemplate
 
-        rank = len(input_shapes[0])
-        axis = kwargs.get("axis", 0)
-
-        factors = [f"d{i}" for i in range(rank)]
-        in_str = " ".join(factors)
-
-        out_factors = list(factors)
-        if 0 <= axis < rank:
-            out_factors[axis] = "1"
-        out_str = " ".join(out_factors)
-
-        return OpShardingRuleTemplate.parse(
-            f"{in_str} -> {out_str}", input_shapes
-        ).instantiate(input_shapes, output_shapes)
-
-    def infer_output_shape(
-        self, input_shapes: list[tuple[int, ...]], **kwargs
-    ) -> tuple[int, ...]:
-        """Compute output shape for reduction."""
-        axis = kwargs.get("axis", 0)
-        keepdims = kwargs.get("keepdims", False)
-        in_shape = input_shapes[0]
-        if axis < 0:
-            axis = len(in_shape) + axis
-        if keepdims:
-            return tuple(1 if i == axis else d for i, d in enumerate(in_shape))
-        else:
-            return tuple(d for i, d in enumerate(in_shape) if i != axis)
-
-
-class ReduceMaxPhysicalOp(Operation):
+class ReduceMaxPhysicalOp(PhysicalReduceOp):
     @property
     def name(self) -> str:
         return "reduce_max_physical"
-
-    def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
-        """Infer physical shapes for reduce_max_physical."""
-        from ..core.sharding import spmd
-
-        x = args[0]
-        axis = kwargs.get("axis", 0)
-        keepdims = kwargs.get("keepdims", False)
-
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
-
-        shapes = []
-        for i in range(num_shards):
-            idx = i if i < x.num_shards else 0
-            in_shape = x.physical_local_shape_ints(idx)
-            if in_shape is None:
-                raise RuntimeError(
-                    f"Could not determine physical shape for {self.name}"
-                )
-            norm_axis = axis if axis >= 0 else len(in_shape) + axis
-            if keepdims:
-                out_shape = tuple(
-                    1 if i == norm_axis else d for i, d in enumerate(in_shape)
-                )
-            else:
-                out_shape = tuple(d for i, d in enumerate(in_shape) if i != norm_axis)
-            shapes.append(out_shape)
-
-        dtypes = [x.dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [x.device] * num_shards
-
-        return shapes, dtypes, devices
 
     @property
     def collective_reduce_type(self) -> str:
@@ -399,46 +227,7 @@ class ReduceMaxPhysicalOp(Operation):
     def kernel(
         self, x: TensorValue, *, axis: int, keepdims: bool = False
     ) -> TensorValue:
-
         return ops._reduce_max(x, axis=axis)
-
-    def sharding_rule(
-        self,
-        input_shapes: list[tuple[int, ...]],
-        output_shapes: list[tuple[int, ...]],
-        **kwargs,
-    ):
-        """Reduce: (d0, d1, ...) -> (d0, 1, ...) with reduce_dim kept as size 1."""
-        from ..core.sharding.propagation import OpShardingRuleTemplate
-
-        rank = len(input_shapes[0])
-        axis = kwargs.get("axis", 0)
-
-        factors = [f"d{i}" for i in range(rank)]
-        in_str = " ".join(factors)
-
-        out_factors = list(factors)
-        if 0 <= axis < rank:
-            out_factors[axis] = "1"
-        out_str = " ".join(out_factors)
-
-        return OpShardingRuleTemplate.parse(
-            f"{in_str} -> {out_str}", input_shapes
-        ).instantiate(input_shapes, output_shapes)
-
-    def infer_output_shape(
-        self, input_shapes: list[tuple[int, ...]], **kwargs
-    ) -> tuple[int, ...]:
-        """Compute output shape for reduction."""
-        axis = kwargs.get("axis", 0)
-        keepdims = kwargs.get("keepdims", False)
-        in_shape = input_shapes[0]
-        if axis < 0:
-            axis = len(in_shape) + axis
-        if keepdims:
-            return tuple(1 if i == axis else d for i, d in enumerate(in_shape))
-        else:
-            return tuple(d for i, d in enumerate(in_shape) if i != axis)
 
 
 class ReduceMinOp(ReduceOperation):
@@ -455,66 +244,11 @@ class ReduceMinOp(ReduceOperation):
     ) -> TensorValue:
         return ops._reduce_min(x, axis=axis)
 
-    def infer_output_shape(
-        self, input_shapes: list[tuple[int, ...]], **kwargs: Any
-    ) -> tuple[int, ...]:
-        """Compute output shape for reduction."""
-        axis = kwargs.get("axis", 0)
-        keepdims = kwargs.get("keepdims", False)
-        in_shape = input_shapes[0]
-        if axis < 0:
-            axis = len(in_shape) + axis
-        if keepdims:
-            return tuple(1 if i == axis else d for i, d in enumerate(in_shape))
-        else:
-            return tuple(d for i, d in enumerate(in_shape) if i != axis)
 
-
-class ReduceMinPhysicalOp(Operation):
+class ReduceMinPhysicalOp(PhysicalReduceOp):
     @property
     def name(self) -> str:
         return "reduce_min_physical"
-
-    def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
-        """Infer physical shapes for reduce_min_physical."""
-        from ..core.sharding import spmd
-
-        x = args[0]
-        axis = kwargs.get("axis", 0)
-        keepdims = kwargs.get("keepdims", False)
-
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
-
-        shapes = []
-        for i in range(num_shards):
-            idx = i if i < x.num_shards else 0
-            in_shape = x.physical_local_shape_ints(idx)
-            if in_shape is None:
-                raise RuntimeError(
-                    f"Could not determine physical shape for {self.name}"
-                )
-            norm_axis = axis if axis >= 0 else len(in_shape) + axis
-            if keepdims:
-                out_shape = tuple(
-                    1 if i == norm_axis else d for i, d in enumerate(in_shape)
-                )
-            else:
-                out_shape = tuple(d for i, d in enumerate(in_shape) if i != norm_axis)
-            shapes.append(out_shape)
-
-        dtypes = [x.dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [x.device] * num_shards
-
-        return shapes, dtypes, devices
 
     @property
     def collective_reduce_type(self) -> str:
@@ -524,44 +258,6 @@ class ReduceMinPhysicalOp(Operation):
         self, x: TensorValue, *, axis: int, keepdims: bool = False
     ) -> TensorValue:
         return ops._reduce_min(x, axis=axis)
-
-    def sharding_rule(
-        self,
-        input_shapes: list[tuple[int, ...]],
-        output_shapes: list[tuple[int, ...]],
-        **kwargs,
-    ):
-        """Reduce: (d0, d1, ...) -> (d0, 1, ...) with reduce_dim kept as size 1."""
-        from ..core.sharding.propagation import OpShardingRuleTemplate
-
-        rank = len(input_shapes[0])
-        axis = kwargs.get("axis", 0)
-
-        factors = [f"d{i}" for i in range(rank)]
-        in_str = " ".join(factors)
-
-        out_factors = list(factors)
-        if 0 <= axis < rank:
-            out_factors[axis] = "1"
-        out_str = " ".join(out_factors)
-
-        return OpShardingRuleTemplate.parse(
-            f"{in_str} -> {out_str}", input_shapes
-        ).instantiate(input_shapes, output_shapes)
-
-    def infer_output_shape(
-        self, input_shapes: list[tuple[int, ...]], **kwargs
-    ) -> tuple[int, ...]:
-        """Compute output shape for reduction."""
-        axis = kwargs.get("axis", 0)
-        keepdims = kwargs.get("keepdims", False)
-        in_shape = input_shapes[0]
-        if axis < 0:
-            axis = len(in_shape) + axis
-        if keepdims:
-            return tuple(1 if i == axis else d for i, d in enumerate(in_shape))
-        else:
-            return tuple(d for i, d in enumerate(in_shape) if i != axis)
 
 
 _reduce_min_physical_op = ReduceMinPhysicalOp()
@@ -574,12 +270,10 @@ _mean_op = MeanOp()
 _reduce_max_op = ReduceMaxOp()
 
 
-def reduce_sum(
-    x: Tensor,
-    *,
-    axis: int | tuple[int, ...] | list[int] | None = None,
-    keepdims: bool = False,
+def _multi_axis_reduce(
+    op, x: Tensor, *, axis=None, keepdims: bool = False
 ) -> Tensor:
+    """Shared implementation for multi-axis reductions (reduce_sum, reduce_max, reduce_min)."""
     from .view import squeeze
     from .view.shape import reshape
 
@@ -592,25 +286,32 @@ def reduce_sum(
         )
         res = x
         for ax in axes:
-            res = _reduce_sum_op(res, axis=ax, keepdims=True)
+            res = op(res, axis=ax, keepdims=True)
 
         if not keepdims:
-            # Batch all squeezes into a single reshape instead of N separate squeeze ops
             out_shape = tuple(
                 int(d) for i, d in enumerate(x.shape) if i not in set(
                     ax if ax >= 0 else len(x.shape) + ax for ax in axis
                 )
             )
             res = reshape(res, out_shape if out_shape else (1,)) if len(axes) > 1 else squeeze(res, axis=axes[0])
-            # For full reduction to scalar, squeeze out the remaining dim
             if not out_shape and len(axes) > 1:
                 res = squeeze(res, axis=0)
         return res
 
-    result = _reduce_sum_op(x, axis=axis, keepdims=True)
+    result = op(x, axis=axis, keepdims=True)
     if not keepdims:
         result = squeeze(result, axis=axis)
     return result
+
+
+def reduce_sum(
+    x: Tensor,
+    *,
+    axis: int | tuple[int, ...] | list[int] | None = None,
+    keepdims: bool = False,
+) -> Tensor:
+    return _multi_axis_reduce(_reduce_sum_op, x, axis=axis, keepdims=keepdims)
 
 
 def mean(
@@ -648,59 +349,27 @@ def reduce_max(
     axis: int | tuple[int, ...] | list[int] | None = None,
     keepdims: bool = False,
 ) -> Tensor:
-    from .view import squeeze
-    from .view.shape import reshape
+    return _multi_axis_reduce(_reduce_max_op, x, axis=axis, keepdims=keepdims)
 
-    if axis is None:
-        axis = tuple(range(len(x.shape)))
 
-    if isinstance(axis, (list, tuple)):
-        axes = sorted(
-            [ax if ax >= 0 else len(x.shape) + ax for ax in axis], reverse=True
-        )
-        res = x
-        for ax in axes:
-            res = _reduce_max_op(res, axis=ax, keepdims=True)
-
-        if not keepdims:
-            out_shape = tuple(
-                int(d) for i, d in enumerate(x.shape) if i not in set(
-                    ax if ax >= 0 else len(x.shape) + ax for ax in axis
-                )
-            )
-            res = reshape(res, out_shape if out_shape else (1,)) if len(axes) > 1 else squeeze(res, axis=axes[0])
-            if not out_shape and len(axes) > 1:
-                res = squeeze(res, axis=0)
-        return res
-
-    result = _reduce_max_op(x, axis=axis, keepdims=True)
+def _physical_reduce(op, x: Tensor, axis: int, keepdims: bool = False) -> Tensor:
+    """Shared wrapper for physical reduce operations."""
+    result = op(x, axis=axis, keepdims=True)
     if not keepdims:
-        result = squeeze(result, axis=axis)
+        result = _squeeze_physical_op(result, axis=axis)
     return result
 
 
 def reduce_sum_physical(x: Tensor, axis: int, keepdims: bool = False) -> Tensor:
-
-    result = _reduce_sum_physical_op(x, axis=axis, keepdims=True)
-    if not keepdims:
-        result = _squeeze_physical_op(result, axis=axis)
-    return result
+    return _physical_reduce(_reduce_sum_physical_op, x, axis, keepdims)
 
 
 def mean_physical(x: Tensor, axis: int, keepdims: bool = False) -> Tensor:
-
-    result = _mean_physical_op(x, axis=axis, keepdims=True)
-    if not keepdims:
-        result = _squeeze_physical_op(result, axis=axis)
-    return result
+    return _physical_reduce(_mean_physical_op, x, axis, keepdims)
 
 
 def reduce_max_physical(x: Tensor, axis: int, keepdims: bool = False) -> Tensor:
-
-    result = _reduce_max_physical_op(x, axis=axis, keepdims=True)
-    if not keepdims:
-        result = _squeeze_physical_op(result, axis=axis)
-    return result
+    return _physical_reduce(_reduce_max_physical_op, x, axis, keepdims)
 
 
 def reduce_min(
@@ -709,68 +378,39 @@ def reduce_min(
     axis: int | tuple[int, ...] | list[int] | None = None,
     keepdims: bool = False,
 ) -> Tensor:
-    from .view import squeeze
-    from .view.shape import reshape
-
-    if axis is None:
-        axis = tuple(range(len(x.shape)))
-
-    if isinstance(axis, (list, tuple)):
-        axes = sorted(
-            [ax if ax >= 0 else len(x.shape) + ax for ax in axis], reverse=True
-        )
-        res = x
-        for ax in axes:
-            res = _reduce_min_op(res, axis=ax, keepdims=True)
-
-        if not keepdims:
-            out_shape = tuple(
-                int(d) for i, d in enumerate(x.shape) if i not in set(
-                    ax if ax >= 0 else len(x.shape) + ax for ax in axis
-                )
-            )
-            res = reshape(res, out_shape if out_shape else (1,)) if len(axes) > 1 else squeeze(res, axis=axes[0])
-            if not out_shape and len(axes) > 1:
-                res = squeeze(res, axis=0)
-        return res
-
-    result = _reduce_min_op(x, axis=axis, keepdims=True)
-    if not keepdims:
-        result = squeeze(result, axis=axis)
-    return result
+    return _multi_axis_reduce(_reduce_min_op, x, axis=axis, keepdims=keepdims)
 
 
 def reduce_min_physical(x: Tensor, axis: int, keepdims: bool = False) -> Tensor:
-
-    result = _reduce_min_physical_op(x, axis=axis, keepdims=True)
-    if not keepdims:
-        result = _squeeze_physical_op(result, axis=axis)
-    return result
+    return _physical_reduce(_reduce_min_physical_op, x, axis, keepdims)
 
 
 
-class ArgmaxOp(AxisOp):
-    """Indices of the maximum value along an axis."""
+class _ArgReduceOp(AxisOp):
+    """Base for argmax/argmin operations."""
+
+    _op_name: str = ""
+
+    def _get_reduce_fn(self):
+        return ops.argmax if self._op_name == "argmax" else ops.argmin
 
     @property
     def name(self) -> str:
-        return "argmax"
+        return self._op_name
 
     def kernel(self, x: TensorValue, *, axis: int) -> TensorValue:
+        reduce_fn = self._get_reduce_fn()
         rank = len(x.shape)
         if axis < 0:
             axis += rank
-        
+
         if axis != rank - 1:
             perm = list(range(rank))
             perm[axis], perm[-1] = perm[-1], perm[axis]
             x = ops.permute(x, tuple(perm))
-            # After swapping, the dimension to reduce is at -1
-            res = ops.argmax(x, axis=-1)
-            return ops.squeeze(res, -1)
-            
-        res = ops.argmax(x, axis=axis)
-        return ops.squeeze(res, axis)
+            return ops.squeeze(reduce_fn(x, axis=-1), -1)
+
+        return ops.squeeze(reduce_fn(x, axis=axis), axis)
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
@@ -790,7 +430,7 @@ class ArgmaxOp(AxisOp):
             if in_shape is None:
                 raise RuntimeError("Could not determine physical shape")
             norm_axis = axis if axis >= 0 else len(in_shape) + axis
-            out_shape = tuple(d for i, d in enumerate(in_shape) if i != norm_axis)
+            out_shape = tuple(d for j, d in enumerate(in_shape) if j != norm_axis)
             shapes.append(out_shape)
 
         return shapes, [DType.int64] * num_shards, [x.device] * num_shards
@@ -808,60 +448,12 @@ class ArgmaxOp(AxisOp):
         return tuple(d for i, d in enumerate(in_shape) if i != axis)
 
 
-class ArgminOp(AxisOp):
-    """Indices of the minimum value along an axis."""
+class ArgmaxOp(_ArgReduceOp):
+    _op_name = "argmax"
 
-    @property
-    def name(self) -> str:
-        return "argmin"
 
-    def kernel(self, x: TensorValue, *, axis: int) -> TensorValue:
-        rank = len(x.shape)
-        if axis < 0:
-            axis += rank
-        
-        if axis != rank - 1:
-            perm = list(range(rank))
-            perm[axis], perm[-1] = perm[-1], perm[axis]
-            x = ops.permute(x, tuple(perm))
-            return ops.squeeze(ops.argmin(x, axis=-1), -1)
-
-        return ops.squeeze(ops.argmin(x, axis=axis), axis)
-
-    def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
-        from max.dtype import DType
-        from ..core.sharding import spmd
-
-        x = args[0]
-        axis = kwargs.get("axis", -1)
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
-
-        shapes = []
-        for i in range(num_shards):
-            idx = i if i < x.num_shards else 0
-            in_shape = x.physical_local_shape_ints(idx)
-            if in_shape is None:
-                raise RuntimeError("Could not determine physical shape")
-            norm_axis = axis if axis >= 0 else len(in_shape) + axis
-            out_shape = tuple(d for i, d in enumerate(in_shape) if i != norm_axis)
-            shapes.append(out_shape)
-
-        return shapes, [DType.int64] * num_shards, [x.device] * num_shards
-
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        return (None,)
-
-    def infer_output_shape(
-        self, input_shapes: list[tuple[int, ...]], **kwargs: Any
-    ) -> tuple[int, ...]:
-        axis = kwargs.get("axis", -1)
-        in_shape = input_shapes[0]
-        if axis < 0:
-            axis = len(in_shape) + axis
-        return tuple(d for i, d in enumerate(in_shape) if i != axis)
+class ArgminOp(_ArgReduceOp):
+    _op_name = "argmin"
 
 
 class CumsumOp(AxisOp):

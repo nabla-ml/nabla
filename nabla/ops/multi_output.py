@@ -12,6 +12,40 @@ from max.graph import TensorValue, ops
 from .base import AxisOp, Operation
 
 
+def _unshard_axis_before_split(x, kwargs):
+    """Unshard the split axis if it's sharded (shared by Split/Chunk/Unbind)."""
+    from ..core.sharding.spec import DimSpec
+
+    rank = len(x.shape)
+    batch_dims = x.batch_dims
+    axis = kwargs.get("axis", 0)
+    if axis < 0:
+        axis = rank + axis
+    phys_axis = batch_dims + axis
+    spec = x.sharding
+    if spec and phys_axis < len(spec.dim_specs):
+        ds = spec.dim_specs[phys_axis]
+        if ds.axes:
+            new_dim_specs = list(spec.dim_specs)
+            new_dim_specs[phys_axis] = DimSpec([])
+            x = x.with_sharding(spec.mesh, new_dim_specs)
+    return x
+
+
+def _build_multi_output_metadata(x, mesh, num_shards, num_splits):
+    """Build dtype and device lists for multi-output ops."""
+    dtypes = [[x.dtype] * num_shards] * num_splits
+    if mesh:
+        if mesh.is_distributed:
+            devs = [d for d in mesh.device_refs]
+        else:
+            devs = [mesh.device_refs[0]] * num_shards
+        devices = [devs] * num_splits
+    else:
+        devices = [[x.device] * num_shards] * num_splits
+    return dtypes, devices
+
+
 class SplitOp(AxisOp):
     """Split a tensor into multiple equal chunks along an axis.
 
@@ -27,26 +61,7 @@ class SplitOp(AxisOp):
     output_container_type = tuple
 
     def __call__(self, x: Tensor, **kwargs: Any) -> tuple[Tensor, ...]:
-        from ..core.sharding.spec import DimSpec
-
-        rank = len(x.shape)
-        batch_dims = x.batch_dims
-        axis = kwargs.get("axis", 0)
-
-        if axis < 0:
-            axis = rank + axis
-
-        phys_axis = batch_dims + axis
-
-        spec = x.sharding
-        if spec and phys_axis < len(spec.dim_specs):
-            ds = spec.dim_specs[phys_axis]
-            if ds.axes:
-                new_dim_specs = list(spec.dim_specs)
-                new_dim_specs[phys_axis] = DimSpec([])
-
-                x = x.with_sharding(spec.mesh, new_dim_specs)
-
+        x = _unshard_axis_before_split(x, kwargs)
         return super().__call__(x, **kwargs)
 
     def kernel(
@@ -97,16 +112,7 @@ class SplitOp(AxisOp):
                     )
             all_outputs_shapes.append(out_shapes)
 
-        dtypes = [[x.dtype] * num_shards] * num_splits
-        if mesh:
-            if mesh.is_distributed:
-                devs = [d for d in mesh.device_refs]
-            else:
-                devs = [mesh.device_refs[0]] * num_shards
-            devices = [devs] * num_splits
-        else:
-            devices = [[x.device] * num_shards] * num_splits
-
+        dtypes, devices = _build_multi_output_metadata(x, mesh, num_shards, num_splits)
         return all_outputs_shapes, dtypes, devices
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
@@ -221,39 +227,11 @@ class ChunkOp(AxisOp):
                 all_outputs_shapes[out_idx].append(tuple(out_shape))
 
         num_splits = len(all_outputs_shapes)
-        dtypes = [[x.dtype] * num_shards] * num_splits
-        if mesh:
-            if mesh.is_distributed:
-                devs = [d for d in mesh.device_refs]
-            else:
-                devs = [mesh.device_refs[0]] * num_shards
-            devices = [devs] * num_splits
-        else:
-            devices = [[x.device] * num_shards] * num_splits
-
+        dtypes, devices = _build_multi_output_metadata(x, mesh, num_shards, num_splits)
         return all_outputs_shapes, dtypes, devices
 
     def __call__(self, x: Tensor, **kwargs: Any) -> list[Tensor]:
-        from ..core.sharding.spec import DimSpec
-
-        rank = len(x.shape)
-        batch_dims = x.batch_dims
-        axis = kwargs.get("axis", 0)
-
-        if axis < 0:
-            axis = rank + axis
-
-        phys_axis = batch_dims + axis
-
-        spec = x.sharding
-        if spec and phys_axis < len(spec.dim_specs):
-            ds = spec.dim_specs[phys_axis]
-            if ds.axes:
-                new_dim_specs = list(spec.dim_specs)
-                new_dim_specs[phys_axis] = DimSpec([])
-
-                x = x.with_sharding(spec.mesh, new_dim_specs)
-
+        x = _unshard_axis_before_split(x, kwargs)
         return super().__call__(x, **kwargs)
 
     def kernel(
@@ -347,26 +325,7 @@ class UnbindOp(AxisOp):
         return "unbind"
 
     def __call__(self, x: Tensor, **kwargs: Any) -> tuple[Tensor, ...]:
-        from ..core.sharding.spec import DimSpec
-
-        rank = len(x.shape)
-        batch_dims = x.batch_dims
-        axis = kwargs.get("axis", 0)
-
-        if axis < 0:
-            axis = rank + axis
-
-        phys_axis = batch_dims + axis
-
-        spec = x.sharding
-        if spec and phys_axis < len(spec.dim_specs):
-            ds = spec.dim_specs[phys_axis]
-            if ds.axes:
-                new_dim_specs = list(spec.dim_specs)
-                new_dim_specs[phys_axis] = DimSpec([])
-
-                x = x.with_sharding(spec.mesh, new_dim_specs)
-
+        x = _unshard_axis_before_split(x, kwargs)
         return super().__call__(x, **kwargs)
 
     def compute_physical_shape(
@@ -400,16 +359,7 @@ class UnbindOp(AxisOp):
                 all_outputs_shapes[out_idx].append(tuple(out_shape))
 
         num_splits = len(all_outputs_shapes)
-        dtypes = [[x.dtype] * num_shards] * num_splits
-        if mesh:
-            if mesh.is_distributed:
-                devs = [d for d in mesh.device_refs]
-            else:
-                devs = [mesh.device_refs[0]] * num_shards
-            devices = [devs] * num_splits
-        else:
-            devices = [[x.device] * num_shards] * num_splits
-
+        dtypes, devices = _build_multi_output_metadata(x, mesh, num_shards, num_splits)
         return all_outputs_shapes, dtypes, devices
 
     def kernel(self, x: TensorValue, *, axis: int = 0) -> tuple[TensorValue, ...]:

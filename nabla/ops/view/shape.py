@@ -255,15 +255,7 @@ class ReshapeOp(ShapeOp):
         else:
             shapes = [tuple(int(d) for d in resolved_shape)] * num_shards
 
-        dtypes = [x.dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [x.device] * (num_shards or 1)
-
+        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
         return shapes, dtypes, devices
 
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
@@ -462,15 +454,7 @@ class SliceUpdateOp(Operation):
                     f"Could not determine physical shape for input x in {self.name}"
                 )
 
-        dtypes = [x.dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [x.device] * (num_shards or 1)
-
+        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
         return shapes, dtypes, devices
 
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
@@ -591,15 +575,7 @@ class SliceTensorOp(Operation):
                     f"Could not determine local physical shape for {self.name}"
                 )
 
-        dtypes = [x.dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [x.device] * (num_shards or 1)
-
+        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
         return shapes, dtypes, devices
 
     def infer_output_rank(self, input_shapes, **kwargs) -> int:
@@ -798,15 +774,7 @@ class ConcatenateOp(AxisOp):
                 ref_shape[norm_axis] = total_axis_size
                 shapes.append(tuple(ref_shape))
 
-        dtypes = [tensors[0].dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [tensors[0].device] * (num_shards or 1)
-
+        dtypes, devices = self._build_shard_metadata(tensors[0], mesh, num_shards)
         return shapes, dtypes, devices
 
     def sharding_rule(
@@ -971,15 +939,7 @@ class BroadcastToPhysicalOp(Operation):
         else:
             shapes = [tuple(int(d) for d in target_shape)] * num_shards
 
-        dtypes = [x.dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [x.device] * (num_shards or 1)
-
+        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
         return shapes, dtypes, devices
 
     def kernel(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
@@ -1223,9 +1183,6 @@ class PadOp(Operation):
         return pad(tangents, paddings=paddings, mode=mode, value=0.0)
 
 
-_reshape_op = ReshapeOp()
-_slice_tensor_op = SliceTensorOp()
-_concatenate_op = ConcatenateOp()
 _rebind_op = RebindOp()
 _pad_op = PadOp()
 _broadcast_to_physical_op = BroadcastToPhysicalOp()

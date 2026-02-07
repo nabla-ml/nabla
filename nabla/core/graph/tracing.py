@@ -104,24 +104,20 @@ class Trace:
             id(t._impl) for t in tree_leaves(inputs) if isinstance(t, Tensor)
         }
 
-    def compute(self) -> None:
-        """Compute subgraph topology."""
+    def _compute_topology(self, stop_at_inputs: bool, collect_grad: bool) -> None:
+        """Shared DFS topology computation for compute() and compute_for_backward()."""
         if self._computed:
             return
 
         visited: set[int] = set()
         nodes: list[OpNode] = []
+        grad_leaves: list[TensorImpl] = [] if collect_grad else None
 
         from ..tensor.api import Tensor
 
         output_leaves = [
             t._impl for t in tree_leaves(self.outputs) if isinstance(t, Tensor)
         ]
-
-        root_refs: list[OpNode] = []
-        for leaf in output_leaves:
-            if leaf.output_refs is not None:
-                root_refs.append(leaf.output_refs)
 
         def dfs(refs: OpNode) -> None:
             refs_id = id(refs)
@@ -136,78 +132,48 @@ class Trace:
                     arg_leaves.append(arg)
 
             for arg in arg_leaves:
-
-                if id(arg) in self._input_tensor_ids:
+                if collect_grad and arg.requires_grad and arg not in grad_leaves:
+                    grad_leaves.append(arg)
+                if stop_at_inputs and id(arg) in self._input_tensor_ids:
                     continue
-
-                if arg.output_refs:
-                    dfs(arg.output_refs)
-
-            visited.add(refs_id)
-            nodes.append(refs)
-
-        for root in root_refs:
-            dfs(root)
-
-        self.nodes = nodes
-        self._computed = True
-
-    def compute_for_backward(self) -> None:
-        """Compute subgraph topology for backward pass.
-        
-        Unlike compute(), this method:
-        1. Traverses the ENTIRE graph back to leaves (ignores self._input_tensor_ids).
-        2. Collects all TensorImpls encountered that have requires_grad=True.
-        3. Only stops at true leaves (no output_refs).
-        """
-        if self._computed:
-            return
-
-        visited: set[int] = set()
-        nodes: list[OpNode] = []
-        gradient_leaves: list[TensorImpl] = []
-
-        from ..tensor.api import Tensor
-
-        output_leaves = [
-            t._impl for t in tree_leaves(self.outputs) if isinstance(t, Tensor)
-        ]
-        
-        def dfs(refs: OpNode) -> None:
-            refs_id = id(refs)
-            if refs_id in visited:
-                return
-
-            arg_leaves = []
-            for arg in tree_leaves(refs.op_args):
-                if isinstance(arg, Tensor):
-                    arg_leaves.append(arg._impl)
-                elif isinstance(arg, TensorImpl):
-                    arg_leaves.append(arg)
-
-            for arg in arg_leaves:
-                # 1. Collect gradient leaves (any tensor with requires_grad=True)
-                if arg.requires_grad and arg not in gradient_leaves:
-                    gradient_leaves.append(arg)
-
-                # 2. Continue DFS if it's not a root leaf (has a producing op)
                 if arg.output_refs is not None:
                     dfs(arg.output_refs)
 
             visited.add(refs_id)
             nodes.append(refs)
 
-        for leaf in output_leaves:
-            # We also check the starting leaves themselves for requires_grad
-            if leaf.requires_grad and leaf not in gradient_leaves:
-                gradient_leaves.append(leaf)
-                
-            if leaf.output_refs is not None:
-                dfs(leaf.output_refs)
+        if collect_grad:
+            for leaf in output_leaves:
+                if leaf.requires_grad and leaf not in grad_leaves:
+                    grad_leaves.append(leaf)
+                if leaf.output_refs is not None:
+                    dfs(leaf.output_refs)
+        else:
+            root_refs: list[OpNode] = []
+            for leaf in output_leaves:
+                if leaf.output_refs is not None:
+                    root_refs.append(leaf.output_refs)
+            for root in root_refs:
+                dfs(root)
 
         self.nodes = nodes
-        self.gradient_leaves = gradient_leaves
+        if collect_grad:
+            self.gradient_leaves = grad_leaves
         self._computed = True
+
+    def compute(self) -> None:
+        """Compute subgraph topology."""
+        self._compute_topology(stop_at_inputs=True, collect_grad=False)
+
+    def compute_for_backward(self) -> None:
+        """Compute subgraph topology for backward pass.
+
+        Unlike compute(), this method:
+        1. Traverses the ENTIRE graph back to leaves (ignores self._input_tensor_ids).
+        2. Collects all TensorImpls encountered that have requires_grad=True.
+        3. Only stops at true leaves (no output_refs).
+        """
+        self._compute_topology(stop_at_inputs=False, collect_grad=True)
 
     def refresh_graph_values(self) -> None:
         """Rehydrate all TensorImpl._graph_values by replaying operations.

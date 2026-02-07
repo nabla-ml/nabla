@@ -487,16 +487,15 @@ def tril(x: Any, k: int = 0) -> Any:
     return _tril_op(x, k=k)
 
 
-def zeros_like(x: Any) -> Any:
-    """Create a tensor of zeros with the same shape/dtype/device/sharding as x."""
+def _like_helper(x: Any, create_fn, *extra_args) -> Any:
+    """Shared implementation for zeros_like/ones_like/full_like."""
     from ..core import Tensor
 
     if not isinstance(x, Tensor):
-        return zeros(x.shape, dtype=x.dtype, device=x.device)
+        return create_fn(*extra_args, x.shape, dtype=x.dtype, device=x.device)
 
-    # Use physical global shape to preserve rank (includes batch_dims)
     shape = x.physical_global_shape
-    res = zeros(shape, dtype=x.dtype, device=x.device)
+    res = create_fn(*extra_args, shape, dtype=x.dtype, device=x.device)
     res.batch_dims = x.batch_dims
 
     if x.sharding:
@@ -509,54 +508,21 @@ def zeros_like(x: Any) -> Any:
             replicated_axes=x.sharding.replicated_axes,
         )
     return res
+
+
+def zeros_like(x: Any) -> Any:
+    """Create a tensor of zeros with the same shape/dtype/device/sharding as x."""
+    return _like_helper(x, zeros)
 
 
 def ones_like(x: Any) -> Any:
     """Create a tensor of ones with the same shape/dtype/device/sharding as x."""
-    from ..core import Tensor
-
-    if not isinstance(x, Tensor):
-        return ones(x.shape, dtype=x.dtype, device=x.device)
-
-    # Use physical global shape to preserve rank (includes batch_dims)
-    shape = x.physical_global_shape
-    res = ones(shape, dtype=x.dtype, device=x.device)
-    res.batch_dims = x.batch_dims
-
-    if x.sharding:
-        from .communication.shard import shard
-
-        res = shard(
-            res,
-            x.sharding.mesh,
-            x.sharding.dim_specs,
-            replicated_axes=x.sharding.replicated_axes,
-        )
-    return res
+    return _like_helper(x, ones)
 
 
 def full_like(x: Any, value: Number) -> Any:
     """Create a tensor filled with value, matching x's properties."""
-    from ..core import Tensor
-
-    if not isinstance(x, Tensor):
-        return full(x.shape, value, dtype=x.dtype, device=x.device)
-
-    # Use physical global shape to preserve rank (includes batch_dims)
-    shape = x.physical_global_shape
-    res = full(shape, value, dtype=x.dtype, device=x.device)
-    res.batch_dims = x.batch_dims
-
-    if x.sharding:
-        from .communication.shard import shard
-
-        res = shard(
-            res,
-            x.sharding.mesh,
-            x.sharding.dim_specs,
-            replicated_axes=x.sharding.replicated_axes,
-        )
-    return res
+    return _like_helper(x, full, value)
 
 
 __all__ = [

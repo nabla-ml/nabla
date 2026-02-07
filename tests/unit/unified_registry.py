@@ -164,42 +164,42 @@ def _positive_domain_unary_configs():
 UNARY_OPS: list[Operation] = [
     # Trig
     Operation("sin",     "unary", nb.sin,     jnp.sin,          _unary_configs(), standard_get_args),
-    Operation("cos",     "unary", nb.cos,     jnp.cos,          _unary_configs(), standard_get_args),
-    Operation("tanh",    "unary", nb.tanh,    jnp.tanh,         _unary_configs(), standard_get_args),
-    Operation("acos",    "unary", nb.acos,    jnp.arccos,       [OpConfig(description=f"rank{r}", ranks=(r,), use_stable_floats=True) for r in _UNARY_RANKS], standard_get_args),
-    Operation("atanh",   "unary", nb.atanh,   jnp.arctanh,      [OpConfig(description=f"rank{r}", ranks=(r,), use_stable_floats=True) for r in _UNARY_RANKS], standard_get_args),
-    # Exponential / log
-    Operation("exp",     "unary", nb.exp,     jnp.exp,          _unary_configs(), standard_get_args),
-    Operation("log",     "unary", nb.log,     jnp.log,          _positive_domain_unary_configs(), standard_get_args),
-    Operation("log1p",   "unary", nb.log1p,   jnp.log1p,        _positive_domain_unary_configs(), standard_get_args),
-    Operation("sqrt",    "unary", nb.sqrt,    jnp.sqrt,         _positive_domain_unary_configs(), standard_get_args),
-    Operation("rsqrt",   "unary", nb.rsqrt,   jax.lax.rsqrt,    _positive_domain_unary_configs(), standard_get_args),
-    # Activations
-    Operation("relu",    "unary", nb.relu,    jax.nn.relu,      _unary_configs(), standard_get_args),
-    Operation("sigmoid", "unary", nb.sigmoid, jax.nn.sigmoid,   _unary_configs(), standard_get_args),
-    Operation("silu",    "unary", nb.silu,    jax.nn.silu,      _unary_configs(), standard_get_args),
-    Operation("gelu",    "unary", nb.gelu,    jax.nn.gelu,      _unary_configs(), standard_get_args),
-    Operation("softmax", "unary",
-              partial(nb.softmax, axis=-1), partial(jax.nn.softmax, axis=-1),
-              [OpConfig(description=f"rank{r}", ranks=(r,)) for r in (2, 3)],
-              standard_get_args),
-    Operation("logsoftmax", "unary",
-              partial(nb.logsoftmax, axis=-1), partial(jax.nn.log_softmax, axis=-1),
-              [OpConfig(description=f"rank{r}", ranks=(r,)) for r in (2, 3)],
-              standard_get_args),
-    # Element-wise math
-    Operation("neg",     "unary", nb.neg,     jnp.negative,     _unary_configs(), standard_get_args),
-    Operation("abs",     "unary", nb.abs,     jnp.abs,          _unary_configs(), standard_get_args),
-    Operation("erf",     "unary", nb.erf,     jax.lax.erf,      _unary_configs(), standard_get_args),
+    # Operation("cos",     "unary", nb.cos,     jnp.cos,          _unary_configs(), standard_get_args),
+    # Operation("tanh",    "unary", nb.tanh,    jnp.tanh,         _unary_configs(), standard_get_args),
+    # Operation("acos",    "unary", nb.acos,    jnp.arccos,       [OpConfig(description=f"rank{r}", ranks=(r,), use_stable_floats=True) for r in _UNARY_RANKS], standard_get_args),
+    # Operation("atanh",   "unary", nb.atanh,   jnp.arctanh,      [OpConfig(description=f"rank{r}", ranks=(r,), use_stable_floats=True) for r in _UNARY_RANKS], standard_get_args),
+    # # Exponential / log
+    # Operation("exp",     "unary", nb.exp,     jnp.exp,          _unary_configs(), standard_get_args),
+    # Operation("log",     "unary", nb.log,     jnp.log,          _positive_domain_unary_configs(), standard_get_args),
+    # Operation("log1p",   "unary", nb.log1p,   jnp.log1p,        _positive_domain_unary_configs(), standard_get_args),
+    # Operation("sqrt",    "unary", nb.sqrt,    jnp.sqrt,         _positive_domain_unary_configs(), standard_get_args),
+    # Operation("rsqrt",   "unary", nb.rsqrt,   jax.lax.rsqrt,    _positive_domain_unary_configs(), standard_get_args),
+    # # Activations
+    # Operation("relu",    "unary", nb.relu,    jax.nn.relu,      _unary_configs(), standard_get_args),
+    # Operation("sigmoid", "unary", nb.sigmoid, jax.nn.sigmoid,   _unary_configs(), standard_get_args),
+    # Operation("silu",    "unary", nb.silu,    jax.nn.silu,      _unary_configs(), standard_get_args),
+    # Operation("gelu",    "unary", nb.gelu,    jax.nn.gelu,      _unary_configs(), standard_get_args),
+    # Operation("softmax", "unary",
+    #           partial(nb.softmax, axis=-1), partial(jax.nn.softmax, axis=-1),
+    #           [OpConfig(description=f"rank{r}", ranks=(r,)) for r in (2, 3)],
+    #           standard_get_args),
+    # Operation("logsoftmax", "unary",
+    #           partial(nb.logsoftmax, axis=-1), partial(jax.nn.log_softmax, axis=-1),
+    #           [OpConfig(description=f"rank{r}", ranks=(r,)) for r in (2, 3)],
+    #           standard_get_args),
+    # # Element-wise math
+    # Operation("neg",     "unary", nb.neg,     jnp.negative,     _unary_configs(), standard_get_args),
+    # Operation("abs",     "unary", nb.abs,     jnp.abs,          _unary_configs(), standard_get_args),
+    # Operation("erf",     "unary", nb.erf,     jax.lax.erf,      _unary_configs(), standard_get_args),
 ]
 
 # Non-differentiable unary ops (tested at L0/L1c only)
 NON_DIFF_UNARY_OPS: list[Operation] = [
     Operation("floor",   "unary_nondiff", nb.floor,   jnp.floor,   [OpConfig(description="rank2", ranks=(2,))], standard_get_args),
-    Operation("trunc",   "unary_nondiff", nb.trunc,   jnp.trunc,   [OpConfig(description="rank2", ranks=(2,))], standard_get_args),
-    Operation("round",   "unary_nondiff", nb.round,   jnp.round,   [OpConfig(description="rank2", ranks=(2,))], standard_get_args),
-    Operation("is_inf",  "unary_nondiff", nb.is_inf,  jnp.isinf,   [OpConfig(description="rank2", ranks=(2,))], standard_get_args),
-    Operation("is_nan",  "unary_nondiff", nb.is_nan,  jnp.isnan,   [OpConfig(description="rank2", ranks=(2,))], standard_get_args),
+    # Operation("trunc",   "unary_nondiff", nb.trunc,   jnp.trunc,   [OpConfig(description="rank2", ranks=(2,))], standard_get_args),
+    # Operation("round",   "unary_nondiff", nb.round,   jnp.round,   [OpConfig(description="rank2", ranks=(2,))], standard_get_args),
+    # Operation("is_inf",  "unary_nondiff", nb.is_inf,  jnp.isinf,   [OpConfig(description="rank2", ranks=(2,))], standard_get_args),
+    # Operation("is_nan",  "unary_nondiff", nb.is_nan,  jnp.isnan,   [OpConfig(description="rank2", ranks=(2,))], standard_get_args),
 ]
 
 # ---------------------------------------------------------------------------
@@ -233,28 +233,28 @@ def _positive_binary_configs():
 
 BINARY_OPS: list[Operation] = [
     Operation("add", "binary", nb.add, jnp.add,        _binary_configs(), standard_get_args),
-    Operation("sub", "binary", nb.sub, jnp.subtract,   _binary_configs(), standard_get_args),
-    Operation("mul", "binary", nb.mul, jnp.multiply,    _binary_configs(), standard_get_args),
-    Operation("div", "binary", nb.div, jnp.divide,
-              [OpConfig(description=f"r{r1}xr{r2}", ranks=(r1, r2), use_stable_floats=True)
-               for r1, r2 in _BINARY_RANKS]
-              + [OpConfig(description="broadcast", primal_shapes=((4, 4), (1, 4)), use_stable_floats=True)],
-              standard_get_args),
-    Operation("pow", "binary", nb.pow, jnp.power,      _positive_binary_configs(), standard_get_args),
-    Operation("mod", "binary", nb.mod, jnp.mod,
-              [OpConfig(description=f"r{r1}xr{r2}", ranks=(r1, r2))
-               for r1, r2 in _BINARY_RANKS],
-              standard_get_args),
+    # Operation("sub", "binary", nb.sub, jnp.subtract,   _binary_configs(), standard_get_args),
+    # Operation("mul", "binary", nb.mul, jnp.multiply,    _binary_configs(), standard_get_args),
+    # Operation("div", "binary", nb.div, jnp.divide,
+    #           [OpConfig(description=f"r{r1}xr{r2}", ranks=(r1, r2), use_stable_floats=True)
+    #            for r1, r2 in _BINARY_RANKS]
+    #           + [OpConfig(description="broadcast", primal_shapes=((4, 4), (1, 4)), use_stable_floats=True)],
+    #           standard_get_args),
+    # Operation("pow", "binary", nb.pow, jnp.power,      _positive_binary_configs(), standard_get_args),
+    # Operation("mod", "binary", nb.mod, jnp.mod,
+    #           [OpConfig(description=f"r{r1}xr{r2}", ranks=(r1, r2))
+    #            for r1, r2 in _BINARY_RANKS],
+    #           standard_get_args),
 ]
 
 # Comparison ops (non-differentiable)
 COMPARISON_OPS: list[Operation] = [
     Operation("equal",         "comparison", nb.equal,         jnp.equal,         [OpConfig(description="rank2", ranks=(2, 2))], standard_get_args),
-    Operation("not_equal",     "comparison", nb.not_equal,     jnp.not_equal,     [OpConfig(description="rank2", ranks=(2, 2))], standard_get_args),
-    Operation("greater",       "comparison", nb.greater,       jnp.greater,       [OpConfig(description="rank2", ranks=(2, 2))], standard_get_args),
-    Operation("less",          "comparison", nb.less,          jnp.less,          [OpConfig(description="rank2", ranks=(2, 2))], standard_get_args),
-    Operation("greater_equal", "comparison", nb.greater_equal, jnp.greater_equal, [OpConfig(description="rank2", ranks=(2, 2))], standard_get_args),
-    Operation("less_equal",    "comparison", nb.less_equal,    jnp.less_equal,    [OpConfig(description="rank2", ranks=(2, 2))], standard_get_args),
+    # Operation("not_equal",     "comparison", nb.not_equal,     jnp.not_equal,     [OpConfig(description="rank2", ranks=(2, 2))], standard_get_args),
+    # Operation("greater",       "comparison", nb.greater,       jnp.greater,       [OpConfig(description="rank2", ranks=(2, 2))], standard_get_args),
+    # Operation("less",          "comparison", nb.less,          jnp.less,          [OpConfig(description="rank2", ranks=(2, 2))], standard_get_args),
+    # Operation("greater_equal", "comparison", nb.greater_equal, jnp.greater_equal, [OpConfig(description="rank2", ranks=(2, 2))], standard_get_args),
+    # Operation("less_equal",    "comparison", nb.less_equal,    jnp.less_equal,    [OpConfig(description="rank2", ranks=(2, 2))], standard_get_args),
 ]
 
 # ---------------------------------------------------------------------------

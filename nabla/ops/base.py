@@ -61,6 +61,8 @@ class Operation(ABC):
     Auto-propagates batch_dims.
     """
 
+    _infer_output_sharding: bool = True
+
     @property
     @abstractmethod
     def name(self) -> str: ...
@@ -95,14 +97,24 @@ class Operation(ABC):
             total += elements * dtype_bytes
         return total
 
+    def _build_shard_metadata(self, x, mesh, num_shards):
+        """Build dtype and device lists for physical shape output."""
+        dtypes = [x.dtype] * num_shards
+        if mesh:
+            if mesh.is_distributed:
+                devices = [d for d in mesh.device_refs]
+            else:
+                devices = [mesh.device_refs[0]] * num_shards
+        else:
+            devices = [x.device] * (num_shards or 1)
+        return dtypes, devices
+
     def execute(self, args: tuple, kwargs: dict) -> Any:
         """Default physical execution: execute kernel on each shard independently.
 
-        This is the standard pattern used by most operations. Operations with
-        specialized execution logic (communication ops, reductions, etc.) can override.
-
-        NOTE: This method receives RAW (logical) kwargs and performs adaptation
-        internally via adapt_kwargs, just like AxisOp.execute does.
+        Operations with specialized execution logic (e.g. CreationOperation)
+        can override. Uses adapt_kwargs for batch_dims offset and conditionally
+        infers output sharding based on _infer_output_sharding class flag.
 
         Returns:
             tuple: (shard_results, output_sharding, mesh)
@@ -112,7 +124,6 @@ class Operation(ABC):
         GRAPH = _GRAPH
         spmd = _spmd
 
-        # Adapt kwargs for physical execution (batch_dims offset, etc.)
         max_batch_dims = getattr(self, '_cached_batch_dims', None)
         if max_batch_dims is None:
             max_batch_dims = collect_metadata(args)[0]
@@ -125,9 +136,11 @@ class Operation(ABC):
                 self.kernel, args, adapted_kwargs, mesh, op=self
             )
 
-        output_sharding, _, _ = spmd.infer_output_sharding(
-            self, args, mesh, adapted_kwargs or {}
-        )
+        output_sharding = None
+        if self._infer_output_sharding:
+            output_sharding, _, _ = spmd.infer_output_sharding(
+                self, args, mesh, adapted_kwargs or {}
+            )
 
         return (shard_results, output_sharding, mesh)
 
@@ -383,16 +396,7 @@ class BinaryOperation(Operation):
         if hasattr(y, "dtype") and y.dtype != dtype:
             pass
 
-        dtypes = [dtype] * num_shards
-
-        # Device placement
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [x.device] * num_shards
+        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
 
         return shapes, dtypes, devices
 
@@ -406,27 +410,6 @@ class BinaryOperation(Operation):
         for d in output_shapes[0]:
             num_elements *= d
         return float(num_elements)
-
-    def execute(self, args: tuple, kwargs: dict) -> Any:
-        """Physical execution for Binary Ops."""
-        if _spmd is None:
-            _get_core()
-        GRAPH = _GRAPH
-        spmd = _spmd
-
-        mesh = spmd.get_mesh_from_args(args)
-
-        with GRAPH.graph:
-            shard_results = spmd.execute_on_shards(
-                self.kernel, args, kwargs, mesh, op=self
-            )
-
-        # Infer output sharding from inputs
-        output_sharding, _, _ = spmd.infer_output_sharding(
-            self, args, mesh, kwargs or {}
-        )
-
-        return (shard_results, output_sharding, mesh)
 
     def __call__(self, x: Tensor, y: Tensor) -> Tensor:
         from . import view as view_ops
@@ -509,6 +492,8 @@ class AxisOp(Operation):
 
     axis_arg_names: set[str] = {"axis", "dim"}
 
+    _infer_output_sharding: bool = False
+
     def adapt_kwargs(self, args: tuple, kwargs: dict, batch_dims: int) -> dict:
         if batch_dims == 0:
             return kwargs
@@ -523,35 +508,6 @@ class AxisOp(Operation):
             else:
                 translated[key] = value
         return translated
-
-    def execute(self, args: tuple, kwargs: dict) -> Any:
-        """Physical execution for AxisOp.
-
-        Executes the kernel on each shard independently.
-        Subclasses like ReduceOperation may override for specialized behavior.
-
-        NOTE: This method receives RAW kwargs and performs adaptation internally.
-        """
-        if _spmd is None:
-            _get_core()
-        GRAPH = _GRAPH
-        spmd = _spmd
-
-        # 1. Collect Metadata (use cached value from __call__ if available)
-        max_batch_dims = getattr(self, '_cached_batch_dims', None)
-        if max_batch_dims is None:
-            max_batch_dims = collect_metadata(args)[0]
-
-        # 2. Adapt kwargs
-        adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)
-        mesh = spmd.get_mesh_from_args(args)
-
-        with GRAPH.graph:
-            shard_results = spmd.execute_on_shards(
-                self.kernel, args, adapted_kwargs, mesh, op=self
-            )
-
-        return (shard_results, None, mesh)
 
     def sharding_rule(
         self,
@@ -619,14 +575,7 @@ class ReduceOperation(AxisOp):
                     f"Could not determine physical shape for {self.name}"
                 )
 
-        dtypes = [x.dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [x.device] * num_shards
+        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
 
         return shapes, dtypes, devices
 
@@ -703,38 +652,35 @@ class ReduceOperation(AxisOp):
         else:
             return tuple(d for i, d in enumerate(in_shape) if i != axis)
 
-    def execute(self, args: tuple, kwargs: dict) -> Any:
-        """Physical execution for Reduction Ops.
-
-        Executes the reduction kernel on each shard independently.
-        Cross-shard reductions (when reducing over sharded axes) are handled
-        by the auto-AllReduce mechanism in Operation.__call__.
-
-        NOTE: This method receives RAW kwargs and performs adaptation internally.
-        This ensures consistency with trace rehydration.
-        """
-        if _spmd is None:
-            _get_core()
-        GRAPH = _GRAPH
-        spmd = _spmd
-
-        # Collect Metadata and Adapt (use cached value from __call__ if available)
-        max_batch_dims = getattr(self, '_cached_batch_dims', None)
-        if max_batch_dims is None:
-            max_batch_dims = collect_metadata(args)[0]
-        adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)
-        mesh = spmd.get_mesh_from_args(args)
-
-        with GRAPH.graph:
-            shard_results = spmd.execute_on_shards(
-                self.kernel, args, adapted_kwargs, mesh, op=self
-            )
-
-        return (shard_results, None, mesh)
-
 
 class UnaryOperation(Operation):
     """Base for unary element-wise operations."""
+
+    _infer_output_sharding: bool = False
+    _cost_multiplier: float = 1.0
+
+    def _derivative(self, primals: Any, output: Any) -> Any:
+        """Return the derivative factor for this op (dOutput/dInput).
+
+        Override this instead of vjp_rule/jvp_rule for simple elementwise ops
+        where vjp = mul(cotangent, deriv) and jvp = mul(tangent, deriv).
+        Return NotImplemented to fall back to per-op vjp_rule/jvp_rule.
+        """
+        return NotImplemented
+
+    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+        deriv = self._derivative(primals, output)
+        if deriv is NotImplemented:
+            raise NotImplementedError(f"'{self.name}' does not implement vjp_rule")
+        from ..ops.binary import mul
+        return mul(cotangent, deriv)
+
+    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+        deriv = self._derivative(primals, output)
+        if deriv is NotImplemented:
+            raise NotImplementedError(f"'{self.name}' does not implement jvp_rule")
+        from ..ops.binary import mul
+        return mul(tangents, deriv)
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
@@ -759,47 +705,26 @@ class UnaryOperation(Operation):
                     f"Could not determine physical shape for {self.name}"
                 )
 
-        dtypes = [x.dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [x.device] * num_shards
+        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
 
         return shapes, dtypes, devices
 
     def compute_cost(
         self, input_shapes: list[tuple[int, ...]], output_shapes: list[tuple[int, ...]]
     ) -> float:
-        """Unary elementwise op: 1 FLOP per element by default."""
+        """Unary elementwise op: _cost_multiplier FLOPs per element."""
         if not input_shapes:
             return 0.0
         num_elements = 1
         for d in input_shapes[0]:
             num_elements *= d
-        return float(num_elements)
-
-    def execute(self, args: tuple, kwargs: dict) -> Any:
-        """Physical execution for Unary Ops."""
-        if _spmd is None:
-            _get_core()
-        GRAPH = _GRAPH
-        spmd = _spmd
-
-        mesh = spmd.get_mesh_from_args(args)
-
-        with GRAPH.graph:
-            shard_results = spmd.execute_on_shards(
-                self.kernel, args, kwargs, mesh, op=self
-            )
-
-        return (shard_results, None, mesh)
+        return self._cost_multiplier * num_elements
 
 
 class ShapeOp(Operation):
     """Base for ops that take LOGICAL shape kwargs."""
+
+    _infer_output_sharding: bool = False
 
     def compute_physical_shape(
         self, args: tuple, kwargs: dict, output_sharding: Any = None
@@ -826,14 +751,7 @@ class ShapeOp(Operation):
             # Unsharded / replicated case
             shapes = [tuple(int(d) for d in global_phys_shape)] * num_shards
 
-        dtypes = [x.dtype] * num_shards
-        if mesh:
-            if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
-            else:
-                devices = [mesh.device_refs[0]] * num_shards
-        else:
-            devices = [x.device] * num_shards
+        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
 
         return shapes, dtypes, devices
 
@@ -960,6 +878,8 @@ class CreationOperation(Operation):
             devices = [device] * num_shards
 
         return shapes, dtypes, devices
+
+    _infer_output_sharding: bool = True
 
     def execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for CreationOperation.

@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 try:
     from rich.pretty import pretty_repr
@@ -744,162 +744,64 @@ class Tensor(DLPackArray, HasTensorValue):
             target = f"gpu:{target}"
         return self.to(target)
 
-    def sum(self, axis: int | tuple[int, ...] | None = None, keepdims: bool = False) -> Tensor:
-        from ...ops import reduction
-
-        return reduction.reduce_sum(self, axis=axis, keepdims=keepdims)
-
-    def mean(self, axis: int | tuple[int, ...] | None = None, keepdims: bool = False) -> Tensor:
-        from ...ops import reduction
-
-        return reduction.mean(self, axis=axis, keepdims=keepdims)
-
-    def max(self, axis: int | tuple[int, ...] | None = None, keepdims: bool = False) -> Tensor:
-        from ...ops import reduction
-
-        return reduction.reduce_max(self, axis=axis, keepdims=keepdims)
-
-    def min(self, axis: int | tuple[int, ...] | None = None, keepdims: bool = False) -> Tensor:
-        from ...ops import reduction
-
-        return reduction.reduce_min(self, axis=axis, keepdims=keepdims)
-
-    def argmax(self, axis: int | None = None, keepdims: bool = False) -> Tensor:
-        from ...ops import reduction
-
-        return reduction.argmax(self, axis=axis, keepdims=keepdims)
-
-    def argmin(self, axis: int | None = None, keepdims: bool = False) -> Tensor:
-        from ...ops import reduction
-
-        return reduction.argmin(self, axis=axis, keepdims=keepdims)
-
-    def cumsum(self, axis: int) -> Tensor:
-        from ...ops import reduction
-
-        return reduction.cumsum(self, axis=axis)
-
-    # --- Unary Operations ---
-
-    def abs(self) -> Tensor:
-        from ...ops import unary
-
-        return unary.abs(self)
-
-    def exp(self) -> Tensor:
-        from ...ops import unary
-
-        return unary.exp(self)
-
-    def log(self) -> Tensor:
-        from ...ops import unary
-
-        return unary.log(self)
-
-    def relu(self) -> Tensor:
-        from ...ops import unary
-
-        return unary.relu(self)
-
-    def sigmoid(self) -> Tensor:
-        from ...ops import unary
-
-        return unary.sigmoid(self)
-
-    def softmax(self, axis: int = -1) -> Tensor:
-        from ...ops import unary
-
-        return unary.softmax(self, axis=axis)
-
-    def logsoftmax(self, axis: int = -1) -> Tensor:
-        from ...ops import unary
-
-        return unary.logsoftmax(self, axis=axis)
-
-    def sqrt(self) -> Tensor:
-        from ...ops import unary
-
-        return unary.sqrt(self)
-
-    def tanh(self) -> Tensor:
-        from ...ops import unary
-
-        return unary.tanh(self)
-
-    def acos(self) -> Tensor:
-        from ...ops import unary
-
-        return unary.acos(self)
-
-    def atanh(self) -> Tensor:
-        from ...ops import unary
-
-        return unary.atanh(self)
-
-    def cos(self) -> Tensor:
-        from ...ops import unary
-
-        return unary.cos(self)
-
-    def erf(self) -> Tensor:
-        from ...ops import unary
-
-        return unary.erf(self)
-
-    def floor(self) -> Tensor:
-        from ...ops import unary
-
-        return unary.floor(self)
-
-    def is_inf(self) -> Tensor:
-        from ...ops import unary
-
-        return unary.is_inf(self)
-
-    def is_nan(self) -> Tensor:
-        from ...ops import unary
-
-        return unary.is_nan(self)
-
-    def log1p(self) -> Tensor:
-        from ...ops import unary
-
-        return unary.log1p(self)
-
-    def rsqrt(self) -> Tensor:
-        from ...ops import unary
-
-        return unary.rsqrt(self)
-
-    def silu(self) -> Tensor:
-        from ...ops import unary
-
-        return unary.silu(self)
-
-    def sin(self) -> Tensor:
-        from ...ops import unary
-
-        return unary.sin(self)
-
-    def trunc(self) -> Tensor:
-        from ...ops import unary
-
-        return unary.trunc(self)
-
-    def gelu(self, approximate: str | bool = "none") -> Tensor:
-        from ...ops import unary
-
-        return unary.gelu(self, approximate=approximate)
-
-    def round(self) -> Tensor:
-        from ...ops import unary
-
-        return unary.round(self)
-
-    def cast(self, dtype: DType) -> Tensor:
-        from ...ops import unary
-
-        return unary.cast(self, dtype=dtype)
+    if TYPE_CHECKING:
+        # Reduction/unary methods are generated at module load.
+        def sum(self, axis: int | tuple[int, ...] | None = None, keepdims: bool = False) -> Tensor: ...
+        def mean(self, axis: int | tuple[int, ...] | None = None, keepdims: bool = False) -> Tensor: ...
+        def max(self, axis: int | tuple[int, ...] | None = None, keepdims: bool = False) -> Tensor: ...
+        def min(self, axis: int | tuple[int, ...] | None = None, keepdims: bool = False) -> Tensor: ...
+        def argmax(self, axis: int | None = None, keepdims: bool = False) -> Tensor: ...
+        def argmin(self, axis: int | None = None, keepdims: bool = False) -> Tensor: ...
+        def cumsum(self, axis: int) -> Tensor: ...
+        def abs(self) -> Tensor: ...
+        def exp(self) -> Tensor: ...
+        def log(self) -> Tensor: ...
+        def relu(self) -> Tensor: ...
+        def sigmoid(self) -> Tensor: ...
+        def softmax(self, axis: int = -1) -> Tensor: ...
+        def logsoftmax(self, axis: int = -1) -> Tensor: ...
+        def sqrt(self) -> Tensor: ...
+        def tanh(self) -> Tensor: ...
+        def acos(self) -> Tensor: ...
+        def atanh(self) -> Tensor: ...
+        def cos(self) -> Tensor: ...
+        def erf(self) -> Tensor: ...
+        def floor(self) -> Tensor: ...
+        def is_inf(self) -> Tensor: ...
+        def is_nan(self) -> Tensor: ...
+        def log1p(self) -> Tensor: ...
+        def rsqrt(self) -> Tensor: ...
+        def silu(self) -> Tensor: ...
+        def sin(self) -> Tensor: ...
+        def trunc(self) -> Tensor: ...
+        def gelu(self, approximate: str | bool = "none") -> Tensor: ...
+        def round(self) -> Tensor: ...
+        def cast(self, dtype: DType) -> Tensor: ...
+        def __neg__(self) -> Tensor: ...
+        def __abs__(self) -> Tensor: ...
+        def __add__(self, rhs: TensorValueLike) -> Tensor: ...
+        def __radd__(self, lhs: TensorValueLike) -> Tensor: ...
+        def __sub__(self, rhs: TensorValueLike) -> Tensor: ...
+        def __rsub__(self, lhs: TensorValueLike) -> Tensor: ...
+        def __mul__(self, rhs: TensorValueLike) -> Tensor: ...
+        def __rmul__(self, lhs: TensorValueLike) -> Tensor: ...
+        def __truediv__(self, rhs: TensorValueLike) -> Tensor: ...
+        def __rtruediv__(self, lhs: TensorValueLike) -> Tensor: ...
+        def __matmul__(self, rhs: TensorValueLike) -> Tensor: ...
+        def __rmatmul__(self, lhs: TensorValueLike) -> Tensor: ...
+        def __pow__(self, rhs: TensorValueLike) -> Tensor: ...
+        def __rpow__(self, lhs: TensorValueLike) -> Tensor: ...
+        def __mod__(self, rhs: TensorValueLike) -> Tensor: ...
+        def __rmod__(self, lhs: TensorValueLike) -> Tensor: ...
+        def __eq__(self, rhs: TensorValueLike) -> Tensor: ...
+        def __ne__(self, rhs: TensorValueLike) -> Tensor: ...
+        def __lt__(self, rhs: TensorValueLike) -> Tensor: ...
+        def __le__(self, rhs: TensorValueLike) -> Tensor: ...
+        def __gt__(self, rhs: TensorValueLike) -> Tensor: ...
+        def __ge__(self, rhs: TensorValueLike) -> Tensor: ...
+        def __and__(self, rhs: TensorValueLike) -> Tensor: ...
+        def __or__(self, rhs: TensorValueLike) -> Tensor: ...
+        def __xor__(self, rhs: TensorValueLike) -> Tensor: ...
 
     def type_as(self, other: Tensor) -> Tensor:
         """Cast this tensor to the same dtype as `other`."""
@@ -1105,141 +1007,13 @@ class Tensor(DLPackArray, HasTensorValue):
         """Alias for num_elements() (PyTorch style)."""
         return self.num_elements()
 
-    def __neg__(self) -> Tensor:
-        from ...ops import unary as unary_ops
-
-        return unary_ops.neg(self)
-
     def __pos__(self) -> Tensor:
         return self
 
-    def __abs__(self) -> Tensor:
-        from ...ops import unary as unary_ops
-
-        return unary_ops.abs(self)
-
     def __invert__(self) -> Tensor:
-
         raise NotImplementedError("Bitwise NOT not yet implemented")
 
-    def __add__(self, rhs: TensorValueLike) -> Tensor:
-        from ...ops import binary as binary_ops
-
-        return binary_ops.add(self, _ensure_tensor(rhs, self))
-
-    def __radd__(self, lhs: TensorValueLike) -> Tensor:
-        from ...ops import binary as binary_ops
-
-        return binary_ops.add(_ensure_tensor(lhs, self), self)
-
-    def __sub__(self, rhs: TensorValueLike) -> Tensor:
-        from ...ops import binary as binary_ops
-
-        return binary_ops.sub(self, _ensure_tensor(rhs, self))
-
-    def __rsub__(self, lhs: TensorValueLike) -> Tensor:
-        from ...ops import binary as binary_ops
-
-        return binary_ops.sub(_ensure_tensor(lhs, self), self)
-
-    def __mul__(self, rhs: TensorValueLike) -> Tensor:
-        from ...ops import binary as binary_ops
-
-        return binary_ops.mul(self, _ensure_tensor(rhs, self))
-
-    def __rmul__(self, lhs: TensorValueLike) -> Tensor:
-        from ...ops import binary as binary_ops
-
-        return binary_ops.mul(_ensure_tensor(lhs, self), self)
-
-    def __truediv__(self, rhs: TensorValueLike) -> Tensor:
-        from ...ops import binary as binary_ops
-
-        return binary_ops.div(self, _ensure_tensor(rhs, self))
-
-    def __rtruediv__(self, lhs: TensorValueLike) -> Tensor:
-        from ...ops import binary as binary_ops
-
-        return binary_ops.div(_ensure_tensor(lhs, self), self)
-
-    def __matmul__(self, rhs: TensorValueLike) -> Tensor:
-        from ...ops import binary as binary_ops
-
-        return binary_ops.matmul(self, _ensure_tensor(rhs, self))
-
-    def __rmatmul__(self, lhs: TensorValueLike) -> Tensor:
-        from ...ops import binary as binary_ops
-
-        return binary_ops.matmul(_ensure_tensor(lhs, self), self)
-
-    def __pow__(self, rhs: TensorValueLike) -> Tensor:
-        from ...ops import binary as binary_ops
-
-        return binary_ops.pow(self, _ensure_tensor(rhs, self))
-
-    def __rpow__(self, lhs: TensorValueLike) -> Tensor:
-        from ...ops import binary as binary_ops
-
-        return binary_ops.pow(_ensure_tensor(lhs, self), self)
-
-    def __mod__(self, rhs: TensorValueLike) -> Tensor:
-        from ...ops import binary as binary_ops
-
-        return binary_ops.mod(self, _ensure_tensor(rhs, self))
-
-    def __rmod__(self, lhs: TensorValueLike) -> Tensor:
-        from ...ops import binary as binary_ops
-
-        return binary_ops.mod(_ensure_tensor(lhs, self), self)
-
-    # --- Comparison Operators ---
-
-    def __eq__(self, rhs: TensorValueLike) -> Tensor:
-        from ...ops import comparison as comp_ops
-
-        return comp_ops.equal(self, _ensure_tensor(rhs, self))
-
-    def __ne__(self, rhs: TensorValueLike) -> Tensor:
-        from ...ops import comparison as comp_ops
-
-        return comp_ops.not_equal(self, _ensure_tensor(rhs, self))
-
-    def __lt__(self, rhs: TensorValueLike) -> Tensor:
-        from ...ops import comparison as comp_ops
-
-        return comp_ops.less(self, _ensure_tensor(rhs, self))
-
-    def __le__(self, rhs: TensorValueLike) -> Tensor:
-        from ...ops import comparison as comp_ops
-
-        return comp_ops.less_equal(self, _ensure_tensor(rhs, self))
-
-    def __gt__(self, rhs: TensorValueLike) -> Tensor:
-        from ...ops import comparison as comp_ops
-
-        return comp_ops.greater(self, _ensure_tensor(rhs, self))
-
-    def __ge__(self, rhs: TensorValueLike) -> Tensor:
-        from ...ops import comparison as comp_ops
-
-        return comp_ops.greater_equal(self, _ensure_tensor(rhs, self))
-
-    # --- Logical Operators ---
-
-    def __and__(self, rhs: TensorValueLike) -> Tensor:
-        from ...ops import comparison as comp_ops
-
-        return comp_ops.logical_and(self, _ensure_tensor(rhs, self))
-
-    def __or__(self, rhs: TensorValueLike) -> Tensor:
-        from ...ops import comparison as comp_ops
-
-        return comp_ops.logical_or(self, _ensure_tensor(rhs, self))
-
-    def __xor__(self, rhs: TensorValueLike) -> Tensor:
-        from ...ops import comparison as comp_ops
-
-        return comp_ops.logical_xor(self, _ensure_tensor(rhs, self))
+    # Numeric/comparison/logical dunders are generated at module load.
 
     # --- Indexing ---
 
@@ -1318,6 +1092,183 @@ def _ensure_tensor(value: TensorValueLike, like: Tensor) -> Tensor:
     if isinstance(value, Tensor):
         return value
     return Tensor.constant(value, dtype=like.dtype, device=like.device)
+
+
+def _set_tensor_method(name: str, method) -> None:
+    method.__name__ = name
+    method.__qualname__ = f"Tensor.{name}"
+    setattr(Tensor, name, method)
+
+
+def _make_reduce_axis_keepdims(op_name: str):
+    def _method(self, axis: int | tuple[int, ...] | None = None, keepdims: bool = False):
+        from ...ops import reduction
+
+        op = getattr(reduction, op_name)
+        return op(self, axis=axis, keepdims=keepdims)
+
+    return _method
+
+
+def _make_reduce_axis_optional(op_name: str):
+    def _method(self, axis: int | None = None, keepdims: bool = False):
+        from ...ops import reduction
+
+        op = getattr(reduction, op_name)
+        return op(self, axis=axis, keepdims=keepdims)
+
+    return _method
+
+
+def _make_reduce_axis_required(op_name: str):
+    def _method(self, axis: int):
+        from ...ops import reduction
+
+        op = getattr(reduction, op_name)
+        return op(self, axis=axis)
+
+    return _method
+
+
+def _make_unary_noargs(op_name: str):
+    def _method(self):
+        from ...ops import unary
+
+        op = getattr(unary, op_name)
+        return op(self)
+
+    return _method
+
+
+def _make_unary_axis(op_name: str, *, default_axis: int):
+    def _method(self, axis: int = default_axis):
+        from ...ops import unary
+
+        op = getattr(unary, op_name)
+        return op(self, axis=axis)
+
+    return _method
+
+
+def _make_unary_gelu():
+    def _method(self, approximate: str | bool = "none"):
+        from ...ops import unary
+
+        return unary.gelu(self, approximate=approximate)
+
+    return _method
+
+
+def _make_unary_cast():
+    def _method(self, dtype: DType):
+        from ...ops import unary
+
+        return unary.cast(self, dtype=dtype)
+
+    return _method
+
+
+def _make_binary_method(op_name: str, *, reverse: bool = False):
+    def _method(self, other: TensorValueLike):
+        from ...ops import binary as binary_ops
+
+        op = getattr(binary_ops, op_name)
+        if reverse:
+            return op(_ensure_tensor(other, self), self)
+        return op(self, _ensure_tensor(other, self))
+
+    return _method
+
+
+def _make_comparison_method(op_name: str):
+    def _method(self, other: TensorValueLike):
+        from ...ops import comparison as comp_ops
+
+        op = getattr(comp_ops, op_name)
+        return op(self, _ensure_tensor(other, self))
+
+    return _method
+
+
+def _bind_tensor_generated_methods() -> None:
+    for name, op_name in {
+        "sum": "reduce_sum",
+        "mean": "mean",
+        "max": "reduce_max",
+        "min": "reduce_min",
+    }.items():
+        _set_tensor_method(name, _make_reduce_axis_keepdims(op_name))
+
+    for name, op_name in {"argmax": "argmax", "argmin": "argmin"}.items():
+        _set_tensor_method(name, _make_reduce_axis_optional(op_name))
+
+    _set_tensor_method("cumsum", _make_reduce_axis_required("cumsum"))
+
+    for name in [
+        "abs",
+        "exp",
+        "log",
+        "relu",
+        "sigmoid",
+        "sqrt",
+        "tanh",
+        "acos",
+        "atanh",
+        "cos",
+        "erf",
+        "floor",
+        "is_inf",
+        "is_nan",
+        "log1p",
+        "rsqrt",
+        "silu",
+        "sin",
+        "trunc",
+        "round",
+    ]:
+        _set_tensor_method(name, _make_unary_noargs(name))
+
+    _set_tensor_method("__neg__", _make_unary_noargs("neg"))
+    _set_tensor_method("__abs__", _make_unary_noargs("abs"))
+
+    _set_tensor_method("softmax", _make_unary_axis("softmax", default_axis=-1))
+    _set_tensor_method("logsoftmax", _make_unary_axis("logsoftmax", default_axis=-1))
+    _set_tensor_method("gelu", _make_unary_gelu())
+    _set_tensor_method("cast", _make_unary_cast())
+
+    for name, op_name, reverse in [
+        ("__add__", "add", False),
+        ("__radd__", "add", True),
+        ("__sub__", "sub", False),
+        ("__rsub__", "sub", True),
+        ("__mul__", "mul", False),
+        ("__rmul__", "mul", True),
+        ("__truediv__", "div", False),
+        ("__rtruediv__", "div", True),
+        ("__matmul__", "matmul", False),
+        ("__rmatmul__", "matmul", True),
+        ("__pow__", "pow", False),
+        ("__rpow__", "pow", True),
+        ("__mod__", "mod", False),
+        ("__rmod__", "mod", True),
+    ]:
+        _set_tensor_method(name, _make_binary_method(op_name, reverse=reverse))
+
+    for name, op_name in {
+        "__eq__": "equal",
+        "__ne__": "not_equal",
+        "__lt__": "less",
+        "__le__": "less_equal",
+        "__gt__": "greater",
+        "__ge__": "greater_equal",
+        "__and__": "logical_and",
+        "__or__": "logical_or",
+        "__xor__": "logical_xor",
+    }.items():
+        _set_tensor_method(name, _make_comparison_method(op_name))
+
+
+_bind_tensor_generated_methods()
 
 
 def realize_all(*tensors: Tensor) -> tuple[Tensor, ...]:

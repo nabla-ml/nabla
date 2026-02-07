@@ -170,7 +170,6 @@ from .ops.view import (
     view_as_real_interleaved,
 )
 
-transpose = swap_axes
 from .ops.utils import call_custom_kernel
 from .transforms.compile import CompilationStats, CompiledFunction, compile
 from .transforms.jacfwd import jacfwd
@@ -290,7 +289,6 @@ __all__ = [
     "slice_update",
     "concatenate",
     "stack",
-    "flip",
     "permute",
     "incr_batch_dims",
     "decr_batch_dims",
