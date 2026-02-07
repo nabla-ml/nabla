@@ -103,7 +103,7 @@ def train_mlp():
         loss.backward()
         optimizer.step()
 
-        if (epoch + 1) % 10 == 0:
+        if (epoch + 1) % 1 == 0:
             print(f"{epoch+1:<8} {loss_value.item():<12.6f}")
 
     print("-" * 30)

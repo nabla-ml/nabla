@@ -29,8 +29,8 @@ class AsInterleavedComplexOp(Operation):
         # Input shape (..., 2) -> Output shape (...)
         shapes = []
         for i in range(x.num_shards):
-            s = x.physical_local_shape(i)
-            shapes.append(tuple(int(d) for d in s[:-1]))
+            s = x.physical_local_shape_ints(i)
+            shapes.append(s[:-1])
         
         return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
 
@@ -60,8 +60,8 @@ class ViewAsRealInterleavedOp(Operation):
         # Input shape (...) -> Output shape (..., 2)
         shapes = []
         for i in range(x.num_shards):
-            s = x.physical_local_shape(i)
-            shapes.append(tuple(int(d) for d in s) + (2,))
+            s = x.physical_local_shape_ints(i)
+            shapes.append(s + (2,))
             
         return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
 

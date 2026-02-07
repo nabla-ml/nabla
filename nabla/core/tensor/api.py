@@ -375,6 +375,20 @@ class Tensor(DLPackArray, HasTensorValue):
     def physical_local_shape(self, shard_idx: int = 0) -> graph.Shape | None:
         return self._impl.physical_local_shape(shard_idx)
 
+    def physical_local_shape_ints(self, shard_idx: int = 0) -> tuple[int, ...] | None:
+        """Int-tuple shape for a specific shard (avoids creating Shape/Dim objects)."""
+        return self._impl.physical_local_shape_ints(shard_idx)
+
+    @property
+    def physical_global_shape_ints(self) -> tuple[int, ...] | None:
+        """Fast global physical shape as int tuple (no Shape/Dim allocation)."""
+        return self._impl.physical_global_shape_ints
+
+    @property
+    def global_shape_ints(self) -> tuple[int, ...] | None:
+        """Fast global logical shape as int tuple (no Shape/Dim allocation)."""
+        return self._impl.global_shape_ints
+
     def logical_local_shape(self, shard_idx: int = 0) -> graph.Shape | None:
         return self._impl.logical_local_shape(shard_idx)
 

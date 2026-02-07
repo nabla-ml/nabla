@@ -30,6 +30,30 @@ from .utils import (
     apply_jvp,
 )
 
+# Module-level caches for deferred imports (avoid repeated _handle_fromlist overhead)
+_GRAPH = None
+_spmd = None
+_Tensor = None
+_pytree = None
+_OpNode = None
+_config = None  # Cache the config MODULE (not values) since they can change at runtime
+
+
+def _get_core():
+    """Lazy import and cache core modules."""
+    global _GRAPH, _spmd, _Tensor, _pytree, _OpNode, _config
+    if _GRAPH is None:
+        from ..core import GRAPH as g, Tensor as T, pytree as pt, OpNode as ON
+        from ..core.sharding import spmd as s
+        from .. import config as cfg
+        _GRAPH = g
+        _spmd = s
+        _Tensor = T
+        _pytree = pt
+        _OpNode = ON
+        _config = cfg
+    return _GRAPH, _spmd, _Tensor, _pytree, _OpNode
+
 
 class Operation(ABC):
     """Base class for all operations.
@@ -83,11 +107,15 @@ class Operation(ABC):
         Returns:
             tuple: (shard_results, output_sharding, mesh)
         """
-        from ..core import GRAPH
-        from ..core.sharding import spmd
+        if _spmd is None:
+            _get_core()
+        GRAPH = _GRAPH
+        spmd = _spmd
 
         # Adapt kwargs for physical execution (batch_dims offset, etc.)
-        max_batch_dims = collect_metadata(args)[0]
+        max_batch_dims = getattr(self, '_cached_batch_dims', None)
+        if max_batch_dims is None:
+            max_batch_dims = collect_metadata(args)[0]
         adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)
 
         mesh = spmd.get_mesh_from_args(args)
@@ -116,16 +144,20 @@ class Operation(ABC):
             adapt_and_reshard(self, args, kwargs, any_sharded, max_batch_dims)
         )
 
-        # 3. Compute Hash for Caching
+        # 3. Compute Hash for Caching (always needed for lazy execution model cache)
         op_hash = compute_structural_hash(self.name, resharded_args, adapted_kwargs)
 
         # 4. Eager Execution (if enabled)
+        # Cache batch_dims on self so execute() can reuse without re-collecting
+        self._cached_batch_dims = max_batch_dims
         execution_results = eager_execute(self, resharded_args, kwargs, adapted_kwargs)
+        self._cached_batch_dims = None
 
         # 5. Determine Physical Metadata (Shapes, Dtypes, Devices)
-        from ..config import VERIFY_EAGER_SHAPES
+        if _config is None:
+            _get_core()
 
-        if execution_results is None or VERIFY_EAGER_SHAPES:
+        if execution_results is None or _config.VERIFY_EAGER_SHAPES:
             # We must compute them manually if no physical execution happened,
             # or if the user explicitly requested verification against the backend.
             if type(self).compute_physical_shape is Operation.compute_physical_shape:
@@ -246,9 +278,11 @@ class Operation(ABC):
         op_hash: tuple[Any, ...] | None = None,
     ) -> None:
         """Set up OpNode for tracing support."""
-        from ..core import Tensor, pytree
+        if _Tensor is None:
+            _get_core()
+        Tensor = _Tensor
+        pytree = _pytree
 
-        # Fast path: most outputs are single tensors
         # Fast path: most outputs are single tensors
         if isinstance(output, Tensor):
             output_impls = [output._impl]
@@ -266,7 +300,7 @@ class Operation(ABC):
                 return
             _, output_tree_def = pytree.tree_flatten(output, is_leaf=pytree.is_tensor)
 
-        from ..core import OpNode
+        OpNode = _OpNode
 
         # Optimized to_impl: only use tree_map if args contain nested structures
         def to_impl(x: Any) -> Any:
@@ -315,37 +349,29 @@ class BinaryOperation(Operation):
         self, args: tuple, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for binary elementwise ops (same as input 0)."""
-        from ..core import Tensor
-        from ..core.sharding import spmd
+        if _spmd is None:
+            _get_core()
+        Tensor = _Tensor
+        spmd = _spmd
 
         x = args[0]
         y = args[1]
-
-        # We rely on previous broadcasting steps to ensure x and y have compatible shapes
-        # Or at least compatible for the operation logic.
-        # For elementwise binary, inputs are typically broadcasted to match.
 
         mesh = spmd.get_mesh_from_args(args)
         num_shards = len(mesh.devices) if mesh else 1
 
         shapes = []
         for i in range(num_shards):
-            # Prefer x, but if x is scalar/smaller rank, y might determine shape?
-            # In BinaryOperation.__call__, inputs are broadcasted to target_physical.
-            # So args passed here (resharded_args) should have correct shapes.
-
-            # Handle replicated inputs (1 shard) used in multi-shard mesh
             idx_x = i if i < x.num_shards else 0
-            s = x.physical_local_shape(idx_x)
+            s = x.physical_local_shape_ints(idx_x)
 
             if s is None:
-                # Fallback to y if x doesn't help? or error?
                 if isinstance(y, Tensor):
                     idx_y = i if i < y.num_shards else 0
-                    s = y.physical_local_shape(idx_y)
+                    s = y.physical_local_shape_ints(idx_y)
 
             if s is not None:
-                shapes.append(tuple(int(d) for d in s))
+                shapes.append(s)
             else:
                 # Should not happen if inputs are realized/valid
                 raise RuntimeError(
@@ -353,14 +379,8 @@ class BinaryOperation(Operation):
                 )
 
         # Dtype promotion
-        # Simple rule: preserve float32, etc.
-        # Max usually follows numpy promotion.
-        # For simple cases (same dtype), return x.dtype.
-        # If different, we might need logic.
-        # Let's assume same dtype for now or pick wider.
         dtype = x.dtype
         if hasattr(y, "dtype") and y.dtype != dtype:
-            # Very basic promotion: float > int
             pass
 
         dtypes = [dtype] * num_shards
@@ -389,8 +409,10 @@ class BinaryOperation(Operation):
 
     def execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for Binary Ops."""
-        from ..core import GRAPH
-        from ..core.sharding import spmd
+        if _spmd is None:
+            _get_core()
+        GRAPH = _GRAPH
+        spmd = _spmd
 
         mesh = spmd.get_mesh_from_args(args)
 
@@ -413,8 +435,8 @@ class BinaryOperation(Operation):
         x = ensure_tensor(x)
         y = ensure_tensor(y)
 
-        x_logical = tuple(int(d) for d in x.shape)
-        y_logical = tuple(int(d) for d in y.shape)
+        x_logical = x.global_shape_ints
+        y_logical = y.global_shape_ints
         target_logical = self._broadcast_shapes(x_logical, y_logical)
 
         if x_logical != target_logical:
@@ -424,30 +446,33 @@ class BinaryOperation(Operation):
 
         x_batch_dims = x.batch_dims
         y_batch_dims = y.batch_dims
+        max_batch_dims = max(x_batch_dims, y_batch_dims)
+
+        # Fast path: no batch dims (common case) — skip all batch/physical checks
+        if max_batch_dims == 0:
+            return super().__call__(x, y)
 
         if x_batch_dims >= y_batch_dims:
-            global_phys = x.physical_global_shape or x.local_shape
-            batch_shape = tuple(int(d) for d in global_phys[:x_batch_dims])
+            global_phys = x.physical_global_shape_ints or x.physical_local_shape_ints(0)
+            batch_shape = global_phys[:x_batch_dims]
         else:
-            global_phys = y.physical_global_shape or y.local_shape
-            batch_shape = tuple(int(d) for d in global_phys[:y_batch_dims])
+            global_phys = y.physical_global_shape_ints or y.physical_local_shape_ints(0)
+            batch_shape = global_phys[:y_batch_dims]
 
-        max_batch_dims = max(x_batch_dims, y_batch_dims)
-        if max_batch_dims > 0:
-            if x.batch_dims < max_batch_dims:
-                x = view_ops.broadcast_batch_dims(x, batch_shape)
-            if y.batch_dims < max_batch_dims:
-                y = view_ops.broadcast_batch_dims(y, batch_shape)
+        if x.batch_dims < max_batch_dims:
+            x = view_ops.broadcast_batch_dims(x, batch_shape)
+        if y.batch_dims < max_batch_dims:
+            y = view_ops.broadcast_batch_dims(y, batch_shape)
 
         target_physical = batch_shape + target_logical
 
-        x_global = x.physical_global_shape or x.local_shape
-        y_global = y.physical_global_shape or y.local_shape
+        x_global = x.physical_global_shape_ints or x.physical_local_shape_ints(0)
+        y_global = y.physical_global_shape_ints or y.physical_local_shape_ints(0)
 
-        if tuple(int(d) for d in x_global) != target_physical:
+        if x_global != target_physical:
             x = view_ops.broadcast_to_physical(x, target_physical)
 
-        if tuple(int(d) for d in y_global) != target_physical:
+        if y_global != target_physical:
             y = view_ops.broadcast_to_physical(y, target_physical)
 
         return super().__call__(x, y)
@@ -491,8 +516,6 @@ class AxisOp(Operation):
         translated = {}
         for key, value in kwargs.items():
             if key in self.axis_arg_names and isinstance(value, int):
-                # Negative indices are preserved (they index from end of both logical and physical)
-                # Only POSITIVE indices need shifting by batch_dims.
                 if value >= 0:
                     translated[key] = value + batch_dims
                 else:
@@ -509,11 +532,15 @@ class AxisOp(Operation):
 
         NOTE: This method receives RAW kwargs and performs adaptation internally.
         """
-        from ..core import GRAPH
-        from ..core.sharding import spmd
+        if _spmd is None:
+            _get_core()
+        GRAPH = _GRAPH
+        spmd = _spmd
 
-        # 1. Collect Metadata
-        max_batch_dims = collect_metadata(args)[0]
+        # 1. Collect Metadata (use cached value from __call__ if available)
+        max_batch_dims = getattr(self, '_cached_batch_dims', None)
+        if max_batch_dims is None:
+            max_batch_dims = collect_metadata(args)[0]
 
         # 2. Adapt kwargs
         adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)
@@ -559,7 +586,9 @@ class ReduceOperation(AxisOp):
         self, args: tuple, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for reduction operations."""
-        from ..core.sharding import spmd
+        if _spmd is None:
+            _get_core()
+        spmd = _spmd
 
         x = args[0]
         # Kwargs are already adapted in Operation.__call__
@@ -572,9 +601,8 @@ class ReduceOperation(AxisOp):
         shapes = []
         for i in range(num_shards):
             idx = i if i < x.num_shards else 0
-            s = x.physical_local_shape(idx)
-            if s is not None:
-                in_shape = tuple(int(d) for d in s)
+            in_shape = x.physical_local_shape_ints(idx)
+            if in_shape is not None:
                 # Normalize axis relative to the physical rank
                 norm_axis = axis if axis >= 0 else len(in_shape) + axis
                 if keepdims:
@@ -685,11 +713,15 @@ class ReduceOperation(AxisOp):
         NOTE: This method receives RAW kwargs and performs adaptation internally.
         This ensures consistency with trace rehydration.
         """
-        from ..core import GRAPH
-        from ..core.sharding import spmd
+        if _spmd is None:
+            _get_core()
+        GRAPH = _GRAPH
+        spmd = _spmd
 
-        # Collect Metadata and Adapt
-        max_batch_dims = collect_metadata(args)[0]
+        # Collect Metadata and Adapt (use cached value from __call__ if available)
+        max_batch_dims = getattr(self, '_cached_batch_dims', None)
+        if max_batch_dims is None:
+            max_batch_dims = collect_metadata(args)[0]
         adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)
         mesh = spmd.get_mesh_from_args(args)
 
@@ -708,7 +740,9 @@ class UnaryOperation(Operation):
         self, args: tuple, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for unary elementwise ops (same as input)."""
-        from ..core.sharding import spmd
+        if _spmd is None:
+            _get_core()
+        spmd = _spmd
 
         x = args[0]
         mesh = spmd.get_mesh_from_args(args)
@@ -717,9 +751,9 @@ class UnaryOperation(Operation):
         shapes = []
         for i in range(num_shards):
             idx = i if i < x.num_shards else 0
-            s = x.physical_local_shape(idx)
+            s = x.physical_local_shape_ints(idx)
             if s is not None:
-                shapes.append(tuple(int(d) for d in s))
+                shapes.append(s)
             else:
                 raise RuntimeError(
                     f"Could not determine physical shape for {self.name}"
@@ -749,8 +783,10 @@ class UnaryOperation(Operation):
 
     def execute(self, args: tuple, kwargs: dict) -> Any:
         """Physical execution for Unary Ops."""
-        from ..core import GRAPH
-        from ..core.sharding import spmd
+        if _spmd is None:
+            _get_core()
+        GRAPH = _GRAPH
+        spmd = _spmd
 
         mesh = spmd.get_mesh_from_args(args)
 
@@ -819,14 +855,9 @@ class ShapeOp(Operation):
                     global_phys = x.local_shape
                     # Fallback if local_shape is None? Should not happen if hydrated or determined.
                     if global_phys is None:
-                        # If we can't determine physical shape, we might be in trouble or it's not realized.
-                        # But for shape ops we usually need it.
-                        # Let's assume input has shape info.
                         global_phys = (
                             x.shape
-                        )  # Fallback to logical if physical missing? No.
-                        # If physical is missing it might be (B, ...).
-                        # Let's rely on standard property behavior.
+                        ) 
                         pass
 
                     if global_phys:
@@ -837,12 +868,7 @@ class ShapeOp(Operation):
                         # Best effort: assume standard layout
                         global_batch_shape = x.shape[
                             :batch_dims
-                        ]  # This is wrong if x.shape is logical.
-                        # But x.shape IS logical.
-                        # Logic in original __call__:
-                        # global_phys = x.local_shape
-                        # global_batch_shape = tuple(int(d) for d in global_phys[:batch_dims])
-                        # If local_shape is None, we can't do much.
+                        ] 
                         return kwargs
 
                 physical_shape = global_batch_shape + tuple(shape)
@@ -861,8 +887,10 @@ class ShapeOp(Operation):
         from ..core import GRAPH
         from ..core.sharding import spmd
 
-        # Collect Metadata and Adapt
-        max_batch_dims = collect_metadata(args)[0]
+        # Collect Metadata and Adapt (use cached value from __call__ if available)
+        max_batch_dims = getattr(self, '_cached_batch_dims', None)
+        if max_batch_dims is None:
+            max_batch_dims = collect_metadata(args)[0]
         adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)
         mesh = spmd.get_mesh_from_args(args)
 

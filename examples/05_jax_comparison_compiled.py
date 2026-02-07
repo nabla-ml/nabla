@@ -154,6 +154,42 @@ if loss_diff < 1e-4:
 else:
     print("⚠ Compiled and eager differ!")
 
+# Test 2b: Eager MAX Graph (builds MAX graph eagerly each step)
+print()
+print("=" * 70)
+print("TEST 2b: Eager MAX Graph (EAGER_MAX_GRAPH=1)")
+print("=" * 70)
+
+import nabla.config as nabla_config
+orig_eager_max = nabla_config.EAGER_MAX_GRAPH
+nabla_config.EAGER_MAX_GRAPH = True
+
+params_eager_max = params
+
+loss, params_eager_max = train_step_eager(params_eager_max, X, y)
+print(f"Warmup: loss = {loss.to_numpy():.6f}")
+
+start = time.perf_counter()
+losses_eager_max = []
+for i in range(n_steps):
+    loss, params_eager_max = train_step_eager(params_eager_max, X, y)
+    losses_eager_max.append(float(loss.to_numpy()))
+    if (i + 1) % 50 == 0:
+        print(f"  Step {i+1:3d}: loss = {loss.to_numpy():.6f}")
+
+elapsed_eager_max = time.perf_counter() - start
+nabla_config.EAGER_MAX_GRAPH = orig_eager_max
+
+print(f"\nTime: {elapsed_eager_max:.4f}s ({n_steps/elapsed_eager_max:.1f} steps/sec)")
+print(f"Loss: {losses_eager_max[0]:.6f} -> {losses_eager_max[-1]:.6f}")
+
+loss_diff_max = abs(losses_compiled[-1] - losses_eager_max[-1])
+print(f"Loss diff vs compiled: {loss_diff_max:.8f}")
+if loss_diff_max < 1e-4:
+    print("✓ Eager MAX Graph and compiled match!")
+else:
+    print("⚠ Eager MAX Graph and compiled differ!")
+
 # Test 3: JAX JIT comparison
 if HAS_JAX:
     print()
@@ -217,10 +253,11 @@ print()
 print("=" * 70)
 print("FINAL COMPARISON")
 print("=" * 70)
-print(f"Nabla Compiled: {elapsed_compiled:.4f}s ({n_steps/elapsed_compiled:.1f} steps/sec)")
-print(f"Nabla Eager:    {elapsed_eager:.4f}s ({n_steps/elapsed_eager:.1f} steps/sec)")
+print(f"Nabla Compiled:        {elapsed_compiled:.4f}s ({n_steps/elapsed_compiled:.1f} steps/sec)")
+print(f"Nabla Eager (deferred):{elapsed_eager:.4f}s ({n_steps/elapsed_eager:.1f} steps/sec)")
+print(f"Nabla Eager (MAX):     {elapsed_eager_max:.4f}s ({n_steps/elapsed_eager_max:.1f} steps/sec)")
 if HAS_JAX:
-    print(f"JAX JIT:        {elapsed_jax:.4f}s ({n_steps/elapsed_jax:.1f} steps/sec)")
+    print(f"JAX JIT:               {elapsed_jax:.4f}s ({n_steps/elapsed_jax:.1f} steps/sec)")
     print()
     speedup_vs_jax = elapsed_jax / elapsed_compiled
     if speedup_vs_jax > 1:
@@ -228,7 +265,8 @@ if HAS_JAX:
     else:
         print(f"JAX is {1/speedup_vs_jax:.2f}x faster than Nabla")
 print()
-print(f"Nabla speedup over eager: {speedup:.2f}x")
+print(f"Nabla speedup over eager (deferred): {speedup:.2f}x")
+print(f"Nabla speedup over eager (MAX graph): {elapsed_eager_max/elapsed_compiled:.2f}x")
 
 print()
 print("=" * 70)

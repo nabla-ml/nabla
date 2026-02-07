@@ -41,9 +41,9 @@ class UnsqueezeOp(AxisOp):
         shapes = []
         for i in range(num_shards):
             idx = i if i < x.num_shards else 0
-            s = x.physical_local_shape(idx)
-            if s is not None:
-                in_shape = list(int(d) for d in s)
+            in_shape = x.physical_local_shape_ints(idx)
+            if in_shape is not None:
+                in_shape = list(in_shape)
                 norm_axis = axis if axis >= 0 else len(in_shape) + 1 + axis
                 in_shape.insert(norm_axis, 1)
                 shapes.append(tuple(in_shape))
@@ -162,9 +162,9 @@ class SqueezeOp(AxisOp):
         shapes = []
         for i in range(num_shards):
             idx = i if i < x.num_shards else 0
-            s = x.physical_local_shape(idx)
-            if s is not None:
-                in_shape = list(int(d) for d in s)
+            in_shape = x.physical_local_shape_ints(idx)
+            if in_shape is not None:
+                in_shape = list(in_shape)
                 if axis is None:
                     axes = [idx for idx, d in enumerate(in_shape) if d == 1]
                 elif isinstance(axis, int):
@@ -306,9 +306,9 @@ class SwapAxesOp(AxisOp):
         shapes = []
         for i in range(num_shards):
             idx = i if i < x.num_shards else 0
-            s = x.physical_local_shape(idx)
-            if s is not None:
-                in_shape = list(int(d) for d in s)
+            in_shape = x.physical_local_shape_ints(idx)
+            if in_shape is not None:
+                in_shape = list(in_shape)
                 norm_axis1 = axis1 if axis1 >= 0 else len(in_shape) + axis1
                 norm_axis2 = axis2 if axis2 >= 0 else len(in_shape) + axis2
                 in_shape[norm_axis1], in_shape[norm_axis2] = (
@@ -458,9 +458,9 @@ class MoveAxisOp(AxisOp):
         shapes = []
         for i in range(num_shards):
             idx = i if i < x.num_shards else 0
-            s = x.physical_local_shape(idx)
-            if s is not None:
-                in_shape = list(int(d) for d in s)
+            in_shape = x.physical_local_shape_ints(idx)
+            if in_shape is not None:
+                in_shape = list(in_shape)
                 rank = len(in_shape)
                 norm_source = source if source >= 0 else rank + source
                 norm_dest = destination if destination >= 0 else rank + destination
@@ -551,9 +551,9 @@ class UnsqueezePhysicalOp(Operation):
         shapes = []
         for i in range(num_shards):
             idx = i if i < x.num_shards else 0
-            s = x.physical_local_shape(idx)
-            if s is not None:
-                in_shape = list(int(d) for d in s)
+            in_shape = x.physical_local_shape_ints(idx)
+            if in_shape is not None:
+                in_shape = list(in_shape)
                 norm_axis = axis if axis >= 0 else len(in_shape) + axis
                 in_shape.insert(norm_axis, 1)
                 shapes.append(tuple(in_shape))
@@ -631,9 +631,9 @@ class SqueezePhysicalOp(Operation):
         shapes = []
         for i in range(num_shards):
             idx = i if i < x.num_shards else 0
-            s = x.physical_local_shape(idx)
-            if s is not None:
-                in_shape = list(int(d) for d in s)
+            in_shape = x.physical_local_shape_ints(idx)
+            if in_shape is not None:
+                in_shape = list(in_shape)
                 norm_axis = axis if axis >= 0 else len(in_shape) + axis
                 in_shape.pop(norm_axis)
                 shapes.append(tuple(in_shape))
@@ -720,7 +720,7 @@ class FlipOp(AxisOp):
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         x = args[0]
         shapes = [
-            tuple(int(d) for d in x.physical_local_shape(i))
+            x.physical_local_shape_ints(i)
             for i in range(x.num_shards)
         ]
         return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
@@ -779,8 +779,8 @@ class PermuteOp(Operation):
         order = kwargs.get("order")
         shapes = []
         for i in range(x.num_shards):
-            local_shape = x.physical_local_shape(i)
-            shapes.append(tuple(int(local_shape[j]) for j in order))
+            local_shape = x.physical_local_shape_ints(i)
+            shapes.append(tuple(local_shape[j] for j in order))
         return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:

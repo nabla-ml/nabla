@@ -255,9 +255,13 @@ class ComputeGraph:
             sharding_key = _make_hashable(t.sharding) if t.sharding else None
             return (1, str(t.dtype), tuple(int(d) for d in t.shape), sharding_key)
 
-        targets.sort(key=lambda t: str(get_tensor_key(t)))
+        # Pre-compute keys once, sort by hash (avoid expensive str() conversion)
+        target_keys = [get_tensor_key(t) for t in targets]
+        indices = sorted(range(len(targets)), key=lambda i: hash(target_keys[i]))
+        targets[:] = [targets[i] for i in indices]
+        target_keys = [target_keys[i] for i in indices]
 
-        op_hashes = [get_tensor_key(t) for t in targets]
+        op_hashes = target_keys
         cache_key = tuple(op_hashes) if op_hashes else None
 
         if DEBUG_LAZY_EVAL:

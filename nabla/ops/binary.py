@@ -157,24 +157,11 @@ class MatmulOp(Operation):
             idx_x = i if i < x.num_shards else 0
             idx_y = i if i < y.num_shards else 0
 
-            sx = x.physical_local_shape(idx_x)
-            sy = y.physical_local_shape(idx_y)
+            sx = x.physical_local_shape_ints(idx_x)
+            sy = y.physical_local_shape_ints(idx_y)
 
             if sx is not None and sy is not None:
-                # sx: ... M K, sy: ... K N (after broadcasting in __call__)
-                # res: ... M N
-                # Logic: sx[:-1] + sy[-1:]
-
-                # Handling 1D cases (vector-matrix etc) might be tricky if not normalized.
-                # But Operation.__call__ receives RESHARDED args which come from __call__ logic.
-                # In MatmulOp.__call__, we unsqueeze 1D inputs!
-                # But wait, __call__ calls super().__call__ (Operation.__call__) with UNSQUEEZED inputs.
-                # So inputs passed to execute/compute_physical_shape ARE AT LEAST 2D.
-                # So slicing [-1] is safe.
-
-                res_shape = tuple(int(d) for d in sx[:-1]) + tuple(
-                    int(d) for d in sy[-1:]
-                )
+                res_shape = sx[:-1] + sy[-1:]
                 shapes.append(res_shape)
             else:
                 raise RuntimeError(
@@ -429,17 +416,16 @@ class OuterOp(BinaryOperation):
         for i in range(num_shards):
             idx_l = i if i < lhs.num_shards else 0
             idx_r = i if i < rhs.num_shards else 0
-            sl = lhs.physical_local_shape(idx_l)
-            sr = rhs.physical_local_shape(idx_r)
+            sl = lhs.physical_local_shape_ints(idx_l)
+            sr = rhs.physical_local_shape_ints(idx_r)
             
             # Use global shape if local is missing (replicated fallback)
             if sl is None:
-                sl = lhs.physical_global_shape or lhs.shape
+                sl = tuple(int(d) for d in (lhs.physical_global_shape or lhs.shape))
             if sr is None:
-                sr = rhs.physical_global_shape or rhs.shape
+                sr = tuple(int(d) for d in (rhs.physical_global_shape or rhs.shape))
                 
-            prefix = tuple(int(d) for d in sl[:-1])
-            shapes.append(prefix + (int(sl[-1]), int(sr[-1])))
+            shapes.append(sl[:-1] + (sl[-1], sr[-1]))
         return shapes, [lhs.dtype] * num_shards, [lhs.device] * num_shards
 
     def infer_output_shape(

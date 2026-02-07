@@ -14,10 +14,33 @@ from __future__ import annotations
 from typing import Any, Union
 from pathlib import Path
 
+# Module-level caches for deferred imports
+_Tensor = None
+_GRAPH = None
+_spmd = None
+_pytree = None
+_config = None  # Cache the config MODULE (not values) since they can change at runtime
+
+
+def _get_utils_core():
+    """Lazy import and cache core modules for utils hot paths."""
+    global _Tensor, _GRAPH, _spmd, _pytree, _config
+    if _Tensor is None:
+        from ..core import Tensor as T, GRAPH as g, pytree as pt
+        from ..core.sharding import spmd as s
+        from .. import config as cfg
+        _Tensor = T
+        _GRAPH = g
+        _spmd = s
+        _pytree = pt
+        _config = cfg
+
 
 def ensure_tensor(x: Any) -> Any:
     """Convert scalar or array-like to Tensor."""
-    from ..core import Tensor
+    if _Tensor is None:
+        _get_utils_core()
+    Tensor = _Tensor
 
     if isinstance(x, Tensor):
         return x
@@ -40,7 +63,9 @@ def _make_hashable(obj: Any) -> Any:
 
     Optimized with caching for Tensor objects since they're frequently hashed.
     """
-    from ..core import Tensor
+    if _Tensor is None:
+        _get_utils_core()
+    Tensor = _Tensor
 
     if isinstance(obj, Tensor):
         # Check cache first - use id() for Tensor objects
@@ -119,28 +144,33 @@ def _get_tensor_hash(x: Any) -> Any:
 
     Optimized module-level function to avoid closure overhead in hot path.
     """
-    from ..core import Tensor
+    if _Tensor is None:
+        _get_utils_core()
+    Tensor = _Tensor
 
     if isinstance(x, Tensor):
-        impl = x._impl
-        buffers = impl._buffers
-        output_refs = impl.output_refs
-
         # Fast path: get sharding key only if sharding exists
         sharding = x.sharding
         sharding_key = _make_hashable(sharding) if sharding else None
 
-        if buffers:
+        if x.is_realized:
             # Realized tensor - hash based on shape/dtype/sharding (data-independent)
-            shape_tuple = tuple(int(d) for d in x.shape)
+            shape_tuple = x.physical_local_shape_ints(0)
+            if shape_tuple is not None and x.batch_dims > 0:
+                shape_tuple = shape_tuple[x.batch_dims:]
             return ("realized", str(x.dtype), shape_tuple, sharding_key)
-        elif output_refs is not None and output_refs._op_hash is not None:
-            # Unrealized tensor - use its OpNode's hash AND its output index
+
+        # Unrealized tensor: check for OpNode hash via _impl (framework-internal)
+        impl = x._impl
+        output_refs = impl.output_refs
+        if output_refs is not None and output_refs._op_hash is not None:
             return (output_refs._op_hash, impl.output_index, sharding_key)
-        else:
-            # Leaf tensor without buffers (shouldn't happen in normal flow)
-            shape_tuple = tuple(int(d) for d in x.shape)
-            return ("leaf", str(x.dtype), shape_tuple, sharding_key)
+
+        # Leaf tensor without buffers (shouldn't happen in normal flow)
+        shape_tuple = x.physical_local_shape_ints(0)
+        if shape_tuple is not None and x.batch_dims > 0:
+            shape_tuple = shape_tuple[x.batch_dims:]
+        return ("leaf", str(x.dtype), shape_tuple, sharding_key)
     return _make_hashable(x)
 
 
@@ -345,7 +375,9 @@ def collect_metadata(args: tuple) -> tuple[int, bool, bool, bool]:
     Returns:
         Tuple of (max_batch_dims, any_traced, any_sharded, any_has_tangent)
     """
-    from ..core import Tensor
+    if _Tensor is None:
+        _get_utils_core()
+    Tensor = _Tensor
 
     max_batch_dims = 0
     any_traced = False
@@ -377,14 +409,21 @@ def adapt_and_reshard(
     op: Any, args: tuple, kwargs: dict, any_sharded: bool, max_batch_dims: int
 ) -> tuple[tuple, dict, Any, Any, Any]:
     """Perform logical adaptation and input resharding."""
-    from ..core.sharding import spmd
-
-    mesh = spmd.get_mesh_from_args(args) if any_sharded else None
+    # Fast path: skip all SPMD machinery for unsharded tensors
+    mesh = None
+    if any_sharded:
+        from ..core.sharding import spmd
+        mesh = spmd.get_mesh_from_args(args)
     # Also check kwargs for mesh (e.g., shard/reshard ops pass mesh as kwarg)
     if mesh is None and kwargs.get("mesh") is not None:
         mesh = kwargs["mesh"]
 
     adapted_kwargs = op.adapt_kwargs(args, kwargs, max_batch_dims)
+
+    if mesh is None:
+        return args, adapted_kwargs, None, None, None
+
+    from ..core.sharding import spmd
     args_with_specs = spmd.ensure_specs(args, mesh)
     predicted_output_spec, input_shardings, reduce_axes = spmd.infer_output_sharding(
         op, args_with_specs, mesh, adapted_kwargs or {}
@@ -412,12 +451,15 @@ def eager_execute(
     op: Any, resharded_args: tuple, kwargs: dict, adapted_kwargs: dict
 ) -> Any:
     """Execute operation eagerly if enabled by configuration."""
-    from ..config import EAGER_MAX_GRAPH
+    if _config is None:
+        _get_utils_core()
 
-    if not EAGER_MAX_GRAPH:
+    if not _config.EAGER_MAX_GRAPH:
         return None
 
-    from ..core import GRAPH, Tensor, pytree
+    GRAPH = _GRAPH
+    Tensor = _Tensor
+    pytree = _pytree
 
     # PRE-EXECUTION: Ensure all inputs are valid in the current graph context.
     seen_impls = set()
@@ -461,9 +503,10 @@ def verify_eager_shapes(
     op: Any, execution_results: Any, output_physical_shapes: Any
 ) -> None:
     """Verify that eager execution produced the expected physical shapes."""
-    from ..config import VERIFY_EAGER_SHAPES
+    if _config is None:
+        _get_utils_core()
 
-    if not VERIFY_EAGER_SHAPES or execution_results is None:
+    if not _config.VERIFY_EAGER_SHAPES or execution_results is None:
         return
 
     shard_vals = execution_results[0]
@@ -518,9 +561,11 @@ def package_outputs(
     max_batch_dims: int,
 ) -> Any:
     """Create resulting Tensor(s) with appropriate metadata and graph references."""
-    from ..core import GRAPH
-    from ..core.sharding import spmd
-    from ..config import EAGER_MAX_GRAPH
+    if _GRAPH is None:
+        _get_utils_core()
+    GRAPH = _GRAPH
+    spmd = _spmd
+    EAGER_MAX_GRAPH = _config.EAGER_MAX_GRAPH
 
     # Detect multi-output mode
     is_multi_output = False

@@ -24,6 +24,14 @@ if TYPE_CHECKING:
     from ..graph.tracing import OpNode
     from ..sharding import ShardingSpec
 
+# Module-level cache for hot-path imports (avoids per-call deferred imports)
+_GRAPH = None
+
+def _get_graph():
+    global _GRAPH
+    from ..graph.engine import GRAPH
+    _GRAPH = GRAPH
+
 
 class TensorImpl:
     """Graph node containing tensor data and autograd structure."""
@@ -180,9 +188,11 @@ class TensorImpl:
         return len(self.parents) == 0
 
     def _get_valid_graph_values(self):
-        from ..graph.engine import GRAPH
+        global _GRAPH
+        if _GRAPH is None:
+            _get_graph()
 
-        if self.graph_values_epoch != GRAPH.epoch:
+        if self.graph_values_epoch != _GRAPH.epoch:
             return []
         return self._graph_values
 
@@ -197,6 +207,20 @@ class TensorImpl:
 
         if self._physical_shapes and shard_idx < len(self._physical_shapes):
             return graph.Shape(self._physical_shapes[shard_idx])
+
+        return None
+
+    def physical_local_shape_ints(self, shard_idx: int = 0) -> tuple[int, ...] | None:
+        """Int-tuple shape for a specific shard (avoids creating Shape/Dim objects)."""
+        if self._buffers and shard_idx < len(self._buffers):
+            return tuple(self._buffers[shard_idx].shape)
+
+        values = self._get_valid_graph_values()
+        if values and shard_idx < len(values):
+            return tuple(int(d) for d in values[shard_idx].type.shape)
+
+        if self._physical_shapes and shard_idx < len(self._physical_shapes):
+            return self._physical_shapes[shard_idx]
 
         return None
 
@@ -262,7 +286,27 @@ class TensorImpl:
         return graph.Shape(global_ints)
 
     @property
+    def physical_global_shape_ints(self) -> tuple[int, ...] | None:
+        """Fast global physical shape as ints (no Shape/Dim allocation)."""
+        # Unsharded: physical global = physical local shard 0
+        if not self.sharding:
+            return self.physical_local_shape_ints(0)
+        # Sharded: fall back to the full path
+        shape = self.physical_global_shape
+        return tuple(int(d) for d in shape) if shape is not None else None
+
+    @property
     def global_shape_ints(self) -> tuple[int, ...] | None:
+        """Fast global logical shape as ints (no Shape/Dim allocation)."""
+        # Fast path: unsharded tensor — physical_local_shape_ints is the global shape
+        if not self.sharding:
+            phys = self.physical_local_shape_ints(0)
+            if phys is None:
+                return None
+            if self.batch_dims > 0:
+                return phys[self.batch_dims:]
+            return phys
+        # Sharded: fall back to the full path
         shape = self.global_shape
         return tuple(int(d) for d in shape) if shape is not None else None
 

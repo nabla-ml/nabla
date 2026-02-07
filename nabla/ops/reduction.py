@@ -185,12 +185,11 @@ class ReduceSumPhysicalOp(Operation):
         shapes = []
         for i in range(num_shards):
             idx = i if i < x.num_shards else 0
-            s = x.physical_local_shape(idx)
-            if s is None:
+            in_shape = x.physical_local_shape_ints(idx)
+            if in_shape is None:
                 raise RuntimeError(
                     f"Could not determine physical shape for {self.name}"
                 )
-            in_shape = tuple(int(d) for d in s)
             norm_axis = axis if axis >= 0 else len(in_shape) + axis
             if keepdims:
                 out_shape = tuple(
@@ -277,12 +276,11 @@ class MeanPhysicalOp(Operation):
         shapes = []
         for i in range(num_shards):
             idx = i if i < x.num_shards else 0
-            s = x.physical_local_shape(idx)
-            if s is None:
+            in_shape = x.physical_local_shape_ints(idx)
+            if in_shape is None:
                 raise RuntimeError(
                     f"Could not determine physical shape for {self.name}"
                 )
-            in_shape = tuple(int(d) for d in s)
             norm_axis = axis if axis >= 0 else len(in_shape) + axis
             if keepdims:
                 out_shape = tuple(
@@ -369,12 +367,11 @@ class ReduceMaxPhysicalOp(Operation):
         shapes = []
         for i in range(num_shards):
             idx = i if i < x.num_shards else 0
-            s = x.physical_local_shape(idx)
-            if s is None:
+            in_shape = x.physical_local_shape_ints(idx)
+            if in_shape is None:
                 raise RuntimeError(
                     f"Could not determine physical shape for {self.name}"
                 )
-            in_shape = tuple(int(d) for d in s)
             norm_axis = axis if axis >= 0 else len(in_shape) + axis
             if keepdims:
                 out_shape = tuple(
@@ -494,12 +491,11 @@ class ReduceMinPhysicalOp(Operation):
         shapes = []
         for i in range(num_shards):
             idx = i if i < x.num_shards else 0
-            s = x.physical_local_shape(idx)
-            if s is None:
+            in_shape = x.physical_local_shape_ints(idx)
+            if in_shape is None:
                 raise RuntimeError(
                     f"Could not determine physical shape for {self.name}"
                 )
-            in_shape = tuple(int(d) for d in s)
             norm_axis = axis if axis >= 0 else len(in_shape) + axis
             if keepdims:
                 out_shape = tuple(
@@ -585,6 +581,7 @@ def reduce_sum(
     keepdims: bool = False,
 ) -> Tensor:
     from .view import squeeze
+    from .view.shape import reshape
 
     if axis is None:
         axis = tuple(range(len(x.shape)))
@@ -598,8 +595,16 @@ def reduce_sum(
             res = _reduce_sum_op(res, axis=ax, keepdims=True)
 
         if not keepdims:
-            for ax in axes:
-                res = squeeze(res, axis=ax)
+            # Batch all squeezes into a single reshape instead of N separate squeeze ops
+            out_shape = tuple(
+                int(d) for i, d in enumerate(x.shape) if i not in set(
+                    ax if ax >= 0 else len(x.shape) + ax for ax in axis
+                )
+            )
+            res = reshape(res, out_shape if out_shape else (1,)) if len(axes) > 1 else squeeze(res, axis=axes[0])
+            # For full reduction to scalar, squeeze out the remaining dim
+            if not out_shape and len(axes) > 1:
+                res = squeeze(res, axis=0)
         return res
 
     result = _reduce_sum_op(x, axis=axis, keepdims=True)
@@ -644,6 +649,7 @@ def reduce_max(
     keepdims: bool = False,
 ) -> Tensor:
     from .view import squeeze
+    from .view.shape import reshape
 
     if axis is None:
         axis = tuple(range(len(x.shape)))
@@ -657,8 +663,14 @@ def reduce_max(
             res = _reduce_max_op(res, axis=ax, keepdims=True)
 
         if not keepdims:
-            for ax in axes:
-                res = squeeze(res, axis=ax)
+            out_shape = tuple(
+                int(d) for i, d in enumerate(x.shape) if i not in set(
+                    ax if ax >= 0 else len(x.shape) + ax for ax in axis
+                )
+            )
+            res = reshape(res, out_shape if out_shape else (1,)) if len(axes) > 1 else squeeze(res, axis=axes[0])
+            if not out_shape and len(axes) > 1:
+                res = squeeze(res, axis=0)
         return res
 
     result = _reduce_max_op(x, axis=axis, keepdims=True)
@@ -698,6 +710,7 @@ def reduce_min(
     keepdims: bool = False,
 ) -> Tensor:
     from .view import squeeze
+    from .view.shape import reshape
 
     if axis is None:
         axis = tuple(range(len(x.shape)))
@@ -711,8 +724,14 @@ def reduce_min(
             res = _reduce_min_op(res, axis=ax, keepdims=True)
 
         if not keepdims:
-            for ax in axes:
-                res = squeeze(res, axis=ax)
+            out_shape = tuple(
+                int(d) for i, d in enumerate(x.shape) if i not in set(
+                    ax if ax >= 0 else len(x.shape) + ax for ax in axis
+                )
+            )
+            res = reshape(res, out_shape if out_shape else (1,)) if len(axes) > 1 else squeeze(res, axis=axes[0])
+            if not out_shape and len(axes) > 1:
+                res = squeeze(res, axis=0)
         return res
 
     result = _reduce_min_op(x, axis=axis, keepdims=True)
@@ -767,10 +786,9 @@ class ArgmaxOp(AxisOp):
         shapes = []
         for i in range(num_shards):
             idx = i if i < x.num_shards else 0
-            s = x.physical_local_shape(idx)
-            if s is None:
+            in_shape = x.physical_local_shape_ints(idx)
+            if in_shape is None:
                 raise RuntimeError("Could not determine physical shape")
-            in_shape = tuple(int(d) for d in s)
             norm_axis = axis if axis >= 0 else len(in_shape) + axis
             out_shape = tuple(d for i, d in enumerate(in_shape) if i != norm_axis)
             shapes.append(out_shape)
@@ -824,10 +842,9 @@ class ArgminOp(AxisOp):
         shapes = []
         for i in range(num_shards):
             idx = i if i < x.num_shards else 0
-            s = x.physical_local_shape(idx)
-            if s is None:
+            in_shape = x.physical_local_shape_ints(idx)
+            if in_shape is None:
                 raise RuntimeError("Could not determine physical shape")
-            in_shape = tuple(int(d) for d in s)
             norm_axis = axis if axis >= 0 else len(in_shape) + axis
             out_shape = tuple(d for i, d in enumerate(in_shape) if i != norm_axis)
             shapes.append(out_shape)
@@ -865,7 +882,7 @@ class CumsumOp(AxisOp):
         x = args[0]
         shapes = []
         for i in range(x.num_shards):
-            shapes.append(tuple(int(d) for d in x.physical_local_shape(i)))
+            shapes.append(x.physical_local_shape_ints(i))
         return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
 
     def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
