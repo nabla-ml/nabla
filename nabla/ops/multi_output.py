@@ -493,9 +493,10 @@ def unbind(x: "Tensor", axis: int = 0) -> list:
     return _unbind_op([x], {"axis": axis})
 
 
-def minmax(x: "Tensor") -> list:
-    """Return both min and max of a tensor."""
-    return _minmax_op([x], {})
+def minmax(x: "Tensor") -> dict[str, "Tensor"]:
+    """Return both min and max of a tensor as a dict with 'min' and 'max' keys."""
+    result = _minmax_op([x], {})
+    return {"min": result[0], "max": result[1]}
 
 
 __all__ = [

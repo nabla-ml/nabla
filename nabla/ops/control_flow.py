@@ -519,11 +519,17 @@ def where(condition: Tensor, x: Tensor, y: Tensor) -> Tensor:
 
 
 def cond(pred: Tensor, true_fn: Callable[..., Any], false_fn: Callable[..., Any], *operands: Any) -> Any:
-    return _cond_op([pred, true_fn, false_fn] + list(operands), {})
+    result = _cond_op([pred, true_fn, false_fn] + list(operands), {})
+    if len(result) == 1:
+        return result[0]
+    return tuple(result)
 
 
 def while_loop(cond_fn: Callable[..., bool], body_fn: Callable[..., Any], init_val: Any) -> Any:
-    return _while_loop_op([cond_fn, body_fn, init_val], {})
+    result = _while_loop_op([cond_fn, body_fn, init_val], {})
+    if len(result) == 1:
+        return result[0]
+    return tuple(result)
 
 
 def scan(

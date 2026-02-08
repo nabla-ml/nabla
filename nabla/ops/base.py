@@ -441,6 +441,9 @@ class Operation(ABC):
     @staticmethod
     def _broadcast_shapes(s1: tuple[int, ...], s2: tuple[int, ...]) -> tuple[int, ...]:
         """Compute broadcast shape of two shapes (numpy-style right-aligned)."""
+        # Ensure inputs are tuples (Shape subclasses list, slicing returns list)
+        s1 = tuple(s1)
+        s2 = tuple(s2)
         if len(s1) > len(s2):
             s2 = (1,) * (len(s1) - len(s2)) + s2
         elif len(s2) > len(s1):

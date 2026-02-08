@@ -284,17 +284,28 @@ def apply_jvp(op: Any, args: list, kwargs: dict, output: Any) -> None:
     primals_list = []
     tangents_list = []
 
+    # First pass: collect primals and tangents without modifying tangent state.
+    # This is critical when the same tensor appears multiple times in args
+    # (e.g., x * x) — clearing tangents eagerly would zero the second copy.
     for x in arg_leaves:
         if isinstance(x, Tensor):
             primals_list.append(x)
             if x.tangent is not None:
                 tangents_list.append(Tensor(impl=x.tangent))
-                saved_tangents.append((x._impl, x.tangent))
-                x._impl.tangent = None
             else:
                 from ..ops.creation import zeros_like
 
                 tangents_list.append(zeros_like(x))
+
+    # Second pass: save and clear tangents to prevent recursive JVP.
+    seen_ids: set[int] = set()
+    for x in arg_leaves:
+        if isinstance(x, Tensor) and x.tangent is not None:
+            impl_id = id(x._impl)
+            if impl_id not in seen_ids:
+                saved_tangents.append((x._impl, x.tangent))
+                x._impl.tangent = None
+                seen_ids.add(impl_id)
         # Non-tensor args are not part of the derivative
 
     # Build flat list of outputs

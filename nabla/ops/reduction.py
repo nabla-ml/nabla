@@ -288,6 +288,9 @@ def _multi_axis_reduce(op, x: Tensor, *, axis=None, keepdims: bool = False) -> T
         axes = sorted(
             [ax if ax >= 0 else len(x.shape) + ax for ax in axis], reverse=True
         )
+        if not axes:
+            # Empty axes (e.g. reducing a 0-d scalar) — nothing to reduce
+            return x
         res = x
         for ax in axes:
             res = op([res], {"axis": ax, "keepdims": True})[0]
