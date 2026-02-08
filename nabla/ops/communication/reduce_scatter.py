@@ -82,7 +82,9 @@ class ReduceScatterOp(CollectiveOperation):
     ) -> float:
         return CollectiveOperation._ring_cost(size_bytes, mesh, axes)
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """VJP for reduce_scatter: all_gather the gradients."""
         from .all_gather import all_gather
 
@@ -158,14 +160,19 @@ class ReduceScatterOp(CollectiveOperation):
         # 1. Distributed Execution Path
         if mesh and mesh.is_distributed:
             if hasattr(ops, "reducescatter") and hasattr(ops.reducescatter, "sum"):
-                return ops.reducescatter.sum(shard_graph_values, mesh.get_signal_buffers(), axis=axis)
+                return ops.reducescatter.sum(
+                    shard_graph_values, mesh.get_signal_buffers(), axis=axis
+                )
 
-            # Robust fallback via native allgather: 
+            # Robust fallback via native allgather:
             # 1. Every device gets all chunks.
             # 2. Every device reduces all chunks locally.
             # 3. Every device slices its own disjoint result portion.
             from max.graph.ops.allgather import allgather as max_allgather
-            gathered_results = max_allgather(shard_graph_values, mesh.get_signal_buffers(), axis=axis)
+
+            gathered_results = max_allgather(
+                shard_graph_values, mesh.get_signal_buffers(), axis=axis
+            )
 
             num_shards = len(shard_graph_values)
             chunk_shape = shard_graph_values[0].type.shape
@@ -181,13 +188,17 @@ class ReduceScatterOp(CollectiveOperation):
                 # Local reduction of all chunks
                 reduced = _slice_axis(gathered, 0, chunk_axis_size)
                 for i in range(1, num_shards):
-                    chunk = _slice_axis(gathered, i * chunk_axis_size, (i + 1) * chunk_axis_size)
+                    chunk = _slice_axis(
+                        gathered, i * chunk_axis_size, (i + 1) * chunk_axis_size
+                    )
                     reduced = ops.add(reduced, chunk)
 
                 # Pick the device-specific portion of the reduced result
                 out_size = chunk_axis_size // num_shards
                 results.append(
-                    _slice_axis(reduced, device_idx * out_size, (device_idx + 1) * out_size)
+                    _slice_axis(
+                        reduced, device_idx * out_size, (device_idx + 1) * out_size
+                    )
                 )
 
             return results
@@ -274,7 +285,9 @@ class ReduceScatterOp(CollectiveOperation):
 
         return new_results
 
-    def _compute_output_spec(self, input_tensor, results, input_sharding=None, **kwargs):
+    def _compute_output_spec(
+        self, input_tensor, results, input_sharding=None, **kwargs
+    ):
         """Output sharding: the scatter axis becomes sharded on the scatter_axes."""
         from ...core.sharding.spec import DimSpec, ShardingSpec
 
@@ -303,7 +316,9 @@ class ReduceScatterOp(CollectiveOperation):
 
             for d in range(rank):
                 input_d_spec = (
-                    input_sharding.dim_specs[d] if d < len(input_sharding.dim_specs) else None
+                    input_sharding.dim_specs[d]
+                    if d < len(input_sharding.dim_specs)
+                    else None
                 )
 
                 if d == target_dim:

@@ -89,27 +89,42 @@ class AllReduceOp(CollectiveOperation):
 
         # 1. Distributed Execution Path
         if mesh and mesh.is_distributed and len(shard_graph_values) > 1:
-            if reduce_op == "sum" and hasattr(ops, "allreduce") and hasattr(ops.allreduce, "sum"):
+            if (
+                reduce_op == "sum"
+                and hasattr(ops, "allreduce")
+                and hasattr(ops.allreduce, "sum")
+            ):
                 return ops.allreduce.sum(shard_graph_values, mesh.get_signal_buffers())
 
             # Fallback for complex reductions (MAX/MIN/PROD) using native allgather
             from max.graph.ops.allgather import allgather as max_allgather
-            gathered = max_allgather(shard_graph_values, mesh.get_signal_buffers(), axis=0)
+
+            gathered = max_allgather(
+                shard_graph_values, mesh.get_signal_buffers(), axis=0
+            )
 
             result_graph_values = []
             num_shards = len(shard_graph_values)
             chunk_size = shard_graph_values[0].type.shape[0]
 
             for gathered_tensor in gathered:
-                chunks = [gathered_tensor[i * chunk_size : (i + 1) * chunk_size] for i in range(num_shards)]
-                
+                chunks = [
+                    gathered_tensor[i * chunk_size : (i + 1) * chunk_size]
+                    for i in range(num_shards)
+                ]
+
                 reduced = chunks[0]
                 for chunk in chunks[1:]:
-                    if reduce_op == "sum": reduced = ops.add(reduced, chunk)
-                    elif reduce_op == "max": reduced = ops.max(reduced, chunk)
-                    elif reduce_op == "min": reduced = ops.min(reduced, chunk)
-                    elif reduce_op == "prod": reduced = ops.mul(reduced, chunk)
-                    else: raise ValueError(f"Unknown reduction op: {reduce_op}")
+                    if reduce_op == "sum":
+                        reduced = ops.add(reduced, chunk)
+                    elif reduce_op == "max":
+                        reduced = ops.max(reduced, chunk)
+                    elif reduce_op == "min":
+                        reduced = ops.min(reduced, chunk)
+                    elif reduce_op == "prod":
+                        reduced = ops.mul(reduced, chunk)
+                    else:
+                        raise ValueError(f"Unknown reduction op: {reduce_op}")
                 result_graph_values.append(reduced)
 
             return result_graph_values
@@ -123,11 +138,16 @@ class AllReduceOp(CollectiveOperation):
         # 3. Simple Fallback (Single shard or generic)
         result = shard_graph_values[0]
         for sv in shard_graph_values[1:]:
-            if reduce_op == "sum": result = ops.add(result, sv)
-            elif reduce_op == "max": result = ops.max(result, sv)
-            elif reduce_op == "min": result = ops.min(result, sv)
-            elif reduce_op == "prod": result = ops.mul(result, sv)
-            else: raise ValueError(f"Unknown reduction op: {reduce_op}")
+            if reduce_op == "sum":
+                result = ops.add(result, sv)
+            elif reduce_op == "max":
+                result = ops.max(result, sv)
+            elif reduce_op == "min":
+                result = ops.min(result, sv)
+            elif reduce_op == "prod":
+                result = ops.mul(result, sv)
+            else:
+                raise ValueError(f"Unknown reduction op: {reduce_op}")
 
         return [result] * len(shard_graph_values)
 
@@ -138,7 +158,9 @@ class AllReduceOp(CollectiveOperation):
         output_sharding = self._compute_output_spec(input_tensor, None, **kwargs)
         return output_sharding, [input_sharding], False
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """VJP for AllReduce (sum): assign replicated gradient to shards."""
         input_tensor = primals[0]
 
@@ -157,15 +179,19 @@ class AllReduceOp(CollectiveOperation):
 
         from .reshard import reshard
 
-        return [reshard(
-            cotangents[0],
-            input_tensor.sharding.mesh,
-            input_tensor.sharding.dim_specs,
-            replicated_axes=input_tensor.sharding.replicated_axes,
-            global_shape=input_tensor.physical_global_shape,
-        )]
+        return [
+            reshard(
+                cotangents[0],
+                input_tensor.sharding.mesh,
+                input_tensor.sharding.dim_specs,
+                replicated_axes=input_tensor.sharding.replicated_axes,
+                global_shape=input_tensor.physical_global_shape,
+            )
+        ]
 
-    def _compute_output_spec(self, input_tensor, results, input_sharding=None, **kwargs):
+    def _compute_output_spec(
+        self, input_tensor, results, input_sharding=None, **kwargs
+    ):
         """Output clears partial flags but preserves axes mappings for non-partial dims."""
         from ...core.sharding.spec import ShardingSpec, DimSpec
 

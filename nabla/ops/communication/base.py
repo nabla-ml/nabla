@@ -41,7 +41,9 @@ class CollectiveOperation(Operation):
         return shapes, dtypes, devices
 
     @staticmethod
-    def _ring_cost(size_bytes: int, mesh, axes: list[str], factor: float = 1.0) -> float:
+    def _ring_cost(
+        size_bytes: int, mesh, axes: list[str], factor: float = 1.0
+    ) -> float:
         """Compute ring-algorithm cost for collective ops.
 
         factor=1.0 for all_gather/reduce_scatter, factor=2.0 for all_reduce.
@@ -126,16 +128,21 @@ class CollectiveOperation(Operation):
         # Validation: check if we should proceed
         if not input_sharding:
             if mesh:
-                # If no input sharding but we have a mesh, 
+                # If no input sharding but we have a mesh,
                 # treat input as replicated to allow inference to proceed.
                 from ...core.sharding import spec
+
                 rank = len(input_tensor.physical_global_shape or input_tensor.shape)
-                input_sharding = spec.ShardingSpec(mesh, [spec.DimSpec([]) for _ in range(rank)])
+                input_sharding = spec.ShardingSpec(
+                    mesh, [spec.DimSpec([]) for _ in range(rank)]
+                )
             else:
                 return None, [None] * len(args), False
 
         # Compute output sharding using the subclass logic
-        output_sharding = self._compute_output_spec(input_tensor, None, input_sharding=input_sharding, **kwargs)
+        output_sharding = self._compute_output_spec(
+            input_tensor, None, input_sharding=input_sharding, **kwargs
+        )
 
         # Default: preserve input sharding for all args
         input_shardings = [
@@ -219,7 +226,9 @@ class CollectiveOperation(Operation):
             return True
         return False
 
-    def _compute_output_spec(self, input_tensor, results, input_sharding=None, **kwargs):
+    def _compute_output_spec(
+        self, input_tensor, results, input_sharding=None, **kwargs
+    ):
         """Compute output sharding spec. Default: preserve input spec."""
         return input_sharding or input_tensor.sharding
 

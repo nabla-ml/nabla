@@ -29,6 +29,7 @@ def _get_utils_core():
         from ..core import Tensor as T, GRAPH as g, pytree as pt
         from ..core.sharding import spmd as s
         from .. import config as cfg
+
         _Tensor = T
         _GRAPH = g
         _spmd = s
@@ -157,7 +158,7 @@ def _get_tensor_hash(x: Any) -> Any:
             # Realized tensor - hash based on shape/dtype/sharding (data-independent)
             shape_tuple = x.physical_local_shape_ints(0)
             if shape_tuple is not None and x.batch_dims > 0:
-                shape_tuple = shape_tuple[x.batch_dims:]
+                shape_tuple = shape_tuple[x.batch_dims :]
             return ("realized", str(x.dtype), shape_tuple, sharding_key)
 
         # Unrealized tensor: check for OpNode hash via _impl (framework-internal)
@@ -169,7 +170,7 @@ def _get_tensor_hash(x: Any) -> Any:
         # Leaf tensor without buffers (shouldn't happen in normal flow)
         shape_tuple = x.physical_local_shape_ints(0)
         if shape_tuple is not None and x.batch_dims > 0:
-            shape_tuple = shape_tuple[x.batch_dims:]
+            shape_tuple = shape_tuple[x.batch_dims :]
         return ("leaf", str(x.dtype), shape_tuple, sharding_key)
     return _make_hashable(x)
 
@@ -227,13 +228,23 @@ def validate_physical_metadata(
         # Multi-output: normalize to list-of-lists and validate each
         unzipped = list(zip(*shard_graph_values))
         for i, (shapes, dtypes, devices, shards) in enumerate(
-            zip(output_physical_shapes, output_shard_dtypes, output_shard_devices, unzipped)
+            zip(
+                output_physical_shapes,
+                output_shard_dtypes,
+                output_shard_devices,
+                unzipped,
+            )
         ):
             for j, (s, dt, dv, val) in enumerate(zip(shapes, dtypes, devices, shards)):
                 _check(s, dt, dv, val, f"Output Index: {i}, Shard Index: {j}")
     else:
         for i, (s, dt, dv, val) in enumerate(
-            zip(output_physical_shapes, output_shard_dtypes, output_shard_devices, shard_graph_values)
+            zip(
+                output_physical_shapes,
+                output_shard_dtypes,
+                output_shard_devices,
+                shard_graph_values,
+            )
         ):
             _check(s, dt, dv, val, f"Shard Index: {i}")
 
@@ -275,6 +286,7 @@ def apply_jvp(op: Any, args: list, kwargs: dict, output: Any) -> None:
                 x._impl.tangent = None
             else:
                 from ..ops.creation import zeros_like
+
                 tangents_list.append(zeros_like(x))
         # Non-tensor args are not part of the derivative
 
@@ -301,7 +313,7 @@ def apply_jvp(op: Any, args: list, kwargs: dict, output: Any) -> None:
 
 def collect_metadata(args: list) -> tuple[int, bool, bool, bool]:
     """Analyze arguments to collect metadata needed for execution adaptation.
-    
+
     Returns:
         Tuple of (max_batch_dims, any_traced, any_sharded, any_has_tangent)
     """
@@ -343,6 +355,7 @@ def adapt_and_reshard(
     mesh = None
     if any_sharded:
         from ..core.sharding import spmd
+
         mesh = spmd.get_mesh_from_args(args)
     # Also check kwargs for mesh (e.g., shard/reshard ops pass mesh as kwarg)
     if mesh is None and kwargs.get("mesh") is not None:
@@ -354,6 +367,7 @@ def adapt_and_reshard(
         return args, adapted_kwargs, None, None, None
 
     from ..core.sharding import spmd
+
     args_with_specs = spmd.ensure_specs(args, mesh)
     predicted_output_spec, input_shardings, reduce_axes = spmd.infer_output_sharding(
         op, args_with_specs, mesh, adapted_kwargs or {}
@@ -378,7 +392,10 @@ def compute_structural_hash(
 
 
 def eager_execute(
-    op: Any, resharded_args: list, kwargs: dict, adapted_kwargs: dict,
+    op: Any,
+    resharded_args: list,
+    kwargs: dict,
+    adapted_kwargs: dict,
 ) -> Any:
     """Execute operation eagerly if enabled by configuration."""
     if _config is None:

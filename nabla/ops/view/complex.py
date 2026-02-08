@@ -31,10 +31,12 @@ class AsInterleavedComplexOp(Operation):
         for i in range(x.num_shards):
             s = x.physical_local_shape_ints(i)
             shapes.append(s[:-1])
-        
+
         return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """VJP for as_interleaved_complex: view as real."""
         return [view_as_real_interleaved(cotangents[0])]
 
@@ -59,10 +61,12 @@ class ViewAsRealInterleavedOp(Operation):
         for i in range(x.num_shards):
             s = x.physical_local_shape_ints(i)
             shapes.append(s + (2,))
-            
+
         return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         return [as_interleaved_complex(cotangents[0])]
 
 

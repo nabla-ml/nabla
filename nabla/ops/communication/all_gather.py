@@ -63,7 +63,9 @@ class AllGatherOp(CollectiveOperation):
         dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
         return shapes, dtypes, devices
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """VJP for all_gather: reshard back to input's sharding."""
         x = primals[0]
         from .reshard import reshard
@@ -71,12 +73,14 @@ class AllGatherOp(CollectiveOperation):
         if not x.sharding:
             return [cotangents[0]]
 
-        return [reshard(
-            cotangents[0],
-            x.sharding.mesh,
-            x.sharding.dim_specs,
-            replicated_axes=x.sharding.replicated_axes,
-        )]
+        return [
+            reshard(
+                cotangents[0],
+                x.sharding.mesh,
+                x.sharding.dim_specs,
+                replicated_axes=x.sharding.replicated_axes,
+            )
+        ]
 
     @classmethod
     def estimate_cost(
@@ -89,7 +93,9 @@ class AllGatherOp(CollectiveOperation):
     ) -> float:
         return CollectiveOperation._ring_cost(size_bytes, mesh, axes)
 
-    def _compute_output_spec(self, input_tensor, results, input_sharding=None, **kwargs):
+    def _compute_output_spec(
+        self, input_tensor, results, input_sharding=None, **kwargs
+    ):
         """Compute output sharding spec for AllGather."""
         input_sharding = input_sharding or input_tensor.sharding
         if not input_sharding:
@@ -185,7 +191,10 @@ class AllGatherOp(CollectiveOperation):
         # 1. Distributed Execution Path
         if mesh and mesh.is_distributed:
             from max.graph.ops.allgather import allgather as max_allgather
-            return max_allgather(shard_graph_values, mesh.get_signal_buffers(), axis=axis)
+
+            return max_allgather(
+                shard_graph_values, mesh.get_signal_buffers(), axis=axis
+            )
 
         # 2. CPU Simulation Path (Local execution)
         if mesh is None or (sharded_axis_name is None and len(mesh.axis_names) <= 1):
@@ -291,7 +300,9 @@ class GatherAllAxesOp(Operation):
 
         return shapes, dtypes, devices
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """VJP for gather_all_axes: reshard back to input's sharding."""
         x = primals[0]
         from .reshard import reshard
@@ -299,12 +310,14 @@ class GatherAllAxesOp(Operation):
         if not x.sharding:
             return [cotangents[0]]
 
-        return [reshard(
-            cotangents[0],
-            x.sharding.mesh,
-            x.sharding.dim_specs,
-            replicated_axes=x.sharding.replicated_axes,
-        )]
+        return [
+            reshard(
+                cotangents[0],
+                x.sharding.mesh,
+                x.sharding.dim_specs,
+                replicated_axes=x.sharding.replicated_axes,
+            )
+        ]
 
     def infer_sharding_spec(self, args: Any, mesh: Any, kwargs: dict) -> Any:
         """Infer sharding: Input preserves current sharding, Output is replicated."""

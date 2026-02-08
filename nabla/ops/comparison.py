@@ -58,7 +58,9 @@ class EqualOp(ComparisonOp):
     def kernel(self, args: list, kwargs: dict) -> list:
         return [ops.equal(args[0], args[1])]
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """VJP for comparison: None gradients (non-differentiable)."""
         return [None, None]
 
@@ -80,7 +82,9 @@ class GreaterOp(ComparisonOp):
     def kernel(self, args: list, kwargs: dict) -> list:
         return [ops.greater(args[0], args[1])]
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """VJP for comparison: None gradients (non-differentiable)."""
         return [None, None]
 
@@ -102,7 +106,9 @@ class LessOp(ComparisonOp):
     def kernel(self, args: list, kwargs: dict) -> list:
         return [ops.greater(args[1], args[0])]
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """VJP for comparison: None gradients (non-differentiable)."""
         return [None, None]
 
@@ -142,7 +148,9 @@ class LogicalNotOp(ComparisonUnaryOp):
     def kernel(self, args: list, kwargs: dict) -> list:
         return [ops.logical_not(args[0])]
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         return [None]
 
 
@@ -169,51 +177,61 @@ _logical_xor_op = LogicalXorOp()
 
 def equal(x, y) -> "Tensor":
     from .base import ensure_tensor
+
     return _equal_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
 def not_equal(x, y) -> "Tensor":
     from .base import ensure_tensor
+
     return _not_equal_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
 def greater(x, y) -> "Tensor":
     from .base import ensure_tensor
+
     return _greater_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
 def greater_equal(x, y) -> "Tensor":
     from .base import ensure_tensor
+
     return _greater_equal_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
 def less(x, y) -> "Tensor":
     from .base import ensure_tensor
+
     return _less_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
 def less_equal(x, y) -> "Tensor":
     from .base import ensure_tensor
+
     return _less_equal_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
 def logical_and(x, y) -> "Tensor":
     from .base import ensure_tensor
+
     return _logical_and_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
 def logical_or(x, y) -> "Tensor":
     from .base import ensure_tensor
+
     return _logical_or_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
 def logical_not(x) -> "Tensor":
     from .base import ensure_tensor
+
     return _logical_not_op([ensure_tensor(x)], {})[0]
 
 
 def logical_xor(x, y) -> "Tensor":
     from .base import ensure_tensor
+
     return _logical_xor_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 

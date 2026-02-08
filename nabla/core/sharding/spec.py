@@ -139,10 +139,10 @@ class DeviceMesh:
 
     def get_signal_buffers(self, buffer_size: int = 65536) -> list:
         """Get or create cached signal buffers for collective operations.
-        
+
         Args:
             buffer_size: Size of the signal buffer in bytes.
-            
+
         Returns:
             list: List of MAX buffer values, one per participating device.
         """

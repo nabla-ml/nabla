@@ -291,7 +291,7 @@ def compare_nested_structures(nb_res, jax_res, path="", tolerance=5e-4):
             # Special handling for interleaved complex comparison
             # Case 1: (..., 2) vs (...) complex
             if (
-                nb_val_jax.ndim == jax_val.ndim + 1 
+                nb_val_jax.ndim == jax_val.ndim + 1
                 and nb_val_jax.shape[-1] == 2
                 and nb_val_jax.shape[:-1] == jax_val.shape
             ):
@@ -303,7 +303,7 @@ def compare_nested_structures(nb_res, jax_res, path="", tolerance=5e-4):
                 and nb_val_jax.shape[-2:] == (1, 2)
                 and nb_val_jax.shape[:-2] == jax_val.shape
             ):
-                 nb_val_jax = nb_val_jax[..., 0, 0] + 1j * nb_val_jax[..., 0, 1]
+                nb_val_jax = nb_val_jax[..., 0, 0] + 1j * nb_val_jax[..., 0, 1]
 
         try:
             # Use np.testing.assert_allclose which handles JAX arrays nicely
@@ -316,8 +316,8 @@ def compare_nested_structures(nb_res, jax_res, path="", tolerance=5e-4):
             )
         except AssertionError as e:
             if hasattr(nb_res, "is_complex") and nb_res.is_complex():
-                 # Handle complex comparison if needed
-                 pass
+                # Handle complex comparison if needed
+                pass
             raise e
         return
 

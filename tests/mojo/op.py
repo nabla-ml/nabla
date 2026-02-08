@@ -11,6 +11,7 @@ from nabla.ops import UnaryOperation, call_custom_kernel
 if TYPE_CHECKING:
     from nabla.core import Tensor
 
+
 class AddOneCustomOp(UnaryOperation):
     name = "my_kernel"
 
@@ -20,6 +21,7 @@ class AddOneCustomOp(UnaryOperation):
         kernel_dir = Path(__file__).parent / "kernels"
 
         return call_custom_kernel("my_kernel", kernel_dir, x, x.type)
+
 
 def add_one_custom(x: "Tensor") -> "Tensor":
     """Custom op that adds one to each element using a Mojo kernel."""

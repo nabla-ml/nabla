@@ -27,9 +27,11 @@ if TYPE_CHECKING:
 # Module-level cache for hot-path imports (avoids per-call deferred imports)
 _GRAPH = None
 
+
 def _get_graph():
     global _GRAPH
     from ..graph.engine import GRAPH
+
     _GRAPH = GRAPH
 
 
@@ -299,7 +301,7 @@ class TensorImpl:
             if phys is None:
                 return None
             if self.batch_dims > 0:
-                return phys[self.batch_dims:]
+                return phys[self.batch_dims :]
             return phys
         # Sharded: fall back to the full path
         shape = self.global_shape
@@ -477,9 +479,11 @@ class TensorImpl:
                         indent = " " * len(prefix)
                         other_lines = [indent + line for line in lines[1:]]
                         shard_reprs.append("\n".join([first_line] + other_lines))
-                    
+
                     shards_block = "\n".join(shard_reprs)
-                    indented_shards = "\n".join("  " + line for line in shards_block.split("\n"))
+                    indented_shards = "\n".join(
+                        "  " + line for line in shards_block.split("\n")
+                    )
                     data_str = f"[\n{indented_shards}\n]"
                 else:
                     arr = self._buffers[0].to(CPU()).to_numpy()

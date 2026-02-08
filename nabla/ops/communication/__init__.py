@@ -9,7 +9,12 @@ from .all_gather import (
     gather_all_axes,
     _gather_all_axes_op as gather_all_axes_op,
 )
-from .all_reduce import all_reduce, _all_reduce_op as all_reduce_op, pmean, _pmean_op as pmean_op
+from .all_reduce import (
+    all_reduce,
+    _all_reduce_op as all_reduce_op,
+    pmean,
+    _pmean_op as pmean_op,
+)
 from .all_to_all import all_to_all, _all_to_all_op as all_to_all_op
 from .broadcast import (
     distributed_broadcast,

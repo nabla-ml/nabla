@@ -31,7 +31,9 @@ class PPermuteOp(CollectiveOperation):
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         return self._compute_local_preserved_shapes(args, kwargs)
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """VJP for ppermute: permute back with inverse table."""
         perm = kwargs.get("permutation")
         inv_perm = [(dst, src) for src, dst in perm]

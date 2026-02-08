@@ -120,7 +120,9 @@ class WhereOp(Operation):
         condition, x, y = args[0], args[1], args[2]
         return [ops.where(condition, x, y)]
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         from .creation import zeros_like
         from .control_flow import where
 
@@ -129,7 +131,9 @@ class WhereOp(Operation):
         grad_y = where(condition, zeros_like(y), cotangents[0])
         return [None, grad_x, grad_y]
 
-    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
+    def jvp_rule(
+        self, primals: list, tangents: list, outputs: list, kwargs: dict
+    ) -> list:
         from .control_flow import where
 
         condition = primals[0]
@@ -143,9 +147,7 @@ class CondOp(Operation):
     def name(self) -> str:
         return "cond"
 
-    def __call__(
-        self, args: list, kwargs: dict
-    ) -> list:
+    def __call__(self, args: list, kwargs: dict) -> list:
         from ..core.tensor import Tensor
 
         pred = args[0]

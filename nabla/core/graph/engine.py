@@ -89,9 +89,11 @@ class ComputeGraph:
         self._skip_finalize = False
         self._reset(context, seed)
 
-    def _reset(self, context: mlir.Context | None, seed: int, input_types: list | None = None) -> None:
+    def _reset(
+        self, context: mlir.Context | None, seed: int, input_types: list | None = None
+    ) -> None:
         """Resets the internal graph state.
-        
+
         Args:
             context: MLIR context to use (creates new one if None)
             seed: Random seed for the graph
@@ -100,7 +102,9 @@ class ComputeGraph:
         self.context = context or mlir.Context()
         self.sources = {}
         self.unrealized = weakref.WeakValueDictionary()
-        self.graph = graph.Graph("main", input_types=input_types or [], context=self.context)
+        self.graph = graph.Graph(
+            "main", input_types=input_types or [], context=self.context
+        )
         self._input_refs = []
         self._skip_finalize = False
         with self.graph:
@@ -130,7 +134,9 @@ class ComputeGraph:
             if ref_buffers and ref_buffers[0] is buf:
                 # Same buffer already registered - copy graph values to this impl
                 with self.graph:
-                    impl._graph_values = [gv[...] for gv in ref_tensor._impl._graph_values]
+                    impl._graph_values = [
+                        gv[...] for gv in ref_tensor._impl._graph_values
+                    ]
                     impl.graph_values_epoch = self.epoch
                 return
 
@@ -145,7 +151,7 @@ class ComputeGraph:
             with self.graph:
                 # Use provided shape (e.g. symbolic) or fall back to physical buffer shape
                 input_shape = shape if shape is not None else buffers.shape
-                
+
                 tensor_type = graph.TensorType(
                     buffers.dtype,
                     input_shape,
@@ -176,7 +182,7 @@ class ComputeGraph:
 
     def add_constant(self, tensor: Tensor) -> None:
         """Adds a realized tensor's data as a constant in the graph (not an input).
-        
+
         Use this for intermediate tensors that are accessed during eager graph building
         but shouldn't be function arguments.
         """
@@ -192,7 +198,7 @@ class ComputeGraph:
                 np_data = buf.to_numpy()
                 const_val = ops.constant(np_data)
                 const_values.append(const_val)
-            
+
             impl._graph_values = const_values
             impl.graph_values_epoch = self.epoch
 
@@ -459,7 +465,7 @@ class ComputeGraph:
                 refs = impl.output_refs
                 impl.output_refs = None
                 impl.output_index = None
-                
+
                 for arg in pytree.tree_leaves(refs.op_args):
                     if isinstance(arg, TensorImpl):
                         clean(arg)

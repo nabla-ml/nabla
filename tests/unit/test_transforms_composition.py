@@ -29,6 +29,7 @@ def _close(nb_val, jax_val, rtol=5e-4, atol=5e-4):
 #  VMAP + VJP
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestVmapVJP:
     """Composition of vmap with vjp."""
 
@@ -125,6 +126,7 @@ class TestVmapVJP:
 #  VMAP + JVP
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestVmapJVP:
     """Composition of vmap with jvp."""
 
@@ -162,7 +164,9 @@ class TestVmapJVP:
         ty_nb = tensor_from_jax(ty_jax)
 
         def jvp_fn_nb(x, y, tx, ty):
-            out, tan = nb.jvp(lambda x, y: nb.reduce_sum(nb.mul(x, y)), (x, y), (tx, ty))
+            out, tan = nb.jvp(
+                lambda x, y: nb.reduce_sum(nb.mul(x, y)), (x, y), (tx, ty)
+            )
             return tan
 
         def jvp_fn_jax(x, y, tx, ty):
@@ -200,6 +204,7 @@ class TestVmapJVP:
 #  NESTED VMAP
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestNestedVmap:
     """Nested vmap compositions."""
 
@@ -231,6 +236,7 @@ class TestNestedVmap:
 # ═════════════════════════════════════════════════════════════════════════════
 #  VJP + JVP consistency
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestVJPJVPConsistency:
     """Verify VJP and JVP give consistent Jacobian information."""
@@ -284,6 +290,7 @@ class TestVJPJVPConsistency:
 # ═════════════════════════════════════════════════════════════════════════════
 #  HIGHER-ORDER COMPOSITIONS
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestHigherOrderCompositions:
     """Complex compositions of transforms."""

@@ -117,14 +117,18 @@ class SplitOp(AxisOp):
         dtypes, devices = _build_multi_output_metadata(x, mesh, num_shards, num_splits)
         return all_outputs_shapes, dtypes, devices
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """VJP for split: concatenate cotangents along split axis."""
         from .view.shape import concatenate
 
         axis = kwargs.get("axis", 0)
         return [concatenate(cotangents, axis=axis)]
 
-    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
+    def jvp_rule(
+        self, primals: list, tangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """JVP for split: split tangent along the same axis."""
         axis = kwargs.get("axis", 0)
         num_splits = kwargs.get("num_splits")
@@ -254,14 +258,18 @@ class ChunkOp(AxisOp):
 
         return list(ops.split(x, split_sizes, axis))
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """VJP for chunk: concatenate cotangents along chunk axis."""
         from .view.shape import concatenate
 
         axis = kwargs.get("axis", 0)
         return [concatenate(cotangents, axis=axis)]
 
-    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
+    def jvp_rule(
+        self, primals: list, tangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """JVP for chunk: chunk tangent along the same axis."""
         axis = kwargs.get("axis", 0)
         chunks = kwargs.get("chunks")
@@ -375,14 +383,18 @@ class UnbindOp(AxisOp):
         results = [ops.squeeze(s, axis) for s in sliced]
         return list(results)
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """VJP for unbind: stack cotangents and unsqueeze along unbound axis."""
         from .view.shape import stack
 
         axis = kwargs.get("axis", 0)
         return [stack(cotangents, axis=axis)]
 
-    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
+    def jvp_rule(
+        self, primals: list, tangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """JVP for unbind: unbind tangent along the same axis."""
         axis = kwargs.get("axis", 0)
         return unbind(tangents[0], axis=axis)

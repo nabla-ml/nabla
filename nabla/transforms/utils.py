@@ -20,10 +20,20 @@ def _get_non_diff_dtypes() -> frozenset:
     global _NON_DIFF_DTYPES
     if _NON_DIFF_DTYPES is None:
         from max.dtype import DType
-        _NON_DIFF_DTYPES = frozenset({
-            DType.bool, DType.int8, DType.int16, DType.int32, DType.int64,
-            DType.uint8, DType.uint16, DType.uint32, DType.uint64,
-        })
+
+        _NON_DIFF_DTYPES = frozenset(
+            {
+                DType.bool,
+                DType.int8,
+                DType.int16,
+                DType.int32,
+                DType.int64,
+                DType.uint8,
+                DType.uint16,
+                DType.uint32,
+                DType.uint64,
+            }
+        )
     return _NON_DIFF_DTYPES
 
 
@@ -40,7 +50,8 @@ def split_aux(raw: Any, has_aux: bool, name: str) -> tuple[Any, Any]:
 
 
 def resolve_argnums(
-    argnums: int | tuple[int, ...] | list[int] | None, n_args: int,
+    argnums: int | tuple[int, ...] | list[int] | None,
+    n_args: int,
 ) -> tuple[int, ...]:
     """Normalise *argnums* to a canonical ``tuple[int, ...]``."""
     if argnums is None:
@@ -66,7 +77,10 @@ def select_argnums(grads_struct: tuple, argnums: int | tuple[int, ...]) -> Any:
 
 
 def collect_grads(
-    grads_map: dict[Tensor, Tensor], input_leaves: list, *, skip_non_diff: bool = True,
+    grads_map: dict[Tensor, Tensor],
+    input_leaves: list,
+    *,
+    skip_non_diff: bool = True,
 ) -> list[Tensor | None]:
     """Collect per-leaf gradients from a backward *grads_map*."""
     from ..core.tensor.api import Tensor
@@ -89,13 +103,16 @@ def collect_grads(
 def realize_tensors(tensors: list) -> None:
     """Batch-realize any lazy Tensors in *tensors*."""
     from ..core.tensor.api import Tensor, realize_all
+
     unrealized = [t for t in tensors if isinstance(t, Tensor) and not t.real]
     if unrealized:
         realize_all(*unrealized)
 
 
 def create_jacobian_helpers(
-    fn: Callable, argnums: int | tuple[int, ...] | list[int] | None, args: tuple,
+    fn: Callable,
+    argnums: int | tuple[int, ...] | list[int] | None,
+    args: tuple,
 ) -> tuple[tuple, Callable]:
     """Resolve *argnums* and build a partial that fixes non-diff args."""
     norm = resolve_argnums(argnums, len(args))

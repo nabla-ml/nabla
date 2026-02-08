@@ -23,7 +23,9 @@ class ShardOp(Operation):
     def name(self) -> str:
         return "shard"
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """VJP for shard: reshard back to input's sharding."""
         x = primals[0]
 
@@ -36,12 +38,14 @@ class ShardOp(Operation):
 
         # Use the smart shard function (defined below) to handle transition.
         # Note: reshard name is deprecated, we use universal shard() now.
-        return [shard(
-            cotangents[0],
-            x.sharding.mesh,
-            x.sharding.dim_specs,
-            replicated_axes=x.sharding.replicated_axes,
-        )]
+        return [
+            shard(
+                cotangents[0],
+                x.sharding.mesh,
+                x.sharding.dim_specs,
+                replicated_axes=x.sharding.replicated_axes,
+            )
+        ]
 
     def infer_sharding_spec(self, args, mesh, kwargs):
         spec = kwargs.get("spec")
@@ -412,7 +416,13 @@ def shard(
     if not isinstance(x, Tensor) or not x.sharding:
         # If not a tensor or not sharded, treat as fresh slicing (legacy behavior)
         return _shard_op(
-            [x], {"mesh": mesh, "dim_specs": dim_specs, "replicated_axes": replicated_axes, **kwargs}
+            [x],
+            {
+                "mesh": mesh,
+                "dim_specs": dim_specs,
+                "replicated_axes": replicated_axes,
+                **kwargs,
+            },
         )[0]
 
     # === Transition Logic (merged from ReshardOp) ===
@@ -421,7 +431,13 @@ def shard(
 
     if not needs_reshard(from_spec, to_spec):
         return _shard_op(
-            [x], {"mesh": mesh, "dim_specs": dim_specs, "replicated_axes": replicated_axes, **kwargs}
+            [x],
+            {
+                "mesh": mesh,
+                "dim_specs": dim_specs,
+                "replicated_axes": replicated_axes,
+                **kwargs,
+            },
         )[0]
 
     result = x
@@ -466,7 +482,12 @@ def shard(
     # (though usually the shape change prevents that confusion, explicit is better)
     return _shard_op(
         [result],
-        {"mesh": mesh, "dim_specs": dim_specs, "replicated_axes": replicated_axes, **kwargs},
+        {
+            "mesh": mesh,
+            "dim_specs": dim_specs,
+            "replicated_axes": replicated_axes,
+            **kwargs,
+        },
     )[0]
 
 

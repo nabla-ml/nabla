@@ -29,22 +29,26 @@ def _close(nb_val, jax_val, rtol=5e-4, atol=5e-4):
 #  UNARY OPS
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestVJPUnary:
     """VJP for unary operations."""
 
-    @pytest.mark.parametrize("op_nb,op_jax", [
-        (nb.exp, jnp.exp),
-        (nb.log, jnp.log),
-        (nb.sin, jnp.sin),
-        (nb.cos, jnp.cos),
-        (nb.tanh, jnp.tanh),
-        (nb.sqrt, jnp.sqrt),
-        (nb.neg, jnp.negative),
-        (nb.abs, jnp.abs),
-        (nb.relu, jax.nn.relu),
-        (nb.sigmoid, jax.nn.sigmoid),
-        (nb.gelu, jax.nn.gelu),
-    ])
+    @pytest.mark.parametrize(
+        "op_nb,op_jax",
+        [
+            (nb.exp, jnp.exp),
+            (nb.log, jnp.log),
+            (nb.sin, jnp.sin),
+            (nb.cos, jnp.cos),
+            (nb.tanh, jnp.tanh),
+            (nb.sqrt, jnp.sqrt),
+            (nb.neg, jnp.negative),
+            (nb.abs, jnp.abs),
+            (nb.relu, jax.nn.relu),
+            (nb.sigmoid, jax.nn.sigmoid),
+            (nb.gelu, jax.nn.gelu),
+        ],
+    )
     def test_vjp_unary_ops(self, op_nb, op_jax):
         """Test VJP correctness for various unary ops."""
         cleanup_caches()
@@ -80,16 +84,20 @@ class TestVJPUnary:
 #  BINARY OPS
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestVJPBinary:
     """VJP for binary operations."""
 
-    @pytest.mark.parametrize("op_nb,op_jax", [
-        (nb.add, lambda x, y: x + y),
-        (nb.sub, lambda x, y: x - y),
-        (nb.mul, lambda x, y: x * y),
-        (nb.div, lambda x, y: x / y),
-        (nb.pow, lambda x, y: x ** y),
-    ])
+    @pytest.mark.parametrize(
+        "op_nb,op_jax",
+        [
+            (nb.add, lambda x, y: x + y),
+            (nb.sub, lambda x, y: x - y),
+            (nb.mul, lambda x, y: x * y),
+            (nb.div, lambda x, y: x / y),
+            (nb.pow, lambda x, y: x**y),
+        ],
+    )
     def test_vjp_binary_ops(self, op_nb, op_jax):
         """Test VJP for basic binary ops."""
         cleanup_caches()
@@ -148,6 +156,7 @@ class TestVJPBinary:
 # ═════════════════════════════════════════════════════════════════════════════
 #  REDUCTION OPS
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestVJPReduction:
     """VJP for reduction operations."""
@@ -233,6 +242,7 @@ class TestVJPReduction:
 #  VIEW OPS
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestVJPView:
     """VJP for view/reshape operations."""
 
@@ -272,10 +282,14 @@ class TestVJPView:
         x_jax = make_jax_array(1, 4, seed=1)
         x_nb = tensor_from_jax(x_jax)
 
-        out_nb, vjp_fn = nb.vjp(lambda x: nb.reduce_sum(nb.broadcast_to(x, (3, 4))), x_nb)
+        out_nb, vjp_fn = nb.vjp(
+            lambda x: nb.reduce_sum(nb.broadcast_to(x, (3, 4))), x_nb
+        )
         (g_nb,) = vjp_fn(nb.ones_like(out_nb))
 
-        out_jax, vjp_fn_jax = jax.vjp(lambda x: jnp.sum(jnp.broadcast_to(x, (3, 4))), x_jax)
+        out_jax, vjp_fn_jax = jax.vjp(
+            lambda x: jnp.sum(jnp.broadcast_to(x, (3, 4))), x_jax
+        )
         (g_jax,) = vjp_fn_jax(jnp.ones_like(out_jax))
 
         _close(out_nb, out_jax)
@@ -304,6 +318,7 @@ class TestVJPView:
 # ═════════════════════════════════════════════════════════════════════════════
 #  COMPOSITIONS
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestVJPComposition:
     """VJP for composed operations."""
@@ -378,6 +393,7 @@ class TestVJPComposition:
 # ═════════════════════════════════════════════════════════════════════════════
 #  SPECIAL CASES
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestVJPSpecial:
     """VJP special cases and edge cases."""

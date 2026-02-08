@@ -65,6 +65,7 @@ def _get_core():
         from ..core import GRAPH as g, Tensor as T, pytree as pt, OpNode as ON
         from ..core.sharding import spmd as s
         from .. import config as cfg
+
         _GRAPH = g
         _spmd = s
         _Tensor = T
@@ -95,7 +96,9 @@ class Operation(ABC):
     @abstractmethod
     def name(self) -> str: ...
 
-    def kernel(self, args: list[graph.TensorValue], kwargs: dict) -> list[graph.TensorValue]:
+    def kernel(
+        self, args: list[graph.TensorValue], kwargs: dict
+    ) -> list[graph.TensorValue]:
         """Execute the low-level computation.
 
         Args:
@@ -289,9 +292,7 @@ class Operation(ABC):
 
         return kwargs
 
-    def infer_output_rank(
-        self, input_shapes: list[tuple[int, ...]], **kwargs
-    ) -> int:
+    def infer_output_rank(self, input_shapes: list[tuple[int, ...]], **kwargs) -> int:
         """Infer output rank from input shapes."""
         if not input_shapes:
             return 0
@@ -322,10 +323,14 @@ class Operation(ABC):
                 input_shapes, output_shapes
             )
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         raise NotImplementedError(f"'{self.name}' does not implement vjp_rule")
 
-    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
+    def jvp_rule(
+        self, primals: list, tangents: list, outputs: list, kwargs: dict
+    ) -> list:
         raise NotImplementedError(f"'{self.name}' does not implement jvp_rule")
 
     def get_sharding_rule_template(self) -> Any:
@@ -403,9 +408,7 @@ class Operation(ABC):
         return f"{self.__class__.__name__}(name={self.name!r})"
 
     @staticmethod
-    def _broadcast_shapes(
-        s1: tuple[int, ...], s2: tuple[int, ...]
-    ) -> tuple[int, ...]:
+    def _broadcast_shapes(s1: tuple[int, ...], s2: tuple[int, ...]) -> tuple[int, ...]:
         """Compute broadcast shape of two shapes (numpy-style right-aligned)."""
         if len(s1) > len(s2):
             s2 = (1,) * (len(s1) - len(s2)) + s2
@@ -717,18 +720,24 @@ class UnaryOperation(Operation):
         """
         return NotImplemented
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         deriv = self._derivative(primals[0], outputs[0])
         if deriv is NotImplemented:
             raise NotImplementedError(f"'{self.name}' does not implement vjp_rule")
         from ..ops.binary import mul
+
         return [mul(cotangents[0], deriv)]
 
-    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
+    def jvp_rule(
+        self, primals: list, tangents: list, outputs: list, kwargs: dict
+    ) -> list:
         deriv = self._derivative(primals[0], outputs[0])
         if deriv is NotImplemented:
             raise NotImplementedError(f"'{self.name}' does not implement jvp_rule")
         from ..ops.binary import mul
+
         return [mul(tangents[0], deriv)]
 
     def compute_physical_shape(
@@ -822,9 +831,7 @@ class ShapeOp(Operation):
                     global_phys = x.local_shape
                     # Fallback if local_shape is None? Should not happen if hydrated or determined.
                     if global_phys is None:
-                        global_phys = (
-                            x.shape
-                        ) 
+                        global_phys = x.shape
                         pass
 
                     if global_phys:
@@ -833,9 +840,7 @@ class ShapeOp(Operation):
                         )
                     else:
                         # Best effort: assume standard layout
-                        global_batch_shape = x.shape[
-                            :batch_dims
-                        ] 
+                        global_batch_shape = x.shape[:batch_dims]
                         return kwargs
 
                 physical_shape = global_batch_shape + tuple(shape)
@@ -885,6 +890,7 @@ class CreationOperation(Operation):
                 # For constant(value), the shape comes from the value itself
                 value = args[0]
                 import numpy as np
+
                 if isinstance(value, (list, tuple, np.ndarray)):
                     shape = np.shape(value)
                 else:
@@ -909,7 +915,9 @@ class CreationOperation(Operation):
             shapes = []
             if output_sharding and mesh:
                 for i in range(num_shards):
-                    local = spec.compute_local_shape(shape, output_sharding, device_id=i)
+                    local = spec.compute_local_shape(
+                        shape, output_sharding, device_id=i
+                    )
                     shapes.append(tuple(int(d) for d in local))
             else:
                 shapes = [tuple(int(d) for d in shape)] * num_shards
@@ -950,7 +958,9 @@ class CreationOperation(Operation):
                 shard_results = []
                 for _ in range(num_shards):
                     result_list = self.kernel(args, kwargs)
-                    shard_results.append(result_list[0] if len(result_list) == 1 else result_list)
+                    shard_results.append(
+                        result_list[0] if len(result_list) == 1 else result_list
+                    )
             else:
                 # Deterministic creation: call once and replicate results (MAX handles broadcast if needed)
                 # kernel returns list; unwrap single-element for shard_results
@@ -965,6 +975,8 @@ class CreationOperation(Operation):
 
         return (shard_results, output_sharding, mesh)
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         # Creation ops usually have no differentiable inputs
         return [None for _ in range(len(primals))]

@@ -81,9 +81,7 @@ def _reshape_jacfwd(output_tangents, test_output, flat_inputs, sizes, diff_args)
     from ..ops.multi_output import split
     from ..core.common.pytree import tree_flatten
 
-    flat_out, _ = tree_flatten(
-        test_output, is_leaf=lambda x: isinstance(x, Tensor)
-    )
+    flat_out, _ = tree_flatten(test_output, is_leaf=lambda x: isinstance(x, Tensor))
 
     total_in = sum(sizes)
     single_arg = not isinstance(diff_args, tuple) or len(diff_args) == 1
@@ -94,13 +92,19 @@ def _reshape_jacfwd(output_tangents, test_output, flat_inputs, sizes, diff_args)
         if single_arg:
             in_shape = tuple(int(d) for d in flat_inputs[0].shape)
             if in_shape == ():
-                return reshape(output_tangents, out_shape) if total_in == 1 else output_tangents
+                return (
+                    reshape(output_tangents, out_shape)
+                    if total_in == 1
+                    else output_tangents
+                )
             else:
                 intermediate = reshape(output_tangents, in_shape + out_shape)
                 if out_shape:
                     in_ndim = len(in_shape)
                     out_ndim = len(out_shape)
-                    perm = tuple(range(in_ndim, in_ndim + out_ndim)) + tuple(range(in_ndim))
+                    perm = tuple(range(in_ndim, in_ndim + out_ndim)) + tuple(
+                        range(in_ndim)
+                    )
                     return _permute_tensor(intermediate, perm)
                 else:
                     return reshape(output_tangents, in_shape)
@@ -114,17 +118,24 @@ def _reshape_jacfwd(output_tangents, test_output, flat_inputs, sizes, diff_args)
             offset = 0
             for inp, n_elems in zip(flat_inputs, sizes):
                 in_shape = tuple(int(d) for d in inp.shape)
-                inp_chunks = chunks[offset:offset + n_elems]
+                inp_chunks = chunks[offset : offset + n_elems]
                 if len(inp_chunks) == 1:
-                    J = reshape(inp_chunks[0], out_shape + in_shape) if in_shape == () else inp_chunks[0]
+                    J = (
+                        reshape(inp_chunks[0], out_shape + in_shape)
+                        if in_shape == ()
+                        else inp_chunks[0]
+                    )
                 else:
                     from ..ops.view.shape import concatenate
+
                     stacked = concatenate(list(inp_chunks), axis=0)
                     intermediate = reshape(stacked, in_shape + out_shape)
                     if out_shape:
                         in_ndim = len(in_shape)
                         out_ndim = len(out_shape)
-                        perm = tuple(range(in_ndim, in_ndim + out_ndim)) + tuple(range(in_ndim))
+                        perm = tuple(range(in_ndim, in_ndim + out_ndim)) + tuple(
+                            range(in_ndim)
+                        )
                         J = _permute_tensor(intermediate, perm)
                     else:
                         J = reshape(stacked, in_shape)
@@ -141,6 +152,7 @@ def _reshape_jacfwd(output_tangents, test_output, flat_inputs, sizes, diff_args)
 
 def _permute_tensor(t, perm: tuple[int, ...]):
     from ..ops.view.axes import swap_axes
+
     ndim = len(perm)
     current = list(range(ndim))
 
@@ -149,7 +161,10 @@ def _permute_tensor(t, perm: tuple[int, ...]):
         current_pos = current.index(target_dim)
         if current_pos != target_pos:
             t = swap_axes(t, target_pos, current_pos)
-            current[target_pos], current[current_pos] = current[current_pos], current[target_pos]
+            current[target_pos], current[current_pos] = (
+                current[current_pos],
+                current[target_pos],
+            )
 
     return t
 

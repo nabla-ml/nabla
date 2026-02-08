@@ -69,7 +69,9 @@ class GatherOp(Operation):
             # Physical axis: gather replaces axis dim with index dims (after batch)
             norm_axis = axis if axis >= 0 else len(x_shape) + axis
             # Output: x[:axis] + indices[batch_dims:] + x[axis+1:]
-            out_shape = x_shape[:norm_axis] + i_shape[batch_dims:] + x_shape[norm_axis + 1 :]
+            out_shape = (
+                x_shape[:norm_axis] + i_shape[batch_dims:] + x_shape[norm_axis + 1 :]
+            )
 
             shapes.append(tuple(out_shape))
 
@@ -130,9 +132,18 @@ class GatherOp(Operation):
                 # Move idx_dims (at positions batch_dims..batch_dims+n_idx-1)
                 # after the n_before dims
                 idx_dim_positions = list(range(batch_dims, batch_dims + n_idx_dims))
-                before_positions = list(range(batch_dims + n_idx_dims, batch_dims + n_idx_dims + n_before))
-                after_positions = list(range(batch_dims + n_idx_dims + n_before, r_rank))
-                perm_inv = list(range(batch_dims)) + before_positions + idx_dim_positions + after_positions
+                before_positions = list(
+                    range(batch_dims + n_idx_dims, batch_dims + n_idx_dims + n_before)
+                )
+                after_positions = list(
+                    range(batch_dims + n_idx_dims + n_before, r_rank)
+                )
+                perm_inv = (
+                    list(range(batch_dims))
+                    + before_positions
+                    + idx_dim_positions
+                    + after_positions
+                )
                 result = ops.permute(result, perm_inv)
 
             return [result]
@@ -150,7 +161,9 @@ class GatherOp(Operation):
         else:
             return [ops.gather(x, indices, axis)]
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """VJP rule uses LOGICAL axis from kwargs."""
         x, indices = primals[0], primals[1]
         axis = kwargs.get("axis", 0)
@@ -159,7 +172,9 @@ class GatherOp(Operation):
         gx = scatter(zeros_like(x), indices, cotangents[0], axis=axis)
         return [gx, None]
 
-    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
+    def jvp_rule(
+        self, primals: list, tangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """JVP rule uses LOGICAL axis from kwargs."""
         x, indices = primals[0], primals[1]
         tx = tangents[0]
@@ -276,7 +291,9 @@ class ScatterOp(Operation):
 
             # Use axis=0 scatter_nd approach on the permuted tensors
             # For batch_dims > 0, we need per-batch scatter
-            result = self._scatter_at_axis(x_perm, idx, updates_perm, axis=batch_dims, batch_dims=batch_dims)
+            result = self._scatter_at_axis(
+                x_perm, idx, updates_perm, axis=batch_dims, batch_dims=batch_dims
+            )
 
             # Permute result back
             perm_inv = [0] * x_rank
@@ -288,7 +305,11 @@ class ScatterOp(Operation):
 
         elif batch_dims > 0:
             # axis == batch_dims: scatter directly at that position
-            return [self._scatter_at_axis(x, indices, updates, axis=axis, batch_dims=batch_dims)]
+            return [
+                self._scatter_at_axis(
+                    x, indices, updates, axis=axis, batch_dims=batch_dims
+                )
+            ]
         else:
             return [self._scatter_at_axis(x, indices, updates, axis=axis, batch_dims=0)]
 
@@ -359,7 +380,9 @@ class ScatterOp(Operation):
         stacked = ops.stack(coord_list, axis=-1)
         return ops.scatter_nd(x, updates, stacked)
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """VJP rule uses LOGICAL axis from kwargs."""
         x, indices, updates = primals[0], primals[1], primals[2]
         axis = kwargs.get("axis", 0)
@@ -370,7 +393,9 @@ class ScatterOp(Operation):
 
         return [gx, None, g_updates]
 
-    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
+    def jvp_rule(
+        self, primals: list, tangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """JVP rule uses LOGICAL axis from kwargs."""
         x, indices, updates = primals[0], primals[1], primals[2]
         tx, _, t_updates = tangents[0], tangents[1], tangents[2]

@@ -59,12 +59,15 @@ class DistributedBroadcastOp(CollectiveOperation):
 
         rank = len(x.shape)
         output_spec = create_replicated_spec(mesh, rank)
-        
+
         return (results, output_spec, mesh)
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """VJP for distributed broadcast: AllReduce(sum) back to root."""
         from .all_reduce import all_reduce
+
         return [all_reduce(cotangents[0])]
 
 

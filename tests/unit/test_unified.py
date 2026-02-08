@@ -48,7 +48,16 @@ from .common import (
     tensor_from_jax,
     to_jax,
 )
-from .unified_registry import ALL_OPS, DIFF_OPS, NON_DIFF_OPS, UNARY_OPS, BINARY_OPS, MATMUL_OPS, REDUCTION_OPS, VIEW_OPS
+from .unified_registry import (
+    ALL_OPS,
+    DIFF_OPS,
+    NON_DIFF_OPS,
+    UNARY_OPS,
+    BINARY_OPS,
+    MATMUL_OPS,
+    REDUCTION_OPS,
+    VIEW_OPS,
+)
 
 SEED = 42
 MESH = DeviceMesh("test", (2, 4), ("x", "y"))
@@ -83,8 +92,8 @@ def _ones_like_jax(x):
 
 
 def _is_scalar_output(result):
-    if hasattr(result, 'shape'):
-        return result.shape == () or (hasattr(result, 'ndim') and result.ndim == 0)
+    if hasattr(result, "shape"):
+        return result.shape == () or (hasattr(result, "ndim") and result.ndim == 0)
     return False
 
 
@@ -168,7 +177,9 @@ class TestVJP:
         primals_out_jax, pullback_jax = jax.vjp(jax_fn, *args_jax)
 
         cot_jax = jax.tree.map(_ones_like_jax, primals_out_jax)
-        cot_nb = jax.tree.map(lambda x: tensor_from_jax(jnp.ones_like(x)), primals_out_jax)
+        cot_nb = jax.tree.map(
+            lambda x: tensor_from_jax(jnp.ones_like(x)), primals_out_jax
+        )
 
         grads_nb = pullback_nb(cot_nb)
         grads_jax = pullback_jax(cot_jax)
@@ -207,7 +218,9 @@ class TestJVP:
         primals_out_jax, tangents_out_jax = jax.jvp(jax_fn, args_jax, tangents_jax)
 
         compare_nested_structures(primals_out_nb, primals_out_jax, tolerance=TOLERANCE)
-        compare_nested_structures(tangents_out_nb, tangents_out_jax, tolerance=TOLERANCE)
+        compare_nested_structures(
+            tangents_out_nb, tangents_out_jax, tolerance=TOLERANCE
+        )
 
 
 # ===========================================================================
@@ -230,7 +243,7 @@ class TestVmap:
             batched_nb = []
             batched_jax = []
             for a_nb, a_jax in zip(args_nb, args_jax, strict=False):
-                if hasattr(a_nb, 'shape'):
+                if hasattr(a_nb, "shape"):
                     batched_nb.append(nb.stack([a_nb, a_nb]))
                     batched_jax.append(jnp.stack([a_jax, a_jax]))
                     in_axes.append(0)
@@ -276,9 +289,13 @@ class TestVmapVJP:
         if list_input:
             batched_nb, batched_jax, in_axes = _batch_list_input(args_nb, args_jax)
         else:
-            in_axes = tuple(0 if hasattr(a, 'shape') else None for a in args_nb)
-            batched_nb = tuple(nb.stack([a, a]) if hasattr(a, 'shape') else a for a in args_nb)
-            batched_jax = tuple(jnp.stack([a, a]) if hasattr(a, 'shape') else a for a in args_jax)
+            in_axes = tuple(0 if hasattr(a, "shape") else None for a in args_nb)
+            batched_nb = tuple(
+                nb.stack([a, a]) if hasattr(a, "shape") else a for a in args_nb
+            )
+            batched_jax = tuple(
+                jnp.stack([a, a]) if hasattr(a, "shape") else a for a in args_jax
+            )
 
         nb_res = vmap(nb_grad_fn, in_axes=in_axes)(*batched_nb)
         jax_res = jax.vmap(jax_grad_fn, in_axes=in_axes)(*batched_jax)
@@ -322,9 +339,13 @@ class TestVmapJVP:
         if list_input:
             batched_nb, batched_jax, in_axes = _batch_list_input(args_nb, args_jax)
         else:
-            in_axes = tuple(0 if hasattr(a, 'shape') else None for a in args_nb)
-            batched_nb = tuple(nb.stack([a, a]) if hasattr(a, 'shape') else a for a in args_nb)
-            batched_jax = tuple(jnp.stack([a, a]) if hasattr(a, 'shape') else a for a in args_jax)
+            in_axes = tuple(0 if hasattr(a, "shape") else None for a in args_nb)
+            batched_nb = tuple(
+                nb.stack([a, a]) if hasattr(a, "shape") else a for a in args_nb
+            )
+            batched_jax = tuple(
+                jnp.stack([a, a]) if hasattr(a, "shape") else a for a in args_jax
+            )
 
         nb_res = vmap(nb_jvp_fn, in_axes=in_axes)(*batched_nb)
         jax_res = jax.vmap(jax_jvp_fn, in_axes=in_axes)(*batched_jax)
@@ -381,7 +402,9 @@ def _shard_axis0(t: nb.Tensor, mesh: DeviceMesh) -> nb.Tensor:
     if len(t.shape) == 0 or int(t.shape[0]) % mesh.shape[0] != 0:
         return t
     rank = len(t.shape)
-    specs = [DimSpec(["x"], is_open=False)] + [DimSpec([], is_open=True) for _ in range(rank - 1)]
+    specs = [DimSpec(["x"], is_open=False)] + [
+        DimSpec([], is_open=True) for _ in range(rank - 1)
+    ]
     return t.shard(mesh, specs)
 
 
@@ -407,12 +430,14 @@ def _shardable_pairs(ops=None):
     pairs = []
     for op in ops:
         for config in op.configs:
-            shapes = config.primal_shapes or tuple(get_shape_for_rank(r) for r in config.ranks)
-            all_shardable = all(
-                len(s) > 0 and s[0] % 2 == 0 for s in shapes
+            shapes = config.primal_shapes or tuple(
+                get_shape_for_rank(r) for r in config.ranks
             )
+            all_shardable = all(len(s) > 0 and s[0] % 2 == 0 for s in shapes)
             if all_shardable:
-                pairs.append(pytest.param(op, config, id=f"{op.name}_{config.description}"))
+                pairs.append(
+                    pytest.param(op, config, id=f"{op.name}_{config.description}")
+                )
     return pairs
 
 
@@ -430,8 +455,7 @@ class TestShardedBaseline:
             pytest.skip("sharding not supported for this op/config")
         args_nb, kw_nb, args_jax, kw_jax = _get_args(op, config)
         sharded_nb = tuple(
-            _maybe_shard_arg_tree(op, i, a, MESH)
-            for i, a in enumerate(args_nb)
+            _maybe_shard_arg_tree(op, i, a, MESH) for i, a in enumerate(args_nb)
         )
         nb_res = op.nabla_fn(*sharded_nb, **kw_nb)
         jax_res = op.jax_fn(*args_jax, **kw_jax)
@@ -445,8 +469,7 @@ class TestShardedVJP:
             pytest.skip("sharding not supported for this op/config")
         args_nb, kw_nb, args_jax, kw_jax = _get_args(op, config)
         sharded_nb = tuple(
-            _maybe_shard_arg_tree(op, i, a, MESH)
-            for i, a in enumerate(args_nb)
+            _maybe_shard_arg_tree(op, i, a, MESH) for i, a in enumerate(args_nb)
         )
 
         def nb_fn(*a):

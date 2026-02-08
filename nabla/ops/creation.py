@@ -29,7 +29,9 @@ class ConstantOp(CreationOperation):
         device = kwargs["device"]
         return [ops.constant(value, dtype, device)]
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         return [None for _ in range(len(primals))]
 
 
@@ -221,7 +223,9 @@ class TriOp(Operation):
         ]
         return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         k = kwargs.get("k", 0)
         return [self.__class__()([cotangents[0]], {"k": k})[0]]
 
@@ -320,7 +324,9 @@ def full(
 ):
     """Create a tensor filled with a constant value."""
     dtype, device = defaults(dtype, device)
-    t = _full_op([], {"shape": shape, "value": value, "dtype": dtype, "device": device})[0]
+    t = _full_op(
+        [], {"shape": shape, "value": value, "dtype": dtype, "device": device}
+    )[0]
     if is_traced:
         t.is_traced = True
     return t
@@ -368,7 +374,10 @@ def arange(
     dtype, device = defaults(dtype, device)
     if stop is None:
         start, stop = 0, start
-    return _arange_op([], {"start": start, "stop": stop, "step": step, "dtype": dtype, "device": device})[0]
+    return _arange_op(
+        [],
+        {"start": start, "stop": stop, "step": step, "dtype": dtype, "device": device},
+    )[0]
 
 
 def uniform(
@@ -381,7 +390,9 @@ def uniform(
 ):
     """Create a tensor with uniform random values."""
     dtype, device = defaults(dtype, device)
-    return _uniform_op([], {"shape": shape, "low": low, "high": high, "dtype": dtype, "device": device})[0]
+    return _uniform_op(
+        [], {"shape": shape, "low": low, "high": high, "dtype": dtype, "device": device}
+    )[0]
 
 
 def gaussian(
@@ -394,7 +405,9 @@ def gaussian(
 ):
     """Create a tensor with Gaussian (normal) random values."""
     dtype, device = defaults(dtype, device)
-    return _gaussian_op([], {"shape": shape, "mean": mean, "std": std, "dtype": dtype, "device": device})[0]
+    return _gaussian_op(
+        [], {"shape": shape, "mean": mean, "std": std, "dtype": dtype, "device": device}
+    )[0]
 
 
 normal = gaussian
@@ -409,7 +422,15 @@ def hann_window(
 ):
     """Create a 1D Hann window tensor."""
     dtype, device = defaults(dtype, device)
-    return _hann_window_op([], {"window_length": window_length, "device": device, "periodic": periodic, "dtype": dtype})[0]
+    return _hann_window_op(
+        [],
+        {
+            "window_length": window_length,
+            "device": device,
+            "periodic": periodic,
+            "dtype": dtype,
+        },
+    )[0]
 
 
 def triu(x: Any, k: int = 0) -> Any:

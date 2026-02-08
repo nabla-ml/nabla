@@ -40,7 +40,9 @@ def jacrev(
         sizes, cotangent_basis = std_basis(flat_out)
         basis_tree = tree_unflatten(out_td, cotangent_basis)
         batched_grads = vmap(pullback, in_axes=0)(basis_tree)
-        flat_diff_args, _ = tree_flatten(diff_args, is_leaf=lambda x: isinstance(x, Tensor))
+        flat_diff_args, _ = tree_flatten(
+            diff_args, is_leaf=lambda x: isinstance(x, Tensor)
+        )
 
         jacobian = _reshape_jacrev(
             batched_grads, flat_out, flat_diff_args, sizes, diff_args
@@ -59,7 +61,11 @@ def _reshape_jacrev(batched_grads, flat_out, flat_diff_args, sizes, diff_args):
     from ..ops.view.shape import reshape
 
     single_arg = not isinstance(diff_args, tuple) or len(diff_args) == 1
-    all_grads = ([batched_grads[0]] if isinstance(batched_grads, tuple) else [batched_grads]) if single_arg else list(batched_grads)
+    all_grads = (
+        ([batched_grads[0]] if isinstance(batched_grads, tuple) else [batched_grads])
+        if single_arg
+        else list(batched_grads)
+    )
     total_out = sum(sizes)
 
     if len(flat_out) == 1:

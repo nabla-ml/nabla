@@ -22,16 +22,21 @@ from tests.unit.common import (
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
+
 def _close(nb_val, jax_val, rtol=5e-4, atol=5e-4):
     """Assert nabla Tensor ≈ JAX array."""
     np.testing.assert_allclose(
-        to_jax(nb_val), jax_val, rtol=rtol, atol=atol,
+        to_jax(nb_val),
+        jax_val,
+        rtol=rtol,
+        atol=atol,
     )
 
 
 # ═════════════════════════════════════════════════════════════════════════════
 #  VJP TESTS
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestVJPBasic:
     """Basic VJP correctness — scalar and vector functions."""
@@ -151,18 +156,21 @@ class TestVJPBasic:
 class TestVJPOps:
     """VJP correctness for various ops."""
 
-    @pytest.mark.parametrize("op_nb,op_jax", [
-        (nb.exp, jnp.exp),
-        (nb.log, jnp.log),
-        (nb.tanh, jnp.tanh),
-        (nb.sin, jnp.sin),
-        (nb.cos, jnp.cos),
-        (nb.relu, jax.nn.relu),
-        (nb.sigmoid, jax.nn.sigmoid),
-        (nb.neg, jnp.negative),
-        (nb.abs, jnp.abs),
-        (nb.sqrt, jnp.sqrt),
-    ])
+    @pytest.mark.parametrize(
+        "op_nb,op_jax",
+        [
+            (nb.exp, jnp.exp),
+            (nb.log, jnp.log),
+            (nb.tanh, jnp.tanh),
+            (nb.sin, jnp.sin),
+            (nb.cos, jnp.cos),
+            (nb.relu, jax.nn.relu),
+            (nb.sigmoid, jax.nn.sigmoid),
+            (nb.neg, jnp.negative),
+            (nb.abs, jnp.abs),
+            (nb.sqrt, jnp.sqrt),
+        ],
+    )
     def test_vjp_unary_ops(self, op_nb, op_jax):
         cleanup_caches()
         # Use positive values to avoid domain issues with log/sqrt
@@ -183,6 +191,7 @@ class TestVJPOps:
 # ═════════════════════════════════════════════════════════════════════════════
 #  JVP TESTS
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestJVPBasic:
     """Basic JVP correctness — scalar and vector functions."""
@@ -225,7 +234,9 @@ class TestJVPBasic:
         ty = tensor_from_jax(jnp.array(0.0))
 
         out_nb, tan_nb = nb.jvp(f_nb, (x_nb, y_nb), (tx, ty))
-        out_jax, tan_jax = jax.jvp(f_jax, (x_jax, y_jax), (jnp.array(1.0), jnp.array(0.0)))
+        out_jax, tan_jax = jax.jvp(
+            f_jax, (x_jax, y_jax), (jnp.array(1.0), jnp.array(0.0))
+        )
 
         _close(out_nb, out_jax)
         _close(tan_nb, tan_jax)
@@ -264,17 +275,20 @@ class TestJVPBasic:
         _close(out_nb, out_jax)
         _close(tan_nb, tan_jax)
 
-    @pytest.mark.parametrize("op_nb,op_jax", [
-        (nb.exp, jnp.exp),
-        (nb.log, jnp.log),
-        (nb.tanh, jnp.tanh),
-        (nb.sin, jnp.sin),
-        (nb.cos, jnp.cos),
-        (nb.relu, jax.nn.relu),
-        (nb.sigmoid, jax.nn.sigmoid),
-        (nb.neg, jnp.negative),
-        (nb.sqrt, jnp.sqrt),
-    ])
+    @pytest.mark.parametrize(
+        "op_nb,op_jax",
+        [
+            (nb.exp, jnp.exp),
+            (nb.log, jnp.log),
+            (nb.tanh, jnp.tanh),
+            (nb.sin, jnp.sin),
+            (nb.cos, jnp.cos),
+            (nb.relu, jax.nn.relu),
+            (nb.sigmoid, jax.nn.sigmoid),
+            (nb.neg, jnp.negative),
+            (nb.sqrt, jnp.sqrt),
+        ],
+    )
     def test_jvp_unary_ops(self, op_nb, op_jax):
         cleanup_caches()
         x_jax = jnp.abs(make_jax_array(4)) + 0.5
@@ -303,7 +317,9 @@ class TestJVPBasic:
 
         t_nb = tensor_from_jax(jnp.array(1.0))
         out_nb, tan_nb, aux_nb = nb.jvp(f_nb, (x_nb,), (t_nb,), has_aux=True)
-        out_jax, tan_jax, aux_jax = jax.jvp(f_jax, (x_jax,), (jnp.array(1.0),), has_aux=True)
+        out_jax, tan_jax, aux_jax = jax.jvp(
+            f_jax, (x_jax,), (jnp.array(1.0),), has_aux=True
+        )
 
         _close(out_nb, out_jax)
         _close(tan_nb, tan_jax)
@@ -313,6 +329,7 @@ class TestJVPBasic:
 # ═════════════════════════════════════════════════════════════════════════════
 #  VJP + JVP consistency: they should give same Jacobian info
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestVJPJVPConsistency:
 

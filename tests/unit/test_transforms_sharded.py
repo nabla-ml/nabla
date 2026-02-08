@@ -33,6 +33,7 @@ def _close(nb_val, jax_val, rtol=1e-4, atol=1e-4):
 #  SHARDED VJP
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestShardedVJP:
     """VJP with sharded tensors."""
 
@@ -41,7 +42,7 @@ class TestShardedVJP:
         """VJP with input sharded along first axis."""
         cleanup_caches()
         mesh = DeviceMesh(mesh_name, mesh_shape, axis_names)
-        
+
         x_jax = make_jax_array(8, 4, seed=1)
         x_nb = tensor_from_jax(x_jax)
         x_sharded = shard_on_axis(x_nb, mesh, axis=0, mesh_axis=0)
@@ -65,7 +66,7 @@ class TestShardedVJP:
         """VJP with replicated input."""
         cleanup_caches()
         mesh = DeviceMesh(mesh_name, mesh_shape, axis_names)
-        
+
         x_jax = make_jax_array(4, 4, seed=1)
         x_nb = tensor_from_jax(x_jax)
         x_replicated = replicated(x_nb, mesh)
@@ -84,7 +85,7 @@ class TestShardedVJP:
         """VJP with binary op on sharded tensors."""
         cleanup_caches()
         mesh = DeviceMesh(mesh_name, mesh_shape, axis_names)
-        
+
         x_jax = make_jax_array(8, 4, seed=1)
         y_jax = make_jax_array(8, 4, seed=2)
         x_nb = tensor_from_jax(x_jax)
@@ -92,7 +93,9 @@ class TestShardedVJP:
         x_sharded = shard_on_axis(x_nb, mesh, axis=0, mesh_axis=0)
         y_sharded = shard_on_axis(y_nb, mesh, axis=0, mesh_axis=0)
 
-        out_nb, vjp_fn = nb.vjp(lambda x, y: nb.reduce_sum(nb.mul(x, y)), x_sharded, y_sharded)
+        out_nb, vjp_fn = nb.vjp(
+            lambda x, y: nb.reduce_sum(nb.mul(x, y)), x_sharded, y_sharded
+        )
         gx_nb, gy_nb = vjp_fn(nb.ones_like(out_nb))
 
         out_jax, vjp_fn_jax = jax.vjp(lambda x, y: jnp.sum(x * y), x_jax, y_jax)
@@ -107,7 +110,7 @@ class TestShardedVJP:
         """VJP of matmul with sharded inputs."""
         cleanup_caches()
         mesh = DeviceMesh(mesh_name, mesh_shape, axis_names)
-        
+
         x_jax = make_jax_array(8, 4, seed=1)
         w_jax = make_jax_array(4, 6, seed=2)
         x_nb = tensor_from_jax(x_jax)
@@ -130,6 +133,7 @@ class TestShardedVJP:
 #  SHARDED JVP
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestShardedJVP:
     """JVP with sharded tensors."""
 
@@ -139,7 +143,7 @@ class TestShardedJVP:
         """JVP with input sharded along first axis."""
         cleanup_caches()
         mesh = DeviceMesh(mesh_name, mesh_shape, axis_names)
-        
+
         x_jax = make_jax_array(8, 4, seed=1)
         t_jax = jnp.ones_like(x_jax)
         x_nb = tensor_from_jax(x_jax)
@@ -161,7 +165,7 @@ class TestShardedJVP:
         """JVP with replicated input."""
         cleanup_caches()
         mesh = DeviceMesh(mesh_name, mesh_shape, axis_names)
-        
+
         x_jax = make_jax_array(4, 4, seed=1)
         t_jax = jnp.ones_like(x_jax)
         x_nb = tensor_from_jax(x_jax)
@@ -169,7 +173,9 @@ class TestShardedJVP:
         x_replicated = replicated(x_nb, mesh)
         t_replicated = replicated(t_nb, mesh)
 
-        out_nb, tan_nb = nb.jvp(lambda x: nb.reduce_sum(nb.exp(x)), (x_replicated,), (t_replicated,))
+        out_nb, tan_nb = nb.jvp(
+            lambda x: nb.reduce_sum(nb.exp(x)), (x_replicated,), (t_replicated,)
+        )
         out_jax, tan_jax = jax.jvp(lambda x: jnp.sum(jnp.exp(x)), (x_jax,), (t_jax,))
 
         _close(out_nb, out_jax)
@@ -181,7 +187,7 @@ class TestShardedJVP:
         """JVP with binary op on sharded tensors."""
         cleanup_caches()
         mesh = DeviceMesh(mesh_name, mesh_shape, axis_names)
-        
+
         x_jax = make_jax_array(8, 4, seed=1)
         y_jax = make_jax_array(8, 4, seed=2)
         tx_jax = jnp.ones_like(x_jax)
@@ -190,21 +196,19 @@ class TestShardedJVP:
         y_nb = tensor_from_jax(y_jax)
         tx_nb = tensor_from_jax(tx_jax)
         ty_nb = tensor_from_jax(ty_jax)
-        
+
         x_sharded = shard_on_axis(x_nb, mesh, axis=0, mesh_axis=0)
         y_sharded = shard_on_axis(y_nb, mesh, axis=0, mesh_axis=0)
         tx_sharded = shard_on_axis(tx_nb, mesh, axis=0, mesh_axis=0)
         ty_sharded = shard_on_axis(ty_nb, mesh, axis=0, mesh_axis=0)
 
         out_nb, tan_nb = nb.jvp(
-            lambda x, y: nb.reduce_sum(nb.mul(x, y)), 
-            (x_sharded, y_sharded), 
-            (tx_sharded, ty_sharded)
+            lambda x, y: nb.reduce_sum(nb.mul(x, y)),
+            (x_sharded, y_sharded),
+            (tx_sharded, ty_sharded),
         )
         out_jax, tan_jax = jax.jvp(
-            lambda x, y: jnp.sum(x * y), 
-            (x_jax, y_jax), 
-            (tx_jax, ty_jax)
+            lambda x, y: jnp.sum(x * y), (x_jax, y_jax), (tx_jax, ty_jax)
         )
 
         _close(out_nb, out_jax)
@@ -215,6 +219,7 @@ class TestShardedJVP:
 #  VMAP + SHARDING
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestVmapShardedTransforms:
     """vmap composed with sharded vjp/jvp."""
 
@@ -223,7 +228,7 @@ class TestVmapShardedTransforms:
         """vmap(vjp(...)) with sharded tensors."""
         cleanup_caches()
         mesh = DeviceMesh(mesh_name, mesh_shape, axis_names)
-        
+
         x_jax = make_jax_array(4, 3, 4, seed=1)
         x_nb = tensor_from_jax(x_jax)
         # Shard on batch dim
@@ -249,7 +254,7 @@ class TestVmapShardedTransforms:
         """vmap(jvp(...)) with sharded tensors."""
         cleanup_caches()
         mesh = DeviceMesh(mesh_name, mesh_shape, axis_names)
-        
+
         x_jax = make_jax_array(4, 3, 4, seed=1)
         t_jax = jnp.ones_like(x_jax)
         x_nb = tensor_from_jax(x_jax)
@@ -275,6 +280,7 @@ class TestVmapShardedTransforms:
 #  REDUCTION OPS WITH SHARDING
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestShardedReductions:
     """VJP/JVP with reductions and sharding."""
 
@@ -283,7 +289,7 @@ class TestShardedReductions:
         """VJP of reduce_sum with sharded input."""
         cleanup_caches()
         mesh = DeviceMesh(mesh_name, mesh_shape, axis_names)
-        
+
         x_jax = make_jax_array(8, 4, seed=1)
         x_nb = tensor_from_jax(x_jax)
         x_sharded = shard_on_axis(x_nb, mesh, axis=0, mesh_axis=0)
@@ -302,7 +308,7 @@ class TestShardedReductions:
         """VJP of reduce_sum along axis with sharded input."""
         cleanup_caches()
         mesh = DeviceMesh(mesh_name, mesh_shape, axis_names)
-        
+
         x_jax = make_jax_array(8, 4, 6, seed=1)
         x_nb = tensor_from_jax(x_jax)
         x_sharded = shard_on_axis(x_nb, mesh, axis=0, mesh_axis=0)

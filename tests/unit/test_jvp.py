@@ -29,22 +29,26 @@ def _close(nb_val, jax_val, rtol=5e-4, atol=5e-4):
 #  UNARY OPS
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestJVPUnary:
     """JVP for unary operations."""
 
-    @pytest.mark.parametrize("op_nb,op_jax", [
-        (nb.exp, jnp.exp),
-        (nb.log, jnp.log),
-        (nb.sin, jnp.sin),
-        (nb.cos, jnp.cos),
-        (nb.tanh, jnp.tanh),
-        (nb.sqrt, jnp.sqrt),
-        (nb.neg, jnp.negative),
-        (nb.abs, jnp.abs),
-        (nb.relu, jax.nn.relu),
-        (nb.sigmoid, jax.nn.sigmoid),
-        (nb.gelu, jax.nn.gelu),
-    ])
+    @pytest.mark.parametrize(
+        "op_nb,op_jax",
+        [
+            (nb.exp, jnp.exp),
+            (nb.log, jnp.log),
+            (nb.sin, jnp.sin),
+            (nb.cos, jnp.cos),
+            (nb.tanh, jnp.tanh),
+            (nb.sqrt, jnp.sqrt),
+            (nb.neg, jnp.negative),
+            (nb.abs, jnp.abs),
+            (nb.relu, jax.nn.relu),
+            (nb.sigmoid, jax.nn.sigmoid),
+            (nb.gelu, jax.nn.gelu),
+        ],
+    )
     def test_jvp_unary_ops(self, op_nb, op_jax):
         """Test JVP correctness for various unary ops."""
         cleanup_caches()
@@ -78,16 +82,20 @@ class TestJVPUnary:
 #  BINARY OPS
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestJVPBinary:
     """JVP for binary operations."""
 
-    @pytest.mark.parametrize("op_nb,op_jax", [
-        (nb.add, lambda x, y: x + y),
-        (nb.sub, lambda x, y: x - y),
-        (nb.mul, lambda x, y: x * y),
-        (nb.div, lambda x, y: x / y),
-        (nb.pow, lambda x, y: x ** y),
-    ])
+    @pytest.mark.parametrize(
+        "op_nb,op_jax",
+        [
+            (nb.add, lambda x, y: x + y),
+            (nb.sub, lambda x, y: x - y),
+            (nb.mul, lambda x, y: x * y),
+            (nb.div, lambda x, y: x / y),
+            (nb.pow, lambda x, y: x**y),
+        ],
+    )
     def test_jvp_binary_ops(self, op_nb, op_jax):
         """Test JVP for basic binary ops."""
         cleanup_caches()
@@ -165,6 +173,7 @@ class TestJVPBinary:
 #  REDUCTION OPS
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestJVPReduction:
     """JVP for reduction operations."""
 
@@ -216,6 +225,7 @@ class TestJVPReduction:
 #  VIEW OPS
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestJVPView:
     """JVP for view/reshape operations."""
 
@@ -256,7 +266,9 @@ class TestJVPView:
         t_nb = tensor_from_jax(t_jax)
 
         out_nb, tan_nb = nb.jvp(lambda x: nb.broadcast_to(x, (3, 4)), (x_nb,), (t_nb,))
-        out_jax, tan_jax = jax.jvp(lambda x: jnp.broadcast_to(x, (3, 4)), (x_jax,), (t_jax,))
+        out_jax, tan_jax = jax.jvp(
+            lambda x: jnp.broadcast_to(x, (3, 4)), (x_jax,), (t_jax,)
+        )
 
         _close(out_nb, out_jax)
         _close(tan_nb, tan_jax)
@@ -284,6 +296,7 @@ class TestJVPView:
 #  COMPOSITIONS
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestJVPComposition:
     """JVP for composed operations."""
 
@@ -310,7 +323,9 @@ class TestJVPComposition:
             return jax.nn.relu(x @ w + b)
 
         out_nb, tan_nb = nb.jvp(f_nb, (x_nb, w_nb, b_nb), (tx_nb, tw_nb, tb_nb))
-        out_jax, tan_jax = jax.jvp(f_jax, (x_jax, w_jax, b_jax), (tx_jax, tw_jax, tb_jax))
+        out_jax, tan_jax = jax.jvp(
+            f_jax, (x_jax, w_jax, b_jax), (tx_jax, tw_jax, tb_jax)
+        )
 
         _close(out_nb, out_jax)
         _close(tan_nb, tan_jax)
@@ -361,6 +376,7 @@ class TestJVPComposition:
 # ═════════════════════════════════════════════════════════════════════════════
 #  SPECIAL CASES
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestJVPSpecial:
     """JVP special cases and edge cases."""

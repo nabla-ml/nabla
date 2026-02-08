@@ -54,9 +54,7 @@ class PhysicalReduceOp(Operation):
                     1 if j == norm_axis else d for j, d in enumerate(in_shape)
                 )
             else:
-                out_shape = tuple(
-                    d for j, d in enumerate(in_shape) if j != norm_axis
-                )
+                out_shape = tuple(d for j, d in enumerate(in_shape) if j != norm_axis)
             shapes.append(out_shape)
 
         dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
@@ -110,14 +108,18 @@ class ReduceSumOp(ReduceOperation):
         axis = kwargs.get("axis", 0)
         return [ops.sum(x, axis)]
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """VJP for reduce_sum: broadcast cotangent back to input shape."""
         x = primals[0]
         from ..ops.view.shape import broadcast_to
 
         return [broadcast_to(cotangents[0], tuple(x.shape))]
 
-    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
+    def jvp_rule(
+        self, primals: list, tangents: list, outputs: list, kwargs: dict
+    ) -> list:
         t = tangents[0]
         axis = kwargs.get("axis", 0)
         keepdims = kwargs.get("keepdims", False)
@@ -134,7 +136,9 @@ class MeanOp(ReduceOperation):
         axis = kwargs.get("axis", 0)
         return [ops.mean(x, axis)]
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """VJP for mean: broadcast cotangent / axis_size."""
         x = primals[0]
         axis = kwargs.get("axis", 0)
@@ -144,7 +148,9 @@ class MeanOp(ReduceOperation):
         target_shape = tuple(int(d) for d in x.shape)
         return [broadcast_to(cotangents[0], target_shape) / axis_size]
 
-    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
+    def jvp_rule(
+        self, primals: list, tangents: list, outputs: list, kwargs: dict
+    ) -> list:
         axis = kwargs.get("axis", 0)
         keepdims = kwargs.get("keepdims", False)
         return [mean(tangents[0], axis=axis, keepdims=keepdims)]
@@ -164,7 +170,9 @@ class ReduceMaxOp(ReduceOperation):
         axis = kwargs.get("axis", 0)
         return [ops._reduce_max(x, axis=axis)]
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         x = primals[0]
         from ..ops.comparison import equal
         from ..ops.view.shape import broadcast_to
@@ -175,7 +183,9 @@ class ReduceMaxOp(ReduceOperation):
         cotangent_broadcasted = broadcast_to(cotangents[0], tuple(x.shape))
         return [mul(cotangent_broadcasted, mask)]
 
-    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
+    def jvp_rule(
+        self, primals: list, tangents: list, outputs: list, kwargs: dict
+    ) -> list:
         x = primals[0]
         from ..ops.comparison import equal
         from ..ops.view.shape import broadcast_to
@@ -187,7 +197,6 @@ class ReduceMaxOp(ReduceOperation):
         max_broadcasted = broadcast_to(outputs[0], tuple(x.shape))
         mask = equal(x, max_broadcasted)
         return [reduce_sum(mul(tangents[0], mask), axis=axis, keepdims=keepdims)]
-
 
 
 class ReduceSumPhysicalOp(PhysicalReduceOp):
@@ -267,9 +276,7 @@ _mean_op = MeanOp()
 _reduce_max_op = ReduceMaxOp()
 
 
-def _multi_axis_reduce(
-    op, x: Tensor, *, axis=None, keepdims: bool = False
-) -> Tensor:
+def _multi_axis_reduce(op, x: Tensor, *, axis=None, keepdims: bool = False) -> Tensor:
     """Shared implementation for multi-axis reductions (reduce_sum, reduce_max, reduce_min)."""
     from .view import squeeze
     from .view.shape import reshape
@@ -287,11 +294,15 @@ def _multi_axis_reduce(
 
         if not keepdims:
             out_shape = tuple(
-                int(d) for i, d in enumerate(x.shape) if i not in set(
-                    ax if ax >= 0 else len(x.shape) + ax for ax in axis
-                )
+                int(d)
+                for i, d in enumerate(x.shape)
+                if i not in set(ax if ax >= 0 else len(x.shape) + ax for ax in axis)
             )
-            res = reshape(res, out_shape if out_shape else (1,)) if len(axes) > 1 else squeeze(res, axis=axes[0])
+            res = (
+                reshape(res, out_shape if out_shape else (1,))
+                if len(axes) > 1
+                else squeeze(res, axis=axes[0])
+            )
             if not out_shape and len(axes) > 1:
                 res = squeeze(res, axis=0)
         return res
@@ -382,7 +393,6 @@ def reduce_min_physical(x: Tensor, axis: int, keepdims: bool = False) -> Tensor:
     return _physical_reduce(_reduce_min_physical_op, x, axis, keepdims)
 
 
-
 class _ArgReduceOp(AxisOp):
     """Base for argmax/argmin operations."""
 
@@ -434,7 +444,9 @@ class _ArgReduceOp(AxisOp):
 
         return shapes, [DType.int64] * num_shards, [x.device] * num_shards
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         return [None]
 
     def infer_output_shape(
@@ -478,7 +490,9 @@ class CumsumOp(AxisOp):
             shapes.append(x.physical_local_shape_ints(i))
         return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """VJP: flip(cumsum(flip(cotangent, axis), axis), axis)."""
         axis = kwargs.get("axis", -1)
 
@@ -486,7 +500,9 @@ class CumsumOp(AxisOp):
 
         return [flip(cumsum(flip(cotangents[0], axis=axis), axis=axis), axis=axis)]
 
-    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
+    def jvp_rule(
+        self, primals: list, tangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """JVP: cumsum(tangent, axis)."""
         axis = kwargs.get("axis", -1)
         return [cumsum(tangents[0], axis=axis)]
@@ -540,7 +556,9 @@ def argmin(x: Tensor, axis: int = -1, keepdims: bool = False) -> Tensor:
 def cumsum(
     x: Tensor, axis: int = -1, exclusive: bool = False, reverse: bool = False
 ) -> Tensor:
-    return _cumsum_op([x], {"axis": axis, "exclusive": exclusive, "reverse": reverse})[0]
+    return _cumsum_op([x], {"axis": axis, "exclusive": exclusive, "reverse": reverse})[
+        0
+    ]
 
 
 __all__ = [

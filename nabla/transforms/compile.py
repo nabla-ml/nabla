@@ -9,7 +9,7 @@ Subsequent calls with matching signatures use the cached version.
 
 Key mechanisms:
 - EAGER_MAX_GRAPH=True: ops build graph immediately during trace
-- Dynamic dimensions: use SymbolicDim for batch-independent compilation  
+- Dynamic dimensions: use SymbolicDim for batch-independent compilation
 - Smart caching: deduplicates inputs via buffer identity checks
 """
 
@@ -110,7 +110,7 @@ class CompiledFunction(Generic[T]):
     def __call__(self, *args: Any, **kwargs: Any) -> T:
         """Main entry: check cache, trace if miss, execute."""
         flat, treedef = tree_flatten((args, kwargs))
-        
+
         # Fast path: reuse structure from last cached call
         if self._cache:
             last_cached = next(reversed(self._cache.values()))
@@ -119,10 +119,10 @@ class CompiledFunction(Generic[T]):
                 if key in self._cache:
                     self._cache.move_to_end(key)
                     return self._execute_cached_fast(self._cache[key], flat)
-        
+
         # Slow path: discover tensor positions
         tensor_indices = [i for i, x in enumerate(flat) if isinstance(x, Tensor)]
-        
+
         # Realize unrealized tensors before caching
         unrealized = [flat[i] for i in tensor_indices if not flat[i].is_realized]
         if unrealized:
@@ -143,7 +143,7 @@ class CompiledFunction(Generic[T]):
         """Build cache key from tensor specs and static values."""
         tensor_sigs = []
         static_vals = []
-        
+
         tensor_counter = 0
         for i, x in enumerate(flat):
             if i in tensor_indices:
@@ -152,7 +152,7 @@ class CompiledFunction(Generic[T]):
                 tensor_counter += 1
             else:
                 static_vals.append(x)
-        
+
         return _CacheKey(tuple(tensor_sigs), tuple(static_vals), treedef)
 
     def _tensor_signature(self, tensor: Tensor, arg_idx: int) -> tuple:
@@ -163,49 +163,65 @@ class CompiledFunction(Generic[T]):
             for dim_idx, sym_name in self.dynamic_dims[arg_idx].items():
                 if dim_idx < len(shape):
                     shape[dim_idx] = f"${sym_name}"
-        
+
         # Extract sharding key
-        sharding_key = self._extract_sharding_key(tensor.sharding) if tensor.sharding else None
+        sharding_key = (
+            self._extract_sharding_key(tensor.sharding) if tensor.sharding else None
+        )
         return (tuple(shape), str(tensor.dtype), sharding_key)
 
     def _extract_sharding_key(self, sharding) -> tuple:
         """Extract hashable sharding info."""
-        mesh = getattr(sharding, 'mesh', None)
+        mesh = getattr(sharding, "mesh", None)
         mesh_key = None
         if mesh is not None:
             mesh_key = (
-                getattr(mesh, 'name', None),
-                tuple(mesh.shape) if hasattr(mesh, 'shape') and mesh.shape else (),
-                tuple(mesh.axis_names) if hasattr(mesh, 'axis_names') and mesh.axis_names else (),
+                getattr(mesh, "name", None),
+                tuple(mesh.shape) if hasattr(mesh, "shape") and mesh.shape else (),
+                (
+                    tuple(mesh.axis_names)
+                    if hasattr(mesh, "axis_names") and mesh.axis_names
+                    else ()
+                ),
             )
-        
-        dim_specs = getattr(sharding, 'dim_specs', [])
-        dim_specs_key = tuple(
-            (tuple(ds.axes) if ds.axes else (), bool(ds.partial))
-            for ds in dim_specs
-        ) if dim_specs else ()
-        
+
+        dim_specs = getattr(sharding, "dim_specs", [])
+        dim_specs_key = (
+            tuple(
+                (tuple(ds.axes) if ds.axes else (), bool(ds.partial))
+                for ds in dim_specs
+            )
+            if dim_specs
+            else ()
+        )
+
         return (mesh_key, dim_specs_key)
 
     def _build_input_types(self, flat: list[Any], tensor_indices: list[int]) -> list:
         """Build TensorType list for graph with symbolic dims where specified."""
         from max.graph import TensorType, DeviceRef
-        
+
         input_types = []
         for arg_idx, flat_idx in enumerate(tensor_indices):
             tensor = flat[flat_idx]
             buf = tensor._impl._buffers[0]
-            
+
             # Build shape with SymbolicDim for dynamic dimensions
             shape = list(tensor.shape)
             if arg_idx in self.dynamic_dims:
                 shape = [
-                    SymbolicDim(self.dynamic_dims[arg_idx][i]) if i in self.dynamic_dims[arg_idx] else int(d)
+                    (
+                        SymbolicDim(self.dynamic_dims[arg_idx][i])
+                        if i in self.dynamic_dims[arg_idx]
+                        else int(d)
+                    )
                     for i, d in enumerate(shape)
                 ]
-            
-            input_types.append(TensorType(buf.dtype, shape, DeviceRef.from_device(buf.device)))
-        
+
+            input_types.append(
+                TensorType(buf.dtype, shape, DeviceRef.from_device(buf.device))
+            )
+
         return input_types
 
     def _trace_and_compile(
@@ -227,15 +243,22 @@ class CompiledFunction(Generic[T]):
             )
 
         # Save/set config for tracing
-        orig_eager, orig_verify = nabla_config.EAGER_MAX_GRAPH, nabla_config.VERIFY_EAGER_SHAPES
+        orig_eager, orig_verify = (
+            nabla_config.EAGER_MAX_GRAPH,
+            nabla_config.VERIFY_EAGER_SHAPES,
+        )
         t0 = time.perf_counter()
 
         try:
             nabla_config.EAGER_MAX_GRAPH = True  # Ops build graph during trace
             nabla_config.VERIFY_EAGER_SHAPES = False  # Skip shape checks
-            
+
             # Prepare graph with input types
-            input_types = self._build_input_types(flat, tensor_indices) if self.dynamic_dims else None
+            input_types = (
+                self._build_input_types(flat, tensor_indices)
+                if self.dynamic_dims
+                else None
+            )
             GRAPH._reset(GRAPH.context, 0, input_types=input_types)
 
             # Register inputs
@@ -251,7 +274,9 @@ class CompiledFunction(Generic[T]):
             nabla_config.EAGER_MAX_GRAPH = orig_eager
             nabla_config.VERIFY_EAGER_SHAPES = orig_verify
 
-    def _register_inputs(self, flat: list[Any], tensor_indices: list[int], input_types: list | None) -> None:
+    def _register_inputs(
+        self, flat: list[Any], tensor_indices: list[int], input_types: list | None
+    ) -> None:
         """Register input tensors with the graph."""
         if input_types:
             # Symbolic dims: link existing graph inputs to buffers
@@ -259,11 +284,11 @@ class CompiledFunction(Generic[T]):
                 tensor = flat[flat_idx]
                 impl = tensor._impl
                 buf = impl._buffers[0]
-                
+
                 graph_input = GRAPH.graph.inputs[arg_idx]
                 GRAPH.sources[graph_input._mlir_value] = buf
                 GRAPH._input_refs.append(tensor)
-                
+
                 with GRAPH.graph:
                     impl._graph_values = [graph_input[...]]
                     impl.graph_values_epoch = GRAPH.epoch
@@ -273,7 +298,12 @@ class CompiledFunction(Generic[T]):
                 GRAPH.add_input(flat[flat_idx])
 
     def _finalize_compilation(
-        self, result: T, key: _CacheKey, treedef: Any, tensor_indices: list[int], t0: float
+        self,
+        result: T,
+        key: _CacheKey,
+        treedef: Any,
+        tensor_indices: list[int],
+        t0: float,
     ) -> T:
         """Finalize graph, compile, execute, and cache."""
         from ..core.common.context import _session
@@ -291,13 +321,13 @@ class CompiledFunction(Generic[T]):
         # Set graph outputs
         with GRAPH.graph:
             ops.random.set_seed(0)
-            
+
             all_graph_values = []
             for tensor in output_tensors:
                 if not tensor._impl._graph_values:
                     GRAPH.add_input(tensor)  # Pass-through
                 all_graph_values.extend(tensor._impl._graph_values)
-            
+
             seed_out = ops.random._peek_seed()
             GRAPH.graph.output(seed_out, *all_graph_values)
 
@@ -309,12 +339,12 @@ class CompiledFunction(Generic[T]):
         # Assign result buffers to output tensors
         buf_idx = 0
         output_shard_counts, output_shardings = [], []
-        
+
         for tensor in output_tensors:
             n_shards = len(tensor._impl._graph_values) or 1
             output_shard_counts.append(n_shards)
             output_shardings.append(tensor.sharding)
-            
+
             if n_shards == 1:
                 tensor.buffers = result_buffers[buf_idx]
             else:
@@ -345,15 +375,21 @@ class CompiledFunction(Generic[T]):
 
     def _execute_cached_fast(self, cached: _CachedModel, flat: list[Any]) -> T:
         """Fast execution using cached tensor_indices."""
-        return self._execute_cached_impl(cached, flat, tensor_indices=cached.tensor_indices)
+        return self._execute_cached_impl(
+            cached, flat, tensor_indices=cached.tensor_indices
+        )
 
     def _execute_cached(
         self, key: _CacheKey, flat: list[Any], tensor_indices: list[int]
     ) -> T:
         """Execute cached model with given tensor indices."""
-        return self._execute_cached_impl(self._cache[key], flat, tensor_indices=tensor_indices)
+        return self._execute_cached_impl(
+            self._cache[key], flat, tensor_indices=tensor_indices
+        )
 
-    def _execute_cached_impl(self, cached: _CachedModel, flat: list[Any], tensor_indices: list[int]) -> T:
+    def _execute_cached_impl(
+        self, cached: _CachedModel, flat: list[Any], tensor_indices: list[int]
+    ) -> T:
         """Core execution logic for cached models."""
         t0 = time.perf_counter()
 
@@ -378,7 +414,11 @@ class CompiledFunction(Generic[T]):
                 sharding = next(shardings_iter)
                 shard_bufs = [next(out_buf_iter) for _ in range(n_shards)]
 
-                t = Tensor(buffers=shard_bufs[0]) if n_shards == 1 else Tensor._create_unsafe(bufferss=shard_bufs)
+                t = (
+                    Tensor(buffers=shard_bufs[0])
+                    if n_shards == 1
+                    else Tensor._create_unsafe(bufferss=shard_bufs)
+                )
                 t.sharding = sharding
                 all_leaves.append(t)
             else:

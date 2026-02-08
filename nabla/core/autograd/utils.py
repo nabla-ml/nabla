@@ -157,7 +157,8 @@ class BackwardEngine:
             return
 
         active_indices = [
-            i for i, o in enumerate(alive_outputs) 
+            i
+            for i, o in enumerate(alive_outputs)
             if o is not None and id(o) in self.cotangent_map
         ]
         if not active_indices:
@@ -174,9 +175,7 @@ class BackwardEngine:
         vjp_primals = [wrap(a) for a in node.op_args]
 
         # Flat list of output Tensors
-        vjp_outputs = [
-            Tensor(impl=o) if o is not None else None for o in alive_outputs
-        ]
+        vjp_outputs = [Tensor(impl=o) if o is not None else None for o in alive_outputs]
 
         # Flat list of cotangent Tensors (matching outputs)
         vjp_cotangents = []
@@ -186,6 +185,7 @@ class BackwardEngine:
                     vjp_cotangents.append(Tensor(impl=self.cotangent_map[id(o)]))
                 else:
                     from ...ops.creation import zeros_like
+
                     vjp_cotangents.append(zeros_like(Tensor(impl=o)))
             else:
                 vjp_cotangents.append(None)
@@ -309,7 +309,7 @@ def backward(
     create_graph: bool = False,
 ) -> None:
     """PyTorch-style backward pass that populates .grad on requires_grad tensors.
-    
+
     This function:
     1. Builds a Trace from outputs using compute_for_backward()
        - Traverses through all OpNodes back to true leaves.
@@ -320,14 +320,17 @@ def backward(
     """
     from ..common import pytree
     from ..graph.tracing import Trace
-    
+
     # 1. Handle default cotangents
     if cotangents is None:
-        output_leaves = [t for t in pytree.tree_leaves(outputs) if isinstance(t, Tensor)]
+        output_leaves = [
+            t for t in pytree.tree_leaves(outputs) if isinstance(t, Tensor)
+        ]
         if len(output_leaves) == 1:
             out = output_leaves[0]
             if len(out.shape) == 0 or (len(out.shape) == 1 and out.shape[0] == 1):
                 from ...ops.creation import ones_like
+
                 cotangents = ones_like(out)
             else:
                 raise ValueError(
@@ -338,42 +341,48 @@ def backward(
             raise ValueError(
                 "backward() requires explicit cotangents for multiple outputs."
             )
-    
+
     # 2. Build Trace from outputs and collect gradient leaves
     trace = Trace(inputs=(), outputs=outputs)
     trace.compute_for_backward()
 
     if not trace.nodes:
         # If no nodes, just check if any output itself requires grad
-        output_leaves = [t._impl for t in pytree.tree_leaves(outputs) if isinstance(t, Tensor)]
-        cot_leaves = [t._impl for t in pytree.tree_leaves(cotangents) if isinstance(t, Tensor)]
+        output_leaves = [
+            t._impl for t in pytree.tree_leaves(outputs) if isinstance(t, Tensor)
+        ]
+        cot_leaves = [
+            t._impl for t in pytree.tree_leaves(cotangents) if isinstance(t, Tensor)
+        ]
         for out_impl, cot_impl in zip(output_leaves, cot_leaves):
             if out_impl.requires_grad:
                 out_impl.cotangent = cot_impl
         return
-    
+
     # 3. Refresh graph values (Crucial for Eager Max Graph)
     from ...config import EAGER_MAX_GRAPH
+
     if EAGER_MAX_GRAPH:
         trace.refresh_graph_values()
-    
+
     # 4. Run Backward Engine
     engine = BackwardEngine(trace, cotangents, create_graph=create_graph)
     engine.run()
-    
+
     # 5. Populate .grad on gradient leaves and collect for batch realization
     grad_tensors_to_realize = []
-    
+
     for impl in trace.gradient_leaves:
         impl_id = id(impl)
         if impl_id in engine.cotangent_map:
             cot_impl = engine.cotangent_map[impl_id]
             impl.cotangent = cot_impl
             grad_tensors_to_realize.append(Tensor(impl=cot_impl))
-    
+
     # 6. Batch-realize all gradients for efficiency
     if grad_tensors_to_realize:
         from ..tensor.api import realize_all
+
         realize_all(*grad_tensors_to_realize)
 
 

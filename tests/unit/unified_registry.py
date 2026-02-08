@@ -26,6 +26,7 @@ from .common import (
 # JAX compatibility wrappers
 # ---------------------------------------------------------------------------
 
+
 def _jax_matmul(x, y):
     if x.ndim == 1 and y.ndim == 1:
         return jnp.dot(x, y)
@@ -95,7 +96,9 @@ def _jax_pad(x, *, paddings, mode="constant", value=0.0):
 def _jax_flatten(x, start_dim=0, end_dim=-1):
     shape = x.shape
     end = end_dim if end_dim >= 0 else len(shape) + end_dim
-    new_shape = shape[:start_dim] + (-1,) + (shape[end + 1:] if end + 1 < len(shape) else ())
+    new_shape = (
+        shape[:start_dim] + (-1,) + (shape[end + 1 :] if end + 1 < len(shape) else ())
+    )
     return jnp.reshape(x, new_shape)
 
 
@@ -108,7 +111,7 @@ def _list_input_get_args(config: OpConfig):
 def _where_get_args(config: OpConfig):
     shape = config.primal_shapes[0]
     primals_nb, primals_jax = get_test_data_for_shapes((shape, shape), config)
-    condition = (jnp.arange(math.prod(shape)).reshape(shape) % 2 == 0)
+    condition = jnp.arange(math.prod(shape)).reshape(shape) % 2 == 0
     condition_nb = tensor_from_jax(condition)
     return (
         ((condition_nb, primals_nb[0], primals_nb[1]), config.params),
@@ -158,12 +161,15 @@ def _unary_configs():
 
 
 def _positive_domain_unary_configs():
-    return [OpConfig(description=f"rank{r}", ranks=(r,), domain_positive=True) for r in _UNARY_RANKS]
+    return [
+        OpConfig(description=f"rank{r}", ranks=(r,), domain_positive=True)
+        for r in _UNARY_RANKS
+    ]
 
 
 UNARY_OPS: list[Operation] = [
     # Trig
-    Operation("sin",     "unary", nb.sin,     jnp.sin,          _unary_configs(), standard_get_args),
+    Operation("sin", "unary", nb.sin, jnp.sin, _unary_configs(), standard_get_args),
     # Operation("cos",     "unary", nb.cos,     jnp.cos,          _unary_configs(), standard_get_args),
     # Operation("tanh",    "unary", nb.tanh,    jnp.tanh,         _unary_configs(), standard_get_args),
     # Operation("acos",    "unary", nb.acos,    jnp.arccos,       [OpConfig(description=f"rank{r}", ranks=(r,), use_stable_floats=True) for r in _UNARY_RANKS], standard_get_args),
@@ -195,7 +201,14 @@ UNARY_OPS: list[Operation] = [
 
 # Non-differentiable unary ops (tested at L0/L1c only)
 NON_DIFF_UNARY_OPS: list[Operation] = [
-    Operation("floor",   "unary_nondiff", nb.floor,   jnp.floor,   [OpConfig(description="rank2", ranks=(2,))], standard_get_args),
+    Operation(
+        "floor",
+        "unary_nondiff",
+        nb.floor,
+        jnp.floor,
+        [OpConfig(description="rank2", ranks=(2,))],
+        standard_get_args,
+    ),
     # Operation("trunc",   "unary_nondiff", nb.trunc,   jnp.trunc,   [OpConfig(description="rank2", ranks=(2,))], standard_get_args),
     # Operation("round",   "unary_nondiff", nb.round,   jnp.round,   [OpConfig(description="rank2", ranks=(2,))], standard_get_args),
     # Operation("is_inf",  "unary_nondiff", nb.is_inf,  jnp.isinf,   [OpConfig(description="rank2", ranks=(2,))], standard_get_args),
@@ -211,12 +224,9 @@ _BINARY_RANKS = ((2, 2), (3, 3))
 
 def _binary_configs():
     configs = [
-        OpConfig(description=f"r{r1}xr{r2}", ranks=(r1, r2))
-        for r1, r2 in _BINARY_RANKS
+        OpConfig(description=f"r{r1}xr{r2}", ranks=(r1, r2)) for r1, r2 in _BINARY_RANKS
     ]
-    configs.append(
-        OpConfig(description="broadcast", primal_shapes=((4, 4), (1, 4)))
-    )
+    configs.append(OpConfig(description="broadcast", primal_shapes=((4, 4), (1, 4))))
     return configs
 
 
@@ -226,13 +236,17 @@ def _positive_binary_configs():
         for r1, r2 in _BINARY_RANKS
     ]
     configs.append(
-        OpConfig(description="broadcast", primal_shapes=((4, 4), (1, 4)), domain_positive=True)
+        OpConfig(
+            description="broadcast",
+            primal_shapes=((4, 4), (1, 4)),
+            domain_positive=True,
+        )
     )
     return configs
 
 
 BINARY_OPS: list[Operation] = [
-    Operation("add", "binary", nb.add, jnp.add,        _binary_configs(), standard_get_args),
+    Operation("add", "binary", nb.add, jnp.add, _binary_configs(), standard_get_args),
     # Operation("sub", "binary", nb.sub, jnp.subtract,   _binary_configs(), standard_get_args),
     # Operation("mul", "binary", nb.mul, jnp.multiply,    _binary_configs(), standard_get_args),
     # Operation("div", "binary", nb.div, jnp.divide,
@@ -249,7 +263,14 @@ BINARY_OPS: list[Operation] = [
 
 # Comparison ops (non-differentiable)
 COMPARISON_OPS: list[Operation] = [
-    Operation("equal",         "comparison", nb.equal,         jnp.equal,         [OpConfig(description="rank2", ranks=(2, 2))], standard_get_args),
+    Operation(
+        "equal",
+        "comparison",
+        nb.equal,
+        jnp.equal,
+        [OpConfig(description="rank2", ranks=(2, 2))],
+        standard_get_args,
+    ),
     # Operation("not_equal",     "comparison", nb.not_equal,     jnp.not_equal,     [OpConfig(description="rank2", ranks=(2, 2))], standard_get_args),
     # Operation("greater",       "comparison", nb.greater,       jnp.greater,       [OpConfig(description="rank2", ranks=(2, 2))], standard_get_args),
     # Operation("less",          "comparison", nb.less,          jnp.less,          [OpConfig(description="rank2", ranks=(2, 2))], standard_get_args),
@@ -262,13 +283,17 @@ COMPARISON_OPS: list[Operation] = [
 # ---------------------------------------------------------------------------
 
 MATMUL_OPS: list[Operation] = [
-    Operation("matmul", "binary",
-              nb.matmul, _jax_matmul,
-              [
-                  OpConfig(description="2d", primal_shapes=((4, 8), (8, 4))),
-                  OpConfig(description="batch", primal_shapes=((2, 4, 8), (2, 8, 4))),
-              ],
-              standard_get_args),
+    Operation(
+        "matmul",
+        "binary",
+        nb.matmul,
+        _jax_matmul,
+        [
+            OpConfig(description="2d", primal_shapes=((4, 8), (8, 4))),
+            OpConfig(description="batch", primal_shapes=((2, 4, 8), (2, 8, 4))),
+        ],
+        standard_get_args,
+    ),
 ]
 
 # ---------------------------------------------------------------------------
@@ -276,38 +301,75 @@ MATMUL_OPS: list[Operation] = [
 # ---------------------------------------------------------------------------
 
 REDUCTION_OPS: list[Operation] = [
-    Operation("reduce_sum", "reduction",
-              partial(nb.reduce_sum, axis=-1), partial(jnp.sum, axis=-1),
-              [OpConfig(description=f"rank{r}", ranks=(r,)) for r in (2, 3)],
-              standard_get_args),
-    Operation("mean", "reduction",
-              partial(nb.mean, axis=-1), partial(jnp.mean, axis=-1),
-              [OpConfig(description=f"rank{r}", ranks=(r,)) for r in (2, 3)],
-              standard_get_args),
-    Operation("reduce_max", "reduction",
-              partial(nb.reduce_max, axis=-1), partial(jnp.max, axis=-1),
-              [OpConfig(description=f"rank{r}", ranks=(r,), use_stable_floats=True) for r in (2, 3)],
-              standard_get_args),
+    Operation(
+        "reduce_sum",
+        "reduction",
+        partial(nb.reduce_sum, axis=-1),
+        partial(jnp.sum, axis=-1),
+        [OpConfig(description=f"rank{r}", ranks=(r,)) for r in (2, 3)],
+        standard_get_args,
+    ),
+    Operation(
+        "mean",
+        "reduction",
+        partial(nb.mean, axis=-1),
+        partial(jnp.mean, axis=-1),
+        [OpConfig(description=f"rank{r}", ranks=(r,)) for r in (2, 3)],
+        standard_get_args,
+    ),
+    Operation(
+        "reduce_max",
+        "reduction",
+        partial(nb.reduce_max, axis=-1),
+        partial(jnp.max, axis=-1),
+        [
+            OpConfig(description=f"rank{r}", ranks=(r,), use_stable_floats=True)
+            for r in (2, 3)
+        ],
+        standard_get_args,
+    ),
 ]
 
 # Non-differentiable reduction ops (reduce_min: no VJP; cumsum: VJP uses unimplemented flip)
 NON_DIFF_REDUCTION_OPS: list[Operation] = [
-    Operation("reduce_min", "reduction_nondiff",
-              partial(nb.reduce_min, axis=-1), partial(jnp.min, axis=-1),
-              [OpConfig(description=f"rank{r}", ranks=(r,), use_stable_floats=True) for r in (2, 3)],
-              standard_get_args),
-    Operation("cumsum", "reduction_nondiff",
-              partial(nb.cumsum, axis=0), partial(jnp.cumsum, axis=0),
-              [OpConfig(description=f"rank{r}", ranks=(r,), supports_sharding=False) for r in (2, 3)],
-              standard_get_args),
-    Operation("argmax", "reduction_nondiff",
-              partial(nb.argmax, axis=-1), partial(jnp.argmax, axis=-1),
-              [OpConfig(description="rank2", ranks=(2,), use_stable_floats=True)],
-              standard_get_args),
-    Operation("argmin", "reduction_nondiff",
-              partial(nb.argmin, axis=-1), partial(jnp.argmin, axis=-1),
-              [OpConfig(description="rank2", ranks=(2,), use_stable_floats=True)],
-              standard_get_args),
+    Operation(
+        "reduce_min",
+        "reduction_nondiff",
+        partial(nb.reduce_min, axis=-1),
+        partial(jnp.min, axis=-1),
+        [
+            OpConfig(description=f"rank{r}", ranks=(r,), use_stable_floats=True)
+            for r in (2, 3)
+        ],
+        standard_get_args,
+    ),
+    Operation(
+        "cumsum",
+        "reduction_nondiff",
+        partial(nb.cumsum, axis=0),
+        partial(jnp.cumsum, axis=0),
+        [
+            OpConfig(description=f"rank{r}", ranks=(r,), supports_sharding=False)
+            for r in (2, 3)
+        ],
+        standard_get_args,
+    ),
+    Operation(
+        "argmax",
+        "reduction_nondiff",
+        partial(nb.argmax, axis=-1),
+        partial(jnp.argmax, axis=-1),
+        [OpConfig(description="rank2", ranks=(2,), use_stable_floats=True)],
+        standard_get_args,
+    ),
+    Operation(
+        "argmin",
+        "reduction_nondiff",
+        partial(nb.argmin, axis=-1),
+        partial(jnp.argmin, axis=-1),
+        [OpConfig(description="rank2", ranks=(2,), use_stable_floats=True)],
+        standard_get_args,
+    ),
 ]
 
 # ---------------------------------------------------------------------------
@@ -315,112 +377,236 @@ NON_DIFF_REDUCTION_OPS: list[Operation] = [
 # ---------------------------------------------------------------------------
 
 VIEW_OPS: list[Operation] = [
-    Operation("reshape", "view",
-              lambda x: nb.reshape(x, (int(x.shape[0]) * int(x.shape[1]),)),
-              lambda x: jnp.reshape(x, (x.shape[0] * x.shape[1],)),
-              [OpConfig(description="2d", ranks=(2,))],
-              standard_get_args),
-    Operation("swap_axes", "view",
-              partial(nb.swap_axes, axis1=0, axis2=1),
-              partial(_jax_swap_axes, axis1=0, axis2=1),
-              [OpConfig(description="2d", ranks=(2,)),
-               OpConfig(description="3d", ranks=(3,))],
-              standard_get_args),
-    Operation("unsqueeze", "view",
-              partial(nb.unsqueeze, axis=0),
-              partial(_jax_unsqueeze, axes=0),
-              [OpConfig(description="2d", ranks=(2,))],
-              standard_get_args),
-    Operation("squeeze", "view",
-              partial(nb.squeeze, axis=0),
-              partial(jnp.squeeze, axis=0),
-              [OpConfig(description="squeezable", primal_shapes=((1, 4, 4),))],
-              standard_get_args),
-    Operation("moveaxis", "view",
-              partial(nb.moveaxis, source=0, destination=-1),
-              partial(jnp.moveaxis, source=0, destination=-1),
-              [OpConfig(description="3d", ranks=(3,))],
-              standard_get_args),
-    Operation("concatenate", "view",
-              nb.concatenate, jnp.concatenate,
-              [OpConfig(description="axis1", primal_shapes=((2, 3), (2, 1)), params={"axis": 1}, is_list_input=True)],
-              _list_input_get_args),
-    Operation("stack", "view",
-              nb.stack, jnp.stack,
-              [OpConfig(description="axis0", primal_shapes=((2, 3), (2, 3)), params={"axis": 0}, is_list_input=True)],
-              _list_input_get_args),
-    Operation("slice_tensor", "view",
-              nb.slice_tensor, _jax_slice_tensor,
-              [OpConfig(description="2d", primal_shapes=((4, 5),), params={"start": [1, 2], "size": [2, 2]})],
-              standard_get_args),
-    Operation("slice_update", "view",
-              nb.slice_update, _jax_slice_update,
-              [OpConfig(description="2d", primal_shapes=((4, 5), (2, 2)), params={"start": [1, 2], "size": [2, 2]})],
-              standard_get_args),
-    Operation("permute", "view",
-              partial(nb.permute, order=(2, 0, 1)), partial(_jax_permute, order=(2, 0, 1)),
-              [OpConfig(description="3d", ranks=(3,))],
-              standard_get_args),
-    Operation("pad", "view",
-              partial(nb.pad, paddings=[(1, 1), (2, 0)], mode="constant", value=0.0),
-              partial(_jax_pad, paddings=[(1, 1), (2, 0)], mode="constant", value=0.0),
-              [OpConfig(description="2d", ranks=(2,))],
-              standard_get_args),
-    Operation("broadcast_to", "view",
-              partial(nb.broadcast_to, shape=(2, 1, 3)),
-              partial(jnp.broadcast_to, shape=(2, 1, 3)),
-              [OpConfig(description="rank2_to3", primal_shapes=((1, 3),))],
-              standard_get_args),
-    Operation("flatten", "view",
-              nb.flatten,
-              _jax_flatten,
-              [OpConfig(description="3d", ranks=(3,))],
-              standard_get_args),
+    Operation(
+        "reshape",
+        "view",
+        lambda x: nb.reshape(x, (int(x.shape[0]) * int(x.shape[1]),)),
+        lambda x: jnp.reshape(x, (x.shape[0] * x.shape[1],)),
+        [OpConfig(description="2d", ranks=(2,))],
+        standard_get_args,
+    ),
+    Operation(
+        "swap_axes",
+        "view",
+        partial(nb.swap_axes, axis1=0, axis2=1),
+        partial(_jax_swap_axes, axis1=0, axis2=1),
+        [
+            OpConfig(description="2d", ranks=(2,)),
+            OpConfig(description="3d", ranks=(3,)),
+        ],
+        standard_get_args,
+    ),
+    Operation(
+        "unsqueeze",
+        "view",
+        partial(nb.unsqueeze, axis=0),
+        partial(_jax_unsqueeze, axes=0),
+        [OpConfig(description="2d", ranks=(2,))],
+        standard_get_args,
+    ),
+    Operation(
+        "squeeze",
+        "view",
+        partial(nb.squeeze, axis=0),
+        partial(jnp.squeeze, axis=0),
+        [OpConfig(description="squeezable", primal_shapes=((1, 4, 4),))],
+        standard_get_args,
+    ),
+    Operation(
+        "moveaxis",
+        "view",
+        partial(nb.moveaxis, source=0, destination=-1),
+        partial(jnp.moveaxis, source=0, destination=-1),
+        [OpConfig(description="3d", ranks=(3,))],
+        standard_get_args,
+    ),
+    Operation(
+        "concatenate",
+        "view",
+        nb.concatenate,
+        jnp.concatenate,
+        [
+            OpConfig(
+                description="axis1",
+                primal_shapes=((2, 3), (2, 1)),
+                params={"axis": 1},
+                is_list_input=True,
+            )
+        ],
+        _list_input_get_args,
+    ),
+    Operation(
+        "stack",
+        "view",
+        nb.stack,
+        jnp.stack,
+        [
+            OpConfig(
+                description="axis0",
+                primal_shapes=((2, 3), (2, 3)),
+                params={"axis": 0},
+                is_list_input=True,
+            )
+        ],
+        _list_input_get_args,
+    ),
+    Operation(
+        "slice_tensor",
+        "view",
+        nb.slice_tensor,
+        _jax_slice_tensor,
+        [
+            OpConfig(
+                description="2d",
+                primal_shapes=((4, 5),),
+                params={"start": [1, 2], "size": [2, 2]},
+            )
+        ],
+        standard_get_args,
+    ),
+    Operation(
+        "slice_update",
+        "view",
+        nb.slice_update,
+        _jax_slice_update,
+        [
+            OpConfig(
+                description="2d",
+                primal_shapes=((4, 5), (2, 2)),
+                params={"start": [1, 2], "size": [2, 2]},
+            )
+        ],
+        standard_get_args,
+    ),
+    Operation(
+        "permute",
+        "view",
+        partial(nb.permute, order=(2, 0, 1)),
+        partial(_jax_permute, order=(2, 0, 1)),
+        [OpConfig(description="3d", ranks=(3,))],
+        standard_get_args,
+    ),
+    Operation(
+        "pad",
+        "view",
+        partial(nb.pad, paddings=[(1, 1), (2, 0)], mode="constant", value=0.0),
+        partial(_jax_pad, paddings=[(1, 1), (2, 0)], mode="constant", value=0.0),
+        [OpConfig(description="2d", ranks=(2,))],
+        standard_get_args,
+    ),
+    Operation(
+        "broadcast_to",
+        "view",
+        partial(nb.broadcast_to, shape=(2, 1, 3)),
+        partial(jnp.broadcast_to, shape=(2, 1, 3)),
+        [OpConfig(description="rank2_to3", primal_shapes=((1, 3),))],
+        standard_get_args,
+    ),
+    Operation(
+        "flatten",
+        "view",
+        nb.flatten,
+        _jax_flatten,
+        [OpConfig(description="3d", ranks=(3,))],
+        standard_get_args,
+    ),
 ]
 
 # ---------------------------------------------------------------------------
 # MULTI-OUTPUT OPS
 # ---------------------------------------------------------------------------
 MULTI_OUTPUT_OPS: list[Operation] = [
-    Operation("split", "multi_output",
-              nb.split, _jax_split,
-              [OpConfig(description="axis1_3", primal_shapes=((4, 6),), params={"num_splits": 3, "axis": 1})],
-              standard_get_args),
-    Operation("chunk", "multi_output",
-              nb.chunk, _jax_chunk,
-              [OpConfig(description="axis0_3", primal_shapes=((6, 4),), params={"chunks": 3, "axis": 0})],
-              standard_get_args),
-    Operation("unbind", "multi_output",
-              nb.unbind, _jax_unbind,
-              [OpConfig(description="axis0", primal_shapes=((3, 4, 2),), params={"axis": 0})],
-              standard_get_args),
+    Operation(
+        "split",
+        "multi_output",
+        nb.split,
+        _jax_split,
+        [
+            OpConfig(
+                description="axis1_3",
+                primal_shapes=((4, 6),),
+                params={"num_splits": 3, "axis": 1},
+            )
+        ],
+        standard_get_args,
+    ),
+    Operation(
+        "chunk",
+        "multi_output",
+        nb.chunk,
+        _jax_chunk,
+        [
+            OpConfig(
+                description="axis0_3",
+                primal_shapes=((6, 4),),
+                params={"chunks": 3, "axis": 0},
+            )
+        ],
+        standard_get_args,
+    ),
+    Operation(
+        "unbind",
+        "multi_output",
+        nb.unbind,
+        _jax_unbind,
+        [OpConfig(description="axis0", primal_shapes=((3, 4, 2),), params={"axis": 0})],
+        standard_get_args,
+    ),
 ]
 
 CONTROL_FLOW_OPS: list[Operation] = [
-    Operation("where", "control_flow",
-              nb.where, jnp.where,
-              [OpConfig(description="rank2", primal_shapes=((4, 4),), params={})],
-              _where_get_args),
+    Operation(
+        "where",
+        "control_flow",
+        nb.where,
+        jnp.where,
+        [OpConfig(description="rank2", primal_shapes=((4, 4),), params={})],
+        _where_get_args,
+    ),
 ]
 
 INDEXING_OPS: list[Operation] = [
-    Operation("gather", "indexing",
-              nb.gather, _jax_gather,
-              [OpConfig(description="axis1", primal_shapes=((4, 5), (2, 2)), params={"axis": 1},
-                        supports_sharding=False)],
-              _gather_get_args),
-    Operation("scatter", "indexing",
-              nb.scatter, _jax_scatter,
-              [OpConfig(description="axis0", primal_shapes=((4, 5), (2,), (2, 5)), params={"axis": 0},
-                        supports_sharding=False)],
-              _scatter_get_args),
+    Operation(
+        "gather",
+        "indexing",
+        nb.gather,
+        _jax_gather,
+        [
+            OpConfig(
+                description="axis1",
+                primal_shapes=((4, 5), (2, 2)),
+                params={"axis": 1},
+                supports_sharding=False,
+            )
+        ],
+        _gather_get_args,
+    ),
+    Operation(
+        "scatter",
+        "indexing",
+        nb.scatter,
+        _jax_scatter,
+        [
+            OpConfig(
+                description="axis0",
+                primal_shapes=((4, 5), (2,), (2, 5)),
+                params={"axis": 0},
+                supports_sharding=False,
+            )
+        ],
+        _scatter_get_args,
+    ),
 ]
 
 OUTER_OPS: list[Operation] = [
-    Operation("outer", "binary",
-              nb.outer, jnp.outer,
-              [OpConfig(description="vectors", primal_shapes=((3,), (3,)))],
-              standard_get_args),
+    Operation(
+        "outer",
+        "binary",
+        nb.outer,
+        jnp.outer,
+        [OpConfig(description="vectors", primal_shapes=((3,), (3,)))],
+        standard_get_args,
+    ),
 ]
 
 # ---------------------------------------------------------------------------
@@ -441,10 +627,6 @@ DIFF_OPS = (
 )
 
 # Non-differentiable ops: tested at L0 (forward) and L1c (vmap) only
-NON_DIFF_OPS = (
-    NON_DIFF_UNARY_OPS
-    + NON_DIFF_REDUCTION_OPS
-    + COMPARISON_OPS
-)
+NON_DIFF_OPS = NON_DIFF_UNARY_OPS + NON_DIFF_REDUCTION_OPS + COMPARISON_OPS
 
 ALL_OPS = DIFF_OPS + NON_DIFF_OPS

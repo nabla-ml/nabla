@@ -27,7 +27,10 @@ def vjp(
 
 def vjp(
     fn: Callable[..., Any], *primals: Any, has_aux: bool = False
-) -> tuple[Any, Callable[..., tuple[Any, ...]]] | tuple[Any, Callable[..., tuple[Any, ...]], Any]:
+) -> (
+    tuple[Any, Callable[..., tuple[Any, ...]]]
+    | tuple[Any, Callable[..., tuple[Any, ...]], Any]
+):
     """Compute VJP of *fn* at *primals*. Returns ``(output, vjp_fn[, aux])``."""
     from ..core.graph.tracing import trace as capture_trace
     from ..core.autograd.utils import backward_on_trace
@@ -35,10 +38,12 @@ def vjp(
 
     _aux_box: list[Any] = []
     if has_aux:
+
         def traced_fn(*a: Any) -> Any:
             out, aux = split_aux(fn(*a), has_aux=True, name="vjp")
             _aux_box.append(aux)
             return out
+
     else:
         traced_fn = fn
 

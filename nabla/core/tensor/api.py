@@ -155,25 +155,30 @@ class Tensor(DLPackArray, HasTensorValue):
 
     def hydrate(self) -> Tensor:
         """Populate graph values from buffers for realized tensors.
-        
+
         If the tensor is already registered as a graph input, uses that.
         In EAGER_MAX_GRAPH mode, adds buffer data as a constant for intermediate
         tensors accessed during eager graph building.
         """
         from ... import config as nabla_config
-        
+
         if not self._impl._graph_values and self._impl._buffers:
             # Check if this tensor is already registered as a graph input
             if any(t is self for t in GRAPH._input_refs):
                 # Already registered - just need to set up graph values
                 # This shouldn't normally happen, but handle it gracefully
                 GRAPH.add_input(self)
-            elif any(t._impl._buffers and t._impl._buffers[0] is self._impl._buffers[0] 
-                     for t in GRAPH._input_refs):
+            elif any(
+                t._impl._buffers and t._impl._buffers[0] is self._impl._buffers[0]
+                for t in GRAPH._input_refs
+            ):
                 # A different tensor object but same underlying buffer is already an input
                 # Find it and copy its graph values
                 for t in GRAPH._input_refs:
-                    if t._impl._buffers and t._impl._buffers[0] is self._impl._buffers[0]:
+                    if (
+                        t._impl._buffers
+                        and t._impl._buffers[0] is self._impl._buffers[0]
+                    ):
                         self._impl._graph_values = t._impl._graph_values
                         self._impl.graph_values_epoch = t._impl.graph_values_epoch
                         break
@@ -270,16 +275,16 @@ class Tensor(DLPackArray, HasTensorValue):
         create_graph: bool = False,
     ) -> None:
         """Compute gradients of this tensor w.r.t. graph leaves (PyTorch style).
-        
+
         Populates .grad on all tensors with requires_grad=True that this tensor
         depends on. All gradients are batch-realized for efficiency.
-        
+
         Args:
             gradient: Gradient w.r.t. this tensor. Required for non-scalar tensors.
             retain_graph: Unused (maintained for PyTorch API compatibility).
             create_graph: If True, graph of the derivatives will be constructed,
                 allowing to compute higher order derivatives.
-        
+
         Example:
             >>> x = nb.Tensor([1.0, 2.0, 3.0])
             >>> x.requires_grad = True
@@ -288,6 +293,7 @@ class Tensor(DLPackArray, HasTensorValue):
             >>> print(x.grad)  # [2.0, 4.0, 6.0]
         """
         from ..autograd.utils import backward
+
         backward(self, cotangents=gradient, create_graph=create_graph)
 
     @property
@@ -522,16 +528,28 @@ class Tensor(DLPackArray, HasTensorValue):
         return creation.arange(start, stop, step, dtype=dtype, device=device)
 
     def new_zeros(
-        self, shape: ShapeLike, *, dtype: DType | None = None, device: Device | None = None
+        self,
+        shape: ShapeLike,
+        *,
+        dtype: DType | None = None,
+        device: Device | None = None,
     ) -> Tensor:
         """Create a new tensor of zeros with same device/dtype as self by default."""
-        return Tensor.zeros(shape, dtype=dtype or self.dtype, device=device or self.device)
+        return Tensor.zeros(
+            shape, dtype=dtype or self.dtype, device=device or self.device
+        )
 
     def new_ones(
-        self, shape: ShapeLike, *, dtype: DType | None = None, device: Device | None = None
+        self,
+        shape: ShapeLike,
+        *,
+        dtype: DType | None = None,
+        device: Device | None = None,
     ) -> Tensor:
         """Create a new tensor of ones with same device/dtype as self by default."""
-        return Tensor.ones(shape, dtype=dtype or self.dtype, device=device or self.device)
+        return Tensor.ones(
+            shape, dtype=dtype or self.dtype, device=device or self.device
+        )
 
     def new_full(
         self,
@@ -547,7 +565,11 @@ class Tensor(DLPackArray, HasTensorValue):
         )
 
     def new_empty(
-        self, shape: ShapeLike, *, dtype: DType | None = None, device: Device | None = None
+        self,
+        shape: ShapeLike,
+        *,
+        dtype: DType | None = None,
+        device: Device | None = None,
     ) -> Tensor:
         """Create a new uninitialized tensor (defaults to zeros in Nabla)."""
         return self.new_zeros(shape, dtype=dtype, device=device)
@@ -710,7 +732,6 @@ class Tensor(DLPackArray, HasTensorValue):
 
         return self
 
-
     def cpu(self) -> Tensor:
         """Move tensor to CPU, gathering shards if needed.
 
@@ -746,10 +767,18 @@ class Tensor(DLPackArray, HasTensorValue):
 
     if TYPE_CHECKING:
         # Reduction/unary methods are generated at module load.
-        def sum(self, axis: int | tuple[int, ...] | None = None, keepdims: bool = False) -> Tensor: ...
-        def mean(self, axis: int | tuple[int, ...] | None = None, keepdims: bool = False) -> Tensor: ...
-        def max(self, axis: int | tuple[int, ...] | None = None, keepdims: bool = False) -> Tensor: ...
-        def min(self, axis: int | tuple[int, ...] | None = None, keepdims: bool = False) -> Tensor: ...
+        def sum(
+            self, axis: int | tuple[int, ...] | None = None, keepdims: bool = False
+        ) -> Tensor: ...
+        def mean(
+            self, axis: int | tuple[int, ...] | None = None, keepdims: bool = False
+        ) -> Tensor: ...
+        def max(
+            self, axis: int | tuple[int, ...] | None = None, keepdims: bool = False
+        ) -> Tensor: ...
+        def min(
+            self, axis: int | tuple[int, ...] | None = None, keepdims: bool = False
+        ) -> Tensor: ...
         def argmax(self, axis: int | None = None, keepdims: bool = False) -> Tensor: ...
         def argmin(self, axis: int | None = None, keepdims: bool = False) -> Tensor: ...
         def cumsum(self, axis: int) -> Tensor: ...
@@ -879,14 +908,15 @@ class Tensor(DLPackArray, HasTensorValue):
 
     def to(self, target: Device | str | DType) -> Tensor:
         """Move tensor to a device or cast to a dtype.
-        
+
         Args:
             target: Target Device object, device string (e.g. 'cpu', 'gpu:0'), or DType.
         """
         if isinstance(target, DType):
             return self.cast(target)
-            
+
         from ...ops import communication as comm
+
         return comm.to_device(self, target)
 
     def __bool__(self) -> bool:
@@ -1031,7 +1061,7 @@ class Tensor(DLPackArray, HasTensorValue):
         if Ellipsis in key:
             if sum(1 for k in key if k is Ellipsis) > 1:
                 raise ValueError("An index can only have a single ellipsis ('...')")
-            
+
             ellipsis_idx = key.index(Ellipsis)
             num_expanded = len(self.shape) - (len(key) - 1)
             key = (
@@ -1101,7 +1131,9 @@ def _set_tensor_method(name: str, method) -> None:
 
 
 def _make_reduce_axis_keepdims(op_name: str):
-    def _method(self, axis: int | tuple[int, ...] | None = None, keepdims: bool = False):
+    def _method(
+        self, axis: int | tuple[int, ...] | None = None, keepdims: bool = False
+    ):
         from ...ops import reduction
 
         op = getattr(reduction, op_name)

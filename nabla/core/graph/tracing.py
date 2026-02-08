@@ -423,16 +423,19 @@ class GraphPrinter:
 
     def _format_type(self, node: TensorImpl) -> str:
         from ..tensor.impl import TensorImpl
+
         return TensorImpl._format_type(node)
 
     def _format_shape_part(self, shape: tuple | list, batch_dims: int = 0) -> str:
         """Format a shape tuple with batch dims colors: [2, 3 | 4, 5]"""
         from ..tensor.impl import TensorImpl
+
         return TensorImpl._format_shape_part(None, shape, batch_dims)
 
     def _format_spec_factors(self, sharding: Any) -> str:
         """Format sharding factors: (<dp, tp>)"""
         from ..tensor.impl import TensorImpl
+
         return TensorImpl._format_spec_factors(sharding)
 
     def _format_full_info(self, node: TensorImpl) -> str:

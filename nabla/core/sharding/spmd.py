@@ -406,7 +406,10 @@ def execute_on_shards(
             local_kwargs = op._transform_shard_kwargs(
                 kwargs, output_sharding, 0, shard_args
             )
-        result = op_fn(list(shard_args) if not isinstance(shard_args, list) else shard_args, local_kwargs)
+        result = op_fn(
+            list(shard_args) if not isinstance(shard_args, list) else shard_args,
+            local_kwargs,
+        )
         # kernel returns list[TensorValue]; for single-output we need the single value for shard_results
         # But execute_on_shards returns list-of-shard-results. Each shard result should be
         # a single TensorValue (single output) or a list/tuple of TensorValue (multi output).
@@ -433,7 +436,10 @@ def execute_on_shards(
             local_kwargs = op._transform_shard_kwargs(kwargs, output_sharding, i, args)
 
         # Execute with unified kernel signature
-        result = op_fn(list(shard_args) if not isinstance(shard_args, list) else shard_args, local_kwargs)
+        result = op_fn(
+            list(shard_args) if not isinstance(shard_args, list) else shard_args,
+            local_kwargs,
+        )
         if isinstance(result, list) and len(result) == 1:
             results.append(result[0])
         else:

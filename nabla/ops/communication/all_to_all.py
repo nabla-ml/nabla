@@ -68,14 +68,18 @@ class AllToAllOp(CollectiveOperation):
 
     # _get_shifted_axes helper removed in favor of centralized _get_physical_axis
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """VJP for all_to_all: another all_to_all with swapped axes."""
         split_axis = kwargs.get("split_axis")
         concat_axis = kwargs.get("concat_axis")
         from .all_to_all import all_to_all
 
         # Swap split and concat for backward
-        return [all_to_all(cotangents[0], split_axis=concat_axis, concat_axis=split_axis)]
+        return [
+            all_to_all(cotangents[0], split_axis=concat_axis, concat_axis=split_axis)
+        ]
 
     def execute(self, args: list, kwargs: dict) -> Any:
         """All-to-all distributed transpose (Physical)."""
@@ -143,8 +147,19 @@ class AllToAllOp(CollectiveOperation):
                 )
 
             # Split each shard into chunks for every destination device
-            chunks = [val[tuple(slice(i*chunk_size, (i+1)*chunk_size) if d == split_axis else slice(None) 
-                      for d in range(len(shape)))] for i in range(num_devices)]
+            chunks = [
+                val[
+                    tuple(
+                        (
+                            slice(i * chunk_size, (i + 1) * chunk_size)
+                            if d == split_axis
+                            else slice(None)
+                        )
+                        for d in range(len(shape))
+                    )
+                ]
+                for i in range(num_devices)
+            ]
             chunks_per_device.append(chunks)
 
         # Transpose communication: send chunks to their respective devices
@@ -156,13 +171,19 @@ class AllToAllOp(CollectiveOperation):
                 if mesh and mesh.is_distributed:
                     chunk = ops.transfer_to(chunk, mesh.device_refs[dst])
                 received.append(chunk)
-            
+
             # Reassemble on destination
-            results.append(ops.concat(received, axis=concat_axis) if tiled else ops.stack(received, axis=concat_axis))
+            results.append(
+                ops.concat(received, axis=concat_axis)
+                if tiled
+                else ops.stack(received, axis=concat_axis)
+            )
 
         return results
 
-    def _compute_output_spec(self, input_tensor, results, input_sharding=None, **kwargs):
+    def _compute_output_spec(
+        self, input_tensor, results, input_sharding=None, **kwargs
+    ):
         """Output sharding: Swap sharding from split_axis to concat_axis is implied?
         Actually:
         Input sharded on concat_axis (usually).

@@ -3,8 +3,10 @@ from nabla.transforms.compile import compile
 import numpy as np
 import pytest
 
+
 def test_compile_scalar_add():
     """Test compilation of a simple scalar addition."""
+
     @compile
     def add(x, y):
         return x + y
@@ -23,15 +25,17 @@ def test_compile_scalar_add():
     assert np.allclose(res2.numpy(), 3.0)
     assert add.stats.hits == 1
 
+
 def test_compile_matmul():
     """Test compilation of a simple matrix multiplication."""
+
     @compile
     def matmul(x, w):
         return x @ w
 
     x_np = np.random.randn(2, 4).astype(np.float32)
     w_np = np.random.randn(4, 3).astype(np.float32)
-    
+
     x = nb.Tensor.constant(x_np)
     w = nb.Tensor.constant(w_np)
 
@@ -46,8 +50,10 @@ def test_compile_matmul():
     assert np.allclose(res2.numpy(), expected, atol=1e-5)
     assert matmul.stats.hits == 1
 
+
 def test_compile_dynamic_dims():
     """Test compilation with dynamic dimensions."""
+
     @compile(dynamic_dims={0: {0: "batch"}})
     def square(x):
         return x * x
@@ -55,13 +61,13 @@ def test_compile_dynamic_dims():
     # Batch size 2
     x1 = nb.Tensor.constant(np.array([[1, 2], [3, 4]], dtype=np.float32))
     res1 = square(x1)
-    assert np.allclose(res1.numpy(), x1.numpy()**2)
+    assert np.allclose(res1.numpy(), x1.numpy() ** 2)
     assert square.stats.misses == 1
 
     # Batch size 3 (should hit cache because of symbolic batch dim)
     x2 = nb.Tensor.constant(np.array([[1, 1], [2, 2], [3, 3]], dtype=np.float32))
     res2 = square(x2)
-    assert np.allclose(res2.numpy(), x2.numpy()**2)
-    # Check if it was a hit or miss. 
+    assert np.allclose(res2.numpy(), x2.numpy() ** 2)
+    # Check if it was a hit or miss.
     # NOTE: If the signature includes SymbolicDim, it should match even with different sizes.
     assert square.stats.hits == 1

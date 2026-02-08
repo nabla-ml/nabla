@@ -92,7 +92,9 @@ class TransferOp(Operation):
 
         return ([result], output_sharding, mesh)
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """VJP for device transfer: identity (gradient stays on output device).
 
         The gradient is already on the correct device (same as output),

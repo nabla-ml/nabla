@@ -27,6 +27,7 @@ T = TypeVar("T")
 
 # ── Axis-spec helpers ──────────────────────────────────────────────────────
 
+
 def _normalize_axis(axis: int, ndim: int) -> int:
     if axis >= 0:
         if axis >= ndim:
@@ -60,6 +61,7 @@ def _broadcast_to_args(spec: AxisSpec, n: int) -> tuple[AxisSpec, ...]:
 # ── Prefix-pytree traversal ───────────────────────────────────────────────
 # JAX's "prefix pytree": a scalar spec (int/None) broadcasts to every leaf;
 # a container spec must structurally match the data tree.
+
 
 def _walk_prefix(
     fn: Callable[..., T],
@@ -97,7 +99,9 @@ def _walk_prefix(
             raise ValueError(
                 f"Axis spec length ({len(prefix)}) != tree length ({len(tree)})"
             )
-        return type(tree)([_walk_prefix(fn, t, a, *extra) for t, a in zip(tree, prefix)])
+        return type(tree)(
+            [_walk_prefix(fn, t, a, *extra) for t, a in zip(tree, prefix)]
+        )
 
     return tree
 
@@ -105,6 +109,7 @@ def _walk_prefix(
 def _collect_prefix(fn: Callable, tree: Any, prefix: AxisSpec) -> list:
     """Collect non-None results of *fn(tensor, axis)* across all leaves."""
     from ..core.tensor import Tensor
+
     out: list = []
 
     def _go(t: Any, p: AxisSpec) -> None:
@@ -134,11 +139,14 @@ def _collect_prefix(fn: Callable, tree: Any, prefix: AxisSpec) -> list:
 
 # ── Batch-size validation ─────────────────────────────────────────────────
 
+
 def _get_batch_size(tensor: "Tensor", axis: AxisSpec):
     if axis is None:
         return None
     if not isinstance(axis, int):
-        raise TypeError(f"Expected int|None for axis at leaf, got {type(axis).__name__}")
+        raise TypeError(
+            f"Expected int|None for axis at leaf, got {type(axis).__name__}"
+        )
     shape = tensor.shape
     if shape.rank == 0:
         raise ValueError(
@@ -147,14 +155,21 @@ def _get_batch_size(tensor: "Tensor", axis: AxisSpec):
     return shape[_normalize_axis(axis, shape.rank)]
 
 
-def _validate_batch_sizes(args: tuple, in_axes: tuple[AxisSpec, ...], axis_size: int | None):
+def _validate_batch_sizes(
+    args: tuple, in_axes: tuple[AxisSpec, ...], axis_size: int | None
+):
     """Validate batch dims across all inputs; return common Dim."""
     from max.graph.dim import StaticDim
 
-    dims = [d for d in
-            (d for arg, ax in zip(args, in_axes)
-             for d in _collect_prefix(_get_batch_size, arg, ax))
-            if d is not None]
+    dims = [
+        d
+        for d in (
+            d
+            for arg, ax in zip(args, in_axes)
+            for d in _collect_prefix(_get_batch_size, arg, ax)
+        )
+        if d is not None
+    ]
 
     if not dims:
         if axis_size is not None:
@@ -173,9 +188,13 @@ def _validate_batch_sizes(args: tuple, in_axes: tuple[AxisSpec, ...], axis_size:
 
 # ── Batch / unbatch ───────────────────────────────────────────────────────
 
+
 def _batch_tensor(
-    tensor: "Tensor", axis: AxisSpec, batch_dim: Any,
-    spmd_axis_name: str | None, mesh: "DeviceMesh | None",
+    tensor: "Tensor",
+    axis: AxisSpec,
+    batch_dim: Any,
+    spmd_axis_name: str | None,
+    mesh: "DeviceMesh | None",
 ) -> "Tensor":
     """Move *axis* into batch_dims position for batched execution."""
     from max.graph.dim import StaticDim
@@ -198,7 +217,9 @@ def _batch_tensor(
         if axis != 0:
             lr = len(tensor.shape)
             na = axis if axis >= 0 else lr + axis
-            t = view_ops.moveaxis_physical(tensor, source=old_bd + na, destination=old_bd)
+            t = view_ops.moveaxis_physical(
+                tensor, source=old_bd + na, destination=old_bd
+            )
         else:
             t = tensor
         if spmd_axis_name is not None and mesh is not None:
@@ -211,8 +232,13 @@ def _batch_tensor(
 
 
 def _apply_shard(
-    target: "Tensor", source: "Tensor", bd_offset: int,
-    axis_name: str, mesh: "DeviceMesh", *, broadcast: bool,
+    target: "Tensor",
+    source: "Tensor",
+    bd_offset: int,
+    axis_name: str,
+    mesh: "DeviceMesh",
+    *,
+    broadcast: bool,
 ) -> "Tensor":
     """Apply SPMD sharding spec to a batched dim."""
     from ..core.sharding.spec import DimSpec
@@ -239,14 +265,20 @@ def _apply_shard(
 
 
 def _unbatch_tensor(
-    tensor: "Tensor", axis: AxisSpec,
-    spmd_axis_name: str | None = None, mesh: "DeviceMesh | None" = None,
+    tensor: "Tensor",
+    axis: AxisSpec,
+    spmd_axis_name: str | None = None,
+    mesh: "DeviceMesh | None" = None,
 ) -> "Tensor":
     """Restore *tensor* after batched execution — move batch_dims to *axis*."""
     from ..ops import view as view_ops
 
     cbd = tensor.batch_dims
-    t = view_ops.moveaxis_physical(tensor, source=0, destination=cbd - 1) if cbd > 1 else tensor
+    t = (
+        view_ops.moveaxis_physical(tensor, source=0, destination=cbd - 1)
+        if cbd > 1
+        else tensor
+    )
     t = view_ops.decr_batch_dims(t)
 
     if axis is None:
@@ -261,6 +293,7 @@ def _unbatch_tensor(
 
 # ── Public API ─────────────────────────────────────────────────────────────
 
+
 def vmap(
     func: Callable[..., T] | None = None,
     in_axes: AxisSpec = 0,
@@ -271,9 +304,14 @@ def vmap(
 ) -> Callable[..., T]:
     """Vectorize *func* over batch dimensions (JAX-compatible API)."""
     if func is None:
-        return lambda f: vmap(f, in_axes=in_axes, out_axes=out_axes,
-                              axis_size=axis_size, spmd_axis_name=spmd_axis_name,
-                              mesh=mesh)
+        return lambda f: vmap(
+            f,
+            in_axes=in_axes,
+            out_axes=out_axes,
+            axis_size=axis_size,
+            spmd_axis_name=spmd_axis_name,
+            mesh=mesh,
+        )
 
     def vectorized(*args: Any) -> Any:
         if not args:

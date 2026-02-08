@@ -39,9 +39,7 @@ def _identity_physical_shape(op, args, kwargs):
         idx = i if i < x.num_shards else 0
         s = x.physical_local_shape(idx)
         if s is None:
-            raise RuntimeError(
-                f"Could not determine physical shape for {op.name}"
-            )
+            raise RuntimeError(f"Could not determine physical shape for {op.name}")
         shapes.append(tuple(int(d) for d in s))
 
     dtypes = [x.dtype] * num_shards
@@ -79,7 +77,9 @@ class IncrBatchDimsOp(Operation):
             r._impl.batch_dims = x.batch_dims + 1
         return results
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         return [decr_batch_dims(cotangents[0])]
 
 
@@ -108,7 +108,9 @@ class DecrBatchDimsOp(Operation):
             r._impl.batch_dims = x.batch_dims - 1
         return results
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         return [incr_batch_dims(cotangents[0])]
 
 
@@ -186,11 +188,15 @@ class MoveAxisPhysicalOp(Operation):
             r._impl.batch_dims = original_batch_dims
         return results
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         source = kwargs.get("source")
         destination = kwargs.get("destination")
         # Inverse: move from destination back to source
-        return [moveaxis_physical(cotangents[0], source=destination, destination=source)]
+        return [
+            moveaxis_physical(cotangents[0], source=destination, destination=source)
+        ]
 
     def sharding_rule(
         self,
@@ -318,7 +324,9 @@ class BroadcastBatchDimsOp(Operation):
             r._impl.batch_dims = len(batch_shape)
         return results
 
-    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+    def vjp_rule(
+        self, primals: list, cotangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """VJP: sum over added batch dimensions."""
         x = primals[0]
         added = outputs[0].batch_dims - x.batch_dims
@@ -335,7 +343,9 @@ class BroadcastBatchDimsOp(Operation):
                 result = decr_batch_dims(result)
         return [result]
 
-    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
+    def jvp_rule(
+        self, primals: list, tangents: list, outputs: list, kwargs: dict
+    ) -> list:
         """JVP: broadcast tangent across batch dimensions."""
         phys = outputs[0].physical_global_shape
         batch_shape = tuple(int(d) for d in phys[: outputs[0].batch_dims])

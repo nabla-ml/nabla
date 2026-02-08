@@ -333,17 +333,17 @@ class TestRandomSharding:
         # Create a sharded uniform tensor
         res = nb.uniform(shape, low=0.0, high=1.0)
         res_sharded = res.shard(mesh_1d, P("dp"))
-        
+
         # Realize it
         val = res_sharded.numpy()
-        
+
         # Split into shards (manually for 1D mesh)
         mid = len(val) // 2
         shard0 = val[:mid]
         shard1 = val[mid:]
-        
+
         # They should NOT be equal (very low probability they are exactly same)
         assert not jnp.allclose(shard0, shard1)
-        
+
         # But they should be in range
         assert jnp.all(val >= 0.0) and jnp.all(val <= 1.0)
