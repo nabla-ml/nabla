@@ -3,16 +3,14 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
-"""JVP (Jacobian-Vector Product) transform — forward-mode autodiff primitive.
-
-Usage matches JAX's jvp API:
-    primals_out, tangents_out = jvp(f, primals, tangents)
-"""
+"""JVP (Jacobian-Vector Product) — forward-mode autodiff primitive."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any, Literal, overload
+
+from .utils import split_aux
 
 
 @overload
@@ -42,24 +40,7 @@ def jvp(
     *,
     has_aux: bool = False,
 ) -> tuple[Any, Any] | tuple[Any, Any, Any]:
-    """Compute the JVP (forward-mode) of *fn* evaluated at *primals*.
-
-    Tangent vectors are propagated through operations automatically via
-    each Operation's ``jvp_rule``, which is invoked inside ``Operation.__call__``
-    whenever any input carries a tangent (see ``apply_jvp`` in ops/utils.py).
-
-    Args:
-        fn: Function ``f(*primals) -> output`` (or ``(output, aux)`` when *has_aux*).
-        primals: Tuple of primal inputs — arbitrary pytrees of Tensors.
-        tangents: Tuple of tangent vectors, matching the structure of *primals*.
-        has_aux: If True, *fn* returns ``(output, aux)`` and aux is passed through.
-
-    Returns:
-        ``(primals_out, tangents_out)`` — or ``(primals_out, tangents_out, aux)`` if *has_aux*.
-    """
-    from ..core.common import pytree
-    from ..core.tensor.api import Tensor
-
+    """Compute JVP of *fn* at *primals* with *tangents*. Returns ``(out, tangent_out[, aux])``."""
     if not isinstance(primals, tuple):
         raise TypeError(f"primals must be a tuple, got {type(primals)}")
     if not isinstance(tangents, tuple):
@@ -70,32 +51,14 @@ def jvp(
             f"got {len(primals)} and {len(tangents)}"
         )
 
-    # 1. Attach tangent TensorImpls to primal Tensors.
     _attach_tangents(primals, tangents)
-
     try:
-        # 2. Run the function — tangents propagate through each op automatically.
         raw_output = fn(*primals)
     finally:
-        # 3. Detach tangents from primals (clean up), regardless of success/failure.
         _detach_tangents(primals)
 
-    # 4. Separate output / aux.
-    if has_aux:
-        if not isinstance(raw_output, tuple) or len(raw_output) != 2:
-            raise ValueError(
-                "jvp with has_aux=True expects fn to return (output, aux), "
-                f"got {type(raw_output)}"
-            )
-        output, aux = raw_output
-    else:
-        output = raw_output
-        aux = None
-
-    # 5. Extract tangents from output tensors.
+    output, aux = split_aux(raw_output, has_aux, name="jvp")
     output_tangents = _extract_tangents(output)
-
-    # 6. Clean tangents from output tensors.
     _detach_tangents_from_tree(output)
 
     if has_aux:
@@ -103,12 +66,7 @@ def jvp(
     return output, output_tangents
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
 def _attach_tangents(primals: tuple, tangents: tuple) -> None:
-    """Attach tangent TensorImpls to corresponding primal Tensors."""
     from ..core.common import pytree
     from ..core.tensor.api import Tensor
 
@@ -122,7 +80,6 @@ def _attach_tangents(primals: tuple, tangents: tuple) -> None:
 
 
 def _detach_tangents(primals: tuple) -> None:
-    """Remove tangent references from primal Tensors."""
     from ..core.common import pytree
     from ..core.tensor.api import Tensor
 
@@ -134,7 +91,6 @@ def _detach_tangents(primals: tuple) -> None:
 
 
 def _extract_tangents(output: Any) -> Any:
-    """Extract tangent values from output, mirroring the output's pytree structure."""
     from ..core.common import pytree
     from ..core.tensor.api import Tensor
     from ..ops.creation import zeros_like
@@ -143,15 +99,13 @@ def _extract_tangents(output: Any) -> Any:
         if isinstance(x, Tensor):
             if x._impl.tangent is not None:
                 return Tensor(impl=x._impl.tangent)
-            else:
-                return zeros_like(x)
+            return zeros_like(x)
         return x
 
     return pytree.tree_map(_get_tangent, output)
 
 
 def _detach_tangents_from_tree(tree: Any) -> None:
-    """Remove tangent fields from all Tensors in a pytree."""
     from ..core.common import pytree
     from ..core.tensor.api import Tensor
 
