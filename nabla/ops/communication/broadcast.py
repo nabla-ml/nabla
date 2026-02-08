@@ -9,6 +9,7 @@ from typing import Any
 
 from max.graph import TensorValue, ops
 
+from ..base import OpArgs, OpKwargs, OpResult, OpTensorValues
 from .base import CollectiveOperation
 
 
@@ -39,7 +40,7 @@ class DistributedBroadcastOp(CollectiveOperation):
         dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
         return shapes, dtypes, devices
 
-    def execute(self, args: list, kwargs: dict) -> Any:
+    def execute(self, args: OpArgs, kwargs: OpKwargs) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
         """Execute distributed broadcast using MAX ops."""
         from ...core import GRAPH, Tensor
         from ...core.sharding.spmd import create_replicated_spec
@@ -63,8 +64,8 @@ class DistributedBroadcastOp(CollectiveOperation):
         return (results, output_spec, mesh)
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for distributed broadcast: AllReduce(sum) back to root."""
         from .all_reduce import all_reduce
 

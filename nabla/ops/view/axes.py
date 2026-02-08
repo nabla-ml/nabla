@@ -9,13 +9,13 @@ from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
-from ..base import AxisOp, Operation
+from ..base import AxisOp, OpArgs, OpKwargs, OpResult, OpTensorValues, Operation
 
 if TYPE_CHECKING:
     from ...core import Tensor
 
 
-def _axis_compute_shapes(op, args, kwargs, transform_fn):
+def _axis_compute_shapes(op: Operation, args: OpArgs, kwargs: OpKwargs, transform_fn: Any) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
     """Shared boilerplate for axis-op compute_physical_shape.
 
     *transform_fn(in_shape_list, kwargs)* mutates/returns the output shape list.
@@ -44,7 +44,7 @@ class UnsqueezeOp(AxisOp):
     def name(self) -> str:
         return "unsqueeze"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         axis = kwargs.get("axis", 0)
         return [ops.unsqueeze(x, axis)]
@@ -111,8 +111,8 @@ class UnsqueezeOp(AxisOp):
         return None, [None], False
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for unsqueeze: squeeze the cotangent at the unsqueezed axis."""
         axis = kwargs.get("axis", 0)
         from . import squeeze
@@ -120,8 +120,8 @@ class UnsqueezeOp(AxisOp):
         return [squeeze(cotangents[0], axis=axis)]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """JVP for unsqueeze: unsqueeze the tangent."""
         axis = kwargs.get("axis", 0)
         from . import unsqueeze
@@ -136,7 +136,7 @@ class SqueezeOp(AxisOp):
     def name(self) -> str:
         return "squeeze"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         axis = kwargs.get("axis", 0)
         if axis is None:
@@ -243,8 +243,8 @@ class SqueezeOp(AxisOp):
         return None, [None], False
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for squeeze: unsqueeze the cotangent at the squeezed axis."""
         axis = kwargs.get("axis", 0)
         from . import unsqueeze
@@ -252,8 +252,8 @@ class SqueezeOp(AxisOp):
         return [unsqueeze(cotangents[0], axis=axis)]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """JVP for squeeze: squeeze the tangent."""
         axis = kwargs.get("axis", 0)
         from . import squeeze
@@ -268,7 +268,7 @@ class SwapAxesOp(AxisOp):
     def name(self) -> str:
         return "swap_axes"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         axis1 = kwargs["axis1"]
         axis2 = kwargs["axis2"]
@@ -290,20 +290,20 @@ class SwapAxesOp(AxisOp):
         return _axis_compute_shapes(self, args, kwargs, _transform)
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         axis1 = kwargs.get("axis1")
         axis2 = kwargs.get("axis2")
         return [swap_axes(cotangents[0], axis1=axis1, axis2=axis2)]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         axis1 = kwargs.get("axis1")
         axis2 = kwargs.get("axis2")
         return [swap_axes(tangents[0], axis1=axis1, axis2=axis2)]
 
-    def __call__(self, args: list, kwargs: dict) -> list:
+    def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
         return super().__call__(args, kwargs)
 
     def sharding_rule(
@@ -391,7 +391,7 @@ class MoveAxisOp(AxisOp):
     def name(self) -> str:
         return "moveaxis"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         source = kwargs["source"]
         destination = kwargs["destination"]
@@ -424,19 +424,19 @@ class MoveAxisOp(AxisOp):
 
         return _axis_compute_shapes(self, args, kwargs, _transform)
 
-    def __call__(self, args: list, kwargs: dict) -> list:
+    def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
         return super().__call__(args, kwargs)
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         source = kwargs.get("source")
         destination = kwargs.get("destination")
         return [moveaxis(cotangents[0], source=destination, destination=source)]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         source = kwargs.get("source")
         destination = kwargs.get("destination")
         return [moveaxis(tangents[0], source=source, destination=destination)]
@@ -476,7 +476,7 @@ class UnsqueezePhysicalOp(Operation):
     def name(self) -> str:
         return "unsqueeze_physical"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         axis = kwargs.get("axis", 0)
         return [ops.unsqueeze(x, axis)]
@@ -494,12 +494,12 @@ class UnsqueezePhysicalOp(Operation):
 
         return _axis_compute_shapes(self, args, kwargs, _transform)
 
-    def __call__(self, args: list, kwargs: dict) -> list:
+    def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
         return super().__call__(args, kwargs)
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         axis = kwargs.get("axis", 0)
         return [squeeze_physical(cotangents[0], axis=axis)]
 
@@ -536,7 +536,7 @@ class SqueezePhysicalOp(Operation):
     def name(self) -> str:
         return "squeeze_physical"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         axis = kwargs.get("axis", 0)
         return [ops.squeeze(x, axis)]
@@ -554,12 +554,12 @@ class SqueezePhysicalOp(Operation):
 
         return _axis_compute_shapes(self, args, kwargs, _transform)
 
-    def __call__(self, args: list, kwargs: dict) -> list:
+    def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
         return super().__call__(args, kwargs)
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         axis = kwargs.get("axis", 0)
         return [unsqueeze_physical(cotangents[0], axis=axis)]
 
@@ -615,7 +615,7 @@ class FlipOp(AxisOp):
     def name(self) -> str:
         return "flip"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         axis = kwargs["axis"]
         return [ops.flip(x, axis)]
@@ -628,14 +628,14 @@ class FlipOp(AxisOp):
         return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         axis = kwargs.get("axis")
         return [flip(cotangents[0], axis=axis)]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         axis = kwargs.get("axis")
         return [flip(tangents[0], axis=axis)]
 
@@ -667,7 +667,7 @@ class PermuteOp(Operation):
     def name(self) -> str:
         return "permute"
 
-    def adapt_kwargs(self, args: list, kwargs: dict, batch_dims: int) -> dict:
+    def adapt_kwargs(self, args: OpArgs, kwargs: OpKwargs, batch_dims: int) -> dict:
         order = kwargs.get("order")
         if order is None:
             return kwargs
@@ -675,7 +675,7 @@ class PermuteOp(Operation):
             order = tuple(range(batch_dims)) + tuple(batch_dims + i for i in order)
         return {**kwargs, "order": order}
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         order = kwargs["order"]
         return [ops.permute(x, order)]
@@ -692,8 +692,8 @@ class PermuteOp(Operation):
         return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         order = kwargs.get("order")
         inv_order = [0] * len(order)
         for i, p in enumerate(order):
@@ -701,8 +701,8 @@ class PermuteOp(Operation):
         return [permute(cotangents[0], order=tuple(inv_order))]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         order = kwargs.get("order")
         return [permute(tangents[0], order=order)]
 

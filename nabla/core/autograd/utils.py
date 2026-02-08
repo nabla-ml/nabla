@@ -13,6 +13,9 @@ if TYPE_CHECKING:
     from ..graph.tracing import Trace, OpNode
     from ..tensor.impl import TensorImpl
 
+GradsMap = dict["Tensor", "Tensor"]
+CotangentMap = dict[int, "TensorImpl"]
+
 from ..tensor.api import Tensor
 
 
@@ -50,10 +53,10 @@ def _reduce_to_shape(cot_tensor: Tensor, target_shape: tuple[int, ...]) -> Tenso
 
 
 def _accumulate_cotangent(
-    cotangent_map: dict[int, TensorImpl],
-    target_impl: TensorImpl,
+    cotangent_map: CotangentMap,
+    target_impl: "TensorImpl",
     cot_tensor: Tensor,
-):
+) -> None:
     """Accumulates a cotangent tensor into the global cotangent map for a specific target.
 
     Handles sharding resolution (partial sums, resharding) and addition.
@@ -97,7 +100,12 @@ def _accumulate_cotangent(
 class BackwardEngine:
     """Stateful engine for backpropagation on a captured Trace."""
 
-    def __init__(self, trace: Trace, cotangents: Any, create_graph: bool = False):
+    trace: "Trace"
+    create_graph: bool
+    cotangent_map: CotangentMap
+    _original_flags: dict[int, bool]
+
+    def __init__(self, trace: "Trace", cotangents: Any, create_graph: bool = False) -> None:
         from ..common import pytree
 
         self.trace = trace
@@ -132,7 +140,7 @@ class BackwardEngine:
                 if not self.create_graph:
                     x.is_traced = False
 
-    def _restore_trace_state(self, tree: Any):
+    def _restore_trace_state(self, tree: Any) -> None:
         """Restore original tracing flags."""
         from ..common import pytree
 
@@ -140,13 +148,13 @@ class BackwardEngine:
             if isinstance(x, Tensor) and id(x) in self._original_flags:
                 x.is_traced = self._original_flags[id(x)]
 
-    def run(self) -> dict[Tensor, Tensor]:
+    def run(self) -> GradsMap:
         """Execute backward pass."""
         for node in reversed(self.trace.nodes):
             self._process_node(node)
         return self._finalize()
 
-    def _process_node(self, node: OpNode):
+    def _process_node(self, node: "OpNode") -> None:
         from ..common import pytree
         from ..tensor.impl import TensorImpl
 
@@ -234,7 +242,7 @@ class BackwardEngine:
             # Sharding and Addition
             _accumulate_cotangent(self.cotangent_map, arg_impl_real, cot_tensor)
 
-    def _finalize(self) -> dict[Tensor, Tensor]:
+    def _finalize(self) -> GradsMap:
         """Convert accumulated cotangents to input gradients."""
         from ..common import pytree
 
@@ -279,12 +287,12 @@ class BackwardEngine:
 
 
 def backward_on_trace(
-    trace: Trace,
+    trace: "Trace",
     cotangents: Any,
     *,
     create_graph: bool = False,
     checkpoint_policy: str = "none",
-) -> dict[Tensor, Tensor]:
+) -> GradsMap:
     """Pure-function backpropagation on a Trace."""
 
     if not trace._computed:

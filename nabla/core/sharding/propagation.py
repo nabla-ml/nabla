@@ -5,8 +5,12 @@
 
 from dataclasses import dataclass, field
 from enum import IntEnum
+from typing import TYPE_CHECKING, Any
 
 from .spec import DeviceMesh, DimSpec, ShardingSpec
+
+if TYPE_CHECKING:
+    from .spec import DeviceMesh, ShardingSpec
 
 
 class OpPriority(IntEnum):
@@ -100,7 +104,7 @@ class FactorShardingState:
         new_is_open: bool,
         new_partial: bool,
         mesh: DeviceMesh,
-        strategy: PropagationStrategy = None,
+        strategy: PropagationStrategy | None = None,
     ) -> None:
         """Merge new sharding information with Shardy conflict resolution."""
         if strategy is None:
@@ -402,7 +406,7 @@ class OpShardingRuleTemplate:
 
 
 def _expand_axes_for_factors(
-    axes: list[str], factors: list[str], factor_sizes: dict[str, int], mesh: DeviceMesh
+    axes: list[str], factors: list[str], factor_sizes: dict[str, int], mesh: "DeviceMesh"
 ) -> list[str]:
     """Expand axes into sub-axes when one axis covers multiple factors."""
     if not axes or not factors:
@@ -450,10 +454,10 @@ def _expand_axes_for_factors(
 
 
 def _collect_to_factors(
-    specs: list[ShardingSpec],
+    specs: list["ShardingSpec"],
     mappings: list[dict[int, list[str]]],
     rule: OpShardingRule,
-    mesh: DeviceMesh,
+    mesh: "DeviceMesh",
     state: FactorShardingState,
     strategy: PropagationStrategy,
     max_priority: int | None,
@@ -614,8 +618,8 @@ def _update_from_factors(
 
 def propagate_sharding(
     rule: OpShardingRule,
-    input_specs: list[ShardingSpec],
-    output_specs: list[ShardingSpec],
+    input_specs: list["ShardingSpec"],
+    output_specs: list["ShardingSpec"],
     strategy: PropagationStrategy = PropagationStrategy.BASIC,
     max_priority: int | None = None,
 ) -> bool:
@@ -657,7 +661,7 @@ def propagate_sharding(
 
 
 def run_hierarchical_propagation_pass(
-    operations_with_rules,
+    operations_with_rules: list[tuple[Any, OpShardingRule, list["ShardingSpec"], list["ShardingSpec"]]],
     max_user_priority: int = 10,
     max_iterations: int = 100,
 ) -> int:

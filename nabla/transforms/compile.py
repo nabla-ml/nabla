@@ -20,13 +20,18 @@ import warnings
 from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from max.graph import ops
 from max.graph.dim import SymbolicDim
 
 from ..core import GRAPH, tree_flatten, tree_unflatten
-from ..core.tensor import Tensor
+from ..core.tensor.api import Tensor
+
+if TYPE_CHECKING:
+    from max.graph.model import CompiledModel
+    from ..core.sharding.spec import ShardingSpec
+    from ..core.common.pytree import PyTreeDef
 
 T = TypeVar("T")
 
@@ -58,24 +63,24 @@ class CompilationStats:
 class _CacheKey:
     """Cache key: (tensor signatures, static values, pytree structure)."""
 
-    tensor_sigs: tuple[Any, ...]
+    tensor_sigs: tuple[tuple[tuple[int | str, ...], str, Any], ...]
     static_vals: tuple[Any, ...]
-    treedef: Any
+    treedef: "PyTreeDef"
 
 
 @dataclass
 class _CachedModel:
     """Cached compilation result."""
 
-    model: Any
-    output_treedef: Any
+    model: "CompiledModel"
+    output_treedef: "PyTreeDef"
     output_tensor_mask: list[bool]
     output_static_values: list[Any]
     output_shard_counts: list[int]
-    output_shardings: list[Any]
+    output_shardings: list["ShardingSpec | None"]
     # Fast path metadata for cache hits
     tensor_indices: list[int]  # Which positions in flat args are tensors
-    input_treedef: Any  # Cached input tree structure
+    input_treedef: "PyTreeDef"  # Cached input tree structure
 
 
 class CompiledFunction(Generic[T]):
@@ -138,7 +143,7 @@ class CompiledFunction(Generic[T]):
         return self._trace_and_compile(args, kwargs, flat, tensor_indices, key, treedef)
 
     def _build_cache_key(
-        self, flat: list[Any], tensor_indices: list[int], treedef: Any
+        self, flat: list[Any], tensor_indices: list[int], treedef: "PyTreeDef"
     ) -> _CacheKey:
         """Build cache key from tensor specs and static values."""
         tensor_sigs = []
@@ -155,7 +160,9 @@ class CompiledFunction(Generic[T]):
 
         return _CacheKey(tuple(tensor_sigs), tuple(static_vals), treedef)
 
-    def _tensor_signature(self, tensor: Tensor, arg_idx: int) -> tuple:
+    def _tensor_signature(
+        self, tensor: Tensor, arg_idx: int
+    ) -> tuple[tuple[int | str, ...], str, Any]:
         """Build tensor signature for cache key, applying dynamic_dims."""
         # Apply symbolic markers to dynamic dimensions
         shape = list(tensor.shape)
@@ -170,7 +177,7 @@ class CompiledFunction(Generic[T]):
         )
         return (tuple(shape), str(tensor.dtype), sharding_key)
 
-    def _extract_sharding_key(self, sharding) -> tuple:
+    def _extract_sharding_key(self, sharding: "ShardingSpec | None") -> Any:
         """Extract hashable sharding info."""
         mesh = getattr(sharding, "mesh", None)
         mesh_key = None
@@ -226,12 +233,12 @@ class CompiledFunction(Generic[T]):
 
     def _trace_and_compile(
         self,
-        args: tuple,
-        kwargs: dict,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
         flat: list[Any],
         tensor_indices: list[int],
         key: _CacheKey,
-        treedef: Any,
+        treedef: "PyTreeDef",
     ) -> T:
         """Trace function and compile to MAX graph."""
         from .. import config as nabla_config
@@ -301,7 +308,7 @@ class CompiledFunction(Generic[T]):
         self,
         result: T,
         key: _CacheKey,
-        treedef: Any,
+        treedef: "PyTreeDef",
         tensor_indices: list[int],
         t0: float,
     ) -> T:
@@ -438,7 +445,7 @@ def compile(
     fullgraph: bool = False,
     max_cache_size: int = 64,
     dynamic_dims: dict[int, dict[int, str]] | None = None,
-) -> Callable[..., T] | CompiledFunction[T]:
+) -> CompiledFunction[T] | Callable[..., CompiledFunction[Any]]:
     """Compile a function for cached graph execution.
 
     Args:

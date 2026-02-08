@@ -5,7 +5,8 @@
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from max.driver import Device
 from max.dtype import DType
@@ -13,7 +14,10 @@ from max.graph import DeviceRef, ShapeLike, TensorType, TensorValue, ops
 from max.graph.ops.constant import NestedArray, Number
 
 from ..core import defaults
-from .base import CreationOperation, Operation
+from .base import CreationOperation, OpArgs, OpKwargs, OpResult, OpTensorValues, Operation
+
+if TYPE_CHECKING:
+    from ..core import Tensor
 
 
 class ConstantOp(CreationOperation):
@@ -23,15 +27,15 @@ class ConstantOp(CreationOperation):
     def name(self) -> str:
         return "constant"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         value = args[0]
         dtype = kwargs["dtype"]
         device = kwargs["device"]
         return [ops.constant(value, dtype, device)]
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         return [None for _ in range(len(primals))]
 
 
@@ -42,7 +46,7 @@ class FullOp(CreationOperation):
     def name(self) -> str:
         return "full"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         shape = kwargs["shape"]
         value = kwargs["value"]
         dtype = kwargs["dtype"]
@@ -58,7 +62,7 @@ class ZerosOp(CreationOperation):
     def name(self) -> str:
         return "zeros"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         shape = kwargs["shape"]
         dtype = kwargs["dtype"]
         device = kwargs["device"]
@@ -73,7 +77,7 @@ class OnesOp(CreationOperation):
     def name(self) -> str:
         return "ones"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         shape = kwargs["shape"]
         dtype = kwargs["dtype"]
         device = kwargs["device"]
@@ -128,7 +132,7 @@ class ArangeOp(CreationOperation):
 
         return shapes, dtypes, devices
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         start = kwargs["start"]
         stop = kwargs["stop"]
         step = kwargs["step"]
@@ -144,7 +148,7 @@ class UniformOp(CreationOperation):
     def name(self) -> str:
         return "uniform"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         shape = kwargs["shape"]
         low = kwargs["low"]
         high = kwargs["high"]
@@ -161,7 +165,7 @@ class GaussianOp(CreationOperation):
     def name(self) -> str:
         return "gaussian"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         shape = kwargs["shape"]
         mean = kwargs["mean"]
         std = kwargs["std"]
@@ -202,7 +206,7 @@ class HannWindowOp(CreationOperation):
 
         return shapes, dtypes, devices
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         window_length = kwargs["window_length"]
         device = kwargs["device"]
         periodic = kwargs.get("periodic", True)
@@ -224,8 +228,8 @@ class TriOp(Operation):
         return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         k = kwargs.get("k", 0)
         return [self.__class__()([cotangents[0]], {"k": k})[0]]
 
@@ -237,7 +241,7 @@ class TriuOp(TriOp):
     def name(self) -> str:
         return "triu"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         k = kwargs.get("k", 0)
         try:
@@ -253,7 +257,7 @@ class TrilOp(TriOp):
     def name(self) -> str:
         return "tril"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         k = kwargs.get("k", 0)
         try:
@@ -433,17 +437,17 @@ def hann_window(
     )[0]
 
 
-def triu(x: Any, k: int = 0) -> Any:
+def triu(x: Tensor, k: int = 0) -> Tensor:
     """Upper triangular part of a matrix."""
     return _triu_op([x], {"k": k})[0]
 
 
-def tril(x: Any, k: int = 0) -> Any:
+def tril(x: Tensor, k: int = 0) -> Tensor:
     """Lower triangular part of a matrix."""
     return _tril_op([x], {"k": k})[0]
 
 
-def _like_helper(x: Any, create_fn, *extra_args) -> Any:
+def _like_helper(x: Tensor, create_fn: Callable[..., Tensor], *extra_args: Any) -> Tensor:
     """Shared implementation for zeros_like/ones_like/full_like."""
     from ..core import Tensor
 
@@ -466,17 +470,17 @@ def _like_helper(x: Any, create_fn, *extra_args) -> Any:
     return res
 
 
-def zeros_like(x: Any) -> Any:
+def zeros_like(x: Tensor) -> Tensor:
     """Create a tensor of zeros with the same shape/dtype/device/sharding as x."""
     return _like_helper(x, zeros)
 
 
-def ones_like(x: Any) -> Any:
+def ones_like(x: Tensor) -> Tensor:
     """Create a tensor of ones with the same shape/dtype/device/sharding as x."""
     return _like_helper(x, ones)
 
 
-def full_like(x: Any, value: Number) -> Any:
+def full_like(x: Tensor, value: Number) -> Tensor:
     """Create a tensor filled with value, matching x's properties."""
     return _like_helper(x, full, value)
 

@@ -103,14 +103,14 @@ class ReduceSumOp(ReduceOperation):
     def name(self) -> str:
         return "reduce_sum"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         axis = kwargs.get("axis", 0)
         return [ops.sum(x, axis)]
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for reduce_sum: broadcast cotangent back to input shape."""
         x = primals[0]
         from ..ops.view.shape import broadcast_to
@@ -118,8 +118,8 @@ class ReduceSumOp(ReduceOperation):
         return [broadcast_to(cotangents[0], tuple(x.shape))]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         t = tangents[0]
         axis = kwargs.get("axis", 0)
         keepdims = kwargs.get("keepdims", False)
@@ -131,14 +131,14 @@ class MeanOp(ReduceOperation):
     def name(self) -> str:
         return "mean"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         axis = kwargs.get("axis", 0)
         return [ops.mean(x, axis)]
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for mean: broadcast cotangent / axis_size."""
         x = primals[0]
         axis = kwargs.get("axis", 0)
@@ -149,8 +149,8 @@ class MeanOp(ReduceOperation):
         return [broadcast_to(cotangents[0], target_shape) / axis_size]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         axis = kwargs.get("axis", 0)
         keepdims = kwargs.get("keepdims", False)
         return [mean(tangents[0], axis=axis, keepdims=keepdims)]
@@ -165,14 +165,14 @@ class ReduceMaxOp(ReduceOperation):
     def collective_reduce_type(self) -> str:
         return "max"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         axis = kwargs.get("axis", 0)
         return [ops._reduce_max(x, axis=axis)]
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         x = primals[0]
         from ..ops.comparison import equal
         from ..ops.view.shape import broadcast_to
@@ -184,8 +184,8 @@ class ReduceMaxOp(ReduceOperation):
         return [mul(cotangent_broadcasted, mask)]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         x = primals[0]
         from ..ops.comparison import equal
         from ..ops.view.shape import broadcast_to
@@ -204,7 +204,7 @@ class ReduceSumPhysicalOp(PhysicalReduceOp):
     def name(self) -> str:
         return "reduce_sum_physical"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         axis = kwargs.get("axis", 0)
         return [ops.sum(x, axis=axis)]
@@ -215,7 +215,7 @@ class MeanPhysicalOp(PhysicalReduceOp):
     def name(self) -> str:
         return "mean_physical"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         axis = kwargs.get("axis", 0)
         return [ops.mean(x, axis=axis)]
@@ -230,7 +230,7 @@ class ReduceMaxPhysicalOp(PhysicalReduceOp):
     def collective_reduce_type(self) -> str:
         return "max"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         axis = kwargs.get("axis", 0)
         return [ops._reduce_max(x, axis=axis)]
@@ -245,7 +245,7 @@ class ReduceMinOp(ReduceOperation):
     def collective_reduce_type(self) -> str:
         return "min"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         axis = kwargs.get("axis", 0)
         return [ops._reduce_min(x, axis=axis)]
@@ -260,7 +260,7 @@ class ReduceMinPhysicalOp(PhysicalReduceOp):
     def collective_reduce_type(self) -> str:
         return "min"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         axis = kwargs.get("axis", 0)
         return [ops._reduce_min(x, axis=axis)]
@@ -405,7 +405,7 @@ class _ArgReduceOp(AxisOp):
     def name(self) -> str:
         return self._op_name
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         axis = kwargs.get("axis", -1)
         reduce_fn = self._get_reduce_fn()
@@ -445,8 +445,8 @@ class _ArgReduceOp(AxisOp):
         return shapes, [DType.int64] * num_shards, [x.device] * num_shards
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         return [None]
 
     def infer_output_shape(
@@ -474,7 +474,7 @@ class CumsumOp(AxisOp):
     def name(self) -> str:
         return "cumsum"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         axis = kwargs.get("axis", -1)
         exclusive = kwargs.get("exclusive", False)
@@ -491,8 +491,8 @@ class CumsumOp(AxisOp):
         return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP: flip(cumsum(flip(cotangent, axis), axis), axis)."""
         axis = kwargs.get("axis", -1)
 
@@ -501,8 +501,8 @@ class CumsumOp(AxisOp):
         return [flip(cumsum(flip(cotangents[0], axis=axis), axis=axis), axis=axis)]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """JVP: cumsum(tangent, axis)."""
         axis = kwargs.get("axis", -1)
         return [cumsum(tangents[0], axis=axis)]

@@ -11,7 +11,7 @@ import asyncio
 import contextlib
 from collections.abc import Generator
 from contextvars import ContextVar
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, TypeVar, Any
 
 from max import driver, engine, graph
 from max.driver import (
@@ -34,7 +34,7 @@ T = TypeVar("T")
 
 
 @contextlib.contextmanager
-def contextvar_context(var: ContextVar[T], value: T):
+def contextvar_context(var: ContextVar[T], value: T) -> Generator[None, None, None]:
     token = var.set(value)
     try:
         yield
@@ -98,20 +98,20 @@ def defaults(
     return (dtype or _default_dtype(device)), device
 
 
-def default_device(device: Device | graph.DeviceRef):
+def default_device(device: Device | graph.DeviceRef) -> Generator[None, None, None]:
     """Context manager setting default device."""
     if isinstance(device, graph.DeviceRef):
         device = device.to_device()
     return contextvar_context(_DEFAULT_DEVICE, device)
 
 
-def default_dtype(dtype: DType):
+def default_dtype(dtype: DType) -> Generator[None, None, None]:
     """Context manager setting default dtype."""
     return contextvar_context(_DEFAULT_DTYPE, dtype)
 
 
 @contextlib.contextmanager
-def defaults_like(like: Tensor | TensorType) -> Generator[None]:
+def defaults_like(like: Tensor | TensorType) -> Generator[None, None, None]:
     """Context manager setting default dtype and device from template."""
     with default_dtype(like.dtype), default_device(like.device):
         yield

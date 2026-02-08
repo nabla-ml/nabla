@@ -10,14 +10,14 @@ from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
-from ..base import AxisOp, ShapeOp, Operation
+from ..base import AxisOp, OpArgs, OpKwargs, OpResult, OpTensorValues, ShapeOp, Operation
 from .axes import unsqueeze
 
 if TYPE_CHECKING:
     from ...core import Tensor
 
 
-def _shape_kwarg_to_local(kwargs, output_sharding, shard_idx):
+def _shape_kwarg_to_local(kwargs: OpKwargs, output_sharding: ShardingSpec | None, shard_idx: int) -> OpKwargs:
     """Convert global 'shape' kwarg to local shape for a given shard."""
     from ...core.sharding.spec import compute_local_shape
 
@@ -30,7 +30,7 @@ def _shape_kwarg_to_local(kwargs, output_sharding, shard_idx):
     return {**kwargs, "shape": local_shape}
 
 
-def _force_replicated_sharding(args, mesh):
+def _force_replicated_sharding(args: OpArgs, mesh: DeviceMesh | None) -> None:
     """Return (output_spec, input_specs, False) forcing everything replicated."""
     from ...core.sharding.spmd import create_replicated_spec
     from ...core import Tensor, pytree
@@ -46,7 +46,7 @@ class BroadcastToOp(ShapeOp):
     def name(self) -> str:
         return "broadcast_to"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         shape = kwargs["shape"]
         return [ops.broadcast_to(x, shape)]
@@ -112,8 +112,8 @@ class BroadcastToOp(ShapeOp):
         return _shape_kwarg_to_local(kwargs, output_sharding, shard_idx)
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for broadcast_to: sum over broadcasted dimensions."""
         input_shape = tuple(primals[0].shape)
         output_rank = len(outputs[0].shape)
@@ -135,8 +135,8 @@ class BroadcastToOp(ShapeOp):
         return [result]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         target_shape = tuple(int(d) for d in outputs[0].shape)
         return [broadcast_to(tangents[0], target_shape)]
 
@@ -146,7 +146,7 @@ class ReshapeOp(ShapeOp):
     def name(self) -> str:
         return "reshape"
 
-    def __call__(self, args: list, kwargs: dict) -> list:
+    def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
         """Reshape with conservative sharding safety.
 
         If ANY logical dimension is sharded, we gather the entire tensor.
@@ -181,7 +181,7 @@ class ReshapeOp(ShapeOp):
 
         return super().__call__([x], {"shape": shape})
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         # Nanobind expects a tuple of native ints. The shape received here
         # is the LOCAL physical shape, transformed by _transform_shard_kwargs.
         x = args[0]
@@ -358,15 +358,15 @@ class ReshapeOp(ShapeOp):
         )
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for reshape: reshape cotangent back to input shape."""
         x = primals[0]
         return [reshape(cotangents[0], tuple(x.shape))]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """JVP for reshape: reshape tangent to output shape."""
         target_shape = kwargs.get("shape")
         return [reshape(tangents[0], target_shape)]
@@ -377,7 +377,7 @@ class SliceUpdateOp(Operation):
     def name(self) -> str:
         return "slice_update"
 
-    def __call__(self, args: list, kwargs: dict) -> list:
+    def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
         x = args[0]
         update = args[1]
         start = kwargs["start"]
@@ -404,7 +404,7 @@ class SliceUpdateOp(Operation):
             {"slices": tuple(slices), "start": resolved_start, "size": size},
         )
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         """Update using functional ops (pad + where) to avoid buffer crashes."""
         x = args[0]
         update = args[1]
@@ -495,8 +495,8 @@ class SliceUpdateOp(Operation):
         return _force_replicated_sharding(args, mesh)
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         # primals = [x, update]
         x_in = primals[0]
         u_in = primals[1]
@@ -516,8 +516,8 @@ class SliceUpdateOp(Operation):
         return [dx, du, None, None]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         start = kwargs.get("start")
         size = kwargs.get("size")
         tx, t_update = tangents[0], tangents[1]
@@ -532,7 +532,7 @@ class SliceTensorOp(Operation):
     def name(self) -> str:
         return "slice_tensor"
 
-    def __call__(self, args: list, kwargs: dict) -> list:
+    def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
         x = args[0]
         start = kwargs["start"]
         size = kwargs["size"]
@@ -557,7 +557,7 @@ class SliceTensorOp(Operation):
             [x], {"slices": tuple(slices), "start": resolved_start, "size": size}
         )
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         slices = kwargs["slices"]
         return [ops.slice_tensor(x, slices)]
@@ -620,8 +620,8 @@ class SliceTensorOp(Operation):
         return None, [None], False
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         x = primals[0]
 
         start = kwargs.get("start")
@@ -636,8 +636,8 @@ class SliceTensorOp(Operation):
         return [grad, None, None]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         start = kwargs.get("start")
         size = kwargs.get("size")
         from .shape import slice_tensor
@@ -753,13 +753,13 @@ class ConcatenateOp(AxisOp):
     def name(self) -> str:
         return "concatenate"
 
-    def __call__(self, args: list, kwargs: dict) -> list:
+    def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
         if not args:
             raise ValueError("concatenate expects at least one tensor")
 
         return super().__call__(args, kwargs)
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         axis = kwargs.get("axis", 0)
         return [ops.concat(args, axis=axis)]
 
@@ -845,8 +845,8 @@ class ConcatenateOp(AxisOp):
         return len(input_shapes[0])
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for concatenate: split cotangent along axis."""
         from ...ops.view import slice_tensor
 
@@ -884,8 +884,8 @@ class ConcatenateOp(AxisOp):
         return cotangent_slices
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         axis = kwargs.get("axis", 0)
         # tangents is a flat list of tangent tensors
         return [concatenate(tangents, axis=axis)]
@@ -971,12 +971,12 @@ class BroadcastToPhysicalOp(Operation):
         dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
         return shapes, dtypes, devices
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         shape = kwargs["shape"]
         return [ops.broadcast_to(x, shape)]
 
-    def __call__(self, args: list, kwargs: dict) -> list:
+    def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
         """Broadcast physical shape, auto-incrementing batch_dims when rank increases.
 
         Args:
@@ -1062,8 +1062,8 @@ class BroadcastToPhysicalOp(Operation):
         )
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for broadcast_to_physical: sum over broadcasted dimensions."""
         from ...ops.reduction import reduce_sum_physical
 
@@ -1114,15 +1114,15 @@ class RebindOp(Operation):
             [x.device] * x.num_shards,
         )
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         shape = kwargs["shape"]
         extra = {k: v for k, v in kwargs.items() if k != "shape"}
         return [ops.rebind(x, shape, **extra)]
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         return [cotangents[0]]
 
 
@@ -1162,7 +1162,7 @@ class PadOp(Operation):
 
         return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         paddings = kwargs.get("paddings")
         mode = kwargs.get("mode", "constant")
@@ -1194,8 +1194,8 @@ class PadOp(Operation):
         return _force_replicated_sharding(args, mesh)
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         paddings = kwargs.get("paddings")
         x = primals[0]
 
@@ -1207,8 +1207,8 @@ class PadOp(Operation):
         return [slice_tensor(cotangents[0], start=start, size=size)]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         paddings = kwargs.get("paddings")
         mode = kwargs.get("mode", "constant")
         return [pad(tangents[0], paddings=paddings, mode=mode, value=0.0)]

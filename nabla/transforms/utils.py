@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ..core.tensor.api import Tensor
+    from max.dtype import DType
 
 # Non-differentiable dtypes (lazily initialised).
 _NON_DIFF_DTYPES: frozenset | None = None
@@ -67,7 +68,9 @@ def resolve_argnums(
     return norm
 
 
-def select_argnums(grads_struct: tuple, argnums: int | tuple[int, ...]) -> Any:
+def select_argnums(
+    grads_struct: tuple[Any, ...], argnums: int | tuple[int, ...]
+) -> Any:
     """Index *grads_struct* by *argnums* (int → element, tuple → tuple)."""
     if isinstance(argnums, int):
         return grads_struct[argnums] if len(grads_struct) > argnums else grads_struct
@@ -77,11 +80,11 @@ def select_argnums(grads_struct: tuple, argnums: int | tuple[int, ...]) -> Any:
 
 
 def collect_grads(
-    grads_map: dict[Tensor, Tensor],
-    input_leaves: list,
+    grads_map: dict["Tensor", "Tensor"],
+    input_leaves: list[Any],
     *,
     skip_non_diff: bool = True,
-) -> list[Tensor | None]:
+) -> list["Tensor | None"]:
     """Collect per-leaf gradients from a backward *grads_map*."""
     from ..core.tensor.api import Tensor
     from ..ops.creation import zeros_like
@@ -100,20 +103,20 @@ def collect_grads(
     return result
 
 
-def realize_tensors(tensors: list) -> None:
+def realize_tensors(tensors: list[Any]) -> None:
     """Batch-realize any lazy Tensors in *tensors*."""
     from ..core.tensor.api import Tensor, realize_all
 
-    unrealized = [t for t in tensors if isinstance(t, Tensor) and not t.real]
+    unrealized = [t for t in tensors if isinstance(t, Tensor) and not t.is_realized]
     if unrealized:
         realize_all(*unrealized)
 
 
 def create_jacobian_helpers(
-    fn: Callable,
+    fn: Callable[..., Any],
     argnums: int | tuple[int, ...] | list[int] | None,
-    args: tuple,
-) -> tuple[tuple, Callable]:
+    args: tuple[Any, ...],
+) -> tuple[tuple[Any, ...], Callable[..., Any]]:
     """Resolve *argnums* and build a partial that fixes non-diff args."""
     norm = resolve_argnums(argnums, len(args))
     diff_args = tuple(args[i] for i in norm)

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from ..base import Operation
+from ..base import OpArgs, OpKwargs, OpResult, OpTensorValues, Operation
 
 if TYPE_CHECKING:
     from ...core.sharding.spec import DeviceMesh, ShardingSpec
@@ -20,7 +20,7 @@ class CollectiveOperation(Operation):
     """
 
     def _compute_local_preserved_shapes(
-        self, args: list, kwargs: dict
+        self, args: OpArgs, kwargs: OpKwargs
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Compute physical shapes when each shard preserves its local shape (e.g., all_reduce, ppermute)."""
         from ...core.sharding import spmd
@@ -114,7 +114,7 @@ class CollectiveOperation(Operation):
     # Legacy execute and kernel_all methods have been removed.
     # All communication operations now implement execute.
 
-    def infer_sharding_spec(self, args: Any, mesh: DeviceMesh, kwargs: dict) -> Any:
+    def infer_sharding_spec(self, args: OpArgs, mesh: DeviceMesh | None, kwargs: dict) -> Any:
         """Default adaptation: validate inputs and compute output spec."""
         # This implementation allows subclasses to strictly rely on _compute_output_spec
         # for both adaptation and execution phases.

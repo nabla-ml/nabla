@@ -11,7 +11,10 @@ Optimized for high-throughput traversals using JAX-style logic.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
+
+if TYPE_CHECKING:
+    from ..tensor.api import Tensor
 
 T = TypeVar("T")
 
@@ -40,7 +43,7 @@ class PyTreeDef:
 
     __slots__ = ("_kind", "_meta", "_children", "num_leaves")
 
-    def __init__(self, kind: int, meta: Any, children: tuple, num_leaves: int):
+    def __init__(self, kind: int, meta: Any, children: tuple[PyTreeDef, ...], num_leaves: int) -> None:
         self._kind = kind
         self._meta = meta
         self._children = children
@@ -73,7 +76,7 @@ class PyTreeDef:
     def __hash__(self) -> int:
         return hash((self._kind, self._meta, self._children))
 
-    def unflatten(self, leaves: list) -> Any:
+    def unflatten(self, leaves: list[Any]) -> Any:
         """Reconstruct pytree from leaves."""
         return tree_unflatten(self, leaves)
 
@@ -81,7 +84,7 @@ class PyTreeDef:
 def tree_flatten(
     tree: Any,
     is_leaf: Callable[[Any], bool] | None = None,
-) -> tuple[list, PyTreeDef]:
+) -> tuple[list[Any], PyTreeDef]:
     """Flatten a pytree into leaves and structure."""
     leaves = []
 
@@ -116,7 +119,7 @@ def tree_flatten(
     return leaves, treedef
 
 
-def tree_unflatten(treedef: PyTreeDef, leaves: list) -> Any:
+def tree_unflatten(treedef: PyTreeDef, leaves: list[Any]) -> Any:
     """Reconstruct a pytree from structure info and leaves."""
     if len(leaves) != treedef.num_leaves:
         raise ValueError(f"Expected {treedef.num_leaves} leaves, got {len(leaves)}")
@@ -162,7 +165,7 @@ def tree_flatten_full(
     return tree_flatten(tree, is_leaf=full_is_leaf)
 
 
-def tree_unflatten_full(treedef: PyTreeDef, leaves: list) -> Any:
+def tree_unflatten_full(treedef: PyTreeDef, leaves: list[Any]) -> Any:
     """Reconstruct a pytree from structure info and leaves, supporting None leaves."""
     return tree_unflatten(treedef, leaves)
 
@@ -170,7 +173,7 @@ def tree_unflatten_full(treedef: PyTreeDef, leaves: list) -> Any:
 def tree_leaves(
     tree: Any,
     is_leaf: Callable[[Any], bool] | None = None,
-) -> list:
+) -> list[Any]:
     """Get all leaves from a pytree (optimized version - doesn't build treedef)."""
     leaves = []
 
@@ -292,7 +295,7 @@ def with_batch_dims(tree: Any, delta: int) -> Any:
     return tree_map(_adj, tree)
 
 
-def tensor_leaves(tree: Any) -> list:
+def tensor_leaves(tree: Any) -> list[Tensor]:
     """Get only Tensor leaves from a pytree."""
     from ..tensor.api import Tensor
 

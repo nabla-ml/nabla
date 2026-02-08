@@ -5,11 +5,15 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ...core import Tensor
+    from ...core.sharding.spec import DeviceMesh, ShardingSpec
 
 from max.graph import TensorValue, ops
 
-from ..base import Operation
+from ..base import OpArgs, OpKwargs, OpResult, OpTensorValues, Operation
 
 
 class AsInterleavedComplexOp(Operation):
@@ -19,7 +23,7 @@ class AsInterleavedComplexOp(Operation):
     def name(self) -> str:
         return "as_interleaved_complex"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         return [ops.as_interleaved_complex(args[0])]
 
     def compute_physical_shape(
@@ -35,8 +39,8 @@ class AsInterleavedComplexOp(Operation):
         return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for as_interleaved_complex: view as real."""
         return [view_as_real_interleaved(cotangents[0])]
 
@@ -48,7 +52,7 @@ class ViewAsRealInterleavedOp(Operation):
     def name(self) -> str:
         return "view_as_real_interleaved"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         # Assuming ops.view_as_real exists or similar
         return [ops.view_as_real(args[0])]
 
@@ -65,8 +69,8 @@ class ViewAsRealInterleavedOp(Operation):
         return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         return [as_interleaved_complex(cotangents[0])]
 
 
@@ -74,9 +78,9 @@ _as_interleaved_complex_op = AsInterleavedComplexOp()
 _view_as_real_interleaved_op = ViewAsRealInterleavedOp()
 
 
-def as_interleaved_complex(x):
+def as_interleaved_complex(x: Tensor) -> Tensor:
     return _as_interleaved_complex_op([x], {})[0]
 
 
-def view_as_real_interleaved(x):
+def view_as_real_interleaved(x: Tensor) -> Tensor:
     return _view_as_real_interleaved_op([x], {})[0]

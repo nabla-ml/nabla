@@ -16,8 +16,9 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, TypeVar, Union
 
 if TYPE_CHECKING:
-    from ..core.sharding import DeviceMesh
-    from ..core.tensor import Tensor
+    from ..core.sharding.spec import DeviceMesh
+    from ..core.tensor.api import Tensor
+    from max.graph.dim import Dim
 
 AxisSpec = Union[
     int, None, dict[str, "AxisSpec"], list["AxisSpec"], tuple["AxisSpec", ...]
@@ -140,7 +141,7 @@ def _collect_prefix(fn: Callable, tree: Any, prefix: AxisSpec) -> list:
 # ── Batch-size validation ─────────────────────────────────────────────────
 
 
-def _get_batch_size(tensor: "Tensor", axis: AxisSpec):
+def _get_batch_size(tensor: "Tensor", axis: AxisSpec) -> "Dim":
     if axis is None:
         return None
     if not isinstance(axis, int):
@@ -156,8 +157,8 @@ def _get_batch_size(tensor: "Tensor", axis: AxisSpec):
 
 
 def _validate_batch_sizes(
-    args: tuple, in_axes: tuple[AxisSpec, ...], axis_size: int | None
-):
+    args: tuple[Any, ...], in_axes: tuple[AxisSpec, ...], axis_size: int | None
+) -> "Dim":
     """Validate batch dims across all inputs; return common Dim."""
     from max.graph.dim import StaticDim
 
@@ -192,7 +193,7 @@ def _validate_batch_sizes(
 def _batch_tensor(
     tensor: "Tensor",
     axis: AxisSpec,
-    batch_dim: Any,
+    batch_dim: "Dim",
     spmd_axis_name: str | None,
     mesh: "DeviceMesh | None",
 ) -> "Tensor":
@@ -261,7 +262,7 @@ def _apply_shard(
                 specs[i] = target.sharding.dim_specs[i].clone()
         specs[bd_offset] = DimSpec([axis_name])
 
-    return comm_ops.shard_op(target, mesh=mesh, dim_specs=specs)
+    return comm_ops.shard(target, mesh=mesh, dim_specs=specs)
 
 
 def _unbatch_tensor(

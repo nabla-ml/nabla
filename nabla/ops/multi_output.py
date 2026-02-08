@@ -9,7 +9,7 @@ from typing import Any
 
 from max.graph import TensorValue, ops
 
-from .base import AxisOp, Operation
+from .base import AxisOp, OpArgs, OpKwargs, OpResult, OpTensorValues, Operation
 
 
 def _unshard_axis_before_split(x, kwargs):
@@ -60,11 +60,11 @@ class SplitOp(AxisOp):
 
     output_container_type = tuple
 
-    def __call__(self, args: list, kwargs: dict) -> list:
+    def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
         x = _unshard_axis_before_split(args[0], kwargs)
         return super().__call__([x], kwargs)
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         """Split tensor into num_splits equal parts along axis."""
         x = args[0]
         axis = kwargs.get("axis", 0)
@@ -118,8 +118,8 @@ class SplitOp(AxisOp):
         return all_outputs_shapes, dtypes, devices
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for split: concatenate cotangents along split axis."""
         from .view.shape import concatenate
 
@@ -127,8 +127,8 @@ class SplitOp(AxisOp):
         return [concatenate(cotangents, axis=axis)]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """JVP for split: split tangent along the same axis."""
         axis = kwargs.get("axis", 0)
         num_splits = kwargs.get("num_splits")
@@ -233,11 +233,11 @@ class ChunkOp(AxisOp):
         dtypes, devices = _build_multi_output_metadata(x, mesh, num_shards, num_splits)
         return all_outputs_shapes, dtypes, devices
 
-    def __call__(self, args: list, kwargs: dict) -> list:
+    def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
         x = _unshard_axis_before_split(args[0], kwargs)
         return super().__call__([x], kwargs)
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         """Split tensor into specified number of chunks."""
         x = args[0]
         chunks = kwargs["chunks"]
@@ -259,8 +259,8 @@ class ChunkOp(AxisOp):
         return list(ops.split(x, split_sizes, axis))
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for chunk: concatenate cotangents along chunk axis."""
         from .view.shape import concatenate
 
@@ -268,8 +268,8 @@ class ChunkOp(AxisOp):
         return [concatenate(cotangents, axis=axis)]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """JVP for chunk: chunk tangent along the same axis."""
         axis = kwargs.get("axis", 0)
         chunks = kwargs.get("chunks")
@@ -331,7 +331,7 @@ class UnbindOp(AxisOp):
     def name(self) -> str:
         return "unbind"
 
-    def __call__(self, args: list, kwargs: dict) -> list:
+    def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
         x = _unshard_axis_before_split(args[0], kwargs)
         return super().__call__([x], kwargs)
 
@@ -369,7 +369,7 @@ class UnbindOp(AxisOp):
         dtypes, devices = _build_multi_output_metadata(x, mesh, num_shards, num_splits)
         return all_outputs_shapes, dtypes, devices
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         """Remove dimension and return slices."""
         x = args[0]
         axis = kwargs.get("axis", 0)
@@ -384,8 +384,8 @@ class UnbindOp(AxisOp):
         return list(results)
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for unbind: stack cotangents and unsqueeze along unbound axis."""
         from .view.shape import stack
 
@@ -393,8 +393,8 @@ class UnbindOp(AxisOp):
         return [stack(cotangents, axis=axis)]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """JVP for unbind: unbind tangent along the same axis."""
         axis = kwargs.get("axis", 0)
         return unbind(tangents[0], axis=axis)
@@ -452,7 +452,7 @@ class MinMaxOp(Operation):
         """MinMaxOp returns a dict; skip explicit physical shape inference."""
         return None, None, None
 
-    def __call__(self, args: list, kwargs: dict) -> list:
+    def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
         """Compute global min and max by reducing all axes."""
         from ..ops.reduction import reduce_min, reduce_max
 
@@ -466,7 +466,7 @@ class MinMaxOp(Operation):
 
         return [result_min, result_max]
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         """Compute min and max simultaneously."""
         x = args[0]
         return [ops.min(x), ops.max(x)]

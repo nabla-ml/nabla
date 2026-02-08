@@ -14,15 +14,15 @@ from ..core.tensor import Tensor, TensorImpl
 from ..ops.base import Operation
 
 if TYPE_CHECKING:
-    from ..core.sharding import DeviceMesh
-    from ..core.sharding.spec import ShardingSpec
+    from ..core.sharding.spec import DeviceMesh, ShardingSpec
+    from ..core.graph.tracing import Trace, OpNode
 
 
 def shard_map(
     func: Callable[..., Any],
-    mesh: DeviceMesh,
-    in_specs: dict[int, ShardingSpec],
-    out_specs: dict[int, ShardingSpec] | None = None,
+    mesh: "DeviceMesh",
+    in_specs: dict[int, "ShardingSpec"],
+    out_specs: dict[int, "ShardingSpec"] | None = None,
     auto_sharding: bool = False,
     debug: bool = False,
 ) -> Callable[..., Any]:
@@ -240,11 +240,11 @@ class _ShardingGraphExtractor:
 
     def __init__(
         self,
-        trace: Trace,
-        in_specs: dict[int, Any],
-        out_specs: dict[int, Any] | None = None,
+        trace: "Trace",
+        in_specs: dict[int, "ShardingSpec"],
+        out_specs: dict[int, "ShardingSpec"] | None = None,
         debug: bool = False,
-    ):
+    ) -> None:
         self.trace = trace
         self.in_specs = in_specs
         self.out_specs = out_specs or {}

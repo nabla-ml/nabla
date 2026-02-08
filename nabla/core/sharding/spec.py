@@ -6,9 +6,13 @@
 import math
 import re
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from max.graph import DeviceRef, Value
+    from max.driver import Device
 
 
 def parse_sub_axis(axis_name: str) -> tuple[str, int, int] | None:
@@ -80,7 +84,7 @@ def check_sub_axes_maximality(axes: list[str]) -> list[str]:
 class DeviceMesh:
     """Logical multi-dimensional view of devices: @name = <["axis1"=size1, ...]>.
 
-    Args:
+    Attributes:
         name: Name of the mesh.
         shape: Shape of the mesh (e.g., (2, 4)).
         axis_names: Names for each axis (e.g., ("x", "y")).
@@ -88,15 +92,25 @@ class DeviceMesh:
         device_refs: Physical device references.
     """
 
+    name: str
+    shape: tuple[int, ...]
+    axis_names: tuple[str, ...]
+    bandwidth: float
+    devices: list[int]
+    device_refs: list["DeviceRef"]
+    axis_lookup: dict[str, int]
+    phys_strides: list[int]
+    _signal_buffers: dict[tuple[int, tuple["DeviceRef", ...]], list["Value"]]
+
     def __init__(
         self,
         name: str,
         shape: tuple[int, ...],
         axis_names: tuple[str, ...],
-        devices: list[int] = None,
-        device_refs: list = None,
+        devices: list[int] | None = None,
+        device_refs: list["DeviceRef"] | None = None,
         bandwidth: float = 1.0,
-    ):
+    ) -> None:
         self.name = name
         self.shape = shape
         self.axis_names = axis_names
@@ -137,7 +151,7 @@ class DeviceMesh:
 
         self._signal_buffers = {}  # Cache: (buffer_size, device_hash) -> list[Value]
 
-    def get_signal_buffers(self, buffer_size: int = 65536) -> list:
+    def get_signal_buffers(self, buffer_size: int = 65536) -> list["Value"]:
         """Get or create cached signal buffers for collective operations.
 
         Args:
@@ -238,21 +252,14 @@ class DeviceMesh:
 
 @dataclass
 class DimSpec:
-    """Per-dimension sharding specification.
-
-    Attributes:
-        axes: Sharding axes (major to minor).
-        is_open: If True, can accept more sharding.
-        priority: 0=Strongest, 1+=Weaker.
-        partial: If True, holds partial sums.
-    """
+    """Per-dimension sharding specification."""
 
     axes: list[str] = field(default_factory=list)
     is_open: bool = False
     priority: int = 0
     partial: bool = False
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
 
         if not self.axes and not self.is_open and self.priority != 0:
             raise ValueError(
@@ -315,21 +322,14 @@ class DimSpec:
 
 @dataclass
 class ShardingSpec:
-    """Complete tensor sharding: sharding<@mesh, [dim_shardings], replicated={axes}>.
-
-    Attributes:
-        mesh: target DeviceMesh.
-        dim_specs: Per-dimension specs.
-        replicated_axes: Explicitly replicated axes.
-        partial_sum_axes: Ghost partial axes.
-    """
+    """Complete tensor sharding: sharding<@mesh, [dim_shardings], replicated={axes}>."""
 
     mesh: DeviceMesh
     dim_specs: list[DimSpec] = field(default_factory=list)
     replicated_axes: set[str] = field(default_factory=set)
     partial_sum_axes: set[str] = field(default_factory=set)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate: no duplicate axes, no explicit-replicated axes in dims."""
 
         if hasattr(self, "dim_specs") and self.dim_specs:
@@ -516,7 +516,7 @@ def get_num_shards(sharding: ShardingSpec) -> int:
 
 def compute_global_shape(
     local_shape: tuple[int, ...],
-    sharding: Optional["ShardingSpec"],
+    sharding: ShardingSpec | None,
     shard_shapes: list[tuple[int, ...]] | None = None,
 ) -> tuple[int, ...]:
     """Compute global shape from local shape and sharding spec.
@@ -562,7 +562,7 @@ def compute_global_shape(
 
 
 def needs_reshard(
-    from_spec: Optional["ShardingSpec"], to_spec: Optional["ShardingSpec"]
+    from_spec: ShardingSpec | None, to_spec: ShardingSpec | None
 ) -> bool:
     """Check if specs differ requiring resharding."""
     if (from_spec is None) != (to_spec is None):

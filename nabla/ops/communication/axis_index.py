@@ -46,7 +46,7 @@ class AxisIndexOp(CollectiveOperation):
 
         return shapes, dtypes, devices
 
-    def execute(self, args: list, kwargs: dict) -> Any:
+    def execute(self, args: OpArgs, kwargs: OpKwargs) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
         """Return the device's position along a mesh axis (Physical)."""
         from ...core import GRAPH, Tensor
         from ...core.sharding.spec import DimSpec, ShardingSpec

@@ -55,7 +55,13 @@ def jacrev(
     return jacrev_fn
 
 
-def _reshape_jacrev(batched_grads, flat_out, flat_diff_args, sizes, diff_args):
+def _reshape_jacrev(
+    batched_grads: Any,
+    flat_out: list[Tensor],
+    flat_diff_args: list[Tensor],
+    sizes: list[int],
+    diff_args: tuple[Any, ...],
+) -> Any:
     """Reshape vmap(pullback) results into Jacobian shape ``(*out, *in)``."""
     from ..core.tensor.api import Tensor
     from ..ops.view.shape import reshape

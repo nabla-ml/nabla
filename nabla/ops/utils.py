@@ -11,8 +11,15 @@ on the abstract interface.
 """
 
 from __future__ import annotations
-from typing import Any, Union
+from typing import TYPE_CHECKING, Any, Union
 from pathlib import Path
+
+if TYPE_CHECKING:
+    from ..core.tensor.api import Tensor
+    from ..core.sharding.spec import ShardingSpec, DeviceMesh
+    from max.driver import Device
+    from max.dtype import DType
+    from max.graph import DeviceRef, TensorValue
 
 # Module-level caches for deferred imports
 _Tensor = None
@@ -37,7 +44,7 @@ def _get_utils_core():
         _config = cfg
 
 
-def ensure_tensor(x: Any) -> Any:
+def ensure_tensor(x: Any) -> "Tensor":
     """Convert scalar or array-like to Tensor."""
     if _Tensor is None:
         _get_utils_core()
@@ -311,7 +318,7 @@ def apply_jvp(op: Any, args: list, kwargs: dict, output: Any) -> None:
                 o._impl.tangent = t._impl
 
 
-def collect_metadata(args: list) -> tuple[int, bool, bool, bool]:
+def collect_metadata(args: list[Any]) -> tuple[int, bool, bool, bool]:
     """Analyze arguments to collect metadata needed for execution adaptation.
 
     Returns:
@@ -348,8 +355,12 @@ def collect_metadata(args: list) -> tuple[int, bool, bool, bool]:
 
 
 def adapt_and_reshard(
-    op: Any, args: list, kwargs: dict, any_sharded: bool, max_batch_dims: int
-) -> tuple[list, dict, Any, Any, Any]:
+    op: Any,
+    args: list[Any],
+    kwargs: dict[str, Any],
+    any_sharded: bool,
+    max_batch_dims: int,
+) -> tuple[list[Any], dict[str, Any], Any, Any, Any]:
     """Perform logical adaptation and input resharding."""
     # Fast path: skip all SPMD machinery for unsharded tensors
     mesh = None
@@ -380,8 +391,8 @@ def adapt_and_reshard(
 
 
 def compute_structural_hash(
-    op_name: str, resharded_args: list, adapted_kwargs: dict
-) -> tuple:
+    op_name: str, resharded_args: list[Any], adapted_kwargs: dict[str, Any]
+) -> tuple[Any, ...]:
     """Compute structural hash for operation caching."""
     # Compute hash AFTER resharding - use resharded_args for cache key
     arg_hashes = tuple(_get_tensor_hash(x) for x in resharded_args)
@@ -393,9 +404,9 @@ def compute_structural_hash(
 
 def eager_execute(
     op: Any,
-    resharded_args: list,
-    kwargs: dict,
-    adapted_kwargs: dict,
+    resharded_args: list[Any],
+    kwargs: dict[str, Any],
+    adapted_kwargs: dict[str, Any],
 ) -> Any:
     """Execute operation eagerly if enabled by configuration."""
     if _config is None:

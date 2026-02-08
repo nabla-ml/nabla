@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
-from ..base import Operation
+from ..base import OpArgs, OpKwargs, OpResult, OpTensorValues, Operation
 
 if TYPE_CHECKING:
     from ...core.sharding.spec import DeviceMesh, DimSpec
@@ -24,8 +24,8 @@ class ShardOp(Operation):
         return "shard"
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for shard: reshard back to input's sharding."""
         x = primals[0]
 
@@ -145,7 +145,7 @@ class ShardOp(Operation):
 
         return shapes, dtypes, devices
 
-    def execute(self, args: list, kwargs: dict) -> Any:
+    def execute(self, args: OpArgs, kwargs: OpKwargs) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
         """Physical execution for ShardOp.
 
         Derives all physical metadata from args/kwargs and slices the input.

@@ -55,7 +55,9 @@ def vjp(
         input_leaves = pytree.tree_leaves(primals)
         grad_leaves = collect_grads(grads_map, input_leaves)
         realize_tensors(grad_leaves)
-        grad_struct = pytree.tree_unflatten(pytree.tree_structure(primals), grad_leaves)
+        grad_struct: tuple[Any, ...] = pytree.tree_unflatten(
+            pytree.tree_structure(primals), grad_leaves
+        )
         if not isinstance(grad_struct, tuple):
             grad_struct = (grad_struct,)
         return grad_struct

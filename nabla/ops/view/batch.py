@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
-from ..base import Operation
+from ..base import OpArgs, OpKwargs, OpResult, OpTensorValues, Operation
 
 if TYPE_CHECKING:
     from ...core.tensor import Tensor
@@ -67,10 +67,10 @@ class IncrBatchDimsOp(Operation):
         """Physical shape is unchanged; only batch_dims metadata changes."""
         return _identity_physical_shape(self, args, kwargs)
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         return [args[0]]
 
-    def __call__(self, args: list, kwargs: dict) -> list:
+    def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
         x = args[0]
         results = super().__call__(args, kwargs)
         for r in results:
@@ -78,8 +78,8 @@ class IncrBatchDimsOp(Operation):
         return results
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         return [decr_batch_dims(cotangents[0])]
 
 
@@ -96,10 +96,10 @@ class DecrBatchDimsOp(Operation):
         """Physical shape is unchanged; only batch_dims metadata changes."""
         return _identity_physical_shape(self, args, kwargs)
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         return [args[0]]
 
-    def __call__(self, args: list, kwargs: dict) -> list:
+    def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
         x = args[0]
         if x.batch_dims <= 0:
             raise ValueError("Cannot decrement batch_dims below 0")
@@ -109,8 +109,8 @@ class DecrBatchDimsOp(Operation):
         return results
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         return [incr_batch_dims(cotangents[0])]
 
 
@@ -164,7 +164,7 @@ class MoveAxisPhysicalOp(Operation):
 
         return shapes, dtypes, devices
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         source = kwargs["source"]
         destination = kwargs["destination"]
@@ -179,7 +179,7 @@ class MoveAxisPhysicalOp(Operation):
         order.insert(destination, source)
         return [ops.permute(x, tuple(order))]
 
-    def __call__(self, args: list, kwargs: dict) -> list:
+    def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
         # Preserve batch_dims through the permutation
         x = args[0]
         original_batch_dims = x.batch_dims
@@ -189,8 +189,8 @@ class MoveAxisPhysicalOp(Operation):
         return results
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         source = kwargs.get("source")
         destination = kwargs.get("destination")
         # Inverse: move from destination back to source
@@ -271,7 +271,7 @@ class BroadcastBatchDimsOp(Operation):
 
         return shapes, dtypes, devices
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         shape = kwargs["shape"]
         return [ops.broadcast_to(x, shape)]
@@ -309,7 +309,7 @@ class BroadcastBatchDimsOp(Operation):
             input_shapes, output_shapes
         )
 
-    def __call__(self, args: list, kwargs: dict) -> list:
+    def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
         from ...core import Tensor
 
         x = args[0]
@@ -325,8 +325,8 @@ class BroadcastBatchDimsOp(Operation):
         return results
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP: sum over added batch dimensions."""
         x = primals[0]
         added = outputs[0].batch_dims - x.batch_dims
@@ -344,8 +344,8 @@ class BroadcastBatchDimsOp(Operation):
         return [result]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """JVP: broadcast tangent across batch dimensions."""
         phys = outputs[0].physical_global_shape
         batch_shape = tuple(int(d) for d in phys[: outputs[0].batch_dims])

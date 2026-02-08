@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
+from ..base import OpArgs, OpKwargs, OpResult, OpTensorValues
 from .base import CollectiveOperation
 
 if TYPE_CHECKING:
@@ -83,8 +84,8 @@ class ReduceScatterOp(CollectiveOperation):
         return CollectiveOperation._ring_cost(size_bytes, mesh, axes)
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for reduce_scatter: all_gather the gradients."""
         from .all_gather import all_gather
 
@@ -96,7 +97,7 @@ class ReduceScatterOp(CollectiveOperation):
 
         return [all_gather(cotangents[0], axis=axis)]
 
-    def execute(self, args: list, kwargs: dict) -> Any:
+    def execute(self, args: OpArgs, kwargs: OpKwargs) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
         """Sum-reduce across shards then scatter the result (Physical)."""
         from ...core import GRAPH, Tensor
 

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
-from .base import BinaryOperation, Operation
+from .base import BinaryOperation, OpArgs, OpKwargs, OpResult, OpTensorValues, Operation
 
 if TYPE_CHECKING:
     from ..core.tensor import Tensor
@@ -20,18 +20,18 @@ class AddOp(BinaryOperation):
     def name(self) -> str:
         return "add"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         return [ops.add(args[0], args[1])]
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for addition: ∂(x+y)/∂x = 1, ∂(x+y)/∂y = 1."""
         return [cotangents[0], cotangents[0]]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """JVP for addition: tangent_x + tangent_y."""
         from . import add
 
@@ -43,12 +43,12 @@ class MulOp(BinaryOperation):
     def name(self) -> str:
         return "mul"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         return [ops.mul(args[0], args[1])]
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for multiplication: ∂(x*y)/∂x = y, ∂(x*y)/∂y = x."""
         x, y = primals[0], primals[1]
         from . import mul
@@ -56,8 +56,8 @@ class MulOp(BinaryOperation):
         return [mul(cotangents[0], y), mul(cotangents[0], x)]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """JVP for multiplication: x * tangent_y + y * tangent_x."""
         x, y = primals[0], primals[1]
         tx, ty = tangents[0], tangents[1]
@@ -71,20 +71,20 @@ class SubOp(BinaryOperation):
     def name(self) -> str:
         return "sub"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         return [ops.sub(args[0], args[1])]
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for subtraction: ∂(x-y)/∂x = 1, ∂(x-y)/∂y = -1."""
         from ..ops.unary import neg
 
         return [cotangents[0], neg(cotangents[0])]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """JVP for subtraction: tangent_x - tangent_y."""
         from . import sub
 
@@ -96,12 +96,12 @@ class DivOp(BinaryOperation):
     def name(self) -> str:
         return "div"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         return [ops.div(args[0], args[1])]
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for division: ∂(x/y)/∂x = 1/y, ∂(x/y)/∂y = -x/y²."""
         x, y = primals[0], primals[1]
         cotangent = cotangents[0]
@@ -113,8 +113,8 @@ class DivOp(BinaryOperation):
         return [grad_x, grad_y]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """JVP for division: (y*tangent_x - x*tangent_y) / y²."""
         x, y = primals[0], primals[1]
         tx, ty = tangents[0], tangents[1]
@@ -154,7 +154,7 @@ class MatmulOp(Operation):
 
         return 2.0 * batch_size * m * n * k
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         return [ops.matmul(args[0], args[1])]
 
     def compute_physical_shape(
@@ -191,7 +191,7 @@ class MatmulOp(Operation):
 
     _infer_output_sharding: bool = False
 
-    def __call__(self, args: list, kwargs: dict) -> list:
+    def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
         from . import view as view_ops
         from .base import ensure_tensor
 
@@ -261,8 +261,8 @@ class MatmulOp(Operation):
         ).instantiate(input_shapes, output_shapes)
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for matmul: ∂(X@W)/∂X = cot@W.T, ∂(X@W)/∂W = X.T@cot."""
         x, y = primals[0], primals[1]
         cotangent = cotangents[0]
@@ -274,8 +274,8 @@ class MatmulOp(Operation):
         return [grad_x, grad_y]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """JVP for matmul: X @ tangent_W + tangent_X @ W."""
         x, y = primals[0], primals[1]
         tx, ty = tangents[0], tangents[1]
@@ -291,31 +291,31 @@ _div_op = DivOp()
 _matmul_op = MatmulOp()
 
 
-def add(x, y) -> "Tensor":
+def add(x: Tensor, y: Tensor | float | int) -> Tensor:
     from .base import ensure_tensor
 
     return _add_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
-def mul(x, y) -> "Tensor":
+def mul(x: Tensor, y: Tensor | float | int) -> Tensor:
     from .base import ensure_tensor
 
     return _mul_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
-def sub(x, y) -> "Tensor":
+def sub(x: Tensor, y: Tensor | float | int) -> Tensor:
     from .base import ensure_tensor
 
     return _sub_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
-def div(x, y) -> "Tensor":
+def div(x: Tensor, y: Tensor | float | int) -> Tensor:
     from .base import ensure_tensor
 
     return _div_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
-def matmul(x, y) -> "Tensor":
+def matmul(x: Tensor, y: Tensor) -> Tensor:
     from .base import ensure_tensor
 
     return _matmul_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
@@ -328,12 +328,12 @@ class ModOp(BinaryOperation):
     def name(self) -> str:
         return "mod"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         return [ops.mod(args[0], args[1])]
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP: (cotangent, -cotangent * floor(lhs / rhs))."""
         lhs, rhs = primals[0], primals[1]
         cotangent = cotangents[0]
@@ -345,8 +345,8 @@ class ModOp(BinaryOperation):
         return [grad_lhs, grad_rhs]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """JVP: tangent_lhs - tangent_rhs * floor(lhs / rhs)."""
         lhs, rhs = primals[0], primals[1]
         tl, tr = tangents[0], tangents[1]
@@ -363,12 +363,12 @@ class PowOp(BinaryOperation):
     def name(self) -> str:
         return "pow"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         return [ops.pow(args[0], args[1])]
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP: (cotangent * rhs * lhs^(rhs-1), cotangent * output * log(lhs))."""
         lhs, rhs = primals[0], primals[1]
         output = outputs[0]
@@ -381,8 +381,8 @@ class PowOp(BinaryOperation):
         return [grad_lhs, grad_rhs]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """JVP: rhs * lhs^(rhs-1) * tangent_lhs + output * log(lhs) * tangent_rhs."""
         lhs, rhs = primals[0], primals[1]
         tl, tr = tangents[0], tangents[1]
@@ -402,7 +402,7 @@ class OuterOp(BinaryOperation):
     def name(self) -> str:
         return "outer"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x, y = args
         if len(x.shape) > 1 or len(y.shape) > 1:
             # Handle vmapped case: x is (B, N), y is (B, M) -> output (B, N, M)
@@ -465,8 +465,8 @@ class OuterOp(BinaryOperation):
         ).instantiate(input_shapes, output_shapes)
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP: (matmul(cotangent, rhs), matmul(transpose(cotangent), lhs))."""
         lhs, rhs = primals[0], primals[1]
         cotangent = cotangents[0]
@@ -478,8 +478,8 @@ class OuterOp(BinaryOperation):
         return [grad_lhs, grad_rhs]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """JVP: outer(tangent_lhs, rhs) + outer(lhs, tangent_rhs)."""
         lhs, rhs = primals[0], primals[1]
         tl, tr = tangents[0], tangents[1]
@@ -493,19 +493,19 @@ _pow_op = PowOp()
 _outer_op = OuterOp()
 
 
-def mod(x, y) -> "Tensor":
+def mod(x: Tensor, y: Tensor | float | int) -> Tensor:
     from .base import ensure_tensor
 
     return _mod_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
-def pow(x, y) -> "Tensor":
+def pow(x: Tensor, y: Tensor | float | int) -> Tensor:
     from .base import ensure_tensor
 
     return _pow_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
-def outer(x, y) -> "Tensor":
+def outer(x: Tensor, y: Tensor) -> Tensor:
     from .base import ensure_tensor
 
     return _outer_op([ensure_tensor(x), ensure_tensor(y)], {})[0]

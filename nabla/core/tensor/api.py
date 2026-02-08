@@ -7,13 +7,26 @@
 
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Union
+
+if TYPE_CHECKING:
+    import numpy as np
+    from types import EllipsisType
+
+    from max import driver, graph
+    from max.driver import Device
+    from max.dtype import DType
+    from max.graph import Shape, TensorValue
+
+    from ..sharding.spec import DeviceMesh, ShardingSpec
+    from ..graph.tracing import OpNode
+
 
 try:
     from rich.pretty import pretty_repr
 except ImportError:
 
-    def pretty_repr(obj, **kwargs):
+    def pretty_repr(obj: Any, **kwargs: Any) -> str:
         return repr(obj)
 
 
@@ -45,9 +58,9 @@ class Tensor(DLPackArray, HasTensorValue):
         *,
         buffers: driver.Buffer | None = None,
         value: graph.BufferValue | graph.TensorValue | None = None,
-        impl: TensorImpl | None = None,
+        impl: "TensorImpl | None" = None,
         is_traced: bool = False,
-    ):
+    ) -> None:
         if impl is not None:
             self._impl = impl
         else:
@@ -312,8 +325,8 @@ class Tensor(DLPackArray, HasTensorValue):
 
     def shard(
         self,
-        mesh: Any,
-        dim_specs: list[Any],
+        mesh: "DeviceMesh",
+        dim_specs: list["ShardingSpec" | str | list[str] | None],
         replicated_axes: set[str] | None = None,
     ) -> Tensor:
         """Shard this tensor across a device mesh, handling resharding and vmap batch dims."""
@@ -323,8 +336,8 @@ class Tensor(DLPackArray, HasTensorValue):
 
     def with_sharding(
         self,
-        mesh: Any,
-        dim_specs: list[Any],
+        mesh: "DeviceMesh",
+        dim_specs: list["ShardingSpec" | str | list[str] | None],
         replicated_axes: set[str] | None = None,
     ) -> Tensor:
         """Apply sharding constraint, resharding if needed."""
@@ -334,7 +347,7 @@ class Tensor(DLPackArray, HasTensorValue):
 
     def with_sharding_constraint(
         self,
-        mesh: Any,
+        mesh: "DeviceMesh",
         dim_specs: list[Any],
         replicated_axes: set[str] | None = None,
     ) -> Tensor:
@@ -346,12 +359,12 @@ class Tensor(DLPackArray, HasTensorValue):
         return self
 
     @property
-    def sharding(self) -> Any | None:
+    def sharding(self) -> "ShardingSpec | None":
         """Get the current sharding specification."""
         return self._impl.sharding
 
     @sharding.setter
-    def sharding(self, value: Any) -> None:
+    def sharding(self, value: "ShardingSpec | None") -> None:
         self._impl.sharding = value
 
     @property
@@ -963,7 +976,7 @@ class Tensor(DLPackArray, HasTensorValue):
     def __deepcopy__(self, memo: object) -> Tensor:
         return self
 
-    def item(self):
+    def item(self) -> float | int | bool:
         if self.num_elements() != 1:
             raise TypeError(
                 "Only single-element tensors can be converted to Python scalars"
@@ -975,7 +988,7 @@ class Tensor(DLPackArray, HasTensorValue):
             raise RuntimeError("Failed to realize tensor for item access")
         return t._impl._buffers[0].to(CPU()).item()
 
-    def to_numpy(self):
+    def to_numpy(self) -> "np.ndarray":
         """Convert tensor to numpy array."""
         t = self.gather()
         t.realize()
@@ -985,12 +998,12 @@ class Tensor(DLPackArray, HasTensorValue):
 
     numpy = to_numpy
 
-    def tolist(self) -> list:
+    def tolist(self) -> list[Any]:
         """Convert tensor to a Python list (PyTorch style)."""
         return self.to_numpy().tolist()
 
     @staticmethod
-    def to_numpy_all(*tensors: Tensor) -> tuple:
+    def to_numpy_all(*tensors: Tensor) -> tuple["np.ndarray", ...]:
         """Convert multiple tensors to numpy arrays in a single batched compilation.
 
         This is more efficient than calling `.to_numpy()` on each tensor individually,
@@ -1047,7 +1060,7 @@ class Tensor(DLPackArray, HasTensorValue):
 
     # --- Indexing ---
 
-    def __getitem__(self, key: Any) -> Tensor:
+    def __getitem__(self, key: int | slice | EllipsisType | tuple[int | slice | EllipsisType, ...]) -> Tensor:
         """Basic slicing and integer indexing."""
         from ...ops import view
 
@@ -1124,7 +1137,7 @@ def _ensure_tensor(value: TensorValueLike, like: Tensor) -> Tensor:
     return Tensor.constant(value, dtype=like.dtype, device=like.device)
 
 
-def _set_tensor_method(name: str, method) -> None:
+def _set_tensor_method(name: str, method: Any) -> None:
     method.__name__ = name
     method.__qualname__ = f"Tensor.{name}"
     setattr(Tensor, name, method)

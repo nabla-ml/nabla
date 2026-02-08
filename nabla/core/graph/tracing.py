@@ -18,7 +18,10 @@ from ..tensor.impl import TensorImpl
 
 if TYPE_CHECKING:
     from ...ops import Operation
+    from ..tensor.api import Tensor
     from ..tensor.impl import TensorImpl
+
+    from max.graph.graph import Shape
 
 
 @dataclass(frozen=True)
@@ -34,14 +37,14 @@ class OpNode:
         _op_hash: Operation hash for cache key computation.
     """
 
-    _refs: tuple[TensorImpl, ...]
+    _refs: tuple["TensorImpl | None", ...]
     tree_def: PyTreeDef
-    op: Operation
+    op: "Operation"
     op_args: tuple[Any, ...]
     op_kwargs: dict[str, Any] | None
     _op_hash: tuple[Any, ...] | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate that refs and tree_def are consistent."""
         if len(self._refs) != self.tree_def.num_leaves:
             raise ValueError(
@@ -49,7 +52,7 @@ class OpNode:
                 f"tree_def leaves {self.tree_def.num_leaves}"
             )
 
-    def get_alive_outputs(self) -> list[TensorImpl | None]:
+    def get_alive_outputs(self) -> list["TensorImpl | None"]:
         """Get output TensorImpls."""
         return list(self._refs)
 
@@ -92,11 +95,12 @@ class Trace:
         nodes: Topological list of OpNode.
     """
 
-    def __init__(self, inputs: Any, outputs: Any):
+    def __init__(self, inputs: Any, outputs: Any) -> None:
         self.inputs = inputs
         self.outputs = outputs
         self._computed = False
         self.nodes: list[OpNode] = []
+        self.gradient_leaves: list["TensorImpl"] = []
 
         from ..tensor.api import Tensor
 
@@ -111,7 +115,7 @@ class Trace:
 
         visited: set[int] = set()
         nodes: list[OpNode] = []
-        grad_leaves: list[TensorImpl] = [] if collect_grad else None
+        grad_leaves: list["TensorImpl"] | None = [] if collect_grad else None
 
         from ..tensor.api import Tensor
 
@@ -132,7 +136,12 @@ class Trace:
                     arg_leaves.append(arg)
 
             for arg in arg_leaves:
-                if collect_grad and arg.requires_grad and arg not in grad_leaves:
+                if (
+                    collect_grad
+                    and grad_leaves is not None
+                    and arg.requires_grad
+                    and arg not in grad_leaves
+                ):
                     grad_leaves.append(arg)
                 if stop_at_inputs and id(arg) in self._input_tensor_ids:
                     continue
@@ -144,7 +153,11 @@ class Trace:
 
         if collect_grad:
             for leaf in output_leaves:
-                if leaf.requires_grad and leaf not in grad_leaves:
+                if (
+                    grad_leaves is not None
+                    and leaf.requires_grad
+                    and leaf not in grad_leaves
+                ):
                     grad_leaves.append(leaf)
                 if leaf.output_refs is not None:
                     dfs(leaf.output_refs)
@@ -158,7 +171,7 @@ class Trace:
 
         self.nodes = nodes
         if collect_grad:
-            self.gradient_leaves = grad_leaves
+            self.gradient_leaves = grad_leaves or []
         self._computed = True
 
     def compute(self) -> None:
@@ -426,11 +439,13 @@ class GraphPrinter:
 
         return TensorImpl._format_type(node)
 
-    def _format_shape_part(self, shape: tuple | list, batch_dims: int = 0) -> str:
+    def _format_shape_part(
+        self, shape: tuple[int, ...] | list[int] | "Shape", batch_dims: int = 0
+    ) -> str:
         """Format a shape tuple with batch dims colors: [2, 3 | 4, 5]"""
         from ..tensor.impl import TensorImpl
 
-        return TensorImpl._format_shape_part(None, shape, batch_dims)
+        return TensorImpl._format_shape_part(shape, batch_dims)
 
     def _format_spec_factors(self, sharding: Any) -> str:
         """Format sharding factors: (<dp, tp>)"""
@@ -438,7 +453,7 @@ class GraphPrinter:
 
         return TensorImpl._format_spec_factors(sharding)
 
-    def _format_full_info(self, node: TensorImpl) -> str:
+    def _format_full_info(self, node: "TensorImpl") -> str:
         """Format: dtype[global](factors)(local=[local])"""
         return node.format_metadata(include_data=False)
 

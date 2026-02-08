@@ -20,12 +20,18 @@ from max.graph.graph import _location
 
 if TYPE_CHECKING:
     from ..tensor.api import Tensor
+    from ..tensor.impl import TensorImpl
+    from .tracing import OpNode
+    from max.graph.model import CompiledModel
+
 
 from ..common.context import _session
 
 _GRAPH_EPOCH: int = 0
-_SEED: ContextVar[Tensor] = ContextVar("_SEED")
-_GRAPH_CACHE: dict[tuple, Any] = {}  # cache_key -> compiled model
+_SEED: ContextVar[Tensor | None] = ContextVar("_SEED", default=None)
+_GRAPH_CACHE: dict[tuple[Any, ...], tuple[CompiledModel, list[int]]] = (
+    {}
+)  # cache_key -> (compiled model, kept_input_indices)
 
 import os
 
@@ -76,9 +82,9 @@ class ComputeGraph:
 
     graph: graph.Graph
     sources: dict[_core.Value[Any], driver.Buffer]
-    unrealized: weakref.WeakValueDictionary[int, TensorImpl]
+    unrealized: weakref.WeakValueDictionary[int, "TensorImpl"]
     epoch: int
-    _input_refs: list[Tensor]
+    _input_refs: list["Tensor"]
     _skip_finalize: bool
 
     def __init__(self, context: mlir.Context | None = None, seed: int = 0):
@@ -90,7 +96,10 @@ class ComputeGraph:
         self._reset(context, seed)
 
     def _reset(
-        self, context: mlir.Context | None, seed: int, input_types: list | None = None
+        self,
+        context: mlir.Context | None,
+        seed: int,
+        input_types: list[graph.TensorType] | None = None,
     ) -> None:
         """Resets the internal graph state.
 
@@ -120,7 +129,7 @@ class ComputeGraph:
 
         # gc.collect()  # Removed: too expensive for hot paths
 
-    def add_input(self, tensor: Tensor, shape: Any | None = None) -> None:
+    def add_input(self, tensor: "Tensor", shape: tuple[int, ...] | None = None) -> None:
         """Registers a realized tensor's bufferss as graph inputs."""
         impl = tensor._impl
         bufferss = impl._buffers
@@ -180,7 +189,7 @@ class ComputeGraph:
                 impl._graph_values = [bv[...] for bv in tensor_graph_values]
                 impl.graph_values_epoch = self.epoch
 
-    def add_constant(self, tensor: Tensor) -> None:
+    def add_constant(self, tensor: "Tensor") -> None:
         """Adds a realized tensor's data as a constant in the graph (not an input).
 
         Use this for intermediate tensors that are accessed during eager graph building
@@ -202,16 +211,16 @@ class ComputeGraph:
             impl._graph_values = const_values
             impl.graph_values_epoch = self.epoch
 
-    def add_unrealized(self, impl: TensorImpl) -> None:
+    def add_unrealized(self, impl: "TensorImpl") -> None:
         """Registers a tensor implementation as pending computation."""
         self.unrealized[id(impl)] = impl
 
     def evaluate(
         self,
-        tensor: Tensor,
+        tensor: "Tensor",
         *extra_outputs: Any,
         return_model: bool = False,
-    ) -> Any:
+    ) -> tuple[CompiledModel, list[driver.Buffer]] | None:
         """Main entry point: Evaluates specific tensors and their dependencies."""
 
         from ..common.pytree import tree_leaves
@@ -435,7 +444,7 @@ class ComputeGraph:
         self._cleanup_trace(targets)
         return (model, inputs) if return_model else None
 
-    def _cleanup_trace(self, targets: list[Tensor]) -> None:
+    def _cleanup_trace(self, targets: list["Tensor"]) -> None:
         """Clean up trace references to prevent unbounded memory growth.
 
         Once a tensor is realized, we can clear internal graph values but
@@ -475,7 +484,7 @@ class ComputeGraph:
             clean(t._impl)
 
     @staticmethod
-    def _topo_sort_opnodes(targets: list) -> list:
+    def _topo_sort_opnodes(targets: list["Tensor"]) -> list["OpNode"]:
         """Topologically sort OpNodes reachable from *targets*."""
         from ..common import pytree
         from ..tensor.impl import TensorImpl
@@ -501,7 +510,7 @@ class ComputeGraph:
                 dfs(t._impl.output_refs)
         return result
 
-    def _replay_trace_to_build_graph(self, targets: list[Tensor]) -> None:
+    def _replay_trace_to_build_graph(self, targets: list["Tensor"]) -> None:
         """Walk OpNode DAG and execute operations to build MAX graph."""
         from ..common import pytree
         from ..tensor.api import Tensor
@@ -570,7 +579,7 @@ class ComputeGraph:
         self.epoch = _GRAPH_EPOCH
         self._reset(None, seed_value)
 
-    def _get_input_tensors_ordered(self, targets: list[Tensor]) -> list[TensorImpl]:
+    def _get_input_tensors_ordered(self, targets: list["Tensor"]) -> list["TensorImpl"]:
         """Returns realized TensorImpls in the canonical order they would be added to a graph."""
         from ..common import pytree
         from ..tensor.impl import TensorImpl

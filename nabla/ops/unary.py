@@ -9,9 +9,11 @@ from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
-from .base import AxisOp, UnaryOperation
+from .base import AxisOp, OpArgs, OpKwargs, OpResult, OpTensorValues, UnaryOperation
 
 if TYPE_CHECKING:
+    from max.dtype import DType
+
     from ..core import Tensor
 
 
@@ -22,13 +24,13 @@ class ReluOp(UnaryOperation):
     def name(self) -> str:
         return "relu"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         """Apply ReLU element-wise."""
         return [ops.relu(args[0])]
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for ReLU: ∂relu(x)/∂x = (x > 0)."""
         x = primals[0]
         from ..ops.comparison import greater
@@ -40,8 +42,8 @@ class ReluOp(UnaryOperation):
         return [where(mask, cotangents[0], zeros_like(cotangents[0]))]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """JVP for ReLU: tangent where x > 0, else 0."""
         x = primals[0]
         t = tangents[0]
@@ -61,11 +63,11 @@ class SigmoidOp(UnaryOperation):
     def name(self) -> str:
         return "sigmoid"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         """Apply sigmoid element-wise."""
         return [ops.sigmoid(args[0])]
 
-    def _derivative(self, primals: Any, output: Any) -> Any:
+    def _derivative(self, primals: Tensor, output: Tensor) -> Tensor:
         """sigmoid'(x) = sigmoid(x) * (1 - sigmoid(x))."""
         from ..ops.binary import mul, sub
 
@@ -81,11 +83,11 @@ class TanhOp(UnaryOperation):
     def name(self) -> str:
         return "tanh"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         """Apply tanh element-wise."""
         return [ops.tanh(args[0])]
 
-    def _derivative(self, primals: Any, output: Any) -> Any:
+    def _derivative(self, primals: Tensor, output: Tensor) -> Tensor:
         """tanh'(x) = 1 - tanh(x)^2."""
         from ..ops.binary import mul, sub
 
@@ -99,11 +101,11 @@ class ExpOp(UnaryOperation):
     def name(self) -> str:
         return "exp"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         """Apply exp element-wise."""
         return [ops.exp(args[0])]
 
-    def _derivative(self, primals: Any, output: Any) -> Any:
+    def _derivative(self, primals: Tensor, output: Tensor) -> Tensor:
         """exp'(x) = exp(x) = output."""
         return output
 
@@ -115,19 +117,19 @@ class NegOp(UnaryOperation):
     def name(self) -> str:
         return "neg"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         """Apply negation element-wise."""
         return [ops.negate(args[0])]
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for neg: ∂(-x)/∂x = -1."""
         return [neg(cotangents[0])]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """JVP for neg: -tangent."""
         return [neg(tangents[0])]
 
@@ -139,13 +141,13 @@ class AbsOp(UnaryOperation):
     def name(self) -> str:
         return "abs"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         """Apply abs element-wise."""
         return [ops.abs(args[0])]
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for abs: grad = cotangent * sign(x)."""
         x = primals[0]
         cotangent = cotangents[0]
@@ -167,8 +169,8 @@ class AbsOp(UnaryOperation):
         ]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """JVP for abs: tangent * sign(x)."""
         x = primals[0]
         t = tangents[0]
@@ -194,14 +196,14 @@ class _SoftmaxNativeOp(AxisOp, UnaryOperation):
     def name(self) -> str:
         return "softmax"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         """Apply softmax using MAX's native softmax."""
         axis = kwargs.get("axis", -1)
         return [ops.softmax(args[0], axis=axis)]
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for softmax: ∂s_i/∂x_j = s_i(δ_ij - s_j)."""
         from ..ops.binary import mul, sub
         from ..ops.reduction import reduce_sum
@@ -214,8 +216,8 @@ class _SoftmaxNativeOp(AxisOp, UnaryOperation):
         return [mul(output, sub(cotangent, sum_cot_mul_out))]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         from ..ops.binary import mul, sub
         from ..ops.reduction import reduce_sum
 
@@ -233,11 +235,11 @@ class LogOp(UnaryOperation):
     def name(self) -> str:
         return "log"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         """Apply log element-wise."""
         return [ops.log(args[0])]
 
-    def _derivative(self, primals: Any, output: Any) -> Any:
+    def _derivative(self, primals: Tensor, output: Tensor) -> Tensor:
         """log'(x) = 1/x."""
         x = primals
         from ..ops.binary import div
@@ -253,11 +255,11 @@ class SqrtOp(UnaryOperation):
     def name(self) -> str:
         return "sqrt"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         """Apply sqrt element-wise."""
         return [ops.sqrt(args[0])]
 
-    def _derivative(self, primals: Any, output: Any) -> Any:
+    def _derivative(self, primals: Tensor, output: Tensor) -> Tensor:
         """sqrt'(x) = 1/(2*sqrt(x)) = 1/(2*output)."""
         from ..ops.binary import div, mul
 
@@ -314,7 +316,7 @@ class AcosOp(UnaryOperation):
     def name(self) -> str:
         return "acos"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         res = ops.acos(x)
         abs_x = ops.abs(x)
@@ -323,7 +325,7 @@ class AcosOp(UnaryOperation):
         nan = ops.constant(float("nan"), x.type.dtype, x.type.device)
         return [ops.where(mask, ops.broadcast_to(nan, x.type.shape), res)]
 
-    def _derivative(self, primals: Any, output: Any) -> Any:
+    def _derivative(self, primals: Tensor, output: Tensor) -> Tensor:
         """acos'(x) = -1/sqrt(1 - x^2)."""
         x = primals
         from . import neg, sqrt
@@ -339,10 +341,10 @@ class AtanhOp(UnaryOperation):
     def name(self) -> str:
         return "atanh"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         return [ops.atanh(args[0])]
 
-    def _derivative(self, primals: Any, output: Any) -> Any:
+    def _derivative(self, primals: Tensor, output: Tensor) -> Tensor:
         """atanh'(x) = 1/(1 - x^2)."""
         x = primals
         from ..ops.binary import div, mul, sub
@@ -357,10 +359,10 @@ class CosOp(UnaryOperation):
     def name(self) -> str:
         return "cos"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         return [ops.cos(args[0])]
 
-    def _derivative(self, primals: Any, output: Any) -> Any:
+    def _derivative(self, primals: Tensor, output: Tensor) -> Tensor:
         """cos'(x) = -sin(x)."""
         x = primals
         from . import neg, sin
@@ -375,10 +377,10 @@ class ErfOp(UnaryOperation):
     def name(self) -> str:
         return "erf"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         return [ops.erf(args[0])]
 
-    def _derivative(self, primals: Any, output: Any) -> Any:
+    def _derivative(self, primals: Tensor, output: Tensor) -> Tensor:
         """erf'(x) = (2/sqrt(pi)) * exp(-x^2)."""
         x = primals
         import math
@@ -396,19 +398,19 @@ class FloorOp(UnaryOperation):
     def name(self) -> str:
         return "floor"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         return [ops.floor(args[0])]
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         from ..ops.creation import zeros_like
 
         return [zeros_like(cotangents[0])]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         from ..ops.creation import zeros_like
 
         return [zeros_like(outputs[0])]
@@ -435,7 +437,7 @@ class IsInfOp(_BoolOutputUnaryOp):
     def name(self) -> str:
         return "is_inf"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         return [ops.is_inf(args[0])]
 
 
@@ -446,7 +448,7 @@ class IsNanOp(_BoolOutputUnaryOp):
     def name(self) -> str:
         return "is_nan"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         return [ops.is_nan(args[0])]
 
 
@@ -457,10 +459,10 @@ class Log1pOp(UnaryOperation):
     def name(self) -> str:
         return "log1p"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         return [ops.log1p(args[0])]
 
-    def _derivative(self, primals: Any, output: Any) -> Any:
+    def _derivative(self, primals: Tensor, output: Tensor) -> Tensor:
         """log1p'(x) = 1/(1 + x)."""
         x = primals
         from ..ops.binary import add, div
@@ -475,10 +477,10 @@ class RsqrtOp(UnaryOperation):
     def name(self) -> str:
         return "rsqrt"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         return [ops.rsqrt(args[0])]
 
-    def _derivative(self, primals: Any, output: Any) -> Any:
+    def _derivative(self, primals: Tensor, output: Tensor) -> Tensor:
         """rsqrt'(x) = -0.5 * rsqrt(x)^3 = -0.5 * output^3."""
         from ..ops.binary import mul
 
@@ -492,10 +494,10 @@ class SiluOp(UnaryOperation):
     def name(self) -> str:
         return "silu"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         return [ops.silu(args[0])]
 
-    def _derivative(self, primals: Any, output: Any) -> Any:
+    def _derivative(self, primals: Tensor, output: Tensor) -> Tensor:
         """silu'(x) = sigmoid(x) + silu(x) * (1 - sigmoid(x))."""
         x = primals
         from . import sigmoid
@@ -512,10 +514,10 @@ class SinOp(UnaryOperation):
     def name(self) -> str:
         return "sin"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         return [ops.sin(args[0])]
 
-    def _derivative(self, primals: Any, output: Any) -> Any:
+    def _derivative(self, primals: Tensor, output: Tensor) -> Tensor:
         """sin'(x) = cos(x)."""
         x = primals
         from . import cos
@@ -530,19 +532,19 @@ class TruncOp(UnaryOperation):
     def name(self) -> str:
         return "trunc"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         return [ops.trunc(args[0])]
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         from ..ops.creation import zeros_like
 
         return [zeros_like(cotangents[0])]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         from ..ops.creation import zeros_like
 
         return [zeros_like(outputs[0])]
@@ -555,7 +557,7 @@ class GeluOp(UnaryOperation):
     def name(self) -> str:
         return "gelu"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
         approx = kwargs.get("approximate", "none")
         if approx is True:
@@ -564,7 +566,7 @@ class GeluOp(UnaryOperation):
             approx = "none"
         return [ops.gelu(x, approximate=approx)]
 
-    def _derivative(self, primals: Any, output: Any) -> Any:
+    def _derivative(self, primals: Tensor, output: Tensor) -> Tensor:
         """GELU'(x) = cdf(x) + x * pdf(x)."""
         x = primals
         import math
@@ -585,13 +587,13 @@ class _LogSoftmaxNativeOp(AxisOp, UnaryOperation):
     def name(self) -> str:
         return "logsoftmax"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         axis = kwargs.get("axis", -1)
         return [ops.logsoftmax(args[0], axis=axis)]
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         from ..ops.binary import mul, sub
         from ..ops.reduction import reduce_sum
 
@@ -603,8 +605,8 @@ class _LogSoftmaxNativeOp(AxisOp, UnaryOperation):
         return [sub(cotangent, mul(soft, sum_cot))]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         from ..ops.binary import mul, sub
         from ..ops.reduction import reduce_sum
 
@@ -622,19 +624,19 @@ class RoundOp(UnaryOperation):
     def name(self) -> str:
         return "round"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         return [ops.round(args[0])]
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         from ..ops.creation import zeros_like
 
         return [zeros_like(cotangents[0])]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         from ..ops.creation import zeros_like
 
         return [zeros_like(outputs[0])]
@@ -647,7 +649,7 @@ class CastOp(UnaryOperation):
     def name(self) -> str:
         return "cast"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         return [ops.cast(args[0], kwargs["dtype"])]
 
     def compute_physical_shape(
@@ -660,14 +662,14 @@ class CastOp(UnaryOperation):
         return shapes, [dtype] * len(shapes), devices
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         x = primals[0]
         return [cast(cotangents[0], dtype=x.dtype)]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         dtype = kwargs.get("dtype")
         return [cast(tangents[0], dtype=dtype)]
 
@@ -746,7 +748,7 @@ def round(x: Tensor) -> Tensor:
     return _round_op([x], {})[0]
 
 
-def cast(x: Tensor, dtype: Any = None) -> Tensor:
+def cast(x: Tensor, dtype: DType | None = None) -> Tensor:
     return _cast_op([x], {"dtype": dtype})[0]
 
 

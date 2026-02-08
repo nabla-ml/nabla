@@ -9,13 +9,13 @@ from typing import TYPE_CHECKING
 
 from max.graph import TensorValue, ops
 
-from ..base import Operation
+from ..base import OpArgs, OpKwargs, OpResult, OpTensorValues, Operation
 
 if TYPE_CHECKING:
     from ...core import Tensor
 
 
-def _adapt_axis_kwargs(kwargs: dict, batch_dims: int) -> dict:
+def _adapt_axis_kwargs(kwargs: OpKwargs, batch_dims: int) -> OpKwargs:
     """Translate logical axis to physical axis for gather/scatter."""
     if batch_dims == 0:
         return kwargs
@@ -31,7 +31,7 @@ class GatherOp(Operation):
     def name(self) -> str:
         return "gather"
 
-    def adapt_kwargs(self, args: list, kwargs: dict, batch_dims: int) -> dict:
+    def adapt_kwargs(self, args: OpArgs, kwargs: OpKwargs, batch_dims: int) -> dict:
         return _adapt_axis_kwargs(kwargs, batch_dims)
 
     def compute_physical_shape(
@@ -79,7 +79,7 @@ class GatherOp(Operation):
 
         return shapes, dtypes, devices
 
-    def __call__(self, args: list, kwargs: dict) -> list:
+    def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
         """Call gather with LOGICAL axis (no translation here)."""
         x = args[0]
         axis = kwargs.get("axis", 0)
@@ -88,7 +88,7 @@ class GatherOp(Operation):
             axis = logical_ndim + axis
         return super().__call__(args, {**kwargs, "axis": axis})
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         from max.dtype import DType
 
         x = args[0]
@@ -162,8 +162,8 @@ class GatherOp(Operation):
             return [ops.gather(x, indices, axis)]
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP rule uses LOGICAL axis from kwargs."""
         x, indices = primals[0], primals[1]
         axis = kwargs.get("axis", 0)
@@ -173,8 +173,8 @@ class GatherOp(Operation):
         return [gx, None]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """JVP rule uses LOGICAL axis from kwargs."""
         x, indices = primals[0], primals[1]
         tx = tangents[0]
@@ -220,7 +220,7 @@ class ScatterOp(Operation):
     def name(self) -> str:
         return "scatter"
 
-    def adapt_kwargs(self, args: list, kwargs: dict, batch_dims: int) -> dict:
+    def adapt_kwargs(self, args: OpArgs, kwargs: OpKwargs, batch_dims: int) -> dict:
         return _adapt_axis_kwargs(kwargs, batch_dims)
 
     def compute_physical_shape(
@@ -247,7 +247,7 @@ class ScatterOp(Operation):
 
         return shapes, dtypes, devices
 
-    def __call__(self, args: list, kwargs: dict) -> list:
+    def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
         """Call scatter with LOGICAL axis (no translation here)."""
         x = args[0]
         axis = kwargs.get("axis", 0)
@@ -256,7 +256,7 @@ class ScatterOp(Operation):
             axis = logical_ndim + axis
         return super().__call__(args, {**kwargs, "axis": axis})
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         from max.dtype import DType
 
         x = args[0]
@@ -381,8 +381,8 @@ class ScatterOp(Operation):
         return ops.scatter_nd(x, updates, stacked)
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP rule uses LOGICAL axis from kwargs."""
         x, indices, updates = primals[0], primals[1], primals[2]
         axis = kwargs.get("axis", 0)
@@ -394,8 +394,8 @@ class ScatterOp(Operation):
         return [gx, None, g_updates]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """JVP rule uses LOGICAL axis from kwargs."""
         x, indices, updates = primals[0], primals[1], primals[2]
         tx, _, t_updates = tangents[0], tangents[1], tangents[2]

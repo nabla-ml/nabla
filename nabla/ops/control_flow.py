@@ -12,7 +12,7 @@ from max import graph
 from max.graph import ops
 
 from ..core import GRAPH, pytree
-from .base import Operation, ensure_tensor
+from .base import OpArgs, OpKwargs, OpResult, OpTensorValues, Operation, ensure_tensor
 
 if TYPE_CHECKING:
     from ..core.sharding.spec import DeviceMesh
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 class WhereOp(Operation):
     """Element-wise conditional selection: where(cond, x, y)."""
 
-    def __call__(self, args: list, kwargs: dict) -> list:
+    def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
         from . import view as view_ops
         from .base import ensure_tensor
 
@@ -116,13 +116,13 @@ class WhereOp(Operation):
 
         return shapes, dtypes, devices
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         condition, x, y = args[0], args[1], args[2]
         return [ops.where(condition, x, y)]
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         from .creation import zeros_like
         from .control_flow import where
 
@@ -132,8 +132,8 @@ class WhereOp(Operation):
         return [None, grad_x, grad_y]
 
     def jvp_rule(
-        self, primals: list, tangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         from .control_flow import where
 
         condition = primals[0]
@@ -147,7 +147,7 @@ class CondOp(Operation):
     def name(self) -> str:
         return "cond"
 
-    def __call__(self, args: list, kwargs: dict) -> list:
+    def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
         from ..core.tensor import Tensor
 
         pred = args[0]
@@ -248,7 +248,7 @@ class CondOp(Operation):
             input_shapes, output_shapes
         )
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         from ..core.tensor import Tensor
 
         pred_shard = args[0]
@@ -317,7 +317,7 @@ class WhileLoopOp(Operation):
     def name(self) -> str:
         return "while_loop"
 
-    def __call__(self, args: list, kwargs: dict) -> list:
+    def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
         cond_fn = args[0]
         body_fn = args[1]
         init_val = args[2]
@@ -399,7 +399,7 @@ class WhileLoopOp(Operation):
             input_shapes, output_shapes
         )
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         from ..core.tensor import Tensor
 
         cond_fn = args[0]
@@ -459,14 +459,14 @@ class ScanOp(Operation):
     def compute_physical_shape(self, args, kwargs, output_sharding=None):
         return None, None, None
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         raise NotImplementedError("ScanOp is unrolled via __call__.")
 
     def __call__(
         self,
-        args: list,
-        kwargs: dict,
-    ) -> list:
+        args: OpArgs,
+        kwargs: OpKwargs,
+    ) -> OpResult:
         f = args[0]
         init = args[1]
         xs = args[2]
@@ -518,16 +518,16 @@ def where(condition: Tensor, x: Tensor, y: Tensor) -> Tensor:
     return _where_op([condition, x, y], {})[0]
 
 
-def cond(pred: Tensor, true_fn: Callable, false_fn: Callable, *operands: Any) -> Any:
+def cond(pred: Tensor, true_fn: Callable[..., Any], false_fn: Callable[..., Any], *operands: Any) -> Any:
     return _cond_op([pred, true_fn, false_fn] + list(operands), {})
 
 
-def while_loop(cond_fn: Callable, body_fn: Callable, init_val: Any) -> Any:
+def while_loop(cond_fn: Callable[..., bool], body_fn: Callable[..., Any], init_val: Any) -> Any:
     return _while_loop_op([cond_fn, body_fn, init_val], {})
 
 
 def scan(
-    f: Callable, init: Any, xs: Any, length: int | None = None, reverse: bool = False
+    f: Callable[[Any, Any], tuple[Any, Any]], init: Any, xs: Any, length: int | None = None, reverse: bool = False
 ) -> tuple[Any, Any]:
     return _scan_op([f, init, xs], {"length": length, "reverse": reverse})
 

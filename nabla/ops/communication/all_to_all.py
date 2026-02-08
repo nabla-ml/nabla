@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
+from ..base import OpArgs, OpKwargs, OpResult, OpTensorValues
 from .base import CollectiveOperation
 
 if TYPE_CHECKING:
@@ -69,8 +70,8 @@ class AllToAllOp(CollectiveOperation):
     # _get_shifted_axes helper removed in favor of centralized _get_physical_axis
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for all_to_all: another all_to_all with swapped axes."""
         split_axis = kwargs.get("split_axis")
         concat_axis = kwargs.get("concat_axis")
@@ -81,7 +82,7 @@ class AllToAllOp(CollectiveOperation):
             all_to_all(cotangents[0], split_axis=concat_axis, concat_axis=split_axis)
         ]
 
-    def execute(self, args: list, kwargs: dict) -> Any:
+    def execute(self, args: OpArgs, kwargs: OpKwargs) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
         """All-to-all distributed transpose (Physical)."""
         from ...core import GRAPH, Tensor
 

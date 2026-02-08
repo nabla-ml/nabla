@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
-from ..base import Operation
+from ..base import OpArgs, OpKwargs, OpResult, OpTensorValues, Operation
 from .base import CollectiveOperation
 
 if TYPE_CHECKING:
@@ -64,8 +64,8 @@ class AllGatherOp(CollectiveOperation):
         return shapes, dtypes, devices
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for all_gather: reshard back to input's sharding."""
         x = primals[0]
         from .reshard import reshard
@@ -117,7 +117,7 @@ class AllGatherOp(CollectiveOperation):
 
         return ShardingSpec(input_sharding.mesh, new_dim_specs)
 
-    def execute(self, args: list, kwargs: dict) -> Any:
+    def execute(self, args: OpArgs, kwargs: OpKwargs) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
         """Gather shards along an axis to produce replicated full tensors (Physical).
 
         Derives all physical context (mesh, sharded_axis_name) internally.
@@ -301,8 +301,8 @@ class GatherAllAxesOp(Operation):
         return shapes, dtypes, devices
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for gather_all_axes: reshard back to input's sharding."""
         x = primals[0]
         from .reshard import reshard
@@ -319,7 +319,7 @@ class GatherAllAxesOp(Operation):
             )
         ]
 
-    def infer_sharding_spec(self, args: Any, mesh: Any, kwargs: dict) -> Any:
+    def infer_sharding_spec(self, args: OpArgs, mesh: DeviceMesh | None, kwargs: dict) -> Any:
         """Infer sharding: Input preserves current sharding, Output is replicated."""
         if not args:
             return None, [], False
@@ -337,7 +337,7 @@ class GatherAllAxesOp(Operation):
 
         return output_sharding, input_shardings, False
 
-    def execute(self, args: list, kwargs: dict) -> Any:
+    def execute(self, args: OpArgs, kwargs: OpKwargs) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
         """Physical execution for GatherAllAxesOp."""
         from ...core import GRAPH, Tensor
         from ...core.sharding.spmd import create_replicated_spec

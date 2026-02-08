@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
+from ..base import OpArgs, OpKwargs, OpResult, OpTensorValues
 from .base import CollectiveOperation
 
 if TYPE_CHECKING:
@@ -38,7 +39,7 @@ class AllReduceOp(CollectiveOperation):
     ) -> float:
         return CollectiveOperation._ring_cost(size_bytes, mesh, axes, factor=2.0)
 
-    def execute(self, args: list, kwargs: dict) -> Any:
+    def execute(self, args: OpArgs, kwargs: OpKwargs) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
         """Sum-reduce across shards (Physical)."""
         from ...core import GRAPH, Tensor
 
@@ -151,7 +152,7 @@ class AllReduceOp(CollectiveOperation):
 
         return [result] * len(shard_graph_values)
 
-    def infer_sharding_spec(self, args: Any, mesh: DeviceMesh, kwargs: dict) -> Any:
+    def infer_sharding_spec(self, args: OpArgs, mesh: DeviceMesh | None, kwargs: dict) -> Any:
         """Infer sharding for AllReduce (Adaptation Layer)."""
         input_tensor = args[0]
         input_sharding = input_tensor.sharding
@@ -159,8 +160,8 @@ class AllReduceOp(CollectiveOperation):
         return output_sharding, [input_sharding], False
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for AllReduce (sum): assign replicated gradient to shards."""
         input_tensor = primals[0]
 
@@ -277,7 +278,7 @@ class PMeanOp(CollectiveOperation):
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         return self._compute_local_preserved_shapes(args, kwargs)
 
-    def execute(self, args: list, kwargs: dict) -> Any:
+    def execute(self, args: OpArgs, kwargs: OpKwargs) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
         """Compute mean across shards (Physical)."""
         from ...core import GRAPH
 

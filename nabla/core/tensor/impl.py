@@ -22,13 +22,14 @@ C_BATCH = "\033[90m"
 if TYPE_CHECKING:
     from ...ops import Operation
     from ..graph.tracing import OpNode
-    from ..sharding import ShardingSpec
+    from ..sharding.spec import ShardingSpec, DeviceMesh
+    from .api import Tensor
 
 # Module-level cache for hot-path imports (avoids per-call deferred imports)
 _GRAPH = None
 
 
-def _get_graph():
+def _get_graph() -> None:
     global _GRAPH
     from ..graph.engine import GRAPH
 
@@ -60,16 +61,17 @@ class TensorImpl:
 
     _graph_values: list[graph.BufferValue | graph.TensorValue]
     _buffers: list[driver.Buffer] | None
-    sharding: object | None
-    sharding_constraint: object | None
+    sharding: "ShardingSpec | None"
+    sharding_constraint: "ShardingSpec | None"
     is_traced: bool
     requires_grad: bool
     tangent: TensorImpl | None
     cotangent: TensorImpl | None
     dual: TensorImpl | None
     batch_dims: int
-    output_refs: OpNode | None
+    output_refs: "OpNode | None"
     output_index: int
+    graph_values_epoch: int
     _physical_shapes: list[tuple[int, ...]] | None
     _shard_dtypes: list[DType] | None
     _shard_devices: list[Device] | None
@@ -85,11 +87,11 @@ class TensorImpl:
         ) = None,
         is_traced: bool = False,
         batch_dims: int = 0,
-        sharding_constraint: ShardingSpec | None = None,
+        sharding_constraint: "ShardingSpec | None" = None,
         physical_shapes: list[tuple[int, ...]] | None = None,
         shard_dtypes: list[DType] | None = None,
         shard_devices: list[Device] | None = None,
-    ):
+    ) -> None:
         self._graph_values = (
             values
             if isinstance(values, list)
@@ -184,7 +186,7 @@ class TensorImpl:
     def is_leaf(self) -> bool:
         return len(self.parents) == 0
 
-    def _get_valid_graph_values(self):
+    def _get_valid_graph_values(self) -> list[graph.BufferValue | graph.TensorValue]:
         global _GRAPH
         if _GRAPH is None:
             _get_graph()
@@ -324,7 +326,7 @@ class TensorImpl:
         return self.physical_local_shape(0)
 
     @staticmethod
-    def _format_type(impl: TensorImpl) -> str:
+    def _format_type(impl: "TensorImpl") -> str:
         """Get a concise string representation of the dtype."""
         try:
             dtype_obj = impl.dtype
@@ -353,7 +355,7 @@ class TensorImpl:
         )
 
     @staticmethod
-    def _format_shape_part(shape: tuple | list | None, batch_dims: int = 0) -> str:
+    def _format_shape_part(shape: tuple[int, ...] | list[int] | graph.Shape | None, batch_dims: int = 0) -> str:
         """Format a shape tuple with batch dims colored."""
         if shape is None:
             return "[?]"
@@ -375,16 +377,16 @@ class TensorImpl:
         return str(clean).replace(" ", "")
 
     @staticmethod
-    def _format_spec_factors(sharding: Any) -> str:
+    def _format_spec_factors(sharding: "ShardingSpec | None") -> str:
         """Format sharding factors: (<dp, tp>)"""
         if not sharding:
             return ""
 
-        all_partial_axes = set()
+        all_partial_axes: set[str] = set()
         if hasattr(sharding, "partial_sum_axes"):
             all_partial_axes.update(sharding.partial_sum_axes)
 
-        factors = []
+        factors: list[str] = []
         if hasattr(sharding, "dim_specs"):
             for dim in sharding.dim_specs:
                 if getattr(dim, "partial", False):
@@ -409,7 +411,7 @@ class TensorImpl:
         batch_dims = getattr(self, "batch_dims", 0)
 
         # Try to get shapes without triggering errors
-        local_shape = None
+        local_shape: graph.Shape | None = None
         try:
             local_shape = self.physical_local_shape(0)
         except Exception:
@@ -434,7 +436,7 @@ class TensorImpl:
                             shard_shapes = [v.type.shape for v in vals]
 
                     g_shape = compute_global_shape(
-                        tuple(local_shape), self.sharding, shard_shapes=shard_shapes
+                        tuple(int(d) for d in local_shape), self.sharding, shard_shapes=shard_shapes
                     )
                     global_str = self._format_shape_part(g_shape, batch_dims)
             except Exception:
@@ -519,9 +521,6 @@ class TensorImpl:
             return values[0].type.shape
         if self._buffers:
             return graph.Shape(self._buffers[0].shape)
-        if self.sharding:
-
-            pass
         raise RuntimeError("No shape source available")
 
     def get_realized_dtype(self) -> DType:

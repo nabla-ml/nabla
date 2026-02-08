@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 from max.driver import Device
 from max.graph import TensorValue
 
-from ..base import Operation
+from ..base import OpArgs, OpKwargs, OpResult, OpTensorValues, Operation
 
 if TYPE_CHECKING:
     from ...core import Tensor
@@ -35,7 +35,7 @@ class TransferOp(Operation):
     def name(self) -> str:
         return f"transfer_to_{self.target_device}"
 
-    def kernel(self, args: list, kwargs: dict) -> list:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         """Transfer tensor to target device using MAX's transfer_to operation."""
         from max.graph import ops as graph_ops
 
@@ -67,7 +67,7 @@ class TransferOp(Operation):
 
         return shapes, dtypes, devices
 
-    def execute(self, args: list, kwargs: dict) -> Any:
+    def execute(self, args: OpArgs, kwargs: OpKwargs) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
         """Execute device transfer.
 
         Returns:
@@ -93,8 +93,8 @@ class TransferOp(Operation):
         return ([result], output_sharding, mesh)
 
     def vjp_rule(
-        self, primals: list, cotangents: list, outputs: list, kwargs: dict
-    ) -> list:
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
         """VJP for device transfer: identity (gradient stays on output device).
 
         The gradient is already on the correct device (same as output),

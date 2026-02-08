@@ -74,7 +74,13 @@ def jacfwd(
     return jacfwd_fn
 
 
-def _reshape_jacfwd(output_tangents, test_output, flat_inputs, sizes, diff_args):
+def _reshape_jacfwd(
+    output_tangents: Any,
+    test_output: Any,
+    flat_inputs: list[Tensor],
+    sizes: list[int],
+    diff_args: tuple[Any, ...],
+) -> Any:
     """Reshape vmap(jvp) results into Jacobian shape ``(*out, *in)``."""
     from ..core.tensor.api import Tensor
     from ..ops.view.shape import reshape
@@ -150,7 +156,7 @@ def _reshape_jacfwd(output_tangents, test_output, flat_inputs, sizes, diff_args)
         )
 
 
-def _permute_tensor(t, perm: tuple[int, ...]):
+def _permute_tensor(t: Tensor, perm: tuple[int, ...]) -> Tensor:
     from ..ops.view.axes import swap_axes
 
     ndim = len(perm)

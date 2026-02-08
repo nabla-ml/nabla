@@ -66,7 +66,7 @@ def jvp(
     return output, output_tangents
 
 
-def _attach_tangents(primals: tuple, tangents: tuple) -> None:
+def _attach_tangents(primals: tuple[Any, ...], tangents: tuple[Any, ...]) -> None:
     from ..core.common import pytree
     from ..core.tensor.api import Tensor
 
@@ -85,7 +85,7 @@ def _attach_tangents(primals: tuple, tangents: tuple) -> None:
                 p._impl.tangent = t._impl
 
 
-def _detach_tangents(primals: tuple) -> None:
+def _detach_tangents(primals: tuple[Any, ...]) -> None:
     from ..core.common import pytree
     from ..core.tensor.api import Tensor
 

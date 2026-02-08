@@ -5,13 +5,17 @@
 
 from __future__ import annotations
 
-from typing import Callable, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 from .utils import backward_on_trace
 from ..graph.tracing import trace
 from ..common import pytree
 from ..tensor.api import Tensor
 from ...transforms.utils import select_argnums
+
+if TYPE_CHECKING:
+    from .utils import GradsMap
+    from ..graph.tracing import Trace
 
 
 def grad(
@@ -22,9 +26,9 @@ def grad(
 ) -> Callable:
     """Return a function computing the gradient of *fun* (must return a scalar)."""
 
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
         # Trace the function execution
-        t = trace(fun, *args, **kwargs)
+        t: "Trace" = trace(fun, *args, **kwargs)
 
         output = t.outputs
 
@@ -33,13 +37,13 @@ def grad(
 
         # If output is a single Tensor, create ones_like
         if isinstance(output, Tensor):
-            cotangent = ones_like(output)
+            cotangent: Tensor = ones_like(output)
         else:
             raise TypeError(f"grad: output must be a Tensor, got {type(output)}")
 
-        grads_map = backward_on_trace(t, cotangent, create_graph=create_graph)
+        grads_map: "GradsMap" = backward_on_trace(t, cotangent, create_graph=create_graph)
         input_leaves = pytree.tree_leaves(args)
-        grad_leaves = []
+        grad_leaves: list[Tensor | None] = []
         for inp in input_leaves:
             if isinstance(inp, Tensor) and inp in grads_map:
                 grad_leaves.append(grads_map[inp])
@@ -76,22 +80,22 @@ def value_and_grad(
 ) -> Callable:
     """Return a function computing ``(value, grad)`` of *fun*."""
 
-    def wrapper(*args, **kwargs):
-        t = trace(fun, *args, **kwargs)
+    def wrapper(*args: Any, **kwargs: Any) -> tuple[Any, Any]:
+        t: "Trace" = trace(fun, *args, **kwargs)
         output = t.outputs
 
         from ...ops.creation import ones_like
         from ..tensor.api import Tensor
 
         if isinstance(output, Tensor):
-            cotangent = ones_like(output)
+            cotangent: Tensor = ones_like(output)
         else:
             raise TypeError(f"grad: output must be a Tensor, got {type(output)}")
 
-        grads_map = backward_on_trace(t, cotangent, create_graph=create_graph)
+        grads_map: "GradsMap" = backward_on_trace(t, cotangent, create_graph=create_graph)
 
         input_leaves = pytree.tree_leaves(args)
-        grad_leaves = []
+        grad_leaves: list[Tensor | None] = []
         for inp in input_leaves:
             if isinstance(inp, Tensor) and inp in grads_map:
                 grad_leaves.append(grads_map[inp])
@@ -100,7 +104,7 @@ def value_and_grad(
 
         # Group and evaluate everything at once: primal output + all gradients
         if realize:
-            all_targets = (
+            all_targets: list[Tensor] = (
                 [output] if isinstance(output, Tensor) and not output.real else []
             )
             all_targets.extend(
