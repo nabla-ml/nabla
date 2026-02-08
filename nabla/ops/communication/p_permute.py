@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
@@ -27,17 +27,17 @@ class PPermuteOp(CollectiveOperation):
         return "ppermute"
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         return self._compute_local_preserved_shapes(args, kwargs)
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
         """VJP for ppermute: permute back with inverse table."""
-        perm = output.op_kwargs.get("permutation")
+        perm = kwargs.get("permutation")
         inv_perm = [(dst, src) for src, dst in perm]
         from .p_permute import ppermute
 
-        return ppermute(cotangent, inv_perm)
+        return [ppermute(cotangents[0], inv_perm)]
 
     def infer_sharding_spec(self, args: Any, mesh: DeviceMesh, kwargs: dict) -> Any:
         """Infer sharding for PPermute (Adaptation Layer)."""
@@ -46,7 +46,7 @@ class PPermuteOp(CollectiveOperation):
         # PPermute preserves sharding spec (it just moves data between devices).
         return input_sharding, [input_sharding], False
 
-    def execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
+    def execute(self, args: list, kwargs: dict) -> Any:
         """Point-to-point permutation (Physical)."""
         from ...core import GRAPH, Tensor
 
@@ -113,9 +113,9 @@ class PPermuteOp(CollectiveOperation):
         return results
 
 
-ppermute_op = PPermuteOp()
+_ppermute_op = PPermuteOp()
 
 
 def ppermute(sharded_tensor, permutation: list[tuple]):
     """Point-to-point permutation collective."""
-    return ppermute_op(sharded_tensor, permutation=permutation)
+    return _ppermute_op([sharded_tensor], {"permutation": permutation})[0]

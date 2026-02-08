@@ -20,7 +20,7 @@ class DistributedBroadcastOp(CollectiveOperation):
         return "distributed_broadcast"
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Output shape is same as input shape on all shards (replicated)."""
         from ...core.sharding import spmd
@@ -39,7 +39,7 @@ class DistributedBroadcastOp(CollectiveOperation):
         dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
         return shapes, dtypes, devices
 
-    def execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
+    def execute(self, args: list, kwargs: dict) -> Any:
         """Execute distributed broadcast using MAX ops."""
         from ...core import GRAPH, Tensor
         from ...core.sharding.spmd import create_replicated_spec
@@ -62,15 +62,15 @@ class DistributedBroadcastOp(CollectiveOperation):
         
         return (results, output_spec, mesh)
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
         """VJP for distributed broadcast: AllReduce(sum) back to root."""
         from .all_reduce import all_reduce
-        return (all_reduce(cotangent),)
+        return [all_reduce(cotangents[0])]
 
 
-distributed_broadcast_op = DistributedBroadcastOp()
+_distributed_broadcast_op = DistributedBroadcastOp()
 
 
 def distributed_broadcast(x, mesh=None):
     """Broadcast a tensor across a distributed mesh."""
-    return distributed_broadcast_op(x, mesh=mesh)
+    return _distributed_broadcast_op([x], {"mesh": mesh})[0]

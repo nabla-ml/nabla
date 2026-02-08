@@ -289,13 +289,13 @@ def create_replicated_spec(mesh: DeviceMesh, rank: int) -> ShardingSpec:
 
 
 def get_shard_args(
-    args: tuple,
+    args: list,
     shard_idx: int,
     per_input_shardings: list[ShardingSpec | None],
     g: Any,
     Tensor: type,
     pytree: Any,
-) -> tuple:
+) -> list:
     """Get per-shard TensorValues, slicing each input according to its sharding."""
 
     input_idx = [0]
@@ -373,7 +373,7 @@ def create_sharded_output(
 
 def execute_on_shards(
     op_fn: Any,
-    args: tuple,
+    args: list,
     kwargs: dict,
     mesh: DeviceMesh | None,
     input_shardings: list[ShardingSpec | None] | None = None,
@@ -406,7 +406,15 @@ def execute_on_shards(
             local_kwargs = op._transform_shard_kwargs(
                 kwargs, output_sharding, 0, shard_args
             )
-        return [op_fn(*shard_args, **local_kwargs)]
+        result = op_fn(list(shard_args) if not isinstance(shard_args, list) else shard_args, local_kwargs)
+        # kernel returns list[TensorValue]; for single-output we need the single value for shard_results
+        # But execute_on_shards returns list-of-shard-results. Each shard result should be
+        # a single TensorValue (single output) or a list/tuple of TensorValue (multi output).
+        # Since kernel now always returns list, we unwrap single-element lists for backward compat
+        # with the packaging layer.
+        if isinstance(result, list) and len(result) == 1:
+            return [result[0]]
+        return [result]
 
     results = []
     num_shards = len(mesh.devices)
@@ -424,7 +432,11 @@ def execute_on_shards(
         ):
             local_kwargs = op._transform_shard_kwargs(kwargs, output_sharding, i, args)
 
-        # Execute
-        results.append(op_fn(*shard_args, **local_kwargs))
+        # Execute with unified kernel signature
+        result = op_fn(list(shard_args) if not isinstance(shard_args, list) else shard_args, local_kwargs)
+        if isinstance(result, list) and len(result) == 1:
+            results.append(result[0])
+        else:
+            results.append(result)
 
     return results

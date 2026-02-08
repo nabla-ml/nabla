@@ -22,13 +22,13 @@ if TYPE_CHECKING:
 class WhereOp(Operation):
     """Element-wise conditional selection: where(cond, x, y)."""
 
-    def __call__(self, condition: Tensor, x: Tensor, y: Tensor) -> Tensor:
+    def __call__(self, args: list, kwargs: dict) -> list:
         from . import view as view_ops
         from .base import ensure_tensor
 
-        condition = ensure_tensor(condition)
-        x = ensure_tensor(x)
-        y = ensure_tensor(y)
+        condition = ensure_tensor(args[0])
+        x = ensure_tensor(args[1])
+        y = ensure_tensor(args[2])
 
         # 1. Logical Broadcasting (Ported from original)
         c_shape = tuple(int(d) for d in condition.shape)
@@ -86,14 +86,14 @@ class WhereOp(Operation):
         x = align(x)
         y = align(y)
 
-        return super().__call__(condition, x, y)
+        return super().__call__([condition, x, y], kwargs)
 
     @property
     def name(self) -> str:
         return "where"
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ):
         from ..core.sharding import spmd
 
@@ -116,27 +116,26 @@ class WhereOp(Operation):
 
         return shapes, dtypes, devices
 
-    def kernel(
-        self, condition: graph.TensorValue, x: graph.TensorValue, y: graph.TensorValue
-    ) -> graph.TensorValue:
-        return ops.where(condition, x, y)
+    def kernel(self, args: list, kwargs: dict) -> list:
+        condition, x, y = args[0], args[1], args[2]
+        return [ops.where(condition, x, y)]
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
         from .creation import zeros_like
         from .control_flow import where
 
-        condition, x, y = primals
-        grad_x = where(condition, cotangent, zeros_like(x))
-        grad_y = where(condition, zeros_like(y), cotangent)
-        return (None, grad_x, grad_y)
+        condition, x, y = primals[0], primals[1], primals[2]
+        grad_x = where(condition, cotangents[0], zeros_like(x))
+        grad_y = where(condition, zeros_like(y), cotangents[0])
+        return [None, grad_x, grad_y]
 
-    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
         from .control_flow import where
 
         condition = primals[0]
         t_x = tangents[1]
         t_y = tangents[2]
-        return where(condition, t_x, t_y)
+        return [where(condition, t_x, t_y)]
 
 
 class CondOp(Operation):
@@ -145,17 +144,22 @@ class CondOp(Operation):
         return "cond"
 
     def __call__(
-        self, pred: Tensor | bool, true_fn: Callable, false_fn: Callable, *operands: Any
-    ) -> Any:
+        self, args: list, kwargs: dict
+    ) -> list:
         from ..core.tensor import Tensor
+
+        pred = args[0]
+        true_fn = args[1]
+        false_fn = args[2]
+        operands = args[3:]
 
         operands = pytree.tree_map(ensure_tensor, operands)
         if not isinstance(pred, Tensor):
             pred = ensure_tensor(pred)
-        return super().__call__(pred, true_fn, false_fn, *operands)
+        return super().__call__([pred, true_fn, false_fn] + list(operands), kwargs)
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ):
         """Infer output shapes by tracing true_fn symbolically (no graph building).
 
@@ -206,15 +210,7 @@ class CondOp(Operation):
             return all_shapes[0], all_dtypes[0], all_devices[0]
         return all_shapes, all_dtypes, all_devices
 
-    def infer_sharding_spec(self, args: tuple, mesh, kwargs: dict = None):
-        """Cond: output sharding matches the traced branch output sharding.
-
-        Since both branches must return identical shapes/dtypes, we trace true_fn
-        and use its output sharding specs.
-        """
-        from ..core.tensor import Tensor
-
-        pred, true_fn, false_fn, *operands = args
+    def infer_sharding_spec(self, args: list, mesh, kwargs: dict = None):
 
         # Trace true_fn to get output structure
         res = true_fn(*operands)
@@ -250,8 +246,13 @@ class CondOp(Operation):
             input_shapes, output_shapes
         )
 
-    def kernel(self, pred_shard, true_fn, false_fn, *operand_shards):
+    def kernel(self, args: list, kwargs: dict) -> list:
         from ..core.tensor import Tensor
+
+        pred_shard = args[0]
+        true_fn = args[1]
+        false_fn = args[2]
+        operand_shards = args[3:]
 
         def wrap(v):
             if not hasattr(v, "type"):
@@ -303,7 +304,10 @@ class CondOp(Operation):
             lambda: trace_and_replay(true_fn),
             lambda: trace_and_replay(false_fn),
         )
-        return pytree.tree_unflatten(out_structure, res_flat)
+        result = pytree.tree_unflatten(out_structure, res_flat)
+        if isinstance(result, (list, tuple)):
+            return list(result)
+        return [result]
 
 
 class WhileLoopOp(Operation):
@@ -311,10 +315,13 @@ class WhileLoopOp(Operation):
     def name(self) -> str:
         return "while_loop"
 
-    def __call__(self, cond_fn: Callable, body_fn: Callable, init_val: Any) -> Any:
-        return super().__call__(cond_fn, body_fn, init_val)
+    def __call__(self, args: list, kwargs: dict) -> list:
+        cond_fn = args[0]
+        body_fn = args[1]
+        init_val = args[2]
+        return super().__call__([cond_fn, body_fn, init_val], kwargs)
 
-    def infer_sharding_spec(self, args: tuple, mesh, kwargs: dict = None):
+    def infer_sharding_spec(self, args: list, mesh, kwargs: dict = None):
         """While loop: output sharding matches init_val sharding."""
         from ..core.tensor import Tensor
 
@@ -338,7 +345,7 @@ class WhileLoopOp(Operation):
         return output_specs, input_specs, False
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ):
         from ..core.tensor import Tensor
         from ..core.sharding import spmd
@@ -390,8 +397,12 @@ class WhileLoopOp(Operation):
             input_shapes, output_shapes
         )
 
-    def kernel(self, cond_fn, body_fn, init_val_shard):
+    def kernel(self, args: list, kwargs: dict) -> list:
         from ..core.tensor import Tensor
+
+        cond_fn = args[0]
+        body_fn = args[1]
+        init_val_shard = args[2]
 
         def wrap(v):
             if not hasattr(v, "type"):
@@ -432,7 +443,10 @@ class WhileLoopOp(Operation):
         res_flat = ops.while_loop(
             init_flat, trace_and_replay_cond, trace_and_replay_body
         )
-        return pytree.tree_unflatten(init_structure, res_flat)
+        result = pytree.tree_unflatten(init_structure, res_flat)
+        if isinstance(result, (list, tuple)):
+            return list(result)
+        return [result]
 
 
 class ScanOp(Operation):
@@ -443,17 +457,20 @@ class ScanOp(Operation):
     def compute_physical_shape(self, args, kwargs, output_sharding=None):
         return None, None, None
 
-    def kernel(self, *args, **kwargs) -> Any:
+    def kernel(self, args: list, kwargs: dict) -> list:
         raise NotImplementedError("ScanOp is unrolled via __call__.")
 
     def __call__(
         self,
-        f: Callable,
-        init: Any,
-        xs: Any,
-        length: int | None = None,
-        reverse: bool = False,
-    ) -> tuple[Any, Any]:
+        args: list,
+        kwargs: dict,
+    ) -> list:
+        f = args[0]
+        init = args[1]
+        xs = args[2]
+        length = kwargs.get("length", None)
+        reverse = kwargs.get("reverse", False)
+
         if reverse:
             raise NotImplementedError("Reverse scan not implemented")
         from ..ops import view
@@ -480,13 +497,13 @@ class ScanOp(Operation):
             ys_list.append(y_i)
 
         if not ys_list:
-            return carry, None
+            return [carry, None]
         treedef = pytree.tree_structure(ys_list[0])
         stacked_leaves = [
             view.stack([pytree.tree_leaves(y)[j] for y in ys_list], axis=0)
             for j in range(len(pytree.tree_leaves(ys_list[0])))
         ]
-        return carry, pytree.tree_unflatten(treedef, stacked_leaves)
+        return [carry, pytree.tree_unflatten(treedef, stacked_leaves)]
 
 
 _where_op = WhereOp()
@@ -496,21 +513,21 @@ _scan_op = ScanOp()
 
 
 def where(condition: Tensor, x: Tensor, y: Tensor) -> Tensor:
-    return _where_op(condition, x, y)
+    return _where_op([condition, x, y], {})[0]
 
 
 def cond(pred: Tensor, true_fn: Callable, false_fn: Callable, *operands: Any) -> Any:
-    return _cond_op(pred, true_fn, false_fn, *operands)
+    return _cond_op([pred, true_fn, false_fn] + list(operands), {})
 
 
 def while_loop(cond_fn: Callable, body_fn: Callable, init_val: Any) -> Any:
-    return _while_loop_op(cond_fn, body_fn, init_val)
+    return _while_loop_op([cond_fn, body_fn, init_val], {})
 
 
 def scan(
     f: Callable, init: Any, xs: Any, length: int | None = None, reverse: bool = False
 ) -> tuple[Any, Any]:
-    return _scan_op(f, init, xs, length, reverse)
+    return _scan_op([f, init, xs], {"length": length, "reverse": reverse})
 
 
 __all__ = ["where", "cond", "while_loop", "scan"]

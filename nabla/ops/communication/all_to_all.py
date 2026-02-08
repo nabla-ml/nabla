@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
@@ -27,7 +27,7 @@ class AllToAllOp(CollectiveOperation):
         return "all_to_all"
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for all_to_all (split then concat)."""
         from ...core.sharding import spmd
@@ -68,16 +68,16 @@ class AllToAllOp(CollectiveOperation):
 
     # _get_shifted_axes helper removed in favor of centralized _get_physical_axis
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
         """VJP for all_to_all: another all_to_all with swapped axes."""
-        split_axis = output.op_kwargs.get("split_axis")
-        concat_axis = output.op_kwargs.get("concat_axis")
+        split_axis = kwargs.get("split_axis")
+        concat_axis = kwargs.get("concat_axis")
         from .all_to_all import all_to_all
 
         # Swap split and concat for backward
-        return all_to_all(cotangent, split_axis=concat_axis, concat_axis=split_axis)
+        return [all_to_all(cotangents[0], split_axis=concat_axis, concat_axis=split_axis)]
 
-    def execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
+    def execute(self, args: list, kwargs: dict) -> Any:
         """All-to-all distributed transpose (Physical)."""
         from ...core import GRAPH, Tensor
 
@@ -213,11 +213,12 @@ class AllToAllOp(CollectiveOperation):
         return None
 
 
-all_to_all_op = AllToAllOp()
+_all_to_all_op = AllToAllOp()
 
 
 def all_to_all(sharded_tensor, split_axis: int, concat_axis: int, tiled: bool = True):
     """All-to-all collective (distributed transpose)."""
-    return all_to_all_op(
-        sharded_tensor, split_axis=split_axis, concat_axis=concat_axis, tiled=tiled
-    )
+    return _all_to_all_op(
+        [sharded_tensor],
+        {"split_axis": split_axis, "concat_axis": concat_axis, "tiled": tiled},
+    )[0]

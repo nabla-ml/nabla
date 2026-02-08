@@ -238,7 +238,7 @@ def validate_physical_metadata(
             _check(s, dt, dv, val, f"Shard Index: {i}")
 
 
-def apply_jvp(op: Any, args: tuple, output: Any) -> None:
+def apply_jvp(op: Any, args: list, kwargs: dict, output: Any) -> None:
     """Apply JVP (forward-mode autodiff) by propagating tangents through the operation.
 
     This is called during operation execution when any input has tangents attached.
@@ -252,70 +252,54 @@ def apply_jvp(op: Any, args: tuple, output: Any) -> None:
     Args:
         op: The operation instance (needed for jvp_rule)
         args: Input arguments (may have tangents attached)
+        kwargs: Static metadata kwargs for this op
         output: Output tensor(s) to attach tangents to
     """
     from ..core import Tensor, pytree
 
-    # 1. Extract tangents and temporarily detach them from primals.
+    # 1. Build flat lists of primals and tangents.
     saved_tangents: list[tuple[Any, Any]] = []  # (impl, old_tangent)
 
-    tangents = pytree.tree_map(
-        lambda x: (
-            Tensor(impl=x.tangent) if isinstance(x, Tensor) and x.tangent else None
-        ),
-        args,
-    )
+    # Flatten args to get all Tensor leaves
+    arg_leaves = list(args)
 
-    # Strip tangents so inner ops don't see them.
-    def _strip(x):
-        if isinstance(x, Tensor) and x.tangent is not None:
-            saved_tangents.append((x._impl, x.tangent))
-            x._impl.tangent = None
-        return x
-    pytree.tree_map(_strip, args)
+    primals_list = []
+    tangents_list = []
 
-    # Replace missing tangents with zeros for tensor primals so jvp_rules can
-    # assume tangents are always tensors for tensor inputs.
-    def _fill_missing_tangents(primal, tangent):
-        if isinstance(primal, Tensor) and tangent is None:
-            from ..ops.creation import zeros_like
+    for x in arg_leaves:
+        if isinstance(x, Tensor):
+            primals_list.append(x)
+            if x.tangent is not None:
+                tangents_list.append(Tensor(impl=x.tangent))
+                saved_tangents.append((x._impl, x.tangent))
+                x._impl.tangent = None
+            else:
+                from ..ops.creation import zeros_like
+                tangents_list.append(zeros_like(x))
+        # Non-tensor args are not part of the derivative
 
-            return zeros_like(primal)
-        return tangent
-
-    tangents = pytree.tree_map(_fill_missing_tangents, args, tangents)
-
-    # Unwrap single-element tuples — jvp_rules for unary ops expect a single
-    # tensor, not a 1-element tuple. This matches BackwardEngine's _unwrap_single
-    # convention used for vjp_rule.
-    def _unwrap(x):
-        if isinstance(x, (list, tuple)) and len(x) == 1:
-            return x[0]
-        return x
-
-    unwrapped_primals = _unwrap(args)
-    unwrapped_tangents = _unwrap(tangents)
+    # Build flat list of outputs
+    if isinstance(output, Tensor):
+        outputs_list = [output]
+    elif isinstance(output, (list, tuple)):
+        outputs_list = [o for o in output if isinstance(o, Tensor)]
+    else:
+        outputs_list = [o for o in pytree.tree_leaves(output) if isinstance(o, Tensor)]
 
     try:
-        output_tangent = op.jvp_rule(unwrapped_primals, unwrapped_tangents, output)
+        output_tangents = op.jvp_rule(primals_list, tangents_list, outputs_list, kwargs)
     finally:
         # 2. Restore tangents on primals.
         for impl, old_tangent in saved_tangents:
             impl.tangent = old_tangent
 
-    if output_tangent is not None:
-        pytree.tree_map(
-            lambda o, t: (
-                setattr(o._impl, "tangent", t._impl)
-                if isinstance(o, Tensor) and isinstance(t, Tensor)
-                else None
-            ),
-            output,
-            output_tangent,
-        )
+    if output_tangents is not None:
+        for o, t in zip(outputs_list, output_tangents):
+            if isinstance(o, Tensor) and isinstance(t, Tensor):
+                o._impl.tangent = t._impl
 
 
-def collect_metadata(args: tuple) -> tuple[int, bool, bool, bool]:
+def collect_metadata(args: list) -> tuple[int, bool, bool, bool]:
     """Analyze arguments to collect metadata needed for execution adaptation.
     
     Returns:
@@ -352,8 +336,8 @@ def collect_metadata(args: tuple) -> tuple[int, bool, bool, bool]:
 
 
 def adapt_and_reshard(
-    op: Any, args: tuple, kwargs: dict, any_sharded: bool, max_batch_dims: int
-) -> tuple[tuple, dict, Any, Any, Any]:
+    op: Any, args: list, kwargs: dict, any_sharded: bool, max_batch_dims: int
+) -> tuple[list, dict, Any, Any, Any]:
     """Perform logical adaptation and input resharding."""
     # Fast path: skip all SPMD machinery for unsharded tensors
     mesh = None
@@ -382,7 +366,7 @@ def adapt_and_reshard(
 
 
 def compute_structural_hash(
-    op_name: str, resharded_args: tuple, adapted_kwargs: dict
+    op_name: str, resharded_args: list, adapted_kwargs: dict
 ) -> tuple:
     """Compute structural hash for operation caching."""
     # Compute hash AFTER resharding - use resharded_args for cache key
@@ -394,7 +378,7 @@ def compute_structural_hash(
 
 
 def eager_execute(
-    op: Any, resharded_args: tuple, kwargs: dict, adapted_kwargs: dict
+    op: Any, resharded_args: list, kwargs: dict, adapted_kwargs: dict,
 ) -> Any:
     """Execute operation eagerly if enabled by configuration."""
     if _config is None:

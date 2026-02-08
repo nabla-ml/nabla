@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
@@ -23,7 +23,7 @@ class AxisIndexOp(CollectiveOperation):
         return "axis_index"
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for axis_index (scalar per shard)."""
         from max.dtype import DType
@@ -46,7 +46,7 @@ class AxisIndexOp(CollectiveOperation):
 
         return shapes, dtypes, devices
 
-    def execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
+    def execute(self, args: list, kwargs: dict) -> Any:
         """Return the device's position along a mesh axis (Physical)."""
         from ...core import GRAPH, Tensor
         from ...core.sharding.spec import DimSpec, ShardingSpec
@@ -77,9 +77,9 @@ class AxisIndexOp(CollectiveOperation):
         return (results, output_spec, mesh)
 
 
-axis_index_op = AxisIndexOp()
+_axis_index_op = AxisIndexOp()
 
 
 def axis_index(mesh: DeviceMesh, axis_name: str):
     """Return each device's position along a mesh axis."""
-    return axis_index_op(mesh, axis_name)
+    return _axis_index_op([], {"mesh": mesh, "axis_name": axis_name})[0]

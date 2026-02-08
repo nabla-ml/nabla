@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
@@ -23,7 +23,7 @@ class ReduceScatterOp(CollectiveOperation):
         return "reduce_scatter"
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for reduce_scatter (reduce then split axis)."""
         from ...core.sharding import spmd
@@ -82,19 +82,19 @@ class ReduceScatterOp(CollectiveOperation):
     ) -> float:
         return CollectiveOperation._ring_cost(size_bytes, mesh, axes)
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
         """VJP for reduce_scatter: all_gather the gradients."""
         from .all_gather import all_gather
 
         # Axis is required. Passed as second positional arg by wrapper.
-        if isinstance(primals, (list, tuple)) and len(primals) > 1:
+        if len(primals) > 1:
             axis = primals[1]
         else:
             axis = 0  # Fallback
 
-        return all_gather(cotangent, axis=axis)
+        return [all_gather(cotangents[0], axis=axis)]
 
-    def execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
+    def execute(self, args: list, kwargs: dict) -> Any:
         """Sum-reduce across shards then scatter the result (Physical)."""
         from ...core import GRAPH, Tensor
 
@@ -318,7 +318,7 @@ class ReduceScatterOp(CollectiveOperation):
         return None
 
 
-reduce_scatter_op = ReduceScatterOp()
+_reduce_scatter_op = ReduceScatterOp()
 
 
 def reduce_scatter(sharded_tensor, axis: int, **kwargs):
@@ -326,4 +326,4 @@ def reduce_scatter(sharded_tensor, axis: int, **kwargs):
 
     Note: MAX only supports sum reduction natively.
     """
-    return reduce_scatter_op(sharded_tensor, axis, **kwargs)
+    return _reduce_scatter_op([sharded_tensor], {"axis": axis, **kwargs})[0]

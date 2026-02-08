@@ -23,25 +23,25 @@ class ShardOp(Operation):
     def name(self) -> str:
         return "shard"
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
         """VJP for shard: reshard back to input's sharding."""
-        x = primals[0] if isinstance(primals, (list, tuple)) else primals
+        x = primals[0]
 
         if not x.sharding:
             # If input was not sharded (replicated), we gather/replicate the cotangent
             from .all_gather import gather_all_axes
 
-            res = gather_all_axes(cotangent)
-            return res
+            res = gather_all_axes(cotangents[0])
+            return [res]
 
         # Use the smart shard function (defined below) to handle transition.
         # Note: reshard name is deprecated, we use universal shard() now.
-        return shard(
-            cotangent,
+        return [shard(
+            cotangents[0],
             x.sharding.mesh,
             x.sharding.dim_specs,
             replicated_axes=x.sharding.replicated_axes,
-        )
+        )]
 
     def infer_sharding_spec(self, args, mesh, kwargs):
         spec = kwargs.get("spec")
@@ -85,7 +85,7 @@ class ShardOp(Operation):
         return self._simulate_shard_execution(x, global_shape, spec, mesh)
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for shard operation."""
         from ...core.sharding import spmd, spec
@@ -141,7 +141,7 @@ class ShardOp(Operation):
 
         return shapes, dtypes, devices
 
-    def execute(self, args: tuple, kwargs: dict) -> Any:
+    def execute(self, args: list, kwargs: dict) -> Any:
         """Physical execution for ShardOp.
 
         Derives all physical metadata from args/kwargs and slices the input.
@@ -364,7 +364,7 @@ class ShardOp(Operation):
         return effective_x[tuple(slices)]
 
 
-shard_op = ShardOp()
+_shard_op = ShardOp()
 
 
 def create_replicated_spec(mesh: DeviceMesh, rank: int) -> ShardingSpec:
@@ -411,18 +411,18 @@ def shard(
 
     if not isinstance(x, Tensor) or not x.sharding:
         # If not a tensor or not sharded, treat as fresh slicing (legacy behavior)
-        return shard_op(
-            x, mesh=mesh, dim_specs=dim_specs, replicated_axes=replicated_axes, **kwargs
-        )
+        return _shard_op(
+            [x], {"mesh": mesh, "dim_specs": dim_specs, "replicated_axes": replicated_axes, **kwargs}
+        )[0]
 
     # === Transition Logic (merged from ReshardOp) ===
     from_spec = x.sharding
     to_spec = target_spec
 
     if not needs_reshard(from_spec, to_spec):
-        return shard_op(
-            x, mesh=mesh, dim_specs=dim_specs, replicated_axes=replicated_axes, **kwargs
-        )
+        return _shard_op(
+            [x], {"mesh": mesh, "dim_specs": dim_specs, "replicated_axes": replicated_axes, **kwargs}
+        )[0]
 
     result = x
 
@@ -464,13 +464,10 @@ def shard(
     # 3. Contraction (ShardOp)
     # We pass _bypass_idempotency=True to force the shard op even if specs look similar
     # (though usually the shape change prevents that confusion, explicit is better)
-    return shard_op(
-        result,
-        mesh=mesh,
-        dim_specs=dim_specs,
-        replicated_axes=replicated_axes,
-        **kwargs,
-    )
+    return _shard_op(
+        [result],
+        {"mesh": mesh, "dim_specs": dim_specs, "replicated_axes": replicated_axes, **kwargs},
+    )[0]
 
 
 def broadcast(x, mesh: DeviceMesh = None, root: int = 0):

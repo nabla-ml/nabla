@@ -23,7 +23,7 @@ class AllReduceOp(CollectiveOperation):
         return "all_reduce"
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         return self._compute_local_preserved_shapes(args, kwargs)
 
@@ -38,7 +38,7 @@ class AllReduceOp(CollectiveOperation):
     ) -> float:
         return CollectiveOperation._ring_cost(size_bytes, mesh, axes, factor=2.0)
 
-    def execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
+    def execute(self, args: list, kwargs: dict) -> Any:
         """Sum-reduce across shards (Physical)."""
         from ...core import GRAPH, Tensor
 
@@ -138,12 +138,12 @@ class AllReduceOp(CollectiveOperation):
         output_sharding = self._compute_output_spec(input_tensor, None, **kwargs)
         return output_sharding, [input_sharding], False
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
         """VJP for AllReduce (sum): assign replicated gradient to shards."""
-        input_tensor = primals[0] if isinstance(primals, (list, tuple)) else primals
+        input_tensor = primals[0]
 
         if not input_tensor.sharding:
-            return cotangent
+            return [cotangents[0]]
 
         # VJP for all_reduce (sum) propagates the gradient to all inputs.
         # Since all_reduce acts as a sum reduction over shards, the gradient w.r.t
@@ -157,13 +157,13 @@ class AllReduceOp(CollectiveOperation):
 
         from .reshard import reshard
 
-        return reshard(
-            cotangent,
+        return [reshard(
+            cotangents[0],
             input_tensor.sharding.mesh,
             input_tensor.sharding.dim_specs,
             replicated_axes=input_tensor.sharding.replicated_axes,
             global_shape=input_tensor.physical_global_shape,
-        )
+        )]
 
     def _compute_output_spec(self, input_tensor, results, input_sharding=None, **kwargs):
         """Output clears partial flags but preserves axes mappings for non-partial dims."""
@@ -247,16 +247,16 @@ class PMeanOp(CollectiveOperation):
         return "pmean"
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         return self._compute_local_preserved_shapes(args, kwargs)
 
-    def execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
+    def execute(self, args: list, kwargs: dict) -> Any:
         """Compute mean across shards (Physical)."""
         from ...core import GRAPH
 
         # 1. Perform AllReduce first
-        shard_graph_values, output_spec, mesh = all_reduce_op.execute(args, kwargs)
+        shard_graph_values, output_spec, mesh = _all_reduce_op.execute(args, kwargs)
 
         axis_name = kwargs.get("axis_name")
 
@@ -289,8 +289,8 @@ class PMeanOp(CollectiveOperation):
         return new_spec
 
 
-all_reduce_op = AllReduceOp()
-pmean_op = PMeanOp()
+_all_reduce_op = AllReduceOp()
+_pmean_op = PMeanOp()
 
 
 def all_reduce(sharded_tensor, **kwargs):
@@ -298,7 +298,7 @@ def all_reduce(sharded_tensor, **kwargs):
 
     Note: MAX only supports sum reduction natively.
     """
-    return all_reduce_op(sharded_tensor, **kwargs)
+    return _all_reduce_op([sharded_tensor], kwargs)[0]
 
 
 def pmean(sharded_tensor, axis_name: str = None):
@@ -306,7 +306,7 @@ def pmean(sharded_tensor, axis_name: str = None):
 
     Equivalent to psum(x) / axis_size.
     """
-    return pmean_op(sharded_tensor, axis_name=axis_name)
+    return _pmean_op([sharded_tensor], {"axis_name": axis_name})[0]
 
 
 __all__ = ["AllReduceOp", "all_reduce", "pmean"]

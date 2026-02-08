@@ -60,14 +60,16 @@ class SplitOp(AxisOp):
 
     output_container_type = tuple
 
-    def __call__(self, x: Tensor, **kwargs: Any) -> tuple[Tensor, ...]:
-        x = _unshard_axis_before_split(x, kwargs)
-        return super().__call__(x, **kwargs)
+    def __call__(self, args: list, kwargs: dict) -> list:
+        x = _unshard_axis_before_split(args[0], kwargs)
+        return super().__call__([x], kwargs)
 
-    def kernel(
-        self, x: TensorValue, *, num_splits: int, axis: int = 0
-    ) -> tuple[TensorValue, ...]:
+    def kernel(self, args: list, kwargs: dict) -> list:
         """Split tensor into num_splits equal parts along axis."""
+        x = args[0]
+        axis = kwargs.get("axis", 0)
+        num_splits = kwargs["num_splits"]
+
         shape = list(x.type.shape)
         axis_size = int(shape[axis])
 
@@ -80,10 +82,10 @@ class SplitOp(AxisOp):
         split_sizes = [chunk_size] * num_splits
 
         result_list = ops.split(x, split_sizes, axis)
-        return tuple(result_list)
+        return list(result_list)
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[list[tuple[int, ...]]], list[list[Any]], list[list[Any]]]:
         """Infer physical shapes for split (multi-output)."""
         from ..core.sharding import spmd
@@ -115,21 +117,18 @@ class SplitOp(AxisOp):
         dtypes, devices = _build_multi_output_metadata(x, mesh, num_shards, num_splits)
         return all_outputs_shapes, dtypes, devices
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
         """VJP for split: concatenate cotangents along split axis."""
         from .view.shape import concatenate
 
-        # output is a tuple/list of tensors
-        target = output[0] if isinstance(output, (list, tuple)) else output
-        axis = target.op_kwargs.get("axis", 0)
-        return concatenate(cotangent, axis=axis)
+        axis = kwargs.get("axis", 0)
+        return [concatenate(cotangents, axis=axis)]
 
-    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
         """JVP for split: split tangent along the same axis."""
-        target = output[0] if isinstance(output, (list, tuple)) else output
-        axis = target.op_kwargs.get("axis", 0)
-        num_splits = target.op_kwargs.get("num_splits")
-        return split(tangents, num_splits=num_splits, axis=axis)
+        axis = kwargs.get("axis", 0)
+        num_splits = kwargs.get("num_splits")
+        return split(tangents[0], num_splits=num_splits, axis=axis)
 
     def sharding_rule(
         self,
@@ -187,7 +186,7 @@ class ChunkOp(AxisOp):
     output_container_type = list
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[list[tuple[int, ...]]], list[list[Any]], list[list[Any]]]:
         """Infer physical shapes for chunk (multi-output)."""
         from ..core.sharding import spmd
@@ -230,14 +229,16 @@ class ChunkOp(AxisOp):
         dtypes, devices = _build_multi_output_metadata(x, mesh, num_shards, num_splits)
         return all_outputs_shapes, dtypes, devices
 
-    def __call__(self, x: Tensor, **kwargs: Any) -> list[Tensor]:
-        x = _unshard_axis_before_split(x, kwargs)
-        return super().__call__(x, **kwargs)
+    def __call__(self, args: list, kwargs: dict) -> list:
+        x = _unshard_axis_before_split(args[0], kwargs)
+        return super().__call__([x], kwargs)
 
-    def kernel(
-        self, x: TensorValue, *, chunks: int, axis: int = 0
-    ) -> list[TensorValue]:
+    def kernel(self, args: list, kwargs: dict) -> list:
         """Split tensor into specified number of chunks."""
+        x = args[0]
+        chunks = kwargs["chunks"]
+        axis = kwargs.get("axis", 0)
+
         shape = list(x.type.shape)
         axis_size = int(shape[axis])
 
@@ -251,22 +252,20 @@ class ChunkOp(AxisOp):
             if size > 0:
                 split_sizes.append(size)
 
-        return ops.split(x, split_sizes, axis)
+        return list(ops.split(x, split_sizes, axis))
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
         """VJP for chunk: concatenate cotangents along chunk axis."""
         from .view.shape import concatenate
 
-        target = output[0] if isinstance(output, (list, tuple)) else output
-        axis = target.op_kwargs.get("axis", 0)
-        return concatenate(cotangent, axis=axis)
+        axis = kwargs.get("axis", 0)
+        return [concatenate(cotangents, axis=axis)]
 
-    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
         """JVP for chunk: chunk tangent along the same axis."""
-        target = output[0] if isinstance(output, (list, tuple)) else output
-        axis = target.op_kwargs.get("axis", 0)
-        chunks = target.op_kwargs.get("chunks")
-        return chunk(tangents, chunks=chunks, axis=axis)
+        axis = kwargs.get("axis", 0)
+        chunks = kwargs.get("chunks")
+        return chunk(tangents[0], chunks=chunks, axis=axis)
 
     def sharding_rule(
         self,
@@ -324,12 +323,12 @@ class UnbindOp(AxisOp):
     def name(self) -> str:
         return "unbind"
 
-    def __call__(self, x: Tensor, **kwargs: Any) -> tuple[Tensor, ...]:
-        x = _unshard_axis_before_split(x, kwargs)
-        return super().__call__(x, **kwargs)
+    def __call__(self, args: list, kwargs: dict) -> list:
+        x = _unshard_axis_before_split(args[0], kwargs)
+        return super().__call__([x], kwargs)
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[list[tuple[int, ...]]], list[list[Any]], list[list[Any]]]:
         """Infer physical shapes for unbind (multi-output)."""
         from ..core.sharding import spmd
@@ -362,8 +361,11 @@ class UnbindOp(AxisOp):
         dtypes, devices = _build_multi_output_metadata(x, mesh, num_shards, num_splits)
         return all_outputs_shapes, dtypes, devices
 
-    def kernel(self, x: TensorValue, *, axis: int = 0) -> tuple[TensorValue, ...]:
+    def kernel(self, args: list, kwargs: dict) -> list:
         """Remove dimension and return slices."""
+        x = args[0]
+        axis = kwargs.get("axis", 0)
+
         shape = list(x.type.shape)
         axis_size = int(shape[axis])
 
@@ -371,21 +373,19 @@ class UnbindOp(AxisOp):
         sliced = ops.split(x, split_sizes, axis)
 
         results = [ops.squeeze(s, axis) for s in sliced]
-        return tuple(results)
+        return list(results)
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
         """VJP for unbind: stack cotangents and unsqueeze along unbound axis."""
         from .view.shape import stack
 
-        target = output[0] if isinstance(output, (list, tuple)) else output
-        axis = target.op_kwargs.get("axis", 0)
-        return stack(cotangent, axis=axis)
+        axis = kwargs.get("axis", 0)
+        return [stack(cotangents, axis=axis)]
 
-    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
         """JVP for unbind: unbind tangent along the same axis."""
-        target = output[0] if isinstance(output, (list, tuple)) else output
-        axis = target.op_kwargs.get("axis", 0)
-        return unbind(tangents, axis=axis)
+        axis = kwargs.get("axis", 0)
+        return unbind(tangents[0], axis=axis)
 
     def sharding_rule(
         self,
@@ -435,15 +435,16 @@ class MinMaxOp(Operation):
         return "minmax"
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]] | None, Any]:
         """MinMaxOp returns a dict; skip explicit physical shape inference."""
         return None, None, None
 
-    def __call__(self, x: Tensor, **kwargs: Any) -> dict[str, Tensor]:
+    def __call__(self, args: list, kwargs: dict) -> list:
         """Compute global min and max by reducing all axes."""
         from ..ops.reduction import reduce_min, reduce_max
 
+        x = args[0]
         # Reduce along all axes to get scalar
         result_min = x
         result_max = x
@@ -451,23 +452,38 @@ class MinMaxOp(Operation):
             result_min = reduce_min(result_min, axis=axis, keepdims=False)
             result_max = reduce_max(result_max, axis=axis, keepdims=False)
 
-        return {
-            "min": result_min,
-            "max": result_max,
-        }
+        return [result_min, result_max]
 
-    def kernel(self, x: TensorValue, **kwargs: Any) -> dict[str, TensorValue]:
+    def kernel(self, args: list, kwargs: dict) -> list:
         """Compute min and max simultaneously."""
-        return {
-            "min": ops.min(x),
-            "max": ops.max(x),
-        }
+        x = args[0]
+        return [ops.min(x), ops.max(x)]
 
 
-split = SplitOp()
-chunk = ChunkOp()
-unbind = UnbindOp()
-minmax = MinMaxOp()
+_split_op = SplitOp()
+_chunk_op = ChunkOp()
+_unbind_op = UnbindOp()
+_minmax_op = MinMaxOp()
+
+
+def split(x: "Tensor", num_splits: int, axis: int = 0) -> list:
+    """Split a tensor into multiple equal chunks along an axis."""
+    return _split_op([x], {"num_splits": num_splits, "axis": axis})
+
+
+def chunk(x: "Tensor", chunks: int, axis: int = 0) -> list:
+    """Split a tensor into a specified number of chunks."""
+    return _chunk_op([x], {"chunks": chunks, "axis": axis})
+
+
+def unbind(x: "Tensor", axis: int = 0) -> list:
+    """Remove a dimension and return list of slices."""
+    return _unbind_op([x], {"axis": axis})
+
+
+def minmax(x: "Tensor") -> list:
+    """Return both min and max of a tensor."""
+    return _minmax_op([x], {})
 
 
 __all__ = [

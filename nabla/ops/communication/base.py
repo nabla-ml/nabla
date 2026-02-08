@@ -20,7 +20,7 @@ class CollectiveOperation(Operation):
     """
 
     def _compute_local_preserved_shapes(
-        self, args: tuple, kwargs: dict
+        self, args: list, kwargs: dict
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Compute physical shapes when each shard preserves its local shape (e.g., all_reduce, ppermute)."""
         from ...core.sharding import spmd
@@ -57,7 +57,7 @@ class CollectiveOperation(Operation):
         return factor * (n_devices - 1) / n_devices * size_bytes / bandwidth
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for collective operations (global shape preservation)."""
         from ...core.sharding import spmd, spec

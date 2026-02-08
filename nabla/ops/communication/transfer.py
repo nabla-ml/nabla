@@ -35,15 +35,16 @@ class TransferOp(Operation):
     def name(self) -> str:
         return f"transfer_to_{self.target_device}"
 
-    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+    def kernel(self, args: list, kwargs: dict) -> list:
         """Transfer tensor to target device using MAX's transfer_to operation."""
         from max.graph import ops as graph_ops
 
+        x = args[0]
         # Use MAX's built-in transfer_to operation
-        return graph_ops.transfer_to(x, self.target_device)
+        return [graph_ops.transfer_to(x, self.target_device)]
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Physical shape matches input shape, but on target device."""
         x = args[0]
@@ -66,7 +67,7 @@ class TransferOp(Operation):
 
         return shapes, dtypes, devices
 
-    def execute(self, args: tuple, kwargs: dict) -> Any:
+    def execute(self, args: list, kwargs: dict) -> Any:
         """Execute device transfer.
 
         Returns:
@@ -83,7 +84,7 @@ class TransferOp(Operation):
 
         with GRAPH.graph:
             # Execute kernel (identity operation)
-            result = self.kernel(x.value if hasattr(x, "value") else x, **kwargs)
+            result = self.kernel([x.value if hasattr(x, "value") else x], kwargs)[0]
 
         # No sharding for single-device transfer
         output_sharding = None
@@ -91,7 +92,7 @@ class TransferOp(Operation):
 
         return ([result], output_sharding, mesh)
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
         """VJP for device transfer: identity (gradient stays on output device).
 
         The gradient is already on the correct device (same as output),
@@ -100,16 +101,16 @@ class TransferOp(Operation):
         """
         from ...core import Tensor
 
-        x = primals[0] if isinstance(primals, (list, tuple)) else primals
+        x = primals[0]
 
         # If input and output are on different devices, transfer gradient back
-        if isinstance(x, Tensor) and isinstance(cotangent, Tensor):
-            if x.device != cotangent.device:
+        if isinstance(x, Tensor) and isinstance(cotangents[0], Tensor):
+            if x.device != cotangents[0].device:
                 # Transfer gradient back to input's device
-                return to_device(cotangent, x.device)
+                return [to_device(cotangents[0], x.device)]
 
         # Otherwise gradient is already on correct device
-        return cotangent
+        return [cotangents[0]]
 
     def infer_sharding_spec(self, args, mesh, kwargs):
         """Device transfer doesn't change sharding."""
@@ -211,7 +212,7 @@ def to_device(
 
     # Create transfer operation
     op = TransferOp(device)
-    return op(x)
+    return op([x], {})[0]
 
 
 def cpu(x: Tensor) -> Tensor:

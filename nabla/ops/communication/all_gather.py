@@ -24,7 +24,7 @@ class AllGatherOp(CollectiveOperation):
         return "all_gather"
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for all_gather (gather along axis)."""
         from ...core.sharding import spmd
@@ -63,20 +63,20 @@ class AllGatherOp(CollectiveOperation):
         dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
         return shapes, dtypes, devices
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
         """VJP for all_gather: reshard back to input's sharding."""
-        x = primals[0] if isinstance(primals, (list, tuple)) else primals
+        x = primals[0]
         from .reshard import reshard
 
         if not x.sharding:
-            return cotangent
+            return [cotangents[0]]
 
-        return reshard(
-            cotangent,
+        return [reshard(
+            cotangents[0],
             x.sharding.mesh,
             x.sharding.dim_specs,
             replicated_axes=x.sharding.replicated_axes,
-        )
+        )]
 
     @classmethod
     def estimate_cost(
@@ -111,7 +111,7 @@ class AllGatherOp(CollectiveOperation):
 
         return ShardingSpec(input_sharding.mesh, new_dim_specs)
 
-    def execute(self, args: tuple[Any, ...], kwargs: dict) -> Any:
+    def execute(self, args: list, kwargs: dict) -> Any:
         """Gather shards along an axis to produce replicated full tensors (Physical).
 
         Derives all physical context (mesh, sharded_axis_name) internally.
@@ -260,7 +260,7 @@ class GatherAllAxesOp(Operation):
         return "gather_all_axes"
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], Any]:
         """Infer physical shapes for gather_all_axes (full global shape)."""
         from ...core.sharding import spmd
@@ -291,20 +291,20 @@ class GatherAllAxesOp(Operation):
 
         return shapes, dtypes, devices
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
         """VJP for gather_all_axes: reshard back to input's sharding."""
-        x = primals[0] if isinstance(primals, (list, tuple)) else primals
+        x = primals[0]
         from .reshard import reshard
 
         if not x.sharding:
-            return cotangent
+            return [cotangents[0]]
 
-        return reshard(
-            cotangent,
+        return [reshard(
+            cotangents[0],
             x.sharding.mesh,
             x.sharding.dim_specs,
             replicated_axes=x.sharding.replicated_axes,
-        )
+        )]
 
     def infer_sharding_spec(self, args: Any, mesh: Any, kwargs: dict) -> Any:
         """Infer sharding: Input preserves current sharding, Output is replicated."""
@@ -324,7 +324,7 @@ class GatherAllAxesOp(Operation):
 
         return output_sharding, input_shardings, False
 
-    def execute(self, args: tuple, kwargs: dict) -> Any:
+    def execute(self, args: list, kwargs: dict) -> Any:
         """Physical execution for GatherAllAxesOp."""
         from ...core import GRAPH, Tensor
         from ...core.sharding.spmd import create_replicated_spec
@@ -419,15 +419,15 @@ class GatherAllAxesOp(Operation):
         return current_shard_descs[0][0]
 
 
-all_gather_op = AllGatherOp()
-gather_all_axes_op = GatherAllAxesOp()
+_all_gather_op = AllGatherOp()
+_gather_all_axes_op = GatherAllAxesOp()
 
 
 def all_gather(sharded_tensor, axis: int = None, **kwargs):
     """Gather all shards to produce a replicated tensor."""
-    return all_gather_op(sharded_tensor, axis=axis, **kwargs)
+    return _all_gather_op([sharded_tensor], {"axis": axis, **kwargs})[0]
 
 
 def gather_all_axes(sharded_tensor):
     """Gather all sharded axes to produce a fully replicated tensor."""
-    return gather_all_axes_op(sharded_tensor)
+    return _gather_all_axes_op([sharded_tensor], {})[0]

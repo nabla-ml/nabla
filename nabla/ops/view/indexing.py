@@ -31,11 +31,11 @@ class GatherOp(Operation):
     def name(self) -> str:
         return "gather"
 
-    def adapt_kwargs(self, args: tuple, kwargs: dict, batch_dims: int) -> dict:
+    def adapt_kwargs(self, args: list, kwargs: dict, batch_dims: int) -> dict:
         return _adapt_axis_kwargs(kwargs, batch_dims)
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for gather.
 
@@ -77,22 +77,22 @@ class GatherOp(Operation):
 
         return shapes, dtypes, devices
 
-    def __call__(self, x: Tensor, indices: Tensor, *, axis: int = 0) -> Tensor:
+    def __call__(self, args: list, kwargs: dict) -> list:
         """Call gather with LOGICAL axis (no translation here)."""
+        x = args[0]
+        axis = kwargs.get("axis", 0)
         logical_ndim = len(x.shape)
         if axis < 0:
             axis = logical_ndim + axis
-        return super().__call__(x, indices, axis=axis)
+        return super().__call__(args, {**kwargs, "axis": axis})
 
-    def kernel(
-        self,
-        x: TensorValue,
-        indices: TensorValue,
-        *,
-        axis: int = 0,
-        batch_dims: int = 0,
-    ) -> TensorValue:
+    def kernel(self, args: list, kwargs: dict) -> list:
         from max.dtype import DType
+
+        x = args[0]
+        indices = args[1]
+        axis = kwargs.get("axis", 0)
+        batch_dims = kwargs.get("batch_dims", 0)
 
         if batch_dims > 0 and axis != batch_dims:
             # Need to permute x so the gather axis is at position batch_dims,
@@ -135,7 +135,7 @@ class GatherOp(Operation):
                 perm_inv = list(range(batch_dims)) + before_positions + idx_dim_positions + after_positions
                 result = ops.permute(result, perm_inv)
 
-            return result
+            return [result]
 
         elif batch_dims > 0:
             # axis == batch_dims: gather_nd directly
@@ -146,25 +146,25 @@ class GatherOp(Operation):
             if indices.dtype != DType.int64:
                 indices = ops.cast(indices, DType.int64)
 
-            return ops.gather_nd(x, indices, batch_dims=batch_dims)
+            return [ops.gather_nd(x, indices, batch_dims=batch_dims)]
         else:
-            return ops.gather(x, indices, axis)
+            return [ops.gather(x, indices, axis)]
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        """VJP rule uses LOGICAL axis from op_kwargs."""
-        x, indices = primals
-        axis = output.op_kwargs.get("axis", 0)
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+        """VJP rule uses LOGICAL axis from kwargs."""
+        x, indices = primals[0], primals[1]
+        axis = kwargs.get("axis", 0)
         from ..creation import zeros_like
 
-        gx = scatter(zeros_like(x), indices, cotangent, axis=axis)
-        return (gx, None)
+        gx = scatter(zeros_like(x), indices, cotangents[0], axis=axis)
+        return [gx, None]
 
-    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
-        """JVP rule uses LOGICAL axis from op_kwargs."""
-        x, indices = primals
-        tx, _ = tangents
-        axis = output.op_kwargs.get("axis", 0)
-        return gather(tx, indices, axis=axis)
+    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
+        """JVP rule uses LOGICAL axis from kwargs."""
+        x, indices = primals[0], primals[1]
+        tx = tangents[0]
+        axis = kwargs.get("axis", 0)
+        return [gather(tx, indices, axis=axis)]
 
     def sharding_rule(
         self,
@@ -205,11 +205,11 @@ class ScatterOp(Operation):
     def name(self) -> str:
         return "scatter"
 
-    def adapt_kwargs(self, args: tuple, kwargs: dict, batch_dims: int) -> dict:
+    def adapt_kwargs(self, args: list, kwargs: dict, batch_dims: int) -> dict:
         return _adapt_axis_kwargs(kwargs, batch_dims)
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for scatter (same as input x)."""
         from ...core.sharding import spmd
@@ -232,25 +232,23 @@ class ScatterOp(Operation):
 
         return shapes, dtypes, devices
 
-    def __call__(
-        self, x: Tensor, indices: Tensor, updates: Tensor, *, axis: int = 0
-    ) -> Tensor:
+    def __call__(self, args: list, kwargs: dict) -> list:
         """Call scatter with LOGICAL axis (no translation here)."""
+        x = args[0]
+        axis = kwargs.get("axis", 0)
         logical_ndim = len(x.shape)
         if axis < 0:
             axis = logical_ndim + axis
-        return super().__call__(x, indices, updates, axis=axis)
+        return super().__call__(args, {**kwargs, "axis": axis})
 
-    def kernel(
-        self,
-        x: TensorValue,
-        indices: TensorValue,
-        updates: TensorValue,
-        *,
-        axis: int = 0,
-        batch_dims: int = 0,
-    ) -> TensorValue:
+    def kernel(self, args: list, kwargs: dict) -> list:
         from max.dtype import DType
+
+        x = args[0]
+        indices = args[1]
+        updates = args[2]
+        axis = kwargs.get("axis", 0)
+        batch_dims = kwargs.get("batch_dims", 0)
 
         if batch_dims > 0 and axis != batch_dims:
             # Permute x and updates so the scatter axis is at position batch_dims,
@@ -286,13 +284,13 @@ class ScatterOp(Operation):
                 perm_inv[p] = i
             result = ops.permute(result, perm_inv)
 
-            return result
+            return [result]
 
         elif batch_dims > 0:
             # axis == batch_dims: scatter directly at that position
-            return self._scatter_at_axis(x, indices, updates, axis=axis, batch_dims=batch_dims)
+            return [self._scatter_at_axis(x, indices, updates, axis=axis, batch_dims=batch_dims)]
         else:
-            return self._scatter_at_axis(x, indices, updates, axis=axis, batch_dims=0)
+            return [self._scatter_at_axis(x, indices, updates, axis=axis, batch_dims=0)]
 
     def _scatter_at_axis(
         self,
@@ -361,23 +359,23 @@ class ScatterOp(Operation):
         stacked = ops.stack(coord_list, axis=-1)
         return ops.scatter_nd(x, updates, stacked)
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        """VJP rule uses LOGICAL axis from op_kwargs."""
-        x, indices, updates = primals
-        axis = output.op_kwargs.get("axis", 0)
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+        """VJP rule uses LOGICAL axis from kwargs."""
+        x, indices, updates = primals[0], primals[1], primals[2]
+        axis = kwargs.get("axis", 0)
         from ..creation import zeros_like
 
-        gx = scatter(cotangent, indices, zeros_like(updates), axis=axis)
-        g_updates = gather(cotangent, indices, axis=axis)
+        gx = scatter(cotangents[0], indices, zeros_like(updates), axis=axis)
+        g_updates = gather(cotangents[0], indices, axis=axis)
 
-        return (gx, None, g_updates)
+        return [gx, None, g_updates]
 
-    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
-        """JVP rule uses LOGICAL axis from op_kwargs."""
-        x, indices, updates = primals
-        tx, _, t_updates = tangents
-        axis = output.op_kwargs.get("axis", 0)
-        return scatter(tx, indices, t_updates, axis=axis)
+    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
+        """JVP rule uses LOGICAL axis from kwargs."""
+        x, indices, updates = primals[0], primals[1], primals[2]
+        tx, _, t_updates = tangents[0], tangents[1], tangents[2]
+        axis = kwargs.get("axis", 0)
+        return [scatter(tx, indices, t_updates, axis=axis)]
 
     def sharding_rule(
         self,
@@ -424,7 +422,7 @@ def gather(x: Tensor, indices: Tensor, axis: int = 0) -> Tensor:
     from ..base import ensure_tensor
 
     indices = ensure_tensor(indices)
-    return _gather_op(x, indices, axis=axis)
+    return _gather_op([x, indices], {"axis": axis})[0]
 
 
 def scatter(x: Tensor, indices: Tensor, updates: Tensor, axis: int = 0) -> Tensor:
@@ -434,4 +432,4 @@ def scatter(x: Tensor, indices: Tensor, updates: Tensor, axis: int = 0) -> Tenso
     x = ensure_tensor(x)
     indices = ensure_tensor(indices)
     updates = ensure_tensor(updates)
-    return _scatter_op(x, indices, updates, axis=axis)
+    return _scatter_op([x, indices, updates], {"axis": axis})[0]

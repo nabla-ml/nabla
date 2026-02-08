@@ -7,12 +7,31 @@ from __future__ import annotations
 
 import os
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Union
 
 if TYPE_CHECKING:
     from max import graph
+    from max.graph import TensorValue
 
     from ..core import Tensor
+
+# ---------------------------------------------------------------------------
+# Unified internal signature type aliases (JAX-style args/params separation)
+#
+# These types define the contract that ALL Operation internal methods share.
+# - OpArgs: flat list of tensor arguments (dynamic, traceable values)
+# - OpKwargs: flat dict of static metadata (ints, floats, bools, strings, lists)
+# - OpResult: flat list of output tensor values (even for single-output ops)
+#
+# The user-facing __call__ keeps per-op ergonomic signatures and normalizes
+# into these types before internal dispatch.
+# ---------------------------------------------------------------------------
+
+# Value types allowed in OpKwargs (must be representable in a systems language)
+OpKwargsValue = Union[int, float, bool, str, list[int], list[float]]
+
+# Static metadata dictionary
+OpKwargs = dict[str, OpKwargsValue]
 
 
 from .utils import (
@@ -58,17 +77,34 @@ def _get_core():
 class Operation(ABC):
     """Base class for all operations.
 
-    Auto-propagates batch_dims.
+    Operations are stateless singletons used purely for dispatch. All context
+    needed by a method is passed as parameters — no mutable state on self.
+
+    Classes serve as namespace + inheritance for shared logic; instances carry
+    only class-level constants (name, flags, axis_arg_names, etc.).
     """
 
     _infer_output_sharding: bool = True
+
+    # Whether this op produces multiple output tensors.
+    # When True, kernel returns list[TensorValue] with len > 1.
+    # When False, kernel returns list[TensorValue] with exactly 1 element.
+    multiple_results: bool = False
 
     @property
     @abstractmethod
     def name(self) -> str: ...
 
-    def kernel(self, *args: graph.TensorValue, **kwargs: Any) -> Any:
-        """Returns TensorValue or pytree of TensorValues."""
+    def kernel(self, args: list[graph.TensorValue], kwargs: dict) -> list[graph.TensorValue]:
+        """Execute the low-level computation.
+
+        Args:
+            args: Flat list of TensorValue inputs.
+            kwargs: Static metadata dictionary.
+
+        Returns:
+            Flat list of TensorValue outputs (even for single-output ops).
+        """
         ...
 
     @property
@@ -109,12 +145,16 @@ class Operation(ABC):
             devices = [x.device] * (num_shards or 1)
         return dtypes, devices
 
-    def execute(self, args: tuple, kwargs: dict) -> Any:
+    def execute(self, args: list, kwargs: dict) -> Any:
         """Default physical execution: execute kernel on each shard independently.
 
         Operations with specialized execution logic (e.g. CreationOperation)
         can override. Uses adapt_kwargs for batch_dims offset and conditionally
         infers output sharding based on _infer_output_sharding class flag.
+
+        Args:
+            args: Flat list of Tensor inputs.
+            kwargs: Static metadata dictionary.
 
         Returns:
             tuple: (shard_results, output_sharding, mesh)
@@ -124,10 +164,8 @@ class Operation(ABC):
         GRAPH = _GRAPH
         spmd = _spmd
 
-        max_batch_dims = getattr(self, '_cached_batch_dims', None)
-        if max_batch_dims is None:
-            max_batch_dims = collect_metadata(args)[0]
-        adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)
+        batch_dims = collect_metadata(args)[0]
+        adapted_kwargs = self.adapt_kwargs(args, kwargs, batch_dims)
 
         mesh = spmd.get_mesh_from_args(args)
 
@@ -144,8 +182,17 @@ class Operation(ABC):
 
         return (shard_results, output_sharding, mesh)
 
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        # === New Path: Physical Execution ===
+    def __call__(self, args: list, kwargs: dict) -> list:
+        """Unified entry point for all operations.
+
+        Args:
+            args: Flat list of Tensor inputs.
+            kwargs: Static metadata dictionary (OpKwargs).
+
+        Returns:
+            Flat list of output Tensors (even for single-output ops).
+        """
+        # === Physical Execution Pipeline ===
 
         # 1. Collect Metadata (for Adaptation logic)
         max_batch_dims, any_traced, any_sharded, any_has_tangent = collect_metadata(
@@ -161,18 +208,13 @@ class Operation(ABC):
         op_hash = compute_structural_hash(self.name, resharded_args, adapted_kwargs)
 
         # 4. Eager Execution (if enabled)
-        # Cache batch_dims on self so execute() can reuse without re-collecting
-        self._cached_batch_dims = max_batch_dims
         execution_results = eager_execute(self, resharded_args, kwargs, adapted_kwargs)
-        self._cached_batch_dims = None
 
         # 5. Determine Physical Metadata (Shapes, Dtypes, Devices)
         if _config is None:
             _get_core()
 
         if execution_results is None or _config.VERIFY_EAGER_SHAPES:
-            # We must compute them manually if no physical execution happened,
-            # or if the user explicitly requested verification against the backend.
             if type(self).compute_physical_shape is Operation.compute_physical_shape:
                 raise RuntimeError(
                     f"{self.__class__.__name__} must implement compute_physical_shape"
@@ -184,12 +226,9 @@ class Operation(ABC):
                 )
             )
 
-            # Optional cross-verification
             if execution_results is not None:
                 verify_eager_shapes(self, execution_results, output_physical_shapes)
         else:
-            # OPTIMIZATION: Trust the TensorValues produced by the backend.
-            # package_outputs will let the Tensors infer shape/dtype from their own values.
             output_physical_shapes, output_shard_dtypes, output_shard_devices = (
                 None,
                 None,
@@ -209,19 +248,28 @@ class Operation(ABC):
             max_batch_dims,
         )
 
-        # 7. Tracing Setup (store op_kwargs on output so jvp_rule can read them)
+        # 7. Tracing Setup (store op_kwargs on output so transforms can read them)
         self._setup_output_refs(output, resharded_args, kwargs, op_hash=op_hash)
 
         # 8. JVP tangent propagation (after output refs are set)
         if any_has_tangent:
-            apply_jvp(self, args, output)
+            apply_jvp(self, args, kwargs, output)
 
         output = apply_auto_reduction(self, output, mesh, reduce_axes)
 
-        return output
+        # 9. Normalize to flat list[Tensor] output
+        if _Tensor is None:
+            _get_core()
+        Tensor = _Tensor
+        if isinstance(output, Tensor):
+            return [output]
+        elif isinstance(output, (list, tuple)):
+            return list(output)
+        else:
+            return [output]
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]] | None, list[Any] | None, list[Any] | None]:
         """Infer per-shard physical shapes for outputs.
 
@@ -231,18 +279,18 @@ class Operation(ABC):
             f"{self.__class__.__name__} must implement compute_physical_shape"
         )
 
-    def adapt_kwargs(self, args: tuple, kwargs: dict, batch_dims: int) -> dict:
+    def adapt_kwargs(self, args: list, kwargs: dict, batch_dims: int) -> dict:
         return kwargs
 
     def _transform_shard_kwargs(
-        self, kwargs: dict, output_sharding: Any, shard_idx: int, args: tuple
+        self, kwargs: dict, output_sharding: Any, shard_idx: int, args: list
     ) -> dict:
         """Transform kwargs for per-shard kernel execution."""
 
         return kwargs
 
     def infer_output_rank(
-        self, input_shapes: tuple[tuple[int, ...], ...], **kwargs
+        self, input_shapes: list[tuple[int, ...]], **kwargs
     ) -> int:
         """Infer output rank from input shapes."""
         if not input_shapes:
@@ -274,10 +322,10 @@ class Operation(ABC):
                 input_shapes, output_shapes
             )
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
         raise NotImplementedError(f"'{self.name}' does not implement vjp_rule")
 
-    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
         raise NotImplementedError(f"'{self.name}' does not implement jvp_rule")
 
     def get_sharding_rule_template(self) -> Any:
@@ -286,7 +334,7 @@ class Operation(ABC):
     def _setup_output_refs(
         self,
         output: Any,
-        args: tuple,
+        args: list,
         logical_kwargs: dict,
         op_hash: tuple[Any, ...] | None = None,
     ) -> None:
@@ -319,8 +367,8 @@ class Operation(ABC):
         def to_impl(x: Any) -> Any:
             return x._impl if isinstance(x, Tensor) else x
 
-        # Fast path for simple tuple of tensors (very common case)
-        if isinstance(args, tuple) and all(
+        # Fast path for simple list/tuple of tensors (very common case)
+        if isinstance(args, (list, tuple)) and all(
             isinstance(a, Tensor) or not isinstance(a, (list, dict, tuple))
             for a in args
         ):
@@ -381,7 +429,7 @@ class BinaryOperation(Operation):
     """Base for binary element-wise ops with batch_dims-aware broadcasting."""
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for binary elementwise ops (same as input 0)."""
         if _spmd is None:
@@ -433,12 +481,12 @@ class BinaryOperation(Operation):
             num_elements *= d
         return float(num_elements)
 
-    def __call__(self, x: Tensor, y: Tensor) -> Tensor:
+    def __call__(self, args: list, kwargs: dict) -> list:
         from . import view as view_ops
         from .base import ensure_tensor
 
-        x = ensure_tensor(x)
-        y = ensure_tensor(y)
+        x = ensure_tensor(args[0])
+        y = ensure_tensor(args[1])
 
         x_logical = x.global_shape_ints
         y_logical = y.global_shape_ints
@@ -455,7 +503,7 @@ class BinaryOperation(Operation):
 
         # Fast path: no batch dims (common case) — skip all batch/physical checks
         if max_batch_dims == 0:
-            return super().__call__(x, y)
+            return super().__call__([x, y], kwargs)
 
         if x_batch_dims >= y_batch_dims:
             global_phys = x.physical_global_shape_ints or x.physical_local_shape_ints(0)
@@ -480,7 +528,7 @@ class BinaryOperation(Operation):
         if y_global != target_physical:
             y = view_ops.broadcast_to_physical(y, target_physical)
 
-        return super().__call__(x, y)
+        return super().__call__([x, y], kwargs)
 
 
 class AxisOp(Operation):
@@ -495,7 +543,7 @@ class AxisOp(Operation):
 
     _infer_output_sharding: bool = False
 
-    def adapt_kwargs(self, args: tuple, kwargs: dict, batch_dims: int) -> dict:
+    def adapt_kwargs(self, args: list, kwargs: dict, batch_dims: int) -> dict:
         if batch_dims == 0:
             return kwargs
 
@@ -540,7 +588,7 @@ class ReduceOperation(AxisOp):
     """Base for reduction operations (sum, mean, max, min, etc.)."""
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for reduction operations."""
         if _spmd is None:
@@ -669,22 +717,22 @@ class UnaryOperation(Operation):
         """
         return NotImplemented
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        deriv = self._derivative(primals, output)
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+        deriv = self._derivative(primals[0], outputs[0])
         if deriv is NotImplemented:
             raise NotImplementedError(f"'{self.name}' does not implement vjp_rule")
         from ..ops.binary import mul
-        return mul(cotangent, deriv)
+        return [mul(cotangents[0], deriv)]
 
-    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
-        deriv = self._derivative(primals, output)
+    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
+        deriv = self._derivative(primals[0], outputs[0])
         if deriv is NotImplemented:
             raise NotImplementedError(f"'{self.name}' does not implement jvp_rule")
         from ..ops.binary import mul
-        return mul(tangents, deriv)
+        return [mul(tangents[0], deriv)]
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for unary elementwise ops (same as input)."""
         if _spmd is None:
@@ -728,7 +776,7 @@ class ShapeOp(Operation):
     _infer_output_sharding: bool = False
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for shape operations."""
         from ..core.sharding import spmd, spec
@@ -756,7 +804,7 @@ class ShapeOp(Operation):
 
         return shapes, dtypes, devices
 
-    def adapt_kwargs(self, args: tuple, kwargs: dict, batch_dims: int) -> dict:
+    def adapt_kwargs(self, args: list, kwargs: dict, batch_dims: int) -> dict:
         if batch_dims == 0:
             return kwargs
 
@@ -796,7 +844,7 @@ class ShapeOp(Operation):
                 return new_kwargs
         return kwargs
 
-    def execute(self, args: tuple, kwargs: dict) -> Any:
+    def execute(self, args: list, kwargs: dict) -> Any:
         """Physical execution for ShapeOp.
 
         Executes kernel on each shard with shape kwargs adapted for batch_dims.
@@ -806,11 +854,8 @@ class ShapeOp(Operation):
         from ..core import GRAPH
         from ..core.sharding import spmd
 
-        # Collect Metadata and Adapt (use cached value from __call__ if available)
-        max_batch_dims = getattr(self, '_cached_batch_dims', None)
-        if max_batch_dims is None:
-            max_batch_dims = collect_metadata(args)[0]
-        adapted_kwargs = self.adapt_kwargs(args, kwargs, max_batch_dims)
+        batch_dims = collect_metadata(args)[0]
+        adapted_kwargs = self.adapt_kwargs(args, kwargs, batch_dims)
         mesh = spmd.get_mesh_from_args(args)
 
         with GRAPH.graph:
@@ -829,7 +874,7 @@ class CreationOperation(Operation):
     """
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for creation operations."""
         from ..core.sharding import spmd, spec
@@ -882,7 +927,7 @@ class CreationOperation(Operation):
 
     _infer_output_sharding: bool = True
 
-    def execute(self, args: tuple, kwargs: dict) -> Any:
+    def execute(self, args: list, kwargs: dict) -> Any:
         """Physical execution for CreationOperation.
 
         Creation ops don't pull from input shards - they create new ones.
@@ -901,11 +946,17 @@ class CreationOperation(Operation):
                 "gaussian",
             ):
                 # Random ops must be called per-shard to get different seeds/states
-                shard_results = [self.kernel(*args, **kwargs) for _ in range(num_shards)]
+                # kernel returns list; unwrap single-element for shard_results
+                shard_results = []
+                for _ in range(num_shards):
+                    result_list = self.kernel(args, kwargs)
+                    shard_results.append(result_list[0] if len(result_list) == 1 else result_list)
             else:
                 # Deterministic creation: call once and replicate results (MAX handles broadcast if needed)
-                result = self.kernel(*args, **kwargs)
-                shard_results = [result] * num_shards
+                # kernel returns list; unwrap single-element for shard_results
+                result_list = self.kernel(args, kwargs)
+                val = result_list[0] if len(result_list) == 1 else result_list
+                shard_results = [val] * num_shards
 
         # Infer output sharding (which was computed during adapt_and_reshard)
         output_sharding, _, _ = spmd.infer_output_sharding(
@@ -914,6 +965,6 @@ class CreationOperation(Operation):
 
         return (shard_results, output_sharding, mesh)
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
         # Creation ops usually have no differentiable inputs
-        return tuple(None for _ in range(len(primals)))
+        return [None for _ in range(len(primals))]

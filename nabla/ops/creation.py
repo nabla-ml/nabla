@@ -23,16 +23,14 @@ class ConstantOp(CreationOperation):
     def name(self) -> str:
         return "constant"
 
-    def kernel(
-        self,
-        value: NestedArray | Number,
-        dtype: DType,
-        device: Device,
-    ) -> TensorValue:
-        return ops.constant(value, dtype, device)
+    def kernel(self, args: list, kwargs: dict) -> list:
+        value = args[0]
+        dtype = kwargs["dtype"]
+        device = kwargs["device"]
+        return [ops.constant(value, dtype, device)]
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        return (None, None, None)
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+        return [None for _ in range(len(primals))]
 
 
 class FullOp(CreationOperation):
@@ -42,15 +40,13 @@ class FullOp(CreationOperation):
     def name(self) -> str:
         return "full"
 
-    def kernel(
-        self,
-        shape: ShapeLike,
-        value: Number,
-        dtype: DType,
-        device: Device,
-    ) -> TensorValue:
+    def kernel(self, args: list, kwargs: dict) -> list:
+        shape = kwargs["shape"]
+        value = kwargs["value"]
+        dtype = kwargs["dtype"]
+        device = kwargs["device"]
         const = ops.constant(value, dtype, device)
-        return ops.broadcast_to(const, shape)
+        return [ops.broadcast_to(const, shape)]
 
 
 class ZerosOp(CreationOperation):
@@ -60,14 +56,12 @@ class ZerosOp(CreationOperation):
     def name(self) -> str:
         return "zeros"
 
-    def kernel(
-        self,
-        shape: ShapeLike,
-        dtype: DType,
-        device: Device,
-    ) -> TensorValue:
+    def kernel(self, args: list, kwargs: dict) -> list:
+        shape = kwargs["shape"]
+        dtype = kwargs["dtype"]
+        device = kwargs["device"]
         const = ops.constant(0, dtype, device)
-        return ops.broadcast_to(const, shape)
+        return [ops.broadcast_to(const, shape)]
 
 
 class OnesOp(CreationOperation):
@@ -77,14 +71,12 @@ class OnesOp(CreationOperation):
     def name(self) -> str:
         return "ones"
 
-    def kernel(
-        self,
-        shape: ShapeLike,
-        dtype: DType,
-        device: Device,
-    ) -> TensorValue:
+    def kernel(self, args: list, kwargs: dict) -> list:
+        shape = kwargs["shape"]
+        dtype = kwargs["dtype"]
+        device = kwargs["device"]
         const = ops.constant(1, dtype, device)
-        return ops.broadcast_to(const, shape)
+        return [ops.broadcast_to(const, shape)]
 
 
 class ArangeOp(CreationOperation):
@@ -95,7 +87,7 @@ class ArangeOp(CreationOperation):
         return "arange"
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for arange (1D)."""
         import math
@@ -134,15 +126,13 @@ class ArangeOp(CreationOperation):
 
         return shapes, dtypes, devices
 
-    def kernel(
-        self,
-        start: int,
-        stop: int,
-        step: int,
-        dtype: DType,
-        device: Device,
-    ) -> TensorValue:
-        return ops.range(start, stop, step, dtype=dtype, device=device)
+    def kernel(self, args: list, kwargs: dict) -> list:
+        start = kwargs["start"]
+        stop = kwargs["stop"]
+        step = kwargs["step"]
+        dtype = kwargs["dtype"]
+        device = kwargs["device"]
+        return [ops.range(start, stop, step, dtype=dtype, device=device)]
 
 
 class UniformOp(CreationOperation):
@@ -152,16 +142,14 @@ class UniformOp(CreationOperation):
     def name(self) -> str:
         return "uniform"
 
-    def kernel(
-        self,
-        shape: ShapeLike,
-        low: float,
-        high: float,
-        dtype: DType,
-        device: Device,
-    ) -> TensorValue:
+    def kernel(self, args: list, kwargs: dict) -> list:
+        shape = kwargs["shape"]
+        low = kwargs["low"]
+        high = kwargs["high"]
+        dtype = kwargs["dtype"]
+        device = kwargs["device"]
         tensor_type = TensorType(dtype, shape, device=DeviceRef.from_device(device))
-        return ops.random.uniform(tensor_type, range=(low, high))
+        return [ops.random.uniform(tensor_type, range=(low, high))]
 
 
 class GaussianOp(CreationOperation):
@@ -171,16 +159,14 @@ class GaussianOp(CreationOperation):
     def name(self) -> str:
         return "gaussian"
 
-    def kernel(
-        self,
-        shape: ShapeLike,
-        mean: float,
-        std: float,
-        dtype: DType,
-        device: Device,
-    ) -> TensorValue:
+    def kernel(self, args: list, kwargs: dict) -> list:
+        shape = kwargs["shape"]
+        mean = kwargs["mean"]
+        std = kwargs["std"]
+        dtype = kwargs["dtype"]
+        device = kwargs["device"]
         tensor_type = TensorType(dtype, shape, device=DeviceRef.from_device(device))
-        return ops.random.gaussian(tensor_type, mean=mean, std=std)
+        return [ops.random.gaussian(tensor_type, mean=mean, std=std)]
 
 
 class HannWindowOp(CreationOperation):
@@ -191,7 +177,7 @@ class HannWindowOp(CreationOperation):
         return "hann_window"
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         window_length = args[0] if len(args) > 0 else kwargs.get("window_length")
         dtype = kwargs.get("dtype", DType.float32)
@@ -214,21 +200,19 @@ class HannWindowOp(CreationOperation):
 
         return shapes, dtypes, devices
 
-    def kernel(
-        self,
-        window_length: int,
-        device: Device,
-        periodic: bool = True,
-        dtype: DType = DType.float32,
-    ) -> TensorValue:
-        return ops.hann_window(window_length, device, periodic=periodic, dtype=dtype)
+    def kernel(self, args: list, kwargs: dict) -> list:
+        window_length = kwargs["window_length"]
+        device = kwargs["device"]
+        periodic = kwargs.get("periodic", True)
+        dtype = kwargs.get("dtype", DType.float32)
+        return [ops.hann_window(window_length, device, periodic=periodic, dtype=dtype)]
 
 
 class TriOp(Operation):
     """Base for Triu and Tril."""
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         x = args[0]
         shapes = [
@@ -237,9 +221,9 @@ class TriOp(Operation):
         ]
         return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        k = output.op_kwargs.get("k", 0)
-        return (self.__class__()(cotangent, k=k),)
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+        k = kwargs.get("k", 0)
+        return [self.__class__()([cotangents[0]], {"k": k})[0]]
 
 
 class TriuOp(TriOp):
@@ -249,56 +233,13 @@ class TriuOp(TriOp):
     def name(self) -> str:
         return "triu"
 
-    def kernel(self, x: TensorValue, *, k: int = 0) -> TensorValue:
-        # Fallback to band_part if triu is missing
-        # Upper triangle: keep everything from diagonal k upwards
-        # lower=-1 (ignore), upper=0 (diagonal) -- wait, band_part(x, num_lower, num_upper)
-        # Keeps elements where in_band(m, n) = (num_lower < 0 || (m-n) <= num_lower)) &&
-        #                                      (num_upper < 0 || (n-m) <= num_upper)
-        # For triu(k): keep j >= i + k => j - i >= k => (i - j) <= -k.
-        # This roughly maps to num_lower = -k? No, that's unintuitive.
-        # XLA/TF semantics: band_part(x, num_lower, num_upper)
-        # Retains: num_lower <= (i - j) <= num_upper. (assuming m=i, n=j)
-        # triu(k): j >= i + k  => 0 >= i - j + k => i - j <= -k.
-        # So we want (i - j) <= -k.
-        #num_lower = 0 # No wait, we keep everything "above" diagonal. So i is small, j is large.
-        # i-j is negative.
-        # So we want lower bound on i-j? We want to discard things where i-j > -k.
+    def kernel(self, args: list, kwargs: dict) -> list:
+        x = args[0]
+        k = kwargs.get("k", 0)
         try:
-             return ops.triu(x, k)
+            return [ops.triu(x, k)]
         except AttributeError:
-             # Fallback: band_part(x, 0, -1) keeps upper triangle (k=0)
-             # ops.band_part(input, num_lower, num_upper)
-             # To Implement triu(k): num_lower = -k? No.
-             # We want to KEEP if j >= i + k.
-             # This means i - j <= -k.
-             # band_part keeps num_lower <= i - j <= num_upper.
-             # So we set num_upper = -1 (infinity), and num_lower?
-             # Actually, simpler:
-             # triu(k) is everything *above* the k-th diagonal.
-             # This corresponds to band_part(x, 0, -1) for k=0? No wait.
-             # Let's check max ops.
-             return ops.band_part(x, -k, -1) # wait, if k=0, band_part(0, -1) -> main diagonal and up? 
-             # If k=1 (superdiagonal), we want j >= i+1. i-j <= -1.
-             # band_part(x, -1, -1) would mean -1 <= i-j. That keeps lower stuff.
-             # Correct mapping for triu(x, k):
-             # band_part(x, num_lower, num_upper)
-             # We want (j >= i + k) => (j - i >= k).
-             # band_part keeps (i - j <= num_lower) AND (j - i <= num_upper).
-             # Wait, TF says: (num_lower < 0 || (m-n) <= num_lower) && (num_upper < 0 || (n-m) <= num_upper)
-             
-             # Let's assume `ops.band_part` follows standard XLA/TF.
-             # triu(x, k): mask where j >= i + k.
-             # band_part(x, -k-1??, -1)?
-             # Actually easiest way is usually multiply by mask if `ops.band_part` is confusing.
-             # But let's try strict substitution. 
-             # triu(k=0): j >= i. i <= j. Keep upper.
-             # band_part(x, 0, -1):
-             #   (m-n) <= 0 => m <= n (i<=j). Correct for k=0.
-             # triu(k=1): j >= i+1. i <= j-1.
-             # band_part(x, -1, -1)?
-             #   (m-n) <= -1 => m <= n-1 => i <= j-1. Correct.
-             return ops.band_part(x, -k, -1)
+            return [ops.band_part(x, -k, -1)]
 
 
 class TrilOp(TriOp):
@@ -308,19 +249,13 @@ class TrilOp(TriOp):
     def name(self) -> str:
         return "tril"
 
-    def kernel(self, x: TensorValue, *, k: int = 0) -> TensorValue:
+    def kernel(self, args: list, kwargs: dict) -> list:
+        x = args[0]
+        k = kwargs.get("k", 0)
         try:
-            return ops.tril(x, k)
+            return [ops.tril(x, k)]
         except AttributeError:
-             # tril(k): j <= i + k.
-             # j - i <= k. (i - j) >= -k.
-             # band_part(x, num_lower, num_upper)
-             # We want to KEEP if j <= i + k.
-             # band_part keeps (m-n <= num_lower) and (n-m <= num_upper).
-             # n-m <= k.
-             # So num_upper = k.
-             # num_lower = -1 (infinity).
-             return ops.band_part(x, -1, k)
+            return [ops.band_part(x, -1, k)]
 
 
 _constant_op = ConstantOp()
@@ -372,7 +307,7 @@ def constant(
         return Tensor.from_dlpack(value)
 
     dtype, device = defaults(dtype, device)
-    return _constant_op(value, dtype=dtype, device=device)
+    return _constant_op([value], {"dtype": dtype, "device": device})[0]
 
 
 def full(
@@ -385,7 +320,7 @@ def full(
 ):
     """Create a tensor filled with a constant value."""
     dtype, device = defaults(dtype, device)
-    t = _full_op(shape, value, dtype=dtype, device=device)
+    t = _full_op([], {"shape": shape, "value": value, "dtype": dtype, "device": device})[0]
     if is_traced:
         t.is_traced = True
     return t
@@ -400,7 +335,7 @@ def zeros(
 ):
     """Create a tensor filled with zeros."""
     dtype, device = defaults(dtype, device)
-    t = _zeros_op(shape, dtype=dtype, device=device)
+    t = _zeros_op([], {"shape": shape, "dtype": dtype, "device": device})[0]
     if is_traced:
         t.is_traced = True
     return t
@@ -415,7 +350,7 @@ def ones(
 ):
     """Create a tensor filled with ones."""
     dtype, device = defaults(dtype, device)
-    t = _ones_op(shape, dtype=dtype, device=device)
+    t = _ones_op([], {"shape": shape, "dtype": dtype, "device": device})[0]
     if is_traced:
         t.is_traced = True
     return t
@@ -433,7 +368,7 @@ def arange(
     dtype, device = defaults(dtype, device)
     if stop is None:
         start, stop = 0, start
-    return _arange_op(start, stop, step, dtype=dtype, device=device)
+    return _arange_op([], {"start": start, "stop": stop, "step": step, "dtype": dtype, "device": device})[0]
 
 
 def uniform(
@@ -446,7 +381,7 @@ def uniform(
 ):
     """Create a tensor with uniform random values."""
     dtype, device = defaults(dtype, device)
-    return _uniform_op(shape, low, high, dtype=dtype, device=device)
+    return _uniform_op([], {"shape": shape, "low": low, "high": high, "dtype": dtype, "device": device})[0]
 
 
 def gaussian(
@@ -459,7 +394,7 @@ def gaussian(
 ):
     """Create a tensor with Gaussian (normal) random values."""
     dtype, device = defaults(dtype, device)
-    return _gaussian_op(shape, mean, std, dtype=dtype, device=device)
+    return _gaussian_op([], {"shape": shape, "mean": mean, "std": std, "dtype": dtype, "device": device})[0]
 
 
 normal = gaussian
@@ -474,17 +409,17 @@ def hann_window(
 ):
     """Create a 1D Hann window tensor."""
     dtype, device = defaults(dtype, device)
-    return _hann_window_op(window_length, device=device, periodic=periodic, dtype=dtype)
+    return _hann_window_op([], {"window_length": window_length, "device": device, "periodic": periodic, "dtype": dtype})[0]
 
 
 def triu(x: Any, k: int = 0) -> Any:
     """Upper triangular part of a matrix."""
-    return _triu_op(x, k=k)
+    return _triu_op([x], {"k": k})[0]
 
 
 def tril(x: Any, k: int = 0) -> Any:
     """Lower triangular part of a matrix."""
-    return _tril_op(x, k=k)
+    return _tril_op([x], {"k": k})[0]
 
 
 def _like_helper(x: Any, create_fn, *extra_args) -> Any:

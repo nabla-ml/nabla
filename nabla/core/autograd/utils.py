@@ -149,7 +149,6 @@ class BackwardEngine:
     def _process_node(self, node: OpNode):
         from ..common import pytree
         from ..tensor.impl import TensorImpl
-        import sys
 
         alive_outputs = node.get_alive_outputs()
         op = node.op
@@ -164,44 +163,43 @@ class BackwardEngine:
         if not active_indices:
             return
 
-        # 2. Prepare structural arguments for VJP rule
+        # 2. Prepare flat list arguments for VJP rule
         def wrap(x):
             if isinstance(x, (Tensor, TensorImpl)):
                 impl = x._impl if isinstance(x, Tensor) else x
                 return Tensor(impl=impl)
             return x
 
-        vjp_primals = pytree.tree_map(wrap, node.op_args)
+        # Flat list of primal Tensors (preserving non-Tensor args as-is)
+        vjp_primals = [wrap(a) for a in node.op_args]
 
-        output_tensors = [
+        # Flat list of output Tensors
+        vjp_outputs = [
             Tensor(impl=o) if o is not None else None for o in alive_outputs
         ]
-        vjp_outputs = pytree.tree_unflatten(node.tree_def, output_tensors)
 
-        cot_tensors = []
+        # Flat list of cotangent Tensors (matching outputs)
+        vjp_cotangents = []
         for o in alive_outputs:
             if o is not None:
                 if id(o) in self.cotangent_map:
-                    cot_tensors.append(Tensor(impl=self.cotangent_map[id(o)]))
+                    vjp_cotangents.append(Tensor(impl=self.cotangent_map[id(o)]))
                 else:
                     from ...ops.creation import zeros_like
-
-                    cot_tensors.append(zeros_like(Tensor(impl=o)))
+                    vjp_cotangents.append(zeros_like(Tensor(impl=o)))
             else:
-                cot_tensors.append(None)
-        vjp_cotangents = pytree.tree_unflatten(node.tree_def, cot_tensors)
+                vjp_cotangents.append(None)
 
-        # 3. Invoke VJP Rule
-        unwrapped_primals = _unwrap_single(vjp_primals)
-        unwrapped_outputs = _unwrap_single(vjp_outputs)
-        unwrapped_cotangents = _unwrap_single(vjp_cotangents)
+        # Get kwargs from the OpNode (stored during forward pass)
+        vjp_kwargs = node.op_kwargs or {}
 
-        vjp_inputs = [unwrapped_primals, unwrapped_outputs, unwrapped_cotangents]
+        # 3. Invoke VJP Rule (unified: flat lists + kwargs)
+        vjp_inputs = [vjp_primals, vjp_outputs, vjp_cotangents]
         self._set_trace_state(vjp_inputs)
 
         try:
             input_cotangents = op.vjp_rule(
-                unwrapped_primals, unwrapped_cotangents, unwrapped_outputs
+                vjp_primals, vjp_cotangents, vjp_outputs, vjp_kwargs
             )
         except Exception as e:
             self._restore_trace_state(vjp_inputs)
@@ -210,21 +208,10 @@ class BackwardEngine:
         finally:
             self._restore_trace_state(vjp_inputs)
 
-        # 4. Align and Accumulate
-        arg_leaves, _ = pytree.tree_flatten_full(node.op_args)
-        cot_leaves, _ = pytree.tree_flatten_full(input_cotangents)
+        # 4. Align and Accumulate — input_cotangents is flat list matching primals
+        arg_leaves = [a for a in node.op_args]
 
-        # Workaround for single-arg ops that return unwrapped cotangents or (None, cot)
-        if len(arg_leaves) == 1 and len(cot_leaves) > 1 and cot_leaves[0] is None:
-            cot_leaves = [c for c in cot_leaves if c is not None]
-
-        if len(cot_leaves) != len(arg_leaves):
-            if len(arg_leaves) == 1 and not isinstance(
-                input_cotangents, (list, tuple, dict)
-            ):
-                cot_leaves = [input_cotangents]
-
-        for arg_impl, cot_result in zip(arg_leaves, cot_leaves, strict=False):
+        for arg_impl, cot_result in zip(arg_leaves, input_cotangents, strict=False):
             if arg_impl is None or cot_result is None:
                 continue
 

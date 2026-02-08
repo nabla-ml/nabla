@@ -19,11 +19,11 @@ class AsInterleavedComplexOp(Operation):
     def name(self) -> str:
         return "as_interleaved_complex"
 
-    def kernel(self, x: TensorValue) -> TensorValue:
-        return ops.as_interleaved_complex(x)
+    def kernel(self, args: list, kwargs: dict) -> list:
+        return [ops.as_interleaved_complex(args[0])]
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         x = args[0]
         # Input shape (..., 2) -> Output shape (...)
@@ -34,12 +34,9 @@ class AsInterleavedComplexOp(Operation):
         
         return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
         """VJP for as_interleaved_complex: view as real."""
-        # This requires a 'view_as_real' or similar. 
-        # If we have complex cotangenet C, we want to split it back to (real, imag).
-        # Usually this is the inverse view.
-        return (view_as_real_interleaved(cotangent),)
+        return [view_as_real_interleaved(cotangents[0])]
 
 
 class ViewAsRealInterleavedOp(Operation):
@@ -49,12 +46,12 @@ class ViewAsRealInterleavedOp(Operation):
     def name(self) -> str:
         return "view_as_real_interleaved"
 
-    def kernel(self, x: TensorValue) -> TensorValue:
+    def kernel(self, args: list, kwargs: dict) -> list:
         # Assuming ops.view_as_real exists or similar
-        return ops.view_as_real(x)
+        return [ops.view_as_real(args[0])]
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         x = args[0]
         # Input shape (...) -> Output shape (..., 2)
@@ -65,17 +62,17 @@ class ViewAsRealInterleavedOp(Operation):
             
         return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        return (as_interleaved_complex(cotangent),)
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+        return [as_interleaved_complex(cotangents[0])]
 
 
-as_interleaved_complex_op = AsInterleavedComplexOp()
-view_as_real_interleaved_op = ViewAsRealInterleavedOp()
+_as_interleaved_complex_op = AsInterleavedComplexOp()
+_view_as_real_interleaved_op = ViewAsRealInterleavedOp()
 
 
 def as_interleaved_complex(x):
-    return as_interleaved_complex_op(x)
+    return _as_interleaved_complex_op([x], {})[0]
 
 
 def view_as_real_interleaved(x):
-    return view_as_real_interleaved_op(x)
+    return _view_as_real_interleaved_op([x], {})[0]

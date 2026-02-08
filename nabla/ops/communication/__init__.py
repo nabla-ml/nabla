@@ -5,22 +5,22 @@
 
 from .all_gather import (
     all_gather,
-    all_gather_op,
+    _all_gather_op as all_gather_op,
     gather_all_axes,
-    gather_all_axes_op,
+    _gather_all_axes_op as gather_all_axes_op,
 )
-from .all_reduce import all_reduce, all_reduce_op, pmean, pmean_op
-from .all_to_all import all_to_all, all_to_all_op
+from .all_reduce import all_reduce, _all_reduce_op as all_reduce_op, pmean, _pmean_op as pmean_op
+from .all_to_all import all_to_all, _all_to_all_op as all_to_all_op
 from .broadcast import (
     distributed_broadcast,
-    distributed_broadcast_op,
+    _distributed_broadcast_op as distributed_broadcast_op,
 )
-from .axis_index import axis_index, axis_index_op
+from .axis_index import axis_index, _axis_index_op as axis_index_op
 from .base import CollectiveOperation
-from .p_permute import ppermute, ppermute_op
-from .reduce_scatter import reduce_scatter, reduce_scatter_op
+from .p_permute import ppermute, _ppermute_op as ppermute_op
+from .reduce_scatter import reduce_scatter, _reduce_scatter_op as reduce_scatter_op
 from .reshard import reshard
-from .shard import broadcast, shard, shard_op
+from .shard import broadcast, shard, _shard_op as shard_op
 from .transfer import to_device, transfer_to, cpu, gpu, accelerator
 
 __all__ = [

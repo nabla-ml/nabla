@@ -64,21 +64,23 @@ class IncrBatchDimsOp(Operation):
         return "incr_batch_dims"
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], Any]:
         """Physical shape is unchanged; only batch_dims metadata changes."""
         return _identity_physical_shape(self, args, kwargs)
 
-    def kernel(self, x: TensorValue) -> TensorValue:
-        return x
+    def kernel(self, args: list, kwargs: dict) -> list:
+        return [args[0]]
 
-    def __call__(self, x: Tensor) -> Tensor:
-        result = super().__call__(x)
-        result._impl.batch_dims = x.batch_dims + 1
-        return result
+    def __call__(self, args: list, kwargs: dict) -> list:
+        x = args[0]
+        results = super().__call__(args, kwargs)
+        for r in results:
+            r._impl.batch_dims = x.batch_dims + 1
+        return results
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        return decr_batch_dims(cotangent)
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+        return [decr_batch_dims(cotangents[0])]
 
 
 class DecrBatchDimsOp(Operation):
@@ -89,23 +91,25 @@ class DecrBatchDimsOp(Operation):
         return "decr_batch_dims"
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], Any]:
         """Physical shape is unchanged; only batch_dims metadata changes."""
         return _identity_physical_shape(self, args, kwargs)
 
-    def kernel(self, x: TensorValue) -> TensorValue:
-        return x
+    def kernel(self, args: list, kwargs: dict) -> list:
+        return [args[0]]
 
-    def __call__(self, x: Tensor) -> Tensor:
+    def __call__(self, args: list, kwargs: dict) -> list:
+        x = args[0]
         if x.batch_dims <= 0:
             raise ValueError("Cannot decrement batch_dims below 0")
-        result = super().__call__(x)
-        result._impl.batch_dims = x.batch_dims - 1
-        return result
+        results = super().__call__(args, kwargs)
+        for r in results:
+            r._impl.batch_dims = x.batch_dims - 1
+        return results
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        return incr_batch_dims(cotangent)
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+        return [incr_batch_dims(cotangents[0])]
 
 
 class MoveAxisPhysicalOp(Operation):
@@ -116,7 +120,7 @@ class MoveAxisPhysicalOp(Operation):
         return "moveaxis_physical"
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], Any]:
         """Infer physical shapes for moveaxis_physical."""
         from ...core.sharding import spmd
@@ -158,7 +162,10 @@ class MoveAxisPhysicalOp(Operation):
 
         return shapes, dtypes, devices
 
-    def kernel(self, x: TensorValue, *, source: int, destination: int) -> TensorValue:
+    def kernel(self, args: list, kwargs: dict) -> list:
+        x = args[0]
+        source = kwargs["source"]
+        destination = kwargs["destination"]
         rank = len(x.type.shape)
         if source < 0:
             source = rank + source
@@ -168,20 +175,22 @@ class MoveAxisPhysicalOp(Operation):
         order = list(range(rank))
         order.pop(source)
         order.insert(destination, source)
-        return ops.permute(x, tuple(order))
+        return [ops.permute(x, tuple(order))]
 
-    def __call__(self, x: Tensor, *, source: int, destination: int) -> Tensor:
+    def __call__(self, args: list, kwargs: dict) -> list:
         # Preserve batch_dims through the permutation
+        x = args[0]
         original_batch_dims = x.batch_dims
-        result = super().__call__(x, source=source, destination=destination)
-        result._impl.batch_dims = original_batch_dims
-        return result
+        results = super().__call__(args, kwargs)
+        for r in results:
+            r._impl.batch_dims = original_batch_dims
+        return results
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        source = output.op_kwargs.get("source")
-        destination = output.op_kwargs.get("destination")
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+        source = kwargs.get("source")
+        destination = kwargs.get("destination")
         # Inverse: move from destination back to source
-        return moveaxis_physical(cotangent, source=destination, destination=source)
+        return [moveaxis_physical(cotangents[0], source=destination, destination=source)]
 
     def sharding_rule(
         self,
@@ -221,7 +230,7 @@ class BroadcastBatchDimsOp(Operation):
         return "broadcast_batch_dims"
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], Any]:
         """Infer physical shapes for broadcast_batch_dims."""
         from ...core.sharding import spmd, spec
@@ -256,8 +265,10 @@ class BroadcastBatchDimsOp(Operation):
 
         return shapes, dtypes, devices
 
-    def kernel(self, x: TensorValue, *, shape: tuple[int, ...]) -> TensorValue:
-        return ops.broadcast_to(x, shape)
+    def kernel(self, args: list, kwargs: dict) -> list:
+        x = args[0]
+        shape = kwargs["shape"]
+        return [ops.broadcast_to(x, shape)]
 
     def sharding_rule(
         self,
@@ -292,40 +303,43 @@ class BroadcastBatchDimsOp(Operation):
             input_shapes, output_shapes
         )
 
-    def __call__(self, x: Tensor, *, batch_shape: tuple[int, ...]) -> Tensor:
+    def __call__(self, args: list, kwargs: dict) -> list:
         from ...core import Tensor
 
+        x = args[0]
+        batch_shape = kwargs["batch_shape"]
         logical_shape = tuple(x.shape)
         physical_shape = tuple(batch_shape) + logical_shape
 
-        result = super().__call__(x, shape=physical_shape)
+        results = super().__call__(args, {"shape": physical_shape})
 
         # Update batch_dims to match the new batch shape.
-        result._impl.batch_dims = len(batch_shape)
-        return result
+        for r in results:
+            r._impl.batch_dims = len(batch_shape)
+        return results
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
         """VJP: sum over added batch dimensions."""
-        x = primals
-        added = output.batch_dims - x.batch_dims
+        x = primals[0]
+        added = outputs[0].batch_dims - x.batch_dims
         if added <= 0:
-            return cotangent
+            return [cotangents[0]]
 
         from ..reduction import reduce_sum_physical
         from .batch import decr_batch_dims
 
-        result = cotangent
+        result = cotangents[0]
         for _ in range(added):
             result = reduce_sum_physical(result, axis=0, keepdims=False)
             if result.batch_dims > 0:
                 result = decr_batch_dims(result)
-        return result
+        return [result]
 
-    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
         """JVP: broadcast tangent across batch dimensions."""
-        phys = output.physical_global_shape
-        batch_shape = tuple(int(d) for d in phys[: output.batch_dims])
-        return broadcast_batch_dims(tangents, batch_shape)
+        phys = outputs[0].physical_global_shape
+        batch_shape = tuple(int(d) for d in phys[: outputs[0].batch_dims])
+        return [broadcast_batch_dims(tangents[0], batch_shape)]
 
 
 # Singleton instances
@@ -337,17 +351,17 @@ _broadcast_batch_dims_op = BroadcastBatchDimsOp()
 
 def incr_batch_dims(x: Tensor) -> Tensor:
     """Increment batch_dims counter (first physical dim becomes batch dim)."""
-    return _incr_batch_dims_op(x)
+    return _incr_batch_dims_op([x], {})[0]
 
 
 def decr_batch_dims(x: Tensor) -> Tensor:
     """Decrement batch_dims counter (first batch dim becomes logical dim)."""
-    return _decr_batch_dims_op(x)
+    return _decr_batch_dims_op([x], {})[0]
 
 
 def moveaxis_physical(x: Tensor, source: int, destination: int) -> Tensor:
     """Move a physical axis to another physical position."""
-    return _moveaxis_physical_op(x, source=source, destination=destination)
+    return _moveaxis_physical_op([x], {"source": source, "destination": destination})[0]
 
 
 def move_axis_to_batch_dims(x: Tensor, axis: int) -> Tensor:
@@ -381,7 +395,7 @@ def move_axis_from_batch_dims(
 
 def broadcast_batch_dims(x: Tensor, batch_shape: tuple[int, ...]) -> Tensor:
     """Broadcast tensor to have specified batch shape."""
-    return _broadcast_batch_dims_op(x, batch_shape=batch_shape)
+    return _broadcast_batch_dims_op([x], {"batch_shape": batch_shape})[0]
 
 
 __all__ = [

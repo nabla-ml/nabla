@@ -29,7 +29,7 @@ class PhysicalReduceOp(Operation):
     _infer_output_sharding: bool = False
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         from ..core.sharding import spmd
 
@@ -105,23 +105,23 @@ class ReduceSumOp(ReduceOperation):
     def name(self) -> str:
         return "reduce_sum"
 
-    def kernel(
-        self, x: TensorValue, *, axis: int, keepdims: bool = False
-    ) -> TensorValue:
-        return ops.sum(x, axis)
+    def kernel(self, args: list, kwargs: dict) -> list:
+        x = args[0]
+        axis = kwargs.get("axis", 0)
+        return [ops.sum(x, axis)]
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
         """VJP for reduce_sum: broadcast cotangent back to input shape."""
-        x = primals
+        x = primals[0]
         from ..ops.view.shape import broadcast_to
 
-        return broadcast_to(cotangent, tuple(x.shape))
+        return [broadcast_to(cotangents[0], tuple(x.shape))]
 
-    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
-        t = tangents
-        axis = output.op_kwargs.get("axis", 0)
-        keepdims = output.op_kwargs.get("keepdims", False)
-        return reduce_sum(t, axis=axis, keepdims=keepdims)
+    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
+        t = tangents[0]
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+        return [reduce_sum(t, axis=axis, keepdims=keepdims)]
 
 
 class MeanOp(ReduceOperation):
@@ -129,28 +129,25 @@ class MeanOp(ReduceOperation):
     def name(self) -> str:
         return "mean"
 
-    def kernel(
-        self, x: TensorValue, *, axis: int, keepdims: bool = False
-    ) -> TensorValue:
-        return ops.mean(x, axis)
+    def kernel(self, args: list, kwargs: dict) -> list:
+        x = args[0]
+        axis = kwargs.get("axis", 0)
+        return [ops.mean(x, axis)]
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
         """VJP for mean: broadcast cotangent / axis_size."""
-        x = primals
-        axis = output.op_kwargs.get("axis", 0)
+        x = primals[0]
+        axis = kwargs.get("axis", 0)
         axis_size = x.shape[axis]
         from ..ops.view.shape import broadcast_to
 
         target_shape = tuple(int(d) for d in x.shape)
-        return broadcast_to(cotangent, target_shape) / axis_size
+        return [broadcast_to(cotangents[0], target_shape) / axis_size]
 
-    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
-        axis = output.op_kwargs.get("axis", 0)
-        keepdims = output.op_kwargs.get("keepdims", False)
-        return mean(tangents, axis=axis, keepdims=keepdims)
-
-    def __call__(self, x, *, axis: int, keepdims: bool = False):
-        return super().__call__(x, axis=axis, keepdims=keepdims)
+    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+        return [mean(tangents[0], axis=axis, keepdims=keepdims)]
 
 
 class ReduceMaxOp(ReduceOperation):
@@ -162,34 +159,34 @@ class ReduceMaxOp(ReduceOperation):
     def collective_reduce_type(self) -> str:
         return "max"
 
-    def kernel(
-        self, x: TensorValue, *, axis: int, keepdims: bool = False
-    ) -> TensorValue:
-        return ops._reduce_max(x, axis=axis)
+    def kernel(self, args: list, kwargs: dict) -> list:
+        x = args[0]
+        axis = kwargs.get("axis", 0)
+        return [ops._reduce_max(x, axis=axis)]
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        x = primals
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+        x = primals[0]
         from ..ops.comparison import equal
         from ..ops.view.shape import broadcast_to
         from ..ops.binary import mul
 
-        max_broadcasted = broadcast_to(output, tuple(x.shape))
+        max_broadcasted = broadcast_to(outputs[0], tuple(x.shape))
         mask = equal(x, max_broadcasted)
-        cotangent_broadcasted = broadcast_to(cotangent, tuple(x.shape))
-        return mul(cotangent_broadcasted, mask)
+        cotangent_broadcasted = broadcast_to(cotangents[0], tuple(x.shape))
+        return [mul(cotangent_broadcasted, mask)]
 
-    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
-        x = primals
+    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
+        x = primals[0]
         from ..ops.comparison import equal
         from ..ops.view.shape import broadcast_to
         from ..ops.binary import mul
         from ..ops.reduction import reduce_sum
 
-        axis = output.op_kwargs.get("axis", 0)
-        keepdims = output.op_kwargs.get("keepdims", False)
-        max_broadcasted = broadcast_to(output, tuple(x.shape))
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+        max_broadcasted = broadcast_to(outputs[0], tuple(x.shape))
         mask = equal(x, max_broadcasted)
-        return reduce_sum(mul(tangents, mask), axis=axis, keepdims=keepdims)
+        return [reduce_sum(mul(tangents[0], mask), axis=axis, keepdims=keepdims)]
 
 
 
@@ -198,10 +195,10 @@ class ReduceSumPhysicalOp(PhysicalReduceOp):
     def name(self) -> str:
         return "reduce_sum_physical"
 
-    def kernel(
-        self, x: TensorValue, *, axis: int, keepdims: bool = False
-    ) -> TensorValue:
-        return ops.sum(x, axis=axis)
+    def kernel(self, args: list, kwargs: dict) -> list:
+        x = args[0]
+        axis = kwargs.get("axis", 0)
+        return [ops.sum(x, axis=axis)]
 
 
 class MeanPhysicalOp(PhysicalReduceOp):
@@ -209,10 +206,10 @@ class MeanPhysicalOp(PhysicalReduceOp):
     def name(self) -> str:
         return "mean_physical"
 
-    def kernel(
-        self, x: TensorValue, *, axis: int, keepdims: bool = False
-    ) -> TensorValue:
-        return ops.mean(x, axis=axis)
+    def kernel(self, args: list, kwargs: dict) -> list:
+        x = args[0]
+        axis = kwargs.get("axis", 0)
+        return [ops.mean(x, axis=axis)]
 
 
 class ReduceMaxPhysicalOp(PhysicalReduceOp):
@@ -224,10 +221,10 @@ class ReduceMaxPhysicalOp(PhysicalReduceOp):
     def collective_reduce_type(self) -> str:
         return "max"
 
-    def kernel(
-        self, x: TensorValue, *, axis: int, keepdims: bool = False
-    ) -> TensorValue:
-        return ops._reduce_max(x, axis=axis)
+    def kernel(self, args: list, kwargs: dict) -> list:
+        x = args[0]
+        axis = kwargs.get("axis", 0)
+        return [ops._reduce_max(x, axis=axis)]
 
 
 class ReduceMinOp(ReduceOperation):
@@ -239,10 +236,10 @@ class ReduceMinOp(ReduceOperation):
     def collective_reduce_type(self) -> str:
         return "min"
 
-    def kernel(
-        self, x: TensorValue, *, axis: int, keepdims: bool = False
-    ) -> TensorValue:
-        return ops._reduce_min(x, axis=axis)
+    def kernel(self, args: list, kwargs: dict) -> list:
+        x = args[0]
+        axis = kwargs.get("axis", 0)
+        return [ops._reduce_min(x, axis=axis)]
 
 
 class ReduceMinPhysicalOp(PhysicalReduceOp):
@@ -254,10 +251,10 @@ class ReduceMinPhysicalOp(PhysicalReduceOp):
     def collective_reduce_type(self) -> str:
         return "min"
 
-    def kernel(
-        self, x: TensorValue, *, axis: int, keepdims: bool = False
-    ) -> TensorValue:
-        return ops._reduce_min(x, axis=axis)
+    def kernel(self, args: list, kwargs: dict) -> list:
+        x = args[0]
+        axis = kwargs.get("axis", 0)
+        return [ops._reduce_min(x, axis=axis)]
 
 
 _reduce_min_physical_op = ReduceMinPhysicalOp()
@@ -286,7 +283,7 @@ def _multi_axis_reduce(
         )
         res = x
         for ax in axes:
-            res = op(res, axis=ax, keepdims=True)
+            res = op([res], {"axis": ax, "keepdims": True})[0]
 
         if not keepdims:
             out_shape = tuple(
@@ -299,7 +296,7 @@ def _multi_axis_reduce(
                 res = squeeze(res, axis=0)
         return res
 
-    result = op(x, axis=axis, keepdims=True)
+    result = op([x], {"axis": axis, "keepdims": True})[0]
     if not keepdims:
         result = squeeze(result, axis=axis)
     return result
@@ -354,9 +351,9 @@ def reduce_max(
 
 def _physical_reduce(op, x: Tensor, axis: int, keepdims: bool = False) -> Tensor:
     """Shared wrapper for physical reduce operations."""
-    result = op(x, axis=axis, keepdims=True)
+    result = op([x], {"axis": axis, "keepdims": True})[0]
     if not keepdims:
-        result = _squeeze_physical_op(result, axis=axis)
+        result = _squeeze_physical_op([result], {"axis": axis})[0]
     return result
 
 
@@ -398,7 +395,9 @@ class _ArgReduceOp(AxisOp):
     def name(self) -> str:
         return self._op_name
 
-    def kernel(self, x: TensorValue, *, axis: int) -> TensorValue:
+    def kernel(self, args: list, kwargs: dict) -> list:
+        x = args[0]
+        axis = kwargs.get("axis", -1)
         reduce_fn = self._get_reduce_fn()
         rank = len(x.shape)
         if axis < 0:
@@ -408,12 +407,12 @@ class _ArgReduceOp(AxisOp):
             perm = list(range(rank))
             perm[axis], perm[-1] = perm[-1], perm[axis]
             x = ops.permute(x, tuple(perm))
-            return ops.squeeze(reduce_fn(x, axis=-1), -1)
+            return [ops.squeeze(reduce_fn(x, axis=-1), -1)]
 
-        return ops.squeeze(reduce_fn(x, axis=axis), axis)
+        return [ops.squeeze(reduce_fn(x, axis=axis), axis)]
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         from max.dtype import DType
         from ..core.sharding import spmd
@@ -435,8 +434,8 @@ class _ArgReduceOp(AxisOp):
 
         return shapes, [DType.int64] * num_shards, [x.device] * num_shards
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
-        return (None,)
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
+        return [None]
 
     def infer_output_shape(
         self, input_shapes: list[tuple[int, ...]], **kwargs: Any
@@ -463,13 +462,15 @@ class CumsumOp(AxisOp):
     def name(self) -> str:
         return "cumsum"
 
-    def kernel(
-        self, x: TensorValue, *, axis: int, exclusive: bool = False, reverse: bool = False
-    ) -> TensorValue:
-        return ops.cumsum(x, axis=axis, exclusive=exclusive, reverse=reverse)
+    def kernel(self, args: list, kwargs: dict) -> list:
+        x = args[0]
+        axis = kwargs.get("axis", -1)
+        exclusive = kwargs.get("exclusive", False)
+        reverse = kwargs.get("reverse", False)
+        return [ops.cumsum(x, axis=axis, exclusive=exclusive, reverse=reverse)]
 
     def compute_physical_shape(
-        self, args: tuple, kwargs: dict, output_sharding: Any = None
+        self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         x = args[0]
         shapes = []
@@ -477,18 +478,18 @@ class CumsumOp(AxisOp):
             shapes.append(x.physical_local_shape_ints(i))
         return shapes, [x.dtype] * x.num_shards, [x.device] * x.num_shards
 
-    def vjp_rule(self, primals: Any, cotangent: Any, output: Any) -> Any:
+    def vjp_rule(self, primals: list, cotangents: list, outputs: list, kwargs: dict) -> list:
         """VJP: flip(cumsum(flip(cotangent, axis), axis), axis)."""
-        axis = output.op_kwargs.get("axis", -1)
+        axis = kwargs.get("axis", -1)
 
         from ..ops.view.axes import flip
 
-        return flip(cumsum(flip(cotangent, axis=axis), axis=axis), axis=axis)
+        return [flip(cumsum(flip(cotangents[0], axis=axis), axis=axis), axis=axis)]
 
-    def jvp_rule(self, primals: Any, tangents: Any, output: Any) -> Any:
+    def jvp_rule(self, primals: list, tangents: list, outputs: list, kwargs: dict) -> list:
         """JVP: cumsum(tangent, axis)."""
-        axis = output.op_kwargs.get("axis", -1)
-        return cumsum(tangents, axis=axis)
+        axis = kwargs.get("axis", -1)
+        return [cumsum(tangents[0], axis=axis)]
 
     def sharding_rule(
         self,
@@ -519,7 +520,7 @@ _cumsum_op = CumsumOp()
 def argmax(x: Tensor, axis: int = -1, keepdims: bool = False) -> Tensor:
     from .view import squeeze
 
-    res = _argmax_op(x, axis=axis)
+    res = _argmax_op([x], {"axis": axis})[0]
     if keepdims:
         from .view import unsqueeze
 
@@ -528,7 +529,7 @@ def argmax(x: Tensor, axis: int = -1, keepdims: bool = False) -> Tensor:
 
 
 def argmin(x: Tensor, axis: int = -1, keepdims: bool = False) -> Tensor:
-    res = _argmin_op(x, axis=axis)
+    res = _argmin_op([x], {"axis": axis})[0]
     if keepdims:
         from .view import unsqueeze
 
@@ -539,7 +540,7 @@ def argmin(x: Tensor, axis: int = -1, keepdims: bool = False) -> Tensor:
 def cumsum(
     x: Tensor, axis: int = -1, exclusive: bool = False, reverse: bool = False
 ) -> Tensor:
-    return _cumsum_op(x, axis=axis, exclusive=exclusive, reverse=reverse)
+    return _cumsum_op([x], {"axis": axis, "exclusive": exclusive, "reverse": reverse})[0]
 
 
 __all__ = [
