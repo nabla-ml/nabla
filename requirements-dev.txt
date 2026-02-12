@@ -5,14 +5,14 @@
 
 # Testing, Linting & Formatting
 pytest>=7.0
-ruff
+# ruff
 black
-mypy
-pre-commit
+# mypy
+# pre-commit
 
 # Packaging Tools
-build
-twine
+# build
+# twine
 
 # --- Comparison Frameworks for Validation & Benchmarking ---
 
@@ -20,4 +20,4 @@ twine
 jax
 
 # For performance comparison in benchmarks
-torch
+# torch
