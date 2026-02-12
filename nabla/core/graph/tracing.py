@@ -530,18 +530,31 @@ class GraphPrinter:
         lines = []
 
         meshes_used: dict[str, Any] = {}
-        all_nodes = [
+
+        # 1) Input/output tensor shardings
+        tensor_impls = [
             t._impl for t in tree_leaves(self.trace.inputs) if isinstance(t, Tensor)
-        ] + list(self.trace.nodes)
-        for node in all_nodes:
-            if hasattr(node, "sharding") and node.sharding and node.sharding.mesh:
-                m = node.sharding.mesh
-                if m.name not in meshes_used:
+        ] + [t._impl for t in tree_leaves(self.trace.outputs) if isinstance(t, Tensor)]
+        for impl in tensor_impls:
+            if hasattr(impl, "sharding") and impl.sharding and impl.sharding.mesh:
+                m = impl.sharding.mesh
+                meshes_used[m.name] = m
+
+        # 2) Meshes referenced by traced operations (e.g. mesh=@mesh_8 in kwargs)
+        for refs in self.trace.nodes:
+            kwargs = refs.op_kwargs or {}
+            mesh = kwargs.get("mesh")
+            if mesh is not None and hasattr(mesh, "name"):
+                meshes_used[mesh.name] = mesh
+
+            for out in refs.get_alive_outputs():
+                if out is not None and out.sharding and out.sharding.mesh:
+                    m = out.sharding.mesh
                     meshes_used[m.name] = m
 
-        fn_mesh_str = ""
-        if len(meshes_used) == 1:
-            fn_mesh_str = f" {self._format_mesh_def(list(meshes_used.values())[0])}"
+        if meshes_used:
+            for mesh_name in sorted(meshes_used.keys()):
+                lines.append(self._format_mesh_def(meshes_used[mesh_name]))
 
         input_leaves = [
             t._impl for t in tree_leaves(self.trace.inputs) if isinstance(t, Tensor)
@@ -560,11 +573,9 @@ class GraphPrinter:
             for i, var in enumerate(input_vars):
                 comma = "," if i < len(input_vars) - 1 else ""
                 lines.append(f"    {var}{comma}")
-            lines.append(f"){fn_mesh_str} {{")
+            lines.append(") {")
         else:
-            lines.append(
-                f"{C_KEYWORD}fn{RESET}({', '.join(input_vars)}){fn_mesh_str} {{ "
-            )
+            lines.append(f"{C_KEYWORD}fn{RESET}({', '.join(input_vars)}) {{ ")
 
         current_block_mesh = None
         block_lines = []

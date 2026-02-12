@@ -444,14 +444,11 @@ class TensorImpl:
         else:
             global_str = local_str
 
-        # Add " (traced)" if is_traced is true
-        traced_str = " (traced)" if self.is_traced else ""
-
         header = ""
         if self.sharding:
-            header = f"{dtype}{global_str}{factors_str}(local={local_str}){traced_str}"
+            header = f"{dtype}{global_str}{factors_str}(local={local_str})"
         else:
-            header = f"{dtype}{global_str}{traced_str}"
+            header = f"{dtype}{global_str}"
 
         if not include_data:
             return header

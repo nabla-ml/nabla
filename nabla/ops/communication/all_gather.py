@@ -191,9 +191,16 @@ class AllGatherOp(CollectiveOperation):
         # 1. Distributed Execution Path
         if mesh and mesh.is_distributed:
             from max.graph.ops.allgather import allgather as max_allgather
+            from max.dtype import DType
+            from max.graph.type import BufferType
+
+            signal_buffers = [
+                ops.buffer_create(BufferType(DType.uint8, (65536,), dev))
+                for dev in mesh.device_refs
+            ]
 
             return max_allgather(
-                shard_graph_values, mesh.get_signal_buffers(), axis=axis
+                shard_graph_values, signal_buffers, axis=axis
             )
 
         # 2. CPU Simulation Path (Local execution)

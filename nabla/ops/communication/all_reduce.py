@@ -90,18 +90,26 @@ class AllReduceOp(CollectiveOperation):
 
         # 1. Distributed Execution Path
         if mesh and mesh.is_distributed and len(shard_graph_values) > 1:
+            from max.dtype import DType
+            from max.graph.type import BufferType
+
+            signal_buffers = [
+                ops.buffer_create(BufferType(DType.uint8, (65536,), dev))
+                for dev in mesh.device_refs
+            ]
+
             if (
                 reduce_op == "sum"
                 and hasattr(ops, "allreduce")
                 and hasattr(ops.allreduce, "sum")
             ):
-                return ops.allreduce.sum(shard_graph_values, mesh.get_signal_buffers())
+                return ops.allreduce.sum(shard_graph_values, signal_buffers)
 
             # Fallback for complex reductions (MAX/MIN/PROD) using native allgather
             from max.graph.ops.allgather import allgather as max_allgather
 
             gathered = max_allgather(
-                shard_graph_values, mesh.get_signal_buffers(), axis=0
+                shard_graph_values, signal_buffers, axis=0
             )
 
             result_graph_values = []
@@ -294,10 +302,12 @@ class PMeanOp(CollectiveOperation):
             else:
                 axis_size = len(shard_graph_values)
 
-            dtype = shard_graph_values[0].type.dtype
-            device = shard_graph_values[0].type.device
-            scale = ops.constant(1.0 / axis_size, dtype, device)
-            scaled_graph_values = [ops.mul(r, scale) for r in shard_graph_values]
+            scaled_graph_values = []
+            for r in shard_graph_values:
+                dtype = r.type.dtype
+                device = r.type.device
+                scale = ops.constant(1.0 / axis_size, dtype, device)
+                scaled_graph_values.append(ops.mul(r, scale))
 
         return (scaled_graph_values, output_spec, mesh)
 

@@ -249,32 +249,10 @@ class ShardOp(Operation):
             signal_buffers = mesh.get_signal_buffers()
             return distributed_broadcast(root_val, signal_buffers)
 
-        # OPTIMIZATION 2: Use shard_and_stack for simple 1D distributed sharding
-        if mesh.is_distributed and num_shards > 1:
-            sharded_dims = [d for d, s in enumerate(spec.dim_specs) if s.axes]
-            if len(sharded_dims) == 1:
-                sharded_dim = sharded_dims[0]
-                dim_spec = spec.dim_specs[sharded_dim]
-
-                # Check if this dimension is sharded across the entire mesh
-                axis_factor = 1
-                for ax in dim_spec.axes:
-                    axis_factor *= mesh.get_axis_size(ax)
-
-                if (
-                    axis_factor == num_shards
-                    and int(global_shape[sharded_dim]) % num_shards == 0
-                ):
-                    from max.graph.ops import shard_and_stack
-
-                    # shard_and_stack handles the communication efficiently
-                    # We pass [x] as a list of one tensor, which returns [1, ...] shapes
-                    stacked_shards = shard_and_stack(
-                        [x], mesh.device_refs, axis=sharded_dim
-                    )
-
-                    # Remove the extra stack dimension (size 1) on each device
-                    return [ops.squeeze(s, axis=0) for s in stacked_shards]
+        # NOTE: Keep distributed sharding on the conservative slice+transfer path.
+        # Some MAX versions fail to compile shard_and_stack in this call site due to
+        # input mutability/signature mismatch (MutableInput vs Input). We intentionally
+        # avoid that fast path here for correctness on real multi-GPU execution.
 
         shard_graph_values = []
         for shard_idx in range(num_shards):
