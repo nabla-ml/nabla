@@ -1,4 +1,4 @@
-# Nabla: Distributed-Deep-Learning ⽕ Framework
+# Nabla: Distributed-Deep-Learning Framework
 
 ![alt text](./assets/title_image.png)
 
