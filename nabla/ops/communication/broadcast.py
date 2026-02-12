@@ -59,8 +59,13 @@ class DistributedBroadcastOp(CollectiveOperation):
                 # transfer-based fallback for MAX versions without this primitive.
                 try:
                     from max.graph.ops import distributed_broadcast as max_distributed_broadcast
+                    from max.dtype import DType
+                    from max.graph.type import BufferType
 
-                    signal_buffers = mesh.get_signal_buffers()
+                    signal_buffers = [
+                        ops.buffer_create(BufferType(DType.uint8, (65536,), dev))
+                        for dev in mesh.device_refs
+                    ]
                     results = max_distributed_broadcast(root, signal_buffers)
                 except Exception:
                     results = [root]
