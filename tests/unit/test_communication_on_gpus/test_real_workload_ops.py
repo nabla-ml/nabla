@@ -10,7 +10,8 @@ import nabla as nb
 import numpy as np
 from max.dtype import DType
 from nabla.core import GRAPH, trace
-from nabla.core.sharding.spec import DeviceMesh, DimSpec, ShardingSpec
+from nabla.core.sharding.spec import DeviceMesh, DimSpec
+from nabla.ops.communication import all_reduce
 
 
 def _print_header(title: str) -> None:
@@ -114,7 +115,7 @@ def _case_reshard_then_regular_ops(mesh: DeviceMesh) -> bool:
     return np.allclose(got, ref, rtol=1e-5, atol=1e-5)
 
 
-def _case_shard_map_spmd(mesh: DeviceMesh) -> bool:
+def _case_sharded_chain_ops(mesh: DeviceMesh) -> bool:
     rows = max(32, len(mesh.devices) * 8)
     cols = 8
     x_np = np.linspace(-1.0, 1.0, rows * cols, dtype=np.float32).reshape(rows, cols)
@@ -127,23 +128,48 @@ def _case_shard_map_spmd(mesh: DeviceMesh) -> bool:
     w = nb.distributed_broadcast(nb.Tensor.constant(w_np, dtype=DType.float32), mesh=mesh)
 
     def mapped(a: nb.Tensor, b: nb.Tensor) -> nb.Tensor:
-        y = nb.tanh(nb.matmul(a, b) + 0.25)
-        z = nb.reshard(y, mesh, [DimSpec([], is_open=True), DimSpec([], is_open=True)])
-        return nb.relu(z)
+        y = nb.tanh(nb.matmul(a, b))
+        y = nb.relu(y)
+        y = nb.reshard(y, mesh, [DimSpec([], is_open=True), DimSpec([], is_open=True)])
+        y = y * y
+        return y
+
+    def collective_probe(a: nb.Tensor) -> nb.Tensor:
+        v = nb.mean(a, axis=1)
+        v = v.shard(mesh, [DimSpec(["x"], is_open=False)])
+        return all_reduce(v)
 
     if os.environ.get("PRINT_TRACE", "1") == "1":
-        print("\n--- shard_map_spmd: Nabla Trace ---")
+        print("\n--- sharded_chain_ops: Nabla Trace ---")
         print(trace(mapped, x, w))
+        print("\n--- sharded_chain_collective: Nabla Trace ---")
+        print(trace(collective_probe, x))
     if os.environ.get("PRINT_MAX_GRAPH", "1") == "1":
-        print("\n--- shard_map_spmd: MAX Graph ---")
+        print("\n--- sharded_chain_ops: MAX Graph ---")
         print(GRAPH.graph)
 
     out = mapped(x, w)
     out.realize()
+    collective_out = collective_probe(x)
+    collective_out.realize()
+
     got = out.gather().numpy()
-    ref = np.tanh((x_np @ w_np) + 0.25)
+    ref = np.tanh(x_np @ w_np)
     ref = np.maximum(ref, 0.0)
-    return np.allclose(got, ref, rtol=1e-4, atol=1e-4)
+    ref = ref * ref
+
+    coll_np = collective_out.gather().numpy()
+    coll_ok = np.isfinite(coll_np).all() and coll_np.size > 0
+
+    if not coll_ok:
+        print("collective_probe produced invalid values")
+        return False
+
+    if not np.allclose(got, ref, rtol=1e-4, atol=5e-4):
+        print("chain max abs err:", float(np.max(np.abs(got - ref))))
+        return False
+
+    return True
 
 
 def main() -> int:
@@ -194,11 +220,11 @@ def main() -> int:
         ok = False
 
     ok = ok and _run_case(
-        "workload_shard_map_spmd_n8",
+        "workload_sharded_chain_ops_n8",
         lambda: (
             lambda x, w: nb.relu(
                 nb.reshard(
-                    nb.tanh(nb.matmul(x, w) + 0.25),
+                    nb.tanh(nb.matmul(x, w)),
                     mesh,
                     [DimSpec([], is_open=True), DimSpec([], is_open=True)],
                 )
@@ -218,8 +244,8 @@ def main() -> int:
         ),
     )
 
-    if (not case_filter or "workload_shard_map_spmd" in case_filter) and not _case_shard_map_spmd(mesh):
-        print("[workload_shard_map_spmd_n8] numerical check failed")
+    if (not case_filter or "workload_sharded_chain_ops" in case_filter) and not _case_sharded_chain_ops(mesh):
+        print("[workload_sharded_chain_ops_n8] numerical check failed")
         ok = False
 
     if ok:
