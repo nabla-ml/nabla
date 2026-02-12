@@ -151,11 +151,20 @@ class DeviceMesh:
 
         self._signal_buffers = {}  # Cache: (buffer_size, device_hash) -> list[Value]
 
-    def get_signal_buffers(self, buffer_size: int = 65536) -> list["Value"]:
-        """Get or create cached signal buffers for collective operations.
+    def get_signal_buffers(
+        self, buffer_size: int = 65536, use_cache: bool = False
+    ) -> list["Value"]:
+        """Create signal buffers for collective operations.
 
         Args:
             buffer_size: Size of the signal buffer in bytes.
+            use_cache: Whether to reuse cached buffers.
+
+        Notes:
+            MAX graph values are region-scoped SSA values. Reusing cached
+            buffers across graph regions can lead to verifier failures such as
+            UNKNOWN SSA VALUE. This method therefore defaults to creating fresh
+            buffers for correctness.
 
         Returns:
             list: List of MAX buffer values, one per participating device.
@@ -164,16 +173,17 @@ class DeviceMesh:
         from max.graph import ops
         from max.graph.type import BufferType
 
-        # Use id(self) as part of cache key to ensure mesh-specific buffers
+        # Cache key is mesh-specific (device refs are part of the key).
         cache_key = (buffer_size, tuple(self.device_refs))
-        if cache_key in self._signal_buffers:
+        if use_cache and cache_key in self._signal_buffers:
             return self._signal_buffers[cache_key]
 
         buffers = [
             ops.buffer_create(BufferType(DType.uint8, (buffer_size,), dev))
             for dev in self.device_refs
         ]
-        self._signal_buffers[cache_key] = buffers
+        if use_cache:
+            self._signal_buffers[cache_key] = buffers
         return buffers
 
     @property

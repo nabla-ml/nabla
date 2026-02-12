@@ -55,22 +55,22 @@ class DistributedBroadcastOp(CollectiveOperation):
                 if root.type.device != root_device:
                     root = ops.transfer_to(root, root_device)
 
-                # Prefer native collective when available, otherwise use a robust
-                # transfer-based fallback for MAX versions without this primitive.
                 try:
                     from max.graph.ops import distributed_broadcast as max_distributed_broadcast
                     from max.dtype import DType
                     from max.graph.type import BufferType
+                except ImportError as exc:
+                    raise RuntimeError(
+                        "Native MAX op 'distributed_broadcast' is required for "
+                        "distributed mesh broadcast but is not available in this "
+                        "MAX build. Install nightly modular/max versions."
+                    ) from exc
 
-                    signal_buffers = [
-                        ops.buffer_create(BufferType(DType.uint8, (65536,), dev))
-                        for dev in mesh.device_refs
-                    ]
-                    results = max_distributed_broadcast(root, signal_buffers)
-                except Exception:
-                    results = [root]
-                    for dev in mesh.device_refs[1:]:
-                        results.append(ops.transfer_to(root, dev))
+                signal_buffers = [
+                    ops.buffer_create(BufferType(DType.uint8, (65536,), dev))
+                    for dev in mesh.device_refs
+                ]
+                results = max_distributed_broadcast(root, signal_buffers)
             else:
                 # Simulation: just replicate the first shard
                 results = [x.values[0]] * (len(mesh.devices) if mesh else 1)

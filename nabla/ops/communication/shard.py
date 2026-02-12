@@ -246,7 +246,7 @@ class ShardOp(Operation):
             if hasattr(x, "type") and x.type.device != root_device:
                 root_val = ops.transfer_to(x, root_device)
 
-            signal_buffers = mesh.get_signal_buffers()
+            signal_buffers = mesh.get_signal_buffers(use_cache=False)
             return distributed_broadcast(root_val, signal_buffers)
 
         # NOTE: Keep distributed sharding on the conservative slice+transfer path.
