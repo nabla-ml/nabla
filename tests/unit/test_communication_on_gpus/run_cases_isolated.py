@@ -84,7 +84,13 @@ def run_case(case: str, timeout_sec: int) -> CaseResult:
 
     except subprocess.TimeoutExpired as exc:
         dt = time.perf_counter() - t0
-        tail = ((exc.stdout or "") + "\n" + (exc.stderr or ""))[-500:]
+        out_part = exc.stdout or ""
+        err_part = exc.stderr or ""
+        if isinstance(out_part, bytes):
+            out_part = out_part.decode("utf-8", errors="replace")
+        if isinstance(err_part, bytes):
+            err_part = err_part.decode("utf-8", errors="replace")
+        tail = (out_part + "\n" + err_part)[-500:]
         note = "timeout"
         if tail.strip():
             note += f"; tail={tail!r}"
@@ -93,12 +99,20 @@ def run_case(case: str, timeout_sec: int) -> CaseResult:
 
 def main() -> int:
     timeout_sec = int(os.environ.get("CASE_TIMEOUT_SEC", "30"))
+    case_filter = os.environ.get("CASE_FILTER", "").strip()
 
-    print(f"Running {len(CASES)} isolated cases with timeout={timeout_sec}s each")
+    cases = CASES
+    if case_filter:
+        cases = [c for c in CASES if case_filter in c]
+        if not cases:
+            print(f"No cases match CASE_FILTER={case_filter!r}")
+            return 2
+
+    print(f"Running {len(cases)} isolated cases with timeout={timeout_sec}s each")
     print("-" * 88)
 
     results: list[CaseResult] = []
-    for case in CASES:
+    for case in cases:
         print(f"[RUN] {case}")
         res = run_case(case, timeout_sec)
         results.append(res)
