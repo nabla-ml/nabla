@@ -284,11 +284,38 @@ class ComputeGraph:
                 f"\n[CACHE] Key hash: {hash(cache_key)} | Cache size: {len(_GRAPH_CACHE)}"
             )
 
+        def _buf_signature(buf: driver.Buffer) -> tuple[str, tuple[int, ...], str]:
+            return (str(buf.dtype), tuple(int(d) for d in buf.shape), str(buf.device))
+
+        def _remap_inputs_by_signature(
+            signatures: list[tuple[str, tuple[int, ...], str]],
+            candidates: list[driver.Buffer],
+        ) -> list[driver.Buffer] | None:
+            used = [False] * len(candidates)
+            remapped: list[driver.Buffer] = []
+            for sig in signatures:
+                found_idx = None
+                for i, candidate in enumerate(candidates):
+                    if used[i]:
+                        continue
+                    if _buf_signature(candidate) == sig:
+                        found_idx = i
+                        break
+                if found_idx is None:
+                    return None
+                used[found_idx] = True
+                remapped.append(candidates[found_idx])
+            return remapped
+
         # === CHECK CACHE ===
         if cache_key is not None:
             entry = _GRAPH_CACHE.get(cache_key)
             if entry is not None:
-                cached_model, kept_indices = entry
+                if len(entry) == 2:
+                    cached_model, kept_indices = entry
+                    input_signatures = None
+                else:
+                    cached_model, kept_indices, input_signatures = entry
                 if DEBUG_LAZY_EVAL:
                     print(f"[CACHE] HIT! key_hash={hash(cache_key)}")
 
@@ -299,37 +326,56 @@ class ComputeGraph:
                 for impl in all_candidate_tensors:
                     all_buffers.extend(impl._buffers)
 
-                # Filter to only the ones recorded during MISS
-                inputs = [all_buffers[i] for i in kept_indices]
+                remapped_inputs = None
+                if any(i < 0 or i >= len(all_buffers) for i in kept_indices):
+                    if input_signatures is not None:
+                        remapped_inputs = _remap_inputs_by_signature(
+                            input_signatures, all_buffers
+                        )
+                    if DEBUG_LAZY_EVAL:
+                        if remapped_inputs is None:
+                            print(
+                                f"[CACHE] STALE INPUT MAP - invalidating key_hash={hash(cache_key)} "
+                                f"(max_index={max(kept_indices) if kept_indices else -1}, buffers={len(all_buffers)})"
+                            )
+                        else:
+                            print(
+                                f"[CACHE] REMAP mode=signature key_hash={hash(cache_key)}"
+                            )
+                    if remapped_inputs is None:
+                        _GRAPH_CACHE.pop(cache_key, None)
+                else:
+                    remapped_inputs = [all_buffers[i] for i in kept_indices]
 
-                if DEBUG_LAZY_EVAL:
-                    print(
-                        f"[CACHE] inputs: {[(tuple(inp.shape), str(inp.dtype), id(inp)) for inp in inputs]}"
-                    )
+                if remapped_inputs is not None:
+                    inputs = remapped_inputs
 
-                seed_val, *results = cached_model(*inputs)
+                    if DEBUG_LAZY_EVAL:
+                        print(
+                            f"[CACHE] inputs: {[(tuple(inp.shape), str(inp.dtype), id(inp)) for inp in inputs]}"
+                        )
 
-                # Store results to targets
-                result_idx = 0
-                for t in targets:
-                    n_shards = t.num_shards
-                    t_results = results[result_idx : result_idx + n_shards]
+                    seed_val, *results = cached_model(*inputs)
 
-                    if n_shards > 1:
-                        t._impl._buffers = list(t_results)
-                    else:
-                        t.buffers = t_results[0]
+                    result_idx = 0
+                    for t in targets:
+                        n_shards = t.num_shards
+                        t_results = results[result_idx : result_idx + n_shards]
 
-                    t._value = None
-                    t.real = True
-                    t._impl._graph_values = []
-                    result_idx += n_shards
-                    # Remove from unrealized since it's now real
-                    self.unrealized.pop(id(t), None)
+                        if n_shards > 1:
+                            t._impl._buffers = list(t_results)
+                        else:
+                            t.buffers = t_results[0]
 
-                self._finalize_evaluation(seed_value=seed_val.item())
-                self._cleanup_trace(targets)
-                return (cached_model, inputs) if return_model else None
+                        t._value = None
+                        t.real = True
+                        t._impl._graph_values = []
+                        result_idx += n_shards
+                        self.unrealized.pop(id(t), None)
+
+                    self._finalize_evaluation(seed_value=seed_val.item())
+                    self._cleanup_trace(targets)
+                    return (cached_model, inputs) if return_model else None
 
         # === CACHE MISS - Build and compile graph ===
         if DEBUG_LAZY_EVAL:
@@ -438,7 +484,8 @@ class ComputeGraph:
                 if not found:
                     raise RuntimeError("Could not map graph input back to trace")
 
-            _GRAPH_CACHE[cache_key] = (model, kept_indices)
+            input_signatures = [_buf_signature(b) for b in used_bufferss if b is not None]
+            _GRAPH_CACHE[cache_key] = (model, kept_indices, input_signatures)
 
         self._finalize_evaluation(seed_value=seed_val.item())
         self._cleanup_trace(targets)

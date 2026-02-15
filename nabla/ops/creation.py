@@ -289,6 +289,12 @@ def constant(
 
     from ..core import Tensor
 
+    def _to_numpy_dtype(dt: DType):
+        try:
+            return dt.to_numpy()
+        except Exception:
+            return np.dtype(dt.name)
+
     if dtype is None:
         if isinstance(value, np.ndarray):
             try:
@@ -302,20 +308,29 @@ def constant(
         elif isinstance(value, bool):
             dtype = DType.bool
 
-    if not isinstance(value, (int, float, bool, complex)) and not (
+    scalar_like = isinstance(value, (int, float, bool, complex)) or (
         isinstance(value, np.ndarray) and value.ndim == 0
-    ):
-        if isinstance(value, (list, tuple)):
-            value = np.array(value)
-            if dtype:
-                try:
-                    value = value.astype(dtype.name)
-                except Exception:
-                    pass
-        return Tensor.from_dlpack(value)
+    )
 
-    dtype, device = defaults(dtype, device)
-    return _constant_op([value], {"dtype": dtype, "device": device})[0]
+    if scalar_like:
+        dtype, device = defaults(dtype, device)
+        arr = np.asarray(value)
+        arr = arr.astype(_to_numpy_dtype(dtype), copy=False)
+        t = Tensor.from_dlpack(arr)
+        if t.dtype != dtype:
+            t = t.to(dtype)
+        if t.device != device:
+            t = t.to(device)
+        return t
+
+    if isinstance(value, (list, tuple)):
+        value = np.array(value)
+        if dtype:
+            try:
+                value = value.astype(_to_numpy_dtype(dtype), copy=False)
+            except Exception:
+                pass
+    return Tensor.from_dlpack(value)
 
 
 def full(
