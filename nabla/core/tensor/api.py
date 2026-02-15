@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any, Sequence, Union
 
 if TYPE_CHECKING:
     import numpy as np
@@ -1060,74 +1060,207 @@ class Tensor(DLPackArray, HasTensorValue):
 
     # --- Indexing ---
 
+    @property
+    def at(self) -> "_TensorAtAccessor":
+        """JAX-like functional indexed update accessor.
+
+        Usage:
+            x2 = x.at[idx].set(v)
+            x3 = x.at[idx].add(v)
+        """
+        return _TensorAtAccessor(self)
+
     def __getitem__(self, key: int | slice | EllipsisType | tuple[int | slice | EllipsisType, ...]) -> Tensor:
         """Basic slicing and integer indexing."""
         from ...ops import view
 
-        shape = self.shape
-
-        # Standardize key to a tuple
-        if not isinstance(key, tuple):
-            key = (key,)
-
-        # 1. Expand Ellipsis
-        if Ellipsis in key:
-            if sum(1 for k in key if k is Ellipsis) > 1:
-                raise ValueError("An index can only have a single ellipsis ('...')")
-
-            ellipsis_idx = key.index(Ellipsis)
-            num_expanded = len(self.shape) - (len(key) - 1)
-            key = (
-                key[:ellipsis_idx]
-                + (slice(None),) * max(0, num_expanded)
-                + key[ellipsis_idx + 1 :]
-            )
-
-        start = []
-        size = []
-        squeeze_axes = []
-
-        for i, k in enumerate(key):
-            if i >= len(shape):
-                break
-            dim_size = int(shape[i])
-            if isinstance(k, int):
-                if k < 0:
-                    k += dim_size
-                start.append(k)
-                size.append(1)
-                squeeze_axes.append(i)
-            elif isinstance(k, slice):
-                s_start = k.start if k.start is not None else 0
-                if s_start < 0:
-                    s_start += dim_size
-                s_stop = k.stop if k.stop is not None else dim_size
-                if s_stop < 0:
-                    s_stop += dim_size
-                s_step = k.step if k.step is not None else 1
-                if s_step != 1:
-                    raise NotImplementedError(
-                        "Slicing with step != 1 is not yet supported."
-                    )
-
-                s_start = max(0, min(dim_size, s_start))
-                s_stop = max(0, min(dim_size, s_stop))
-
-                start.append(s_start)
-                size.append(max(0, s_stop - s_start))
-            else:
-                raise TypeError(f"Invalid index type: {type(k)}")
-
-        # Pad remaining dimensions
-        while len(start) < len(shape):
-            idx = len(start)
-            start.append(0)
-            size.append(int(shape[idx]))
+        start, size, squeeze_axes = _parse_basic_index(self, key)
 
         res = view.slice_tensor(self, start=tuple(start), size=tuple(size))
         if squeeze_axes:
             res = view.squeeze(res, axis=tuple(squeeze_axes))
         return res
+
+    def __setitem__(
+        self,
+        key: int | slice | EllipsisType | tuple[int | slice | EllipsisType, ...] | "Tensor",
+        value: TensorValueLike,
+    ) -> None:
+        """PyTorch-like indexed update that mutates this Tensor object binding.
+
+        The underlying update is represented via Nabla operations so history is kept.
+        """
+        updated = _apply_indexed_update(
+            self,
+            key,
+            value,
+            mode="set",
+            prefer_inplace_buffers=True,
+        )
+        self._impl = updated._impl
+        self.real = self._impl.is_realized
+
+
+class _TensorAtAccessor:
+    """Intermediate accessor for JAX-like x.at[idx].set/add."""
+
+    def __init__(self, tensor: Tensor):
+        self._tensor = tensor
+
+    def __getitem__(
+        self,
+        key: int | slice | EllipsisType | tuple[int | slice | EllipsisType, ...] | Tensor,
+    ) -> "_TensorAtIndexer":
+        return _TensorAtIndexer(self._tensor, key)
+
+
+class _TensorAtIndexer:
+    """Bound updater created by x.at[idx]."""
+
+    def __init__(
+        self,
+        tensor: Tensor,
+        key: int | slice | EllipsisType | tuple[int | slice | EllipsisType, ...] | Tensor,
+    ):
+        self._tensor = tensor
+        self._key = key
+
+    def set(self, value: TensorValueLike) -> Tensor:
+        return _apply_indexed_update(self._tensor, self._key, value, mode="set")
+
+    def add(self, value: TensorValueLike) -> Tensor:
+        return _apply_indexed_update(self._tensor, self._key, value, mode="add")
+
+
+def _parse_basic_index(
+    x: Tensor,
+    key: int | slice | EllipsisType | tuple[int | slice | EllipsisType, ...],
+) -> tuple[list[int], list[int], list[int]]:
+    shape = x.shape
+
+    if not isinstance(key, tuple):
+        key = (key,)
+
+    if Ellipsis in key:
+        if sum(1 for k in key if k is Ellipsis) > 1:
+            raise ValueError("An index can only have a single ellipsis ('...')")
+
+        ellipsis_idx = key.index(Ellipsis)
+        num_expanded = len(shape) - (len(key) - 1)
+        key = (
+            key[:ellipsis_idx]
+            + (slice(None),) * max(0, num_expanded)
+            + key[ellipsis_idx + 1 :]
+        )
+
+    start: list[int] = []
+    size: list[int] = []
+    squeeze_axes: list[int] = []
+
+    for i, k in enumerate(key):
+        if i >= len(shape):
+            break
+        dim_size = int(shape[i])
+        if isinstance(k, int):
+            idx = k + dim_size if k < 0 else k
+            start.append(idx)
+            size.append(1)
+            squeeze_axes.append(i)
+        elif isinstance(k, slice):
+            s_start = k.start if k.start is not None else 0
+            if s_start < 0:
+                s_start += dim_size
+            s_stop = k.stop if k.stop is not None else dim_size
+            if s_stop < 0:
+                s_stop += dim_size
+            s_step = k.step if k.step is not None else 1
+            if s_step != 1:
+                raise NotImplementedError("Slicing with step != 1 is not yet supported.")
+
+            s_start = max(0, min(dim_size, s_start))
+            s_stop = max(0, min(dim_size, s_stop))
+
+            start.append(s_start)
+            size.append(max(0, s_stop - s_start))
+        else:
+            raise TypeError(f"Invalid index type: {type(k)}")
+
+    while len(start) < len(shape):
+        idx = len(start)
+        start.append(0)
+        size.append(int(shape[idx]))
+
+    return start, size, squeeze_axes
+
+
+def _broadcast_updates_for_scatter(x: Tensor, indices: Tensor, updates: Tensor) -> Tensor:
+    """Broadcast scalar updates for axis=0 scatter convenience."""
+    if updates.shape == tuple(indices.shape):
+        return updates
+    if updates.numel() == 1:
+        from ...ops import view
+
+        target_shape = tuple(int(d) for d in indices.shape) + tuple(
+            int(d) for d in x.shape[1:]
+        )
+        return view.broadcast_to(updates, target_shape)
+    return updates
+
+
+def _broadcast_updates_for_slice(size: tuple[int, ...], updates: Tensor) -> Tensor:
+    target_shape = tuple(int(d) for d in size)
+    if updates.shape == target_shape:
+        return updates
+    from ...ops import view
+
+    return view.broadcast_to(updates, target_shape)
+
+
+def _apply_indexed_update(
+    x: Tensor,
+    key: int | slice | EllipsisType | tuple[int | slice | EllipsisType, ...] | Tensor,
+    value: TensorValueLike,
+    *,
+    mode: str,
+    prefer_inplace_buffers: bool = False,
+) -> Tensor:
+    from ...ops import view
+
+    if isinstance(key, Tensor):
+        indices = key
+        updates = _ensure_tensor(value, x)
+        updates = _broadcast_updates_for_scatter(x, indices, updates)
+
+        if mode == "set":
+            return view.scatter(x, indices, updates, axis=0)
+        if mode == "add":
+            gathered = view.gather(x, indices, axis=0)
+            new_updates = gathered + updates
+            return view.scatter(x, indices, new_updates, axis=0)
+        raise ValueError(f"Unsupported indexed update mode: {mode}")
+
+    start, size, _ = _parse_basic_index(x, key)
+    updates = _ensure_tensor(value, x)
+    updates = _broadcast_updates_for_slice(tuple(size), updates)
+
+    if mode == "set":
+        if prefer_inplace_buffers:
+            return view.slice_update_inplace(
+                x,
+                updates,
+                start=tuple(start),
+                size=tuple(size),
+            )
+        return view.slice_update(x, updates, start=tuple(start), size=tuple(size))
+    if mode == "add":
+        current = view.slice_tensor(x, start=tuple(start), size=tuple(size))
+        return view.slice_update(
+            x,
+            current + updates,
+            start=tuple(start),
+            size=tuple(size),
+        )
+    raise ValueError(f"Unsupported indexed update mode: {mode}")
 
 
 def _ensure_tensor(value: TensorValueLike, like: Tensor) -> Tensor:

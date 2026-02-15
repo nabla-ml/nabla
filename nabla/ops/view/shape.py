@@ -382,6 +382,7 @@ class SliceUpdateOp(Operation):
         update = args[1]
         start = kwargs["start"]
         size = kwargs["size"]
+        use_buffer_ops = bool(kwargs.get("use_buffer_ops", False))
 
         # Resolve negative start indices
         shape = x.shape
@@ -401,22 +402,47 @@ class SliceUpdateOp(Operation):
 
         return super().__call__(
             [x, update],
-            {"slices": tuple(slices), "start": resolved_start, "size": size},
+            {
+                "slices": tuple(slices),
+                "start": resolved_start,
+                "size": size,
+                "use_buffer_ops": use_buffer_ops,
+            },
         )
 
     def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
-        """Update using functional ops (pad + where) to avoid buffer crashes."""
+        """Slice update kernel.
+
+        - `use_buffer_ops=True`: explicit MAX buffer mutation path.
+        - otherwise: functional path (pad + masks).
+        """
         x = args[0]
         update = args[1]
         slices = kwargs.get("slices")
         start = kwargs.get("start")
         size = kwargs.get("size")
+        use_buffer_ops = bool(kwargs.get("use_buffer_ops", False))
 
-        if start is None or size is None:
+        if use_buffer_ops or start is None or size is None:
+            expected_shape: list[int] = []
+            for dim, slc in zip(x.shape, slices, strict=False):
+                if isinstance(slc, slice):
+                    if slc.start is None and slc.stop is None and slc.step is None:
+                        expected_shape.append(int(dim))
+                    else:
+                        slc_start = 0 if slc.start is None else int(slc.start)
+                        slc_stop = int(dim) if slc.stop is None else int(slc.stop)
+                        expected_shape.append(slc_stop - slc_start)
+                else:
+                    expected_shape.append(1)
+
+            if tuple(update.shape) != tuple(expected_shape):
+                update = ops.broadcast_to(update, tuple(expected_shape))
+
             x_buffer = ops.buffer_create(x.type.as_buffer())
             ops.buffer_store(x_buffer, x)
             ops.buffer_store_slice(x_buffer, update, slices)
-            return ops.buffer_load(x_buffer)
+            return [ops.buffer_load(x_buffer)]
 
         # Functional implementation
         rank = len(x.shape)
@@ -444,6 +470,9 @@ class SliceUpdateOp(Operation):
             paddings.extend([before, after])
 
             update_shape.append(int(sz))
+
+        if tuple(update.shape) != tuple(update_shape):
+            update = ops.broadcast_to(update, tuple(update_shape))
 
         padded_update = ops.pad(update, paddings, value=0.0)
         scalar_one = ops.constant(1.0, dtype=x.dtype, device=x.device)
@@ -925,7 +954,22 @@ def slice_update(x: Tensor, update: Tensor, start: Any, size: Any) -> Tensor:
 
     x = ensure_tensor(x)
     update = ensure_tensor(update)
-    return _slice_update_op([x, update], {"start": start, "size": size})[0]
+    return _slice_update_op(
+        [x, update],
+        {"start": start, "size": size, "use_buffer_ops": False},
+    )[0]
+
+
+def slice_update_inplace(x: Tensor, update: Tensor, start: Any, size: Any) -> Tensor:
+    """Slice update lowered through explicit MAX buffer mutation ops."""
+    from ..base import ensure_tensor
+
+    x = ensure_tensor(x)
+    update = ensure_tensor(update)
+    return _slice_update_op(
+        [x, update],
+        {"start": start, "size": size, "use_buffer_ops": True},
+    )[0]
 
 
 def concatenate(tensors: Sequence[Tensor], axis: int = 0) -> Tensor:
