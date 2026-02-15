@@ -20,6 +20,7 @@ import warnings
 from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass
+from collections import defaultdict, deque
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from max.graph import ops
@@ -81,6 +82,7 @@ class _CachedModel:
     # Fast path metadata for cache hits
     tensor_indices: list[int]  # Which positions in flat args are tensors
     input_treedef: "PyTreeDef"  # Cached input tree structure
+    input_plan: list[tuple[str, Any]]  # [("arg", arg_buf_pos) | ("captured", driver.Buffer)]
 
 
 class CompiledFunction(Generic[T]):
@@ -275,7 +277,9 @@ class CompiledFunction(Generic[T]):
             result = self.__wrapped__(*args, **kwargs)
 
             # Extract outputs and compile
-            return self._finalize_compilation(result, key, treedef, tensor_indices, t0)
+            return self._finalize_compilation(
+                result, key, treedef, flat, tensor_indices, t0
+            )
 
         finally:
             nabla_config.EAGER_MAX_GRAPH = orig_eager
@@ -309,6 +313,7 @@ class CompiledFunction(Generic[T]):
         result: T,
         key: _CacheKey,
         treedef: "PyTreeDef",
+        flat: list[Any],
         tensor_indices: list[int],
         t0: float,
     ) -> T:
@@ -340,7 +345,27 @@ class CompiledFunction(Generic[T]):
 
         # Compile and execute
         model = _session().load(GRAPH.graph)
-        inputs = [GRAPH.sources[inp._mlir_value] for inp in GRAPH.graph.inputs]
+        graph_inputs = [GRAPH.sources[inp._mlir_value] for inp in GRAPH.graph.inputs]
+
+        # Build input replay plan for cached execution.
+        # Graph inputs can include both call-time args and captured tensors (closures).
+        arg_buffers: list[Any] = []
+        for i in tensor_indices:
+            arg_buffers.extend(flat[i]._impl._buffers)
+
+        positions_by_id: dict[int, deque[int]] = defaultdict(deque)
+        for pos, buf in enumerate(arg_buffers):
+            positions_by_id[id(buf)].append(pos)
+
+        input_plan: list[tuple[str, Any]] = []
+        for buf in graph_inputs:
+            q = positions_by_id.get(id(buf))
+            if q and len(q) > 0:
+                input_plan.append(("arg", q.popleft()))
+            else:
+                input_plan.append(("captured", buf))
+
+        inputs = graph_inputs
         seed_val, *result_buffers = model(*inputs)
 
         # Assign result buffers to output tensors
@@ -368,6 +393,7 @@ class CompiledFunction(Generic[T]):
             output_shardings=output_shardings,
             tensor_indices=tensor_indices,
             input_treedef=treedef,
+            input_plan=input_plan,
         )
         self._add_to_cache(key, cached, t0)
         return result
@@ -400,10 +426,18 @@ class CompiledFunction(Generic[T]):
         """Core execution logic for cached models."""
         t0 = time.perf_counter()
 
-        # Gather input buffers in order
-        inputs = []
+        # Gather argument buffers in canonical arg order
+        arg_buffers: list[Any] = []
         for i in tensor_indices:
-            inputs.extend(flat[i]._impl._buffers)
+            arg_buffers.extend(flat[i]._impl._buffers)
+
+        # Rebuild model inputs using stored input plan (args + captured closures)
+        inputs: list[Any] = []
+        for src_kind, src_value in cached.input_plan:
+            if src_kind == "arg":
+                inputs.append(arg_buffers[int(src_value)])
+            else:
+                inputs.append(src_value)
 
         # Execute model
         _, *outputs = cached.model(*inputs)
