@@ -41,19 +41,19 @@ def main() -> None:
     y = nb.Tensor.from_dlpack(y_np)
     frozen_weight = nb.Tensor.from_dlpack(w_base_np)
 
-    qweight = nb.quantize_nf4(frozen_weight, block_size=64)
-    dense_recon = nb.dequantize_nf4(qweight)
+    qweight = nb.nn.finetune.quantize_nf4(frozen_weight, block_size=64)
+    dense_recon = nb.nn.finetune.dequantize_nf4(qweight)
     quant_rel_err = float(
         np.linalg.norm(dense_recon.to_numpy() - frozen_weight.to_numpy())
         / (np.linalg.norm(frozen_weight.to_numpy()) + 1e-8)
     )
     print(f"NF4 relative reconstruction error: {quant_rel_err:.4f}")
 
-    lora_params = nb.init_lora_adapter(frozen_weight, rank=rank, init_std=0.01)
-    opt_state = nb.adamw_init(lora_params)
+    lora_params = nb.nn.finetune.init_lora_adapter(frozen_weight, rank=rank, init_std=0.01)
+    opt_state = nb.nn.optim.adamw_init(lora_params)
 
     def loss_fn(adapter, batch_x, batch_y):
-        pred = nb.qlora_linear(
+        pred = nb.nn.finetune.qlora_linear(
             batch_x,
             qweight,
             adapter,
@@ -65,7 +65,7 @@ def main() -> None:
 
     def train_step(adapter, optimizer_state, batch_x, batch_y):
         loss, grads = nb.value_and_grad(loss_fn, argnums=0, realize=False)(adapter, batch_x, batch_y)
-        new_adapter, new_state = nb.adamw_update(
+        new_adapter, new_state = nb.nn.optim.adamw_update(
             adapter,
             grads,
             optimizer_state,

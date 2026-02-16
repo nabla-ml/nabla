@@ -13,6 +13,8 @@ from .context import (
 )
 from .pytree import (
     PyTreeDef,
+    is_tensor,
+    register_pytree_node,
     tensor_leaves,
     traced,
     tree_flatten,
@@ -41,6 +43,8 @@ __all__ = [
     "tree_leaves",
     "tree_structure",
     "PyTreeDef",
+    "is_tensor",
+    "register_pytree_node",
     "tensor_leaves",
     "traced",
     "untraced",

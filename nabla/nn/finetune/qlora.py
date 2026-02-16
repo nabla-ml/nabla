@@ -11,9 +11,9 @@ import numpy as np
 
 from max.dtype import DType
 
-from ..core import Tensor
-from ..ops.unary import cast
-from ..ops.view import gather, reshape, unsqueeze
+from ...core import Tensor
+from ...ops.unary import cast
+from ...ops.view import gather, reshape, unsqueeze
 from .lora import lora_delta
 
 
@@ -41,12 +41,7 @@ NF4_CODEBOOK = np.array(
 
 
 def quantize_nf4(weight: Tensor, block_size: int = 64) -> dict[str, Any]:
-    """Quantize a 2D weight to NF4 indices + per-block scales.
-
-    Notes:
-      - Stores 4-bit codebook indices in uint8 form (unpacked) for simplicity.
-      - Pure Nabla ops are used for dequantization in forward pass.
-    """
+    """Quantize a 2D weight to NF4 indices + per-block scales."""
     if len(weight.shape) != 2:
         raise ValueError("quantize_nf4 expects a 2D weight tensor")
     if block_size <= 0:

@@ -24,6 +24,21 @@ _K_NONE = 1
 _K_LIST = 2
 _K_TUPLE = 3
 _K_DICT = 4
+_K_CUSTOM = 5
+
+
+_CUSTOM_REGISTRY: dict[type, tuple[Callable[[Any], tuple[list[Any], Any]], Callable[[Any, list[Any]], Any]]] = {}
+
+
+def register_pytree_node(
+    cls: type,
+    flatten_fn: Callable[[Any], tuple[list[Any], Any]],
+    unflatten_fn: Callable[[Any, list[Any]], Any],
+) -> None:
+    """Register a custom class as a pytree container node."""
+    if not isinstance(cls, type):
+        raise TypeError("cls must be a type")
+    _CUSTOM_REGISTRY[cls] = (flatten_fn, unflatten_fn)
 
 
 class _LeafMarker:
@@ -60,6 +75,9 @@ class PyTreeDef:
             return f"tuple[{len(self._children)}]"
         if self._kind == _K_DICT:
             return f"dict{list(self._meta)}"
+        if self._kind == _K_CUSTOM:
+            cls, _ = self._meta
+            return f"custom[{cls.__name__}]"
         return "PyTreeDef(?)"
 
     def __eq__(self, other: Any) -> bool:
@@ -112,6 +130,14 @@ def tree_flatten(
             num = sum(c.num_leaves for c in children)
             return PyTreeDef(_K_DICT, tuple(keys), children, num)
 
+        node_type = type(node)
+        if node_type in _CUSTOM_REGISTRY:
+            flatten_fn, _ = _CUSTOM_REGISTRY[node_type]
+            child_nodes, aux_data = flatten_fn(node)
+            children = tuple(_flatten(v) for v in child_nodes)
+            num = sum(c.num_leaves for c in children)
+            return PyTreeDef(_K_CUSTOM, (node_type, aux_data), children, num)
+
         leaves.append(node)
         return PyTreeDef(_K_LEAF, None, (), 1)
 
@@ -150,6 +176,16 @@ def tree_unflatten(treedef: PyTreeDef, leaves: list[Any]) -> Any:
                 key: _build(child)
                 for key, child in zip(def_._meta, def_._children, strict=False)
             }
+
+        if k == _K_CUSTOM:
+            node_type, aux_data = def_._meta
+            if node_type not in _CUSTOM_REGISTRY:
+                raise ValueError(
+                    f"No pytree unflatten function registered for type: {node_type.__name__}"
+                )
+            _, unflatten_fn = _CUSTOM_REGISTRY[node_type]
+            child_values = [_build(child) for child in def_._children]
+            return unflatten_fn(aux_data, child_values)
 
         raise ValueError(f"Unknown node kind: {k}")
 
@@ -198,6 +234,14 @@ def tree_leaves(
         if isinstance(node, dict):
             for k in sorted(node.keys()):
                 _collect(node[k])
+            return
+
+        node_type = type(node)
+        if node_type in _CUSTOM_REGISTRY:
+            flatten_fn, _ = _CUSTOM_REGISTRY[node_type]
+            child_nodes, _ = flatten_fn(node)
+            for child in child_nodes:
+                _collect(child)
             return
 
         leaves.append(node)
@@ -253,6 +297,32 @@ def tree_map(
                 raise ValueError("Tree structure mismatch: Dict size or type")
 
             return {k: _map(v, *[x[k] for x in others]) for k, v in primary.items()}
+
+        primary_type = type(primary)
+        if primary_type in _CUSTOM_REGISTRY:
+            flatten_fn, unflatten_fn = _CUSTOM_REGISTRY[primary_type]
+            primary_children, primary_aux = flatten_fn(primary)
+
+            other_children_nodes: list[list[Any]] = []
+            for other in others:
+                if type(other) is not primary_type:
+                    raise ValueError(
+                        "Tree structure mismatch: Custom node types differ "
+                        f"({primary_type.__name__} vs {type(other).__name__})"
+                    )
+                other_flatten_fn, _ = _CUSTOM_REGISTRY[type(other)]
+                child_nodes, other_aux = other_flatten_fn(other)
+                if other_aux != primary_aux:
+                    raise ValueError(
+                        "Tree structure mismatch: Custom node metadata differs"
+                    )
+                other_children_nodes.append(child_nodes)
+
+            mapped_children = [
+                _map(child, *[nodes[i] for nodes in other_children_nodes])
+                for i, child in enumerate(primary_children)
+            ]
+            return unflatten_fn(primary_aux, mapped_children)
 
         return fn(primary, *others)
 

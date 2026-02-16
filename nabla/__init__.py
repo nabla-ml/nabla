@@ -13,7 +13,9 @@ from .core import (
     defaults,
     defaults_like,
     driver_tensor_type,
+    is_tensor,
     realize_all,
+    register_pytree_node,
     tensor_leaves,
     traced,
     tree_flatten,
@@ -178,22 +180,7 @@ from .transforms.jvp import jvp
 from .transforms.shard_map import shard_map
 from .transforms.vjp import vjp
 from .transforms.vmap import vmap
-from .finetune import (
-    init_lora_adapter,
-    lora_delta,
-    lora_linear,
-    merge_lora_weight,
-    unmerge_lora_weight,
-    tree_lora_delta,
-    adamw_init,
-    adamw_update,
-    save_finetune_checkpoint,
-    load_finetune_checkpoint,
-    NF4_CODEBOOK,
-    quantize_nf4,
-    dequantize_nf4,
-    qlora_linear,
-)
+from . import nn
 
 from max.driver import Accelerator, CPU
 from max.dtype import DType
@@ -328,6 +315,8 @@ __all__ = [
     "CompiledFunction",
     "CompilationStats",
     "PyTreeDef",
+    "is_tensor",
+    "register_pytree_node",
     "tensor_leaves",
     "traced",
     "tree_flatten",
@@ -363,20 +352,7 @@ __all__ = [
     "CPU",
     "DType",
     "call_custom_kernel",
-    "init_lora_adapter",
-    "lora_delta",
-    "lora_linear",
-    "merge_lora_weight",
-    "unmerge_lora_weight",
-    "tree_lora_delta",
-    "adamw_init",
-    "adamw_update",
-    "save_finetune_checkpoint",
-    "load_finetune_checkpoint",
-    "NF4_CODEBOOK",
-    "quantize_nf4",
-    "dequantize_nf4",
-    "qlora_linear",
+    "nn",
     "_clear_caches",
 ]
 

@@ -73,68 +73,46 @@ def _walk_prefix(
     """Apply *fn(tensor, axis, *extra)* to every Tensor leaf paired with its
     axis from *prefix*.  Returns the mapped tree (same structure as *tree*)."""
     from ..core.tensor import Tensor
+    from ..core import tree_map
 
     # Leaf spec → broadcast to all tensor leaves.
     if isinstance(prefix, (int, type(None))):
-        if isinstance(tree, Tensor):
-            return fn(tree, prefix, *extra)
-        if isinstance(tree, dict):
-            return {k: _walk_prefix(fn, v, prefix, *extra) for k, v in tree.items()}
-        if isinstance(tree, (list, tuple)):
-            return type(tree)([_walk_prefix(fn, t, prefix, *extra) for t in tree])
-        return tree
+        return tree_map(
+            lambda leaf: fn(leaf, prefix, *extra) if isinstance(leaf, Tensor) else leaf,
+            tree,
+        )
 
     # Direct tensor leaf.
     if isinstance(tree, Tensor):
         return fn(tree, prefix, *extra)
 
-    # Structured prefix → walk both in lockstep.
-    if isinstance(tree, dict) and isinstance(prefix, dict):
-        missing = set(tree.keys()) - set(prefix.keys())
-        if missing:
-            raise ValueError(f"Axis spec missing keys: {missing}")
-        return {k: _walk_prefix(fn, v, prefix[k], *extra) for k, v in tree.items()}
-
-    if isinstance(tree, (list, tuple)) and isinstance(prefix, (list, tuple)):
-        if len(tree) != len(prefix):
-            raise ValueError(
-                f"Axis spec length ({len(prefix)}) != tree length ({len(tree)})"
-            )
-        return type(tree)(
-            [_walk_prefix(fn, t, a, *extra) for t, a in zip(tree, prefix)]
-        )
-
-    return tree
+    # Structured prefix → walk both in lockstep via pytree semantics.
+    return tree_map(
+        lambda leaf, axis: fn(leaf, axis, *extra) if isinstance(leaf, Tensor) else leaf,
+        tree,
+        prefix,
+    )
 
 
 def _collect_prefix(fn: Callable, tree: Any, prefix: AxisSpec) -> list:
     """Collect non-None results of *fn(tensor, axis)* across all leaves."""
     from ..core.tensor import Tensor
+    from ..core import tree_map
 
     out: list = []
 
-    def _go(t: Any, p: AxisSpec) -> None:
-        if isinstance(t, Tensor):
-            v = fn(t, p)
-            if v is not None:
-                out.append(v)
-        elif isinstance(p, (int, type(None))):
-            # broadcast: walk all children with same spec
-            if isinstance(t, dict):
-                for v in t.values():
-                    _go(v, p)
-            elif isinstance(t, (list, tuple)):
-                for v in t:
-                    _go(v, p)
-        elif isinstance(t, dict) and isinstance(p, dict):
-            for k, v in t.items():
-                if k in p:
-                    _go(v, p[k])
-        elif isinstance(t, (list, tuple)) and isinstance(p, (list, tuple)):
-            for ti, pi in zip(t, p):
-                _go(ti, pi)
+    if isinstance(prefix, (int, type(None))):
+        tree_map(
+            lambda leaf: out.append(v) if isinstance(leaf, Tensor) and (v := fn(leaf, prefix)) is not None else None,
+            tree,
+        )
+        return out
 
-    _go(tree, prefix)
+    tree_map(
+        lambda leaf, axis: out.append(v) if isinstance(leaf, Tensor) and (v := fn(leaf, axis)) is not None else None,
+        tree,
+        prefix,
+    )
     return out
 
 

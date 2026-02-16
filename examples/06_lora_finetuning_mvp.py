@@ -44,17 +44,17 @@ def main() -> None:
     y = nb.Tensor.from_dlpack(y_np)
     frozen_weight = nb.Tensor.from_dlpack(w_base_np)
 
-    lora_params = nb.init_lora_adapter(frozen_weight, rank=rank, init_std=0.01)
-    opt_state = nb.adamw_init(lora_params)
+    lora_params = nb.nn.finetune.init_lora_adapter(frozen_weight, rank=rank, init_std=0.01)
+    opt_state = nb.nn.optim.adamw_init(lora_params)
 
     def loss_fn(adapter, batch_x, batch_y):
-        pred = nb.lora_linear(batch_x, frozen_weight, adapter, alpha=alpha)
+        pred = nb.nn.finetune.lora_linear(batch_x, frozen_weight, adapter, alpha=alpha)
         diff = pred - batch_y
         return nb.mean(diff * diff)
 
     def train_step(adapter, optimizer_state, batch_x, batch_y):
         loss, grads = nb.value_and_grad(loss_fn, argnums=0, realize=False)(adapter, batch_x, batch_y)
-        new_adapter, new_state = nb.adamw_update(
+        new_adapter, new_state = nb.nn.optim.adamw_update(
             adapter,
             grads,
             optimizer_state,
@@ -83,24 +83,24 @@ def main() -> None:
     if ckpt_dir.exists():
         shutil.rmtree(ckpt_dir)
 
-    nb.save_finetune_checkpoint(
+    nb.nn.finetune.save_finetune_checkpoint(
         ckpt_dir,
         lora_params=lora_params,
         optimizer_state=opt_state,
         metadata={"alpha": alpha, "rank": rank},
     )
 
-    lora_template = nb.init_lora_adapter(frozen_weight, rank=rank, init_std=0.01)
-    opt_template = nb.adamw_init(lora_template)
+    lora_template = nb.nn.finetune.init_lora_adapter(frozen_weight, rank=rank, init_std=0.01)
+    opt_template = nb.nn.optim.adamw_init(lora_template)
 
-    loaded_lora, loaded_opt, meta = nb.load_finetune_checkpoint(
+    loaded_lora, loaded_opt, meta = nb.nn.finetune.load_finetune_checkpoint(
         ckpt_dir,
         lora_template=lora_template,
         optimizer_template=opt_template,
     )
 
-    original_pred = nb.lora_linear(x, frozen_weight, lora_params, alpha=alpha)
-    loaded_pred = nb.lora_linear(x, frozen_weight, loaded_lora, alpha=alpha)
+    original_pred = nb.nn.finetune.lora_linear(x, frozen_weight, lora_params, alpha=alpha)
+    loaded_pred = nb.nn.finetune.lora_linear(x, frozen_weight, loaded_lora, alpha=alpha)
 
     max_diff = np.max(np.abs(original_pred.to_numpy() - loaded_pred.to_numpy()))
     print(f"Checkpoint step: {loaded_opt['step'] if loaded_opt else 'N/A'}")

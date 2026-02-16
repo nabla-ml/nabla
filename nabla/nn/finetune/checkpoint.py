@@ -11,18 +11,14 @@ from typing import Any
 
 import numpy as np
 
-from ..core import Tensor
+from ...core import Tensor, is_tensor
 
 
 PathLike = str | Path
 
 
-def _is_tensor(x: Any) -> bool:
-    return isinstance(x, Tensor)
-
-
 def _collect_tensor_paths(tree: Any, prefix: str, out: list[tuple[str, Tensor]]) -> None:
-    if _is_tensor(tree):
+    if is_tensor(tree):
         out.append((prefix, tree))
         return
 
@@ -86,12 +82,7 @@ def save_finetune_checkpoint(
     optimizer_state: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> None:
-    """Save LoRA params and optional optimizer state to Nabla-native checkpoint files.
-
-    Output files in directory `path`:
-      - tensors.npz
-      - meta.json
-    """
+    """Save LoRA params and optional optimizer state to Nabla-native checkpoint files."""
     out_dir = Path(path)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -125,10 +116,7 @@ def load_finetune_checkpoint(
     lora_template: Any,
     optimizer_template: dict[str, Any] | None = None,
 ) -> tuple[Any, dict[str, Any] | None, dict[str, Any]]:
-    """Load LoRA params and optional optimizer state from checkpoint.
-
-    Templates define output pytree structure and tensor dtypes/devices.
-    """
+    """Load LoRA params and optional optimizer state from checkpoint."""
     ckpt_dir = Path(path)
     tensors_path = ckpt_dir / "tensors.npz"
     meta_path = ckpt_dir / "meta.json"

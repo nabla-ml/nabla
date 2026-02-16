@@ -9,8 +9,8 @@ from typing import Any
 
 from max.dtype import DType
 
-from ..core import Tensor, tree_map
-from ..ops.creation import gaussian, zeros
+from ...core import Tensor, tree_map
+from ...ops.creation import gaussian, zeros
 
 
 def init_lora_adapter(
@@ -19,17 +19,7 @@ def init_lora_adapter(
     init_std: float = 0.01,
     dtype: DType | None = None,
 ) -> dict[str, Tensor]:
-    """Initialize LoRA adapter matrices for a 2D linear weight.
-
-    Args:
-        weight: Frozen linear weight with shape (in_features, out_features).
-        rank: LoRA rank.
-        init_std: Stddev for A initialization.
-        dtype: Optional dtype override for adapter tensors.
-
-    Returns:
-        Dict with tensors: {"A": (in_features, rank), "B": (rank, out_features)}
-    """
+    """Initialize LoRA adapter matrices for a 2D linear weight."""
     if len(weight.shape) != 2:
         raise ValueError("init_lora_adapter expects a 2D weight tensor")
     if rank <= 0:
@@ -39,7 +29,11 @@ def init_lora_adapter(
     adapter_dtype = dtype or weight.dtype
 
     A = gaussian(
-        (in_features, rank), mean=0.0, std=init_std, dtype=adapter_dtype, device=weight.device
+        (in_features, rank),
+        mean=0.0,
+        std=init_std,
+        dtype=adapter_dtype,
+        device=weight.device,
     )
     B = zeros((rank, out_features), dtype=adapter_dtype, device=weight.device)
     return {"A": A, "B": B}
@@ -84,10 +78,7 @@ def tree_lora_delta(
     *,
     is_leaf: Any = None,
 ) -> Any:
-    """Map a pytree of LoRA adapter dicts to their low-rank deltas.
-
-    Non-adapter leaves are passed through unchanged.
-    """
+    """Map a pytree of LoRA adapter dicts to their low-rank deltas."""
 
     def _to_delta(leaf: Any) -> Any:
         if isinstance(leaf, dict) and "A" in leaf and "B" in leaf:

@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
+from ..optim import adamw_init, adamw_update
 from .checkpoint import load_finetune_checkpoint, save_finetune_checkpoint
 from .lora import (
     init_lora_adapter,
@@ -12,7 +13,6 @@ from .lora import (
     tree_lora_delta,
     unmerge_lora_weight,
 )
-from .optim import adamw_init, adamw_update
 from .qlora import NF4_CODEBOOK, dequantize_nf4, qlora_linear, quantize_nf4
 
 __all__ = [
