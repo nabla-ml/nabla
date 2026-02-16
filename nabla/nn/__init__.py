@@ -9,24 +9,40 @@ from .modules import (
     ReLU,
     SiLU,
     Sigmoid,
+    Softmax,
     Tanh,
+    Dropout,
+    Embedding,
     LayerNorm,
     Linear,
     Module,
+    MultiHeadAttention,
     Sequential,
+    TransformerDecoderLayer,
+    TransformerEncoderLayer,
 )
 
 __all__ = [
     "functional",
     "optim",
     "finetune",
+    # Base
     "Module",
+    # Layers
     "Linear",
+    "LayerNorm",
+    "Dropout",
+    "Embedding",
+    "MultiHeadAttention",
+    "TransformerEncoderLayer",
+    "TransformerDecoderLayer",
+    # Containers
     "Sequential",
+    # Activations
     "ReLU",
     "GELU",
     "Sigmoid",
     "Tanh",
     "SiLU",
-    "LayerNorm",
+    "Softmax",
 ]

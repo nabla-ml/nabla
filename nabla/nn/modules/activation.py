@@ -33,3 +33,17 @@ class Tanh(Module):
 class SiLU(Module):
     def forward(self, x: Tensor) -> Tensor:
         return F.silu(x)
+
+
+class Softmax(Module):
+    """Apply softmax along a given axis (default: last)."""
+
+    def __init__(self, axis: int = -1) -> None:
+        super().__init__()
+        self.axis = axis
+
+    def forward(self, x: Tensor) -> Tensor:
+        return F.softmax(x, axis=self.axis)
+
+    def extra_repr(self) -> str:
+        return f"axis={self.axis}"
