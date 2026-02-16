@@ -103,6 +103,72 @@ class TestGELUForward:
 
 
 # ===----------------------------------------------------------------------=== #
+# Additional activation module forwards
+# ===----------------------------------------------------------------------=== #
+
+
+class TestAdditionalActivationForward:
+    @pytest.mark.parametrize(
+        "module_cls, torch_fn",
+        [
+            (nb.nn.Sigmoid, "sigmoid"),
+            (nb.nn.Tanh, "tanh"),
+            (nb.nn.SiLU, "silu"),
+        ],
+    )
+    def test_activation_module_vs_pytorch(self, module_cls, torch_fn):
+        torch = pytest.importorskip("torch")
+        rng = make_rng(71)
+        x_np = rng.normal(size=(10, 5)).astype(np.float32)
+
+        module = module_cls()
+        y_nb = module(nb.Tensor.from_dlpack(x_np))
+        y_pt = getattr(torch.nn.functional, torch_fn)(torch.from_numpy(x_np))
+
+        nb.testing.assert_allclose(y_nb, y_pt, rtol=1e-5, atol=1e-6)
+
+
+# ===----------------------------------------------------------------------=== #
+# LayerNorm forward
+# ===----------------------------------------------------------------------=== #
+
+
+class TestLayerNormForward:
+    def test_layer_norm_module_vs_pytorch(self):
+        torch = pytest.importorskip("torch")
+        rng = make_rng(81)
+
+        x_np = rng.normal(size=(4, 6, 8)).astype(np.float32)
+        w_np = rng.normal(size=(8,)).astype(np.float32)
+        b_np = rng.normal(size=(8,)).astype(np.float32)
+
+        model = nb.nn.LayerNorm(8, eps=1e-5)
+        model.weight = nb_from_np(w_np, requires_grad=True)
+        model.bias = nb_from_np(b_np, requires_grad=True)
+
+        y_nb = model(nb.Tensor.from_dlpack(x_np))
+
+        layer_pt = torch.nn.LayerNorm(8, eps=1e-5, elementwise_affine=True)
+        with torch.no_grad():
+            layer_pt.weight.copy_(torch.from_numpy(w_np))
+            layer_pt.bias.copy_(torch.from_numpy(b_np))
+        y_pt = layer_pt(torch.from_numpy(x_np))
+
+        nb.testing.assert_allclose(y_nb, y_pt, rtol=1e-5, atol=1e-6)
+
+    def test_layer_norm_no_affine_shape(self):
+        rng = make_rng(82)
+        x_np = rng.normal(size=(5, 7, 9)).astype(np.float32)
+
+        model = nb.nn.LayerNorm((7, 9), elementwise_affine=False)
+        y = model(nb.Tensor.from_dlpack(x_np))
+
+        assert model.weight is None
+        assert model.bias is None
+        assert tuple(int(d) for d in y.shape) == (5, 7, 9)
+
+
+# ===----------------------------------------------------------------------=== #
 # Sequential forward
 # ===----------------------------------------------------------------------=== #
 

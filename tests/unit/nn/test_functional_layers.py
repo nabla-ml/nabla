@@ -102,3 +102,72 @@ class TestFunctionalLinearGrad:
 
         nb.testing.assert_allclose(gw_nb, gw_jax, rtol=1e-5, atol=1e-6)
         nb.testing.assert_allclose(gb_nb, gb_jax, rtol=1e-5, atol=1e-6)
+
+
+# ===----------------------------------------------------------------------=== #
+# Functional layer_norm
+# ===----------------------------------------------------------------------=== #
+
+
+class TestFunctionalLayerNorm:
+    @pytest.mark.parametrize("shape,normalized", [((6, 8), (8,)), ((3, 4, 5), (4, 5))])
+    def test_layer_norm_forward_vs_jax(self, shape, normalized):
+        jax = pytest.importorskip("jax")
+        jnp = pytest.importorskip("jax.numpy")
+
+        rng = make_rng(51)
+        x_np = rng.normal(size=shape).astype(np.float32)
+        w_np = rng.normal(size=normalized).astype(np.float32)
+        b_np = rng.normal(size=normalized).astype(np.float32)
+        eps = 1e-5
+
+        x = nb.Tensor.from_dlpack(x_np)
+        w = nb.Tensor.from_dlpack(w_np)
+        b = nb.Tensor.from_dlpack(b_np)
+        axis = tuple(range(-len(normalized), 0))
+
+        y_nb = nb.nn.functional.layer_norm(x, weight=w, bias=b, eps=eps, axis=axis)
+
+        mu = jnp.mean(jnp.asarray(x_np), axis=axis, keepdims=True)
+        centered = jnp.asarray(x_np) - mu
+        var = jnp.mean(centered * centered, axis=axis, keepdims=True)
+        y_jax = centered * jax.lax.rsqrt(var + eps)
+        y_jax = y_jax * jnp.asarray(w_np) + jnp.asarray(b_np)
+
+        nb.testing.assert_allclose(y_nb, y_jax, rtol=1e-5, atol=1e-6)
+
+    def test_layer_norm_grad_vs_jax(self):
+        jax = pytest.importorskip("jax")
+        jnp = pytest.importorskip("jax.numpy")
+
+        rng = make_rng(52)
+        x_np = rng.normal(size=(5, 7)).astype(np.float32)
+        w_np = rng.normal(size=(7,)).astype(np.float32)
+        b_np = rng.normal(size=(7,)).astype(np.float32)
+        eps = 1e-5
+
+        x = nb.Tensor.from_dlpack(x_np).requires_grad_(True)
+        w = nb.Tensor.from_dlpack(w_np).requires_grad_(True)
+        b = nb.Tensor.from_dlpack(b_np).requires_grad_(True)
+
+        def nb_loss(x_t, w_t, b_t):
+            y = nb.nn.functional.layer_norm(x_t, weight=w_t, bias=b_t, eps=eps, axis=-1)
+            return nb.mean(y)
+
+        gx_nb, gw_nb, gb_nb = nb.grad(nb_loss, argnums=(0, 1, 2))(x, w, b)
+
+        def jax_loss(x_t, w_t, b_t):
+            mu = jnp.mean(x_t, axis=-1, keepdims=True)
+            centered = x_t - mu
+            var = jnp.mean(centered * centered, axis=-1, keepdims=True)
+            y = centered * jax.lax.rsqrt(var + eps)
+            y = y * w_t + b_t
+            return jnp.mean(y)
+
+        gx_jax, gw_jax, gb_jax = jax.grad(jax_loss, argnums=(0, 1, 2))(
+            jnp.asarray(x_np), jnp.asarray(w_np), jnp.asarray(b_np)
+        )
+
+        nb.testing.assert_allclose(gx_nb, gx_jax, rtol=1e-4, atol=1e-5)
+        nb.testing.assert_allclose(gw_nb, gw_jax, rtol=1e-4, atol=1e-5)
+        nb.testing.assert_allclose(gb_nb, gb_jax, rtol=1e-4, atol=1e-5)

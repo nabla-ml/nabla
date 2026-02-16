@@ -109,6 +109,12 @@ class TestModuleIteration:
         buffers = dict(model.named_buffers())
         assert "running_mean" in buffers
 
+    def test_layer_norm_parameters_registered(self):
+        model = nb.nn.LayerNorm((4, 6))
+        named = dict(model.named_parameters())
+        assert "weight" in named
+        assert "bias" in named
+
 
 # ===----------------------------------------------------------------------=== #
 # Train / eval mode

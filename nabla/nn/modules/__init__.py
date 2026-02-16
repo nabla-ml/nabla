@@ -3,9 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
-from .activation import GELU, ReLU
+from .activation import GELU, ReLU, SiLU, Sigmoid, Tanh
 from .base import Module
 from .containers import Sequential
+from .layernorm import LayerNorm
 from .linear import Linear
 
 __all__ = [
@@ -14,4 +15,8 @@ __all__ = [
 	"Sequential",
 	"ReLU",
 	"GELU",
+	"Sigmoid",
+	"Tanh",
+	"SiLU",
+	"LayerNorm",
 ]

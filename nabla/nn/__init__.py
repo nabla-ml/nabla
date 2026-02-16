@@ -7,6 +7,10 @@ from . import finetune, functional, optim
 from .modules import (
     GELU,
     ReLU,
+    SiLU,
+    Sigmoid,
+    Tanh,
+    LayerNorm,
     Linear,
     Module,
     Sequential,
@@ -21,4 +25,8 @@ __all__ = [
     "Sequential",
     "ReLU",
     "GELU",
+    "Sigmoid",
+    "Tanh",
+    "SiLU",
+    "LayerNorm",
 ]
