@@ -935,6 +935,23 @@ class Tensor(DLPackArray, HasTensorValue):
     def __bool__(self) -> bool:
         return bool(self.item())
 
+    def __array__(
+        self,
+        dtype: "np.dtype | None" = None,
+        copy: bool | None = None,
+    ):
+        """NumPy interoperability.
+
+        Enables direct use in `np.asarray`, `np.testing.assert_allclose`, and
+        other array-consumer APIs without explicit `.to_numpy()` in user code.
+        """
+        arr = self.to_numpy()
+        if dtype is not None:
+            arr = arr.astype(dtype, copy=False)
+        if copy:
+            return arr.copy()
+        return arr
+
     def __hash__(self):
         return id(self)
 

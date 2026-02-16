@@ -181,6 +181,7 @@ from .transforms.shard_map import shard_map
 from .transforms.vjp import vjp
 from .transforms.vmap import vmap
 from . import nn
+from . import testing
 
 from max.driver import Accelerator, CPU
 from max.dtype import DType
@@ -353,6 +354,7 @@ __all__ = [
     "DType",
     "call_custom_kernel",
     "nn",
+    "testing",
     "_clear_caches",
 ]
 

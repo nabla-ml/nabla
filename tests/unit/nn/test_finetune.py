@@ -23,7 +23,9 @@ def _make_data(seed: int = 0, n: int = 48, in_dim: int = 10, out_dim: int = 6):
 
 
 def test_lora_merge_unmerge_roundtrip():
-    weight = nb.Tensor.from_dlpack(np.random.randn(12, 10).astype(np.float32))
+    rng = np.random.default_rng(7071)
+    weight_np = rng.normal(size=(12, 10)).astype(np.float32)
+    weight = nb.Tensor.from_dlpack(weight_np)
     adapter = nb.nn.finetune.init_lora_adapter(weight, rank=4, init_std=0.02)
 
     merged = nb.nn.finetune.merge_lora_weight(weight, adapter, alpha=8.0)
@@ -32,7 +34,15 @@ def test_lora_merge_unmerge_roundtrip():
     assert not merged.real
     assert not restored.real
 
-    np.testing.assert_allclose(restored.to_numpy(), weight.to_numpy(), rtol=1e-5, atol=1e-5)
+    a_np = adapter["A"].to_numpy()
+    b_np = adapter["B"].to_numpy()
+    delta_np = (a_np @ b_np) * (8.0 / a_np.shape[1])
+    merged_ref = weight_np + delta_np
+    restored_ref = merged_ref - delta_np
+
+    nb.testing.batch_realize(merged, restored)
+    nb.testing.assert_allclose(merged, merged_ref, rtol=1e-5, atol=1e-5, realize=False)
+    nb.testing.assert_allclose(restored, restored_ref, rtol=1e-5, atol=1e-5, realize=False)
 
 
 def test_qlora_training_and_checkpoint_roundtrip(tmp_path: Path):
@@ -44,6 +54,14 @@ def test_qlora_training_and_checkpoint_roundtrip(tmp_path: Path):
     qweight = nb.nn.finetune.quantize_nf4(w, block_size=8)
     adapter = nb.nn.finetune.init_lora_adapter(w, rank=3, init_std=0.01)
     opt = nb.nn.optim.adamw_init(adapter)
+
+    w_deq_np = nb.nn.finetune.dequantize_nf4(qweight).to_numpy()
+    a0 = adapter["A"].to_numpy()
+    b0 = adapter["B"].to_numpy()
+    delta0 = (a0 @ b0) * (8.0 / a0.shape[1])
+    pred0_ref = x_np @ (w_deq_np + delta0)
+    pred0_nb = nb.nn.finetune.qlora_linear(x, qweight, adapter, alpha=8.0)
+    nb.testing.assert_allclose(pred0_nb, pred0_ref, rtol=1e-5, atol=1e-5)
 
     def loss_fn(lora_p):
         pred = nb.nn.finetune.qlora_linear(x, qweight, lora_p, alpha=8.0)
@@ -58,16 +76,17 @@ def test_qlora_training_and_checkpoint_roundtrip(tmp_path: Path):
         loss, grads = nb.value_and_grad(loss_fn, realize=False)(adapter)
         adapter, opt = nb.nn.optim.adamw_update(adapter, grads, opt, lr=2e-2, weight_decay=0.0)
 
-        to_realize = [loss]
-        to_realize.extend(t for t in nb.tree_leaves(grads) if isinstance(t, nb.Tensor))
-        to_realize.extend(t for t in nb.tree_leaves(adapter) if isinstance(t, nb.Tensor))
-        to_realize.extend(t for t in nb.tree_leaves(opt) if isinstance(t, nb.Tensor))
-        nb.realize_all(*to_realize)
-
     final_loss = loss_fn(adapter)
     assert not final_loss.real
     final = float(final_loss.to_numpy())
     assert final < initial
+
+    a_last = adapter["A"].to_numpy()
+    b_last = adapter["B"].to_numpy()
+    delta_last = (a_last @ b_last) * (8.0 / a_last.shape[1])
+    pred_last_ref = x_np @ (w_deq_np + delta_last)
+    pred_last_nb = nb.nn.finetune.qlora_linear(x, qweight, adapter, alpha=8.0)
+    nb.testing.assert_allclose(pred_last_nb, pred_last_ref, rtol=1e-5, atol=1e-5)
 
     ckpt = tmp_path / "qlora_lora_ckpt"
     nb.nn.finetune.save_finetune_checkpoint(
@@ -88,8 +107,7 @@ def test_qlora_training_and_checkpoint_roundtrip(tmp_path: Path):
     pred_ref = nb.nn.finetune.qlora_linear(x, qweight, adapter, alpha=8.0)
     pred_loaded = nb.nn.finetune.qlora_linear(x, qweight, loaded_lora, alpha=8.0)
 
-    np.testing.assert_allclose(
-        pred_ref.to_numpy(), pred_loaded.to_numpy(), rtol=1e-5, atol=1e-5
-    )
+    nb.testing.batch_realize(pred_ref, pred_loaded)
+    nb.testing.assert_allclose(pred_ref, pred_loaded, rtol=1e-5, atol=1e-5, realize=False)
     assert loaded_opt is not None
     assert loaded_opt["step"] == opt["step"]

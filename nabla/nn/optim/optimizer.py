@@ -8,17 +8,47 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
-from ...core import Tensor, is_tensor, tree_map
+from ...core import Tensor, is_tensor, realize_all, tree_leaves, tree_map
 from ...ops.creation import zeros_like
 from ...ops.unary import sqrt
 from .functional import adamw_step
 
 
+def _unrealized_tensors(tree: Any) -> list[Tensor]:
+    return [
+        leaf
+        for leaf in tree_leaves(tree)
+        if is_tensor(leaf) and not leaf.real
+    ]
+
+
 class Optimizer(ABC):
     """Base class for stateful optimizers backed by pure functional steps."""
 
+    _AUTO_REALIZE_UPDATED_PARAMS: bool = True
+    _AUTO_REALIZE_UPDATED_STATE: bool = True
+
     def __init__(self, params: Any) -> None:
         self.params = params
+
+    @classmethod
+    def set_execution_policy(
+        cls,
+        *,
+        auto_realize_updated_params: bool | None = None,
+        auto_realize_updated_state: bool | None = None,
+    ) -> None:
+        if auto_realize_updated_params is not None:
+            cls._AUTO_REALIZE_UPDATED_PARAMS = bool(auto_realize_updated_params)
+        if auto_realize_updated_state is not None:
+            cls._AUTO_REALIZE_UPDATED_STATE = bool(auto_realize_updated_state)
+
+    @classmethod
+    def get_execution_policy(cls) -> dict[str, bool]:
+        return {
+            "auto_realize_updated_params": bool(cls._AUTO_REALIZE_UPDATED_PARAMS),
+            "auto_realize_updated_state": bool(cls._AUTO_REALIZE_UPDATED_STATE),
+        }
 
     @abstractmethod
     def step(self, grads: Any) -> Any:
@@ -80,6 +110,15 @@ class AdamW(Optimizer):
         self.m = tree_map(lambda t: t[1], triples, is_leaf=_is_triplet_leaf)
         self.v = tree_map(lambda t: t[2], triples, is_leaf=_is_triplet_leaf)
 
+        to_realize: list[Tensor] = []
+        if self._AUTO_REALIZE_UPDATED_PARAMS:
+            to_realize.extend(_unrealized_tensors(self.params))
+        if self._AUTO_REALIZE_UPDATED_STATE:
+            to_realize.extend(_unrealized_tensors(self.m))
+            to_realize.extend(_unrealized_tensors(self.v))
+        if to_realize:
+            realize_all(*to_realize)
+
         return self.params
 
 
@@ -101,6 +140,7 @@ def adamw_update(
     beta2: float = 0.999,
     eps: float = 1e-8,
     bias_correction: bool = True,
+    realize: bool | None = None,
 ) -> tuple[Any, dict[str, Any]]:
     """Functional AdamW update on pytrees.
 
@@ -139,4 +179,20 @@ def adamw_update(
         return p
 
     new_params = tree_map(_apply, params, grads, m, v)
-    return new_params, {"m": m, "v": v, "step": step}
+    new_state = {"m": m, "v": v, "step": step}
+
+    should_realize = (
+        Optimizer._AUTO_REALIZE_UPDATED_PARAMS
+        if realize is None
+        else bool(realize)
+    )
+    if should_realize:
+        to_realize: list[Tensor] = []
+        to_realize.extend(_unrealized_tensors(new_params))
+        if Optimizer._AUTO_REALIZE_UPDATED_STATE:
+            to_realize.extend(_unrealized_tensors(new_state["m"]))
+            to_realize.extend(_unrealized_tensors(new_state["v"]))
+        if to_realize:
+            realize_all(*to_realize)
+
+    return new_params, new_state
