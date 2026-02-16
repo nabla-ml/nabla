@@ -147,12 +147,15 @@ class TestEncoderDecoderCopyTask:
         opt_state = nb.nn.optim.adamw_init(model)
 
         losses: list[float] = []
-        for _ in range(STEPS):
+        for i in range(STEPS):
+            print(f"[JAX copy] step {i + 1}/{STEPS} start", flush=True)
             src = _random_tokens(rng)
             tgt = src  # copy task
 
             loss, grads = nb.value_and_grad(copy_loss, argnums=0)(model, src, tgt)
-            losses.append(float(loss.to_numpy()))
+            loss_value = float(loss.to_numpy())
+            print(f"[JAX copy] step {i + 1}/{STEPS} loss={loss_value:.6f}", flush=True)
+            losses.append(loss_value)
 
             model, opt_state = nb.nn.optim.adamw_update(
                 model, grads, opt_state, lr=LR,
@@ -170,16 +173,36 @@ class TestDecoderOnlyNextToken:
         opt_state = nb.nn.optim.adamw_init(model)
 
         losses: list[float] = []
-        for _ in range(STEPS):
+        for i in range(STEPS):
+            print(f"[JAX gpt] step {i + 1}/{STEPS} start", flush=True)
             tokens = _random_tokens(rng)
 
             loss, grads = nb.value_and_grad(next_token_loss, argnums=0)(
                 model, tokens,
             )
-            losses.append(float(loss.to_numpy()))
+            loss_value = float(loss.to_numpy())
+            print(f"[JAX gpt] step {i + 1}/{STEPS} loss={loss_value:.6f}", flush=True)
+            losses.append(loss_value)
 
             model, opt_state = nb.nn.optim.adamw_update(
                 model, grads, opt_state, lr=LR,
             )
 
         assert np.mean(losses[-5:]) < np.mean(losses[:5])
+
+if __name__ == "__main__":
+    import faulthandler
+
+    faulthandler.enable()
+    faulthandler.dump_traceback_later(30, repeat=True)
+
+    t1 = TestEncoderDecoderCopyTask()
+    print("Running TestEncoderDecoderCopyTask (JAX)...")
+    t1.test_loss_decreases()
+    
+    t2 = TestDecoderOnlyNextToken()
+    print("\nRunning TestDecoderOnlyNextToken (JAX)...")
+    t2.test_loss_decreases()
+    print("\nAll JAX tests passed!")
+
+    faulthandler.cancel_dump_traceback_later()

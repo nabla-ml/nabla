@@ -120,7 +120,8 @@ class TestEncoderDecoderCopyTask:
         optimizer = nb.nn.optim.AdamW(params, lr=LR)
 
         losses: list[float] = []
-        for _ in range(STEPS):
+        for i in range(STEPS):
+            print(f"[PT copy] step {i + 1}/{STEPS} start", flush=True)
             src = _random_tokens(rng)
             tgt = _random_tokens(rng)
             # Copy task: target == source
@@ -128,7 +129,9 @@ class TestEncoderDecoderCopyTask:
 
             logits = model(src, tgt)
             loss = nb.nn.functional.cross_entropy_loss(logits, tgt, axis=-1)
-            losses.append(float(loss.to_numpy()))
+            loss_value = float(loss.to_numpy())
+            print(f"[PT copy] step {i + 1}/{STEPS} loss={loss_value:.6f}", flush=True)
+            losses.append(loss_value)
 
             model.zero_grad()
             loss.backward()
@@ -160,7 +163,8 @@ class TestDecoderOnlyNextToken:
         optimizer = nb.nn.optim.AdamW(params, lr=LR)
 
         losses: list[float] = []
-        for _ in range(STEPS):
+        for i in range(STEPS):
+            print(f"[PT gpt] step {i + 1}/{STEPS} start", flush=True)
             tokens = _random_tokens(rng)
             logits = model(tokens)
 
@@ -170,7 +174,9 @@ class TestDecoderOnlyNextToken:
             )
             tgt = nb.slice_tensor(tokens, start=(0, 1), size=(BATCH, SEQ - 1))
             loss = nb.nn.functional.cross_entropy_loss(pred, tgt, axis=-1)
-            losses.append(float(loss.to_numpy()))
+            loss_value = float(loss.to_numpy())
+            print(f"[PT gpt] step {i + 1}/{STEPS} loss={loss_value:.6f}", flush=True)
+            losses.append(loss_value)
 
             model.zero_grad()
             loss.backward()
@@ -186,3 +192,20 @@ class TestDecoderOnlyNextToken:
             optimizer.params = dict(model.named_parameters())
 
         assert np.mean(losses[-5:]) < np.mean(losses[:5])
+
+if __name__ == "__main__":
+    import faulthandler
+
+    faulthandler.enable()
+    faulthandler.dump_traceback_later(30, repeat=True)
+
+    t1 = TestEncoderDecoderCopyTask()
+    print("Running TestEncoderDecoderCopyTask (PyTorch)...")
+    t1.test_loss_decreases()
+    
+    t2 = TestDecoderOnlyNextToken()
+    print("\nRunning TestDecoderOnlyNextToken (PyTorch)...")
+    t2.test_loss_decreases()
+    print("\nAll PyTorch tests passed!")
+
+    faulthandler.cancel_dump_traceback_later()

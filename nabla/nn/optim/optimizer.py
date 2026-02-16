@@ -22,6 +22,21 @@ def _unrealized_tensors(tree: Any) -> list[Tensor]:
     ]
 
 
+def _detach_params_like(new_tree: Any, old_tree: Any) -> Any:
+    """Detach updated params to fresh leaves while preserving requires_grad flags."""
+
+    def _detach(new_v: Any, old_v: Any):
+        if is_tensor(new_v) and is_tensor(old_v):
+            if not new_v.real:
+                return new_v
+            detached = new_v.detach()
+            detached.requires_grad_(bool(old_v.requires_grad))
+            return detached
+        return new_v
+
+    return tree_map(_detach, new_tree, old_tree)
+
+
 class Optimizer(ABC):
     """Base class for stateful optimizers backed by pure functional steps."""
 
@@ -77,6 +92,7 @@ class AdamW(Optimizer):
         self.v = tree_map(lambda p: zeros_like(p) if is_tensor(p) else None, params)
 
     def step(self, grads: Any) -> Any:
+        old_params = self.params
         self.step_count += 1
 
         def _apply(p: Any, g: Any, m: Any, v: Any):
@@ -119,6 +135,10 @@ class AdamW(Optimizer):
         if to_realize:
             realize_all(*to_realize)
 
+        # Imperative optimizer semantics: updated params should become fresh leaves
+        # (not connected to previous step history).
+        self.params = _detach_params_like(self.params, old_params)
+
         return self.params
 
 
@@ -152,6 +172,7 @@ class SGD(Optimizer):
             self.bufs = tree_map(lambda p: None, params)
 
     def step(self, grads: Any) -> Any:
+        old_params = self.params
         def _apply(p: Any, g: Any, buf: Any):
             if is_tensor(p) and is_tensor(g):
                 return sgd_step(
@@ -177,6 +198,10 @@ class SGD(Optimizer):
             to_realize.extend(_unrealized_tensors(self.bufs))
         if to_realize:
             realize_all(*to_realize)
+
+        # Imperative optimizer semantics: updated params should become fresh leaves
+        # (not connected to previous step history).
+        self.params = _detach_params_like(self.params, old_params)
 
         return self.params
 

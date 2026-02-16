@@ -38,6 +38,15 @@ import os
 DEBUG_LAZY_EVAL: bool = os.environ.get("NABLA_DEBUG", "0") == "1"
 
 
+def _debug_eval(msg: str) -> None:
+    if not DEBUG_LAZY_EVAL:
+        return
+    import time
+
+    ts = time.strftime("%H:%M:%S")
+    print(f"[NABLA_DEBUG {ts}] {msg}", flush=True)
+
+
 def seed() -> Tensor:
     """Returns the global random seed tensor."""
     from ..tensor.api import Tensor
@@ -86,6 +95,12 @@ class ComputeGraph:
     epoch: int
     _input_refs: list["Tensor"]
     _skip_finalize: bool
+    _debug_input_add_attempts: int
+    _debug_input_add_registered: int
+    _debug_input_add_by_reason: dict[str, int]
+    _debug_input_add_buffers_by_reason: dict[str, int]
+    _debug_constant_add_count: int
+    _debug_constant_add_buffers: int
 
     def __init__(self, context: mlir.Context | None = None, seed: int = 0):
         global _GRAPH_EPOCH
@@ -116,6 +131,12 @@ class ComputeGraph:
         )
         self._input_refs = []
         self._skip_finalize = False
+        self._debug_input_add_attempts = 0
+        self._debug_input_add_registered = 0
+        self._debug_input_add_by_reason = {}
+        self._debug_input_add_buffers_by_reason = {}
+        self._debug_constant_add_count = 0
+        self._debug_constant_add_buffers = 0
         with self.graph:
             ops.random.set_seed(seed)
 
@@ -129,8 +150,19 @@ class ComputeGraph:
 
         # gc.collect()  # Removed: too expensive for hot paths
 
-    def add_input(self, tensor: "Tensor", shape: tuple[int, ...] | None = None) -> None:
+    def add_input(
+        self,
+        tensor: "Tensor",
+        shape: tuple[int, ...] | None = None,
+        *,
+        reason: str = "unknown",
+    ) -> None:
         """Registers a realized tensor's bufferss as graph inputs."""
+        self._debug_input_add_attempts += 1
+        self._debug_input_add_by_reason[reason] = (
+            self._debug_input_add_by_reason.get(reason, 0) + 1
+        )
+
         impl = tensor._impl
         bufferss = impl._buffers
         if not bufferss:
@@ -150,6 +182,10 @@ class ComputeGraph:
                 return
 
         self._input_refs.append(tensor)
+        self._debug_input_add_registered += 1
+        self._debug_input_add_buffers_by_reason[reason] = (
+            self._debug_input_add_buffers_by_reason.get(reason, 0) + len(bufferss)
+        )
 
         op = _core.Operation._from_cmlir(self.graph._mlir_op)
         assert isinstance(op, mo.GraphOp)
@@ -189,7 +225,7 @@ class ComputeGraph:
                 impl._graph_values = [bv[...] for bv in tensor_graph_values]
                 impl.graph_values_epoch = self.epoch
 
-    def add_constant(self, tensor: "Tensor") -> None:
+    def add_constant(self, tensor: "Tensor", *, reason: str = "unknown") -> None:
         """Adds a realized tensor's data as a constant in the graph (not an input).
 
         Use this for intermediate tensors that are accessed during eager graph building
@@ -199,6 +235,9 @@ class ComputeGraph:
         buffers = impl._buffers
         if not buffers:
             raise TypeError("Only realized tensors may be added as constants.")
+
+        self._debug_constant_add_count += 1
+        self._debug_constant_add_buffers += len(buffers)
 
         with self.graph:
             const_values = []
@@ -232,6 +271,14 @@ class ComputeGraph:
         sys.last_traceback = None
         # gc.collect()  # Removed: too expensive for hot paths
 
+        _debug_eval("evaluate(): begin")
+        self._debug_input_add_attempts = 0
+        self._debug_input_add_registered = 0
+        self._debug_input_add_by_reason = {}
+        self._debug_input_add_buffers_by_reason = {}
+        self._debug_constant_add_count = 0
+        self._debug_constant_add_buffers = 0
+
         # Collect target tensors
         seen: set[int] = set()
         targets: list[Tensor] = []
@@ -253,7 +300,10 @@ class ComputeGraph:
         # Skip if only evaluating leaf inputs (nothing to compute)
         self._skip_finalize = all(t._impl.output_refs is None for t in targets)
         if self._skip_finalize:
+            _debug_eval("evaluate(): skip finalize (all targets are already leaf inputs)")
             return None
+
+        _debug_eval(f"evaluate(): collected {len(targets)} targets")
 
         # --- COMPUTE CACHE KEY ---
         # We sort targets to ensure deterministic cache keys regardless of registration order.
@@ -270,18 +320,98 @@ class ComputeGraph:
             sharding_key = _make_hashable(t.sharding) if t.sharding else None
             return (1, str(t.dtype), tuple(int(d) for d in t.shape), sharding_key)
 
-        # Pre-compute keys once, sort by hash (avoid expensive str() conversion)
-        target_keys = [get_tensor_key(t) for t in targets]
-        indices = sorted(range(len(targets)), key=lambda i: hash(target_keys[i]))
-        targets[:] = [targets[i] for i in indices]
-        target_keys = [target_keys[i] for i in indices]
+        # Pre-compute keys once in stable target order.
+        # NOTE:
+        #   Sorting via hash(target_key) can be very expensive for large nested
+        #   op-hash tuples and can dominate evaluate() time before compilation.
+        #   We keep the natural target order (already deterministic for callers)
+        #   and avoid per-target hashing here.
+        if DEBUG_LAZY_EVAL:
+            import time
 
-        op_hashes = target_keys
-        cache_key = tuple(op_hashes) if op_hashes else None
+            prep_start = time.perf_counter()
+            _debug_eval("evaluate(): computing target keys")
+
+        target_keys = [get_tensor_key(t) for t in targets]
 
         if DEBUG_LAZY_EVAL:
-            print(
-                f"\n[CACHE] Key hash: {hash(cache_key)} | Cache size: {len(_GRAPH_CACHE)}"
+            prep_time = time.perf_counter() - prep_start
+            _debug_eval(
+                f"evaluate(): target keys ready | targets={len(targets)} | key_prep={prep_time:.4f}s"
+            )
+
+        def _fingerprint_obj(
+            obj: Any, memo: dict[int, int], str_memo: dict[str, int]
+        ) -> int:
+            """Compute a compact stable fingerprint for nested hashable structures.
+
+            This avoids repeatedly hashing very large nested tuples (e.g. op hashes)
+            during dict lookup.
+            """
+            if isinstance(obj, (int, bool, float, type(None))):
+                return hash(obj)
+            if isinstance(obj, str):
+                if obj in str_memo:
+                    return str_memo[obj]
+                h = hash(obj)
+                str_memo[obj] = h
+                return h
+
+            obj_id = id(obj)
+            if obj_id in memo:
+                return memo[obj_id]
+
+            if isinstance(obj, tuple):
+                h = 1469598103934665603
+                for item in obj:
+                    h ^= _fingerprint_obj(item, memo, str_memo)
+                    h *= 1099511628211
+                    h &= (1 << 63) - 1
+                memo[obj_id] = h
+                return h
+
+            if isinstance(obj, list):
+                h = 1099511628211
+                for item in obj:
+                    h ^= _fingerprint_obj(item, memo, str_memo)
+                    h *= 1469598103934665603
+                    h &= (1 << 63) - 1
+                memo[obj_id] = h
+                return h
+
+            if isinstance(obj, dict):
+                items = tuple(sorted(obj.items(), key=lambda kv: str(kv[0])))
+                h = 7809847782465536322
+                for k, v in items:
+                    h ^= _fingerprint_obj(k, memo, str_memo)
+                    h ^= _fingerprint_obj(v, memo, str_memo)
+                    h *= 6364136223846793005
+                    h &= (1 << 63) - 1
+                memo[obj_id] = h
+                return h
+
+            return hash(str(obj))
+
+        if DEBUG_LAZY_EVAL:
+            import time
+
+            fp_start = time.perf_counter()
+
+        memo: dict[int, int] = {}
+        str_memo: dict[str, int] = {}
+        per_target_fps = [_fingerprint_obj(k, memo, str_memo) for k in target_keys]
+        cache_key = tuple(sorted(per_target_fps)) if per_target_fps else None
+
+        if DEBUG_LAZY_EVAL:
+            fp_time = time.perf_counter() - fp_start
+            _debug_eval(
+                "cache: fingerprint key ready "
+                f"in {fp_time:.4f}s | entries={len(per_target_fps)}"
+            )
+
+        if DEBUG_LAZY_EVAL:
+            _debug_eval(
+                f"cache: key_ready entries={len(target_keys)} cache_size={len(_GRAPH_CACHE)}"
             )
 
         def _buf_signature(buf: driver.Buffer) -> tuple[str, tuple[int, ...], str]:
@@ -309,7 +439,15 @@ class ComputeGraph:
 
         # === CHECK CACHE ===
         if cache_key is not None:
+            if DEBUG_LAZY_EVAL:
+                import time
+
+                cache_lookup_start = time.perf_counter()
+                _debug_eval("cache: lookup start")
             entry = _GRAPH_CACHE.get(cache_key)
+            if DEBUG_LAZY_EVAL:
+                cache_lookup_time = time.perf_counter() - cache_lookup_start
+                _debug_eval(f"cache: lookup done in {cache_lookup_time:.4f}s")
             if entry is not None:
                 if len(entry) == 2:
                     cached_model, kept_indices = entry
@@ -317,7 +455,7 @@ class ComputeGraph:
                 else:
                     cached_model, kept_indices, input_signatures = entry
                 if DEBUG_LAZY_EVAL:
-                    print(f"[CACHE] HIT! key_hash={hash(cache_key)}")
+                    _debug_eval("cache: HIT")
 
                 # Gather ALL candidate buffers from the trace in the order they would be added.
                 # Since we don't have a fresh graph yet, we simulate the input ordering.
@@ -334,14 +472,12 @@ class ComputeGraph:
                         )
                     if DEBUG_LAZY_EVAL:
                         if remapped_inputs is None:
-                            print(
-                                f"[CACHE] STALE INPUT MAP - invalidating key_hash={hash(cache_key)} "
+                            _debug_eval(
+                                "[CACHE] STALE INPUT MAP - invalidating "
                                 f"(max_index={max(kept_indices) if kept_indices else -1}, buffers={len(all_buffers)})"
                             )
                         else:
-                            print(
-                                f"[CACHE] REMAP mode=signature key_hash={hash(cache_key)}"
-                            )
+                            _debug_eval("[CACHE] REMAP mode=signature")
                     if remapped_inputs is None:
                         _GRAPH_CACHE.pop(cache_key, None)
                 else:
@@ -351,10 +487,14 @@ class ComputeGraph:
                     inputs = remapped_inputs
 
                     if DEBUG_LAZY_EVAL:
-                        print(
-                            f"[CACHE] inputs: {[(tuple(inp.shape), str(inp.dtype), id(inp)) for inp in inputs]}"
+                        preview = [
+                            (tuple(inp.shape), str(inp.dtype)) for inp in inputs[:5]
+                        ]
+                        _debug_eval(
+                            f"[CACHE] inputs: count={len(inputs)} preview={preview}"
                         )
 
+                    _debug_eval("cache: executing cached model")
                     seed_val, *results = cached_model(*inputs)
 
                     result_idx = 0
@@ -375,11 +515,12 @@ class ComputeGraph:
 
                     self._finalize_evaluation(seed_value=seed_val.item())
                     self._cleanup_trace(targets)
+                    _debug_eval("cache: cached execution complete")
                     return (cached_model, inputs) if return_model else None
 
         # === CACHE MISS - Build and compile graph ===
         if DEBUG_LAZY_EVAL:
-            print(f"[CACHE] MISS - storing. key_hash={hash(cache_key)}")
+            _debug_eval("cache: MISS")
 
         # Bump epoch and create fresh MAX graph
         global _GRAPH_EPOCH
@@ -393,9 +534,11 @@ class ComputeGraph:
             ops.random.set_seed(0)
 
         # Replay trace to build MAX graph
+        _debug_eval("miss: replaying trace to build graph")
         self._replay_trace_to_build_graph(targets)
 
         # Build graph outputs
+        _debug_eval("miss: building graph outputs")
         all_graph_values = []
         value_map = []
 
@@ -405,7 +548,7 @@ class ComputeGraph:
                     t._impl._graph_values = []
 
                 if not t._impl._graph_values and t._impl.is_realized:
-                    self.add_input(t)
+                    self.add_input(t, reason="target_realized")
 
                 values = t._impl._graph_values
                 if not values:
@@ -424,7 +567,9 @@ class ComputeGraph:
 
         # Optimize and compile
         module = _core.Operation._from_cmlir(self.graph._module.operation)
+        _debug_eval("miss: lowering graph")
         _core.lower(module, [builtin.passes.RemoveDeadValues()])
+        _debug_eval("miss: removing unused arguments")
         _remove_unused_arguments(self.graph)
 
         inputs: list[driver.Buffer] = []
@@ -434,8 +579,46 @@ class ComputeGraph:
                 raise RuntimeError("Missing buffers for graph input")
             inputs.append(buffers)
 
+        if DEBUG_LAZY_EVAL:
+            from collections import Counter
+
+            shape_counter: Counter[tuple[int, ...]] = Counter(
+                tuple(int(d) for d in b.shape) for b in inputs
+            )
+            scalar_inputs = shape_counter.get((), 0)
+            top_shapes = shape_counter.most_common(6)
+            _debug_eval(
+                "inputs: "
+                f"graph_inputs={len(inputs)} unique_tensors={len(self._input_refs)} "
+                f"add_attempts={self._debug_input_add_attempts} "
+                f"registered_tensors={self._debug_input_add_registered} "
+                f"scalar_inputs={scalar_inputs} "
+                f"constants={self._debug_constant_add_count} "
+                f"constant_buffers={self._debug_constant_add_buffers}"
+            )
+            _debug_eval(
+                f"inputs: add_by_reason={self._debug_input_add_by_reason} "
+                f"buffers_by_reason={self._debug_input_add_buffers_by_reason}"
+            )
+            _debug_eval(f"inputs: top_shapes={top_shapes}")
+
+        if DEBUG_LAZY_EVAL:
+            import time
+            _debug_eval(f"miss: compiling graph with {len(self.graph.inputs)} inputs")
+            start_comp = time.perf_counter()
+
         model = _session().load(self.graph)
+
+        if DEBUG_LAZY_EVAL:
+            comp_time = time.perf_counter() - start_comp
+            _debug_eval(f"miss: compilation finished in {comp_time:.2f}s")
+            start_exec = time.perf_counter()
+
         seed_val, *results = model(*inputs)
+
+        if DEBUG_LAZY_EVAL:
+            exec_time = time.perf_counter() - start_exec
+            _debug_eval(f"miss: execution finished in {exec_time:.2f}s")
 
         # Store results
         tensor_results: dict[int, list] = {}
@@ -489,6 +672,7 @@ class ComputeGraph:
 
         self._finalize_evaluation(seed_value=seed_val.item())
         self._cleanup_trace(targets)
+        _debug_eval("miss: evaluation complete")
         return (model, inputs) if return_model else None
 
     def _cleanup_trace(self, targets: list["Tensor"]) -> None:
@@ -562,8 +746,18 @@ class ComputeGraph:
         from ..common import pytree
         from ..tensor.api import Tensor
         from ..tensor.impl import TensorImpl
+        import time
 
+        topo_start = time.perf_counter()
         opnodes_topo = self._topo_sort_opnodes(targets)
+        topo_time = time.perf_counter() - topo_start
+        _debug_eval(
+            f"replay: topo-sort complete | opnodes={len(opnodes_topo)} | time={topo_time:.4f}s"
+        )
+
+        replay_start = time.perf_counter()
+        executed_ops = 0
+        skipped_ops = 0
 
         # Execute each OpNode
         for opnode in opnodes_topo:
@@ -573,6 +767,7 @@ class ComputeGraph:
                 for ref in opnode._refs
                 if ref is not None
             ):
+                skipped_ops += 1
                 continue
 
             # Ensure inputs have graph values
@@ -580,7 +775,9 @@ class ComputeGraph:
                 if isinstance(arg, TensorImpl):
                     if arg.graph_values_epoch != self.epoch or not arg._graph_values:
                         if arg.is_realized:
-                            self.add_input(Tensor(impl=arg))
+                            self.add_input(
+                                Tensor(impl=arg), reason="replay_realized_arg"
+                            )
 
             # Execute operation
             def to_tensor(x):
@@ -590,6 +787,7 @@ class ComputeGraph:
 
             with self.graph:
                 raw_result = opnode.op.execute(op_args, opnode.op_kwargs or {})
+            executed_ops += 1
 
             # Extract graph values
             if isinstance(raw_result, tuple) and len(raw_result) == 3:
@@ -618,6 +816,13 @@ class ComputeGraph:
                         if ref is not None and i < len(unzipped):
                             ref._graph_values = list(unzipped[i])
                             ref.graph_values_epoch = self.epoch
+
+        replay_time = time.perf_counter() - replay_start
+        _debug_eval(
+            "replay: execute complete "
+            f"| executed={executed_ops} skipped={skipped_ops} "
+            f"| time={replay_time:.4f}s"
+        )
 
     def _finalize_evaluation(self, seed_value: int) -> None:
         """Prepares the graph for the next epoch."""
