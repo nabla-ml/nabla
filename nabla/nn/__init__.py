@@ -10,8 +10,6 @@ from .modules import (
     Linear,
     Module,
     Sequential,
-    adapt_max_module_class,
-    adapt_max_nn_core,
 )
 
 __all__ = [
@@ -23,6 +21,4 @@ __all__ = [
     "Sequential",
     "ReLU",
     "GELU",
-    "adapt_max_module_class",
-    "adapt_max_nn_core",
 ]
