@@ -11,7 +11,7 @@ from typing import Any
 from ...core import Tensor, is_tensor, realize_all, tree_leaves, tree_map
 from ...ops.creation import zeros_like
 from ...ops.unary import sqrt
-from .functional import adamw_step
+from .functional import adamw_step, sgd_step
 
 
 def _unrealized_tensors(tree: Any) -> list[Tensor]:
@@ -116,6 +116,65 @@ class AdamW(Optimizer):
         if self._AUTO_REALIZE_UPDATED_STATE:
             to_realize.extend(_unrealized_tensors(self.m))
             to_realize.extend(_unrealized_tensors(self.v))
+        if to_realize:
+            realize_all(*to_realize)
+
+        return self.params
+
+
+class SGD(Optimizer):
+    """Stateful SGD optimizer with optional momentum and weight decay.
+
+    Usage::
+
+        optimizer = SGD(params, lr=0.01, momentum=0.9)
+        new_params = optimizer.step(grads)
+    """
+
+    def __init__(
+        self,
+        params: Any,
+        *,
+        lr: float,
+        momentum: float = 0.0,
+        weight_decay: float = 0.0,
+    ) -> None:
+        super().__init__(params)
+        self.lr = float(lr)
+        self.momentum = float(momentum)
+        self.weight_decay = float(weight_decay)
+
+        if momentum != 0.0:
+            self.bufs = tree_map(
+                lambda p: zeros_like(p) if is_tensor(p) else None, params
+            )
+        else:
+            self.bufs = tree_map(lambda p: None, params)
+
+    def step(self, grads: Any) -> Any:
+        def _apply(p: Any, g: Any, buf: Any):
+            if is_tensor(p) and is_tensor(g):
+                return sgd_step(
+                    p, g, buf,
+                    lr=self.lr,
+                    weight_decay=self.weight_decay,
+                    momentum=self.momentum,
+                )
+            return p, buf
+
+        pairs = tree_map(_apply, self.params, grads, self.bufs)
+
+        def _is_pair(x: Any) -> bool:
+            return isinstance(x, tuple) and len(x) == 2
+
+        self.params = tree_map(lambda t: t[0], pairs, is_leaf=_is_pair)
+        self.bufs = tree_map(lambda t: t[1], pairs, is_leaf=_is_pair)
+
+        to_realize: list[Tensor] = []
+        if self._AUTO_REALIZE_UPDATED_PARAMS:
+            to_realize.extend(_unrealized_tensors(self.params))
+        if self._AUTO_REALIZE_UPDATED_STATE and self.momentum != 0.0:
+            to_realize.extend(_unrealized_tensors(self.bufs))
         if to_realize:
             realize_all(*to_realize)
 

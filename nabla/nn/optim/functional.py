@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from ...core import Tensor
 from ...ops.unary import sqrt
 
@@ -18,7 +20,10 @@ def sgd_step(
     weight_decay: float = 0.0,
     momentum: float = 0.0,
 ) -> tuple[Tensor, Tensor | None]:
-    """Single-tensor SGD update."""
+    """Single-tensor SGD update.
+
+    Returns ``(new_param, new_momentum_buffer)``.
+    """
     update = grad
     if weight_decay != 0.0:
         update = update + param * weight_decay
@@ -32,6 +37,81 @@ def sgd_step(
 
     new_param = param - update * lr
     return new_param, momentum_buffer
+
+
+def sgd_update(
+    params: Any,
+    grads: Any,
+    state: dict[str, Any] | None = None,
+    *,
+    lr: float,
+    momentum: float = 0.0,
+    weight_decay: float = 0.0,
+) -> tuple[Any, dict[str, Any]]:
+    """Functional SGD update on pytrees (mirrors ``adamw_update``).
+
+    Parameters
+    ----------
+    params : pytree
+        Current model parameters.
+    grads : pytree
+        Gradients matching the *params* structure.
+    state : dict, optional
+        Optimizer state containing ``"momentum_buffers"`` and ``"step"``.
+        If *None* a fresh state is created.
+    lr, momentum, weight_decay : float
+        Standard SGD hyper-parameters.
+
+    Returns
+    -------
+    (new_params, new_state) : tuple
+        Updated parameters and optimizer state, with tensors realized
+        according to the global ``Optimizer`` execution policy.
+    """
+    from ...core import is_tensor, realize_all, tree_leaves, tree_map
+    from ...ops.creation import zeros_like
+
+    if state is None:
+        if momentum != 0.0:
+            bufs = tree_map(
+                lambda p: zeros_like(p) if is_tensor(p) else None, params
+            )
+        else:
+            bufs = tree_map(lambda p: None, params)
+        state = {"momentum_buffers": bufs, "step": 0}
+
+    step = int(state["step"]) + 1
+
+    def _apply(p: Any, g: Any, buf: Any) -> Any:
+        if is_tensor(p) and is_tensor(g):
+            new_p, new_buf = sgd_step(
+                p, g, buf,
+                lr=lr, weight_decay=weight_decay, momentum=momentum,
+            )
+            return new_p, new_buf
+        return p, buf
+
+    pairs = tree_map(_apply, params, grads, state["momentum_buffers"])
+
+    def _is_pair(x: Any) -> bool:
+        return isinstance(x, tuple) and len(x) == 2
+
+    new_params = tree_map(lambda t: t[0], pairs, is_leaf=_is_pair)
+    new_bufs = tree_map(lambda t: t[1], pairs, is_leaf=_is_pair)
+    new_state = {"momentum_buffers": new_bufs, "step": step}
+
+    # Honour the global auto-realization policy
+    from .optimizer import Optimizer
+
+    if Optimizer._AUTO_REALIZE_UPDATED_PARAMS:
+        to_realize = [
+            t for t in tree_leaves(new_params)
+            if is_tensor(t) and not t.real
+        ]
+        if to_realize:
+            realize_all(*to_realize)
+
+    return new_params, new_state
 
 
 def adamw_step(
