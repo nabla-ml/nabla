@@ -10,8 +10,8 @@
       "modules": [
         {
           "id": "core",
-          "title": "Core Reference",
-          "description": "The fundamental building blocks of Nabla: Tensors, Sharding, and Devices.",
+          "title": "Core",
+          "description": "The fundamental building blocks of Nabla.",
           "subsections": [
             {
               "id": "tensor",
@@ -27,6 +27,11 @@
                   "name": "realize_all",
                   "type": "function",
                   "path": "nabla.realize_all"
+                },
+                {
+                  "name": "is_tensor",
+                  "type": "function",
+                  "path": "nabla.is_tensor"
                 }
               ]
             },
@@ -45,9 +50,97 @@
                   "path": "nabla.P"
                 },
                 {
-                  "name": "shard",
+                  "name": "DimSpec",
+                  "type": "class",
+                  "path": "nabla.DimSpec"
+                },
+                {
+                  "name": "ShardingSpec",
+                  "type": "class",
+                  "path": "nabla.ShardingSpec"
+                },
+                {
+                  "name": "compute_local_shape",
                   "type": "function",
-                  "path": "nabla.shard"
+                  "path": "nabla.compute_local_shape"
+                },
+                {
+                  "name": "get_num_shards",
+                  "type": "function",
+                  "path": "nabla.get_num_shards"
+                }
+              ]
+            },
+            {
+              "id": "autograd",
+              "title": "Automatic Differentiation",
+              "items": [
+                {
+                  "name": "backward",
+                  "type": "function",
+                  "path": "nabla.backward"
+                }
+              ]
+            },
+            {
+              "id": "context",
+              "title": "Context & Defaults",
+              "items": [
+                {
+                  "name": "defaults",
+                  "type": "function",
+                  "path": "nabla.defaults"
+                },
+                {
+                  "name": "default_device",
+                  "type": "function",
+                  "path": "nabla.default_device"
+                },
+                {
+                  "name": "default_dtype",
+                  "type": "function",
+                  "path": "nabla.default_dtype"
+                }
+              ]
+            },
+            {
+              "id": "pytree",
+              "title": "PyTree Utilities",
+              "items": [
+                {
+                  "name": "tree_flatten",
+                  "type": "function",
+                  "path": "nabla.tree_flatten"
+                },
+                {
+                  "name": "tree_unflatten",
+                  "type": "function",
+                  "path": "nabla.tree_unflatten"
+                },
+                {
+                  "name": "tree_map",
+                  "type": "function",
+                  "path": "nabla.tree_map"
+                },
+                {
+                  "name": "tree_leaves",
+                  "type": "function",
+                  "path": "nabla.tree_leaves"
+                },
+                {
+                  "name": "tree_structure",
+                  "type": "function",
+                  "path": "nabla.tree_structure"
+                },
+                {
+                  "name": "PyTreeDef",
+                  "type": "class",
+                  "path": "nabla.PyTreeDef"
+                },
+                {
+                  "name": "register_pytree_node",
+                  "type": "function",
+                  "path": "nabla.register_pytree_node"
                 }
               ]
             }
@@ -56,88 +149,641 @@
         {
           "id": "transforms",
           "title": "Function Transformations",
-          "description": "JAX-inspired composable transformations for automatic differentiation, vectorization, and compilation.",
-          "items": [
+          "description": "Purely functional, composable transformations for differentiation, vectorization, compilation, and sharding.",
+          "subsections": [
             {
-              "name": "grad",
-              "type": "function",
-              "path": "nabla.grad"
+              "id": "differentiation",
+              "title": "Differentiation",
+              "items": [
+                {
+                  "name": "grad",
+                  "type": "function",
+                  "path": "nabla.grad"
+                },
+                {
+                  "name": "value_and_grad",
+                  "type": "function",
+                  "path": "nabla.value_and_grad"
+                },
+                {
+                  "name": "vjp",
+                  "type": "function",
+                  "path": "nabla.vjp"
+                },
+                {
+                  "name": "jvp",
+                  "type": "function",
+                  "path": "nabla.jvp"
+                },
+                {
+                  "name": "jacrev",
+                  "type": "function",
+                  "path": "nabla.jacrev"
+                },
+                {
+                  "name": "jacfwd",
+                  "type": "function",
+                  "path": "nabla.jacfwd"
+                }
+              ]
             },
             {
-              "name": "value_and_grad",
-              "type": "function",
-              "path": "nabla.value_and_grad"
+              "id": "vectorization",
+              "title": "Vectorization",
+              "items": [
+                {
+                  "name": "vmap",
+                  "type": "function",
+                  "path": "nabla.vmap"
+                }
+              ]
             },
             {
-              "name": "vmap",
-              "type": "function",
-              "path": "nabla.vmap"
+              "id": "compilation",
+              "title": "Compilation",
+              "items": [
+                {
+                  "name": "compile",
+                  "type": "function",
+                  "path": "nabla.compile"
+                },
+                {
+                  "name": "CompiledFunction",
+                  "type": "class",
+                  "path": "nabla.CompiledFunction"
+                }
+              ]
             },
             {
-              "name": "compile",
-              "type": "function",
-              "path": "nabla.compile"
-            },
-            {
-              "name": "jvp",
-              "type": "function",
-              "path": "nabla.jvp"
-            },
-            {
-              "name": "vjp",
-              "type": "function",
-              "path": "nabla.vjp"
+              "id": "distributed",
+              "title": "Distributed",
+              "items": [
+                {
+                  "name": "shard_map",
+                  "type": "function",
+                  "path": "nabla.shard_map"
+                }
+              ]
             }
           ]
         },
         {
           "id": "ops",
           "title": "Operations",
-          "description": "A comprehensive library of mathematical operations.",
+          "description": "A comprehensive library of tensor operations.",
           "subsections": [
             {
               "id": "creation",
               "title": "Creation",
               "items": [
-                { "name": "zeros", "type": "function", "path": "nabla.zeros" },
-                { "name": "ones", "type": "function", "path": "nabla.ones" },
-                { "name": "uniform", "type": "function", "path": "nabla.uniform" },
-                { "name": "normal", "type": "function", "path": "nabla.normal" },
-                { "name": "arange", "type": "function", "path": "nabla.arange" }
+                {
+                  "name": "zeros",
+                  "type": "function",
+                  "path": "nabla.zeros"
+                },
+                {
+                  "name": "ones",
+                  "type": "function",
+                  "path": "nabla.ones"
+                },
+                {
+                  "name": "full",
+                  "type": "function",
+                  "path": "nabla.full"
+                },
+                {
+                  "name": "constant",
+                  "type": "function",
+                  "path": "nabla.constant"
+                },
+                {
+                  "name": "arange",
+                  "type": "function",
+                  "path": "nabla.arange"
+                },
+                {
+                  "name": "uniform",
+                  "type": "function",
+                  "path": "nabla.uniform"
+                },
+                {
+                  "name": "normal",
+                  "type": "function",
+                  "path": "nabla.normal"
+                },
+                {
+                  "name": "gaussian",
+                  "type": "function",
+                  "path": "nabla.gaussian"
+                },
+                {
+                  "name": "hann_window",
+                  "type": "function",
+                  "path": "nabla.hann_window"
+                },
+                {
+                  "name": "triu",
+                  "type": "function",
+                  "path": "nabla.triu"
+                },
+                {
+                  "name": "tril",
+                  "type": "function",
+                  "path": "nabla.tril"
+                },
+                {
+                  "name": "zeros_like",
+                  "type": "function",
+                  "path": "nabla.zeros_like"
+                },
+                {
+                  "name": "ones_like",
+                  "type": "function",
+                  "path": "nabla.ones_like"
+                },
+                {
+                  "name": "full_like",
+                  "type": "function",
+                  "path": "nabla.full_like"
+                }
               ]
             },
             {
               "id": "binary",
               "title": "Binary",
               "items": [
-                { "name": "add", "type": "function", "path": "nabla.add" },
-                { "name": "sub", "type": "function", "path": "nabla.sub" },
-                { "name": "mul", "type": "function", "path": "nabla.mul" },
-                { "name": "div", "type": "function", "path": "nabla.div" },
-                { "name": "matmul", "type": "function", "path": "nabla.matmul" }
+                {
+                  "name": "add",
+                  "type": "function",
+                  "path": "nabla.add"
+                },
+                {
+                  "name": "sub",
+                  "type": "function",
+                  "path": "nabla.sub"
+                },
+                {
+                  "name": "mul",
+                  "type": "function",
+                  "path": "nabla.mul"
+                },
+                {
+                  "name": "div",
+                  "type": "function",
+                  "path": "nabla.div"
+                },
+                {
+                  "name": "matmul",
+                  "type": "function",
+                  "path": "nabla.matmul"
+                },
+                {
+                  "name": "mod",
+                  "type": "function",
+                  "path": "nabla.mod"
+                },
+                {
+                  "name": "pow",
+                  "type": "function",
+                  "path": "nabla.pow"
+                },
+                {
+                  "name": "outer",
+                  "type": "function",
+                  "path": "nabla.outer"
+                }
               ]
             },
-             {
+            {
               "id": "unary",
-              "title": "Unary",
+              "title": "Unary & Activations",
               "items": [
-                { "name": "abs", "type": "function", "path": "nabla.abs" },
-                { "name": "exp", "type": "function", "path": "nabla.exp" },
-                { "name": "log", "type": "function", "path": "nabla.log" },
-                { "name": "sqrt", "type": "function", "path": "nabla.sqrt" },
-                { "name": "relu", "type": "function", "path": "nabla.relu" },
-                { "name": "sigmoid", "type": "function", "path": "nabla.sigmoid" },
-                { "name": "tanh", "type": "function", "path": "nabla.tanh" }
+                {
+                  "name": "abs",
+                  "type": "function",
+                  "path": "nabla.abs"
+                },
+                {
+                  "name": "neg",
+                  "type": "function",
+                  "path": "nabla.neg"
+                },
+                {
+                  "name": "exp",
+                  "type": "function",
+                  "path": "nabla.exp"
+                },
+                {
+                  "name": "log",
+                  "type": "function",
+                  "path": "nabla.log"
+                },
+                {
+                  "name": "log1p",
+                  "type": "function",
+                  "path": "nabla.log1p"
+                },
+                {
+                  "name": "sqrt",
+                  "type": "function",
+                  "path": "nabla.sqrt"
+                },
+                {
+                  "name": "rsqrt",
+                  "type": "function",
+                  "path": "nabla.rsqrt"
+                },
+                {
+                  "name": "sin",
+                  "type": "function",
+                  "path": "nabla.sin"
+                },
+                {
+                  "name": "cos",
+                  "type": "function",
+                  "path": "nabla.cos"
+                },
+                {
+                  "name": "acos",
+                  "type": "function",
+                  "path": "nabla.acos"
+                },
+                {
+                  "name": "atanh",
+                  "type": "function",
+                  "path": "nabla.atanh"
+                },
+                {
+                  "name": "erf",
+                  "type": "function",
+                  "path": "nabla.erf"
+                },
+                {
+                  "name": "floor",
+                  "type": "function",
+                  "path": "nabla.floor"
+                },
+                {
+                  "name": "round",
+                  "type": "function",
+                  "path": "nabla.round"
+                },
+                {
+                  "name": "trunc",
+                  "type": "function",
+                  "path": "nabla.trunc"
+                },
+                {
+                  "name": "cast",
+                  "type": "function",
+                  "path": "nabla.cast"
+                },
+                {
+                  "name": "is_inf",
+                  "type": "function",
+                  "path": "nabla.is_inf"
+                },
+                {
+                  "name": "is_nan",
+                  "type": "function",
+                  "path": "nabla.is_nan"
+                },
+                {
+                  "name": "relu",
+                  "type": "function",
+                  "path": "nabla.relu"
+                },
+                {
+                  "name": "sigmoid",
+                  "type": "function",
+                  "path": "nabla.sigmoid"
+                },
+                {
+                  "name": "tanh",
+                  "type": "function",
+                  "path": "nabla.tanh"
+                },
+                {
+                  "name": "gelu",
+                  "type": "function",
+                  "path": "nabla.gelu"
+                },
+                {
+                  "name": "silu",
+                  "type": "function",
+                  "path": "nabla.silu"
+                },
+                {
+                  "name": "softmax",
+                  "type": "function",
+                  "path": "nabla.softmax"
+                },
+                {
+                  "name": "logsoftmax",
+                  "type": "function",
+                  "path": "nabla.logsoftmax"
+                }
+              ]
+            },
+            {
+              "id": "reduction",
+              "title": "Reduction",
+              "items": [
+                {
+                  "name": "reduce_sum",
+                  "type": "function",
+                  "path": "nabla.reduce_sum"
+                },
+                {
+                  "name": "reduce_max",
+                  "type": "function",
+                  "path": "nabla.reduce_max"
+                },
+                {
+                  "name": "reduce_min",
+                  "type": "function",
+                  "path": "nabla.reduce_min"
+                },
+                {
+                  "name": "mean",
+                  "type": "function",
+                  "path": "nabla.mean"
+                },
+                {
+                  "name": "argmax",
+                  "type": "function",
+                  "path": "nabla.argmax"
+                },
+                {
+                  "name": "argmin",
+                  "type": "function",
+                  "path": "nabla.argmin"
+                },
+                {
+                  "name": "cumsum",
+                  "type": "function",
+                  "path": "nabla.cumsum"
+                }
+              ]
+            },
+            {
+              "id": "comparison",
+              "title": "Comparison & Logical",
+              "items": [
+                {
+                  "name": "equal",
+                  "type": "function",
+                  "path": "nabla.equal"
+                },
+                {
+                  "name": "not_equal",
+                  "type": "function",
+                  "path": "nabla.not_equal"
+                },
+                {
+                  "name": "greater",
+                  "type": "function",
+                  "path": "nabla.greater"
+                },
+                {
+                  "name": "greater_equal",
+                  "type": "function",
+                  "path": "nabla.greater_equal"
+                },
+                {
+                  "name": "less",
+                  "type": "function",
+                  "path": "nabla.less"
+                },
+                {
+                  "name": "less_equal",
+                  "type": "function",
+                  "path": "nabla.less_equal"
+                },
+                {
+                  "name": "logical_and",
+                  "type": "function",
+                  "path": "nabla.logical_and"
+                },
+                {
+                  "name": "logical_or",
+                  "type": "function",
+                  "path": "nabla.logical_or"
+                },
+                {
+                  "name": "logical_xor",
+                  "type": "function",
+                  "path": "nabla.logical_xor"
+                },
+                {
+                  "name": "logical_not",
+                  "type": "function",
+                  "path": "nabla.logical_not"
+                }
+              ]
+            },
+            {
+              "id": "control_flow",
+              "title": "Control Flow",
+              "items": [
+                {
+                  "name": "where",
+                  "type": "function",
+                  "path": "nabla.where"
+                },
+                {
+                  "name": "cond",
+                  "type": "function",
+                  "path": "nabla.cond"
+                },
+                {
+                  "name": "while_loop",
+                  "type": "function",
+                  "path": "nabla.while_loop"
+                },
+                {
+                  "name": "scan",
+                  "type": "function",
+                  "path": "nabla.scan"
+                }
+              ]
+            },
+            {
+              "id": "multi_output",
+              "title": "Multi-Output",
+              "items": [
+                {
+                  "name": "split",
+                  "type": "function",
+                  "path": "nabla.split"
+                },
+                {
+                  "name": "chunk",
+                  "type": "function",
+                  "path": "nabla.chunk"
+                },
+                {
+                  "name": "unbind",
+                  "type": "function",
+                  "path": "nabla.unbind"
+                },
+                {
+                  "name": "minmax",
+                  "type": "function",
+                  "path": "nabla.minmax"
+                }
+              ]
+            },
+            {
+              "id": "view",
+              "title": "View & Shape",
+              "items": [
+                {
+                  "name": "reshape",
+                  "type": "function",
+                  "path": "nabla.reshape"
+                },
+                {
+                  "name": "transpose",
+                  "type": "function",
+                  "path": "nabla.transpose"
+                },
+                {
+                  "name": "permute",
+                  "type": "function",
+                  "path": "nabla.permute"
+                },
+                {
+                  "name": "unsqueeze",
+                  "type": "function",
+                  "path": "nabla.unsqueeze"
+                },
+                {
+                  "name": "squeeze",
+                  "type": "function",
+                  "path": "nabla.squeeze"
+                },
+                {
+                  "name": "flatten",
+                  "type": "function",
+                  "path": "nabla.flatten"
+                },
+                {
+                  "name": "broadcast_to",
+                  "type": "function",
+                  "path": "nabla.broadcast_to"
+                },
+                {
+                  "name": "concatenate",
+                  "type": "function",
+                  "path": "nabla.concatenate"
+                },
+                {
+                  "name": "stack",
+                  "type": "function",
+                  "path": "nabla.stack"
+                },
+                {
+                  "name": "gather",
+                  "type": "function",
+                  "path": "nabla.gather"
+                },
+                {
+                  "name": "scatter",
+                  "type": "function",
+                  "path": "nabla.scatter"
+                },
+                {
+                  "name": "slice_tensor",
+                  "type": "function",
+                  "path": "nabla.slice_tensor"
+                },
+                {
+                  "name": "slice_update",
+                  "type": "function",
+                  "path": "nabla.slice_update"
+                },
+                {
+                  "name": "moveaxis",
+                  "type": "function",
+                  "path": "nabla.moveaxis"
+                },
+                {
+                  "name": "swap_axes",
+                  "type": "function",
+                  "path": "nabla.swap_axes"
+                },
+                {
+                  "name": "flip",
+                  "type": "function",
+                  "path": "nabla.flip"
+                },
+                {
+                  "name": "pad",
+                  "type": "function",
+                  "path": "nabla.pad"
+                },
+                {
+                  "name": "rebind",
+                  "type": "function",
+                  "path": "nabla.rebind"
+                }
               ]
             },
             {
               "id": "communication",
               "title": "Distributed Communication",
               "items": [
-                { "name": "all_reduce", "type": "function", "path": "nabla.all_reduce" },
-                { "name": "all_gather", "type": "function", "path": "nabla.all_gather" },
-                { "name": "ppermute", "type": "function", "path": "nabla.ppermute" },
-                { "name": "reshard", "type": "function", "path": "nabla.reshard" }
+                {
+                  "name": "shard",
+                  "type": "function",
+                  "path": "nabla.shard"
+                },
+                {
+                  "name": "reshard",
+                  "type": "function",
+                  "path": "nabla.reshard"
+                },
+                {
+                  "name": "all_reduce",
+                  "type": "function",
+                  "path": "nabla.all_reduce"
+                },
+                {
+                  "name": "all_gather",
+                  "type": "function",
+                  "path": "nabla.all_gather"
+                },
+                {
+                  "name": "all_to_all",
+                  "type": "function",
+                  "path": "nabla.all_to_all"
+                },
+                {
+                  "name": "reduce_scatter",
+                  "type": "function",
+                  "path": "nabla.reduce_scatter"
+                },
+                {
+                  "name": "distributed_broadcast",
+                  "type": "function",
+                  "path": "nabla.distributed_broadcast"
+                },
+                {
+                  "name": "ppermute",
+                  "type": "function",
+                  "path": "nabla.ppermute"
+                },
+                {
+                  "name": "to_device",
+                  "type": "function",
+                  "path": "nabla.to_device"
+                },
+                {
+                  "name": "transfer_to",
+                  "type": "function",
+                  "path": "nabla.transfer_to"
+                }
               ]
             }
           ]
@@ -145,11 +791,199 @@
         {
           "id": "nn",
           "title": "Neural Networks (nabla.nn)",
-          "description": "High-level components for building models.",
+          "description": "High-level components for building and training models.",
+          "subsections": [
+            {
+              "id": "nn_modules",
+              "title": "Modules",
+              "items": [
+                {
+                  "name": "Module",
+                  "type": "class",
+                  "path": "nabla.nn.Module",
+                  "show_methods": true
+                },
+                {
+                  "name": "Linear",
+                  "type": "class",
+                  "path": "nabla.nn.Linear",
+                  "show_methods": true
+                },
+                {
+                  "name": "LayerNorm",
+                  "type": "class",
+                  "path": "nabla.nn.LayerNorm",
+                  "show_methods": true
+                },
+                {
+                  "name": "Dropout",
+                  "type": "class",
+                  "path": "nabla.nn.Dropout"
+                },
+                {
+                  "name": "Embedding",
+                  "type": "class",
+                  "path": "nabla.nn.Embedding",
+                  "show_methods": true
+                },
+                {
+                  "name": "MultiHeadAttention",
+                  "type": "class",
+                  "path": "nabla.nn.MultiHeadAttention",
+                  "show_methods": true
+                },
+                {
+                  "name": "TransformerEncoderLayer",
+                  "type": "class",
+                  "path": "nabla.nn.TransformerEncoderLayer",
+                  "show_methods": true
+                },
+                {
+                  "name": "TransformerDecoderLayer",
+                  "type": "class",
+                  "path": "nabla.nn.TransformerDecoderLayer",
+                  "show_methods": true
+                },
+                {
+                  "name": "Sequential",
+                  "type": "class",
+                  "path": "nabla.nn.Sequential"
+                }
+              ]
+            },
+            {
+              "id": "nn_activations",
+              "title": "Activation Modules",
+              "items": [
+                {
+                  "name": "ReLU",
+                  "type": "class",
+                  "path": "nabla.nn.ReLU"
+                },
+                {
+                  "name": "GELU",
+                  "type": "class",
+                  "path": "nabla.nn.GELU"
+                },
+                {
+                  "name": "Sigmoid",
+                  "type": "class",
+                  "path": "nabla.nn.Sigmoid"
+                },
+                {
+                  "name": "Tanh",
+                  "type": "class",
+                  "path": "nabla.nn.Tanh"
+                },
+                {
+                  "name": "SiLU",
+                  "type": "class",
+                  "path": "nabla.nn.SiLU"
+                },
+                {
+                  "name": "Softmax",
+                  "type": "class",
+                  "path": "nabla.nn.Softmax"
+                }
+              ]
+            },
+            {
+              "id": "nn_functional",
+              "title": "Functional API (nabla.nn.functional)",
+              "items": [
+                {
+                  "name": "linear",
+                  "type": "function",
+                  "path": "nabla.nn.functional.linear"
+                },
+                {
+                  "name": "layer_norm",
+                  "type": "function",
+                  "path": "nabla.nn.functional.layer_norm"
+                },
+                {
+                  "name": "dropout",
+                  "type": "function",
+                  "path": "nabla.nn.functional.dropout"
+                },
+                {
+                  "name": "embedding",
+                  "type": "function",
+                  "path": "nabla.nn.functional.embedding"
+                },
+                {
+                  "name": "scaled_dot_product_attention",
+                  "type": "function",
+                  "path": "nabla.nn.functional.scaled_dot_product_attention"
+                },
+                {
+                  "name": "mse_loss",
+                  "type": "function",
+                  "path": "nabla.nn.functional.mse_loss"
+                },
+                {
+                  "name": "cross_entropy_loss",
+                  "type": "function",
+                  "path": "nabla.nn.functional.cross_entropy_loss"
+                },
+                {
+                  "name": "xavier_normal",
+                  "type": "function",
+                  "path": "nabla.nn.functional.xavier_normal"
+                },
+                {
+                  "name": "he_normal",
+                  "type": "function",
+                  "path": "nabla.nn.functional.he_normal"
+                }
+              ]
+            },
+            {
+              "id": "nn_optim",
+              "title": "Optimizers (nabla.nn.optim)",
+              "items": [
+                {
+                  "name": "Optimizer",
+                  "type": "class",
+                  "path": "nabla.nn.optim.Optimizer",
+                  "show_methods": true
+                },
+                {
+                  "name": "SGD",
+                  "type": "class",
+                  "path": "nabla.nn.optim.SGD",
+                  "show_methods": true
+                },
+                {
+                  "name": "AdamW",
+                  "type": "class",
+                  "path": "nabla.nn.optim.AdamW",
+                  "show_methods": true
+                },
+                {
+                  "name": "sgd_step",
+                  "type": "function",
+                  "path": "nabla.nn.optim.sgd_step"
+                },
+                {
+                  "name": "adamw_step",
+                  "type": "function",
+                  "path": "nabla.nn.optim.adamw_step"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "utilities",
+          "title": "Utilities",
+          "description": "Custom kernel integration and other utility functions.",
           "items": [
-            { "name": "Module", "type": "class", "path": "nabla.nn.Module", "show_methods": true },
-            { "name": "Linear", "type": "class", "path": "nabla.nn.Linear", "show_methods": true },
-            { "name": "Sequential", "type": "class", "path": "nabla.nn.Sequential" }
+            {
+              "name": "call_custom_kernel",
+              "type": "function",
+              "path": "nabla.call_custom_kernel"
+            }
           ]
         }
       ]

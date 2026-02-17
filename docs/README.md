@@ -1,122 +1,65 @@
-# Documentation Generation Workflow
+# Nabla Documentation
 
-This document explains the automated process for generating the Nabla API reference documentation. The system is designed to convert Python docstrings from the `nabla` source code into a structured, navigable set of Markdown files, which can then be used by static site generators like Sphinx or MkDocs.
+This directory contains the source files for the [Nabla API documentation](https://www.nablaml.com).
 
-The core principle is to separate the **structure** of the documentation (what goes where) from the **content** (the docstrings themselves).
+## Building Locally
 
-## Key Components
+### Prerequisites
 
-The generation process relies on two key files:
+Make sure you have the development dependencies installed:
 
-1.  **`docs/structure.json`**: The blueprint. This file is the single source of truth for the *hierarchy* of the documentation. It defines every page, section, and API item that should be included, and in what order.
-2.  **`docs/scripts/build_from_json.py`**: The engine. This Python script reads the `structure.json` blueprint, introspects the live `nabla` library code to pull out docstrings, formats everything into Markdown, and writes the final `.md` files to the `docs/api/` directory.
+```bash
+pip install -r requirements-dev.txt
+pip install -e .
+```
 
----
+### Build
+
+From the **project root**:
+
+```bash
+make docs
+```
+
+This runs `docs/build.sh`, which:
+1. Cleans any previous build
+2. Generates API reference pages from `docs/structure.json`
+3. Builds HTML via Sphinx
+4. Generates a sitemap and fixes HTML quirks
+
+### Preview
+
+Serve the built docs locally:
+
+```bash
+make docs-serve
+```
+
+Then open [http://localhost:8000](http://localhost:8000).
 
 ## How It Works
 
-The `build_from_json.py` script executes the following steps:
+| File | Purpose |
+|---|---|
+| `structure.json` | Defines every API item (functions, classes, modules) to document |
+| `scripts/build_from_json.py` | Reads `structure.json` → generates Markdown files in `api/` |
+| `conf.py` | Sphinx configuration (theme, extensions, mocking) |
+| `index.md` | Documentation landing page |
+| `build.sh` | End-to-end build script |
 
-1.  **Parse `structure.json`**: The script starts by reading the entire JSON file to understand the desired documentation structure.
+## Adding New API Items
 
-2.  **Traverse the Hierarchy**: It iterates through the defined `modules`. The script is designed to handle two types of modules:
-    *   **Directory Modules** (e.g., `ops`, `nn`): If a module contains a `"subsections"` key, the script creates a corresponding directory (e.g., `docs/api/ops/`) and an `index.md` file for that directory's table of contents. It then generates a separate Markdown file for each subsection.
-    *   **Single-Page Modules** (e.g., `tensor`): If a module does not have subsections and instead has an `"items"` key directly, the script generates a single top-level Markdown file for it (e.g., `docs/api/tensor.md`).
+To document a new function or class:
 
-3.  **Dynamic Introspection**: For each API item listed in the JSON (like `nabla.ops.binary.add`), the script uses Python's `importlib` and `inspect` modules to:
-    *   Dynamically import the function or class from the live `nabla` library.
-    *   Extract its call signature (e.g., `(x: Tensor, y: Tensor) -> Tensor`).
-    *   Extract its raw, unprocessed docstring.
+1. **Edit `structure.json`** — add an entry to the appropriate section:
+   ```json
+   { "name": "my_function", "type": "function", "path": "nabla.my_function" }
+   ```
+   For classes with methods to show:
+   ```json
+   { "name": "MyClass", "type": "class", "path": "nabla.MyClass", "show_methods": true }
+   ```
 
-4.  **Hybrid Docstring Parsing**: The script uses a two-pronged approach to parse the docstring content:
-    *   **Standard Sections**: For sections like `Parameters`, `Returns`, and general descriptions, it uses the `docstring-parser` library.
-    *   **Examples Section**: To ensure doctests (`>>> ...`) and their output are rendered correctly and in order, the script uses a **robust manual parser**. This parser specifically looks for the `Examples` header and its underline (`--------`), then intelligently processes the following lines to create perfectly formatted Markdown code blocks. This was implemented to fix bugs where the output appeared before the code.
+2. **Rebuild** — `make docs`
 
-5.  **Markdown Generation**: The parsed signature and docstring data are formatted into clean Markdown, including headers, code blocks with Python syntax highlighting, bullet points for parameters, and horizontal rules to separate items.
-
-6.  **File Output**: The final Markdown content is written to the appropriate file within the `docs/api/` directory. The script will create any necessary directories and files, overwriting old ones to ensure the docs are always up-to-date.
-
----
-
-## How to Run the Generator
-
-1.  Make sure you are in your project's virtual environment with all dependencies installed.
-2.  From the **project root directory**, run the script:
-
-    ```bash
-    python docs/scripts/build_from_json.py
-    ```
-
-3.  The script will print its progress to the console and report any errors, such as a function path not being found. The generated files will appear in `docs/api/`.
-
----
-
-## How to Adapt and Maintain
-
-### Adding a New Function or Class
-
-This is the most common task.
-
-1.  **Find the right location** in the `docs/structure.json` file. For example, if you've added a new binary operation, find the `"ops_binary"` subsection.
-2.  **Add a new JSON object** to the `"items"` array for your function. Make sure the `"path"` points to the correct, full import path of the object.
-
-    ```json
-    // Inside the "items" array for "ops_binary"
-    {
-      "name": "your_new_function",
-      "type": "function",
-      "path": "nabla.ops.binary.your_new_function"
-    }
-    ```
-
-3.  **Re-run the generator script.** Your new function will now appear in the documentation.
-
-### Reorganizing the Documentation
-
-To change the order of items, create new sections, or move a function from one page to another, **you only need to edit `docs/structure.json`**. The script will automatically generate the new file structure on its next run.
-
----
-
-### Docstring Formatting Conventions
-
-The parser is specifically tuned for **NumPy-style docstrings**. To ensure your docstrings are parsed correctly, please follow this format, especially for the `Examples` section.
-
-```python
-"""A brief one-line summary of the function.
-
-A more detailed multi-line description of what the function does, its
-features, and any important notes for the user.
-
-Parameters
-----------
-arg1 : type
-    Description of the first argument.
-arg2 : type, optional
-    Description of the second argument. Default is `None`.
-
-Returns
--------
-return_type
-    Description of the returned value.
-
-Examples
---------
-A brief description of the first example.
-
->>> import nabla as nb
->>> x = nb.tensor([1, 2, 3])
->>> your_function(x)
-Tensor([2, 4, 6], dtype=int32)
-
-Another example, perhaps showing a different use case.
-
->>> y = nb.tensor([10, 20, 30])
->>> your_function(x, arg2=y)
-Tensor([11, 22, 33], dtype=int32)
-"""
-```
-
-**Key Points:**
-- The section headers (`Parameters`, `Returns`, `Examples`) are followed by an underline of hyphens (`---`).
-- Each example code block starts with `>>>`. The output should follow directly on the next line(s).
-- Blank lines are used to separate examples.
+The build script auto-generates the Markdown pages from `structure.json`, so you don't need to manually create page files.

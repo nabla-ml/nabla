@@ -1,11 +1,12 @@
 # Function Transformations
 
-Tools for automatic differentiation, vectorization, and compilation.
+Purely functional, composable transformations for differentiation, vectorization, compilation, and sharding.
 
 ```{toctree}
 :maxdepth: 1
 
-autodiff/index
+differentiation/index
 vectorization/index
 compilation/index
+distributed/index
 ```
