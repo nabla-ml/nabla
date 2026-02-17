@@ -20,4 +20,4 @@ black
 jax
 
 # For performance comparison in benchmarks
-# torch
+torch
