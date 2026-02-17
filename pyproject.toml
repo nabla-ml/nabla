@@ -105,4 +105,7 @@ python_classes = "Test*"
 python_functions = "test_*"
 markers = [
     "benchmark: marks tests as performance benchmarks (deselect with '-m \"not benchmark\"')",
+    "gpu: marks tests as requiring GPU hardware",
+    "slow: marks tests as slow-running (>10s)",
+    "mojo: marks tests as requiring Mojo SDK",
 ]

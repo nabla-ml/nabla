@@ -11,7 +11,7 @@ from .utils import backward_on_trace
 from ..graph.tracing import trace
 from ..common import pytree
 from ..tensor.api import Tensor
-from ...transforms.utils import select_argnums
+
 
 if TYPE_CHECKING:
     from .utils import GradsMap
@@ -67,6 +67,7 @@ def grad(
 
         # Unflatten and select by argnums
         grads_struct = pytree.tree_unflatten(pytree.tree_structure(args), grad_leaves)
+        from ...transforms.utils import select_argnums
         return select_argnums(grads_struct, argnums)
 
     return wrapper
@@ -124,6 +125,7 @@ def value_and_grad(
                         GRAPH.evaluate(all_targets[0])
 
         grads_struct = pytree.tree_unflatten(pytree.tree_structure(args), grad_leaves)
+        from ...transforms.utils import select_argnums
         return output, select_argnums(grads_struct, argnums)
 
     return wrapper

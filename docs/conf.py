@@ -37,9 +37,9 @@ for mod_name in MOCK_MODULES:
 # SECTION 2: PROJECT INFORMATION
 # =============================================================================
 project = "Nabla"
-project_copyright = "2025, Nabla ML"
+project_copyright = "2026, Nabla ML"
 author = "Nabla ML"
-release = "0.1.0"
+release = "26.1.0"
 
 # =============================================================================
 # SECTION 3: GENERAL SPHINX CONFIGURATION
