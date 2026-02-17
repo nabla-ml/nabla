@@ -4,9 +4,18 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'docs/**'
+      - 'nabla/**'
+      - 'requirements-dev.txt'
+      - '.github/workflows/docs.yml'
   pull_request:
     branches:
       - main
+    paths:
+      - 'docs/**'
+      - 'nabla/**'
+      - 'requirements-dev.txt'
   workflow_dispatch:
 
 permissions:
