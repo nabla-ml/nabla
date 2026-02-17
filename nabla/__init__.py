@@ -3,6 +3,21 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
+from importlib import metadata
+
+
+def _require_modular_nightly() -> None:
+    modular_version = metadata.version("modular")
+    if ".dev" not in modular_version:
+        raise RuntimeError(
+            "Nabla requires Modular nightly builds. Install with: "
+            "pip install --pre modular --extra-index-url "
+            "https://whl.modular.com/nightly/simple/"
+        )
+
+
+_require_modular_nightly()
+
 from max.driver import CPU, Accelerator
 from max.dtype import DType
 

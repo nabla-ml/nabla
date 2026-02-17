@@ -14,20 +14,11 @@ tutorials/index
 
 ## Installation
 
-```bash
-pip install nabla-ml
-```
-
-Latest Modular nightly (recommended):
+Nabla requires **Modular nightly**.
 
 ```bash
-pip install --pre modular --extra-index-url https://whl.modular.com/nightly/simple/
-pip install nabla-ml
-```
-
-One-liner equivalent:
-
-```bash
+python -m venv .venv
+source .venv/bin/activate
 pip install --pre --extra-index-url https://whl.modular.com/nightly/simple/ modular nabla-ml
 ```
 

@@ -27,7 +27,7 @@ keywords = ["deep learning", "machine learning", "jax", "autodiff", "nabla", "mo
 
 dependencies = [
     "numpy>=2.0.0",
-    "modular>=26.1.0",
+    "modular>=26.2.0.dev2026021705",
 ]
 
 [project.urls]
