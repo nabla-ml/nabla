@@ -194,12 +194,11 @@ class TestAllToAllOp:
         assert_allclose(result, jax_x)
 
         spec = result.sharding
-        assert (
-            spec.dim_specs[0].axes == []
-        ), "Axis 0 should be concatenated (replicated-ish)"
+        assert spec.dim_specs[0].axes == [], (
+            "Axis 0 should be concatenated (replicated-ish)"
+        )
 
         if spec:
-
             pass
         else:
             pass

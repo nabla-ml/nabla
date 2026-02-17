@@ -20,9 +20,7 @@ from .conftest import make_rng
 
 
 class TestFunctionalLinear:
-    @pytest.mark.parametrize(
-        "batch,in_f,out_f", [(5, 4, 3), (1, 8, 2), (16, 3, 7)]
-    )
+    @pytest.mark.parametrize("batch,in_f,out_f", [(5, 4, 3), (1, 8, 2), (16, 3, 7)])
     def test_linear_forward_vs_jax(self, batch, in_f, out_f):
         jax = pytest.importorskip("jax")
         jnp = pytest.importorskip("jax.numpy")

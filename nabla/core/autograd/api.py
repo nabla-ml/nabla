@@ -41,7 +41,9 @@ def grad(
         else:
             raise TypeError(f"grad: output must be a Tensor, got {type(output)}")
 
-        grads_map: "GradsMap" = backward_on_trace(t, cotangent, create_graph=create_graph)
+        grads_map: "GradsMap" = backward_on_trace(
+            t, cotangent, create_graph=create_graph
+        )
         input_leaves = pytree.tree_leaves(args)
         grad_leaves: list[Tensor | None] = []
         for inp in input_leaves:
@@ -68,6 +70,7 @@ def grad(
         # Unflatten and select by argnums
         grads_struct = pytree.tree_unflatten(pytree.tree_structure(args), grad_leaves)
         from ...transforms.utils import select_argnums
+
         return select_argnums(grads_struct, argnums)
 
     return wrapper
@@ -93,7 +96,9 @@ def value_and_grad(
         else:
             raise TypeError(f"grad: output must be a Tensor, got {type(output)}")
 
-        grads_map: "GradsMap" = backward_on_trace(t, cotangent, create_graph=create_graph)
+        grads_map: "GradsMap" = backward_on_trace(
+            t, cotangent, create_graph=create_graph
+        )
 
         input_leaves = pytree.tree_leaves(args)
         grad_leaves: list[Tensor | None] = []
@@ -126,6 +131,7 @@ def value_and_grad(
 
         grads_struct = pytree.tree_unflatten(pytree.tree_structure(args), grad_leaves)
         from ...transforms.utils import select_argnums
+
         return output, select_argnums(grads_struct, argnums)
 
     return wrapper

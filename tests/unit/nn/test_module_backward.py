@@ -26,8 +26,12 @@ class TestGradWithModule:
         """nb.grad(loss_fn)(model) returns a Module-shaped gradient tree."""
         rng = make_rng(101)
         model = nb.nn.Linear(4, 2)
-        model.weight = nb_from_np(rng.normal(size=(4, 2)).astype(np.float32), requires_grad=True)
-        model.bias = nb_from_np(rng.normal(size=(1, 2)).astype(np.float32), requires_grad=True)
+        model.weight = nb_from_np(
+            rng.normal(size=(4, 2)).astype(np.float32), requires_grad=True
+        )
+        model.bias = nb_from_np(
+            rng.normal(size=(1, 2)).astype(np.float32), requires_grad=True
+        )
 
         x = nb.Tensor.from_dlpack(rng.normal(size=(12, 4)).astype(np.float32))
         y = nb.Tensor.from_dlpack(rng.normal(size=(12, 2)).astype(np.float32))

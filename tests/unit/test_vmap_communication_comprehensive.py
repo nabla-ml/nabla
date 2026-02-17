@@ -24,7 +24,6 @@ from .common import (
 
 
 class TestVmapCommunicationComprehensive:
-
     def test_vmap_all_to_all_negative_axes(self):
         """Test all_to_all with negative axis indices inside vmap."""
         batch, h1, h2 = 2, 8, 8

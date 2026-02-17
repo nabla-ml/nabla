@@ -82,7 +82,9 @@ class _CachedModel:
     # Fast path metadata for cache hits
     tensor_indices: list[int]  # Which positions in flat args are tensors
     input_treedef: "PyTreeDef"  # Cached input tree structure
-    input_plan: list[tuple[str, Any]]  # [("arg", arg_buf_pos) | ("captured", driver.Buffer)]
+    input_plan: list[
+        tuple[str, Any]
+    ]  # [("arg", arg_buf_pos) | ("captured", driver.Buffer)]
 
 
 class CompiledFunction(Generic[T]):

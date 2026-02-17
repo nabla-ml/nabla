@@ -15,7 +15,6 @@ from nabla.ops import control_flow
 
 class TestControlFlow(unittest.TestCase):
     def setUp(self):
-
         pass
 
     def test_where(self):
@@ -62,7 +61,6 @@ class TestControlFlow(unittest.TestCase):
         self.assertEqual(res[1].to_numpy(), 6.0)
 
     def test_while_loop_basic(self):
-
         def cond_fn(i):
             limit = tensor.Tensor.constant(10, dtype=DType.int32)
             return ops.comparison.less(i, limit)
@@ -76,9 +74,7 @@ class TestControlFlow(unittest.TestCase):
         self.assertEqual(res.to_numpy(), 10)
 
     def test_scan_cumsum(self):
-
         def f(carry, x):
-
             new_carry = carry + x
             return new_carry, new_carry
 
@@ -93,7 +89,6 @@ class TestControlFlow(unittest.TestCase):
         )
 
     def test_scan_nested(self):
-
         pass
 
 

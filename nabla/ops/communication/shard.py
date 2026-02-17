@@ -145,7 +145,9 @@ class ShardOp(Operation):
 
         return shapes, dtypes, devices
 
-    def execute(self, args: OpArgs, kwargs: OpKwargs) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
+    def execute(
+        self, args: OpArgs, kwargs: OpKwargs
+    ) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
         """Physical execution for ShardOp.
 
         Derives all physical metadata from args/kwargs and slices the input.
@@ -163,7 +165,6 @@ class ShardOp(Operation):
         from max import graph as g
 
         with GRAPH.graph:
-
             x = args[0]
 
             # Handle keyword arguments for mesh/dim_specs

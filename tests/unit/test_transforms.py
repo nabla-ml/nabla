@@ -332,7 +332,6 @@ class TestJVPBasic:
 
 
 class TestVJPJVPConsistency:
-
     def test_vjp_jvp_agree_scalar(self):
         """For scalar f, vjp and jvp should produce consistent results."""
         cleanup_caches()

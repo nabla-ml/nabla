@@ -122,9 +122,15 @@ class TestScaledDotProductAttention:
     def test_attention_shape(self):
         rng = make_rng(20)
         batch, heads, seq_q, seq_k, d_k, d_v = 2, 4, 6, 8, 16, 16
-        q = nb.Tensor.from_dlpack(rng.normal(size=(batch, heads, seq_q, d_k)).astype(np.float32))
-        k = nb.Tensor.from_dlpack(rng.normal(size=(batch, heads, seq_k, d_k)).astype(np.float32))
-        v = nb.Tensor.from_dlpack(rng.normal(size=(batch, heads, seq_k, d_v)).astype(np.float32))
+        q = nb.Tensor.from_dlpack(
+            rng.normal(size=(batch, heads, seq_q, d_k)).astype(np.float32)
+        )
+        k = nb.Tensor.from_dlpack(
+            rng.normal(size=(batch, heads, seq_k, d_k)).astype(np.float32)
+        )
+        v = nb.Tensor.from_dlpack(
+            rng.normal(size=(batch, heads, seq_k, d_v)).astype(np.float32)
+        )
 
         out = nb.nn.functional.scaled_dot_product_attention(q, k, v, training=False)
         assert tuple(int(d) for d in out.shape) == (batch, heads, seq_q, d_v)

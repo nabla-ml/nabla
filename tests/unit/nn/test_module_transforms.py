@@ -108,7 +108,9 @@ class TestValueAndGradTraining:
 
         current_model, current_opt = model, opt
         for _ in range(8):
-            loss, grads = nb.value_and_grad(loss_fn, argnums=0, realize=False)(current_model)
+            loss, grads = nb.value_and_grad(loss_fn, argnums=0, realize=False)(
+                current_model
+            )
             current_model, current_opt = nb.nn.optim.adamw_update(
                 current_model, grads, current_opt, lr=1e-2, weight_decay=0.0
             )

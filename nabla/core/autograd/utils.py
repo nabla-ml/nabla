@@ -105,7 +105,9 @@ class BackwardEngine:
     cotangent_map: CotangentMap
     _original_flags: dict[int, bool]
 
-    def __init__(self, trace: "Trace", cotangents: Any, create_graph: bool = False) -> None:
+    def __init__(
+        self, trace: "Trace", cotangents: Any, create_graph: bool = False
+    ) -> None:
         from ..common import pytree
 
         self.trace = trace

@@ -20,7 +20,6 @@ class TestCommunicationCostModel(unittest.TestCase):
     """Tests for collective operation cost functions."""
 
     def setUp(self):
-
         self.mesh = DeviceMesh("test", (4,), ("d",), devices=[0, 1, 2, 3])
 
         self.mesh_2d = DeviceMesh(

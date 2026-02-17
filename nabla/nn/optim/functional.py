@@ -73,9 +73,7 @@ def sgd_update(
 
     if state is None:
         if momentum != 0.0:
-            bufs = tree_map(
-                lambda p: zeros_like(p) if is_tensor(p) else None, params
-            )
+            bufs = tree_map(lambda p: zeros_like(p) if is_tensor(p) else None, params)
         else:
             bufs = tree_map(lambda p: None, params)
         state = {"momentum_buffers": bufs, "step": 0}
@@ -85,8 +83,12 @@ def sgd_update(
     def _apply(p: Any, g: Any, buf: Any) -> Any:
         if is_tensor(p) and is_tensor(g):
             new_p, new_buf = sgd_step(
-                p, g, buf,
-                lr=lr, weight_decay=weight_decay, momentum=momentum,
+                p,
+                g,
+                buf,
+                lr=lr,
+                weight_decay=weight_decay,
+                momentum=momentum,
             )
             return new_p, new_buf
         return p, buf
@@ -104,10 +106,7 @@ def sgd_update(
     from .optimizer import Optimizer
 
     if Optimizer._AUTO_REALIZE_UPDATED_PARAMS:
-        to_realize = [
-            t for t in tree_leaves(new_params)
-            if is_tensor(t) and not t.real
-        ]
+        to_realize = [t for t in tree_leaves(new_params) if is_tensor(t) and not t.real]
         if to_realize:
             realize_all(*to_realize)
 

@@ -82,7 +82,9 @@ class AllToAllOp(CollectiveOperation):
             all_to_all(cotangents[0], split_axis=concat_axis, concat_axis=split_axis)
         ]
 
-    def execute(self, args: OpArgs, kwargs: OpKwargs) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
+    def execute(
+        self, args: OpArgs, kwargs: OpKwargs
+    ) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
         """All-to-all distributed transpose (Physical)."""
         from ...core import GRAPH, Tensor
 

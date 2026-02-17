@@ -108,9 +108,7 @@ class Operation(ABC):
     @abstractmethod
     def name(self) -> str: ...
 
-    def kernel(
-        self, args: OpTensorValues, kwargs: OpKwargs
-    ) -> OpTensorValues:
+    def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         """Execute the low-level computation.
 
         Args:
@@ -336,12 +334,10 @@ class Operation(ABC):
         mapping = {i: [f"d{i}"] for i in range(output_rank)}
 
         if n_inputs == 1:
-
             return OpShardingRuleTemplate([mapping], [mapping]).instantiate(
                 input_shapes, output_shapes
             )
         else:
-
             return OpShardingRuleTemplate([mapping] * n_inputs, [mapping]).instantiate(
                 input_shapes, output_shapes
             )

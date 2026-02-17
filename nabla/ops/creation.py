@@ -14,7 +14,14 @@ from max.graph import DeviceRef, ShapeLike, TensorType, TensorValue, ops
 from max.graph.ops.constant import NestedArray, Number
 
 from ..core import defaults
-from .base import CreationOperation, OpArgs, OpKwargs, OpResult, OpTensorValues, Operation
+from .base import (
+    CreationOperation,
+    OpArgs,
+    OpKwargs,
+    OpResult,
+    OpTensorValues,
+    Operation,
+)
 
 if TYPE_CHECKING:
     from ..core import Tensor
@@ -462,7 +469,9 @@ def tril(x: Tensor, k: int = 0) -> Tensor:
     return _tril_op([x], {"k": k})[0]
 
 
-def _like_helper(x: Tensor, create_fn: Callable[..., Tensor], *extra_args: Any) -> Tensor:
+def _like_helper(
+    x: Tensor, create_fn: Callable[..., Tensor], *extra_args: Any
+) -> Tensor:
     """Shared implementation for zeros_like/ones_like/full_like."""
     from ..core import Tensor
 

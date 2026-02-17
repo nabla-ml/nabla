@@ -85,7 +85,9 @@ class TestCrossEntropyLoss:
         )
 
         log_probs_jax = jax.nn.log_softmax(jnp.asarray(logits_np), axis=-1)
-        loss_jax = -jnp.sum(jnp.asarray(targets_np) * log_probs_jax) / logits_np.shape[0]
+        loss_jax = (
+            -jnp.sum(jnp.asarray(targets_np) * log_probs_jax) / logits_np.shape[0]
+        )
 
         nb.testing.assert_allclose(loss_nb, loss_jax, rtol=1e-5, atol=1e-6)
 

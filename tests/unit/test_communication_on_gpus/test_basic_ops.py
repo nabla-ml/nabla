@@ -72,7 +72,7 @@ def _run_case(name: str, fn, input_data: np.ndarray) -> None:
         _print_trace_and_graph(name, fn, inp)
         if timings:
             print(
-                f"[{time.strftime('%H:%M:%S')}] {name}: trace/print took {time.perf_counter()-t0:.3f}s",
+                f"[{time.strftime('%H:%M:%S')}] {name}: trace/print took {time.perf_counter() - t0:.3f}s",
                 flush=True,
             )
 
@@ -84,7 +84,7 @@ def _run_case(name: str, fn, input_data: np.ndarray) -> None:
         out.realize()
         if timings:
             print(
-                f"[{time.strftime('%H:%M:%S')}] {name}: out.realize took {time.perf_counter()-t0:.3f}s",
+                f"[{time.strftime('%H:%M:%S')}] {name}: out.realize took {time.perf_counter() - t0:.3f}s",
                 flush=True,
             )
 
@@ -101,7 +101,7 @@ def _run_case(name: str, fn, input_data: np.ndarray) -> None:
         print(gathered.numpy())
         if timings:
             print(
-                f"[{time.strftime('%H:%M:%S')}] {name}: to_numpy took {time.perf_counter()-t0:.3f}s",
+                f"[{time.strftime('%H:%M:%S')}] {name}: to_numpy took {time.perf_counter() - t0:.3f}s",
                 flush=True,
             )
     except Exception as exc:

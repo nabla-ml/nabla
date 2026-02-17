@@ -163,7 +163,6 @@ class TestVmapShardingComposite:
         mesh = DeviceMesh("mesh_mlp", (2,), ("tp",))
 
         def mlp(x, w1, w2, b1):
-
             w1_sharded = w1.shard(mesh, P(None, "tp"))
             h = nb.matmul(x, w1_sharded)
 

@@ -58,9 +58,13 @@ class TestAdamWStateful:
         st_w = opt_pt.state[p_w]
         st_b = opt_pt.state[p_b]
         nb.testing.assert_allclose(opt_nb.m["w"], st_w["exp_avg"], rtol=1e-5, atol=1e-6)
-        nb.testing.assert_allclose(opt_nb.v["w"], st_w["exp_avg_sq"], rtol=1e-5, atol=1e-6)
+        nb.testing.assert_allclose(
+            opt_nb.v["w"], st_w["exp_avg_sq"], rtol=1e-5, atol=1e-6
+        )
         nb.testing.assert_allclose(opt_nb.m["b"], st_b["exp_avg"], rtol=1e-5, atol=1e-6)
-        nb.testing.assert_allclose(opt_nb.v["b"], st_b["exp_avg_sq"], rtol=1e-5, atol=1e-6)
+        nb.testing.assert_allclose(
+            opt_nb.v["b"], st_b["exp_avg_sq"], rtol=1e-5, atol=1e-6
+        )
 
     def test_adamw_step_with_weight_decay_vs_pytorch(self):
         torch = pytest.importorskip("torch")
@@ -74,12 +78,18 @@ class TestAdamWStateful:
             nb.zeros_like(nb.Tensor.from_dlpack(p_np)),
             nb.zeros_like(nb.Tensor.from_dlpack(p_np)),
             1,
-            lr=1e-2, beta1=0.9, beta2=0.999, eps=1e-8, weight_decay=1e-2,
+            lr=1e-2,
+            beta1=0.9,
+            beta2=0.999,
+            eps=1e-8,
+            weight_decay=1e-2,
         )
 
         p_pt = torch.nn.Parameter(torch.from_numpy(p_np.copy()))
         p_pt.grad = torch.from_numpy(g_np.copy())
-        opt = torch.optim.AdamW([p_pt], lr=1e-2, betas=(0.9, 0.999), eps=1e-8, weight_decay=1e-2)
+        opt = torch.optim.AdamW(
+            [p_pt], lr=1e-2, betas=(0.9, 0.999), eps=1e-8, weight_decay=1e-2
+        )
         opt.step()
 
         nb.testing.assert_allclose(p2, p_pt, rtol=1e-5, atol=1e-6)
@@ -99,8 +109,12 @@ class TestOptimizerExecutionPolicy:
         )
         try:
             rng = make_rng(61)
-            params = {"w": nb.Tensor.from_dlpack(rng.normal(size=(3, 2)).astype(np.float32))}
-            grads = {"w": nb.Tensor.from_dlpack(rng.normal(size=(3, 2)).astype(np.float32))}
+            params = {
+                "w": nb.Tensor.from_dlpack(rng.normal(size=(3, 2)).astype(np.float32))
+            }
+            grads = {
+                "w": nb.Tensor.from_dlpack(rng.normal(size=(3, 2)).astype(np.float32))
+            }
 
             opt = nb.nn.optim.AdamW(params, lr=1e-2)
             p_new = opt.step(grads)

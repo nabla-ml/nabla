@@ -66,7 +66,6 @@ def check_sub_axes_maximality(axes: list[str]) -> list[str]:
         parent_sub_axes[parent].append((pre_size, size, axis))
 
     for parent, subs in parent_sub_axes.items():
-
         subs_sorted = sorted(subs, key=lambda x: x[0])
         for i in range(len(subs_sorted) - 1):
             pre1, size1, ax1 = subs_sorted[i]
@@ -270,7 +269,6 @@ class DimSpec:
     partial: bool = False
 
     def __post_init__(self) -> None:
-
         if not self.axes and not self.is_open and self.priority != 0:
             raise ValueError(
                 f"Empty closed dimension {{}} cannot have non-zero priority (got p{self.priority})"
@@ -323,7 +321,6 @@ class DimSpec:
         if isinstance(raw, str):
             return DimSpec([raw])
         if isinstance(raw, (tuple, list)):
-
             return DimSpec([str(x) for x in raw])
         raise ValueError(
             f"Invalid dimension spec input: {raw!r}. Expected None, str, tuple/list of str, or DimSpec."
@@ -350,7 +347,6 @@ class ShardingSpec:
 
         for dim_idx, dim in enumerate(self.dim_specs):
             for axis in dim.axes:
-
                 if axis in self.replicated_axes:
                     raise ValueError(
                         f"Axis '{axis}' is explicitly replicated but assigned to dimension {dim_idx}."
@@ -383,7 +379,6 @@ class ShardingSpec:
         dims_str = ", ".join(str(d) for d in self.dim_specs)
         rep_str = ""
         if self.replicated_axes:
-
             ordered_rep = self._order_replicated_axes(self.replicated_axes)
             rep_str = ", replicated={" + ", ".join(f"'{a}'" for a in ordered_rep) + "}"
 
@@ -419,7 +414,6 @@ class ShardingSpec:
         result = []
 
         for ax_name in self.mesh.axis_names:
-
             if ax_name in full_axes:
                 result.append(ax_name)
 
@@ -571,9 +565,7 @@ def compute_global_shape(
     return tuple(result)
 
 
-def needs_reshard(
-    from_spec: ShardingSpec | None, to_spec: ShardingSpec | None
-) -> bool:
+def needs_reshard(from_spec: ShardingSpec | None, to_spec: ShardingSpec | None) -> bool:
     """Check if specs differ requiring resharding."""
     if (from_spec is None) != (to_spec is None):
         return True

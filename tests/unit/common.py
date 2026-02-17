@@ -67,9 +67,9 @@ def assert_allclose(
 
 def assert_dtype(result: Tensor, expected_dtype):
     """Assert tensor dtype matches expected."""
-    assert (
-        result.dtype == expected_dtype
-    ), f"Dtype mismatch: got {result.dtype}, expected {expected_dtype}"
+    assert result.dtype == expected_dtype, (
+        f"Dtype mismatch: got {result.dtype}, expected {expected_dtype}"
+    )
 
 
 def assert_batch_dims(result: Tensor, expected: int):
@@ -81,18 +81,18 @@ def assert_batch_dims(result: Tensor, expected: int):
 def assert_shape(result: Tensor, expected_shape: tuple):
     """Assert tensor.shape matches expected (logical shape)."""
     actual = tuple(int(d) for d in result.shape)
-    assert (
-        actual == expected_shape
-    ), f"Shape mismatch: got {actual}, expected {expected_shape}"
+    assert actual == expected_shape, (
+        f"Shape mismatch: got {actual}, expected {expected_shape}"
+    )
 
 
 def assert_physical_shape(result: Tensor, expected_shape: tuple):
     """Assert tensor's physical shape (global_shape) matches expected."""
     actual = result.global_shape or result.local_shape
     actual = tuple(int(d) for d in actual)
-    assert (
-        actual == expected_shape
-    ), f"Physical shape mismatch: got {actual}, expected {expected_shape}"
+    assert actual == expected_shape, (
+        f"Physical shape mismatch: got {actual}, expected {expected_shape}"
+    )
 
 
 def assert_is_sharded(result: Tensor, expected: bool = True):
@@ -153,8 +153,9 @@ def jax_transpose_wrapper(x, axis1, axis2):
     if rank < 2:
         return x
     axes = list(range(rank))
-    a1, a2 = (axis1 if axis1 >= 0 else rank + axis1), (
-        axis2 if axis2 >= 0 else rank + axis2
+    a1, a2 = (
+        (axis1 if axis1 >= 0 else rank + axis1),
+        (axis2 if axis2 >= 0 else rank + axis2),
     )
     axes[a1], axes[a2] = axes[a2], axes[a1]
     return jnp.transpose(x, axes=axes)
@@ -192,12 +193,10 @@ def jax_matmul_wrapper(x, y):
 
 
 def jax_slice_wrapper(x, slices):
-
     return x[tuple(slices)]
 
 
 def jax_pad_inverse_slice(x, slices, target_shape):
-
     res = jnp.zeros(target_shape, dtype=x.dtype)
     res = res.at[tuple(slices)].set(x)
     return res
@@ -322,9 +321,9 @@ def compare_nested_structures(nb_res, jax_res, path="", tolerance=5e-4):
         return
 
     if isinstance(nb_res, (tuple, list)) and isinstance(jax_res, (tuple, list)):
-        assert len(nb_res) == len(
-            jax_res
-        ), f"Length mismatch at {path}: {len(nb_res)} vs {len(jax_res)}"
+        assert len(nb_res) == len(jax_res), (
+            f"Length mismatch at {path}: {len(nb_res)} vs {len(jax_res)}"
+        )
         for i, (n, j) in enumerate(zip(nb_res, jax_res, strict=False)):
             compare_nested_structures(n, j, path=f"{path}[{i}]", tolerance=tolerance)
         return
@@ -395,7 +394,6 @@ def run_vmap_check(test_name, op, config, args_nb, kw_nb, args_jax, kw_jax):
 
     try:
         if config.is_list_input:
-
             return
         else:
             in_axes_list = []
@@ -448,30 +446,24 @@ def run_sharding_check(test_name, op, config, args_nb, kw_nb):
 
     def shard_arg(x):
         if isinstance(x, nb.Tensor) and len(x.shape) > 0:
-
             if int(x.shape[0]) % mesh_shape[0] == 0:
-
                 spec = ShardingSpec(mesh, (("x",),) + ((),) * (len(x.shape) - 1))
                 return x.shard(mesh, spec.dim_specs)
         return x
 
     sharded_args_nb = []
     if config.is_list_input:
-
         sharded_args_nb.append([shard_arg(x) for x in args_nb])
     else:
         sharded_args_nb = [shard_arg(x) for x in args_nb]
 
     try:
-
         res = op.nabla_fn(*sharded_args_nb, **kw_nb)
 
         if isinstance(res, nb.Tensor) and res.sharding is not None:
-
             assert res.sharding.mesh == mesh, "Result mesh mismatch"
 
     except Exception as e:
-
         raise e
 
 
@@ -486,9 +478,9 @@ def assert_spec(tensor: nb.Tensor, expected_dims: tuple[tuple[str, ...], ...]):
     actual_dims = tuple(tuple(a for a in d) for d in actual_dims)
     expected_dims = tuple(tuple(a for a in d) for d in expected_dims)
 
-    assert (
-        actual_dims == expected_dims
-    ), f"Sharding spec mismatch: got {actual_dims}, expected {expected_dims}"
+    assert actual_dims == expected_dims, (
+        f"Sharding spec mismatch: got {actual_dims}, expected {expected_dims}"
+    )
 
 
 def run_unified_test(op: Operation, config: OpConfig, suffix: str = ""):
@@ -502,7 +494,6 @@ def run_unified_test(op: Operation, config: OpConfig, suffix: str = ""):
     (args_nb, kw_nb), (args_jax, kw_jax) = op.get_args(config)
 
     if config.is_list_input:
-
         nb_inp = [list(args_nb)]
         jax_inp = [list(args_jax)]
     else:

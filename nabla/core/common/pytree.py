@@ -27,7 +27,9 @@ _K_DICT = 4
 _K_CUSTOM = 5
 
 
-_CUSTOM_REGISTRY: dict[type, tuple[Callable[[Any], tuple[list[Any], Any]], Callable[[Any, list[Any]], Any]]] = {}
+_CUSTOM_REGISTRY: dict[
+    type, tuple[Callable[[Any], tuple[list[Any], Any]], Callable[[Any, list[Any]], Any]]
+] = {}
 
 
 def register_pytree_node(
@@ -58,7 +60,9 @@ class PyTreeDef:
 
     __slots__ = ("_kind", "_meta", "_children", "num_leaves")
 
-    def __init__(self, kind: int, meta: Any, children: tuple[PyTreeDef, ...], num_leaves: int) -> None:
+    def __init__(
+        self, kind: int, meta: Any, children: tuple[PyTreeDef, ...], num_leaves: int
+    ) -> None:
         self._kind = kind
         self._meta = meta
         self._children = children
@@ -165,7 +169,6 @@ def tree_unflatten(treedef: PyTreeDef, leaves: list[Any]) -> Any:
             return [_build(c) for c in def_._children]
 
         if k == _K_TUPLE:
-
             cls = def_._meta
             items = (_build(c) for c in def_._children)
 

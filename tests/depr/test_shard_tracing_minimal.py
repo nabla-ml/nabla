@@ -49,9 +49,9 @@ def test_shard_tracing_minimal():
     # rehydrate updates the values of the existing tensors in the trace.
 
     assert out.is_sharded, "Output should be sharded"
-    assert (
-        len(out.values) == 2
-    ), f"Output should have 2 values (shards), got {len(out.values)}"
+    assert len(out.values) == 2, (
+        f"Output should have 2 values (shards), got {len(out.values)}"
+    )
 
     # Check values match slices
     # evaluate() ensures all shards are Evaluated/Realized

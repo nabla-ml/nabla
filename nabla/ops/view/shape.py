@@ -10,14 +10,24 @@ from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
-from ..base import AxisOp, OpArgs, OpKwargs, OpResult, OpTensorValues, ShapeOp, Operation
+from ..base import (
+    AxisOp,
+    OpArgs,
+    OpKwargs,
+    OpResult,
+    OpTensorValues,
+    ShapeOp,
+    Operation,
+)
 from .axes import unsqueeze
 
 if TYPE_CHECKING:
     from ...core import Tensor
 
 
-def _shape_kwarg_to_local(kwargs: OpKwargs, output_sharding: ShardingSpec | None, shard_idx: int) -> OpKwargs:
+def _shape_kwarg_to_local(
+    kwargs: OpKwargs, output_sharding: ShardingSpec | None, shard_idx: int
+) -> OpKwargs:
     """Convert global 'shape' kwarg to local shape for a given shard."""
     from ...core.sharding.spec import compute_local_shape
 
@@ -90,14 +100,11 @@ class BroadcastToOp(ShapeOp):
         offset = out_rank - in_rank
 
         for i in range(in_rank):
-
             out_idx = i + offset
             if out_idx >= 0:
                 if in_shape[i] == out_shape[out_idx]:
-
                     in_mapping[i] = [out_factors[out_idx]]
                 else:
-
                     in_mapping[i] = [f"bcast_{i}"]
             else:
                 in_mapping[i] = [f"d_extra_{i}"]
@@ -169,7 +176,6 @@ class ReshapeOp(ShapeOp):
                     break
 
             if has_sharded_logical:
-
                 new_dim_specs = []
                 for i in range(len(spec.dim_specs)):
                     if i < batch_dims:
@@ -307,7 +313,6 @@ class ReshapeOp(ShapeOp):
         out_rank = len(out_shape)
 
         if in_rank >= out_rank:
-
             factors = [f"d{i}" for i in range(in_rank)]
             in_mapping = {i: [factors[i]] for i in range(in_rank)}
             out_mapping = {}
@@ -331,7 +336,6 @@ class ReshapeOp(ShapeOp):
 
             pass
         else:
-
             factors = [f"d{i}" for i in range(out_rank)]
             out_mapping = {i: [factors[i]] for i in range(out_rank)}
             in_mapping = {}
@@ -1068,7 +1072,6 @@ class BroadcastToPhysicalOp(Operation):
         output_shapes: list[tuple[int, ...]],
         **kwargs: Any,
     ) -> Any:
-
         from ...core.sharding.propagation import OpShardingRuleTemplate
 
         in_shape = input_shapes[0]

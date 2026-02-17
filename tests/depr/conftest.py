@@ -12,7 +12,6 @@ Test Hierarchy:
 4. test_sharding_ops.py - Sharding operations and vmap+sharding combo
 """
 
-
 import jax
 import jax.numpy as jnp
 import jax.numpy as jnp
@@ -93,25 +92,25 @@ def assert_allclose(result: Tensor, expected, rtol: float = 1e-5, atol: float = 
 def assert_shape(result: Tensor, expected_shape: tuple):
     """Assert tensor.shape matches expected (logical shape)."""
     actual = tuple(int(d) for d in result.shape)
-    assert (
-        actual == expected_shape
-    ), f"Shape mismatch: got {actual}, expected {expected_shape}"
+    assert actual == expected_shape, (
+        f"Shape mismatch: got {actual}, expected {expected_shape}"
+    )
 
 
 def assert_physical_shape(result: Tensor, expected_shape: tuple):
     """Assert tensor's physical shape (global_shape) matches expected."""
     actual = result.global_shape or result.local_shape
     actual = tuple(int(d) for d in actual)
-    assert (
-        actual == expected_shape
-    ), f"Physical shape mismatch: got {actual}, expected {expected_shape}"
+    assert actual == expected_shape, (
+        f"Physical shape mismatch: got {actual}, expected {expected_shape}"
+    )
 
 
 def assert_dtype(result: Tensor, expected_dtype):
     """Assert tensor dtype matches expected."""
-    assert (
-        result.dtype == expected_dtype
-    ), f"Dtype mismatch: got {result.dtype}, expected {expected_dtype}"
+    assert result.dtype == expected_dtype, (
+        f"Dtype mismatch: got {result.dtype}, expected {expected_dtype}"
+    )
 
 
 def assert_batch_dims(result: Tensor, expected: int):

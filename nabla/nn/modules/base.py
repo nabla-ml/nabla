@@ -42,7 +42,11 @@ def _module_tree_flatten(
     for key, value in module.__dict__.items():
         if key in {"_parameters", "_buffers", "_modules", "_training"}:
             continue
-        if key in module._parameters or key in module._buffers or key in module._modules:
+        if (
+            key in module._parameters
+            or key in module._buffers
+            or key in module._modules
+        ):
             continue
         extras.append((key, value))
 
@@ -146,7 +150,9 @@ class Module:
 
     @staticmethod
     def _realize_tensor_tree(tree: Any) -> None:
-        tensors = [leaf for leaf in tree_leaves(tree) if is_tensor(leaf) and not leaf.real]
+        tensors = [
+            leaf for leaf in tree_leaves(tree) if is_tensor(leaf) and not leaf.real
+        ]
         if tensors:
             realize_all(*tensors)
 

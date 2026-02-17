@@ -14,7 +14,6 @@ from nabla.core import Tensor
 
 
 def compute_logic(x):
-
     y = x * x
     z = x + x
     return z
@@ -60,7 +59,6 @@ def test_long_chain_trace():
     print("=" * 30 + "\n")
 
     def complex_logic(x):
-
         v1 = x * 2.0
         v2 = v1 + 10.0
         v3 = v2 / 2.0

@@ -144,14 +144,11 @@ class FactorShardingState:
 
         if has_new and has_existing:
             if new_priority < factor.priority:
-
                 factor.axes = list(new_axes)
                 factor.priority = new_priority
                 factor.is_open = new_is_open
             elif new_priority == factor.priority:
-
                 if strategy == PropagationStrategy.AGGRESSIVE:
-
                     old_par = self._get_parallelism(factor.axes, mesh)
                     new_par = self._get_parallelism(new_axes, mesh)
                     if new_par > old_par:
@@ -277,7 +274,6 @@ class OpShardingRule:
                 elif len(factors) == 1:
                     parts.append(factors[0])
                 else:
-
                     parts.append(f"({' '.join(factors)})")
             return " ".join(parts)
 
@@ -406,7 +402,10 @@ class OpShardingRuleTemplate:
 
 
 def _expand_axes_for_factors(
-    axes: list[str], factors: list[str], factor_sizes: dict[str, int], mesh: "DeviceMesh"
+    axes: list[str],
+    factors: list[str],
+    factor_sizes: dict[str, int],
+    mesh: "DeviceMesh",
 ) -> list[str]:
     """Expand axes into sub-axes when one axis covers multiple factors."""
     if not axes or not factors:
@@ -433,7 +432,6 @@ def _expand_axes_for_factors(
             sub_factors.append((f, f_size))
 
             if cum_prod == ax_size and len(sub_factors) > 1:
-
                 pre_size = 1
                 for _, f_size in sub_factors:
                     expanded.append(f"{ax}:({pre_size}){f_size}")
@@ -560,7 +558,6 @@ def _update_from_factors(
             factors = mapping.get(dim_idx, [])
 
             if not factors:
-
                 used_axes_in_tensor.update(current_dim.axes)
                 new_dim_specs.append(current_dim)
                 continue
@@ -594,7 +591,6 @@ def _update_from_factors(
             ) or (proposed_partial != current_dim.partial)
 
             if should_update:
-
                 used_axes_in_tensor.update(proposed_axes)
                 new_dim_specs.append(
                     DimSpec(
@@ -661,7 +657,9 @@ def propagate_sharding(
 
 
 def run_hierarchical_propagation_pass(
-    operations_with_rules: list[tuple[Any, OpShardingRule, list["ShardingSpec"], list["ShardingSpec"]]],
+    operations_with_rules: list[
+        tuple[Any, OpShardingRule, list["ShardingSpec"], list["ShardingSpec"]]
+    ],
     max_user_priority: int = 10,
     max_iterations: int = 100,
 ) -> int:
@@ -669,16 +667,13 @@ def run_hierarchical_propagation_pass(
     total_changes = 0
 
     for user_priority in range(max_user_priority + 1):
-
         for op_priority in [
             OpPriority.PASSTHROUGH,
             OpPriority.CONTRACTION,
             OpPriority.REDUCTION,
             OpPriority.COMMUNICATION,
         ]:
-
             for strategy in [PropagationStrategy.AGGRESSIVE, PropagationStrategy.BASIC]:
-
                 iteration = 0
                 while iteration < max_iterations:
                     changed_this_iter = False

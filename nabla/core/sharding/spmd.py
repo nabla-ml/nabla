@@ -121,7 +121,6 @@ def infer_output_sharding(
         try:
             return int(d)
         except (TypeError, ValueError):
-
             return 1
 
     input_specs = []
@@ -154,7 +153,6 @@ def infer_output_sharding(
     if not any(
         spec.dim_specs and any(d.axes for d in spec.dim_specs) for spec in input_specs
     ):
-
         input_partial_axes = set()
         for spec in input_specs:
             input_partial_axes.update(spec.partial_sum_axes)

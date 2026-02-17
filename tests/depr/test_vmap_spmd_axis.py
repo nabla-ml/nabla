@@ -49,13 +49,13 @@ class TestSpmdAxisNameBasic:
 
         vmapped_relu = vmap(relu, spmd_axis_name=spmd_axis)
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("TEST: test_spmd_basic_relu")
         print(f"mesh_shape={mesh_shape}, mesh_axes={mesh_axes}, spmd_axis={spmd_axis}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         t = trace(vmapped_relu, x)
         print(t)
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         result = vmapped_relu(x)
         expected = np.maximum(np_x, 0)
@@ -66,9 +66,9 @@ class TestSpmdAxisNameBasic:
         if result.sharding:
             spec = result.sharding
 
-            assert (
-                spmd_axis in spec.dim_specs[0].axes
-            ), f"Expected batch dim sharded on {spmd_axis}, got {spec.dim_specs[0]}"
+            assert spmd_axis in spec.dim_specs[0].axes, (
+                f"Expected batch dim sharded on {spmd_axis}, got {spec.dim_specs[0]}"
+            )
 
     @pytest.mark.parametrize(
         "mesh_shape,mesh_axes,spmd_axis",
@@ -168,15 +168,15 @@ class TestSpmdAxisWithLogicalSharding:
             row_sharded = row.shard(mesh, P("tp"))
             return relu(row_sharded)
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("TEST: test_spmd_plus_logical_sharding_relu")
         print("CRITICAL: batch dim on 'dp' + logical dim on 'tp'")
         print("mesh_shape=(2, 4), mesh_axes=('dp', 'tp')")
         print("Expected: multi-axis sharding [dp, tp] on output")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         t = trace(f, x)
         print(t)
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         result = f(x)
         expected = np.maximum(np_x, 0)
@@ -187,13 +187,13 @@ class TestSpmdAxisWithLogicalSharding:
         spec = result.sharding
         assert spec is not None, "Result should have sharding"
 
-        assert (
-            "dp" in spec.dim_specs[0].axes
-        ), f"Batch dim should be sharded on dp, got {spec.dim_specs[0]}"
+        assert "dp" in spec.dim_specs[0].axes, (
+            f"Batch dim should be sharded on dp, got {spec.dim_specs[0]}"
+        )
 
-        assert (
-            "tp" in spec.dim_specs[1].axes
-        ), f"Features dim should be sharded on tp, got {spec.dim_specs[1]}"
+        assert "tp" in spec.dim_specs[1].axes, (
+            f"Features dim should be sharded on tp, got {spec.dim_specs[1]}"
+        )
 
     def test_spmd_plus_logical_sharding_add(self, mesh_2x4):
         """Binary op with batch sharded on dp, logical on tp."""
@@ -208,7 +208,6 @@ class TestSpmdAxisWithLogicalSharding:
 
         @vmap(spmd_axis_name="dp", mesh=mesh)
         def f(row_a, row_b):
-
             row_a_s = row_a.shard(mesh, P("tp"))
             row_b_s = row_b.shard(mesh, P("tp"))
             return add(row_a_s, row_b_s)
@@ -237,7 +236,6 @@ class TestSpmdAxisWithLogicalSharding:
 
         @vmap(in_axes=(0, None), spmd_axis_name="dp", mesh=mesh)
         def f(xi, wi):
-
             wi_sharded = wi.shard(mesh, P(None, "tp"))
             return matmul(xi, wi_sharded)
 
@@ -265,17 +263,16 @@ class TestSpmdAxisWithLogicalSharding:
 
         @vmap(in_axes=(0, None), spmd_axis_name="dp", mesh=mesh)
         def f(xi, wi):
-
             xi_sharded = xi.shard(mesh, P(None, "tp"))
             wi_sharded = wi.shard(mesh, P("tp", None))
             return matmul(xi_sharded, wi_sharded)
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("TEST: test_spmd_plus_logical_matmul_row_parallel")
         print("CRITICAL: Contracting dim K is sharded on 'tp'")
         print("Expected: AllReduce should appear in trace!")
         print("mesh_shape=(2, 4), mesh_axes=('dp', 'tp')")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         t = trace(f, x, w)
         print(t)
 
@@ -284,7 +281,7 @@ class TestSpmdAxisWithLogicalSharding:
             print("✅ AllReduce detected in trace - CORRECT!")
         else:
             print("❌ WARNING: No AllReduce detected - may be INCORRECT!")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         result = f(x, w)
         expected = np_x @ np_w
@@ -308,12 +305,12 @@ class TestSpmdAxisWithLogicalSharding:
             row_sharded = row.shard(mesh, P("tp"))
             return reduce_sum(row_sharded, axis=0)
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("TEST: test_spmd_plus_logical_reduction")
         print("CRITICAL: Reducing sharded axis (tp)")
         print("Expected: AllReduce should appear after local reduce_sum!")
         print("mesh_shape=(2, 4), mesh_axes=('dp', 'tp')")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         t = trace(f, x)
         print(t)
         trace_str = str(t)
@@ -321,7 +318,7 @@ class TestSpmdAxisWithLogicalSharding:
             print("✅ AllReduce detected - CORRECT for reducing sharded axis!")
         else:
             print("❌ WARNING: No AllReduce detected - reduction may be INCORRECT!")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         result = f(x)
         expected = np.sum(np_x, axis=1)
@@ -372,7 +369,6 @@ class TestSpmdAxisNestedVmap:
 
         @vmap(spmd_axis_name="dp", mesh=mesh)
         def outer(batch_x):
-
             return vmap(relu)(batch_x)
 
         result = outer(x)

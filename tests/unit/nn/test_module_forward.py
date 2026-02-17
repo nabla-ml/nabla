@@ -46,7 +46,9 @@ class TestLinearForward:
     @pytest.mark.parametrize("batch,in_f,out_f", [(5, 4, 3), (1, 8, 2), (32, 16, 16)])
     def test_linear_shapes(self, batch, in_f, out_f):
         model = nb.nn.Linear(in_f, out_f)
-        x = nb.Tensor.from_dlpack(make_rng(42).normal(size=(batch, in_f)).astype(np.float32))
+        x = nb.Tensor.from_dlpack(
+            make_rng(42).normal(size=(batch, in_f)).astype(np.float32)
+        )
         y = model(x)
         assert tuple(int(d) for d in y.shape) == (batch, out_f)
 

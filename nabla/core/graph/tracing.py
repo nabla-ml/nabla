@@ -241,7 +241,6 @@ class Trace:
 
         # 4. Iterate through nodes and call kernel_all to recompute intermediates.
         for i, output_refs in enumerate(self.nodes):
-
             alive_outputs = output_refs.get_alive_outputs()
             if not any(out is not None for out in alive_outputs):
                 continue
@@ -403,7 +402,6 @@ def trace(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Trace:
         t.is_traced = True
 
     try:
-
         outputs = fn(*args, **kwargs)
 
         traced_obj = Trace(args, outputs)
@@ -414,7 +412,6 @@ def trace(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Trace:
         return traced_obj
 
     finally:
-
         for t in input_tensors:
             if id(t) in original_is_traced:
                 t.is_traced = original_is_traced[id(t)]
@@ -594,7 +591,6 @@ class GraphPrinter:
             block_lines = []
 
         for refs in self.trace.nodes:
-
             op_name = (
                 refs.op.name.lower()
                 if hasattr(refs.op, "name")

@@ -355,7 +355,9 @@ class TensorImpl:
         )
 
     @staticmethod
-    def _format_shape_part(shape: tuple[int, ...] | list[int] | graph.Shape | None, batch_dims: int = 0) -> str:
+    def _format_shape_part(
+        shape: tuple[int, ...] | list[int] | graph.Shape | None, batch_dims: int = 0
+    ) -> str:
         """Format a shape tuple with batch dims colored."""
         if shape is None:
             return "[?]"
@@ -436,7 +438,9 @@ class TensorImpl:
                             shard_shapes = [v.type.shape for v in vals]
 
                     g_shape = compute_global_shape(
-                        tuple(int(d) for d in local_shape), self.sharding, shard_shapes=shard_shapes
+                        tuple(int(d) for d in local_shape),
+                        self.sharding,
+                        shard_shapes=shard_shapes,
                     )
                     global_str = self._format_shape_part(g_shape, batch_dims)
             except Exception:

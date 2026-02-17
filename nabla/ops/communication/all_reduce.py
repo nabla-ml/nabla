@@ -39,7 +39,9 @@ class AllReduceOp(CollectiveOperation):
     ) -> float:
         return CollectiveOperation._ring_cost(size_bytes, mesh, axes, factor=2.0)
 
-    def execute(self, args: OpArgs, kwargs: OpKwargs) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
+    def execute(
+        self, args: OpArgs, kwargs: OpKwargs
+    ) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
         """Sum-reduce across shards (Physical)."""
         from ...core import GRAPH, Tensor
 
@@ -108,9 +110,7 @@ class AllReduceOp(CollectiveOperation):
             # Fallback for complex reductions (MAX/MIN/PROD) using native allgather
             from max.graph.ops.allgather import allgather as max_allgather
 
-            gathered = max_allgather(
-                shard_graph_values, signal_buffers, axis=0
-            )
+            gathered = max_allgather(shard_graph_values, signal_buffers, axis=0)
 
             result_graph_values = []
             num_shards = len(shard_graph_values)
@@ -160,7 +160,9 @@ class AllReduceOp(CollectiveOperation):
 
         return [result] * len(shard_graph_values)
 
-    def infer_sharding_spec(self, args: OpArgs, mesh: DeviceMesh | None, kwargs: dict) -> Any:
+    def infer_sharding_spec(
+        self, args: OpArgs, mesh: DeviceMesh | None, kwargs: dict
+    ) -> Any:
         """Infer sharding for AllReduce (Adaptation Layer)."""
         input_tensor = args[0]
         input_sharding = input_tensor.sharding
@@ -256,7 +258,6 @@ class AllReduceOp(CollectiveOperation):
         new_results = [None] * num_shards
 
         for key, group_members in groups.items():
-
             group_shards = [val for _, val in group_members]
 
             if len(group_shards) > 1:
@@ -286,7 +287,9 @@ class PMeanOp(CollectiveOperation):
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         return self._compute_local_preserved_shapes(args, kwargs)
 
-    def execute(self, args: OpArgs, kwargs: OpKwargs) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
+    def execute(
+        self, args: OpArgs, kwargs: OpKwargs
+    ) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
         """Compute mean across shards (Physical)."""
         from ...core import GRAPH
 

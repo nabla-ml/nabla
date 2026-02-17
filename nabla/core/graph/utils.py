@@ -82,7 +82,6 @@ def print_trace_graph(outputs: list["TensorImpl"], show_siblings: bool = True) -
     print("-" * 60)
 
     for idx, (op_id, op_outputs) in enumerate(reversed(ops)):
-
         first_out = op_outputs[0]
         op_name = first_out.op_name or "unknown"
         num_inputs = len(first_out.parents)

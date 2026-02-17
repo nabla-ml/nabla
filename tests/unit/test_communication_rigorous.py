@@ -15,7 +15,6 @@ from .common import assert_allclose, tensor_from_jax, to_jax, make_jax_array
 
 
 class TestCommunicationRigorous:
-
     def test_nested_vmap_all_reduce_grad(self):
         """Gradient of nested vmap(vmap(all_reduce))."""
         B1, B2, H = 2, 2, 4

@@ -50,8 +50,9 @@ class TestShardMapRigorous(unittest.TestCase):
             out_specs={0: out_spec},
         )
 
-        d1, d2 = np.random.rand(4, 4).astype(np.float32), np.random.rand(4, 4).astype(
-            np.float32
+        d1, d2 = (
+            np.random.rand(4, 4).astype(np.float32),
+            np.random.rand(4, 4).astype(np.float32),
         )
         t1, t2 = Tensor.from_dlpack(d1), Tensor.from_dlpack(d2)
 

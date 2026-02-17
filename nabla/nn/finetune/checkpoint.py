@@ -17,7 +17,9 @@ from ...core import Tensor, is_tensor
 PathLike = str | Path
 
 
-def _collect_tensor_paths(tree: Any, prefix: str, out: list[tuple[str, Tensor]]) -> None:
+def _collect_tensor_paths(
+    tree: Any, prefix: str, out: list[tuple[str, Tensor]]
+) -> None:
     if is_tensor(tree):
         out.append((prefix, tree))
         return
@@ -140,7 +142,9 @@ def load_finetune_checkpoint(
             raise KeyError(f"Missing tensor key in checkpoint: {path_name}")
         arr = npz[path_name]
         restored = Tensor.from_dlpack(arr).to(template_tensor.dtype)
-        loaded_lora = _assign_tensor_path(loaded_lora, path_name[len("lora") + 1 :], restored)
+        loaded_lora = _assign_tensor_path(
+            loaded_lora, path_name[len("lora") + 1 :], restored
+        )
 
     loaded_opt = None
     if optimizer_template is not None and meta.get("has_optimizer", False):
@@ -160,6 +164,8 @@ def load_finetune_checkpoint(
                 arr = npz[path_name]
                 restored = Tensor.from_dlpack(arr).to(template_tensor.dtype)
                 stripped = path_name[len(f"opt_{slot}") + 1 :]
-                loaded_opt[slot] = _assign_tensor_path(loaded_opt[slot], stripped, restored)
+                loaded_opt[slot] = _assign_tensor_path(
+                    loaded_opt[slot], stripped, restored
+                )
 
     return loaded_lora, loaded_opt, meta

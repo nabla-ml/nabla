@@ -213,7 +213,6 @@ class CondOp(Operation):
         return all_shapes, all_dtypes, all_devices
 
     def infer_sharding_spec(self, args: list, mesh, kwargs: dict = None):
-
         # Trace true_fn to get output structure
         res = true_fn(*operands)
         flat_res = pytree.tree_leaves(res)
@@ -518,14 +517,21 @@ def where(condition: Tensor, x: Tensor, y: Tensor) -> Tensor:
     return _where_op([condition, x, y], {})[0]
 
 
-def cond(pred: Tensor, true_fn: Callable[..., Any], false_fn: Callable[..., Any], *operands: Any) -> Any:
+def cond(
+    pred: Tensor,
+    true_fn: Callable[..., Any],
+    false_fn: Callable[..., Any],
+    *operands: Any,
+) -> Any:
     result = _cond_op([pred, true_fn, false_fn] + list(operands), {})
     if len(result) == 1:
         return result[0]
     return tuple(result)
 
 
-def while_loop(cond_fn: Callable[..., bool], body_fn: Callable[..., Any], init_val: Any) -> Any:
+def while_loop(
+    cond_fn: Callable[..., bool], body_fn: Callable[..., Any], init_val: Any
+) -> Any:
     result = _while_loop_op([cond_fn, body_fn, init_val], {})
     if len(result) == 1:
         return result[0]
@@ -533,7 +539,11 @@ def while_loop(cond_fn: Callable[..., bool], body_fn: Callable[..., Any], init_v
 
 
 def scan(
-    f: Callable[[Any, Any], tuple[Any, Any]], init: Any, xs: Any, length: int | None = None, reverse: bool = False
+    f: Callable[[Any, Any], tuple[Any, Any]],
+    init: Any,
+    xs: Any,
+    length: int | None = None,
+    reverse: bool = False,
 ) -> tuple[Any, Any]:
     return _scan_op([f, init, xs], {"length": length, "reverse": reverse})
 

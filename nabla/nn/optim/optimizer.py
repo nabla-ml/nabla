@@ -15,11 +15,7 @@ from .functional import adamw_step, sgd_step
 
 
 def _unrealized_tensors(tree: Any) -> list[Tensor]:
-    return [
-        leaf
-        for leaf in tree_leaves(tree)
-        if is_tensor(leaf) and not leaf.real
-    ]
+    return [leaf for leaf in tree_leaves(tree) if is_tensor(leaf) and not leaf.real]
 
 
 def _detach_params_like(new_tree: Any, old_tree: Any) -> Any:
@@ -173,10 +169,13 @@ class SGD(Optimizer):
 
     def step(self, grads: Any) -> Any:
         old_params = self.params
+
         def _apply(p: Any, g: Any, buf: Any):
             if is_tensor(p) and is_tensor(g):
                 return sgd_step(
-                    p, g, buf,
+                    p,
+                    g,
+                    buf,
                     lr=self.lr,
                     weight_decay=self.weight_decay,
                     momentum=self.momentum,
@@ -266,9 +265,7 @@ def adamw_update(
     new_state = {"m": m, "v": v, "step": step}
 
     should_realize = (
-        Optimizer._AUTO_REALIZE_UPDATED_PARAMS
-        if realize is None
-        else bool(realize)
+        Optimizer._AUTO_REALIZE_UPDATED_PARAMS if realize is None else bool(realize)
     )
     if should_realize:
         to_realize: list[Tensor] = []

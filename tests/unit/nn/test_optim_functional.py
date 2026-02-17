@@ -50,7 +50,11 @@ class TestAdamWStep:
             nb.zeros_like(nb.Tensor.from_dlpack(p_np)),
             nb.zeros_like(nb.Tensor.from_dlpack(p_np)),
             1,
-            lr=lr, beta1=beta1, beta2=beta2, eps=eps, weight_decay=wd,
+            lr=lr,
+            beta1=beta1,
+            beta2=beta2,
+            eps=eps,
+            weight_decay=wd,
         )
 
         # JAX reference (manual AdamW)
@@ -148,7 +152,9 @@ class TestSGDStep:
 class TestAdamWFunctionalPytree:
     def test_adamw_init_creates_zero_state(self):
         rng = make_rng(60)
-        params = {"w": nb.Tensor.from_dlpack(rng.normal(size=(3, 3)).astype(np.float32))}
+        params = {
+            "w": nb.Tensor.from_dlpack(rng.normal(size=(3, 3)).astype(np.float32))
+        }
         state = nb.nn.optim.adamw_init(params)
         assert state["step"] == 0
         assert "m" in state and "v" in state
@@ -203,5 +209,9 @@ class TestAdamWFunctionalPytree:
         state = nb.nn.optim.adamw_init(params)
         p_functional, _ = nb.nn.optim.adamw_update(params, grads, state, lr=1e-2)
 
-        nb.testing.assert_allclose(p_stateful["w"], p_functional["w"], rtol=1e-5, atol=1e-6)
-        nb.testing.assert_allclose(p_stateful["b"], p_functional["b"], rtol=1e-5, atol=1e-6)
+        nb.testing.assert_allclose(
+            p_stateful["w"], p_functional["w"], rtol=1e-5, atol=1e-6
+        )
+        nb.testing.assert_allclose(
+            p_stateful["b"], p_functional["b"], rtol=1e-5, atol=1e-6
+        )

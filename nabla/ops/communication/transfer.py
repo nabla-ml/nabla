@@ -67,7 +67,9 @@ class TransferOp(Operation):
 
         return shapes, dtypes, devices
 
-    def execute(self, args: OpArgs, kwargs: OpKwargs) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
+    def execute(
+        self, args: OpArgs, kwargs: OpKwargs
+    ) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
         """Execute device transfer.
 
         Returns:

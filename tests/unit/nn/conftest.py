@@ -63,12 +63,8 @@ def _has_jax() -> bool:
         return False
 
 
-requires_torch = pytest.mark.skipif(
-    not _has_torch(), reason="PyTorch not installed"
-)
-requires_jax = pytest.mark.skipif(
-    not _has_jax(), reason="JAX not installed"
-)
+requires_torch = pytest.mark.skipif(not _has_torch(), reason="PyTorch not installed")
+requires_jax = pytest.mark.skipif(not _has_jax(), reason="JAX not installed")
 
 
 # ---------------------------------------------------------------------------
@@ -99,8 +95,12 @@ def simple_linear():
     """A small Linear(4, 3) model with deterministic weights."""
     rng = make_rng(100)
     model = nb.nn.Linear(4, 3)
-    model.weight = nb_from_np(rng.normal(size=(4, 3)).astype(np.float32), requires_grad=True)
-    model.bias = nb_from_np(rng.normal(size=(1, 3)).astype(np.float32), requires_grad=True)
+    model.weight = nb_from_np(
+        rng.normal(size=(4, 3)).astype(np.float32), requires_grad=True
+    )
+    model.bias = nb_from_np(
+        rng.normal(size=(1, 3)).astype(np.float32), requires_grad=True
+    )
     return model
 
 

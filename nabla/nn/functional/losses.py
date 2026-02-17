@@ -36,7 +36,9 @@ def cross_entropy_loss(logits: Tensor, targets: Tensor, axis: int = -1) -> Tenso
 
     # Detect integer-target mode: targets has one fewer dimension than logits
     if len(targets.shape) < len(logits.shape):
-        targets = _one_hot(targets, num_classes=int(logits.shape[axis]), dtype=logits.dtype)
+        targets = _one_hot(
+            targets, num_classes=int(logits.shape[axis]), dtype=logits.dtype
+        )
 
     batch = int(logits.shape[0])
     return -reduce_sum(targets * log_probs) / float(batch)

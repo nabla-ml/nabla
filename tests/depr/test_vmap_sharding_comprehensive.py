@@ -79,7 +79,6 @@ class TestVmapWithShardingUnaryOps:
         mesh = DeviceMesh("mesh", mesh_shape, mesh_axes)
 
         def f(x):
-
             x_sharded = x.shard(mesh, P(None, mesh_axes[-1]))
             return relu(x_sharded)
 
@@ -137,7 +136,6 @@ class TestVmapBinaryOpsWithSharding:
         mesh = DeviceMesh("mesh", mesh_shape, mesh_axes)
 
         def f(x, bias):
-
             bias_sharded = bias.shard(mesh, P(mesh_axes[-1]))
 
             return add(x, bias_sharded)
@@ -195,7 +193,6 @@ class TestVmapMatmulSharding:
         mesh = DeviceMesh("mesh", (2,), ("tp",))
 
         def f(x, w):
-
             w_sharded = w.shard(mesh, P(None, "tp"))
             result = matmul(x, w_sharded)
 
@@ -221,7 +218,6 @@ class TestVmapMatmulSharding:
         mesh = DeviceMesh("mesh", (2,), ("tp",))
 
         def f(x, w):
-
             x_sharded = x.shard(mesh, P("tp"))
 
             w_sharded = w.shard(mesh, P("tp", None))
@@ -249,7 +245,6 @@ class TestVmapMatmulSharding:
         mesh = DeviceMesh("mesh", (2, 2), ("dp", "tp"))
 
         def f(x, w):
-
             w_sharded = w.shard(mesh, P(None, "tp"))
             result = matmul(x, w_sharded)
             return result
@@ -415,7 +410,6 @@ class TestVmapCompositeWithSharding:
         mesh = DeviceMesh("mesh", (2,), ("tp",))
 
         def mlp_layer(x, w1, w2, b1):
-
             w1_sharded = w1.shard(mesh, P(None, "tp"))
             h = matmul(x, w1_sharded)
 
@@ -441,13 +435,13 @@ class TestVmapCompositeWithSharding:
 
         vmapped_mlp = vmap(mlp_layer, in_axes=(0, None, None, None))
 
-        print(f"\n{'='*70}")
+        print(f"\n{'=' * 70}")
         print("TEST: test_mlp_layer_megatron_style")
         print("Pattern: Column Parallel → ReLU → Row Parallel")
         print("  Layer 1: x @ w1_sharded(<*, tp>) = column parallel (no reduction)")
         print("  Layer 2: h @ w2_sharded(<tp, *>) = row parallel (AllReduce needed)")
         print("mesh_shape=(2,), mesh_axes=('tp',)")
-        print(f"{'='*70}")
+        print(f"{'=' * 70}")
         t = trace(vmapped_mlp, x, w1, w2, b1)
         print(t)
 
@@ -461,7 +455,7 @@ class TestVmapCompositeWithSharding:
 
         shard_count = trace_str.lower().count("shard(")
         print(f"📊 Found {shard_count} shard operations in trace")
-        print(f"{'='*70}\n")
+        print(f"{'=' * 70}\n")
 
         result = vmapped_mlp(x, w1, w2, b1)
 
@@ -480,7 +474,6 @@ class TestVmapCompositeWithSharding:
         mesh = DeviceMesh("mesh", (2,), ("tp",))
 
         def compute_attention_scores(q, k):
-
             q_sharded = q.shard(mesh, P(None, "tp"))
             k_sharded = k.shard(mesh, P(None, "tp"))
 

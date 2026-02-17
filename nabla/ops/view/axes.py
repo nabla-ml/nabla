@@ -15,7 +15,9 @@ if TYPE_CHECKING:
     from ...core import Tensor
 
 
-def _axis_compute_shapes(op: Operation, args: OpArgs, kwargs: OpKwargs, transform_fn: Any) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
+def _axis_compute_shapes(
+    op: Operation, args: OpArgs, kwargs: OpKwargs, transform_fn: Any
+) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
     """Shared boilerplate for axis-op compute_physical_shape.
 
     *transform_fn(in_shape_list, kwargs)* mutates/returns the output shape list.

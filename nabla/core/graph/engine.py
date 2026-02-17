@@ -29,9 +29,9 @@ from ..common.context import _session
 
 _GRAPH_EPOCH: int = 0
 _SEED: ContextVar[Tensor | None] = ContextVar("_SEED", default=None)
-_GRAPH_CACHE: dict[tuple[Any, ...], tuple[CompiledModel, list[int]]] = (
-    {}
-)  # cache_key -> (compiled model, kept_input_indices)
+_GRAPH_CACHE: dict[
+    tuple[Any, ...], tuple[CompiledModel, list[int]]
+] = {}  # cache_key -> (compiled model, kept_input_indices)
 
 import os
 
@@ -300,7 +300,9 @@ class ComputeGraph:
         # Skip if only evaluating leaf inputs (nothing to compute)
         self._skip_finalize = all(t._impl.output_refs is None for t in targets)
         if self._skip_finalize:
-            _debug_eval("evaluate(): skip finalize (all targets are already leaf inputs)")
+            _debug_eval(
+                "evaluate(): skip finalize (all targets are already leaf inputs)"
+            )
             return None
 
         _debug_eval(f"evaluate(): collected {len(targets)} targets")
@@ -604,6 +606,7 @@ class ComputeGraph:
 
         if DEBUG_LAZY_EVAL:
             import time
+
             _debug_eval(f"miss: compiling graph with {len(self.graph.inputs)} inputs")
             start_comp = time.perf_counter()
 
@@ -667,7 +670,9 @@ class ComputeGraph:
                 if not found:
                     raise RuntimeError("Could not map graph input back to trace")
 
-            input_signatures = [_buf_signature(b) for b in used_bufferss if b is not None]
+            input_signatures = [
+                _buf_signature(b) for b in used_bufferss if b is not None
+            ]
             _GRAPH_CACHE[cache_key] = (model, kept_indices, input_signatures)
 
         self._finalize_evaluation(seed_value=seed_val.item())

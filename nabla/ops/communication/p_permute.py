@@ -42,14 +42,18 @@ class PPermuteOp(CollectiveOperation):
 
         return [ppermute(cotangents[0], inv_perm)]
 
-    def infer_sharding_spec(self, args: OpArgs, mesh: DeviceMesh | None, kwargs: dict) -> Any:
+    def infer_sharding_spec(
+        self, args: OpArgs, mesh: DeviceMesh | None, kwargs: dict
+    ) -> Any:
         """Infer sharding for PPermute (Adaptation Layer)."""
         input_tensor = args[0]
         input_sharding = input_tensor.sharding
         # PPermute preserves sharding spec (it just moves data between devices).
         return input_sharding, [input_sharding], False
 
-    def execute(self, args: OpArgs, kwargs: OpKwargs) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
+    def execute(
+        self, args: OpArgs, kwargs: OpKwargs
+    ) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
         """Point-to-point permutation (Physical)."""
         from ...core import GRAPH, Tensor
 
@@ -107,7 +111,6 @@ class PPermuteOp(CollectiveOperation):
 
                 results.append(val)
             else:
-
                 template = shard_graph_values[0]
                 zero_val = ops.constant(0, template.type.dtype, template.type.device)
                 zero_val = ops.broadcast_to(zero_val, template.type.shape)

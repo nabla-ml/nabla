@@ -264,7 +264,6 @@ class TestVmapEdgeCases:
         x = tensor_from_numpy(np_x)
 
         def fn(a):
-
             return reduce_sum(a, axis=0)
 
         result = vmap(fn)(x)
@@ -287,7 +286,6 @@ class TestVmapEdgeCases:
         bias = tensor_from_numpy(np_bias)
 
         def normalize_and_scale(inputs, sc, bi):
-
             m = mean(inputs, axis=0)
             centered = sub(inputs, m)
             scaled = mul(centered, sc)

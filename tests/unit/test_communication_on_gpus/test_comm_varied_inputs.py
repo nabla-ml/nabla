@@ -167,7 +167,9 @@ def run_mesh(n_devices: int) -> int:
     a2a_data = np.arange(a2a_len, dtype=np.float32)
     failures += not _run_case(
         f"all_to_all_dense_n{n_devices}",
-        lambda t, m=mesh, d=dimspec_x: all_to_all(t.shard(m, d), split_axis=0, concat_axis=0),
+        lambda t, m=mesh, d=dimspec_x: all_to_all(
+            t.shard(m, d), split_axis=0, concat_axis=0
+        ),
         Variant("all_to_all_dense", a2a_data),
     )[0]
 

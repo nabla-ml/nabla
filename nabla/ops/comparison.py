@@ -11,7 +11,15 @@ from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
-from .base import BinaryOperation, OpArgs, OpKwargs, OpResult, OpTensorValues, Operation, UnaryOperation
+from .base import (
+    BinaryOperation,
+    OpArgs,
+    OpKwargs,
+    OpResult,
+    OpTensorValues,
+    Operation,
+    UnaryOperation,
+)
 
 
 class ComparisonOp(BinaryOperation):

@@ -54,7 +54,6 @@ def mlp_layer(x, w1, w2):
 
 
 class TestNestedVmapAdvanced:
-
     def test_nested_vmap_time_distributed_input_sharding(self, mesh_2x4):
         """
         Pattern: (Batch, Time, Features) -> (Batch, Time, Features)
@@ -71,10 +70,8 @@ class TestNestedVmapAdvanced:
 
         @vmap(spmd_axis_name="dp", mesh=mesh)
         def batch_fn(batch_x):
-
             @vmap
             def time_fn(time_x):
-
                 t_sharded = time_x.shard(mesh, P("tp"))
                 return relu(t_sharded)
 
@@ -118,10 +115,8 @@ class TestNestedVmapAdvanced:
 
         @vmap(spmd_axis_name="dp", mesh=mesh)
         def process_batch(b_q, b_k):
-
             @vmap
             def process_head(h_q, h_k):
-
                 q_s = h_q.shard(mesh, P(None, "tp"))
 
                 k_s = h_k.shard(mesh, P(None, "tp"))
@@ -189,10 +184,8 @@ class TestNestedVmapAdvanced:
 
         @vmap(spmd_axis_name="dp", mesh=mesh)
         def batch_forward(b_x):
-
             @vmap
             def token_forward(tok):
-
                 h = relu(matmul(tok, t_w1_s))
 
                 out = matmul(h, t_w2_s)
@@ -239,10 +232,8 @@ class TestNestedViewAndReduction:
 
         @vmap(spmd_axis_name="dp", mesh=mesh)
         def batch_fn(batch_x):
-
             @vmap
             def time_fn(time_x):
-
                 t_s = time_x.shard(mesh, P(None, None, "tp"))
 
                 flat = nabla.reshape(t_s, (H * W, C))
@@ -283,7 +274,6 @@ class TestNestedViewAndReduction:
         def batch_fn(b_x):
             @vmap
             def time_fn(t_x):
-
                 t_s = t_x.shard(mesh, P("tp"))
                 return reduce_sum(t_s, axis=0)
 
@@ -336,7 +326,6 @@ class TestNestedViewAndReduction:
         def batch_fn(b_x):
             @vmap(spmd_axis_name="pp", mesh=mesh)
             def seq_fn(s_x):
-
                 s_s = s_x.shard(mesh, P("tp"))
 
                 dense = matmul(s_s, t_w_s)
@@ -391,10 +380,8 @@ class TestReviewStress:
 
         @vmap(spmd_axis_name="dp", mesh=mesh)
         def batch_fn(b_x):
-
             @vmap(spmd_axis_name="pp", mesh=mesh)
             def time_fn(t_x):
-
                 t_s = t_x.shard(mesh, P("tp"))
 
                 obs_1 = nabla.unsqueeze(t_s, axis=0)

@@ -42,4 +42,6 @@ class Embedding(Module):
         return F.embedding(indices, self.weight)
 
     def extra_repr(self) -> str:
-        return f"num_embeddings={self.num_embeddings}, embedding_dim={self.embedding_dim}"
+        return (
+            f"num_embeddings={self.num_embeddings}, embedding_dim={self.embedding_dim}"
+        )

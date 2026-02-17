@@ -54,9 +54,10 @@ class TestShardMapComplex(unittest.TestCase):
         }
         out_specs = {0: ShardingSpec(self.mesh, [DimSpec([]), DimSpec([])])}
 
-        a_np, b_np = np.random.randn(M, K).astype(np.float32), np.random.randn(
-            K, N
-        ).astype(np.float32)
+        a_np, b_np = (
+            np.random.randn(M, K).astype(np.float32),
+            np.random.randn(K, N).astype(np.float32),
+        )
         a, b = Tensor.from_dlpack(a_np), Tensor.from_dlpack(b_np)
         sharded_fn = shard_map(binary.matmul, self.mesh, in_specs, out_specs)
 

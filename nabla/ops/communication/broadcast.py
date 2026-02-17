@@ -40,7 +40,9 @@ class DistributedBroadcastOp(CollectiveOperation):
         dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
         return shapes, dtypes, devices
 
-    def execute(self, args: OpArgs, kwargs: OpKwargs) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
+    def execute(
+        self, args: OpArgs, kwargs: OpKwargs
+    ) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
         """Execute distributed broadcast using MAX ops."""
         from ...core import GRAPH, Tensor
         from ...core.sharding.spmd import create_replicated_spec
@@ -56,7 +58,9 @@ class DistributedBroadcastOp(CollectiveOperation):
                     root = ops.transfer_to(root, root_device)
 
                 try:
-                    from max.graph.ops import distributed_broadcast as max_distributed_broadcast
+                    from max.graph.ops import (
+                        distributed_broadcast as max_distributed_broadcast,
+                    )
                     from max.dtype import DType
                     from max.graph.type import BufferType
                 except ImportError as exc:

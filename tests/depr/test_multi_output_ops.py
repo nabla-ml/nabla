@@ -131,7 +131,6 @@ class TestSplitOp:
 
             spec = r.sharding
             if spec:
-
                 pass
 
 

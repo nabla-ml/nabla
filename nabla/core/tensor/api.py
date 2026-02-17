@@ -145,7 +145,6 @@ class Tensor(DLPackArray, HasTensorValue):
 
         if not self._impl._graph_values:
             if self._impl._buffers:
-
                 self.hydrate()
 
         if not self._impl._graph_values:
@@ -1087,7 +1086,9 @@ class Tensor(DLPackArray, HasTensorValue):
         """
         return _TensorAtAccessor(self)
 
-    def __getitem__(self, key: int | slice | EllipsisType | tuple[int | slice | EllipsisType, ...]) -> Tensor:
+    def __getitem__(
+        self, key: int | slice | EllipsisType | tuple[int | slice | EllipsisType, ...]
+    ) -> Tensor:
         """Basic slicing and integer indexing."""
         from ...ops import view
 
@@ -1100,7 +1101,11 @@ class Tensor(DLPackArray, HasTensorValue):
 
     def __setitem__(
         self,
-        key: int | slice | EllipsisType | tuple[int | slice | EllipsisType, ...] | "Tensor",
+        key: int
+        | slice
+        | EllipsisType
+        | tuple[int | slice | EllipsisType, ...]
+        | "Tensor",
         value: TensorValueLike,
     ) -> None:
         """PyTorch-like indexed update that mutates this Tensor object binding.
@@ -1126,7 +1131,11 @@ class _TensorAtAccessor:
 
     def __getitem__(
         self,
-        key: int | slice | EllipsisType | tuple[int | slice | EllipsisType, ...] | Tensor,
+        key: int
+        | slice
+        | EllipsisType
+        | tuple[int | slice | EllipsisType, ...]
+        | Tensor,
     ) -> "_TensorAtIndexer":
         return _TensorAtIndexer(self._tensor, key)
 
@@ -1137,7 +1146,11 @@ class _TensorAtIndexer:
     def __init__(
         self,
         tensor: Tensor,
-        key: int | slice | EllipsisType | tuple[int | slice | EllipsisType, ...] | Tensor,
+        key: int
+        | slice
+        | EllipsisType
+        | tuple[int | slice | EllipsisType, ...]
+        | Tensor,
     ):
         self._tensor = tensor
         self._key = key
@@ -1192,7 +1205,9 @@ def _parse_basic_index(
                 s_stop += dim_size
             s_step = k.step if k.step is not None else 1
             if s_step != 1:
-                raise NotImplementedError("Slicing with step != 1 is not yet supported.")
+                raise NotImplementedError(
+                    "Slicing with step != 1 is not yet supported."
+                )
 
             s_start = max(0, min(dim_size, s_start))
             s_stop = max(0, min(dim_size, s_stop))
@@ -1210,7 +1225,9 @@ def _parse_basic_index(
     return start, size, squeeze_axes
 
 
-def _broadcast_updates_for_scatter(x: Tensor, indices: Tensor, updates: Tensor) -> Tensor:
+def _broadcast_updates_for_scatter(
+    x: Tensor, indices: Tensor, updates: Tensor
+) -> Tensor:
     """Broadcast scalar updates for axis=0 scatter convenience."""
     if updates.shape == tuple(indices.shape):
         return updates

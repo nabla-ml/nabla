@@ -69,7 +69,9 @@ class TransformerEncoderLayer(Module):
     ) -> Tensor:
         # Self-attention sub-layer with residual
         normed = self.norm1(src)
-        attn_out = self.self_attn(normed, normed, normed, attn_mask=src_mask, is_causal=is_causal)
+        attn_out = self.self_attn(
+            normed, normed, normed, attn_mask=src_mask, is_causal=is_causal
+        )
         src = src + self.dropout1(attn_out)
 
         # Feed-forward sub-layer with residual
@@ -136,9 +138,7 @@ class TransformerDecoderLayer(Module):
 
         # Cross-attention over encoder memory
         normed = self.norm2(tgt)
-        cross_attn_out = self.cross_attn(
-            normed, memory, memory, attn_mask=memory_mask
-        )
+        cross_attn_out = self.cross_attn(normed, memory, memory, attn_mask=memory_mask)
         tgt = tgt + self.dropout2(cross_attn_out)
 
         # Feed-forward

@@ -97,7 +97,9 @@ class ReduceScatterOp(CollectiveOperation):
 
         return [all_gather(cotangents[0], axis=axis)]
 
-    def execute(self, args: OpArgs, kwargs: OpKwargs) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
+    def execute(
+        self, args: OpArgs, kwargs: OpKwargs
+    ) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
         """Sum-reduce across shards then scatter the result (Physical)."""
         from ...core import GRAPH, Tensor
 
@@ -238,7 +240,6 @@ class ReduceScatterOp(CollectiveOperation):
 
         scattered = []
         for i in range(num_shards):
-
             slices = [slice(None)] * len(shape)
             slices[axis] = slice(i * chunk_size, (i + 1) * chunk_size)
             scattered.append(full_result[tuple(slices)])

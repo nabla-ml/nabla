@@ -56,12 +56,12 @@ def test_sharded_mlp_grads():
     # 1. Check Sharding Alignment
     from nabla.core.sharding.spec import needs_reshard
 
-    assert not needs_reshard(
-        grad_W.sharding, W.sharding
-    ), f"W grad sharding mismatch: {grad_W.sharding} vs {W.sharding}"
-    assert not needs_reshard(
-        grad_X.sharding, X.sharding
-    ), f"X grad sharding mismatch: {grad_X.sharding} vs {X.sharding}"
+    assert not needs_reshard(grad_W.sharding, W.sharding), (
+        f"W grad sharding mismatch: {grad_W.sharding} vs {W.sharding}"
+    )
+    assert not needs_reshard(grad_X.sharding, X.sharding), (
+        f"X grad sharding mismatch: {grad_X.sharding} vs {X.sharding}"
+    )
 
     # 2. Check Values (compared to replicated execution)
     def expected_fn(x, w):

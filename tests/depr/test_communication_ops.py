@@ -18,7 +18,6 @@ All ops are tested with:
 - Numerical verification against numpy
 """
 
-
 from nabla.core.sharding.spec import DimSpec
 from nabla.ops.communication import all_gather, all_reduce, reshard, broadcast
 from .conftest import (

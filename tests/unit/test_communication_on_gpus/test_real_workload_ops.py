@@ -35,7 +35,7 @@ def _run_case(name: str, fn) -> bool:
         gathered.realize()
         print(f"[{name}] result shape={tuple(int(d) for d in gathered.shape)}")
         print(gathered.numpy())
-        print(f"[{name}] elapsed={time.perf_counter()-t0:.3f}s")
+        print(f"[{name}] elapsed={time.perf_counter() - t0:.3f}s")
         return True
     except Exception as exc:
         print(f"[{name}] FAILED: {exc}")
@@ -97,9 +97,9 @@ def _case_reshard_then_regular_ops(mesh: DeviceMesh) -> bool:
         print("\n--- reshard_then_regular_ops: Nabla Trace ---")
         print(
             trace(
-                lambda t: (
-                    lambda y: nb.relu(y) * nb.relu(y)
-                )(nb.reshard(t, mesh, [DimSpec([], is_open=True)])),
+                lambda t: (lambda y: nb.relu(y) * nb.relu(y))(
+                    nb.reshard(t, mesh, [DimSpec([], is_open=True)])
+                ),
                 x,
             )
         )
@@ -125,7 +125,9 @@ def _case_sharded_chain_ops(mesh: DeviceMesh) -> bool:
         mesh,
         [DimSpec(["x"], is_open=False), DimSpec([], is_open=True)],
     )
-    w = nb.distributed_broadcast(nb.Tensor.constant(w_np, dtype=DType.float32), mesh=mesh)
+    w = nb.distributed_broadcast(
+        nb.Tensor.constant(w_np, dtype=DType.float32), mesh=mesh
+    )
 
     def mapped(a: nb.Tensor, b: nb.Tensor) -> nb.Tensor:
         y = nb.tanh(nb.matmul(a, b))
@@ -180,42 +182,53 @@ def main() -> int:
 
     ok = True
 
-    ok = ok and _run_case("workload_sharded_matmul_n8", lambda: nb.matmul(
-        nb.Tensor.constant(
-            np.arange(max(32, len(mesh.devices) * 8) * 16, dtype=np.float32).reshape(max(32, len(mesh.devices) * 8), 16) / 100.0,
-            dtype=DType.float32,
-        ).shard(mesh, [DimSpec(["x"], is_open=False), DimSpec([], is_open=True)]),
-        nb.distributed_broadcast(
+    ok = ok and _run_case(
+        "workload_sharded_matmul_n8",
+        lambda: nb.matmul(
             nb.Tensor.constant(
-                np.arange(16 * 8, dtype=np.float32).reshape(16, 8) / 50.0,
+                np.arange(
+                    max(32, len(mesh.devices) * 8) * 16, dtype=np.float32
+                ).reshape(max(32, len(mesh.devices) * 8), 16)
+                / 100.0,
                 dtype=DType.float32,
+            ).shard(mesh, [DimSpec(["x"], is_open=False), DimSpec([], is_open=True)]),
+            nb.distributed_broadcast(
+                nb.Tensor.constant(
+                    np.arange(16 * 8, dtype=np.float32).reshape(16, 8) / 50.0,
+                    dtype=DType.float32,
+                ),
+                mesh=mesh,
             ),
-            mesh=mesh,
         ),
-    ))
+    )
 
-    if (not case_filter or "workload_sharded_matmul" in case_filter) and not _case_sharded_matmul(mesh):
+    if (
+        not case_filter or "workload_sharded_matmul" in case_filter
+    ) and not _case_sharded_matmul(mesh):
         print("[workload_sharded_matmul_n8] numerical check failed")
         ok = False
 
-    ok = ok and _run_case("workload_reshard_then_regular_ops_n8", lambda: (
-        (
-            lambda y: (
-                nb.relu(y) * nb.relu(y)
+    ok = ok and _run_case(
+        "workload_reshard_then_regular_ops_n8",
+        lambda: (
+            (lambda y: (nb.relu(y) * nb.relu(y)))(
+                nb.reshard(
+                    nb.Tensor.constant(
+                        np.linspace(
+                            -2.0, 2.0, max(32, len(mesh.devices) * 8), dtype=np.float32
+                        ),
+                        dtype=DType.float32,
+                    ).shard(mesh, [DimSpec(["x"], is_open=False)]),
+                    mesh,
+                    [DimSpec([], is_open=True)],
+                )
             )
-        )(
-            nb.reshard(
-                nb.Tensor.constant(
-                    np.linspace(-2.0, 2.0, max(32, len(mesh.devices) * 8), dtype=np.float32),
-                    dtype=DType.float32,
-                ).shard(mesh, [DimSpec(["x"], is_open=False)]),
-                mesh,
-                [DimSpec([], is_open=True)],
-            )
-        )
-    ))
+        ),
+    )
 
-    if (not case_filter or "workload_reshard_then_regular_ops" in case_filter) and not _case_reshard_then_regular_ops(mesh):
+    if (
+        not case_filter or "workload_reshard_then_regular_ops" in case_filter
+    ) and not _case_reshard_then_regular_ops(mesh):
         print("[workload_reshard_then_regular_ops_n8] numerical check failed")
         ok = False
 
@@ -231,7 +244,9 @@ def main() -> int:
             )
         )(
             nb.Tensor.constant(
-                np.linspace(-1.0, 1.0, max(32, len(mesh.devices) * 8) * 8, dtype=np.float32).reshape(max(32, len(mesh.devices) * 8), 8),
+                np.linspace(
+                    -1.0, 1.0, max(32, len(mesh.devices) * 8) * 8, dtype=np.float32
+                ).reshape(max(32, len(mesh.devices) * 8), 8),
                 dtype=DType.float32,
             ).shard(mesh, [DimSpec(["x"], is_open=False), DimSpec([], is_open=True)]),
             nb.distributed_broadcast(
@@ -244,7 +259,9 @@ def main() -> int:
         ),
     )
 
-    if (not case_filter or "workload_sharded_chain_ops" in case_filter) and not _case_sharded_chain_ops(mesh):
+    if (
+        not case_filter or "workload_sharded_chain_ops" in case_filter
+    ) and not _case_sharded_chain_ops(mesh):
         print("[workload_sharded_chain_ops_n8] numerical check failed")
         ok = False
 

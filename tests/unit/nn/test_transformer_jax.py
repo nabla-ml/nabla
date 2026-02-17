@@ -49,8 +49,7 @@ def sinusoidal_pe(seq_len: int, d_model: int) -> nb.Tensor:
     pe = np.zeros((seq_len, d_model), dtype=np.float32)
     pos = np.arange(seq_len, dtype=np.float32)[:, None]
     div = np.exp(
-        np.arange(0, d_model, 2, dtype=np.float32)
-        * -(math.log(10000.0) / d_model)
+        np.arange(0, d_model, 2, dtype=np.float32) * -(math.log(10000.0) / d_model)
     )
     pe[:, 0::2] = np.sin(pos * div)
     pe[:, 1::2] = np.cos(pos * div)
@@ -158,7 +157,10 @@ class TestEncoderDecoderCopyTask:
             losses.append(loss_value)
 
             model, opt_state = nb.nn.optim.adamw_update(
-                model, grads, opt_state, lr=LR,
+                model,
+                grads,
+                opt_state,
+                lr=LR,
             )
 
         assert np.mean(losses[-5:]) < np.mean(losses[:5])
@@ -178,17 +180,22 @@ class TestDecoderOnlyNextToken:
             tokens = _random_tokens(rng)
 
             loss, grads = nb.value_and_grad(next_token_loss, argnums=0)(
-                model, tokens,
+                model,
+                tokens,
             )
             loss_value = float(loss.to_numpy())
             print(f"[JAX gpt] step {i + 1}/{STEPS} loss={loss_value:.6f}", flush=True)
             losses.append(loss_value)
 
             model, opt_state = nb.nn.optim.adamw_update(
-                model, grads, opt_state, lr=LR,
+                model,
+                grads,
+                opt_state,
+                lr=LR,
             )
 
         assert np.mean(losses[-5:]) < np.mean(losses[:5])
+
 
 if __name__ == "__main__":
     import faulthandler
@@ -199,7 +206,7 @@ if __name__ == "__main__":
     t1 = TestEncoderDecoderCopyTask()
     print("Running TestEncoderDecoderCopyTask (JAX)...")
     t1.test_loss_decreases()
-    
+
     t2 = TestDecoderOnlyNextToken()
     print("\nRunning TestDecoderOnlyNextToken (JAX)...")
     t2.test_loss_decreases()

@@ -38,7 +38,6 @@ def shard_map(
         return x
 
     def wrapper(*args: Any, **kwargs: Any) -> Any:
-
         logical_args = list(args)
         for i, val in enumerate(logical_args):
             if isinstance(val, Tensor) and i in in_specs:

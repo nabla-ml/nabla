@@ -44,8 +44,7 @@ def sinusoidal_pe(seq_len: int, d_model: int) -> nb.Tensor:
     pe = np.zeros((seq_len, d_model), dtype=np.float32)
     pos = np.arange(seq_len, dtype=np.float32)[:, None]
     div = np.exp(
-        np.arange(0, d_model, 2, dtype=np.float32)
-        * -(math.log(10000.0) / d_model)
+        np.arange(0, d_model, 2, dtype=np.float32) * -(math.log(10000.0) / d_model)
     )
     pe[:, 0::2] = np.sin(pos * div)
     pe[:, 1::2] = np.cos(pos * div)
@@ -193,6 +192,7 @@ class TestDecoderOnlyNextToken:
 
         assert np.mean(losses[-5:]) < np.mean(losses[:5])
 
+
 if __name__ == "__main__":
     import faulthandler
 
@@ -202,7 +202,7 @@ if __name__ == "__main__":
     t1 = TestEncoderDecoderCopyTask()
     print("Running TestEncoderDecoderCopyTask (PyTorch)...")
     t1.test_loss_decreases()
-    
+
     t2 = TestDecoderOnlyNextToken()
     print("\nRunning TestDecoderOnlyNextToken (PyTorch)...")
     t2.test_loss_decreases()

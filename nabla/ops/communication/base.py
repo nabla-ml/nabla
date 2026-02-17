@@ -114,7 +114,9 @@ class CollectiveOperation(Operation):
     # Legacy execute and kernel_all methods have been removed.
     # All communication operations now implement execute.
 
-    def infer_sharding_spec(self, args: OpArgs, mesh: DeviceMesh | None, kwargs: dict) -> Any:
+    def infer_sharding_spec(
+        self, args: OpArgs, mesh: DeviceMesh | None, kwargs: dict
+    ) -> Any:
         """Default adaptation: validate inputs and compute output spec."""
         # This implementation allows subclasses to strictly rely on _compute_output_spec
         # for both adaptation and execution phases.

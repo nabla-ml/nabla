@@ -92,12 +92,12 @@ def test_scenario(mesh_shape, mesh_axes, scenario_name):
 
         expected_len = full_size // length_factor
 
-        assert res.shape == (
-            expected_len,
-        ), f"Shape mismatch: {res.shape} != {(expected_len,)}"
-        assert np.allclose(
-            res, val_factor
-        ), f"Value mismatch: {res[0] if res.size>0 else '?'} != {val_factor}"
+        assert res.shape == (expected_len,), (
+            f"Shape mismatch: {res.shape} != {(expected_len,)}"
+        )
+        assert np.allclose(res, val_factor), (
+            f"Value mismatch: {res[0] if res.size > 0 else '?'} != {val_factor}"
+        )
         print(f"        ✅ PASS (Factor {val_factor})")
 
         # 3. Test ReduceScatter
@@ -130,9 +130,9 @@ def test_scenario(mesh_shape, mesh_axes, scenario_name):
         gathered.realize()
         res = gathered.numpy()
 
-        assert np.min(res) >= 0 and np.max(res) < mesh.get_axis_size(
-            ax
-        ), f"Axis {ax}: invalid range {res}"
+        assert np.min(res) >= 0 and np.max(res) < mesh.get_axis_size(ax), (
+            f"Axis {ax}: invalid range {res}"
+        )
         print(f"    ✅ PASS (Axis {ax})")
 
     # 5. Test AllToAll (Simple Check)

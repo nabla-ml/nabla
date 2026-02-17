@@ -159,7 +159,9 @@ class TestTreeLoraDelta:
         def is_adapter_leaf(x):
             return isinstance(x, dict) and "A" in x and "B" in x
 
-        delta = nb.nn.finetune.tree_lora_delta(adapter, alpha=6.0, is_leaf=is_adapter_leaf)
+        delta = nb.nn.finetune.tree_lora_delta(
+            adapter, alpha=6.0, is_leaf=is_adapter_leaf
+        )
         assert isinstance(delta, nb.Tensor)
         assert tuple(int(d) for d in delta.shape) == (8, 6)
 
@@ -180,7 +182,9 @@ class TestTreeLoraDelta:
         def is_adapter_leaf(x):
             return isinstance(x, dict) and "A" in x and "B" in x
 
-        deltas = nb.nn.finetune.tree_lora_delta(adapters, alpha=6.0, is_leaf=is_adapter_leaf)
+        deltas = nb.nn.finetune.tree_lora_delta(
+            adapters, alpha=6.0, is_leaf=is_adapter_leaf
+        )
         assert isinstance(deltas, list)
         assert len(deltas) == 2
         assert isinstance(deltas[0], nb.Tensor)

@@ -82,7 +82,9 @@ def test_setitem_slice_sharded_runs_with_buffer_flag(mesh_1d_2):
 
     x[:, 2:4] = update
 
-    expected = jnp.array([[0.0, 1.0, 50.0, 51.0], [4.0, 5.0, 52.0, 53.0]], dtype=jnp.float32)
+    expected = jnp.array(
+        [[0.0, 1.0, 50.0, 51.0], [4.0, 5.0, 52.0, 53.0]], dtype=jnp.float32
+    )
     assert_allclose(x.gather(), expected)
 
 
@@ -96,7 +98,9 @@ def test_setitem_slice_sharded_traced_uses_buffer_flag(mesh_1d_2):
 
     x[:, 2:4] = update
 
-    expected = jnp.array([[0.0, 1.0, 50.0, 51.0], [4.0, 5.0, 52.0, 53.0]], dtype=jnp.float32)
+    expected = jnp.array(
+        [[0.0, 1.0, 50.0, 51.0], [4.0, 5.0, 52.0, 53.0]], dtype=jnp.float32
+    )
     assert_allclose(x.gather(), expected)
     assert x.is_traced is True
     assert x.op_kwargs.get("use_buffer_ops") is True
@@ -124,14 +128,17 @@ def test_setitem_slice_vmap_batched():
     def jax_f(a, b):
         return a.at[:, 1:3].set(b)
 
-    expected = jax.vmap(jax_f)(jnp.arange(18, dtype=jnp.float32).reshape(3, 2, 3), jnp.array(
-        [
-            [[100.0, 101.0], [102.0, 103.0]],
-            [[110.0, 111.0], [112.0, 113.0]],
-            [[120.0, 121.0], [122.0, 123.0]],
-        ],
-        dtype=jnp.float32,
-    ))
+    expected = jax.vmap(jax_f)(
+        jnp.arange(18, dtype=jnp.float32).reshape(3, 2, 3),
+        jnp.array(
+            [
+                [[100.0, 101.0], [102.0, 103.0]],
+                [[110.0, 111.0], [112.0, 113.0]],
+                [[120.0, 121.0], [122.0, 123.0]],
+            ],
+            dtype=jnp.float32,
+        ),
+    )
     assert_allclose(out, expected)
 
 
@@ -141,7 +148,9 @@ def test_chained_updates_setitem_matches_jax():
         jnp.array([[100.0, 101.0], [110.0, 111.0], [120.0, 121.0]], dtype=jnp.float32)
     )
     row_idx = tensor_from_jax(jnp.array([0, 2], dtype=jnp.int32))
-    row_update = tensor_from_jax(jnp.array([[-5.0, -6.0, -7.0, -8.0], [5.0, 6.0, 7.0, 8.0]]))
+    row_update = tensor_from_jax(
+        jnp.array([[-5.0, -6.0, -7.0, -8.0], [5.0, 6.0, 7.0, 8.0]])
+    )
 
     x[:, 1:3] = col_update
     x[row_idx] = row_update
@@ -193,7 +202,9 @@ def test_grad_at_chained_updates_matches_jax():
     idx = tensor_from_jax(jnp.array([0, 3], dtype=jnp.int32))
 
     def nb_loss(x):
-        y = x.at[1:4].set(tensor_from_jax(jnp.array([2.0, 4.0, 6.0], dtype=jnp.float32)))
+        y = x.at[1:4].set(
+            tensor_from_jax(jnp.array([2.0, 4.0, 6.0], dtype=jnp.float32))
+        )
         z = y.at[idx].add(1.5)
         return nb.reduce_sum(z * z)
 
@@ -229,7 +240,9 @@ def test_vmap_grad_setitem_matches_jax():
 
 def test_sharded_grad_at_matches_jax(mesh_1d_2):
     def nb_loss(x):
-        y = x.at[:, 1:3].set(tensor_from_jax(jnp.array([[7.0, 8.0], [9.0, 10.0]], dtype=jnp.float32)))
+        y = x.at[:, 1:3].set(
+            tensor_from_jax(jnp.array([[7.0, 8.0], [9.0, 10.0]], dtype=jnp.float32))
+        )
         return nb.reduce_sum(y * y)
 
     def jax_loss(x):

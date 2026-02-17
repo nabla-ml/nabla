@@ -117,7 +117,9 @@ class AllGatherOp(CollectiveOperation):
 
         return ShardingSpec(input_sharding.mesh, new_dim_specs)
 
-    def execute(self, args: OpArgs, kwargs: OpKwargs) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
+    def execute(
+        self, args: OpArgs, kwargs: OpKwargs
+    ) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
         """Gather shards along an axis to produce replicated full tensors (Physical).
 
         Derives all physical context (mesh, sharded_axis_name) internally.
@@ -199,9 +201,7 @@ class AllGatherOp(CollectiveOperation):
                 for dev in mesh.device_refs
             ]
 
-            return max_allgather(
-                shard_graph_values, signal_buffers, axis=axis
-            )
+            return max_allgather(shard_graph_values, signal_buffers, axis=axis)
 
         # 2. CPU Simulation Path (Local execution)
         if mesh is None or (sharded_axis_name is None and len(mesh.axis_names) <= 1):
@@ -227,7 +227,6 @@ class AllGatherOp(CollectiveOperation):
         other_axes = [ax for ax in all_axes if ax != sharded_axis_name]
 
         if not other_axes:
-
             unique_shards = []
             seen_coords = set()
             for shard_idx, val in enumerate(shard_graph_values):
@@ -249,7 +248,6 @@ class AllGatherOp(CollectiveOperation):
 
         gathered_per_group = {}
         for other_coords, members in groups.items():
-
             members.sort(key=lambda x: mesh.get_coordinate(x[0], sharded_axis_name))
             shards = [val for _, val in members]
             gathered = ops.concat(shards, axis=axis) if len(shards) > 1 else shards[0]
@@ -326,7 +324,9 @@ class GatherAllAxesOp(Operation):
             )
         ]
 
-    def infer_sharding_spec(self, args: OpArgs, mesh: DeviceMesh | None, kwargs: dict) -> Any:
+    def infer_sharding_spec(
+        self, args: OpArgs, mesh: DeviceMesh | None, kwargs: dict
+    ) -> Any:
         """Infer sharding: Input preserves current sharding, Output is replicated."""
         if not args:
             return None, [], False
@@ -344,7 +344,9 @@ class GatherAllAxesOp(Operation):
 
         return output_sharding, input_shardings, False
 
-    def execute(self, args: OpArgs, kwargs: OpKwargs) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
+    def execute(
+        self, args: OpArgs, kwargs: OpKwargs
+    ) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
         """Physical execution for GatherAllAxesOp."""
         from ...core import GRAPH, Tensor
         from ...core.sharding.spmd import create_replicated_spec

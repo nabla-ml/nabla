@@ -26,7 +26,6 @@ from .common import (
 
 
 class TestVmapCommunicationAdvanced:
-
     def test_nested_vmap_all_gather(self):
         """vmap(vmap(all_gather)): batch_dims=2."""
         # 2 batch dimensions: B1, B2.

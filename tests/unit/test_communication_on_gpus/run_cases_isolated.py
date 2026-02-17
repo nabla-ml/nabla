@@ -76,9 +76,13 @@ def run_case(case: str, timeout_sec: int) -> CaseResult:
         if "[CASE FAILED]" in out:
             return CaseResult(case, "failed", dt, proc.returncode, "[CASE FAILED] seen")
         if proc.returncode != 0:
-            return CaseResult(case, "error", dt, proc.returncode, f"exit={proc.returncode}")
+            return CaseResult(
+                case, "error", dt, proc.returncode, f"exit={proc.returncode}"
+            )
         if f"{case}: case complete" not in out:
-            return CaseResult(case, "incomplete", dt, proc.returncode, "missing case-complete marker")
+            return CaseResult(
+                case, "incomplete", dt, proc.returncode, "missing case-complete marker"
+            )
 
         return CaseResult(case, "ok", dt, proc.returncode, "")
 

@@ -103,13 +103,17 @@ def _collect_prefix(fn: Callable, tree: Any, prefix: AxisSpec) -> list:
 
     if isinstance(prefix, (int, type(None))):
         tree_map(
-            lambda leaf: out.append(v) if isinstance(leaf, Tensor) and (v := fn(leaf, prefix)) is not None else None,
+            lambda leaf: out.append(v)
+            if isinstance(leaf, Tensor) and (v := fn(leaf, prefix)) is not None
+            else None,
             tree,
         )
         return out
 
     tree_map(
-        lambda leaf, axis: out.append(v) if isinstance(leaf, Tensor) and (v := fn(leaf, axis)) is not None else None,
+        lambda leaf, axis: out.append(v)
+        if isinstance(leaf, Tensor) and (v := fn(leaf, axis)) is not None
+        else None,
         tree,
         prefix,
     )

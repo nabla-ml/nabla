@@ -19,7 +19,6 @@ class TestAutoSharding(unittest.TestCase):
     """Tests for Automated Sharding System."""
 
     def setUp(self):
-
         self.mesh = DeviceMesh("test_mesh", (4,), ("d",), devices=[0, 1, 2, 3])
 
     def test_graph_extraction(self):
@@ -235,7 +234,6 @@ class TestAutoSharding(unittest.TestCase):
         print("\nTEST: Multi-Op Chain Auto-Sharding")
 
         def mlp_layer(x, w, b):
-
             h = x @ w
             h = h + b
             return h.sum(axis=-1, keepdims=True)
@@ -347,7 +345,6 @@ class TestAutoSharding(unittest.TestCase):
         print("\nTEST: Transformer Block (8+ ops)")
 
         def transformer_block(x, w_qkv, w_o, w_ff1, w_ff2):
-
             qkv = x @ w_qkv
 
             attn_out = qkv @ w_o

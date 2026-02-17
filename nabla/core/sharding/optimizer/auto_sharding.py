@@ -114,7 +114,6 @@ class AutoSharding:
     ) -> ShardingSpec:
         """Create initial ShardingSpec for a tensor."""
         if fixed:
-
             dim_specs = []
             for ax in fixed.get("dims", []):
                 if ax is None:
@@ -123,7 +122,6 @@ class AutoSharding:
                     dim_specs.append(DimSpec(ax, is_open=False))
             replicated = frozenset(fixed.get("replicated", []))
         else:
-
             dim_specs = [DimSpec([], is_open=True) for _ in shape]
             replicated = frozenset()
 
@@ -242,7 +240,6 @@ class AutoSharding:
             template = OpShardingRuleTemplate.parse(equation, input_shapes)
             rule = template.instantiate(input_shapes, output_shapes)
         except Exception as e:
-
             if debug:
                 print(
                     f"[Solver] WARNING: Failed to parse rule for node {node['id']} [{node['op_name']}]: {e}"
