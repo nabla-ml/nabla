@@ -13,6 +13,24 @@ html {
     --color-mode: dark;
 }
 
+/* Force true black background across Sphinx Book Theme surfaces */
+html[data-theme="dark"] {
+    --pst-color-background: #000000;
+    --pst-color-on-background: #000000;
+    --pst-color-surface: #000000;
+}
+
+html,
+body,
+.bd-container,
+.bd-container__inner,
+.bd-main,
+.bd-page-width,
+.bd-content,
+.bd-article-container {
+    background-color: #000000 !important;
+}
+
 /* Hide ALL theme switcher elements */
 html .theme-switch-button,
 html .bd-theme-switch,
