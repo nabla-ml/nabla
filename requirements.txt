@@ -1,6 +1,7 @@
 # Core dependencies for Nabla
 numpy>=2.0.0
-# Use nightly/pre-release wheels for latest distributed ops support.
---extra-index-url https://whl.modular.com/nightly/simple/
+# Install latest Modular nightly (includes MAX/Mojo):
+# pip install --pre modular --extra-index-url https://whl.modular.com/nightly/simple/
 --pre
-modular>=26.1.0
+--extra-index-url https://whl.modular.com/nightly/simple/
+modular
