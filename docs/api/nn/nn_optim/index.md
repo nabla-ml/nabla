@@ -73,3 +73,45 @@ Single-tensor AdamW update.
 
 
 ---
+## `sgd_update`
+
+```python
+def sgd_update(params: 'Any', grads: 'Any', state: 'dict[str, Any] | None' = None, *, lr: 'float', momentum: 'float' = 0.0, weight_decay: 'float' = 0.0) -> 'tuple[Any, dict[str, Any]]':
+```
+Functional SGD update on pytrees (mirrors ``adamw_update``).
+
+**Parameters**
+
+- **`params`** : `pytree` – Current model parameters.
+- **`grads`** : `pytree` – Gradients matching the *params* structure.
+- **`state`** : `dict`, optional – Optimizer state containing ``"momentum_buffers"`` and ``"step"``.
+If *None* a fresh state is created.
+- **`lr, momentum, weight_decay`** : `float` – Standard SGD hyper-parameters.
+
+**Returns**
+
+`tuple` – Updated parameters and optimizer state, with tensors realized
+according to the global ``Optimizer`` execution policy.
+
+
+---
+## `adamw_init`
+
+```python
+def adamw_init(params: 'Any') -> 'dict[str, Any]':
+```
+Functional AdamW state init for pytree params.
+
+
+---
+## `adamw_update`
+
+```python
+def adamw_update(params: 'Any', grads: 'Any', state: 'dict[str, Any]', *, lr: 'float', weight_decay: 'float' = 0.0, beta1: 'float' = 0.9, beta2: 'float' = 0.999, eps: 'float' = 1e-08, bias_correction: 'bool' = True, realize: 'bool | None' = None) -> 'tuple[Any, dict[str, Any]]':
+```
+Functional AdamW update on pytrees.
+
+Kept for compatibility and reused by finetuning workloads.
+
+
+---

@@ -63,3 +63,39 @@ Register a custom class as a pytree container node.
 
 
 ---
+## `tensor_leaves`
+
+```python
+def tensor_leaves(tree: 'Any') -> 'list[Tensor]':
+```
+Get only Tensor leaves from a pytree.
+
+
+---
+## `traced`
+
+```python
+def traced(tree: 'Any') -> 'Any':
+```
+Mark all tensors in a pytree as traced.
+
+
+---
+## `untraced`
+
+```python
+def untraced(tree: 'Any') -> 'Any':
+```
+Mark all tensors in a pytree as untraced.
+
+
+---
+## `with_batch_dims`
+
+```python
+def with_batch_dims(tree: 'Any', delta: 'int') -> 'Any':
+```
+Adjust batch_dims on all tensors in a pytree.
+
+
+---

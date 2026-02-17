@@ -53,3 +53,17 @@ def cumsum(x: 'Tensor', axis: 'int' = -1, exclusive: 'bool' = False, reverse: 'b
 ```
 
 ---
+## `reduce_sum_physical`
+
+```python
+def reduce_sum_physical(x: 'Tensor', axis: 'int', keepdims: 'bool' = False) -> 'Tensor':
+```
+
+---
+## `mean_physical`
+
+```python
+def mean_physical(x: 'Tensor', axis: 'int', keepdims: 'bool' = False) -> 'Tensor':
+```
+
+---

@@ -9,5 +9,6 @@ tensor/index
 sharding/index
 autograd/index
 context/index
+types/index
 pytree/index
 ```

@@ -100,6 +100,32 @@
                   "name": "default_dtype",
                   "type": "function",
                   "path": "nabla.default_dtype"
+                },
+                {
+                  "name": "defaults_like",
+                  "type": "function",
+                  "path": "nabla.defaults_like"
+                }
+              ]
+            },
+            {
+              "id": "types",
+              "title": "Types & Device",
+              "items": [
+                {
+                  "name": "DType",
+                  "type": "class",
+                  "path": "nabla.DType"
+                },
+                {
+                  "name": "CPU",
+                  "type": "class",
+                  "path": "nabla.CPU"
+                },
+                {
+                  "name": "Accelerator",
+                  "type": "class",
+                  "path": "nabla.Accelerator"
                 }
               ]
             },
@@ -141,6 +167,26 @@
                   "name": "register_pytree_node",
                   "type": "function",
                   "path": "nabla.register_pytree_node"
+                },
+                {
+                  "name": "tensor_leaves",
+                  "type": "function",
+                  "path": "nabla.tensor_leaves"
+                },
+                {
+                  "name": "traced",
+                  "type": "function",
+                  "path": "nabla.traced"
+                },
+                {
+                  "name": "untraced",
+                  "type": "function",
+                  "path": "nabla.untraced"
+                },
+                {
+                  "name": "with_batch_dims",
+                  "type": "function",
+                  "path": "nabla.with_batch_dims"
                 }
               ]
             }
@@ -211,6 +257,11 @@
                   "name": "CompiledFunction",
                   "type": "class",
                   "path": "nabla.CompiledFunction"
+                },
+                {
+                  "name": "CompilationStats",
+                  "type": "class",
+                  "path": "nabla.CompilationStats"
                 }
               ]
             },
@@ -523,6 +574,16 @@
                   "name": "cumsum",
                   "type": "function",
                   "path": "nabla.cumsum"
+                },
+                {
+                  "name": "reduce_sum_physical",
+                  "type": "function",
+                  "path": "nabla.reduce_sum_physical"
+                },
+                {
+                  "name": "mean_physical",
+                  "type": "function",
+                  "path": "nabla.mean_physical"
                 }
               ]
             },
@@ -727,6 +788,51 @@
                   "name": "rebind",
                   "type": "function",
                   "path": "nabla.rebind"
+                },
+                {
+                  "name": "as_interleaved_complex",
+                  "type": "function",
+                  "path": "nabla.as_interleaved_complex"
+                },
+                {
+                  "name": "view_as_real_interleaved",
+                  "type": "function",
+                  "path": "nabla.view_as_real_interleaved"
+                },
+                {
+                  "name": "broadcast_to_physical",
+                  "type": "function",
+                  "path": "nabla.broadcast_to_physical"
+                },
+                {
+                  "name": "squeeze_physical",
+                  "type": "function",
+                  "path": "nabla.squeeze_physical"
+                },
+                {
+                  "name": "unsqueeze_physical",
+                  "type": "function",
+                  "path": "nabla.unsqueeze_physical"
+                },
+                {
+                  "name": "incr_batch_dims",
+                  "type": "function",
+                  "path": "nabla.incr_batch_dims"
+                },
+                {
+                  "name": "decr_batch_dims",
+                  "type": "function",
+                  "path": "nabla.decr_batch_dims"
+                },
+                {
+                  "name": "move_axis_to_batch_dims",
+                  "type": "function",
+                  "path": "nabla.move_axis_to_batch_dims"
+                },
+                {
+                  "name": "move_axis_from_batch_dims",
+                  "type": "function",
+                  "path": "nabla.move_axis_from_batch_dims"
                 }
               ]
             },
@@ -783,6 +889,21 @@
                   "name": "transfer_to",
                   "type": "function",
                   "path": "nabla.transfer_to"
+                },
+                {
+                  "name": "cpu",
+                  "type": "function",
+                  "path": "nabla.cpu"
+                },
+                {
+                  "name": "gpu",
+                  "type": "function",
+                  "path": "nabla.gpu"
+                },
+                {
+                  "name": "accelerator",
+                  "type": "function",
+                  "path": "nabla.accelerator"
                 }
               ]
             }
@@ -969,6 +1090,105 @@
                   "name": "adamw_step",
                   "type": "function",
                   "path": "nabla.nn.optim.adamw_step"
+                },
+                {
+                  "name": "sgd_update",
+                  "type": "function",
+                  "path": "nabla.nn.optim.sgd_update"
+                },
+                {
+                  "name": "adamw_init",
+                  "type": "function",
+                  "path": "nabla.nn.optim.adamw_init"
+                },
+                {
+                  "name": "adamw_update",
+                  "type": "function",
+                  "path": "nabla.nn.optim.adamw_update"
+                }
+              ]
+            },
+            {
+              "id": "nn_finetune",
+              "title": "Fine-Tuning (nabla.nn.finetune)",
+              "subsections": [
+                {
+                  "id": "nn_finetune_lora",
+                  "title": "LoRA",
+                  "items": [
+                    {
+                      "name": "init_lora_adapter",
+                      "type": "function",
+                      "path": "nabla.nn.finetune.init_lora_adapter"
+                    },
+                    {
+                      "name": "lora_delta",
+                      "type": "function",
+                      "path": "nabla.nn.finetune.lora_delta"
+                    },
+                    {
+                      "name": "lora_linear",
+                      "type": "function",
+                      "path": "nabla.nn.finetune.lora_linear"
+                    },
+                    {
+                      "name": "merge_lora_weight",
+                      "type": "function",
+                      "path": "nabla.nn.finetune.merge_lora_weight"
+                    },
+                    {
+                      "name": "unmerge_lora_weight",
+                      "type": "function",
+                      "path": "nabla.nn.finetune.unmerge_lora_weight"
+                    },
+                    {
+                      "name": "tree_lora_delta",
+                      "type": "function",
+                      "path": "nabla.nn.finetune.tree_lora_delta"
+                    }
+                  ]
+                },
+                {
+                  "id": "nn_finetune_qlora",
+                  "title": "QLoRA",
+                  "items": [
+                    {
+                      "name": "NF4_CODEBOOK",
+                      "type": "constant",
+                      "path": "nabla.nn.finetune.NF4_CODEBOOK"
+                    },
+                    {
+                      "name": "quantize_nf4",
+                      "type": "function",
+                      "path": "nabla.nn.finetune.quantize_nf4"
+                    },
+                    {
+                      "name": "dequantize_nf4",
+                      "type": "function",
+                      "path": "nabla.nn.finetune.dequantize_nf4"
+                    },
+                    {
+                      "name": "qlora_linear",
+                      "type": "function",
+                      "path": "nabla.nn.finetune.qlora_linear"
+                    }
+                  ]
+                },
+                {
+                  "id": "nn_finetune_checkpoint",
+                  "title": "Checkpointing",
+                  "items": [
+                    {
+                      "name": "save_finetune_checkpoint",
+                      "type": "function",
+                      "path": "nabla.nn.finetune.save_finetune_checkpoint"
+                    },
+                    {
+                      "name": "load_finetune_checkpoint",
+                      "type": "function",
+                      "path": "nabla.nn.finetune.load_finetune_checkpoint"
+                    }
+                  ]
                 }
               ]
             }
@@ -983,6 +1203,23 @@
               "name": "call_custom_kernel",
               "type": "function",
               "path": "nabla.call_custom_kernel"
+            }
+          ]
+        },
+        {
+          "id": "testing",
+          "title": "Testing (nabla.testing)",
+          "description": "Utilities for testing and validating tensor computations.",
+          "items": [
+            {
+              "name": "assert_allclose",
+              "type": "function",
+              "path": "nabla.testing.assert_allclose"
+            },
+            {
+              "name": "batch_realize",
+              "type": "function",
+              "path": "nabla.testing.batch_realize"
             }
           ]
         }

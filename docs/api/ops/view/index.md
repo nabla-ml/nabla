@@ -136,3 +136,74 @@ def rebind(x: 'Tensor', shape: 'tuple[int, ...]', **kwargs) -> 'Tensor':
 ```
 
 ---
+## `as_interleaved_complex`
+
+```python
+def as_interleaved_complex(x: 'Tensor') -> 'Tensor':
+```
+
+---
+## `view_as_real_interleaved`
+
+```python
+def view_as_real_interleaved(x: 'Tensor') -> 'Tensor':
+```
+
+---
+## `broadcast_to_physical`
+
+```python
+def broadcast_to_physical(x: 'Tensor', shape: 'tuple[int, ...]') -> 'Tensor':
+```
+
+---
+## `squeeze_physical`
+
+```python
+def squeeze_physical(x: 'Tensor', axis: 'int' = 0) -> 'Tensor':
+```
+
+---
+## `unsqueeze_physical`
+
+```python
+def unsqueeze_physical(x: 'Tensor', axis: 'int' = 0) -> 'Tensor':
+```
+
+---
+## `incr_batch_dims`
+
+```python
+def incr_batch_dims(x: 'Tensor') -> 'Tensor':
+```
+Increment batch_dims counter (first physical dim becomes batch dim).
+
+
+---
+## `decr_batch_dims`
+
+```python
+def decr_batch_dims(x: 'Tensor') -> 'Tensor':
+```
+Decrement batch_dims counter (first batch dim becomes logical dim).
+
+
+---
+## `move_axis_to_batch_dims`
+
+```python
+def move_axis_to_batch_dims(x: 'Tensor', axis: 'int') -> 'Tensor':
+```
+Move a logical axis into the batch dimensions (3 ops: calc + moveaxis_physical + incr).
+
+
+---
+## `move_axis_from_batch_dims`
+
+```python
+def move_axis_from_batch_dims(x: 'Tensor', batch_axis: 'int' = 0, logical_destination: 'int' = 0) -> 'Tensor':
+```
+Move a batch dimension to logical axis (3 ops: calc + moveaxis_physical + decr).
+
+
+---

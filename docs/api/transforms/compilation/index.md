@@ -33,3 +33,12 @@ A compiled function with caching.
 
 
 ---
+## `CompilationStats`
+
+```python
+class CompilationStats(hits: 'int' = 0, misses: 'int' = 0, fallbacks: 'int' = 0, total_compile_time_ms: 'float' = 0.0, total_cached_exec_time_ms: 'float' = 0.0, cache_size: 'int' = 0) -> None:
+```
+Compilation statistics.
+
+
+---

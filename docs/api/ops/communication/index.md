@@ -146,3 +146,59 @@ returns x as-is if already on a device, otherwise moves to default device.
 *Warning: Could not parse examples correctly.*
 
 ---
+## `cpu`
+
+```python
+def cpu(x: 'Tensor') -> 'Tensor':
+```
+Transfer tensor to CPU.
+
+Convenience function for `to_device(x, CPU())`.
+
+**Parameters**
+
+- **`x`** – Input tensor
+
+**Returns**
+
+ – Tensor on CPU
+
+
+---
+## `gpu`
+
+```python
+def gpu(x: 'Tensor') -> 'Tensor':
+```
+Transfer tensor to GPU/Accelerator.
+
+Convenience function for `to_device(x, Accelerator())`.
+
+**Parameters**
+
+- **`x`** – Input tensor
+
+**Returns**
+
+ – Tensor on GPU/Accelerator
+
+
+---
+## `accelerator`
+
+```python
+def accelerator(x: 'Tensor', device_id: 'int' = 0) -> 'Tensor':
+```
+Transfer tensor to specific accelerator device.
+
+**Parameters**
+
+- **`x`** – Input tensor
+- **`device_id`** – Accelerator device ID (default: 0)
+
+**Returns**
+
+ – Tensor on specified accelerator
+
+
+---

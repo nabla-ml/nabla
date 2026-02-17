@@ -8,4 +8,5 @@ transforms/index
 ops/index
 nn/index
 utilities/index
+testing/index
 ```

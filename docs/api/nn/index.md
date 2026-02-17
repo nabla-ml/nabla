@@ -9,4 +9,5 @@ nn_modules/index
 nn_activations/index
 nn_functional/index
 nn_optim/index
+nn_finetune/index
 ```

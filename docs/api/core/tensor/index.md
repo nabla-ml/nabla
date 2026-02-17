@@ -3,7 +3,7 @@
 ## `Tensor`
 
 ```python
-class Tensor(*, buffers: 'driver.Buffer | None' = None, value: 'graph.BufferValue | graph.TensorValue | None' = None, impl: "'TensorImpl | None'" = None, is_traced: 'bool' = False) -> 'None':
+class Tensor(*, buffers: 'driver.Buffer | None' = None, value: 'graph.BufferValue | graph.TensorValue | None' = None, impl: 'TensorImpl | None' = None, is_traced: 'bool' = False) -> 'None':
 ```
 Multi-dimensional array with eager execution and automatic compilation.
 
@@ -255,7 +255,7 @@ Alias for num_elements() (PyTorch style).
 
 #### `numpy`
 ```python
-def numpy(self) -> "'np.ndarray'":
+def numpy(self) -> 'np.ndarray':
 ```
 Convert tensor to numpy array.
 
@@ -313,7 +313,7 @@ def rsqrt(self):
 
 #### `shard`
 ```python
-def shard(self, mesh: "'DeviceMesh'", dim_specs: "list['ShardingSpec' | str | list[str] | None]", replicated_axes: 'set[str] | None' = None) -> 'Tensor':
+def shard(self, mesh: 'DeviceMesh', dim_specs: 'list[ShardingSpec | str | list[str] | None]', replicated_axes: 'set[str] | None' = None) -> 'Tensor':
 ```
 Shard this tensor across a device mesh, handling resharding and vmap batch dims.
 
@@ -390,14 +390,14 @@ Move tensor to a device or cast to a dtype.
 
 #### `to_numpy`
 ```python
-def to_numpy(self) -> "'np.ndarray'":
+def to_numpy(self) -> 'np.ndarray':
 ```
 Convert tensor to numpy array.
 
 
 #### `to_numpy_all`
 ```python
-def to_numpy_all(*tensors: 'Tensor') -> "tuple['np.ndarray', ...]":
+def to_numpy_all(*tensors: 'Tensor') -> 'tuple[np.ndarray, ...]':
 ```
 Convert multiple tensors to numpy arrays in a single batched compilation.
 
@@ -458,14 +458,14 @@ Alias for reshape() (PyTorch style).
 
 #### `with_sharding`
 ```python
-def with_sharding(self, mesh: "'DeviceMesh'", dim_specs: "list['ShardingSpec' | str | list[str] | None]", replicated_axes: 'set[str] | None' = None) -> 'Tensor':
+def with_sharding(self, mesh: 'DeviceMesh', dim_specs: 'list[ShardingSpec | str | list[str] | None]', replicated_axes: 'set[str] | None' = None) -> 'Tensor':
 ```
 Apply sharding constraint, resharding if needed.
 
 
 #### `with_sharding_constraint`
 ```python
-def with_sharding_constraint(self, mesh: "'DeviceMesh'", dim_specs: 'list[Any]', replicated_axes: 'set[str] | None' = None) -> 'Tensor':
+def with_sharding_constraint(self, mesh: 'DeviceMesh', dim_specs: 'list[Any]', replicated_axes: 'set[str] | None' = None) -> 'Tensor':
 ```
 Apply sharding constraint for global optimization; no immediate resharding.
 

@@ -27,3 +27,12 @@ Context manager setting default dtype.
 
 
 ---
+## `defaults_like`
+
+```python
+def defaults_like(like: 'Tensor | TensorType') -> 'Generator[None, None, None]':
+```
+Context manager setting default dtype and device from template.
+
+
+---
