@@ -11,8 +11,8 @@ black
 # pre-commit
 
 # Packaging Tools
-# build
-# twine
+build
+twine
 
 # --- Comparison Frameworks for Validation & Benchmarking ---
 
