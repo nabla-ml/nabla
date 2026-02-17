@@ -4,4 +4,3 @@ numpy>=2.0.0
 --extra-index-url https://whl.modular.com/nightly/simple/
 --pre
 modular>=26.2.0.dev2026020706
-max>=26.2.0.dev2026020706
