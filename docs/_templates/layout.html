@@ -1,0 +1,93 @@
+{% extends "sphinx_book_theme/layout.html" %}
+
+{%- set page_description -%}
+{%- if pagename == 'index' -%}
+Automatic differentiation, JIT compilation, and GPU acceleration in Python with Mojo and MAX.
+{%- elif 'api/' in pagename -%}
+API reference documentation for {{ title }} in the Nabla ML framework. Comprehensive function and class documentation with examples.
+{%- elif 'tutorials/' in pagename -%}
+Learn {{ title }} with this comprehensive tutorial. Step-by-step guide to using the Nabla ML framework for machine learning.
+{%- else -%}
+{{ title }} - High-performance machine learning computing framework focused on automatic differentiation, JIT compilation, and GPU acceleration.
+{%- endif -%}
+{%- endset -%}
+
+{%- set page_title -%}
+{%- if pagename == 'index' -%}
+Nabla - Home
+{%- elif 'api/' in pagename -%}
+{{ title }} API - Nabla
+{%- elif 'tutorials/' in pagename -%}
+{{ title }} Tutorial - Nabla  
+{%- else -%}
+{{ title }} - Nabla
+{%- endif -%}
+{%- endset -%}
+
+{%- set base_url = "https://nablaml.com/" -%}
+
+{%- block extrahead %}
+<!-- SEO Meta Tags -->
+<meta name="description" content="{{ page_description|trim }}" />
+<meta name="keywords" content="machine learning, automatic differentiation, JIT compilation, GPU computing, deep learning framework, high performance computing, Mojo, JAX alternative, {{ title|lower }}" />
+<meta name="author" content="Nabla ML" />
+<meta name="robots" content="index, follow" />
+
+<!-- Open Graph Meta Tags -->
+<meta property="og:title" content="{{ page_title|trim }}" />
+<meta property="og:type" content="website" />
+{% if pagename == 'index' %}
+<meta property="og:url" content="{{ base_url }}" />
+{% else %}
+<meta property="og:url" content="{{ base_url }}{{ pagename }}.html" />
+{% endif %}
+<meta property="og:image" content="{{ base_url }}_static/default-image.png" />
+<meta property="og:description" content="{{ page_description|trim }}" />
+<meta property="og:site_name" content="Nabla" />
+
+<!-- Twitter Card Meta Tags -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="{{ page_title|trim }}" />
+<meta name="twitter:description" content="{{ page_description|trim }}" />
+<meta name="twitter:image" content="{{ base_url }}_static/default-image.png" />
+<meta name="twitter:site" content="@nablaml" />
+
+<!-- Structured Data (JSON-LD) -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "{{ page_title|trim }}",
+  "applicationCategory": "DeveloperApplication", 
+  "operatingSystem": "Cross-platform",
+  {% if pagename == 'index' -%}
+  "url": "{{ base_url }}",
+  {%- else -%}
+  "url": "{{ base_url }}{{ pagename }}.html",
+  {%- endif %}
+  "description": "{{ page_description|trim }}",
+  "author": {
+    "@type": "Organization",
+    "name": "Nabla ML",
+    "url": "https://github.com/nabla-ml"
+  },
+  "softwareVersion": "{{ release }}",
+  "dateModified": "{{ last_updated or '2025-07-22' }}",
+  "license": "https://github.com/nabla-ml/nabla/blob/main/LICENSE",
+  "codeRepository": "https://github.com/nabla-ml/nabla",
+  "programmingLanguage": ["Python", "Mojo"],
+  "keywords": "machine learning, automatic differentiation, JIT compilation, GPU computing"
+}
+</script>
+
+<!-- Canonical URL -->
+{% if pagename == 'index' %}
+<link rel="canonical" href="{{ base_url }}" />
+{% else %}
+<link rel="canonical" href="{{ base_url }}{{ pagename }}.html" />
+{% endif %}
+{%- endblock %}
+
+{%- block htmltitle %}
+<title>{{ page_title|trim }}</title>
+{%- endblock %}

@@ -1,0 +1,88 @@
+{
+  "index": {
+    "description": "Nabla: GPU-accelerated Python library for tensor computation with NumPy-like API and JAX-style transformations. Fast, composable, and Mojo-integrated.",
+    "keywords": [
+      "nabla",
+      "gpu",
+      "python",
+      "tensors",
+      "numpy",
+      "jax",
+      "mojo",
+      "machine learning"
+    ]
+  },
+  "api/index": {
+    "description": "Complete API reference for Nabla - Python library for GPU-accelerated tensor operations, transformations, and neural networks.",
+    "keywords": [
+      "api",
+      "reference",
+      "documentation",
+      "functions",
+      "classes",
+      "nabla"
+    ]
+  },
+  "tutorials/index": {
+    "description": "Learn Nabla with hands-on tutorials covering GPU computing, automatic differentiation, and machine learning examples.",
+    "keywords": [
+      "tutorials",
+      "examples",
+      "machine learning",
+      "gpu",
+      "automatic differentiation"
+    ]
+  },
+  "api/tensor": {
+    "description": "Tensor class documentation - the fundamental tensor type in Nabla for GPU-accelerated computation.",
+    "keywords": [
+      "tensor",
+      "class",
+      "gpu",
+      "computation",
+      "tensor"
+    ]
+  },
+  "api/transforms": {
+    "description": "Function transformations in Nabla: vmap, grad, jit, and other automatic differentiation tools.",
+    "keywords": [
+      "transforms",
+      "vmap",
+      "grad",
+      "jit",
+      "automatic differentiation"
+    ]
+  },
+  "tutorials/understanding_nabla_part1": {
+    "description": "Introduction to Nabla fundamentals: tensors, operations, and GPU acceleration basics.",
+    "keywords": [
+      "introduction",
+      "basics",
+      "getting started",
+      "tensors",
+      "gpu"
+    ]
+  },
+  "tutorials/jax_vs_nabla_mlp_cpu": {
+    "description": "Performance comparison between JAX and Nabla for MLP training on CPU with code examples.",
+    "keywords": [
+      "jax",
+      "comparison",
+      "mlp",
+      "performance",
+      "cpu",
+      "training"
+    ]
+  },
+  "tutorials/jax_vs_nabla_transformer_cpu": {
+    "description": "JAX vs Nabla transformer training comparison - performance benchmarks and implementation details.",
+    "keywords": [
+      "transformer",
+      "jax",
+      "comparison",
+      "performance",
+      "nlp",
+      "training"
+    ]
+  }
+}
