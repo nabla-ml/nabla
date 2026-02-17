@@ -2,20 +2,25 @@ User-agent: *
 Allow: /
 
 # Sitemap location
-Sitemap: https://nablaml.com/sitemap.xml
+Sitemap: https://www.nablaml.com/sitemap.xml
 
 # High priority content for search engines
 Allow: /api/
 Allow: /tutorials/
-Allow: /examples/
 Allow: /index.html
 
+# Allow CSS and JS for proper rendering (Google recommends this)
+Allow: /_static/*.css
+Allow: /_static/*.js
+Allow: /_static/*.png
+Allow: /_static/*.svg
+
 # Block build artifacts and unnecessary paths
-Disallow: /_static/
 Disallow: /_sources/
 Disallow: /_build/
 Disallow: /search.html
 Disallow: /genindex.html
+Disallow: /_static/sw.js
 
 # Crawl delay to be respectful to search engines
 Crawl-delay: 1

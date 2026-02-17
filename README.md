@@ -148,6 +148,15 @@ Nabla relies on three core principles:
 
 ---
 
+### PyPI Install
+
+Nabla requires **Modular nightly**:
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install --pre --extra-index-url https://whl.modular.com/nightly/simple/ modular nabla-ml
+```
+
 ## Development Setup
 
 ### Prerequisites
@@ -162,15 +171,6 @@ python -m venv venv
 source venv/bin/activate
 pip install -r requirements-dev.txt
 pip install -e ".[dev]"
-```
-
-### PyPI Install
-
-Nabla requires **Modular nightly**:
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install --pre --extra-index-url https://whl.modular.com/nightly/simple/ modular nabla-ml
 ```
 
 **GPU Support**: 

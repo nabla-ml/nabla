@@ -10,13 +10,26 @@ sys.path.insert(0, str(docs_dir))
 from conf import html_baseurl
 
 def get_priority(url, base_url):
-    """Determine the priority of a URL."""
+    """Determine the priority of a URL based on content type and depth."""
+    # Homepage
     if url == f"{base_url}/index.html" or url == f"{base_url}/":
         return "1.0"
-    if "api/" in url:
-        return "0.7"
+    # Section index pages (high value for navigation)
+    if url.endswith("/index.html"):
+        if "/api/index.html" in url or "/tutorials/index.html" in url:
+            return "0.9"
+        # Module-level index pages (nn, ops, transforms, core)
+        if any(s in url for s in ["/nn/index", "/ops/index", "/transforms/index", "/core/index"]):
+            return "0.85"
+    # High-value feature pages: finetune (LoRA/QLoRA), optimizers, sharding
+    if any(s in url for s in ["finetune", "nn_optim", "sharding"]):
+        return "0.8"
+    # Tutorials (evergreen content, high search value)
     if "tutorials/" in url:
         return "0.8"
+    # API reference pages
+    if "api/" in url:
+        return "0.7"
     return "0.5"
 
 def generate_sitemap():

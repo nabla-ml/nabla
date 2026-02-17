@@ -180,16 +180,6 @@ pip install -e ".[dev]"
 
 ---
 
-## Stable Release (v25.7)
-
-For the simpler, single-device version:
-```bash
-pip install nabla-ml
-```
-(See [v25.7 branch](https://github.com/nabla-ml/nabla/tree/nabla/v25.7))
-
----
-
 ## Contributing
 
 * **Bugs/Docs**: Submit PR directly.
