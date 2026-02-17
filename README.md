@@ -164,6 +164,18 @@ pip install -r requirements-dev.txt
 pip install -e ".[dev]"
 ```
 
+### PyPI Install
+
+Stable (default index):
+```bash
+pip install nabla-ml
+```
+
+Latest Modular nightly (recommended for newest MAX ops):
+```bash
+pip install --pre --extra-index-url https://whl.modular.com/nightly/simple/ nabla-ml
+```
+
 **GPU Support**: 
 *   **Linux (AMD/NVIDIA)**: Supported natively via Modular MAX.
 *   **macOS (Apple Silicon)**: Requires Xcode Metal toolchain (`xcode-select --install`).
