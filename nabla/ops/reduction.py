@@ -210,6 +210,29 @@ class ReduceSumPhysicalOp(PhysicalReduceOp):
         axis = kwargs.get("axis", 0)
         return [ops.sum(x, axis=axis)]
 
+    def vjp_rule(
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
+        from ..ops.view import broadcast_to, unsqueeze_physical
+
+        x = primals[0]
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+
+        cot = cotangents[0]
+        if not keepdims:
+            cot = unsqueeze_physical(cot, axis=axis)
+
+        target_logical = tuple(int(d) for d in x.shape)
+        return [broadcast_to(cot, target_logical)]
+
+    def jvp_rule(
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+        return [reduce_sum_physical(tangents[0], axis=axis, keepdims=keepdims)]
+
 
 class MeanPhysicalOp(PhysicalReduceOp):
     @property

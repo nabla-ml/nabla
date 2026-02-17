@@ -26,7 +26,10 @@ def vjp(
 
 
 def vjp(
-    fn: Callable[..., Any], *primals: Any, has_aux: bool = False
+    fn: Callable[..., Any],
+    *primals: Any,
+    has_aux: bool = False,
+    create_graph: bool = False,
 ) -> (
     tuple[Any, Callable[..., tuple[Any, ...]]]
     | tuple[Any, Callable[..., tuple[Any, ...]], Any]
@@ -51,10 +54,11 @@ def vjp(
     output, aux = t.outputs, (_aux_box[0] if has_aux else None)
 
     def vjp_fn(cotangent: Any) -> tuple[Any, ...]:
-        grads_map = backward_on_trace(t, cotangent)
+        grads_map = backward_on_trace(t, cotangent, create_graph=create_graph)
         input_leaves = pytree.tree_leaves(primals)
         grad_leaves = collect_grads(grads_map, input_leaves)
-        realize_tensors(grad_leaves)
+        if not create_graph:
+            realize_tensors(grad_leaves)
         grad_struct: tuple[Any, ...] = pytree.tree_unflatten(
             pytree.tree_structure(primals), grad_leaves
         )

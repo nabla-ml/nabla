@@ -62,7 +62,6 @@ class MulOp(BinaryOperation):
         x, y = primals[0], primals[1]
         tx, ty = tangents[0], tangents[1]
         from . import add, mul
-
         return [add(mul(x, ty), mul(tx, y))]
 
 

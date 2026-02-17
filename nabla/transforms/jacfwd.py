@@ -13,7 +13,12 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from ..core.tensor.api import Tensor
 
-from .utils import create_jacobian_helpers, split_aux, std_basis
+from .utils import (
+    create_jacobian_helpers,
+    lift_basis_to_batch_prefix,
+    split_aux,
+    std_basis,
+)
 
 
 def jacfwd(
@@ -39,6 +44,7 @@ def jacfwd(
             diff_args, is_leaf=lambda x: isinstance(x, Tensor)
         )
         sizes, tangent_basis = std_basis(flat_inputs)
+        tangent_basis = lift_basis_to_batch_prefix(tangent_basis, flat_inputs)
         _total_in = sum(sizes)
 
         # Primals captured via closure (not through vmap) to avoid batch_dims mismatch.

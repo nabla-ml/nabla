@@ -82,6 +82,11 @@ class IncrBatchDimsOp(Operation):
     ) -> OpResult:
         return [decr_batch_dims(cotangents[0])]
 
+    def jvp_rule(
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
+        return [incr_batch_dims(tangents[0])]
+
 
 class DecrBatchDimsOp(Operation):
     """Decrement batch_dims counter without changing data layout."""
@@ -112,6 +117,11 @@ class DecrBatchDimsOp(Operation):
         self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
     ) -> OpResult:
         return [incr_batch_dims(cotangents[0])]
+
+    def jvp_rule(
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
+        return [decr_batch_dims(tangents[0])]
 
 
 class MoveAxisPhysicalOp(Operation):
@@ -196,6 +206,15 @@ class MoveAxisPhysicalOp(Operation):
         # Inverse: move from destination back to source
         return [
             moveaxis_physical(cotangents[0], source=destination, destination=source)
+        ]
+
+    def jvp_rule(
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
+        source = kwargs.get("source")
+        destination = kwargs.get("destination")
+        return [
+            moveaxis_physical(tangents[0], source=source, destination=destination)
         ]
 
     def sharding_rule(
@@ -335,8 +354,9 @@ class BroadcastBatchDimsOp(Operation):
         from .batch import decr_batch_dims
 
         result = cotangents[0]
+        extra_prefix = max(0, result.batch_dims - outputs[0].batch_dims)
         for _ in range(added):
-            result = reduce_sum_physical(result, axis=0, keepdims=False)
+            result = reduce_sum_physical(result, axis=extra_prefix, keepdims=False)
             if result.batch_dims > 0:
                 result = decr_batch_dims(result)
         return [result]
@@ -345,9 +365,25 @@ class BroadcastBatchDimsOp(Operation):
         self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
     ) -> OpResult:
         """JVP: broadcast tangent across batch dimensions."""
-        phys = outputs[0].physical_global_shape
-        batch_shape = tuple(int(d) for d in phys[: outputs[0].batch_dims])
-        return [broadcast_batch_dims(tangents[0], batch_shape)]
+        tangent = tangents[0]
+        primal = primals[0]
+        target_phys_shape = tuple(int(d) for d in kwargs["shape"])
+        out_batch_rank = len(target_phys_shape) - len(primal.shape)
+        out_batch_shape = target_phys_shape[:out_batch_rank]
+
+        extra_prefix = max(0, tangent.batch_dims - primal.batch_dims)
+        tangent_phys = tangent.physical_global_shape
+        extra_shape = (
+            tuple(int(d) for d in tangent_phys[:extra_prefix])
+            if extra_prefix > 0
+            else ()
+        )
+        target_batch_shape = extra_shape + out_batch_shape
+
+        from .shape import broadcast_to_physical
+
+        target_physical = target_batch_shape + tuple(int(d) for d in tangent.shape)
+        return [broadcast_to_physical(tangent, target_physical)]
 
 
 # Singleton instances

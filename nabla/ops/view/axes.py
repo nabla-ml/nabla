@@ -505,6 +505,12 @@ class UnsqueezePhysicalOp(Operation):
         axis = kwargs.get("axis", 0)
         return [squeeze_physical(cotangents[0], axis=axis)]
 
+    def jvp_rule(
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
+        axis = kwargs.get("axis", 0)
+        return [unsqueeze_physical(tangents[0], axis=axis)]
+
     def sharding_rule(
         self,
         input_shapes: list[tuple[int, ...]],
@@ -564,6 +570,12 @@ class SqueezePhysicalOp(Operation):
     ) -> OpResult:
         axis = kwargs.get("axis", 0)
         return [unsqueeze_physical(cotangents[0], axis=axis)]
+
+    def jvp_rule(
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
+        axis = kwargs.get("axis", 0)
+        return [squeeze_physical(tangents[0], axis=axis)]
 
     def sharding_rule(
         self,

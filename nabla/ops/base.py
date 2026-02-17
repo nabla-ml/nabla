@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import os
+
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Union
 
@@ -223,6 +225,22 @@ class Operation(ABC):
 
         # 3. Compute Hash for Caching (always needed for lazy execution model cache)
         op_hash = compute_structural_hash(self.name, resharded_args, adapted_kwargs)
+
+        if os.environ.get("NABLA_DEBUG_OP_CALL", "0") in {"1", "true", "TRUE", "True"}:
+            arg_debug = []
+            for idx, arg in enumerate(resharded_args):
+                shape = tuple(int(d) for d in arg.shape)
+                physical_shape = arg.physical_global_shape
+                if physical_shape is not None:
+                    physical_shape = tuple(int(d) for d in physical_shape)
+                arg_debug.append(
+                    f"arg{idx}:shape={shape},batch_dims={arg.batch_dims},physical={physical_shape}"
+                )
+            print(
+                f"[NABLA_DEBUG_OP_CALL] op={self.name} "
+                f"max_batch_dims={max_batch_dims} any_traced={any_traced} any_sharded={any_sharded} "
+                f"kwargs={kwargs} adapted_kwargs={adapted_kwargs} args=[{'; '.join(arg_debug)}]"
+            )
 
         # 4. Eager Execution (if enabled)
         execution_results = eager_execute(self, resharded_args, kwargs, adapted_kwargs)
@@ -539,7 +557,13 @@ class BinaryOperation(Operation):
         if max_batch_dims == 0:
             return super().__call__([x, y], kwargs)
 
-        if x_batch_dims >= y_batch_dims:
+        if x_batch_dims == y_batch_dims:
+            x_phys = x.physical_global_shape_ints or x.physical_local_shape_ints(0)
+            y_phys = y.physical_global_shape_ints or y.physical_local_shape_ints(0)
+            x_batch_shape = x_phys[:x_batch_dims]
+            y_batch_shape = y_phys[:y_batch_dims]
+            batch_shape = self._broadcast_shapes(x_batch_shape, y_batch_shape)
+        elif x_batch_dims > y_batch_dims:
             global_phys = x.physical_global_shape_ints or x.physical_local_shape_ints(0)
             batch_shape = global_phys[:x_batch_dims]
         else:
@@ -581,13 +605,25 @@ class AxisOp(Operation):
         if batch_dims == 0:
             return kwargs
 
+        def _shift_axis_value(value: Any) -> Any:
+            if isinstance(value, int):
+                return value + batch_dims if value >= 0 else value
+            if isinstance(value, tuple):
+                return tuple(
+                    (v + batch_dims if isinstance(v, int) and v >= 0 else v)
+                    for v in value
+                )
+            if isinstance(value, list):
+                return [
+                    (v + batch_dims if isinstance(v, int) and v >= 0 else v)
+                    for v in value
+                ]
+            return value
+
         translated = {}
         for key, value in kwargs.items():
-            if key in self.axis_arg_names and isinstance(value, int):
-                if value >= 0:
-                    translated[key] = value + batch_dims
-                else:
-                    translated[key] = value
+            if key in self.axis_arg_names:
+                translated[key] = _shift_axis_value(value)
             else:
                 translated[key] = value
         return translated

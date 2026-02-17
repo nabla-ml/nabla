@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from ..core.tensor.api import Tensor
 
-from .utils import create_jacobian_helpers, std_basis
+from .utils import create_jacobian_helpers, lift_basis_to_batch_prefix, std_basis
 
 
 def jacrev(
@@ -30,15 +30,27 @@ def jacrev(
         from .vmap import vmap
 
         diff_args, partial_func = create_jacobian_helpers(fn, argnums, args)
+        needs_higher_order = any(
+            isinstance(leaf, Tensor) and (leaf.is_traced or leaf.tangent is not None)
+            for leaf in tree_flatten(diff_args)[0]
+        )
 
         if has_aux:
-            output, pullback, aux = vjp(partial_func, *diff_args, has_aux=True)
+            output, pullback, aux = vjp(
+                partial_func,
+                *diff_args,
+                has_aux=True,
+                create_graph=needs_higher_order,
+            )
         else:
-            output, pullback = vjp(partial_func, *diff_args)
+            output, pullback = vjp(
+                partial_func, *diff_args, create_graph=needs_higher_order
+            )
             aux = None
 
         flat_out, out_td = tree_flatten(output, is_leaf=lambda x: isinstance(x, Tensor))
         sizes, cotangent_basis = std_basis(flat_out)
+        cotangent_basis = lift_basis_to_batch_prefix(cotangent_basis, flat_out)
         basis_tree = tree_unflatten(out_td, cotangent_basis)
         batched_grads = vmap(pullback, in_axes=0)(basis_tree)
         flat_diff_args, _ = tree_flatten(

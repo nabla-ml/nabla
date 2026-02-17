@@ -1139,6 +1139,15 @@ class BroadcastToPhysicalOp(Operation):
 
         return [result]
 
+    def jvp_rule(
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
+        target_shape = kwargs.get("shape")
+        if target_shape is None:
+            target_shape = outputs[0].physical_global_shape or outputs[0].local_shape
+        target_shape = tuple(int(d) for d in target_shape)
+        return [broadcast_to_physical(tangents[0], target_shape)]
+
     def _transform_shard_kwargs(
         self, kwargs: dict, output_sharding, shard_idx: int, args: list
     ) -> dict:

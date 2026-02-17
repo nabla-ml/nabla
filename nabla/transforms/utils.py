@@ -155,3 +155,39 @@ def std_basis(flat_tensors: list[Tensor]) -> tuple[list[int], list[Tensor]]:
         basis.append(Tensor.from_dlpack(bp))
         offset += n
     return sizes, basis
+
+
+def lift_basis_to_batch_prefix(
+    basis: list[Tensor], references: list[Tensor]
+) -> list[Tensor]:
+    """Lift Jacobian basis tensors to match reference batch prefixes.
+
+    This is required for nested transform contexts like ``vmap(jacrev(...))`` and
+    ``vmap(jacfwd(...))`` where basis vectors must preserve already-active outer
+    batch dimensions.
+    """
+    from ..ops.view.batch import broadcast_batch_dims
+
+    if len(basis) != len(references):
+        raise ValueError(
+            f"basis/reference length mismatch: {len(basis)} != {len(references)}"
+        )
+
+    lifted: list[Tensor] = []
+    for b, ref in zip(basis, references, strict=False):
+        if ref.batch_dims <= 0:
+            lifted.append(b)
+            continue
+
+        phys = ref.physical_global_shape or ref.local_shape
+        if phys is None:
+            lifted.append(b)
+            continue
+
+        ref_batch_shape = tuple(int(d) for d in phys[: ref.batch_dims])
+        if b.batch_dims < ref.batch_dims:
+            lifted.append(broadcast_batch_dims(b, ref_batch_shape))
+        else:
+            lifted.append(b)
+
+    return lifted
