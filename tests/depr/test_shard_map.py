@@ -56,7 +56,7 @@ class TestShardMapRigorous(unittest.TestCase):
         )
         t1, t2 = Tensor.from_dlpack(d1), Tensor.from_dlpack(d2)
 
-        t = trace(sharded_fn, t1, t2)
+        _t = trace(sharded_fn, t1, t2)
         result = sharded_fn(t1, t2)
 
         self.assertEqual(result.sharding.dim_specs[1].axes, ["tp"])

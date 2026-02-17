@@ -10,10 +10,10 @@ from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
-from ..base import OpArgs, OpKwargs, OpResult, OpTensorValues, Operation
+from ..base import OpArgs, Operation, OpKwargs, OpResult
 
 if TYPE_CHECKING:
-    from ...core.sharding.spec import DeviceMesh, DimSpec
+    from ...core.sharding.spec import DeviceMesh, DimSpec, ShardingSpec
 
 
 class ShardOp(Operation):
@@ -92,7 +92,6 @@ class ShardOp(Operation):
         self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for shard operation."""
-        from ...core.sharding import spmd, spec
         from ...core.sharding.spec import compute_global_shape, compute_local_shape
 
         x = args[0]
@@ -137,7 +136,7 @@ class ShardOp(Operation):
         dtypes = [x.dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
+                devices = list(mesh.device_refs)
             else:
                 devices = [mesh.device_refs[0]] * num_shards
         else:
@@ -153,16 +152,15 @@ class ShardOp(Operation):
         Derives all physical metadata from args/kwargs and slices the input.
         Returns raw shard values as a tuple: (values, output_spec, mesh).
         """
+        from max import graph as g
+
+        from ...core import GRAPH, Tensor
         from ...core.sharding.spec import (
             ShardingSpec,
-            needs_reshard,
             compute_global_shape,
             compute_local_shape,
+            needs_reshard,
         )
-        from ...core.sharding import spmd
-        from ...core import Tensor
-        from ...core import GRAPH
-        from max import graph as g
 
         with GRAPH.graph:
             x = args[0]
@@ -175,10 +173,13 @@ class ShardOp(Operation):
             # We need to construct the target spec to check idempotency and return it
             target_spec = ShardingSpec(mesh, dim_specs, replicated_axes=replicated_axes)
             # 1. Idempotency Check
-            if isinstance(x, Tensor) and x.sharding:
-                if not needs_reshard(x.sharding, target_spec):
-                    # Identity OP: Just return values.
-                    return (x.values, target_spec, mesh)
+            if (
+                isinstance(x, Tensor)
+                and x.sharding
+                and not needs_reshard(x.sharding, target_spec)
+            ):
+                # Identity OP: Just return values.
+                return (x.values, target_spec, mesh)
 
             # 2. Global Shape Determination
             # Explicit global_shape override takes precedence (used for AllReduce VJP reconstruction)
@@ -288,7 +289,7 @@ class ShardOp(Operation):
                                 break
 
                             # Re-calculate position for this shard index
-                            offset = 0
+                            _offset = 0
                             shard_pos = 0
                             total_shards = 1
                             for axis in dim_spec.axes:
@@ -372,21 +373,20 @@ def shard(
     2. Then it applies the physical slicing (ShardOp) to reach the target distribution.
     """
     from ...core import Tensor
-    from ...core.sharding.spec import ShardingSpec, needs_reshard, DimSpec
+    from ...core.sharding.spec import DimSpec, ShardingSpec, needs_reshard
 
     # UI Convenience: Handle implicit batch dimensions in spec
     if isinstance(x, Tensor):
         batch_dims = x.batch_dims
         current_rank = len(x.shape)
-        if batch_dims > 0:
-            if len(dim_specs) == current_rank:
-                batch_specs = [DimSpec([], is_open=True) for _ in range(batch_dims)]
-                if x.sharding:
-                    current_s = x.sharding
-                    if len(current_s.dim_specs) >= batch_dims:
-                        for i in range(batch_dims):
-                            batch_specs[i] = current_s.dim_specs[i].clone()
-                dim_specs = batch_specs + list(dim_specs)
+        if batch_dims > 0 and len(dim_specs) == current_rank:
+            batch_specs = [DimSpec([], is_open=True) for _ in range(batch_dims)]
+            if x.sharding:
+                current_s = x.sharding
+                if len(current_s.dim_specs) >= batch_dims:
+                    for i in range(batch_dims):
+                        batch_specs[i] = current_s.dim_specs[i].clone()
+            dim_specs = batch_specs + list(dim_specs)
 
     target_spec = ShardingSpec(
         mesh, dim_specs, replicated_axes=replicated_axes or set()

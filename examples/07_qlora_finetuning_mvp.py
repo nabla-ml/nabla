@@ -15,7 +15,9 @@ import numpy as np
 import nabla as nb
 
 
-def make_regression_data(n_samples: int, in_dim: int, out_dim: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def make_regression_data(
+    n_samples: int, in_dim: int, out_dim: int
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     rng = np.random.default_rng(321)
     x = rng.normal(size=(n_samples, in_dim)).astype(np.float32)
 
@@ -35,7 +37,9 @@ def main() -> None:
     learning_rate = 2e-2
     steps = 120
 
-    x_np, y_np, w_base_np = make_regression_data(n_samples=512, in_dim=in_dim, out_dim=out_dim)
+    x_np, y_np, w_base_np = make_regression_data(
+        n_samples=512, in_dim=in_dim, out_dim=out_dim
+    )
 
     x = nb.Tensor.from_dlpack(x_np)
     y = nb.Tensor.from_dlpack(y_np)
@@ -49,7 +53,9 @@ def main() -> None:
     )
     print(f"NF4 relative reconstruction error: {quant_rel_err:.4f}")
 
-    lora_params = nb.nn.finetune.init_lora_adapter(frozen_weight, rank=rank, init_std=0.01)
+    lora_params = nb.nn.finetune.init_lora_adapter(
+        frozen_weight, rank=rank, init_std=0.01
+    )
     opt_state = nb.nn.optim.adamw_init(lora_params)
 
     def loss_fn(adapter, batch_x, batch_y):
@@ -64,7 +70,9 @@ def main() -> None:
         return nb.mean(diff * diff)
 
     def train_step(adapter, optimizer_state, batch_x, batch_y):
-        loss, grads = nb.value_and_grad(loss_fn, argnums=0, realize=False)(adapter, batch_x, batch_y)
+        loss, grads = nb.value_and_grad(loss_fn, argnums=0, realize=False)(
+            adapter, batch_x, batch_y
+        )
         new_adapter, new_state = nb.nn.optim.adamw_update(
             adapter,
             grads,
@@ -74,8 +82,12 @@ def main() -> None:
         )
         to_realize = [loss]
         to_realize.extend(t for t in nb.tree_leaves(grads) if isinstance(t, nb.Tensor))
-        to_realize.extend(t for t in nb.tree_leaves(new_adapter) if isinstance(t, nb.Tensor))
-        to_realize.extend(t for t in nb.tree_leaves(new_state) if isinstance(t, nb.Tensor))
+        to_realize.extend(
+            t for t in nb.tree_leaves(new_adapter) if isinstance(t, nb.Tensor)
+        )
+        to_realize.extend(
+            t for t in nb.tree_leaves(new_state) if isinstance(t, nb.Tensor)
+        )
         nb.realize_all(*to_realize)
         return loss, new_adapter, new_state
 

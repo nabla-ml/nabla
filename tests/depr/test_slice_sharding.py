@@ -1,6 +1,7 @@
 import os
+
 import numpy as np
-import pytest
+
 import nabla as nb
 from nabla import ops
 from nabla.core.sharding.spec import DeviceMesh, PartitionSpec

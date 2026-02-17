@@ -13,15 +13,13 @@ from typing import TYPE_CHECKING, Any
 
 from ..common import pytree
 from ..common.pytree import PyTreeDef, tree_leaves
-from ..sharding.spec import compute_global_shape
 from ..tensor.impl import TensorImpl
 
 if TYPE_CHECKING:
-    from ...ops import Operation
-    from ..tensor.api import Tensor
-    from ..tensor.impl import TensorImpl
-
     from max.graph.graph import Shape
+
+    from ...ops import Operation
+    from ..tensor.impl import TensorImpl
 
 
 @dataclass(frozen=True)
@@ -37,9 +35,9 @@ class OpNode:
         _op_hash: Operation hash for cache key computation.
     """
 
-    _refs: tuple["TensorImpl | None", ...]
+    _refs: tuple[TensorImpl | None, ...]
     tree_def: PyTreeDef
-    op: "Operation"
+    op: Operation
     op_args: tuple[Any, ...]
     op_kwargs: dict[str, Any] | None
     _op_hash: tuple[Any, ...] | None = None
@@ -52,7 +50,7 @@ class OpNode:
                 f"tree_def leaves {self.tree_def.num_leaves}"
             )
 
-    def get_alive_outputs(self) -> list["TensorImpl | None"]:
+    def get_alive_outputs(self) -> list[TensorImpl | None]:
         """Get output TensorImpls."""
         return list(self._refs)
 
@@ -100,7 +98,7 @@ class Trace:
         self.outputs = outputs
         self._computed = False
         self.nodes: list[OpNode] = []
-        self.gradient_leaves: list["TensorImpl"] = []
+        self.gradient_leaves: list[TensorImpl] = []
 
         from ..tensor.api import Tensor
 
@@ -115,7 +113,7 @@ class Trace:
 
         visited: set[int] = set()
         nodes: list[OpNode] = []
-        grad_leaves: list["TensorImpl"] | None = [] if collect_grad else None
+        grad_leaves: list[TensorImpl] | None = [] if collect_grad else None
 
         from ..tensor.api import Tensor
 
@@ -240,7 +238,7 @@ class Trace:
                 GRAPH.add_input(t)
 
         # 4. Iterate through nodes and call kernel_all to recompute intermediates.
-        for i, output_refs in enumerate(self.nodes):
+        for _, output_refs in enumerate(self.nodes):
             alive_outputs = output_refs.get_alive_outputs()
             if not any(out is not None for out in alive_outputs):
                 continue
@@ -258,15 +256,14 @@ class Trace:
             # Collect metadata for current batch_dims awareness.
             max_batch_dims = 0
             for arg in tree_leaves(op_args):
-                if isinstance(arg, Tensor):
-                    if arg.batch_dims > max_batch_dims:
-                        max_batch_dims = arg.batch_dims
+                if isinstance(arg, Tensor) and arg.batch_dims > max_batch_dims:
+                    max_batch_dims = arg.batch_dims
 
             # Use adapt_kwargs dynamically during rehydration as batch_dims might change
             if hasattr(op, "adapt_kwargs"):
-                adapted_kwargs = op.adapt_kwargs(op_args, op_kwargs, max_batch_dims)
+                _adapted_kwargs = op.adapt_kwargs(op_args, op_kwargs, max_batch_dims)
             else:
-                adapted_kwargs = op_kwargs
+                _adapted_kwargs = op_kwargs
 
             # Determine sharding context from one of the alive outputs.
             mesh = None
@@ -437,7 +434,7 @@ class GraphPrinter:
         return TensorImpl._format_type(node)
 
     def _format_shape_part(
-        self, shape: tuple[int, ...] | list[int] | "Shape", batch_dims: int = 0
+        self, shape: tuple[int, ...] | list[int] | Shape, batch_dims: int = 0
     ) -> str:
         """Format a shape tuple with batch dims colors: [2, 3 | 4, 5]"""
         from ..tensor.impl import TensorImpl
@@ -450,7 +447,7 @@ class GraphPrinter:
 
         return TensorImpl._format_spec_factors(sharding)
 
-    def _format_full_info(self, node: "TensorImpl") -> str:
+    def _format_full_info(self, node: TensorImpl) -> str:
         """Format: dtype[global](factors)(local=[local])"""
         return node.format_metadata(include_data=False)
 
@@ -501,7 +498,7 @@ class GraphPrinter:
 
                 p_str = ""
                 if all_p_axes:
-                    ordered_p = sorted(list(all_p_axes))
+                    ordered_p = sorted(all_p_axes)
                     axes_joined = ", ".join(f"'{a}'" for a in ordered_p)
                     p_str = f" | partial={{{axes_joined}}}"
                 parts.append(f"spec=<{', '.join(factors)}>{p_str}")
@@ -599,7 +596,7 @@ class GraphPrinter:
 
             arg_names = []
 
-            def collect_arg_names(x):
+            def collect_arg_names(x, arg_names=arg_names):
                 if isinstance(x, Tensor):
                     arg_names.append(
                         f"{C_VAR}{self.var_names.get(id(x._impl), '?')}{RESET}"

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from max.graph import TensorValue, ops
+from max.graph import ops
 
 from .base import AxisOp, OpArgs, OpKwargs, OpResult, OpTensorValues, UnaryOperation
 
@@ -47,8 +47,8 @@ class ReluOp(UnaryOperation):
         """JVP for ReLU: tangent where x > 0, else 0."""
         x = primals[0]
         t = tangents[0]
-        from ..ops.comparison import greater
         from ..ops.binary import mul
+        from ..ops.comparison import greater
 
         mask = greater(x, 0.0)
         return [mul(t, mask)]
@@ -153,12 +153,10 @@ class AbsOp(UnaryOperation):
         cotangent = cotangents[0]
         from ..ops.comparison import greater, less
         from ..ops.control_flow import where
-        from ..ops.creation import ones_like, zeros_like
-        from ..ops.binary import mul
+        from ..ops.creation import zeros_like
         from . import neg
 
         # grad = cotangent if x > 0 else (-cotangent if x < 0 else 0)
-        from . import neg
 
         return [
             where(
@@ -174,10 +172,10 @@ class AbsOp(UnaryOperation):
         """JVP for abs: tangent * sign(x)."""
         x = primals[0]
         t = tangents[0]
+        from ..ops.binary import mul
         from ..ops.comparison import greater, less
         from ..ops.control_flow import where
         from ..ops.creation import ones_like, zeros_like
-        from ..ops.binary import mul
         from . import neg
 
         ones = ones_like(x)
@@ -328,8 +326,8 @@ class AcosOp(UnaryOperation):
     def _derivative(self, primals: Tensor, output: Tensor) -> Tensor:
         """acos'(x) = -1/sqrt(1 - x^2)."""
         x = primals
-        from . import neg, sqrt
         from ..ops.binary import div, mul, sub
+        from . import neg, sqrt
 
         return neg(div(1.0, sqrt(sub(1.0, mul(x, x)))))
 
@@ -384,8 +382,9 @@ class ErfOp(UnaryOperation):
         """erf'(x) = (2/sqrt(pi)) * exp(-x^2)."""
         x = primals
         import math
-        from . import exp, neg
+
         from ..ops.binary import mul
+        from . import exp, neg
 
         factor = 2.0 / math.sqrt(math.pi)
         return mul(factor, exp(neg(mul(x, x))))
@@ -500,8 +499,8 @@ class SiluOp(UnaryOperation):
     def _derivative(self, primals: Tensor, output: Tensor) -> Tensor:
         """silu'(x) = sigmoid(x) + silu(x) * (1 - sigmoid(x))."""
         x = primals
-        from . import sigmoid
         from ..ops.binary import add, mul, sub
+        from . import sigmoid
 
         sig_x = sigmoid(x)
         return add(sig_x, mul(output, sub(1.0, sig_x)))
@@ -570,8 +569,9 @@ class GeluOp(UnaryOperation):
         """GELU'(x) = cdf(x) + x * pdf(x)."""
         x = primals
         import math
-        from . import erf, exp, neg
+
         from ..ops.binary import add, div, mul
+        from . import erf, exp, neg
 
         sqrt2 = math.sqrt(2.0)
         sqrt2pi = math.sqrt(2.0 * math.pi)

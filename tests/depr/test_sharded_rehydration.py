@@ -2,6 +2,7 @@
 """Test for sharded Trace rehydration."""
 
 import numpy as np
+
 import nabla as nb
 from nabla.core.graph.tracing import trace
 from nabla.core.sharding import DeviceMesh, DimSpec
@@ -27,7 +28,7 @@ def test_sharded_rehydration():
     x1 = nb.ops.shard(x1, mesh, [DimSpec(["tp"]), DimSpec([])])
     x2 = nb.ops.shard(x2, mesh, [DimSpec([]), DimSpec(["tp"])])
 
-    print(f"\nInputs sharding:")
+    print("\nInputs sharding:")
     print(f"x1: {x1.sharding}")
     print(f"x2: {x2.sharding}")
 
@@ -46,20 +47,20 @@ def test_sharded_rehydration():
 
     traced = trace(compute, x1, x2)
 
-    print(f"\nTrace:")
+    print("\nTrace:")
     print(traced)
 
     # Check status before
-    print(f"\n--- Before Rehydration ---")
+    print("\n--- Before Rehydration ---")
     out_impl = traced.nodes[0].get_alive_outputs()[0]
     print(f"Output has_values: {bool(out_impl._get_valid_values())}")
 
     # Rehydrate
-    print(f"\n--- Running Rehydration ---")
+    print("\n--- Running Rehydration ---")
     traced.rehydrate()
 
     # Check status after
-    print(f"\n--- After Rehydration ---")
+    print("\n--- After Rehydration ---")
     has_values = bool(out_impl._get_valid_values())
     print(f"Output has_values: {has_values}")
 
@@ -78,7 +79,7 @@ def test_sharded_rehydration():
     eager_res = nb.ops.matmul(x1, x2)
     GRAPH.evaluate(eager_res)
 
-    print(f"\n✓ SUCCESS: Sharded rehydration works!")
+    print("\n✓ SUCCESS: Sharded rehydration works!")
 
 
 if __name__ == "__main__":

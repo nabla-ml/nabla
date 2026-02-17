@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from .shard import shard, create_replicated_spec, _shard_op as shard_op
+from .shard import create_replicated_spec, shard
 
 
 def reshard_tensor(tensor, from_spec, to_spec, mesh):

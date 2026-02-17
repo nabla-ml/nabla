@@ -65,8 +65,8 @@ def _one_hot(indices: Tensor, num_classes: int, dtype=None) -> Tensor:
     """
     from ...ops.comparison import equal
     from ...ops.creation import arange
-    from ...ops.view import unsqueeze
     from ...ops.unary import cast
+    from ...ops.view import unsqueeze
 
     # indices: (*), classes: (num_classes,)
     classes = arange(0, num_classes, dtype=indices.dtype)

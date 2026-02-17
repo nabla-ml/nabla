@@ -11,7 +11,7 @@ import asyncio
 import contextlib
 from collections.abc import Generator
 from contextvars import ContextVar
-from typing import TYPE_CHECKING, TypeVar, Any
+from typing import TYPE_CHECKING, TypeVar
 
 from max import driver, engine, graph
 from max.driver import (

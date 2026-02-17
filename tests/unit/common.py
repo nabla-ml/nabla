@@ -8,14 +8,14 @@ from dataclasses import dataclass, field
 from functools import partial
 
 import jax
-import jax.numpy as jnp
 import jax.dlpack
+import jax.numpy as jnp
 import numpy as np  # Kept for np.prod compatibility if needed, or replace with math
 import pytest
 from max.dtype import DType
 
 import nabla as nb
-from nabla import vmap, Tensor
+from nabla import Tensor, vmap
 from nabla.core.sharding.spec import DeviceMesh, DimSpec, ShardingSpec
 
 nb.DType = DType
@@ -445,10 +445,13 @@ def run_sharding_check(test_name, op, config, args_nb, kw_nb):
     mesh = DeviceMesh("test_mesh", mesh_shape, ("x", "y"))
 
     def shard_arg(x):
-        if isinstance(x, nb.Tensor) and len(x.shape) > 0:
-            if int(x.shape[0]) % mesh_shape[0] == 0:
-                spec = ShardingSpec(mesh, (("x",),) + ((),) * (len(x.shape) - 1))
-                return x.shard(mesh, spec.dim_specs)
+        if (
+            isinstance(x, nb.Tensor)
+            and len(x.shape) > 0
+            and int(x.shape[0]) % mesh_shape[0] == 0
+        ):
+            spec = ShardingSpec(mesh, (("x",),) + ((),) * (len(x.shape) - 1))
+            return x.shard(mesh, spec.dim_specs)
         return x
 
     sharded_args_nb = []

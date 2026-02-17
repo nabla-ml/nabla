@@ -4,10 +4,10 @@
 # ===----------------------------------------------------------------------=== #
 
 import numpy as np
-import pytest
+
 import nabla as nb
-from nabla.core.graph.tracing import trace
 from nabla.core.autograd import backward_on_trace
+from nabla.core.graph.tracing import trace
 from nabla.core.sharding import DeviceMesh, DimSpec
 
 
@@ -30,7 +30,7 @@ def test_shard_vjp():
     # Cotangent should be sharded matching the output of shard_fn
     # Since shard_fn output is sharded (4, 4) on each of 2 devices
     # Total global shape (8, 4)
-    cot_data = np.ones((8, 4), dtype=np.float32)
+    _cot_data = np.ones((8, 4), dtype=np.float32)
     # We need to manually shard the cotangent or use a sharded ones_like
     y = shard_fn(x)
     from nabla.ops.creation import full_like

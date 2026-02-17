@@ -7,9 +7,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from max.graph import TensorValue, ops
+from max.graph import ops
 
-from ..base import AxisOp, OpArgs, OpKwargs, OpResult, OpTensorValues, Operation
+from ..base import AxisOp, OpArgs, Operation, OpKwargs, OpResult, OpTensorValues
 
 if TYPE_CHECKING:
     from ...core import Tensor

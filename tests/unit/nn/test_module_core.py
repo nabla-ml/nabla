@@ -10,12 +10,10 @@ from __future__ import annotations
 from collections import OrderedDict
 
 import numpy as np
-import pytest
 
 import nabla as nb
 
-from .conftest import make_rng, nb_from_np
-
+from .conftest import make_rng
 
 # ===----------------------------------------------------------------------=== #
 # Pytree semantics

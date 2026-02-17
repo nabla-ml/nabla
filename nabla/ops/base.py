@@ -5,18 +5,15 @@
 
 from __future__ import annotations
 
-import os
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Union
 
 if TYPE_CHECKING:
-    from max import graph
     from max.dtype import DType
     from max.graph import TensorValue
 
-    from ..core import Tensor, OpNode
+    from ..core import Tensor
     from ..core.sharding.spec import DeviceMesh, ShardingSpec
-    from ..core.tensor.impl import TensorImpl
 
 # ---------------------------------------------------------------------------
 # Unified internal signature type aliases (JAX-style args/params separation)
@@ -47,18 +44,18 @@ OpResult = list["Tensor"]
 
 
 from .utils import (
-    _get_tensor_hash,
-    _make_hashable,
-    _clear_hashable_cache,
-    ensure_tensor,
-    collect_metadata,
+    _clear_hashable_cache,  # noqa: F401
+    _get_tensor_hash,  # noqa: F401
+    _make_hashable,  # noqa: F401
     adapt_and_reshard,
-    compute_structural_hash,
-    eager_execute,
-    verify_eager_shapes,
-    package_outputs,
     apply_auto_reduction,
     apply_jvp,
+    collect_metadata,
+    compute_structural_hash,
+    eager_execute,
+    ensure_tensor,  # noqa: F401
+    package_outputs,
+    verify_eager_shapes,
 )
 
 # Module-level caches for deferred imports (avoid repeated _handle_fromlist overhead)
@@ -74,9 +71,12 @@ def _get_core():
     """Lazy import and cache core modules."""
     global _GRAPH, _spmd, _Tensor, _pytree, _OpNode, _config
     if _GRAPH is None:
-        from ..core import GRAPH as g, Tensor as T, pytree as pt, OpNode as ON
-        from ..core.sharding import spmd as s
         from .. import config as cfg
+        from ..core import GRAPH as g
+        from ..core import OpNode as ON
+        from ..core import Tensor as T
+        from ..core import pytree as pt
+        from ..core.sharding import spmd as s
 
         _GRAPH = g
         _spmd = s
@@ -147,13 +147,13 @@ class Operation(ABC):
         return total
 
     def _build_shard_metadata(
-        self, x: "Tensor", mesh: "DeviceMesh | None", num_shards: int
-    ) -> tuple[list["DType"], list[Any]]:
+        self, x: Tensor, mesh: DeviceMesh | None, num_shards: int
+    ) -> tuple[list[DType], list[Any]]:
         """Build dtype and device lists for physical shape output."""
         dtypes = [x.dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices: list[Any] = [d for d in mesh.device_refs]
+                devices: list[Any] = list(mesh.device_refs)
             else:
                 devices = [mesh.device_refs[0]] * num_shards
         else:
@@ -162,7 +162,7 @@ class Operation(ABC):
 
     def execute(
         self, args: OpArgs, kwargs: OpKwargs
-    ) -> tuple[list[Any], "ShardingSpec | None", "DeviceMesh | None"]:
+    ) -> tuple[list[Any], ShardingSpec | None, DeviceMesh | None]:
         """Default physical execution: execute kernel on each shard independently.
 
         Operations with specialized execution logic (e.g. CreationOperation)
@@ -289,8 +289,8 @@ class Operation(ABC):
         self,
         args: OpArgs,
         kwargs: OpKwargs,
-        output_sharding: "ShardingSpec | None" = None,
-    ) -> tuple[list[tuple[int, ...]] | None, list["DType"] | None, list[Any] | None]:
+        output_sharding: ShardingSpec | None = None,
+    ) -> tuple[list[tuple[int, ...]] | None, list[DType] | None, list[Any] | None]:
         """Infer per-shard physical shapes for outputs.
 
         Subclasses must override this when used with physical execution.
@@ -305,7 +305,7 @@ class Operation(ABC):
     def _transform_shard_kwargs(
         self,
         kwargs: OpKwargs,
-        output_sharding: "ShardingSpec | None",
+        output_sharding: ShardingSpec | None,
         shard_idx: int,
         args: OpArgs,
     ) -> OpKwargs:
@@ -344,20 +344,20 @@ class Operation(ABC):
 
     def vjp_rule(
         self,
-        primals: list["Tensor"],
-        cotangents: list["Tensor"],
-        outputs: list["Tensor"],
+        primals: list[Tensor],
+        cotangents: list[Tensor],
+        outputs: list[Tensor],
         kwargs: OpKwargs,
-    ) -> list["Tensor | None"]:
+    ) -> list[Tensor | None]:
         raise NotImplementedError(f"'{self.name}' does not implement vjp_rule")
 
     def jvp_rule(
         self,
-        primals: list["Tensor"],
-        tangents: list["Tensor"],
-        outputs: list["Tensor"],
+        primals: list[Tensor],
+        tangents: list[Tensor],
+        outputs: list[Tensor],
         kwargs: OpKwargs,
-    ) -> list["Tensor | None"]:
+    ) -> list[Tensor | None]:
         raise NotImplementedError(f"'{self.name}' does not implement jvp_rule")
 
     def get_sharding_rule_template(self) -> Any:
@@ -465,8 +465,8 @@ class BinaryOperation(Operation):
         self,
         args: OpArgs,
         kwargs: OpKwargs,
-        output_sharding: "ShardingSpec | None" = None,
-    ) -> tuple[list[tuple[int, ...]], list["DType"], list[Any]]:
+        output_sharding: ShardingSpec | None = None,
+    ) -> tuple[list[tuple[int, ...]], list[DType], list[Any]]:
         """Infer physical shapes for binary elementwise ops (same as input 0)."""
         if _spmd is None:
             _get_core()
@@ -484,10 +484,9 @@ class BinaryOperation(Operation):
             idx_x = i if i < x.num_shards else 0
             s = x.physical_local_shape_ints(idx_x)
 
-            if s is None:
-                if isinstance(y, Tensor):
-                    idx_y = i if i < y.num_shards else 0
-                    s = y.physical_local_shape_ints(idx_y)
+            if s is None and isinstance(y, Tensor):
+                idx_y = i if i < y.num_shards else 0
+                s = y.physical_local_shape_ints(idx_y)
 
             if s is not None:
                 shapes.append(s)
@@ -519,7 +518,6 @@ class BinaryOperation(Operation):
 
     def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
         from . import view as view_ops
-        from .base import ensure_tensor
 
         x = ensure_tensor(args[0])
         y = ensure_tensor(args[1])
@@ -627,8 +625,8 @@ class ReduceOperation(AxisOp):
         self,
         args: OpArgs,
         kwargs: OpKwargs,
-        output_sharding: "ShardingSpec | None" = None,
-    ) -> tuple[list[tuple[int, ...]], list["DType"], list[Any]]:
+        output_sharding: ShardingSpec | None = None,
+    ) -> tuple[list[tuple[int, ...]], list[DType], list[Any]]:
         """Infer physical shapes for reduction operations."""
         if _spmd is None:
             _get_core()
@@ -747,7 +745,7 @@ class UnaryOperation(Operation):
     _infer_output_sharding: bool = False
     _cost_multiplier: float = 1.0
 
-    def _derivative(self, primals: "Tensor", output: "Tensor") -> "Tensor":
+    def _derivative(self, primals: Tensor, output: Tensor) -> Tensor:
         """Return the derivative factor for this op (dOutput/dInput).
 
         Override this instead of vjp_rule/jvp_rule for simple elementwise ops
@@ -758,11 +756,11 @@ class UnaryOperation(Operation):
 
     def vjp_rule(
         self,
-        primals: list["Tensor"],
-        cotangents: list["Tensor"],
-        outputs: list["Tensor"],
+        primals: list[Tensor],
+        cotangents: list[Tensor],
+        outputs: list[Tensor],
         kwargs: OpKwargs,
-    ) -> list["Tensor | None"]:
+    ) -> list[Tensor | None]:
         deriv = self._derivative(primals[0], outputs[0])
         if deriv is NotImplemented:
             raise NotImplementedError(f"'{self.name}' does not implement vjp_rule")
@@ -772,11 +770,11 @@ class UnaryOperation(Operation):
 
     def jvp_rule(
         self,
-        primals: list["Tensor"],
-        tangents: list["Tensor"],
-        outputs: list["Tensor"],
+        primals: list[Tensor],
+        tangents: list[Tensor],
+        outputs: list[Tensor],
         kwargs: OpKwargs,
-    ) -> list["Tensor | None"]:
+    ) -> list[Tensor | None]:
         deriv = self._derivative(primals[0], outputs[0])
         if deriv is NotImplemented:
             raise NotImplementedError(f"'{self.name}' does not implement jvp_rule")
@@ -832,7 +830,7 @@ class ShapeOp(Operation):
         self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for shape operations."""
-        from ..core.sharding import spmd, spec
+        from ..core.sharding import spec, spmd
 
         x = args[0]
         # Kwargs are already adapted in Operation.__call__
@@ -926,7 +924,7 @@ class CreationOperation(Operation):
         self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for creation operations."""
-        from ..core.sharding import spmd, spec
+        from ..core.sharding import spec, spmd
 
         shape = kwargs.get("shape")
         if shape is None and len(args) > 0:
@@ -969,7 +967,7 @@ class CreationOperation(Operation):
         dtypes = [dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
+                devices = list(mesh.device_refs)
             else:
                 devices = [mesh.device_refs[0]] * num_shards
         else:

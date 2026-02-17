@@ -7,12 +7,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from max.graph import TensorValue, ops
+from max.graph import ops
 
 from .base import AxisOp, Operation, ReduceOperation
 
 if TYPE_CHECKING:
     from ..core.tensor import Tensor
+    from .base import OpArgs, OpKwargs, OpResult, OpTensorValues
 
 from .view import SqueezePhysicalOp
 
@@ -174,9 +175,9 @@ class ReduceMaxOp(ReduceOperation):
         self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
     ) -> OpResult:
         x = primals[0]
+        from ..ops.binary import mul
         from ..ops.comparison import equal
         from ..ops.view.shape import broadcast_to
-        from ..ops.binary import mul
 
         max_broadcasted = broadcast_to(outputs[0], tuple(x.shape))
         mask = equal(x, max_broadcasted)
@@ -187,10 +188,10 @@ class ReduceMaxOp(ReduceOperation):
         self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
     ) -> OpResult:
         x = primals[0]
-        from ..ops.comparison import equal
-        from ..ops.view.shape import broadcast_to
         from ..ops.binary import mul
+        from ..ops.comparison import equal
         from ..ops.reduction import reduce_sum
+        from ..ops.view.shape import broadcast_to
 
         axis = kwargs.get("axis", 0)
         keepdims = kwargs.get("keepdims", False)
@@ -299,7 +300,7 @@ def _multi_axis_reduce(op, x: Tensor, *, axis=None, keepdims: bool = False) -> T
             out_shape = tuple(
                 int(d)
                 for i, d in enumerate(x.shape)
-                if i not in set(ax if ax >= 0 else len(x.shape) + ax for ax in axis)
+                if i not in {ax if ax >= 0 else len(x.shape) + ax for ax in axis}
             )
             res = (
                 reshape(res, out_shape if out_shape else (1,))
@@ -428,6 +429,7 @@ class _ArgReduceOp(AxisOp):
         self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         from max.dtype import DType
+
         from ..core.sharding import spmd
 
         x = args[0]
@@ -537,8 +539,6 @@ _cumsum_op = CumsumOp()
 
 
 def argmax(x: Tensor, axis: int = -1, keepdims: bool = False) -> Tensor:
-    from .view import squeeze
-
     res = _argmax_op([x], {"axis": axis})[0]
     if keepdims:
         from .view import unsqueeze

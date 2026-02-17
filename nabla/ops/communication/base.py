@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from ..base import OpArgs, OpKwargs, OpResult, OpTensorValues, Operation
+from ..base import OpArgs, Operation, OpKwargs
 
 if TYPE_CHECKING:
     from ...core.sharding.spec import DeviceMesh, ShardingSpec
@@ -62,7 +62,7 @@ class CollectiveOperation(Operation):
         self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for collective operations (global shape preservation)."""
-        from ...core.sharding import spmd, spec
+        from ...core.sharding import spec
 
         x = args[0]
         mesh = self._derive_mesh(x, kwargs)
@@ -103,7 +103,7 @@ class CollectiveOperation(Operation):
         dtypes = [x.dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
+                devices = list(mesh.device_refs)
             else:
                 devices = [mesh.device_refs[0]] * num_shards
         else:
@@ -213,20 +213,21 @@ class CollectiveOperation(Operation):
             return set(reduce_axes)
 
         # Fallback: reduce over all partial axes if none specified
-        if hasattr(tensor, "sharding") and tensor.sharding:
-            if tensor.sharding.partial_sum_axes:
-                return set(tensor.sharding.partial_sum_axes)
+        if (
+            hasattr(tensor, "sharding")
+            and tensor.sharding
+            and tensor.sharding.partial_sum_axes
+        ):
+            return set(tensor.sharding.partial_sum_axes)
         return None
 
     def _should_proceed(self, tensor):
         """Check if operation should proceed (has sharding and potentially multiple shards)."""
         if not tensor.sharding:
             return False
-        if (tensor._graph_values and len(tensor._graph_values) > 1) or (
+        return (tensor._graph_values and len(tensor._graph_values) > 1) or (
             tensor._buffers and len(tensor._buffers) > 1
-        ):
-            return True
-        return False
+        )
 
     def _compute_output_spec(
         self, input_tensor, results, input_sharding=None, **kwargs

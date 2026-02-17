@@ -12,7 +12,8 @@ from max.graph import TensorValue, ops
 from .base import CollectiveOperation
 
 if TYPE_CHECKING:
-    from ...core.sharding.spec import DeviceMesh
+    from ...core.sharding.spec import DeviceMesh, ShardingSpec
+    from ..base import OpArgs, OpKwargs
 
 
 class AxisIndexOp(CollectiveOperation):
@@ -38,7 +39,7 @@ class AxisIndexOp(CollectiveOperation):
         dtypes = [DType.int32] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
+                devices = list(mesh.device_refs)
             else:
                 devices = [mesh.device_refs[0]] * num_shards
         else:
@@ -50,9 +51,10 @@ class AxisIndexOp(CollectiveOperation):
         self, args: OpArgs, kwargs: OpKwargs
     ) -> tuple[list[TensorValue], ShardingSpec | None, DeviceMesh | None]:
         """Return the device's position along a mesh axis (Physical)."""
-        from ...core import GRAPH, Tensor
-        from ...core.sharding.spec import DimSpec, ShardingSpec
         from max.dtype import DType
+
+        from ...core import GRAPH
+        from ...core.sharding.spec import DimSpec, ShardingSpec
 
         mesh = self._derive_mesh(None, kwargs)
         axis_name = kwargs.get("axis_name")

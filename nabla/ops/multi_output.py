@@ -5,11 +5,14 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from max.graph import TensorValue, ops
+from max.graph import ops
 
-from .base import AxisOp, OpArgs, OpKwargs, OpResult, OpTensorValues, Operation
+from .base import AxisOp, OpArgs, Operation, OpKwargs, OpResult, OpTensorValues
+
+if TYPE_CHECKING:
+    from ..core.tensor import Tensor
 
 
 def _unshard_axis_before_split(x, kwargs):
@@ -37,7 +40,7 @@ def _build_multi_output_metadata(x, mesh, num_shards, num_splits):
     dtypes = [[x.dtype] * num_shards] * num_splits
     if mesh:
         if mesh.is_distributed:
-            devs = [d for d in mesh.device_refs]
+            devs = list(mesh.device_refs)
         else:
             devs = [mesh.device_refs[0]] * num_shards
         devices = [devs] * num_splits
@@ -104,7 +107,7 @@ class SplitOp(AxisOp):
                 idx = shard_idx if shard_idx < x.num_shards else 0
                 s = x.physical_local_shape(idx)
                 if s is not None:
-                    in_shape = list(int(d) for d in s)
+                    in_shape = [int(d) for d in s]
                     norm_axis = axis if axis >= 0 else len(in_shape) + axis
                     in_shape[norm_axis] //= num_splits
                     out_shapes.append(tuple(in_shape))
@@ -209,7 +212,7 @@ class ChunkOp(AxisOp):
             if s is None:
                 raise RuntimeError(f"Could not determine physical shape in {self.name}")
 
-            in_shape = list(int(d) for d in s)
+            in_shape = [int(d) for d in s]
             norm_axis = axis if axis >= 0 else len(in_shape) + axis
             axis_size = in_shape[norm_axis]
 
@@ -354,7 +357,7 @@ class UnbindOp(AxisOp):
             if s is None:
                 raise RuntimeError(f"Could not determine physical shape in {self.name}")
 
-            in_shape = list(int(d) for d in s)
+            in_shape = [int(d) for d in s]
             norm_axis = axis if axis >= 0 else len(in_shape) + axis
             axis_size = in_shape[norm_axis]
 
@@ -420,10 +423,7 @@ class UnbindOp(AxisOp):
         out_factors = [factors[i] for i in range(rank) if i != axis]
         out_mapping = {i: [out_factors[i]] for i in range(len(out_factors))}
 
-        if output_shapes:
-            count = len(output_shapes)
-        else:
-            count = input_shapes[0][axis]
+        count = len(output_shapes) if output_shapes else input_shapes[0][axis]
 
         return OpShardingRuleTemplate([in_mapping], [out_mapping] * count).instantiate(
             input_shapes, output_shapes
@@ -454,7 +454,7 @@ class MinMaxOp(Operation):
 
     def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
         """Compute global min and max by reducing all axes."""
-        from ..ops.reduction import reduce_min, reduce_max
+        from ..ops.reduction import reduce_max, reduce_min
 
         x = args[0]
         # Reduce along all axes to get scalar
@@ -478,22 +478,22 @@ _unbind_op = UnbindOp()
 _minmax_op = MinMaxOp()
 
 
-def split(x: "Tensor", num_splits: int, axis: int = 0) -> list:
+def split(x: Tensor, num_splits: int, axis: int = 0) -> list:
     """Split a tensor into multiple equal chunks along an axis."""
     return _split_op([x], {"num_splits": num_splits, "axis": axis})
 
 
-def chunk(x: "Tensor", chunks: int, axis: int = 0) -> list:
+def chunk(x: Tensor, chunks: int, axis: int = 0) -> list:
     """Split a tensor into a specified number of chunks."""
     return _chunk_op([x], {"chunks": chunks, "axis": axis})
 
 
-def unbind(x: "Tensor", axis: int = 0) -> list:
+def unbind(x: Tensor, axis: int = 0) -> list:
     """Remove a dimension and return list of slices."""
     return _unbind_op([x], {"axis": axis})
 
 
-def minmax(x: "Tensor") -> dict[str, "Tensor"]:
+def minmax(x: Tensor) -> dict[str, Tensor]:
     """Return both min and max of a tensor as a dict with 'min' and 'max' keys."""
     result = _minmax_op([x], {})
     return {"min": result[0], "max": result[1]}

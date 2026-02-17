@@ -5,10 +5,11 @@ os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=4"
 
 import jax
 import jax.numpy as jnp
-from jax import vmap, lax
-from jax.experimental.shard_map import shard_map
-from jax.sharding import Mesh, PartitionSpec as P
+from jax import lax, vmap
 from jax.experimental import mesh_utils
+from jax.experimental.shard_map import shard_map
+from jax.sharding import Mesh
+from jax.sharding import PartitionSpec as P
 
 # --- Configuration ---
 STAGES = 4

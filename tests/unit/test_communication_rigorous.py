@@ -7,11 +7,12 @@
 
 import jax
 import jax.numpy as jnp
-import pytest
+
 import nabla as nb
 from nabla.core.sharding.spec import DeviceMesh, P
-from nabla.ops.communication import all_reduce, reduce_scatter, all_gather, all_to_all
-from .common import assert_allclose, tensor_from_jax, to_jax, make_jax_array
+from nabla.ops.communication import all_reduce, reduce_scatter
+
+from .common import assert_allclose, tensor_from_jax
 
 
 class TestCommunicationRigorous:

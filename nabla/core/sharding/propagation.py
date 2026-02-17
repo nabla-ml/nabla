@@ -332,9 +332,8 @@ class OpShardingRuleTemplate:
 
                 if not unknown_factors:
                     pass
-                elif len(unknown_factors) == 1:
-                    if dim_size % known_product == 0:
-                        factor_sizes[unknown_factors[0]] = dim_size // known_product
+                elif len(unknown_factors) == 1 and dim_size % known_product == 0:
+                    factor_sizes[unknown_factors[0]] = dim_size // known_product
 
         return OpShardingRule(self.input_mappings, self.output_mappings, factor_sizes)
 
@@ -520,21 +519,27 @@ def _should_update_dim(
         if current.is_open:
             if not current.axes and proposed_axes:
                 return True
-            if len(proposed_axes) > len(current.axes):
-                if proposed_axes[: len(current.axes)] == current.axes:
-                    return True
-
-        if current.axes and (
-            not proposed_axes or len(proposed_axes) < len(current.axes)
-        ):
-            if not proposed_axes or current.axes[: len(proposed_axes)] == proposed_axes:
+            if (
+                len(proposed_axes) > len(current.axes)
+                and proposed_axes[: len(current.axes)] == current.axes
+            ):
                 return True
 
-    if proposed_priority > current.priority:
-        if current.is_open and not current.axes and proposed_axes:
+        if (
+            current.axes
+            and (not proposed_axes or len(proposed_axes) < len(current.axes))
+            and (
+                not proposed_axes or current.axes[: len(proposed_axes)] == proposed_axes
+            )
+        ):
             return True
 
-    return False
+    return (
+        proposed_priority > current.priority
+        and current.is_open
+        and not current.axes
+        and proposed_axes
+    )
 
 
 def _update_from_factors(
@@ -564,7 +569,7 @@ def _update_from_factors(
 
             proposed_axes = []
             proposed_prio = 999
-            proposed_open = current_dim.is_open
+            _proposed_open = current_dim.is_open
             proposed_partial = False
             has_factor_info = False
 

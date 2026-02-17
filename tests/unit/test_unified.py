@@ -32,31 +32,22 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 import pytest
 
 import nabla as nb
-from nabla import vjp, jvp, vmap, jacrev, jacfwd
-from nabla.core.sharding.spec import DeviceMesh, DimSpec, ShardingSpec
+from nabla import jacfwd, jacrev, jvp, vjp, vmap
+from nabla.core.sharding.spec import DeviceMesh, DimSpec
 
 from .common import (
-    compare_nested_structures,
     cleanup_caches,
-    get_test_data_for_shapes,
+    compare_nested_structures,
     get_shape_for_rank,
-    make_jax_array,
     tensor_from_jax,
-    to_jax,
 )
 from .unified_registry import (
     ALL_OPS,
     DIFF_OPS,
-    NON_DIFF_OPS,
     UNARY_OPS,
-    BINARY_OPS,
-    MATMUL_OPS,
-    REDUCTION_OPS,
-    VIEW_OPS,
 )
 
 SEED = 42

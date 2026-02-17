@@ -9,11 +9,10 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ...core import Tensor
-    from ...core.sharding.spec import DeviceMesh, ShardingSpec
 
-from max.graph import TensorValue, ops
+from max.graph import ops
 
-from ..base import OpArgs, OpKwargs, OpResult, OpTensorValues, Operation
+from ..base import OpArgs, Operation, OpKwargs, OpResult, OpTensorValues
 
 
 class AsInterleavedComplexOp(Operation):

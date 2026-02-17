@@ -3,9 +3,10 @@
 
 import numpy as np
 import pytest
+
 import nabla as nb
-from nabla.core.graph.tracing import trace
 from nabla.core.autograd import backward_on_trace
+from nabla.core.graph.tracing import trace
 
 # Try to import JAX for comparison, but don't fail if not present
 try:

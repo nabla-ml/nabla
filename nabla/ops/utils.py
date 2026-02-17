@@ -11,15 +11,14 @@ on the abstract interface.
 """
 
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Union
+
 from pathlib import Path
+from typing import TYPE_CHECKING, Any, Union
 
 if TYPE_CHECKING:
-    from ..core.tensor.api import Tensor
-    from ..core.sharding.spec import ShardingSpec, DeviceMesh
-    from max.driver import Device
-    from max.dtype import DType
     from max.graph import DeviceRef, TensorValue
+
+    from ..core.tensor.api import Tensor
 
 # Module-level caches for deferred imports
 _Tensor = None
@@ -33,9 +32,11 @@ def _get_utils_core():
     """Lazy import and cache core modules for utils hot paths."""
     global _Tensor, _GRAPH, _spmd, _pytree, _config
     if _Tensor is None:
-        from ..core import Tensor as T, GRAPH as g, pytree as pt
-        from ..core.sharding import spmd as s
         from .. import config as cfg
+        from ..core import GRAPH as g
+        from ..core import Tensor as T
+        from ..core import pytree as pt
+        from ..core.sharding import spmd as s
 
         _Tensor = T
         _GRAPH = g
@@ -44,7 +45,7 @@ def _get_utils_core():
         _config = cfg
 
 
-def ensure_tensor(x: Any) -> "Tensor":
+def ensure_tensor(x: Any) -> Tensor:
     """Convert scalar or array-like to Tensor."""
     if _Tensor is None:
         _get_utils_core()
@@ -196,8 +197,8 @@ def validate_physical_metadata(
     from max import graph as g
 
     def to_dev_ref(d):
-        from max.graph import DeviceRef
         from max.driver import Device as DriverDevice
+        from max.graph import DeviceRef
 
         if isinstance(d, DeviceRef):
             return d
@@ -233,16 +234,19 @@ def validate_physical_metadata(
     first_shard = shard_graph_values[0] if shard_graph_values else None
     if isinstance(first_shard, (list, tuple)):
         # Multi-output: normalize to list-of-lists and validate each
-        unzipped = list(zip(*shard_graph_values))
+        unzipped = list(zip(*shard_graph_values, strict=False))
         for i, (shapes, dtypes, devices, shards) in enumerate(
             zip(
                 output_physical_shapes,
                 output_shard_dtypes,
                 output_shard_devices,
                 unzipped,
+                strict=False,
             )
         ):
-            for j, (s, dt, dv, val) in enumerate(zip(shapes, dtypes, devices, shards)):
+            for j, (s, dt, dv, val) in enumerate(
+                zip(shapes, dtypes, devices, shards, strict=False)
+            ):
                 _check(s, dt, dv, val, f"Output Index: {i}, Shard Index: {j}")
     else:
         for i, (s, dt, dv, val) in enumerate(
@@ -251,6 +255,7 @@ def validate_physical_metadata(
                 output_shard_dtypes,
                 output_shard_devices,
                 shard_graph_values,
+                strict=False,
             )
         ):
             _check(s, dt, dv, val, f"Shard Index: {i}")
@@ -324,7 +329,7 @@ def apply_jvp(op: Any, args: list, kwargs: dict, output: Any) -> None:
             impl.tangent = old_tangent
 
     if output_tangents is not None:
-        for o, t in zip(outputs_list, output_tangents):
+        for o, t in zip(outputs_list, output_tangents, strict=False):
             if isinstance(o, Tensor) and isinstance(t, Tensor):
                 o._impl.tangent = t._impl
 
@@ -549,9 +554,7 @@ def package_outputs(
             )
             and type(output_physical_shapes[0][0]).__name__ != "StaticDim"
         )
-    elif isinstance(predicted_output_spec, (list, tuple)):
-        is_multi_output = True
-    elif (
+    elif isinstance(predicted_output_spec, (list, tuple)) or (
         execution_results
         and execution_results[0]
         and isinstance(execution_results[0][0], (list, tuple))
@@ -569,7 +572,7 @@ def package_outputs(
 
         # 2. Transpose shard-major results to output-major if available
         if EAGER_MAX_GRAPH and execution_results:
-            transposed_results = list(zip(*execution_results[0]))
+            transposed_results = list(zip(*execution_results[0], strict=False))
         else:
             transposed_results = [[] for _ in range(num_outputs)]
 
@@ -641,8 +644,8 @@ def apply_auto_reduction(op: Any, output: Any, mesh: Any, reduce_axes: Any) -> A
     if not (reduce_axes and mesh):
         return output
 
+    from ..core import Tensor, pytree
     from .communication.all_reduce import all_reduce
-    from ..core import pytree, Tensor
 
     def _apply_fn(t):
         if isinstance(t, Tensor):
@@ -679,6 +682,7 @@ def call_custom_kernel(
         Result TensorValue(s).
     """
     from max.graph import DeviceRef, TensorValue, ops
+
     from ..core import GRAPH
 
     if device is None:
@@ -687,10 +691,7 @@ def call_custom_kernel(
     if not isinstance(kernel_path, list):
         kernel_path = [kernel_path]
 
-    if isinstance(values, TensorValue):
-        values_list = [values]
-    else:
-        values_list = values
+    values_list = [values] if isinstance(values, TensorValue) else values
     unwrap_result = False
     if not isinstance(out_types, list):
         out_types_list = [out_types]

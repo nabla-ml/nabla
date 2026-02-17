@@ -12,10 +12,9 @@ from max import graph
 from max.graph import ops
 
 from ..core import GRAPH, pytree
-from .base import OpArgs, OpKwargs, OpResult, OpTensorValues, Operation, ensure_tensor
+from .base import OpArgs, Operation, OpKwargs, OpResult, OpTensorValues, ensure_tensor
 
 if TYPE_CHECKING:
-    from ..core.sharding.spec import DeviceMesh
     from ..core.tensor import Tensor
 
 
@@ -43,7 +42,7 @@ class WhereOp(Operation):
                 if len(s) < len(res):
                     s = (1,) * (len(res) - len(s)) + s
                 new_res = []
-                for d1, d2 in zip(res, s):
+                for d1, d2 in zip(res, s, strict=False):
                     if d1 == d2:
                         new_res.append(d1)
                     elif d1 == 1:
@@ -123,8 +122,8 @@ class WhereOp(Operation):
     def vjp_rule(
         self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
     ) -> OpResult:
-        from .creation import zeros_like
         from .control_flow import where
+        from .creation import zeros_like
 
         condition, x, y = primals[0], primals[1], primals[2]
         grad_x = where(condition, cotangents[0], zeros_like(x))
@@ -213,6 +212,7 @@ class CondOp(Operation):
         return all_shapes, all_dtypes, all_devices
 
     def infer_sharding_spec(self, args: list, mesh, kwargs: dict = None):
+        pred, true_fn, false_fn, *operands = args
         # Trace true_fn to get output structure
         res = true_fn(*operands)
         flat_res = pytree.tree_leaves(res)
@@ -348,8 +348,8 @@ class WhileLoopOp(Operation):
     def compute_physical_shape(
         self, args: list, kwargs: dict, output_sharding: Any = None
     ):
-        from ..core.tensor import Tensor
         from ..core.sharding import spmd
+        from ..core.tensor import Tensor
 
         cond_fn, body_fn, init_val = args
         flat_init, _ = pytree.tree_flatten(
@@ -485,7 +485,7 @@ class ScanOp(Operation):
         ys_list = []
         for i in range(length):
 
-            def _slice_at_i(x):
+            def _slice_at_i(x, i=i):
                 slc = view.slice_tensor(
                     x,
                     start=[i] + [0] * (x.rank - 1),

@@ -14,7 +14,6 @@ import nabla as nb
 
 from .conftest import make_rng
 
-
 # ===----------------------------------------------------------------------=== #
 # adamw_step (single-tensor, lowest level)
 # ===----------------------------------------------------------------------=== #
@@ -36,7 +35,7 @@ class TestAdamWStep:
 
     def test_adamw_step_vs_jax_manual(self):
         """Verify single step against manually computing AdamW in JAX."""
-        jax = pytest.importorskip("jax")
+        jax = pytest.importorskip("jax")  # noqa: F841
         jnp = pytest.importorskip("jax.numpy")
 
         rng = make_rng(42)
@@ -124,7 +123,7 @@ class TestSGDStep:
         nb.testing.assert_allclose(buf, buf_ref, rtol=1e-5, atol=1e-6)
 
     def test_sgd_step_with_weight_decay(self):
-        torch = pytest.importorskip("torch")
+        torch = pytest.importorskip("torch")  # noqa: F841
         rng = make_rng(52)
         p_np = rng.normal(size=(3, 4)).astype(np.float32)
         g_np = rng.normal(size=(3, 4)).astype(np.float32)
@@ -162,7 +161,7 @@ class TestAdamWFunctionalPytree:
         np.testing.assert_allclose(np.asarray(state["v"]["w"]), 0.0)
 
     def test_adamw_update_single_step_vs_jax(self):
-        jax = pytest.importorskip("jax")
+        jax = pytest.importorskip("jax")  # noqa: F841
         jnp = pytest.importorskip("jax.numpy")
 
         rng = make_rng(47)

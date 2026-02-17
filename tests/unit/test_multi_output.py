@@ -10,21 +10,17 @@ test_unified.py via unified_registry.py.
 """
 
 import jax.numpy as jnp
-import pytest
 
 import nabla as nb
-
 
 # =============================================================================
 # COMPREHENSIVE MULTI-OUTPUT SHARDING AND VMAP TESTS
 # =============================================================================
-
 from .common import (
     assert_allclose,
     assert_is_sharded,
     assert_shape,
     make_jax_array,
-    replicated,
     shard_on_axis,
     tensor_from_jax,
 )

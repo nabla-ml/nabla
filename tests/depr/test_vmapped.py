@@ -1,9 +1,11 @@
 import numpy as np
 import pytest
+
 import nabla as nb
-from nabla.transforms import vmap
 from nabla.core.sharding import DeviceMesh, DimSpec
-from .utils import check_vjp, HAS_JAX
+from nabla.transforms import vmap
+
+from .utils import HAS_JAX, check_vjp
 
 np.random.seed(42)
 

@@ -2,6 +2,7 @@
 """Test for Trace rehydration."""
 
 import numpy as np
+
 import nabla as nb
 from nabla.core.graph.tracing import trace
 
@@ -16,7 +17,7 @@ def test_simple_rehydration():
     x1 = nb.Tensor.from_dlpack(np.array([2.0, 3.0], dtype=np.float32))
     x2 = nb.Tensor.from_dlpack(np.array([4.0, 5.0], dtype=np.float32))
 
-    print(f"\nInputs:")
+    print("\nInputs:")
     print(f"x1 = {x1}")
     print(f"x2 = {x2}")
 
@@ -41,11 +42,11 @@ def test_simple_rehydration():
 
     traced = trace(compute, x1, x2)
 
-    print(f"\nTrace:")
+    print("\nTrace:")
     print(traced)
 
     # Check that intermediate tensors might not have _values
-    print(f"\n--- Before Rehydration ---")
+    print("\n--- Before Rehydration ---")
     for i, output_refs in enumerate(traced.nodes):
         alive = output_refs.get_alive_outputs()
         op_name = getattr(output_refs.op, "name", str(output_refs.op))
@@ -55,11 +56,11 @@ def test_simple_rehydration():
                 print(f"Node {i} (op={op_name}), output {j}: has_values={has_values}")
 
     # Rehydrate
-    print(f"\n--- Running Rehydration ---")
+    print("\n--- Running Rehydration ---")
     traced.rehydrate()
 
     # Check that all tensors now have _values
-    print(f"\n--- After Rehydration ---")
+    print("\n--- After Rehydration ---")
     all_hydrated = True
     for i, output_refs in enumerate(traced.nodes):
         alive = output_refs.get_alive_outputs()
@@ -72,9 +73,9 @@ def test_simple_rehydration():
                     all_hydrated = False
 
     if all_hydrated:
-        print(f"\n✓ SUCCESS: All intermediate tensors are rehydrated!")
+        print("\n✓ SUCCESS: All intermediate tensors are rehydrated!")
     else:
-        print(f"\n✗ FAILURE: Some tensors are still not rehydrated")
+        print("\n✗ FAILURE: Some tensors are still not rehydrated")
 
     assert all_hydrated, "Some tensors are still not rehydrated"
 

@@ -5,9 +5,10 @@
 
 import numpy as np
 import pytest
+
 import nabla as nb
-from nabla.core.graph.tracing import trace
 from nabla.core.autograd import backward_on_trace
+from nabla.core.graph.tracing import trace
 from nabla.core.sharding import DeviceMesh, DimSpec
 
 # Try to import JAX for comparison
@@ -76,7 +77,7 @@ class AutogradTestCase:
         # Shard inputs if mesh is provided
         if mesh is not None and input_shardings is not None:
             new_args = []
-            for arg, spec in zip(args, input_shardings):
+            for arg, spec in zip(args, input_shardings, strict=False):
                 if spec is not None:
                     sharded = nb.ops.shard(arg, mesh, spec)
                     new_args.append(sharded)
@@ -105,7 +106,9 @@ class AutogradTestCase:
             jax_cot = pytree.tree_map(jax_ones, val)
             jax_grads = vjp_fn(jax_cot)
 
-            for i, (arg, n_g, j_g) in enumerate(zip(args, nb_grads, jax_grads)):
+            for i, (arg, n_g, j_g) in enumerate(
+                zip(args, nb_grads, jax_grads, strict=False)
+            ):
                 # Only compare gradients for floating point tensors
                 if n_g is not None and str(arg.dtype).startswith("float"):
                     np.testing.assert_allclose(

@@ -12,15 +12,14 @@ import pytest
 
 import nabla as nb
 from tests.unit.common import (
+    MESH_CONFIGS,
+    DeviceMesh,
     cleanup_caches,
     make_jax_array,
-    make_positive_jax_array,
+    replicated,
+    shard_on_axis,
     tensor_from_jax,
     to_jax,
-    shard_on_axis,
-    replicated,
-    DeviceMesh,
-    MESH_CONFIGS,
 )
 
 

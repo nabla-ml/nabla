@@ -32,9 +32,9 @@ def vjp(
     | tuple[Any, Callable[..., tuple[Any, ...]], Any]
 ):
     """Compute VJP of *fn* at *primals*. Returns ``(output, vjp_fn[, aux])``."""
-    from ..core.graph.tracing import trace as capture_trace
     from ..core.autograd.utils import backward_on_trace
     from ..core.common import pytree
+    from ..core.graph.tracing import trace as capture_trace
 
     _aux_box: list[Any] = []
     if has_aux:

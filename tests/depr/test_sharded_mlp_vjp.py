@@ -4,9 +4,10 @@
 # ===----------------------------------------------------------------------=== #
 
 import numpy as np
+
 import nabla as nb
-from nabla.core.graph.tracing import trace
 from nabla.core.autograd import backward_on_trace
+from nabla.core.graph.tracing import trace
 from nabla.core.sharding import DeviceMesh, DimSpec
 
 
@@ -49,7 +50,7 @@ def test_sharded_mlp_grads():
 
     # VERIFICATION
 
-    print(f"\nResults:")
+    print("\nResults:")
     print(f"grad_W sharding: {grad_W.sharding}")
     print(f"grad_X sharding: {grad_X.sharding}")
 

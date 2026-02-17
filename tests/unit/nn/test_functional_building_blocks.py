@@ -14,8 +14,7 @@ import pytest
 
 import nabla as nb
 
-from .conftest import make_rng, nb_from_np
-
+from .conftest import make_rng
 
 # ===----------------------------------------------------------------------=== #
 # Dropout

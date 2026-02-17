@@ -9,8 +9,8 @@ Demonstrates: model definition, SGD optimizer, training loop with .backward().
 """
 
 import math
+
 import nabla as nb
-from max.dtype import DType
 
 
 class MLP:
@@ -104,7 +104,7 @@ def train_mlp():
         optimizer.step()
 
         if (epoch + 1) % 1 == 0:
-            print(f"{epoch+1:<8} {loss_value.item():<12.6f}")
+            print(f"{epoch + 1:<8} {loss_value.item():<12.6f}")
 
     print("-" * 30)
     print("✅ Training completed!")

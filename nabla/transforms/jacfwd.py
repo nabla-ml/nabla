@@ -8,7 +8,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ..core.tensor.api import Tensor
 
 from .utils import create_jacobian_helpers, split_aux, std_basis
 
@@ -21,11 +24,10 @@ def jacfwd(
     """Compute Jacobian of *fn* via forward-mode (one JVP per input element)."""
 
     def jacfwd_fn(*args: Any) -> Any:
-        from .jvp import jvp
-        from .vmap import vmap
         from ..core.common.pytree import tree_flatten, tree_unflatten
         from ..core.tensor.api import Tensor
-        from ..ops.view.shape import reshape
+        from .jvp import jvp
+        from .vmap import vmap
 
         diff_args, partial_func = create_jacobian_helpers(fn, argnums, args)
 
@@ -37,7 +39,7 @@ def jacfwd(
             diff_args, is_leaf=lambda x: isinstance(x, Tensor)
         )
         sizes, tangent_basis = std_basis(flat_inputs)
-        total_in = sum(sizes)
+        _total_in = sum(sizes)
 
         # Primals captured via closure (not through vmap) to avoid batch_dims mismatch.
 
@@ -82,10 +84,10 @@ def _reshape_jacfwd(
     diff_args: tuple[Any, ...],
 ) -> Any:
     """Reshape vmap(jvp) results into Jacobian shape ``(*out, *in)``."""
-    from ..core.tensor.api import Tensor
-    from ..ops.view.shape import reshape
-    from ..ops.multi_output import split
     from ..core.common.pytree import tree_flatten
+    from ..core.tensor.api import Tensor
+    from ..ops.multi_output import split
+    from ..ops.view.shape import reshape
 
     flat_out, _ = tree_flatten(test_output, is_leaf=lambda x: isinstance(x, Tensor))
 
@@ -122,7 +124,7 @@ def _reshape_jacfwd(
 
             jacs = []
             offset = 0
-            for inp, n_elems in zip(flat_inputs, sizes):
+            for inp, n_elems in zip(flat_inputs, sizes, strict=False):
                 in_shape = tuple(int(d) for d in inp.shape)
                 inp_chunks = chunks[offset : offset + n_elems]
                 if len(inp_chunks) == 1:

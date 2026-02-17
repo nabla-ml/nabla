@@ -5,33 +5,24 @@
 
 """Tests for physical operations (foundation layer) ported from tests/unit."""
 
-import jax
 import jax.numpy as jnp
 import pytest
 
 from nabla import (
-    Tensor,
     broadcast_to_physical,
     mean_physical,
     reduce_sum_physical,
     squeeze_physical,
     unsqueeze_physical,
 )
-from nabla.core.sharding.spec import DeviceMesh
-
-from .common import (
-    DeviceMesh,
-    assert_is_sharded,
-    assert_physical_shape,
-    shard_on_axis,
-)
-
 
 from .common import (
     assert_allclose,
+    assert_is_sharded,
+    assert_physical_shape,
     assert_shape,
     make_jax_array,
-    make_positive_jax_array,
+    shard_on_axis,
     tensor_from_jax,
 )
 

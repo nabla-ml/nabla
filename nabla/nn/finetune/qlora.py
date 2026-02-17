@@ -8,14 +8,12 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-
 from max.dtype import DType
 
 from ...core import Tensor
 from ...ops.unary import cast
 from ...ops.view import gather, reshape, unsqueeze
 from .lora import lora_delta
-
 
 NF4_CODEBOOK = np.array(
     [

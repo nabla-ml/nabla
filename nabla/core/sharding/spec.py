@@ -6,13 +6,12 @@
 import math
 import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 if TYPE_CHECKING:
     from max.graph import DeviceRef, Value
-    from max.driver import Device
 
 
 def parse_sub_axis(axis_name: str) -> tuple[str, int, int] | None:
@@ -127,7 +126,7 @@ class DeviceMesh:
             )
 
         if device_refs is None:
-            from max.driver import accelerator_count, Accelerator
+            from max.driver import Accelerator, accelerator_count
             from max.graph import DeviceRef
 
             # Try to use actual GPUs if available, otherwise simulate on CPU

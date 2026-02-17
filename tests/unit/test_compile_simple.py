@@ -1,7 +1,7 @@
+import numpy as np
+
 import nabla as nb
 from nabla.transforms.compile import compile
-import numpy as np
-import pytest
 
 
 def test_compile_scalar_add():

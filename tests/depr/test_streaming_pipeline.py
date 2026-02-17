@@ -1,10 +1,12 @@
 import numpy as np
 import pytest
+
 import nabla as nb
 from nabla import ops
 from nabla.core.sharding import DeviceMesh, DimSpec
-from nabla.transforms import vmap
 from nabla.ops import communication
+from nabla.transforms import vmap
+
 from .utils import HAS_JAX
 
 np.random.seed(42)
@@ -16,12 +18,12 @@ def get_pp_permutation(mesh):
     total = len(mesh.devices)
     perm = []
     for src in range(total):
-        coords = list(mesh.get_coordinate(src, ax) for ax in mesh.axis_names)
+        coords = [mesh.get_coordinate(src, ax) for ax in mesh.axis_names]
         coords[stage_idx] = (coords[stage_idx] + 1) % stage_size
         dst = next(
             d
             for d in range(total)
-            if list(mesh.get_coordinate(d, ax) for ax in mesh.axis_names) == coords
+            if [mesh.get_coordinate(d, ax) for ax in mesh.axis_names] == coords
         )
         perm.append((src, dst))
     return perm
@@ -192,7 +194,7 @@ def test_streaming_pipeline_shift_register(dp_size):
     if HAS_JAX:
         import jax
         import jax.numpy as jnp
-        from jax import vmap as jax_vmap, lax
+        from jax import vmap as jax_vmap
 
         # Fake shard_map by loop (to avoid complex mesh setup in test)
         # Or rely on simple vmap reference as before, but modeling standard behavior.

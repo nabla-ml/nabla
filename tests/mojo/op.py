@@ -4,8 +4,10 @@
 # ===----------------------------------------------------------------------=== #
 
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
 from max.graph import TensorValue
+
 from nabla.ops import UnaryOperation, call_custom_kernel
 
 if TYPE_CHECKING:

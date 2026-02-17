@@ -1,7 +1,7 @@
 import numpy as np
-import pytest
-from nabla import ops
+
 import nabla as nb
+from nabla import ops
 
 
 def test_slice_update_correctness():

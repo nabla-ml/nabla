@@ -1,7 +1,9 @@
 import numpy as np
 import pytest
+
 import nabla as nb
-from .utils import check_vjp, HAS_JAX
+
+from .utils import HAS_JAX, check_vjp
 
 np.random.seed(42)
 

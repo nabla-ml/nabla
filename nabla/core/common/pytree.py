@@ -200,7 +200,10 @@ def tree_flatten_full(
     is_leaf: Callable[[Any], bool] | None = None,
 ) -> tuple[list, PyTreeDef]:
     """Flatten a pytree into leaves and structure, treating None as a leaf."""
-    full_is_leaf = lambda x: (x is None) or (is_leaf(x) if is_leaf else False)
+
+    def full_is_leaf(x):
+        return (x is None) or (is_leaf(x) if is_leaf else False)
+
     return tree_flatten(tree, is_leaf=full_is_leaf)
 
 

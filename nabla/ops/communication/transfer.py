@@ -12,10 +12,11 @@ from typing import TYPE_CHECKING, Any
 from max.driver import Device
 from max.graph import TensorValue
 
-from ..base import OpArgs, OpKwargs, OpResult, OpTensorValues, Operation
+from ..base import OpArgs, Operation, OpKwargs, OpResult, OpTensorValues
 
 if TYPE_CHECKING:
     from ...core import Tensor
+    from ...core.sharding.spec import DeviceMesh, ShardingSpec
 
 
 class TransferOp(Operation):
@@ -76,7 +77,6 @@ class TransferOp(Operation):
             tuple: (shard_results, output_sharding, mesh)
         """
         from ...core import GRAPH
-        from ...core.sharding import spmd
 
         x = args[0]
 
@@ -108,10 +108,13 @@ class TransferOp(Operation):
         x = primals[0]
 
         # If input and output are on different devices, transfer gradient back
-        if isinstance(x, Tensor) and isinstance(cotangents[0], Tensor):
-            if x.device != cotangents[0].device:
-                # Transfer gradient back to input's device
-                return [to_device(cotangents[0], x.device)]
+        if (
+            isinstance(x, Tensor)
+            and isinstance(cotangents[0], Tensor)
+            and x.device != cotangents[0].device
+        ):
+            # Transfer gradient back to input's device
+            return [to_device(cotangents[0], x.device)]
 
         # Otherwise gradient is already on correct device
         return [cotangents[0]]
@@ -183,8 +186,8 @@ def to_device(
 
     # Case 1: Multi-device sharding (like JAX's device_put with Sharding)
     if sharding is not None:
-        from ..communication.shard import shard
         from ...core.sharding.spec import ShardingSpec
+        from ..communication.shard import shard
 
         if not isinstance(sharding, ShardingSpec):
             raise TypeError(

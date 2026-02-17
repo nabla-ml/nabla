@@ -12,13 +12,11 @@ import pytest
 
 import nabla as nb
 from tests.unit.common import (
-    assert_allclose,
+    cleanup_caches,
     make_jax_array,
     tensor_from_jax,
     to_jax,
-    cleanup_caches,
 )
-
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 

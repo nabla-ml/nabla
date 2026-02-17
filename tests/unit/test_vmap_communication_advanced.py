@@ -14,11 +14,11 @@ Covers:
 
 import jax
 import jax.numpy as jnp
-import pytest
 
 import nabla as nb
 from nabla.core.sharding.spec import DeviceMesh, P
-from nabla.ops.communication import all_gather, reduce_scatter, all_reduce
+from nabla.ops.communication import all_gather, all_reduce, reduce_scatter
+
 from .common import (
     assert_allclose,
     tensor_from_jax,

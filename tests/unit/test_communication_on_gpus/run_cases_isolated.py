@@ -21,6 +21,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass
@@ -64,7 +65,7 @@ def run_case(case: str, timeout_sec: int) -> CaseResult:
         proc = subprocess.run(
             cmd,
             env=env,
-            cwd=os.getcwd(),
+            cwd=str(Path.cwd()),
             capture_output=True,
             text=True,
             timeout=timeout_sec,

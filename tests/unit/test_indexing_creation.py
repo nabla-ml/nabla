@@ -12,7 +12,6 @@ test_unified.py via unified_registry.py.
 
 from functools import partial
 
-import jax
 import jax.numpy as jnp
 import pytest
 
@@ -22,10 +21,8 @@ from nabla import P
 from .common import (
     OpConfig,
     Operation,
-    get_test_data_for_shapes,
     run_test_with_consistency_check,
     standard_get_args,
-    SEED,
 )
 
 

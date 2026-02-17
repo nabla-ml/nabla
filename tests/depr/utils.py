@@ -1,9 +1,9 @@
 import numpy as np
-import pytest
+
 import nabla as nb
-from nabla.core.graph.tracing import trace
 from nabla.core.autograd import backward_on_trace
-from nabla.core.sharding import DeviceMesh, DimSpec
+from nabla.core.graph.tracing import trace
+from nabla.core.sharding import DimSpec
 from nabla.transforms import vmap
 
 # Context manager to suppress JAX GPU warnings or handle missing JAX
@@ -84,7 +84,7 @@ def check_vjp(
     # Apply Sharding if requested
     if mesh is not None and input_specs is not None:
         sharded_args = []
-        for arg, spec in zip(args_nb, input_specs):
+        for arg, spec in zip(args_nb, input_specs, strict=False):
             if spec:
                 # Ensure spec is a list of DimSpec objects
                 if isinstance(spec, (list, tuple)) and all(
@@ -148,7 +148,7 @@ def check_vjp(
             GRAPH.evaluate(t)
         return t.to_numpy()
 
-    for i, (g_nb, arg_in) in enumerate(zip(grads_nb, args_np)):
+    for i, (g_nb, arg_in) in enumerate(zip(grads_nb, args_np, strict=False)):
         if g_nb is None:
             # If input is float, we expect a gradient
             if np.issubdtype(arg_in.dtype, np.floating):

@@ -2,6 +2,7 @@
 """Test for multi-output Trace rehydration."""
 
 import numpy as np
+
 import nabla as nb
 from nabla.core.graph.tracing import trace
 
@@ -28,11 +29,11 @@ def test_multi_output_rehydration():
 
     traced = trace(compute, x)
 
-    print(f"\nTrace:")
+    print("\nTrace:")
     print(traced)
 
     # Check status before
-    print(f"\n--- Before Rehydration ---")
+    print("\n--- Before Rehydration ---")
     node = traced.nodes[0]
     op_name = node.op.name
     alive = node.get_alive_outputs()
@@ -41,11 +42,11 @@ def test_multi_output_rehydration():
         print(f"  Output {i} has_values: {bool(impl._get_valid_values())}")
 
     # Rehydrate
-    print(f"\n--- Running Rehydration ---")
+    print("\n--- Running Rehydration ---")
     traced.rehydrate()
 
     # Check status after
-    print(f"\n--- After Rehydration ---")
+    print("\n--- After Rehydration ---")
     all_ok = True
     for i, impl in enumerate(alive):
         has_vals = bool(impl._get_valid_values())
@@ -54,9 +55,9 @@ def test_multi_output_rehydration():
             all_ok = False
 
     if all_ok:
-        print(f"\n✓ SUCCESS: Multi-output rehydration works!")
+        print("\n✓ SUCCESS: Multi-output rehydration works!")
     else:
-        print(f"\n✗ FAILURE: Some outputs were not hydrated")
+        print("\n✗ FAILURE: Some outputs were not hydrated")
 
     assert all_ok, "Some outputs were not hydrated"
 

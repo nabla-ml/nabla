@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ..graph.tracing import Trace, OpNode
+    from ..graph.tracing import OpNode, Trace
     from ..tensor.impl import TensorImpl
 
 GradsMap = dict["Tensor", "Tensor"]
@@ -41,7 +41,7 @@ def _reduce_to_shape(cot_tensor: Tensor, target_shape: tuple[int, ...]) -> Tenso
     # 2. Reduce broadcasted internal dimensions (size 1 in target, size > 1 in cot)
     reduce_axes = [
         i
-        for i, (c_d, a_d) in enumerate(zip(cot_shape, target_shape))
+        for i, (c_d, a_d) in enumerate(zip(cot_shape, target_shape, strict=False))
         if a_d == 1 and c_d > 1
     ]
     if reduce_axes:
@@ -54,7 +54,7 @@ def _reduce_to_shape(cot_tensor: Tensor, target_shape: tuple[int, ...]) -> Tenso
 
 def _accumulate_cotangent(
     cotangent_map: CotangentMap,
-    target_impl: "TensorImpl",
+    target_impl: TensorImpl,
     cot_tensor: Tensor,
 ) -> None:
     """Accumulates a cotangent tensor into the global cotangent map for a specific target.
@@ -100,13 +100,13 @@ def _accumulate_cotangent(
 class BackwardEngine:
     """Stateful engine for backpropagation on a captured Trace."""
 
-    trace: "Trace"
+    trace: Trace
     create_graph: bool
     cotangent_map: CotangentMap
     _original_flags: dict[int, bool]
 
     def __init__(
-        self, trace: "Trace", cotangents: Any, create_graph: bool = False
+        self, trace: Trace, cotangents: Any, create_graph: bool = False
     ) -> None:
         from ..common import pytree
 
@@ -156,8 +156,7 @@ class BackwardEngine:
             self._process_node(node)
         return self._finalize()
 
-    def _process_node(self, node: "OpNode") -> None:
-        from ..common import pytree
+    def _process_node(self, node: OpNode) -> None:
         from ..tensor.impl import TensorImpl
 
         alive_outputs = node.get_alive_outputs()
@@ -219,7 +218,7 @@ class BackwardEngine:
             self._restore_trace_state(vjp_inputs)
 
         # 4. Align and Accumulate — input_cotangents is flat list matching primals
-        arg_leaves = [a for a in node.op_args]
+        arg_leaves = list(node.op_args)
 
         for arg_impl, cot_result in zip(arg_leaves, input_cotangents, strict=False):
             if arg_impl is None or cot_result is None:
@@ -289,7 +288,7 @@ class BackwardEngine:
 
 
 def backward_on_trace(
-    trace: "Trace",
+    trace: Trace,
     cotangents: Any,
     *,
     create_graph: bool = False,
@@ -364,7 +363,7 @@ def backward(
         cot_leaves = [
             t._impl for t in pytree.tree_leaves(cotangents) if isinstance(t, Tensor)
         ]
-        for out_impl, cot_impl in zip(output_leaves, cot_leaves):
+        for out_impl, cot_impl in zip(output_leaves, cot_leaves, strict=False):
             if out_impl.requires_grad:
                 out_impl.cotangent = cot_impl
         return

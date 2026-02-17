@@ -4,13 +4,14 @@
 # ===----------------------------------------------------------------------=== #
 
 import numpy as np
-import pytest
+from max.dtype import DType
+
 import nabla as nb
 from nabla import ops
-from nabla.core.sharding import DeviceMesh, PartitionSpec as P, DimSpec
-from nabla.transforms import vmap
+from nabla.core.sharding import DeviceMesh, DimSpec
+from nabla.core.sharding import PartitionSpec as P
 from nabla.ops import communication
-from max.dtype import DType
+from nabla.transforms import vmap
 
 STAGES = 4
 MICRO_BATCHES = 8
@@ -23,12 +24,12 @@ def get_pp_permutation(mesh):
     size = mesh.shape[idx]
     perm = []
     for src in range(len(mesh.devices)):
-        coords = list(mesh.get_coordinate(src, ax) for ax in mesh.axis_names)
+        coords = [mesh.get_coordinate(src, ax) for ax in mesh.axis_names]
         coords[idx] = (coords[idx] + 1) % size
         dst = next(
             d
             for d in range(len(mesh.devices))
-            if list(mesh.get_coordinate(d, ax) for ax in mesh.axis_names) == coords
+            if [mesh.get_coordinate(d, ax) for ax in mesh.axis_names] == coords
         )
         perm.append((src, dst))
     return perm
@@ -59,7 +60,7 @@ def test_pipeline_parallelism():
     ).realize()
 
     x_nb = nb.Tensor.from_dlpack(x_np)  # Already realized
-    y_nb = nb.Tensor.from_dlpack(y_np)  # Already realized
+    _y_nb = nb.Tensor.from_dlpack(y_np)  # Already realized
 
     # Initialize state as float32 and sharded
     init_state_np = np.zeros((STAGES, MICRO_BATCH_SIZE, DIM), dtype=np.float32)

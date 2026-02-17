@@ -1,7 +1,8 @@
 import numpy as np
+
 import nabla as nb
-from nabla.core.graph.tracing import trace
 from nabla.core.autograd import backward_on_trace
+from nabla.core.graph.tracing import trace
 from nabla.core.sharding import DeviceMesh, DimSpec
 
 

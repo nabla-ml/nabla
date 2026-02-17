@@ -3,12 +3,14 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
-import pytest
 import numpy as np
+import pytest
+
 import nabla as nb
-from nabla.transforms import compile
-from nabla.core.sharding import DeviceMesh, PartitionSpec as P
+from nabla.core.sharding import DeviceMesh
+from nabla.core.sharding import PartitionSpec as P
 from nabla.ops import shard
+from nabla.transforms import compile
 
 
 def test_compile_basic():
@@ -57,7 +59,7 @@ def test_compile_dynamic_dims():
     assert f.stats.misses == 1
 
     # Second call: same batch size, should hit
-    y1_again = f(x1, w)
+    _y1_again = f(x1, w)
     assert f.stats.hits == 1
 
     # Third call: different batch size, but dynamic_dims should allow hit
@@ -99,7 +101,7 @@ def test_compile_sharded():
     np.testing.assert_allclose(result.to_numpy(), a_np + b_np, atol=1e-5)
 
     # Second call: cache hit
-    result2 = sharded_add(a, b)
+    _result2 = sharded_add(a, b)
     assert sharded_add.stats.hits == 1
 
     print("Sharded compile test passed!")
@@ -130,7 +132,7 @@ def test_compile_sharded_dynamic():
         NotImplementedError,
         match="Compilation of sharded tensors with dynamic dimensions is not yet supported",
     ):
-        y1 = f(x, nb.Tensor.from_dlpack(w_np))
+        _y1 = f(x, nb.Tensor.from_dlpack(w_np))
 
     print("Sharded + Dynamic Dims validation check passed (Correctly Raised Error)!")
 
@@ -159,7 +161,7 @@ def test_compile_complex_ops_sharded():
 
     # Expect error
     with pytest.raises(NotImplementedError):
-        y = complex_f(x)
+        _y = complex_f(x)
 
     print("Complex ops sharded validation check passed!")
 

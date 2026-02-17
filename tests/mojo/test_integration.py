@@ -3,11 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
-import pytest
 import numpy as np
+
 import nabla as nb
+from nabla.core.sharding import DeviceMesh
 from tests.mojo.op import add_one_custom
-from nabla.core.sharding import DeviceMesh, ShardingSpec
 
 
 def test_add_one_custom_unsharded():

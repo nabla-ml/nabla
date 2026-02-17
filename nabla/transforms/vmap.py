@@ -16,9 +16,10 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, TypeVar, Union
 
 if TYPE_CHECKING:
+    from max.graph.dim import Dim
+
     from ..core.sharding.spec import DeviceMesh
     from ..core.tensor.api import Tensor
-    from max.graph.dim import Dim
 
 AxisSpec = Union[
     int, None, dict[str, "AxisSpec"], list["AxisSpec"], tuple["AxisSpec", ...]
@@ -72,8 +73,8 @@ def _walk_prefix(
 ) -> Any:
     """Apply *fn(tensor, axis, *extra)* to every Tensor leaf paired with its
     axis from *prefix*.  Returns the mapped tree (same structure as *tree*)."""
-    from ..core.tensor import Tensor
     from ..core import tree_map
+    from ..core.tensor import Tensor
 
     # Leaf spec → broadcast to all tensor leaves.
     if isinstance(prefix, (int, type(None))):
@@ -96,8 +97,8 @@ def _walk_prefix(
 
 def _collect_prefix(fn: Callable, tree: Any, prefix: AxisSpec) -> list:
     """Collect non-None results of *fn(tensor, axis)* across all leaves."""
-    from ..core.tensor import Tensor
     from ..core import tree_map
+    from ..core.tensor import Tensor
 
     out: list = []
 
@@ -123,7 +124,7 @@ def _collect_prefix(fn: Callable, tree: Any, prefix: AxisSpec) -> list:
 # ── Batch-size validation ─────────────────────────────────────────────────
 
 
-def _get_batch_size(tensor: "Tensor", axis: AxisSpec) -> "Dim":
+def _get_batch_size(tensor: Tensor, axis: AxisSpec) -> Dim:
     if axis is None:
         return None
     if not isinstance(axis, int):
@@ -140,7 +141,7 @@ def _get_batch_size(tensor: "Tensor", axis: AxisSpec) -> "Dim":
 
 def _validate_batch_sizes(
     args: tuple[Any, ...], in_axes: tuple[AxisSpec, ...], axis_size: int | None
-) -> "Dim":
+) -> Dim:
     """Validate batch dims across all inputs; return common Dim."""
     from max.graph.dim import StaticDim
 
@@ -148,7 +149,7 @@ def _validate_batch_sizes(
         d
         for d in (
             d
-            for arg, ax in zip(args, in_axes)
+            for arg, ax in zip(args, in_axes, strict=False)
             for d in _collect_prefix(_get_batch_size, arg, ax)
         )
         if d is not None
@@ -173,15 +174,15 @@ def _validate_batch_sizes(
 
 
 def _batch_tensor(
-    tensor: "Tensor",
+    tensor: Tensor,
     axis: AxisSpec,
-    batch_dim: "Dim",
+    batch_dim: Dim,
     spmd_axis_name: str | None,
-    mesh: "DeviceMesh | None",
-) -> "Tensor":
+    mesh: DeviceMesh | None,
+) -> Tensor:
     """Move *axis* into batch_dims position for batched execution."""
     from max.graph.dim import StaticDim
-    from ..ops import communication as comm_ops
+
     from ..ops import view as view_ops
 
     old_bd = tensor.batch_dims
@@ -215,14 +216,14 @@ def _batch_tensor(
 
 
 def _apply_shard(
-    target: "Tensor",
-    source: "Tensor",
+    target: Tensor,
+    source: Tensor,
     bd_offset: int,
     axis_name: str,
-    mesh: "DeviceMesh",
+    mesh: DeviceMesh,
     *,
     broadcast: bool,
-) -> "Tensor":
+) -> Tensor:
     """Apply SPMD sharding spec to a batched dim."""
     from ..core.sharding.spec import DimSpec
     from ..ops import communication as comm_ops
@@ -248,11 +249,11 @@ def _apply_shard(
 
 
 def _unbatch_tensor(
-    tensor: "Tensor",
+    tensor: Tensor,
     axis: AxisSpec,
     spmd_axis_name: str | None = None,
-    mesh: "DeviceMesh | None" = None,
-) -> "Tensor":
+    mesh: DeviceMesh | None = None,
+) -> Tensor:
     """Restore *tensor* after batched execution — move batch_dims to *axis*."""
     from ..ops import view as view_ops
 
@@ -283,7 +284,7 @@ def vmap(
     out_axes: AxisSpec = 0,
     axis_size: int | None = None,
     spmd_axis_name: str | None = None,
-    mesh: "DeviceMesh | None" = None,
+    mesh: DeviceMesh | None = None,
 ) -> Callable[..., T]:
     """Vectorize *func* over batch dimensions (JAX-compatible API)."""
     if func is None:
@@ -305,7 +306,7 @@ def vmap(
 
         batched = tuple(
             _walk_prefix(_batch_tensor, arg, ax, batch_dim, spmd_axis_name, mesh)
-            for arg, ax in zip(args, in_ax)
+            for arg, ax in zip(args, in_ax, strict=False)
         )
 
         outputs = func(*batched)
@@ -316,7 +317,7 @@ def vmap(
 
         unbatched = [
             _walk_prefix(_unbatch_tensor, out, ax, spmd_axis_name, mesh)
-            for out, ax in zip(out_list, out_ax)
+            for out, ax in zip(out_list, out_ax, strict=False)
         ]
         return unbatched[0] if is_single else type(outputs)(unbatched)
 

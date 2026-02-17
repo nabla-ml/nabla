@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ..core.tensor.api import Tensor
-    from max.dtype import DType
 
 # Non-differentiable dtypes (lazily initialised).
 _NON_DIFF_DTYPES: frozenset | None = None
@@ -80,11 +79,11 @@ def select_argnums(
 
 
 def collect_grads(
-    grads_map: dict["Tensor", "Tensor"],
+    grads_map: dict[Tensor, Tensor],
     input_leaves: list[Any],
     *,
     skip_non_diff: bool = True,
-) -> list["Tensor | None"]:
+) -> list[Tensor | None]:
     """Collect per-leaf gradients from a backward *grads_map*."""
     from ..core.tensor.api import Tensor
     from ..ops.creation import zeros_like
@@ -92,9 +91,7 @@ def collect_grads(
     non_diff = _get_non_diff_dtypes() if skip_non_diff else frozenset()
     result: list[Tensor | None] = []
     for leaf in input_leaves:
-        if not isinstance(leaf, Tensor):
-            result.append(None)
-        elif skip_non_diff and leaf.dtype in non_diff:
+        if not isinstance(leaf, Tensor) or skip_non_diff and leaf.dtype in non_diff:
             result.append(None)
         elif leaf in grads_map:
             result.append(grads_map[leaf])
@@ -123,7 +120,7 @@ def create_jacobian_helpers(
 
     def partial_func(*diff_args_inner):
         full = list(args)
-        for idx, arg in zip(norm, diff_args_inner):
+        for idx, arg in zip(norm, diff_args_inner, strict=False):
             full[idx] = arg
         return fn(*full)
 
@@ -133,6 +130,7 @@ def create_jacobian_helpers(
 def std_basis(flat_tensors: list[Tensor]) -> tuple[list[int], list[Tensor]]:
     """One-hot basis vectors for Jacobian computation (shared by jacfwd/jacrev)."""
     import numpy as np
+
     from ..core.tensor.api import Tensor
 
     sizes: list[int] = []
@@ -144,7 +142,7 @@ def std_basis(flat_tensors: list[Tensor]) -> tuple[list[int], list[Tensor]]:
     total = sum(sizes)
     basis: list[Tensor] = []
     offset = 0
-    for t, n in zip(flat_tensors, sizes):
+    for t, n in zip(flat_tensors, sizes, strict=False):
         sh = tuple(int(d) for d in t.shape)
         if sh == ():
             bp = np.zeros((total,), dtype=np.float32)

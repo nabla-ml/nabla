@@ -4,6 +4,7 @@
 # ===----------------------------------------------------------------------=== #
 
 import numpy as np
+
 import nabla as nb
 from nabla import DeviceMesh, DimSpec, ops
 from nabla.core.graph.tracing import trace

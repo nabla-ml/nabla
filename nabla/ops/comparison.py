@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from max.graph import TensorValue, ops
+from max.graph import ops
 
 from .base import (
     BinaryOperation,
@@ -17,9 +17,11 @@ from .base import (
     OpKwargs,
     OpResult,
     OpTensorValues,
-    Operation,
     UnaryOperation,
 )
+
+if TYPE_CHECKING:
+    from ..core.tensor import Tensor
 
 
 class ComparisonOp(BinaryOperation):

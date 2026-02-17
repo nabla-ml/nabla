@@ -1,9 +1,10 @@
-import numpy as np
 import jax
 import jax.numpy as jnp
+import numpy as np
+
 import nabla as nb
-from nabla.core.graph.tracing import trace
 from nabla.core.autograd import backward_on_trace
+from nabla.core.graph.tracing import trace
 from nabla.core.sharding import DeviceMesh, DimSpec
 from nabla.transforms import vmap
 
@@ -33,7 +34,7 @@ def assert_grads_match(
 
     # Apply sharding
     sharded_inputs = []
-    for inp, specs in zip(inputs_nb, mesh_dim_specs):
+    for inp, specs in zip(inputs_nb, mesh_dim_specs, strict=False):
         if specs:
             sharded_inputs.append(nb.ops.shard(inp, mesh, [DimSpec(s) for s in specs]))
         else:
@@ -66,7 +67,7 @@ def assert_grads_match(
             GRAPH.evaluate(t)
         return np.asarray(t.to_numpy())
 
-    for i, (gnb, gjax) in enumerate(zip(grads_nb, grads_jax)):
+    for i, (gnb, gjax) in enumerate(zip(grads_nb, grads_jax, strict=False)):
         gnb_np = to_np(gnb)
         np.testing.assert_allclose(
             gnb_np,
@@ -249,8 +250,8 @@ if __name__ == "__main__":
         print("\n" + "=" * 70)
         print("✅ COMPREHENSIVE SHARDED VJP TEST PASSED!")
         print("=" * 70)
-    except Exception as e:
-        print(f"\n❌ COMPREHENSIVE SHARDED VJP TEST FAILED:")
+    except Exception:
+        print("\n❌ COMPREHENSIVE SHARDED VJP TEST FAILED:")
         import traceback
 
         traceback.print_exc()

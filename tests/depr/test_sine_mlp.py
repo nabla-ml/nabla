@@ -1,13 +1,12 @@
-import os
-
 # Comment out to allow NABLA_DEBUG from environment
 # os.environ["NABLA_DEBUG"] = "0"
 
+import time
+
+import numpy as np
+
 import nabla as nb
 from nabla import ops
-from max.dtype import DType
-import numpy as np
-import time
 
 
 def mlp(x, params):
@@ -72,7 +71,7 @@ def main():
         loss, grads = vg_fn(params, x, y)
 
         # Compute updated parameters (as lazy nodes)
-        new_params = [p - g * lr for p, g in zip(params, grads)]
+        new_params = [p - g * lr for p, g in zip(params, grads, strict=False)]
 
         # Realize everything at once in a SINGLE compilation/execution
         nb.realize_all(loss, *new_params)
@@ -87,7 +86,7 @@ def main():
 
     # Final params should be realized
     for p in params:
-        p
+        _ = p
 
     # Check predictions
     final_preds = mlp(x, params).to_numpy()

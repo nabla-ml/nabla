@@ -1,8 +1,8 @@
 import numpy as np
+
 import nabla as nb
 from nabla import ops
-from nabla.core.sharding import DeviceMesh, PartitionSpec as P, DimSpec
-from max.dtype import DType
+from nabla.core.sharding import DeviceMesh, DimSpec
 
 
 def test_dp_simple():

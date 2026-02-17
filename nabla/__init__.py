@@ -3,6 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
+from max.driver import CPU, Accelerator
+from max.dtype import DType
+
+from . import nn, testing
 from .core import (
     GRAPH,
     PyTreeDef,
@@ -48,26 +52,26 @@ from .ops.binary import (
     add,
     div,
     matmul,
-    mul,
-    sub,
     mod,
-    pow,
+    mul,
     outer,
+    pow,
+    sub,
 )
 from .ops.communication import (
+    accelerator,
     all_gather,
     all_reduce,
-    distributed_broadcast,
     all_to_all,
+    cpu,
+    distributed_broadcast,
+    gpu,
     ppermute,
     reduce_scatter,
     reshard,
     shard,
     to_device,
     transfer_to,
-    cpu,
-    gpu,
-    accelerator,
 )
 from .ops.comparison import (
     equal,
@@ -75,11 +79,11 @@ from .ops.comparison import (
     greater_equal,
     less,
     less_equal,
-    not_equal,
-    logical_xor,
     logical_and,
-    logical_or,
     logical_not,
+    logical_or,
+    logical_xor,
+    not_equal,
 )
 from .ops.control_flow import cond, scan, where, while_loop
 from .ops.creation import (
@@ -92,11 +96,11 @@ from .ops.creation import (
     normal,
     ones,
     ones_like,
+    tril,
+    triu,
     uniform,
     zeros,
     zeros_like,
-    triu,
-    tril,
 )
 from .ops.multi_output import (
     chunk,
@@ -105,53 +109,60 @@ from .ops.multi_output import (
     unbind,
 )
 from .ops.reduction import (
+    argmax,
+    argmin,
+    cumsum,
     mean,
     mean_physical,
     reduce_max,
     reduce_min,
     reduce_sum,
     reduce_sum_physical,
-    argmax,
-    argmin,
-    cumsum,
 )
 from .ops.unary import (
     abs,
-    exp,
-    log,
-    neg,
-    relu,
-    sigmoid,
-    softmax,
-    logsoftmax,
-    sqrt,
-    tanh,
     acos,
     atanh,
+    cast,
     cos,
     erf,
+    exp,
     floor,
+    gelu,
     is_inf,
     is_nan,
+    log,
     log1p,
+    logsoftmax,
+    neg,
+    relu,
+    round,
     rsqrt,
+    sigmoid,
     silu,
     sin,
+    softmax,
+    sqrt,
+    tanh,
     trunc,
-    gelu,
-    round,
-    cast,
 )
+from .ops.utils import call_custom_kernel
 from .ops.view import (
+    as_interleaved_complex,
     broadcast_to,
     broadcast_to_physical,
     concatenate,
     decr_batch_dims,
+    flatten,
+    flip,
     gather,
     incr_batch_dims,
     move_axis_from_batch_dims,
     move_axis_to_batch_dims,
     moveaxis,
+    pad,
+    permute,
+    rebind,
     reshape,
     scatter,
     slice_tensor,
@@ -163,16 +174,8 @@ from .ops.view import (
     transpose,
     unsqueeze,
     unsqueeze_physical,
-    flip,
-    permute,
-    flatten,
-    rebind,
-    pad,
-    as_interleaved_complex,
     view_as_real_interleaved,
 )
-
-from .ops.utils import call_custom_kernel
 from .transforms.compile import CompilationStats, CompiledFunction, compile
 from .transforms.jacfwd import jacfwd
 from .transforms.jacrev import jacrev
@@ -180,11 +183,6 @@ from .transforms.jvp import jvp
 from .transforms.shard_map import shard_map
 from .transforms.vjp import vjp
 from .transforms.vmap import vmap
-from . import nn
-from . import testing
-
-from max.driver import Accelerator, CPU
-from max.dtype import DType
 
 __all__ = [
     "defaults",

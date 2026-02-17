@@ -10,11 +10,13 @@ api/index
 tutorials/index
 ```
 
-## Core Principles
+---
 
-1.  **Lazy Execution**: Shapes are computed eagerly, but the computation graph is built and compiled only when `.realize()` is called.
-2.  **Trace-Based Autodiff**: Gradients are computed by tracing the forward pass and replaying operations in reverse via the `grad` transform.
-3.  **Factor-Based SPMD**: Sharding is propagated using "semantic factors" (e.g., batch, heads) rather than physical mesh axes.
+## Installation
+
+```bash
+pip install nabla-ml
+```
 
 ---
 
@@ -22,7 +24,7 @@ tutorials/index
 
 ### 1. Tensors & Autodiff
 
-Define Python functions and compute gradients using trace-based automatic differentiation. [Read more](nabla/core/autograd/README.md)
+Define Python functions and compute gradients using trace-based automatic differentiation. [Explore the code.](https://github.com/nabla-ml/nabla/tree/main/nabla/core/autograd/README.md)
 
 ```python
 import nabla
@@ -47,7 +49,7 @@ with nabla.default_device(nabla.Accelerator()):
 
 ### 2. SPMD Sharding
 
-Shard tensors on a logical mesh; operations automatically propagate sharding constraints. [Read more](nabla/core/sharding/README.md)
+Shard tensors on a logical mesh; operations automatically propagate sharding constraints. [Explore the code.](https://github.com/nabla-ml/nabla/tree/main/nabla/core/sharding/README.md)
 
 ```python
 # Define 2×4 device mesh (Logical DP × TP)
@@ -67,7 +69,7 @@ print("Loss (Sharded):", loss)
 
 ### 3. Mojo Integration
 
-Nabla's core strength is its ability to drop down to **Mojo** for high-performance custom kernels, bridging the gap between high-level Python and bare-metal execution. [Read more](nabla/ops/README.md)
+Nabla's core strength is its ability to drop down to **Mojo** for high-performance custom kernels, bridging the gap between high-level Python and bare-metal execution. [Explore the code.](https://github.com/nabla-ml/nabla/tree/main/nabla/ops/README.md)
 
 **Mojo Kernel (`kernels/custom_kernel.mojo`)**
 ```mojo
@@ -101,7 +103,7 @@ y = AddOneOp()(x)
 
 ### 4. Distributed Pipeline Parallelism (GPipe)
 
-Define complex distributed schedules like **GPipe** using `vmap` for parallel execution and `ppermute` for explicit data movement. [Read more](nabla/transforms/README.md)
+Define complex distributed schedules like **GPipe** using `vmap` for parallel execution and `ppermute` for explicit data movement. [Explore the code.](https://github.com/nabla-ml/nabla/tree/main/nabla/transforms/README.md)
 
 ```python
 # Parallel execution across 'num_stages'
@@ -139,14 +141,57 @@ res2 = square(x_large) # Reuses compiled graph!
 
 ---
 
-## Installation
+## Architecture Overview
 
+Nabla relies on three core principles:
+
+1.  **Lazy Execution**: Shapes are computed eagerly, but the computation graph is built and compiled only when `.realize()` is called.
+    *   [Explore the code.: Operation Pipeline](https://github.com/nabla-ml/nabla/tree/main/nabla/README.md)
+2.  **Trace-Based Autodiff**: Gradients are computed by tracing the forward pass and replaying operations in reverse.
+    *   [Explore the code.: Autograd Engine](https://github.com/nabla-ml/nabla/tree/main/nabla/core/autograd/README.md)
+3.  **Factor-Based SPMD**: Sharding is propagated using "semantic factors" (e.g., batch, heads) rather than physical mesh axes.
+    *   [Explore the code.: Sharding & Solver](https://github.com/nabla-ml/nabla/tree/main/nabla/core/sharding/README.md)
+
+---
+
+## Development Setup
+
+### Prerequisites
+* **Python 3.12+**
+* **Modular MAX SDK** (via `requirements.txt`)
+
+### Installation
+```bash
+git clone https://github.com/nabla-ml/nabla.git
+cd nabla
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements-dev.txt
+pip install -e ".[dev]"
+```
+
+**GPU Support**: 
+*   **Linux (AMD/NVIDIA)**: Supported natively via Modular MAX.
+*   **macOS (Apple Silicon)**: Requires Xcode Metal toolchain (`xcode-select --install`).
+
+---
+
+## Stable Release (v25.7)
+
+For the simpler, single-device version:
 ```bash
 pip install nabla-ml
 ```
+(See [v25.7 branch](https://github.com/nabla-ml/nabla/tree/nabla/v25.7))
+
+---
 
 ## Contributing
 
-Nabla is open-source and welcomes contributions! See our [GitHub repository](https://github.com/nabla-ml/nabla) for more details.
+* **Bugs/Docs**: Submit PR directly.
+* **Features**: Open an Issue first.
+* **New Ops**: See [nabla/ops/README.md](https://github.com/nabla-ml/nabla/tree/main/nabla/ops/README.md).
 
-License: Apache-2.0
+## License
+
+Apache-2.0 — see [LICENSE](https://github.com/nabla-ml/nabla/tree/main/LICENSE)

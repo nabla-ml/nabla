@@ -9,12 +9,13 @@ combined PP+DP gradient computation compared against JAX.
 """
 
 import numpy as np
+from max.dtype import DType
+
 import nabla as nb
 from nabla import ops
-from nabla.core.sharding import DeviceMesh, PartitionSpec as P, DimSpec
-from nabla.transforms import vmap
+from nabla.core.sharding import DeviceMesh, DimSpec
 from nabla.ops import communication
-from max.dtype import DType
+from nabla.transforms import vmap
 
 # --- Project Constants ---
 DP_SIZE = 2
@@ -150,7 +151,7 @@ def test_pp_dp_grad():
         preds = []
         for i in range(MICRO_BATCHES):
             a = px[i]
-            for w, b in zip(pw, pb):
+            for w, b in zip(pw, pb, strict=False):
                 a = apply(a, w, b)
             preds.append(a)
         preds = jnp.stack(preds)

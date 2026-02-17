@@ -13,7 +13,6 @@ import nabla as nb
 
 from .conftest import make_rng, nb_from_np
 
-
 # ===----------------------------------------------------------------------=== #
 # nb.grad with Module input
 # ===----------------------------------------------------------------------=== #
@@ -163,7 +162,7 @@ class TestImperativeBackward:
 
     def test_backward_and_functional_grad_agree(self):
         """Imperative .backward() and functional nb.grad give same results."""
-        torch = pytest.importorskip("torch")
+        torch = pytest.importorskip("torch")  # noqa: F841
         rng = make_rng(506)
 
         w_np = rng.normal(size=(4, 2)).astype(np.float32)

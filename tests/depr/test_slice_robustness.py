@@ -1,7 +1,7 @@
 import numpy as np
+
 import nabla as nb
 from nabla import ops
-import pytest
 
 
 def test_slice_negative_indices():

@@ -8,9 +8,10 @@ jax.config.update("jax_enable_x64", True)
 
 import jax.numpy as jnp
 from jax import lax
-from jax.experimental.shard_map import shard_map
-from jax.sharding import Mesh, PartitionSpec as P
 from jax.experimental import mesh_utils
+from jax.experimental.shard_map import shard_map
+from jax.sharding import Mesh
+from jax.sharding import PartitionSpec as P
 
 # --- Configuration ---
 STAGES = 4

@@ -1,9 +1,10 @@
-import numpy as np
 import jax
 import jax.numpy as jnp
+import numpy as np
+
 import nabla as nb
-from nabla.core.graph.tracing import trace
 from nabla.core.autograd import backward_on_trace
+from nabla.core.graph.tracing import trace
 from nabla.core.sharding import DeviceMesh, DimSpec
 
 
@@ -84,8 +85,8 @@ def test_sharded_relu_mul():
 if __name__ == "__main__":
     try:
         test_sharded_relu_mul()
-    except Exception as e:
-        print(f"\n✗ Test FAILED:")
+    except Exception:
+        print("\n✗ Test FAILED:")
         import traceback
 
         traceback.print_exc()

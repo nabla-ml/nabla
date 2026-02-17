@@ -14,7 +14,6 @@ import nabla as nb
 
 from .conftest import make_rng
 
-
 # ===----------------------------------------------------------------------=== #
 # init_lora_adapter
 # ===----------------------------------------------------------------------=== #
@@ -45,7 +44,7 @@ class TestInitLoraAdapter:
 
 class TestLoraDelta:
     def test_lora_delta_vs_jax(self):
-        jax = pytest.importorskip("jax")
+        jax = pytest.importorskip("jax")  # noqa: F841
         jnp = pytest.importorskip("jax.numpy")
 
         rng = make_rng(72)
@@ -72,7 +71,7 @@ class TestLoraDelta:
 
 class TestLoraLinear:
     def test_lora_linear_vs_jax(self):
-        jax = pytest.importorskip("jax")
+        jax = pytest.importorskip("jax")  # noqa: F841
         jnp = pytest.importorskip("jax.numpy")
 
         rng = make_rng(73)

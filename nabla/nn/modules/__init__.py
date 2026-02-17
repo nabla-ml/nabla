@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
-from .activation import GELU, ReLU, SiLU, Sigmoid, Softmax, Tanh
+from .activation import GELU, ReLU, Sigmoid, SiLU, Softmax, Tanh
 from .attention import MultiHeadAttention
 from .base import Module
 from .containers import Sequential

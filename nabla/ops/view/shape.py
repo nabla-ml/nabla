@@ -8,21 +8,22 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
-from max.graph import TensorValue, ops
+from max.graph import ops
 
 from ..base import (
     AxisOp,
     OpArgs,
+    Operation,
     OpKwargs,
     OpResult,
     OpTensorValues,
     ShapeOp,
-    Operation,
 )
 from .axes import unsqueeze
 
 if TYPE_CHECKING:
     from ...core import Tensor
+    from ...core.sharding.spec import DeviceMesh, ShardingSpec
 
 
 def _shape_kwarg_to_local(
@@ -42,8 +43,8 @@ def _shape_kwarg_to_local(
 
 def _force_replicated_sharding(args: OpArgs, mesh: DeviceMesh | None) -> None:
     """Return (output_spec, input_specs, False) forcing everything replicated."""
-    from ...core.sharding.spmd import create_replicated_spec
     from ...core import Tensor, pytree
+    from ...core.sharding.spmd import create_replicated_spec
 
     leaves = [a for a in pytree.tree_leaves(args) if isinstance(a, Tensor)]
     input_specs = [create_replicated_spec(mesh, len(t.shape)) for t in leaves]
@@ -225,8 +226,8 @@ class ReshapeOp(ShapeOp):
         self, kwargs: dict, output_sharding, shard_idx: int, args: list
     ) -> dict:
         """Convert global target shape to local shape for each shard."""
-        from ...core.sharding.spec import compute_local_shape
         from ...core import Tensor
+        from ...core.sharding.spec import compute_local_shape
 
         global_shape = kwargs.get("shape")
         if global_shape is None or output_sharding is None:
@@ -248,7 +249,7 @@ class ReshapeOp(ShapeOp):
         self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], Any]:
         """Infer physical shapes for reshape, handling inferred dims (-1)."""
-        from ...core.sharding import spmd, spec
+        from ...core.sharding import spec, spmd
 
         x = args[0]
         # kwargs['shape'] passed here might already include batch dimensions if vmapped.
@@ -390,7 +391,7 @@ class SliceUpdateOp(Operation):
 
         # Resolve negative start indices
         shape = x.shape
-        rank = len(shape)
+        _rank = len(shape)
         resolved_start = []
         for i, s in enumerate(start):
             if s < 0:
@@ -531,7 +532,7 @@ class SliceUpdateOp(Operation):
         self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
     ) -> OpResult:
         # primals = [x, update]
-        x_in = primals[0]
+        _x_in = primals[0]
         u_in = primals[1]
         start = kwargs.get("start")
         size = kwargs.get("size")
@@ -572,7 +573,7 @@ class SliceTensorOp(Operation):
 
         # Resolve negative start indices
         shape = x.shape
-        rank = len(shape)
+        _rank = len(shape)
         resolved_start = []
         for i, s in enumerate(start):
             if s < 0:
@@ -714,7 +715,9 @@ class SliceTensorOp(Operation):
 
         batch_dims = getattr(x, "batch_dims", 0)
 
-        for dim_idx, (g_start, g_size) in enumerate(zip(global_start, global_size)):
+        for dim_idx, (g_start, g_size) in enumerate(
+            zip(global_start, global_size, strict=False)
+        ):
             phys_idx = batch_dims + dim_idx
             dim_spec = (
                 input_sharding.dim_specs[phys_idx]
@@ -771,7 +774,7 @@ class SliceTensorOp(Operation):
         if hasattr(x, "batch_dims"):
             final_slices.extend([slice(None)] * x.batch_dims)
 
-        for s, sz in zip(local_start_indices, local_sizes):
+        for s, sz in zip(local_start_indices, local_sizes, strict=False):
             final_slices.append(slice(s, s + sz))
 
         new_kwargs["slices"] = tuple(final_slices)
@@ -819,7 +822,7 @@ class ConcatenateOp(AxisOp):
                     norm_axis = axis if axis >= 0 else len(s) + axis
                     total_axis_size += int(s[norm_axis])
                     if ref_shape is None:
-                        ref_shape = list(int(d) for d in s)
+                        ref_shape = [int(d) for d in s]
                 else:
                     raise RuntimeError(
                         f"Could not determine physical shape for input in {self.name}"
@@ -854,7 +857,7 @@ class ConcatenateOp(AxisOp):
             axis += rank
 
         input_mappings = []
-        for input_idx in range(num_inputs):
+        for _input_idx in range(num_inputs):
             mapping = {}
             for dim in range(rank):
                 if dim == axis:
@@ -995,7 +998,7 @@ class BroadcastToPhysicalOp(Operation):
         self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
         """Infer physical shapes for broadcast_to_physical."""
-        from ...core.sharding import spmd, spec
+        from ...core.sharding import spec, spmd
 
         x = args[0]
         target_shape = kwargs.get("shape")
@@ -1032,7 +1035,6 @@ class BroadcastToPhysicalOp(Operation):
             kwargs: {"shape": target_shape} - Target GLOBAL physical shape
         """
         from .axes import unsqueeze_physical
-        from .batch import incr_batch_dims
 
         x = args[0]
         shape = kwargs["shape"]

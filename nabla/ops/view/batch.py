@@ -18,9 +18,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from max.graph import TensorValue, ops
+from max.graph import ops
 
-from ..base import OpArgs, OpKwargs, OpResult, OpTensorValues, Operation
+from ..base import OpArgs, Operation, OpKwargs, OpResult, OpTensorValues
 
 if TYPE_CHECKING:
     from ...core.tensor import Tensor
@@ -45,7 +45,7 @@ def _identity_physical_shape(op, args, kwargs):
     dtypes = [x.dtype] * num_shards
     if mesh:
         if mesh.is_distributed:
-            devices = [d for d in mesh.devices]
+            devices = list(mesh.devices)
         else:
             devices = [mesh.devices[0]] * num_shards
     else:
@@ -143,7 +143,7 @@ class MoveAxisPhysicalOp(Operation):
                     f"Could not determine physical shape for {self.name}"
                 )
 
-            in_shape = list(int(d) for d in s)
+            in_shape = [int(d) for d in s]
             rank = len(in_shape)
             norm_source = source if source >= 0 else rank + source
             norm_dest = destination if destination >= 0 else rank + destination
@@ -156,7 +156,7 @@ class MoveAxisPhysicalOp(Operation):
         dtypes = [x.dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.devices]
+                devices = list(mesh.devices)
             else:
                 devices = [mesh.devices[0]] * num_shards
         else:
@@ -239,7 +239,7 @@ class BroadcastBatchDimsOp(Operation):
         self, args: list, kwargs: dict, output_sharding: Any = None
     ) -> tuple[list[tuple[int, ...]], Any]:
         """Infer physical shapes for broadcast_batch_dims."""
-        from ...core.sharding import spmd, spec
+        from ...core.sharding import spec, spmd
 
         x = args[0]
         target_shape = kwargs.get("shape")
@@ -263,7 +263,7 @@ class BroadcastBatchDimsOp(Operation):
         dtypes = [x.dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.devices]
+                devices = list(mesh.devices)
             else:
                 devices = [mesh.devices[0]] * num_shards
         else:
@@ -310,8 +310,6 @@ class BroadcastBatchDimsOp(Operation):
         )
 
     def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
-        from ...core import Tensor
-
         x = args[0]
         batch_shape = kwargs["batch_shape"]
         logical_shape = tuple(x.shape)

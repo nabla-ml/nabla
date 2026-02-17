@@ -20,6 +20,7 @@ import pytest
 
 from nabla import DeviceMesh, P, add, matmul, reduce_sum, relu, vmap
 from nabla.core import trace
+
 from .conftest import (
     assert_allclose,
     assert_shape,
@@ -42,7 +43,7 @@ class TestSpmdAxisNameBasic:
     def test_spmd_basic_relu(self, mesh_shape, mesh_axes, spmd_axis):
         """vmap with spmd_axis_name on unary op."""
         batch = 8
-        mesh = DeviceMesh("mesh", mesh_shape, mesh_axes)
+        _mesh = DeviceMesh("mesh", mesh_shape, mesh_axes)
 
         np_x = make_array(batch, 16, seed=42)
         x = tensor_from_numpy(np_x)
@@ -80,7 +81,7 @@ class TestSpmdAxisNameBasic:
     def test_spmd_basic_add(self, mesh_shape, mesh_axes, spmd_axis):
         """vmap with spmd_axis_name on binary op."""
         batch = 8
-        mesh = DeviceMesh("mesh", mesh_shape, mesh_axes)
+        _mesh = DeviceMesh("mesh", mesh_shape, mesh_axes)
 
         np_a = make_array(batch, 16, seed=42)
         np_b = make_array(batch, 16, seed=43)
@@ -108,7 +109,7 @@ class TestSpmdAxisNameBasic:
         """vmap with spmd_axis_name on matmul."""
         batch = 4
         M, K, N = 8, 16, 12
-        mesh = DeviceMesh("mesh", mesh_shape, mesh_axes)
+        _mesh = DeviceMesh("mesh", mesh_shape, mesh_axes)
 
         np_x = make_array(batch, M, K, seed=42)
         np_w = make_array(K, N, seed=43)

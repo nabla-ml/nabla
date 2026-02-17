@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
-from ..base import OpArgs, OpKwargs, OpResult, OpTensorValues
+from ..base import OpArgs, OpKwargs, OpResult
 from .base import CollectiveOperation
 
 if TYPE_CHECKING:
@@ -204,7 +204,7 @@ class AllReduceOp(CollectiveOperation):
         self, input_tensor, results, input_sharding=None, **kwargs
     ):
         """Output clears partial flags but preserves axes mappings for non-partial dims."""
-        from ...core.sharding.spec import ShardingSpec, DimSpec
+        from ...core.sharding.spec import DimSpec, ShardingSpec
 
         input_sharding = input_sharding or input_tensor.sharding
         if not input_sharding:
@@ -224,9 +224,9 @@ class AllReduceOp(CollectiveOperation):
             )
 
         new_spec = input_sharding.clone()
-        new_spec.partial_sum_axes = set(
+        new_spec.partial_sum_axes = {
             ax for ax in new_spec.partial_sum_axes if ax not in reduce_axes
-        )
+        }
 
         for ds in new_spec.dim_specs:
             ds.axes = tuple(ax for ax in ds.axes if ax not in reduce_axes)
@@ -257,7 +257,7 @@ class AllReduceOp(CollectiveOperation):
 
         new_results = [None] * num_shards
 
-        for key, group_members in groups.items():
+        for _key, group_members in groups.items():
             group_shards = [val for _, val in group_members]
 
             if len(group_shards) > 1:
@@ -316,7 +316,6 @@ class PMeanOp(CollectiveOperation):
 
     def _compute_output_spec(self, input_tensor, results, **kwargs):
         """Output clears partial flags but preserves axes mappings for non-partial dims."""
-        from ...core.sharding.spec import ShardingSpec
 
         if not input_tensor.sharding:
             return None

@@ -7,19 +7,17 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Sequence, Union
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    import numpy as np
     from types import EllipsisType
 
+    import numpy as np
     from max import driver, graph
     from max.driver import Device
     from max.dtype import DType
-    from max.graph import Shape, TensorValue
 
     from ..sharding.spec import DeviceMesh, ShardingSpec
-    from ..graph.tracing import OpNode
 
 
 try:
@@ -58,7 +56,7 @@ class Tensor(DLPackArray, HasTensorValue):
         *,
         buffers: driver.Buffer | None = None,
         value: graph.BufferValue | graph.TensorValue | None = None,
-        impl: "TensorImpl | None" = None,
+        impl: TensorImpl | None = None,
         is_traced: bool = False,
     ) -> None:
         if impl is not None:
@@ -143,9 +141,8 @@ class Tensor(DLPackArray, HasTensorValue):
                 )
             self._impl._graph_values = []
 
-        if not self._impl._graph_values:
-            if self._impl._buffers:
-                self.hydrate()
+        if not self._impl._graph_values and self._impl._buffers:
+            self.hydrate()
 
         if not self._impl._graph_values:
             print(f"ERROR: Tensor {id(self)} values check failed.")
@@ -324,8 +321,8 @@ class Tensor(DLPackArray, HasTensorValue):
 
     def shard(
         self,
-        mesh: "DeviceMesh",
-        dim_specs: list["ShardingSpec" | str | list[str] | None],
+        mesh: DeviceMesh,
+        dim_specs: list[ShardingSpec | str | list[str] | None],
         replicated_axes: set[str] | None = None,
     ) -> Tensor:
         """Shard this tensor across a device mesh, handling resharding and vmap batch dims."""
@@ -335,8 +332,8 @@ class Tensor(DLPackArray, HasTensorValue):
 
     def with_sharding(
         self,
-        mesh: "DeviceMesh",
-        dim_specs: list["ShardingSpec" | str | list[str] | None],
+        mesh: DeviceMesh,
+        dim_specs: list[ShardingSpec | str | list[str] | None],
         replicated_axes: set[str] | None = None,
     ) -> Tensor:
         """Apply sharding constraint, resharding if needed."""
@@ -346,7 +343,7 @@ class Tensor(DLPackArray, HasTensorValue):
 
     def with_sharding_constraint(
         self,
-        mesh: "DeviceMesh",
+        mesh: DeviceMesh,
         dim_specs: list[Any],
         replicated_axes: set[str] | None = None,
     ) -> Tensor:
@@ -358,12 +355,12 @@ class Tensor(DLPackArray, HasTensorValue):
         return self
 
     @property
-    def sharding(self) -> "ShardingSpec | None":
+    def sharding(self) -> ShardingSpec | None:
         """Get the current sharding specification."""
         return self._impl.sharding
 
     @sharding.setter
-    def sharding(self, value: "ShardingSpec | None") -> None:
+    def sharding(self, value: ShardingSpec | None) -> None:
         self._impl.sharding = value
 
     @property
@@ -754,7 +751,6 @@ class Tensor(DLPackArray, HasTensorValue):
         Returns:
             Tensor on CPU with all data gathered.
         """
-        from max.driver import CPU as CPUDevice
 
         # If already on CPU and not sharded, return as-is
         if not self.is_sharded and str(self.device).startswith("Device(type=cpu"):
@@ -936,7 +932,7 @@ class Tensor(DLPackArray, HasTensorValue):
 
     def __array__(
         self,
-        dtype: "np.dtype | None" = None,
+        dtype: np.dtype | None = None,
         copy: bool | None = None,
     ):
         """NumPy interoperability.
@@ -1004,7 +1000,7 @@ class Tensor(DLPackArray, HasTensorValue):
             raise RuntimeError("Failed to realize tensor for item access")
         return t._impl._buffers[0].to(CPU()).item()
 
-    def to_numpy(self) -> "np.ndarray":
+    def to_numpy(self) -> np.ndarray:
         """Convert tensor to numpy array."""
         t = self.gather()
         t.realize()
@@ -1019,7 +1015,7 @@ class Tensor(DLPackArray, HasTensorValue):
         return self.to_numpy().tolist()
 
     @staticmethod
-    def to_numpy_all(*tensors: Tensor) -> tuple["np.ndarray", ...]:
+    def to_numpy_all(*tensors: Tensor) -> tuple[np.ndarray, ...]:
         """Convert multiple tensors to numpy arrays in a single batched compilation.
 
         This is more efficient than calling `.to_numpy()` on each tensor individually,
@@ -1077,7 +1073,7 @@ class Tensor(DLPackArray, HasTensorValue):
     # --- Indexing ---
 
     @property
-    def at(self) -> "_TensorAtAccessor":
+    def at(self) -> _TensorAtAccessor:
         """JAX-like functional indexed update accessor.
 
         Usage:
@@ -1105,7 +1101,7 @@ class Tensor(DLPackArray, HasTensorValue):
         | slice
         | EllipsisType
         | tuple[int | slice | EllipsisType, ...]
-        | "Tensor",
+        | Tensor,
         value: TensorValueLike,
     ) -> None:
         """PyTorch-like indexed update that mutates this Tensor object binding.
@@ -1136,7 +1132,7 @@ class _TensorAtAccessor:
         | EllipsisType
         | tuple[int | slice | EllipsisType, ...]
         | Tensor,
-    ) -> "_TensorAtIndexer":
+    ) -> _TensorAtIndexer:
         return _TensorAtIndexer(self._tensor, key)
 
 

@@ -7,9 +7,10 @@ import time
 import traceback
 from dataclasses import dataclass
 
-import nabla as nb
 import numpy as np
 from max.dtype import DType
+
+import nabla as nb
 from nabla.core import GRAPH, trace
 from nabla.core.sharding.spec import DeviceMesh, DimSpec
 from nabla.ops.communication import (

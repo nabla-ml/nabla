@@ -32,11 +32,12 @@ import pytest
 
 import nabla as nb
 from nabla import ops
-from nabla.core.sharding import DeviceMesh, DimSpec, PartitionSpec as P
+from nabla.core.sharding import DeviceMesh, DimSpec
+from nabla.core.sharding import PartitionSpec as P
 from nabla.ops import communication
 from nabla.ops.control_flow import where
 from nabla.ops.creation import zeros_like
-from nabla.ops.reduction import reduce_sum, mean
+from nabla.ops.reduction import mean, reduce_sum
 from nabla.transforms import vmap
 from tests.unit.common import (
     assert_allclose,

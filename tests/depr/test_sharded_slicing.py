@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
+
 import nabla as nb
 from nabla import ops
 from nabla.core.sharding import DeviceMesh, DimSpec
-from .utils import check_vjp, HAS_JAX
 
 
 def test_gather_on_sharded_axis():

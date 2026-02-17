@@ -5,16 +5,17 @@
 
 import os
 import sys
+from pathlib import Path
 
 os.environ["NABLA_DEBUG"] = "1"
 
-sys.path.append(os.getcwd())
+sys.path.append(str(Path.cwd()))
 
 from nabla.core import Tensor
 
 
 def compute_logic(x):
-    y = x * x
+    _y = x * x
     z = x + x
     return z
 

@@ -19,17 +19,10 @@ import pytest
 import nabla as nb
 from nabla.ops.control_flow import cond, scan, where, while_loop
 
-
-from .common import (
-    MESH_CONFIGS,
-    DeviceMesh,
-)
-
 from .common import (
     assert_allclose,
     assert_shape,
     make_jax_array,
-    replicated,
     shard_on_axis,
     tensor_from_jax,
 )

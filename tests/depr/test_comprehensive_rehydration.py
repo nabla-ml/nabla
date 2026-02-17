@@ -2,9 +2,10 @@
 """Comprehensive rehydration tests for all operation types."""
 
 import numpy as np
+
 import nabla as nb
-from nabla.core.graph.tracing import trace
 from nabla.core.graph.engine import GRAPH
+from nabla.core.graph.tracing import trace
 
 
 def test_binary_with_broadcast():
@@ -34,7 +35,7 @@ def test_binary_with_broadcast():
     print("\n--- Before Rehydration ---")
     for i, refs in enumerate(traced.nodes):
         alive = refs.get_alive_outputs()
-        for j, impl in enumerate(alive):
+        for _j, impl in enumerate(alive):
             if impl:
                 has_vals = bool(impl._get_valid_values())
                 print(f"Node {i} ({refs.op.name}): has_values={has_vals}")
@@ -47,7 +48,7 @@ def test_binary_with_broadcast():
     all_ok = True
     for i, refs in enumerate(traced.nodes):
         alive = refs.get_alive_outputs()
-        for j, impl in enumerate(alive):
+        for _j, impl in enumerate(alive):
             if impl:
                 has_vals = bool(impl._get_valid_values())
                 print(f"Node {i} ({refs.op.name}): has_values={has_vals}")
@@ -89,7 +90,7 @@ def test_matmul_1d_promotion():
     all_ok = True
     for i, refs in enumerate(traced.nodes):
         alive = refs.get_alive_outputs()
-        for j, impl in enumerate(alive):
+        for _j, impl in enumerate(alive):
             if impl:
                 has_vals = bool(impl._get_valid_values())
                 print(f"Node {i} ({refs.op.name}): has_values={has_vals}")
@@ -125,7 +126,7 @@ def test_reshape_operation():
     all_ok = True
     for i, refs in enumerate(traced.nodes):
         alive = refs.get_alive_outputs()
-        for j, impl in enumerate(alive):
+        for _j, impl in enumerate(alive):
             if impl:
                 has_vals = bool(impl._get_valid_values())
                 print(f"Node {i} ({refs.op.name}): has_values={has_vals}")
@@ -161,7 +162,7 @@ def test_reduction_operation():
     all_ok = True
     for i, refs in enumerate(traced.nodes):
         alive = refs.get_alive_outputs()
-        for j, impl in enumerate(alive):
+        for _j, impl in enumerate(alive):
             if impl:
                 has_vals = bool(impl._get_valid_values())
                 print(f"Node {i} ({refs.op.name}): has_values={has_vals}")
@@ -199,7 +200,7 @@ def test_composed_softmax():
     all_ok = True
     for i, refs in enumerate(traced.nodes):
         alive = refs.get_alive_outputs()
-        for j, impl in enumerate(alive):
+        for _j, impl in enumerate(alive):
             if impl:
                 has_vals = bool(impl._get_valid_values())
                 op_name = refs.op.name if hasattr(refs.op, "name") else str(refs.op)

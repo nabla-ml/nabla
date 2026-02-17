@@ -2,9 +2,10 @@
 """Simple test for Trace-based backpropagation."""
 
 import numpy as np
+
 import nabla as nb
-from nabla.core.graph.tracing import trace
 from nabla.core.autograd import backward_on_trace
+from nabla.core.graph.tracing import trace
 
 
 def test_simple_add_mul():
@@ -53,8 +54,8 @@ def test_simple_add_mul():
     # Expected gradients:
     # dy/dx1 = x2 + 1 = [4+1, 5+1] = [5, 6]
     # dy/dx2 = x1 = [2, 3]
-    print(f"\nExpected grad_x1: [5.0, 6.0]")
-    print(f"Expected grad_x2: [2.0, 3.0]")
+    print("\nExpected grad_x1: [5.0, 6.0]")
+    print("Expected grad_x2: [2.0, 3.0]")
 
 
 def test_matmul():
@@ -100,8 +101,8 @@ def test_matmul():
     print(f"\nGradient w.r.t. x2:\n{grad_x2}")
 
     # For matmul: dy/dx1 = cotangent @ x2^T, dy/dx2 = x1^T @ cotangent
-    print(f"\nExpected grad_x1 (ones @ x2^T):")
-    print(f"Expected grad_x2 (x1^T @ ones):")
+    print("\nExpected grad_x1 (ones @ x2^T):")
+    print("Expected grad_x2 (x1^T @ ones):")
 
 
 if __name__ == "__main__":

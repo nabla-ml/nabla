@@ -4,6 +4,7 @@
 # ===----------------------------------------------------------------------=== #
 
 from .axes import (
+    SqueezePhysicalOp,  # noqa: F401
     flip,
     moveaxis,
     permute,
@@ -13,7 +14,6 @@ from .axes import (
     transpose,
     unsqueeze,
     unsqueeze_physical,
-    SqueezePhysicalOp,
 )
 from .batch import (
     broadcast_batch_dims,
@@ -23,26 +23,26 @@ from .batch import (
     move_axis_to_batch_dims,
     moveaxis_physical,
 )
-from .indexing import (
-    gather,
-    scatter,
-)
 from .complex import (
     as_interleaved_complex,
     view_as_real_interleaved,
+)
+from .indexing import (
+    gather,
+    scatter,
 )
 from .shape import (
     broadcast_to,
     broadcast_to_physical,
     concatenate,
+    flatten,
+    pad,
+    rebind,
     reshape,
     slice_tensor,
     slice_update,
     slice_update_inplace,
     stack,
-    flatten,
-    rebind,
-    pad,
 )
 
 __all__ = [

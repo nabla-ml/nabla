@@ -14,7 +14,6 @@ Test Hierarchy:
 
 import jax
 import jax.numpy as jnp
-import jax.numpy as jnp
 import pytest
 
 from nabla import DeviceMesh, Tensor
@@ -79,10 +78,7 @@ def to_jax(t: Tensor) -> jax.Array:
 
 def assert_allclose(result: Tensor, expected, rtol: float = 1e-5, atol: float = 1e-6):
     """Assert tensor values match expected array (numpy or jax)."""
-    if hasattr(result, "numpy"):
-        actual = result.numpy()
-    else:
-        actual = result
+    actual = result.numpy() if hasattr(result, "numpy") else result
 
     import numpy as np
 
@@ -207,12 +203,6 @@ def mesh_3d_4x2x2():
 def mesh_3d_2x4x2():
     """3D mesh with shape (2, 4, 2) named ('dp', 'tp', 'pp')."""
     return DeviceMesh("mesh_3d_2x4x2", (2, 4, 2), ("dp", "tp", "pp"))
-
-
-@pytest.fixture
-def mesh_3d_2x2x4():
-    """3D mesh with shape (2, 2, 4) named ('dp', 'tp', 'pp')."""
-    return DeviceMesh("mesh_3d_2x2x4", (2, 2, 4), ("dp", "tp", "pp"))
 
 
 def shard_on_axis(

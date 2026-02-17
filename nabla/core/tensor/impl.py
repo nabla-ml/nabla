@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING, Any
 
 from max import driver, graph
@@ -22,8 +23,7 @@ C_BATCH = "\033[90m"
 if TYPE_CHECKING:
     from ...ops import Operation
     from ..graph.tracing import OpNode
-    from ..sharding.spec import ShardingSpec, DeviceMesh
-    from .api import Tensor
+    from ..sharding.spec import ShardingSpec
 
 # Module-level cache for hot-path imports (avoids per-call deferred imports)
 _GRAPH = None
@@ -61,15 +61,15 @@ class TensorImpl:
 
     _graph_values: list[graph.BufferValue | graph.TensorValue]
     _buffers: list[driver.Buffer] | None
-    sharding: "ShardingSpec | None"
-    sharding_constraint: "ShardingSpec | None"
+    sharding: ShardingSpec | None
+    sharding_constraint: ShardingSpec | None
     is_traced: bool
     requires_grad: bool
     tangent: TensorImpl | None
     cotangent: TensorImpl | None
     dual: TensorImpl | None
     batch_dims: int
-    output_refs: "OpNode | None"
+    output_refs: OpNode | None
     output_index: int
     graph_values_epoch: int
     _physical_shapes: list[tuple[int, ...]] | None
@@ -87,7 +87,7 @@ class TensorImpl:
         ) = None,
         is_traced: bool = False,
         batch_dims: int = 0,
-        sharding_constraint: "ShardingSpec | None" = None,
+        sharding_constraint: ShardingSpec | None = None,
         physical_shapes: list[tuple[int, ...]] | None = None,
         shard_dtypes: list[DType] | None = None,
         shard_devices: list[Device] | None = None,
@@ -326,7 +326,7 @@ class TensorImpl:
         return self.physical_local_shape(0)
 
     @staticmethod
-    def _format_type(impl: "TensorImpl") -> str:
+    def _format_type(impl: TensorImpl) -> str:
         """Get a concise string representation of the dtype."""
         try:
             dtype_obj = impl.dtype
@@ -340,10 +340,7 @@ class TensorImpl:
                     dtype_str = str(impl._buffers[0].dtype)
                 else:
                     vals = impl._get_valid_graph_values()
-                    if vals:
-                        dtype_str = str(vals[0].type.dtype)
-                    else:
-                        dtype_str = "unknown"
+                    dtype_str = str(vals[0].type.dtype) if vals else "unknown"
             except Exception:
                 dtype_str = "unknown"
 
@@ -379,7 +376,7 @@ class TensorImpl:
         return str(clean).replace(" ", "")
 
     @staticmethod
-    def _format_spec_factors(sharding: "ShardingSpec | None") -> str:
+    def _format_spec_factors(sharding: ShardingSpec | None) -> str:
         """Format sharding factors: (<dp, tp>)"""
         if not sharding:
             return ""
@@ -401,7 +398,7 @@ class TensorImpl:
 
         partial_sum_str = ""
         if all_partial_axes:
-            ordered_partial = sorted(list(all_partial_axes))
+            ordered_partial = sorted(all_partial_axes)
             axes_joined = ", ".join(f"'{a}'" for a in ordered_partial)
             partial_sum_str = f" | partial={{{axes_joined}}}"
 
@@ -414,10 +411,8 @@ class TensorImpl:
 
         # Try to get shapes without triggering errors
         local_shape: graph.Shape | None = None
-        try:
+        with contextlib.suppress(Exception):
             local_shape = self.physical_local_shape(0)
-        except Exception:
-            pass
 
         local_str = self._format_shape_part(local_shape, batch_dims)
         global_str = "[?]"
@@ -458,8 +453,8 @@ class TensorImpl:
             return header
 
         try:
-            from max.driver import CPU
             import numpy as np
+            from max.driver import CPU
 
             if self._buffers:
                 # Reduced view settings: max 6 elements per dim (3 at start, 3 at end), no row wrapping

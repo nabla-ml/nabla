@@ -5,12 +5,15 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
-from ..base import OpArgs, OpKwargs, OpResult, OpTensorValues
+from ..base import OpArgs, OpKwargs, OpResult
 from .base import CollectiveOperation
+
+if TYPE_CHECKING:
+    from ...core.sharding.spec import DeviceMesh, ShardingSpec
 
 
 class DistributedBroadcastOp(CollectiveOperation):
@@ -58,10 +61,10 @@ class DistributedBroadcastOp(CollectiveOperation):
                     root = ops.transfer_to(root, root_device)
 
                 try:
+                    from max.dtype import DType
                     from max.graph.ops import (
                         distributed_broadcast as max_distributed_broadcast,
                     )
-                    from max.dtype import DType
                     from max.graph.type import BufferType
                 except ImportError as exc:
                     raise RuntimeError(

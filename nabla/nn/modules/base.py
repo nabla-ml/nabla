@@ -12,7 +12,6 @@ from typing import Any, ClassVar
 
 from ...core import Tensor, is_tensor, realize_all, register_pytree_node, tree_leaves
 
-
 _MODULE_CALL_STATE = threading.local()
 
 

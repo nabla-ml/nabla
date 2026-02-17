@@ -70,7 +70,7 @@ def _attach_tangents(primals: tuple[Any, ...], tangents: tuple[Any, ...]) -> Non
     from ..core.common import pytree
     from ..core.tensor.api import Tensor
 
-    for primal, tangent in zip(primals, tangents):
+    for primal, tangent in zip(primals, tangents, strict=False):
         primal_leaves = (
             pytree.tree_leaves(primal) if not isinstance(primal, Tensor) else [primal]
         )
@@ -80,7 +80,7 @@ def _attach_tangents(primals: tuple[Any, ...], tangents: tuple[Any, ...]) -> Non
             else [tangent]
         )
 
-        for p, t in zip(primal_leaves, tangent_leaves):
+        for p, t in zip(primal_leaves, tangent_leaves, strict=False):
             if isinstance(p, Tensor) and isinstance(t, Tensor):
                 p._impl.tangent = t._impl
 

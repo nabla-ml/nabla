@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
-import jax.numpy as jnp
 import jax
+import jax.numpy as jnp
 
 import nabla as nb
 from nabla import P

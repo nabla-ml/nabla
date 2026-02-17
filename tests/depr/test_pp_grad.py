@@ -4,12 +4,14 @@
 # ===----------------------------------------------------------------------=== #
 
 import numpy as np
+from max.dtype import DType
+
 import nabla as nb
 from nabla import ops
-from nabla.core.sharding import DeviceMesh, PartitionSpec as P, DimSpec
-from nabla.transforms import vmap
+from nabla.core.sharding import DeviceMesh, DimSpec
+from nabla.core.sharding import PartitionSpec as P
 from nabla.ops import communication
-from max.dtype import DType
+from nabla.transforms import vmap
 
 # --- Project Constants ---
 STAGES = 4

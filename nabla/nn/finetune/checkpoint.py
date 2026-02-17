@@ -13,7 +13,6 @@ import numpy as np
 
 from ...core import Tensor, is_tensor
 
-
 PathLike = str | Path
 
 
@@ -108,7 +107,7 @@ def save_finetune_checkpoint(
         "user_metadata": metadata or {},
         "tensor_keys": sorted(payload.keys()),
     }
-    with open(out_dir / "meta.json", "w", encoding="utf-8") as f:
+    with (out_dir / "meta.json").open("w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2, sort_keys=True)
 
 
@@ -128,7 +127,7 @@ def load_finetune_checkpoint(
     if not meta_path.exists():
         raise FileNotFoundError(f"Missing checkpoint metadata file: {meta_path}")
 
-    with open(meta_path, "r", encoding="utf-8") as f:
+    with meta_path.open(encoding="utf-8") as f:
         meta = json.load(f)
 
     npz = np.load(tensors_path, allow_pickle=False)

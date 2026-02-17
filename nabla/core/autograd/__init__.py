@@ -5,7 +5,7 @@
 
 """Automatic differentiation for Nabla."""
 
-from .utils import backward_on_trace, backward
 from .api import grad, value_and_grad
+from .utils import backward, backward_on_trace
 
 __all__ = ["backward_on_trace", "backward", "grad", "value_and_grad"]

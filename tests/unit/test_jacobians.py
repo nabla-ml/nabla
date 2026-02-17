@@ -11,13 +11,11 @@ Tests verify correctness against JAX's jax.jacrev and jax.jacfwd.
 import jax
 import jax.numpy as jnp
 import numpy as np
-import pytest
 
 import nabla as nb
 from tests.unit.common import (
     cleanup_caches,
     make_jax_array,
-    make_positive_jax_array,
     tensor_from_jax,
     to_jax,
 )

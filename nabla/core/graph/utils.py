@@ -12,18 +12,17 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..tensor.impl import TensorImpl
-    from .tracing import OpNode
 
 
 def get_operations_topological(
-    outputs: list["TensorImpl"],
-) -> list[tuple[int, list["TensorImpl"]]]:
+    outputs: list[TensorImpl],
+) -> list[tuple[int, list[TensorImpl]]]:
     """Get operations in reverse topological order (outputs first)."""
     visited_ops: set[int] = set()
     visited_impls: set[int] = set()
-    result: list[tuple[int, list["TensorImpl"]]] = []
+    result: list[tuple[int, list[TensorImpl]]] = []
 
-    def visit(impl: "TensorImpl") -> None:
+    def visit(impl: TensorImpl) -> None:
         """DFS traversal of the computation graph."""
         impl_id = id(impl)
         if impl_id in visited_impls:
@@ -52,12 +51,12 @@ def get_operations_topological(
     return result
 
 
-def get_all_impls_topological(outputs: list["TensorImpl"]) -> list["TensorImpl"]:
+def get_all_impls_topological(outputs: list[TensorImpl]) -> list[TensorImpl]:
     """Get all TensorImpls in forward topological order."""
     visited: set[int] = set()
-    result: list["TensorImpl"] = []
+    result: list[TensorImpl] = []
 
-    def visit(impl: "TensorImpl") -> None:
+    def visit(impl: TensorImpl) -> None:
         impl_id = id(impl)
         if impl_id in visited:
             return
@@ -74,14 +73,14 @@ def get_all_impls_topological(outputs: list["TensorImpl"]) -> list["TensorImpl"]
     return result
 
 
-def print_trace_graph(outputs: list["TensorImpl"], show_siblings: bool = True) -> None:
+def print_trace_graph(outputs: list[TensorImpl], show_siblings: bool = True) -> None:
     """Print the traced computation graph."""
     ops = get_operations_topological(outputs)
 
     print(f"Computation Graph ({len(ops)} operations):")
     print("-" * 60)
 
-    for idx, (op_id, op_outputs) in enumerate(reversed(ops)):
+    for idx, (_op_id, op_outputs) in enumerate(reversed(ops)):
         first_out = op_outputs[0]
         op_name = first_out.op_name or "unknown"
         num_inputs = len(first_out.parents)
@@ -99,7 +98,7 @@ def print_trace_graph(outputs: list["TensorImpl"], show_siblings: bool = True) -
 
 
 def apply_to_operations(
-    outputs: list["TensorImpl"], fn: Callable[[int, list["TensorImpl"]], None]
+    outputs: list[TensorImpl], fn: Callable[[int, list[TensorImpl]], None]
 ) -> None:
     """Apply a function to each operation in reverse topological order."""
     ops = get_operations_topological(outputs)

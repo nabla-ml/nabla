@@ -4,29 +4,44 @@
 # ===----------------------------------------------------------------------=== #
 
 from .all_gather import (
-    all_gather,
     _all_gather_op as all_gather_op,
-    gather_all_axes,
+)
+from .all_gather import (
     _gather_all_axes_op as gather_all_axes_op,
+)
+from .all_gather import (
+    all_gather,
+    gather_all_axes,
+)
+from .all_reduce import (
+    _all_reduce_op as all_reduce_op,
+)
+from .all_reduce import (
+    _pmean_op as pmean_op,
 )
 from .all_reduce import (
     all_reduce,
-    _all_reduce_op as all_reduce_op,
     pmean,
-    _pmean_op as pmean_op,
 )
-from .all_to_all import all_to_all, _all_to_all_op as all_to_all_op
+from .all_to_all import _all_to_all_op as all_to_all_op
+from .all_to_all import all_to_all
+from .axis_index import _axis_index_op as axis_index_op
+from .axis_index import axis_index
+from .base import CollectiveOperation
 from .broadcast import (
-    distributed_broadcast,
     _distributed_broadcast_op as distributed_broadcast_op,
 )
-from .axis_index import axis_index, _axis_index_op as axis_index_op
-from .base import CollectiveOperation
-from .p_permute import ppermute, _ppermute_op as ppermute_op
-from .reduce_scatter import reduce_scatter, _reduce_scatter_op as reduce_scatter_op
+from .broadcast import (
+    distributed_broadcast,
+)
+from .p_permute import _ppermute_op as ppermute_op
+from .p_permute import ppermute
+from .reduce_scatter import _reduce_scatter_op as reduce_scatter_op
+from .reduce_scatter import reduce_scatter
 from .reshard import reshard
-from .shard import broadcast, shard, _shard_op as shard_op
-from .transfer import to_device, transfer_to, cpu, gpu, accelerator
+from .shard import _shard_op as shard_op
+from .shard import broadcast, shard  # noqa: F401
+from .transfer import accelerator, cpu, gpu, to_device, transfer_to
 
 __all__ = [
     "CollectiveOperation",

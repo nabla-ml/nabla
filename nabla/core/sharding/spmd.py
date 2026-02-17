@@ -5,16 +5,17 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, Set, Tuple
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from max.graph import TensorValue
+
     from ..tensor.api import Tensor
     from .propagation import OpShardingRule
     from .spec import DeviceMesh, ShardingSpec
-    from max.graph import Value, TensorValue
 
 
-def get_mesh_from_args(args: tuple[Any, ...]) -> "DeviceMesh | None":
+def get_mesh_from_args(args: tuple[Any, ...]) -> DeviceMesh | None:
     """Extract DeviceMesh from first tensor with sharding spec."""
     from ..tensor import Tensor
 
@@ -35,15 +36,15 @@ def get_mesh_from_args(args: tuple[Any, ...]) -> "DeviceMesh | None":
     return None
 
 
-def ensure_specs(args: tuple[Any, ...], mesh: "DeviceMesh | None") -> tuple[Any, ...]:
+def ensure_specs(args: tuple[Any, ...], mesh: DeviceMesh | None) -> tuple[Any, ...]:
     """Ensure all tensors have explicit sharding specs (replicated if default)."""
     return args
 
 
 def reshard_inputs(
     args: tuple[Any, ...],
-    required_specs: list["ShardingSpec | None"],
-    mesh: "DeviceMesh | None",
+    required_specs: list[ShardingSpec | None],
+    mesh: DeviceMesh | None,
 ) -> tuple[Any, ...]:
     """Pre-operation resharding: align inputs to required propagation specs."""
     if mesh is None or not required_specs:
@@ -92,9 +93,9 @@ def reshard_inputs(
 def infer_output_sharding(
     op: Any,
     args: tuple[Any, ...],
-    mesh: "DeviceMesh | None",
+    mesh: DeviceMesh | None,
     kwargs: dict[str, Any] | None = None,
-) -> tuple["ShardingSpec | None", list["ShardingSpec | None"], set[str]]:
+) -> tuple[ShardingSpec | None, list[ShardingSpec | None], set[str]]:
     """Infer output/input shardings via factor propagation.
 
     Returns:
@@ -181,12 +182,14 @@ def infer_output_sharding(
 
     if rule is None:
         for spec in input_specs:
-            if any(d.axes for d in spec.dim_specs):
-                if len(spec.dim_specs) == output_rank:
-                    cloned_spec = spec.clone()
-                    for dim_spec in cloned_spec.dim_specs:
-                        dim_spec.is_open = False
-                    return cloned_spec, input_specs, False
+            if (
+                any(d.axes for d in spec.dim_specs)
+                and len(spec.dim_specs) == output_rank
+            ):
+                cloned_spec = spec.clone()
+                for dim_spec in cloned_spec.dim_specs:
+                    dim_spec.is_open = False
+                return cloned_spec, input_specs, False
         return None, input_specs, False
 
     output_spec = ShardingSpec(
@@ -234,9 +237,9 @@ def infer_output_sharding(
 
 
 def _check_contracting_factors_sharded(
-    rule: "OpShardingRule",
-    input_specs: list["ShardingSpec"],
-    output_spec: "ShardingSpec | None",
+    rule: OpShardingRule,
+    input_specs: list[ShardingSpec],
+    output_spec: ShardingSpec | None,
 ) -> tuple[set[str], set[str]]:
     """Check if contracting factors need AllReduce (sharded input, not in output)."""
     contracting_factors = rule.get_contracting_factors()
@@ -251,7 +254,7 @@ def _check_contracting_factors_sharded(
         for ds in output_spec.dim_specs:
             preserved_axes.update(ds.axes)
 
-    axis_partial_map: Dict[str, bool] = {}
+    axis_partial_map: dict[str, bool] = {}
     contracted_axes = set()
 
     for input_idx, spec in enumerate(input_specs):
@@ -280,7 +283,7 @@ def _check_contracting_factors_sharded(
     return reduce_axes, ghost_axes
 
 
-def create_replicated_spec(mesh: "DeviceMesh", rank: int) -> "ShardingSpec":
+def create_replicated_spec(mesh: DeviceMesh, rank: int) -> ShardingSpec:
     """Create a fully replicated sharding spec."""
     from .spec import DimSpec, ShardingSpec
 
@@ -290,7 +293,7 @@ def create_replicated_spec(mesh: "DeviceMesh", rank: int) -> "ShardingSpec":
 def get_shard_args(
     args: Any,
     shard_idx: int,
-    per_input_shardings: list["ShardingSpec | None"],
+    per_input_shardings: list[ShardingSpec | None],
     g: Any,
     Tensor: type,
     pytree: Any,
@@ -303,9 +306,9 @@ def get_shard_args(
         if not isinstance(x, Tensor):
             return x
 
-        this_sharding = None
+        _this_sharding = None
         if per_input_shardings and input_idx[0] < len(per_input_shardings):
-            this_sharding = per_input_shardings[input_idx[0]]
+            _this_sharding = per_input_shardings[input_idx[0]]
         input_idx[0] += 1
 
         from ..graph.engine import GRAPH
@@ -324,17 +327,16 @@ def get_shard_args(
 
 
 def create_sharded_output(
-    results: list["TensorValue"],
-    sharding: "ShardingSpec | None",
+    results: list[TensorValue],
+    sharding: ShardingSpec | None,
     is_traced: bool,
     batch_dims: int,
-    mesh: "DeviceMesh | None" = None,
+    mesh: DeviceMesh | None = None,
     physical_shapes: list[tuple[int, ...]] | None = None,
     shard_dtypes: list[Any] | None = None,
     shard_devices: list[Any] | None = None,
-) -> "Tensor":
+) -> Tensor:
     """Build sharded Tensor from per-shard TensorValues."""
-    from max import graph as g
 
     from ..tensor import Tensor
 
@@ -374,14 +376,15 @@ def execute_on_shards(
     op_fn: Any,
     args: Any,
     kwargs: dict[str, Any],
-    mesh: "DeviceMesh | None",
-    input_shardings: list["ShardingSpec | None"] | None = None,
+    mesh: DeviceMesh | None,
+    input_shardings: list[ShardingSpec | None] | None = None,
     op: Any | None = None,
 ) -> list[Any]:
     """Execute op_fn on each shard, handling input slicing and kwarg transformation."""
     from max import graph as g
-    from ..tensor import Tensor
+
     from .. import pytree
+    from ..tensor import Tensor
 
     # Pre-fetch input shardings if not provided
     if mesh is not None and input_shardings is None:

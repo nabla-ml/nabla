@@ -39,6 +39,7 @@ from nabla import (
     tanh,
     unsqueeze,
 )
+
 from .conftest import (
     assert_allclose,
     assert_is_sharded,

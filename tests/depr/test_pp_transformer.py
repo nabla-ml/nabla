@@ -36,12 +36,12 @@ def get_pipeline_perm(mesh):
     total = len(mesh.devices)
     perm = []
     for src in range(total):
-        coords = list(mesh.get_coordinate(src, ax) for ax in mesh.axis_names)
+        coords = [mesh.get_coordinate(src, ax) for ax in mesh.axis_names]
         coords[stage_idx] = (coords[stage_idx] + 1) % stage_size
         dst = next(
             d
             for d in range(total)
-            if list(mesh.get_coordinate(d, ax) for ax in mesh.axis_names) == coords
+            if [mesh.get_coordinate(d, ax) for ax in mesh.axis_names] == coords
         )
         perm.append((src, dst))
     return perm

@@ -5,22 +5,23 @@
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from max.driver import Device
 from max.dtype import DType
-from max.graph import DeviceRef, ShapeLike, TensorType, TensorValue, ops
+from max.graph import DeviceRef, ShapeLike, TensorType, ops
 from max.graph.ops.constant import NestedArray, Number
 
 from ..core import defaults
 from .base import (
     CreationOperation,
     OpArgs,
+    Operation,
     OpKwargs,
     OpResult,
     OpTensorValues,
-    Operation,
 )
 
 if TYPE_CHECKING:
@@ -131,7 +132,7 @@ class ArangeOp(CreationOperation):
         dtypes = [dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
+                devices = list(mesh.device_refs)
             else:
                 devices = [mesh.device_refs[0]] * num_shards
         else:
@@ -205,7 +206,7 @@ class HannWindowOp(CreationOperation):
         dtypes = [dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.device_refs]
+                devices = list(mesh.device_refs)
             else:
                 devices = [mesh.device_refs[0]] * num_shards
         else:
@@ -304,10 +305,8 @@ def constant(
 
     if dtype is None:
         if isinstance(value, np.ndarray):
-            try:
+            with contextlib.suppress(KeyError, ValueError):
                 dtype = DType[str(value.dtype)]
-            except (KeyError, ValueError):
-                pass
         elif isinstance(value, int):
             dtype = DType.int32
         elif isinstance(value, float):
@@ -333,10 +332,8 @@ def constant(
     if isinstance(value, (list, tuple)):
         value = np.array(value)
         if dtype:
-            try:
+            with contextlib.suppress(Exception):
                 value = value.astype(_to_numpy_dtype(dtype), copy=False)
-            except Exception:
-                pass
     return Tensor.from_dlpack(value)
 
 

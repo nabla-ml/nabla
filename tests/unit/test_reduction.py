@@ -11,7 +11,6 @@ Forward/VJP/JVP/vmap correctness for individual reduction ops is covered by
 test_unified.py via unified_registry.py.
 """
 
-import jax
 import jax.numpy as jnp
 import pytest
 
@@ -23,7 +22,6 @@ from .common import (
     make_jax_array,
     tensor_from_jax,
 )
-
 
 REDUCTION_OPS = {
     "sum": (nb.reduce_sum, jnp.sum),

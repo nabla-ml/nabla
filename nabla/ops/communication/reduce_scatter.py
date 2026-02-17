@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
-from ..base import OpArgs, OpKwargs, OpResult, OpTensorValues
+from ..base import OpArgs, OpKwargs, OpResult
 from .base import CollectiveOperation
 
 if TYPE_CHECKING:
@@ -59,7 +59,7 @@ class ReduceScatterOp(CollectiveOperation):
             if s is None:
                 s = x.shape
 
-            out_shape = list(int(d) for d in s)
+            out_shape = [int(d) for d in s]
             if scatter_factor > 1 and 0 <= physical_axis < len(out_shape):
                 if out_shape[physical_axis] % scatter_factor != 0:
                     raise ValueError(
@@ -90,10 +90,7 @@ class ReduceScatterOp(CollectiveOperation):
         from .all_gather import all_gather
 
         # Axis is required. Passed as second positional arg by wrapper.
-        if len(primals) > 1:
-            axis = primals[1]
-        else:
-            axis = 0  # Fallback
+        axis = primals[1] if len(primals) > 1 else 0  # Fallback
 
         return [all_gather(cotangents[0], axis=axis)]
 
@@ -106,10 +103,7 @@ class ReduceScatterOp(CollectiveOperation):
         sharded_tensor: Tensor = args[0]
 
         # Handle positional or keyword axis
-        if len(args) > 1:
-            axis = args[1]
-        else:
-            axis = kwargs.get("axis")
+        axis = args[1] if len(args) > 1 else kwargs.get("axis")
 
         if axis is None:
             raise ValueError("ReduceScatterOp requires an 'axis' argument.")
@@ -266,10 +260,10 @@ class ReduceScatterOp(CollectiveOperation):
         num_total_shards = len(shard_graph_values)
         new_results = [None] * num_total_shards
 
-        for key, group_members in groups.items():
+        for _key, group_members in groups.items():
             # Extract the values for this group
             group_shards = [val for _, val in group_members]
-            group_indices = [idx for idx, _ in group_members]
+            _group_indices = [idx for idx, _ in group_members]
             num_in_group = len(group_shards)
 
             if num_in_group <= 1:
@@ -333,7 +327,7 @@ class ReduceScatterOp(CollectiveOperation):
 
                 if d == target_dim:
                     # Output is sharded on the scatter_axes (same as input sharding on this dim)
-                    current_axes = sorted(list(scatter_axes))
+                    current_axes = sorted(scatter_axes)
                     new_dim_specs.append(DimSpec(current_axes))
                 else:
                     new_dim_specs.append(input_d_spec if input_d_spec else DimSpec([]))

@@ -8,9 +8,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from .utils import create_jacobian_helpers, split_aux, std_basis
+if TYPE_CHECKING:
+    from ..core.tensor.api import Tensor
+
+from .utils import create_jacobian_helpers, std_basis
 
 
 def jacrev(
@@ -21,12 +24,10 @@ def jacrev(
     """Compute Jacobian of *fn* via reverse-mode (one VJP per output element)."""
 
     def jacrev_fn(*args: Any) -> Any:
+        from ..core.common.pytree import tree_flatten, tree_unflatten
+        from ..core.tensor.api import Tensor
         from .vjp import vjp
         from .vmap import vmap
-        from ..core.common.pytree import tree_flatten, tree_unflatten, tree_structure
-        from ..core.tensor.api import Tensor
-        from ..ops.creation import zeros_like
-        from ..ops.view.shape import reshape
 
         diff_args, partial_func = create_jacobian_helpers(fn, argnums, args)
 
@@ -63,7 +64,6 @@ def _reshape_jacrev(
     diff_args: tuple[Any, ...],
 ) -> Any:
     """Reshape vmap(pullback) results into Jacobian shape ``(*out, *in)``."""
-    from ..core.tensor.api import Tensor
     from ..ops.view.shape import reshape
 
     single_arg = not isinstance(diff_args, tuple) or len(diff_args) == 1

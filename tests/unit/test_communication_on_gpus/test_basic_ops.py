@@ -10,25 +10,26 @@ import os
 import time
 import traceback
 
-import nabla as nb
 import numpy as np
 from max.dtype import DType
+
+import nabla as nb
 from nabla.core import GRAPH, trace
 from nabla.core.sharding.spec import DeviceMesh, DimSpec
 from nabla.ops.communication import (
+    accelerator,
     all_reduce,
     all_to_all,
     axis_index,
+    cpu,
     distributed_broadcast,
     gather_all_axes,
-    ppermute,
+    gpu,
     pmean,
+    ppermute,
     reduce_scatter,
     reshard,
     transfer_to,
-    cpu,
-    gpu,
-    accelerator,
 )
 
 

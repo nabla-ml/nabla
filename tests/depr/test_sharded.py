@@ -1,8 +1,10 @@
 import numpy as np
 import pytest
+
 import nabla as nb
 from nabla.core.sharding import DeviceMesh, DimSpec
-from .utils import check_vjp, HAS_JAX
+
+from .utils import HAS_JAX, check_vjp
 
 np.random.seed(1337)
 
@@ -159,8 +161,8 @@ def test_sharded_mlp_grads_explicit():
     assert not needs_reshard(grad_X.sharding, X.sharding)
 
     if HAS_JAX:
-        import jax.numpy as jnp
         import jax
+        import jax.numpy as jnp
 
         def expected_fn(x, w):
             h = jnp.matmul(x, w)

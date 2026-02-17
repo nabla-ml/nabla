@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
-from ..base import OpArgs, OpKwargs, OpResult, OpTensorValues, Operation
+from ..base import OpArgs, Operation, OpKwargs, OpResult
 from .base import CollectiveOperation
 
 if TYPE_CHECKING:
@@ -45,7 +45,7 @@ class AllGatherOp(CollectiveOperation):
             if s is None:
                 s = x.shape
 
-            out_shape = list(int(d) for d in s)
+            out_shape = [int(d) for d in s]
             if (
                 x.sharding
                 and physical_axis is not None
@@ -125,16 +125,11 @@ class AllGatherOp(CollectiveOperation):
         Derives all physical context (mesh, sharded_axis_name) internally.
         """
         from ...core import GRAPH, Tensor
-        from ...core.sharding.spec import DimSpec, ShardingSpec
 
         sharded_tensor: Tensor = args[0]
 
         # Handle positional or keyword axis
-        axis = None
-        if len(args) > 1:
-            axis = args[1]
-        else:
-            axis = kwargs.get("axis")
+        axis = args[1] if len(args) > 1 else kwargs.get("axis")
 
         physical_axis = kwargs.get("physical_axis")
 
@@ -192,8 +187,8 @@ class AllGatherOp(CollectiveOperation):
 
         # 1. Distributed Execution Path
         if mesh and mesh.is_distributed:
-            from max.graph.ops.allgather import allgather as max_allgather
             from max.dtype import DType
+            from max.graph.ops.allgather import allgather as max_allgather
             from max.graph.type import BufferType
 
             signal_buffers = [
@@ -297,7 +292,7 @@ class GatherAllAxesOp(Operation):
         dtypes = [x.dtype] * num_shards
         if mesh:
             if mesh.is_distributed:
-                devices = [d for d in mesh.devices]
+                devices = list(mesh.devices)
             else:
                 devices = [mesh.devices[0]] * num_shards
         else:
@@ -400,7 +395,7 @@ class GatherAllAxesOp(Operation):
                 groups = {}
                 for val, device_id in current_shard_descs:
                     signature = []
-                    for check_ax in sorted(list(current_active_axes)):
+                    for check_ax in sorted(current_active_axes):
                         if check_ax == ax:
                             continue
 
@@ -415,7 +410,7 @@ class GatherAllAxesOp(Operation):
                     groups[key].append((my_coord, val, device_id))
 
                 new_shard_descs = []
-                for key, members in groups.items():
+                for _key, members in groups.items():
                     members.sort(key=lambda x: x[0])
                     unique_chunks = []
                     seen_coords = set()

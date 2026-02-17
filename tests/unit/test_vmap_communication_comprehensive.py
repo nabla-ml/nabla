@@ -11,12 +11,14 @@ Focuses on:
 - Error handling for invalid communication configs.
 """
 
-import pytest
 import jax
 import jax.numpy as jnp
+import pytest
+
 import nabla as nb
 from nabla.core.sharding.spec import DeviceMesh, P
-from nabla.ops.communication import all_to_all, all_reduce, all_gather
+from nabla.ops.communication import all_gather, all_reduce, all_to_all
+
 from .common import (
     assert_allclose,
     tensor_from_jax,

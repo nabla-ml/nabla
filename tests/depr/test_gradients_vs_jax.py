@@ -9,19 +9,19 @@ Tests real-world workloads including:
 - Activation functions
 """
 
-import numpy as np
-import jax
-import jax.numpy as jnp
-import nabla as nb
-from nabla.core.graph.tracing import trace
-from nabla.core.autograd import backward_on_trace
-
 # Import testing utilities
 import sys
 from pathlib import Path
 
+import jax
+import jax.numpy as jnp
+import numpy as np
+
+import nabla as nb
+from nabla.core.autograd import backward_on_trace
+from nabla.core.graph.tracing import trace
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "unit"))
-from common import assert_allclose
 
 
 def to_numpy(t):
@@ -75,7 +75,7 @@ def test_simple_linear_layer():
     grad_x_nb = to_numpy(grads_nb[x_nb])
     grad_b_nb = to_numpy(grads_nb[b_nb])
 
-    print(f"\nGradient shapes:")
+    print("\nGradient shapes:")
     print(f"  ∇W: Nabla {grad_W_nb.shape}, JAX {grads_jax[0].shape}")
     print(f"  ∇x: Nabla {grad_x_nb.shape}, JAX {grads_jax[1].shape}")
     print(f"  ∇b: Nabla {grad_b_nb.shape}, JAX {grads_jax[2].shape}")
@@ -131,7 +131,7 @@ def test_two_layer_network():
     grad_W2_nb = to_numpy(grads_nb[W2_nb])
     grad_x_nb = to_numpy(grads_nb[x_nb])
 
-    print(f"\nGradient shapes:")
+    print("\nGradient shapes:")
     print(f"  ∇W1: Nabla {grad_W1_nb.shape}, JAX {grads_jax[0].shape}")
     print(f"  ∇W2: Nabla {grad_W2_nb.shape}, JAX {grads_jax[1].shape}")
     print(f"  ∇x: Nabla {grad_x_nb.shape}, JAX {grads_jax[2].shape}")
@@ -204,7 +204,7 @@ def test_elementwise_operations():
     grad_x1_nb = to_numpy(grads_nb[x1_nb])
     grad_x2_nb = to_numpy(grads_nb[x2_nb])
 
-    print(f"\nGradient shapes:")
+    print("\nGradient shapes:")
     print(f"  ∇x1: Nabla {grad_x1_nb.shape}, JAX {grads_jax[0].shape}")
     print(f"  ∇x2: Nabla {grad_x2_nb.shape}, JAX {grads_jax[1].shape}")
 
@@ -270,7 +270,7 @@ def test_mixed_operations():
     grad_x_nb = to_numpy(grads_nb[x_nb])
     grad_bias_nb = to_numpy(grads_nb[bias_nb])
 
-    print(f"\nGradient shapes:")
+    print("\nGradient shapes:")
     print(f"  ∇W: Nabla {grad_W_nb.shape}, JAX {grads_jax[0].shape}")
     print(f"  ∇x: Nabla {grad_x_nb.shape}, JAX {grads_jax[1].shape}")
     print(f"  ∇bias: Nabla {grad_bias_nb.shape}, JAX {grads_jax[2].shape}")
@@ -350,7 +350,7 @@ def test_deep_chain():
     grad_x_nb = to_numpy(grads_nb[x_nb])
     grad_y_nb = to_numpy(grads_nb[y_nb])
 
-    print(f"\nGradient shapes:")
+    print("\nGradient shapes:")
     print(f"  ∇x: Nabla {grad_x_nb.shape}, JAX {grads_jax[0].shape}")
     print(f"  ∇y: Nabla {grad_y_nb.shape}, JAX {grads_jax[1].shape}")
 

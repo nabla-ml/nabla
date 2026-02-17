@@ -1,10 +1,12 @@
 import unittest
+
 import numpy as np
+
 from nabla import ops
 from nabla.core import grad
 from nabla.core.sharding import DeviceMesh, DimSpec
-from nabla.transforms.vmap import vmap
 from nabla.ops import communication
+from nabla.transforms.vmap import vmap
 
 
 class TestPP_DP_Training(unittest.TestCase):
@@ -108,7 +110,7 @@ class TestPP_DP_Training(unittest.TestCase):
         # Since w1 was <stage, *, *>, dw1 should be <stage, *, *>
         # This implies an all-reduce over 'dp' happened during backprop.
 
-        dw1 = grads["w1"]
+        _dw1 = grads["w1"]
         # self.assertEqual(dw1.sharding.spec, ...) # Hard to check spec string equality directly
         # But we can check it runs.
 

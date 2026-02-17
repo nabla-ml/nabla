@@ -1,7 +1,8 @@
 import numpy as np
+
 import nabla as nb
-from nabla.core.graph.tracing import trace
 from nabla.core.autograd import backward_on_trace
+from nabla.core.graph.tracing import trace
 from nabla.core.sharding import DeviceMesh, DimSpec
 
 
@@ -29,14 +30,14 @@ def test_add_conflict_minimal():
 
     print("\nRunning backward...")
     cotangent = nb.Tensor.from_dlpack(np.array(1.0, dtype=np.float32))
-    grads = backward_on_trace(traced, cotangent)
+    _grads = backward_on_trace(traced, cotangent)
     print("DONE")
 
 
 if __name__ == "__main__":
     try:
         test_add_conflict_minimal()
-    except Exception as e:
+    except Exception:
         import traceback
 
         traceback.print_exc()

@@ -5,11 +5,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
-from ..base import OpArgs, OpKwargs, OpResult, OpTensorValues, Operation
+from ..base import OpArgs, Operation, OpKwargs, OpResult, OpTensorValues
 
 if TYPE_CHECKING:
     from ...core import Tensor
@@ -176,7 +176,7 @@ class GatherOp(Operation):
         self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
     ) -> OpResult:
         """JVP rule uses LOGICAL axis from kwargs."""
-        x, indices = primals[0], primals[1]
+        _x, indices = primals[0], primals[1]
         tx = tangents[0]
         axis = kwargs.get("axis", 0)
         return [gather(tx, indices, axis=axis)]
@@ -284,7 +284,7 @@ class ScatterOp(Operation):
             updates_perm = ops.permute(updates, perm_u)
 
             # scatter_nd at position batch_dims
-            indices_shape = list(indices.shape)
+            _indices_shape = list(indices.shape)
             idx = indices
             if idx.dtype != DType.int64:
                 idx = ops.cast(idx, DType.int64)
@@ -384,7 +384,7 @@ class ScatterOp(Operation):
         self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
     ) -> OpResult:
         """VJP rule uses LOGICAL axis from kwargs."""
-        x, indices, updates = primals[0], primals[1], primals[2]
+        _x, indices, updates = primals[0], primals[1], primals[2]
         axis = kwargs.get("axis", 0)
         from ..creation import zeros_like
 
@@ -397,7 +397,7 @@ class ScatterOp(Operation):
         self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
     ) -> OpResult:
         """JVP rule uses LOGICAL axis from kwargs."""
-        x, indices, updates = primals[0], primals[1], primals[2]
+        _x, indices, _updates = primals[0], primals[1], primals[2]
         tx, _, t_updates = tangents[0], tangents[1], tangents[2]
         axis = kwargs.get("axis", 0)
         return [scatter(tx, indices, t_updates, axis=axis)]

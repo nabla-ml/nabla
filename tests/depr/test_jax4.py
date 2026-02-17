@@ -9,9 +9,10 @@ jax.config.update("jax_enable_x64", True)
 
 import jax.numpy as jnp
 from jax import lax
-from jax.experimental.shard_map import shard_map
-from jax.sharding import Mesh, PartitionSpec as P
 from jax.experimental import mesh_utils
+from jax.experimental.shard_map import shard_map
+from jax.sharding import Mesh
+from jax.sharding import PartitionSpec as P
 
 # --- Configuration ---
 DP = 2  # Data Parallel Replicas
@@ -227,7 +228,7 @@ def train_dp_pp(inputs, targets, weights):
 
 
 # --- Verification ---
-print("--- 1F1B + Data Parallelism (DP={}) PP={}) ---".format(DP, STAGES))
+print(f"--- 1F1B + Data Parallelism (DP={DP}) PP={STAGES}) ---")
 key = jax.random.PRNGKey(42)
 
 w_global = jax.random.normal(key, (STAGES, DIM, DIM))

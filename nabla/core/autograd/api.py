@@ -5,17 +5,17 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
-from .utils import backward_on_trace
-from ..graph.tracing import trace
 from ..common import pytree
+from ..graph.tracing import trace
 from ..tensor.api import Tensor
-
+from .utils import backward_on_trace
 
 if TYPE_CHECKING:
-    from .utils import GradsMap
     from ..graph.tracing import Trace
+    from .utils import GradsMap
 
 
 def grad(
@@ -28,7 +28,7 @@ def grad(
 
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         # Trace the function execution
-        t: "Trace" = trace(fun, *args, **kwargs)
+        t: Trace = trace(fun, *args, **kwargs)
 
         output = t.outputs
 
@@ -41,9 +41,7 @@ def grad(
         else:
             raise TypeError(f"grad: output must be a Tensor, got {type(output)}")
 
-        grads_map: "GradsMap" = backward_on_trace(
-            t, cotangent, create_graph=create_graph
-        )
+        grads_map: GradsMap = backward_on_trace(t, cotangent, create_graph=create_graph)
         input_leaves = pytree.tree_leaves(args)
         grad_leaves: list[Tensor | None] = []
         for inp in input_leaves:
@@ -85,7 +83,7 @@ def value_and_grad(
     """Return a function computing ``(value, grad)`` of *fun*."""
 
     def wrapper(*args: Any, **kwargs: Any) -> tuple[Any, Any]:
-        t: "Trace" = trace(fun, *args, **kwargs)
+        t: Trace = trace(fun, *args, **kwargs)
         output = t.outputs
 
         from ...ops.creation import ones_like
@@ -96,9 +94,7 @@ def value_and_grad(
         else:
             raise TypeError(f"grad: output must be a Tensor, got {type(output)}")
 
-        grads_map: "GradsMap" = backward_on_trace(
-            t, cotangent, create_graph=create_graph
-        )
+        grads_map: GradsMap = backward_on_trace(t, cotangent, create_graph=create_graph)
 
         input_leaves = pytree.tree_leaves(args)
         grad_leaves: list[Tensor | None] = []

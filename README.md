@@ -1,11 +1,9 @@
-# Nabla: Distributed-Deep-Learning Framework
-
-![alt text](./assets/title_image.png)
+# Nabla: High-Performance Distributed ML
 
 > **A JAX-inspired autodiff library with factor-based SPMD sharding, built on [Mojo & MAX](https://www.modular.com/max).**
 
 > 
-> **Active Development**: This is the `main` development branch with distributed SPMD execution and a refined lazy, MAX-native execution model. For the older single-device release (v25.7), see [`pip install nabla-ml`](#stable-release-v257).
+> **Active Development**: This is the `main` development branch with distributed SPMD execution and a refined lazy, MAX-native execution model. Read the docs: [https://nablaml.com](https://nablaml.com).
 
 [![Development Status](https://img.shields.io/badge/status-alpha-orange)](https://github.com/nabla-ml/nabla)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
@@ -14,6 +12,9 @@
 ---
 
 ## Feature Showcase
+
+<!-- ![alt text](./assets/title_image.png) -->
+
 
 ### 1. Tensors & Autodiff
 

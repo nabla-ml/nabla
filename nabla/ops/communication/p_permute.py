@@ -9,11 +9,11 @@ from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
-from ..base import OpArgs, OpKwargs, OpResult, OpTensorValues
+from ..base import OpArgs, OpKwargs, OpResult
 from .base import CollectiveOperation
 
 if TYPE_CHECKING:
-    from ...core.sharding.spec import DeviceMesh
+    from ...core.sharding.spec import DeviceMesh, ShardingSpec
 
 
 class PPermuteOp(CollectiveOperation):

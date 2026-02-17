@@ -9,12 +9,14 @@ gradient computation compared against JAX reference.
 """
 
 import numpy as np
+from max.dtype import DType
+
 import nabla as nb
 from nabla import ops
-from nabla.core.sharding import DeviceMesh, PartitionSpec as P, DimSpec
-from nabla.transforms import vmap
+from nabla.core.sharding import DeviceMesh, DimSpec
+from nabla.core.sharding import PartitionSpec as P
 from nabla.ops import communication
-from max.dtype import DType
+from nabla.transforms import vmap
 
 # --- Project Constants ---
 STAGES = 4
@@ -146,7 +148,7 @@ def test_pp_grad_with_bias():
         preds = []
         for i in range(MICRO_BATCHES):
             a = x[i]
-            for w, b in zip(params_w, params_b):
+            for w, b in zip(params_w, params_b, strict=False):
                 a = apply(a, w, b)
             preds.append(a)
         preds = jnp.stack(preds)
@@ -155,10 +157,7 @@ def test_pp_grad_with_bias():
     grad_ref_fn = jax.jit(jax.grad(jax_ref, argnums=(0, 1, 2)))
     x_grad_ref, w_grad_ref, b_grad_ref = grad_ref_fn(x_np, w_np, b_np, y_np)
 
-    if x_grad_np is not None:
-        x_diff = np.max(np.abs(x_grad_np - x_grad_ref))
-    else:
-        x_diff = 0.0
+    x_diff = np.max(np.abs(x_grad_np - x_grad_ref)) if x_grad_np is not None else 0.0
 
     w_diff = np.max(np.abs(w_grad_np - w_grad_ref))
     b_diff = np.max(np.abs(b_grad_np - b_grad_ref))
@@ -166,7 +165,7 @@ def test_pp_grad_with_bias():
     if x_grad_np is not None:
         print(f"Max X Grad Diff:      {x_diff:.6f}")
     else:
-        print(f"Max X Grad Diff:      N/A")
+        print("Max X Grad Diff:      N/A")
 
     print(f"Max Weight Grad Diff: {w_diff:.6f}")
     print(f"Max Bias Grad Diff:   {b_diff:.6f}")

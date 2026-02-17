@@ -3,11 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
-import pytest
 import numpy as np
+import pytest
 from max import graph as g
 from max.graph import ops
-from nabla import Tensor, DeviceMesh
+
+from nabla import DeviceMesh, Tensor
 from nabla.core.sharding.spec import DimSpec, ShardingSpec
 from nabla.ops.communication import all_gather, all_reduce, reduce_scatter, shard
 
@@ -19,7 +20,7 @@ def distributed_mesh():
     # We use actual DeviceRef objects if possible, otherwise strings might fail the set check
     # in the DeviceMesh property depending on how they are compared.
     try:
-        from max.graph import DeviceRef
+        from max.graph import DeviceRef  # noqa: F401
 
         # Create 4 distinct DeviceRef-like objects or actual ones
         # For simulation we can use multiple "Accelerator"-like slots if it's supported

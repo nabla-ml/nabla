@@ -1,11 +1,11 @@
 """Rigorous verification of communication ops on multi-GPU."""
 
+import numpy as np
+import pytest
+from max.dtype import DType
+
 import nabla as nb
 from nabla.core.sharding.spec import DeviceMesh, DimSpec
-from max.dtype import DType
-import numpy as np
-import itertools
-import pytest
 
 
 @pytest.mark.parametrize(

@@ -18,10 +18,9 @@ from ...ops.binary import matmul
 from ...ops.comparison import greater
 from ...ops.control_flow import where
 from ...ops.creation import full, ones, tril, uniform, zeros_like
-from ...ops.reduction import mean, reduce_sum
+from ...ops.reduction import mean
 from ...ops.unary import rsqrt, softmax
-from ...ops.view import gather, reshape, squeeze, swap_axes, unsqueeze
-
+from ...ops.view import gather, swap_axes
 
 # ===----------------------------------------------------------------------=== #
 # Core layers

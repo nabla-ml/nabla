@@ -4,15 +4,16 @@
 # ===----------------------------------------------------------------------=== #
 
 import unittest
-import numpy as np
+
 import jax
 import jax.numpy as jnp
+import numpy as np
+
 import nabla as nb
 from nabla import ops
 from nabla.core import trace
 from nabla.core.autograd import backward_on_trace
 from nabla.core.sharding import DeviceMesh, DimSpec
-from nabla.ops import communication
 from nabla.transforms.vmap import vmap
 
 
@@ -30,12 +31,12 @@ def get_pp_permutation(mesh):
 
     perm = []
     for src in range(total):
-        coords = list(mesh.get_coordinate(src, ax) for ax in mesh.axis_names)
+        coords = [mesh.get_coordinate(src, ax) for ax in mesh.axis_names]
         coords[stage_idx] = (coords[stage_idx] + 1) % stage_size
         dst = next(
             d
             for d in range(total)
-            if list(mesh.get_coordinate(d, ax) for ax in mesh.axis_names) == coords
+            if [mesh.get_coordinate(d, ax) for ax in mesh.axis_names] == coords
         )
         perm.append((src, dst))
     return perm
@@ -92,14 +93,14 @@ class TestPPMLPTraining(unittest.TestCase):
             mesh=mesh,
         )
 
-        forward_perm = get_pp_permutation(mesh)
+        _forward_perm = get_pp_permutation(mesh)
 
         def pp_train_step(x, weights):
             curr_x = x
             accum_loss = 0.0
 
             # Run only 1 stage for debugging
-            for t in range(1):
+            for _t in range(1):
                 # Compute
                 y = layer_stage_batch_mapped(curr_x, weights)
 
@@ -132,7 +133,7 @@ class TestPPMLPTraining(unittest.TestCase):
         def ref_loop(x, w):
             curr_x = x
             loss = 0.0
-            for t in range(1):
+            for _t in range(1):
                 vmapped_layer = jax.vmap(ref_mlp_layer, in_axes=(0, 0))
                 y = vmapped_layer(curr_x, w)
                 # curr_x = jnp.roll(y, shift=1, axis=0)
@@ -150,7 +151,7 @@ class TestPPMLPTraining(unittest.TestCase):
         )
         print("  \u2713 Input gradient matched!")
 
-        for k in weights_np.keys():
+        for k in weights_np:
             gnb = grads_nb[weights_nb[k]].to_numpy()
             gjax = gw_jax[k]
             np.testing.assert_allclose(

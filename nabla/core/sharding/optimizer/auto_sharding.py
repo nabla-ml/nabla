@@ -186,9 +186,9 @@ class AutoSharding:
         in_b_id = node["inputs"][1]
         out_id = node["outputs"][0]
 
-        rank_a = len(tensors[in_a_id]["shape"])
-        rank_b = len(tensors[in_b_id]["shape"])
-        out_rank = len(tensors[out_id]["shape"])
+        _rank_a = len(tensors[in_a_id]["shape"])
+        _rank_b = len(tensors[in_b_id]["shape"])
+        _out_rank = len(tensors[out_id]["shape"])
 
         strategy = "none"
 

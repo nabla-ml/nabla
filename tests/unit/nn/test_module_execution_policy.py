@@ -7,12 +7,10 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 import nabla as nb
 
 from .conftest import make_rng
-
 
 # ===----------------------------------------------------------------------=== #
 # Auto-realize toplevel forward

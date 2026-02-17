@@ -7,9 +7,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from max.graph import TensorValue, ops
+from max.graph import ops
 
-from .base import BinaryOperation, OpArgs, OpKwargs, OpResult, OpTensorValues, Operation
+from .base import BinaryOperation, OpArgs, Operation, OpKwargs, OpResult, OpTensorValues
 
 if TYPE_CHECKING:
     from ..core.tensor import Tensor
@@ -105,8 +105,8 @@ class DivOp(BinaryOperation):
         """VJP for division: ∂(x/y)/∂x = 1/y, ∂(x/y)/∂y = -x/y²."""
         x, y = primals[0], primals[1]
         cotangent = cotangents[0]
-        from . import div, mul
         from ..ops.unary import neg
+        from . import div, mul
 
         grad_x = div(cotangent, y)
         grad_y = neg(mul(cotangent, div(x, mul(y, y))))
@@ -350,7 +350,7 @@ class ModOp(BinaryOperation):
         """JVP: tangent_lhs - tangent_rhs * floor(lhs / rhs)."""
         lhs, rhs = primals[0], primals[1]
         tl, tr = tangents[0], tangents[1]
-        from ..ops.unary import floor, neg
+        from ..ops.unary import floor
         from . import div, mul, sub
 
         return [sub(tl, mul(tr, floor(div(lhs, rhs))))]

@@ -52,6 +52,7 @@ from nabla import (
 )
 from nabla.core import trace
 from nabla.ops.multi_output import chunk, split
+
 from .conftest import (
     assert_allclose,
     assert_is_sharded,
@@ -1015,7 +1016,7 @@ class TestVmapShardingMultiOutputOps:
         expected_parts = np.split(np_x, 2, axis=1)
 
         assert len(result) == 2
-        for i, (r, e) in enumerate(zip(result, expected_parts, strict=False)):
+        for _i, (r, e) in enumerate(zip(result, expected_parts, strict=False)):
             assert_shape(r, (batch, 8))
             assert_allclose(r, e)
 
@@ -1042,6 +1043,6 @@ class TestVmapShardingMultiOutputOps:
         expected_chunks = np.array_split(np_x, 4, axis=1)
 
         assert len(result) == 4
-        for i, (r, e) in enumerate(zip(result, expected_chunks, strict=False)):
+        for _i, (r, e) in enumerate(zip(result, expected_chunks, strict=False)):
             assert_shape(r, (batch, 2, 16))
             assert_allclose(r, e)

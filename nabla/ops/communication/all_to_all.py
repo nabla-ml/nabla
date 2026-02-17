@@ -9,11 +9,11 @@ from typing import TYPE_CHECKING, Any
 
 from max.graph import TensorValue, ops
 
-from ..base import OpArgs, OpKwargs, OpResult, OpTensorValues
+from ..base import OpArgs, OpKwargs, OpResult
 from .base import CollectiveOperation
 
 if TYPE_CHECKING:
-    from ...core.sharding.spec import DeviceMesh
+    from ...core.sharding.spec import DeviceMesh, ShardingSpec
 
 
 class AllToAllOp(CollectiveOperation):
@@ -53,7 +53,7 @@ class AllToAllOp(CollectiveOperation):
             if s is None:
                 s = x.shape
 
-            out_shape = list(int(d) for d in s)
+            out_shape = [int(d) for d in s]
             if phys_split_axis != phys_concat_axis:
                 if out_shape[phys_split_axis] % num_shards != 0:
                     raise ValueError(
@@ -229,7 +229,7 @@ class AllToAllOp(CollectiveOperation):
                 moved_axes = list(source_axes)
                 new_dim_specs[phys_concat_axis] = DimSpec([], is_open=True)
                 new_dim_specs[phys_split_axis] = DimSpec(
-                    sorted(list(set(target_axes) | set(moved_axes)))
+                    sorted(set(target_axes) | set(moved_axes))
                 )
 
             return ShardingSpec(mesh, new_dim_specs)

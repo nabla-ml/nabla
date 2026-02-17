@@ -13,7 +13,6 @@ import nabla as nb
 
 from .conftest import make_rng
 
-
 # ===----------------------------------------------------------------------=== #
 # Forward correctness
 # ===----------------------------------------------------------------------=== #
@@ -22,7 +21,7 @@ from .conftest import make_rng
 class TestFunctionalLinear:
     @pytest.mark.parametrize("batch,in_f,out_f", [(5, 4, 3), (1, 8, 2), (16, 3, 7)])
     def test_linear_forward_vs_jax(self, batch, in_f, out_f):
-        jax = pytest.importorskip("jax")
+        jax = pytest.importorskip("jax")  # noqa: F841
         jnp = pytest.importorskip("jax.numpy")
 
         rng = make_rng(29)

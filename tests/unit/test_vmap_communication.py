@@ -11,14 +11,13 @@ correctly when composed with vmap and multi-axis sharding.
 
 import jax
 import jax.numpy as jnp
-import pytest
 
 import nabla as nb
 from nabla.core.sharding.spec import DeviceMesh, P
-from nabla.ops.communication import all_to_all, reduce_scatter, gather_all_axes
+from nabla.ops.communication import all_to_all, gather_all_axes, reduce_scatter
+
 from .common import (
     assert_allclose,
-    make_jax_array,
     tensor_from_jax,
 )
 
@@ -166,7 +165,6 @@ class TestVmapCommunicationStress:
         def f(x):
             # Shard on both inner axes
             x_sharded = x.shard(mesh, P("x", "y"))
-            from nabla.ops.communication import gather_all_axes
 
             return gather_all_axes(x_sharded)
 

@@ -12,10 +12,9 @@ import pytest
 import nabla as nb
 from nabla.core.sharding.spec import DeviceMesh, P
 
-from .common import MESH_CONFIGS
 from .common import (
+    MESH_CONFIGS,
     assert_allclose,
-    make_jax_array,
     tensor_from_jax,
 )
 

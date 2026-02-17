@@ -3,10 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
-import jax
 import pytest
 
-import nabla as nb
 from nabla.core.sharding.spec import DimSpec
 from nabla.ops.communication import (
     all_gather,
@@ -29,13 +27,11 @@ from .common import (
 OPS = {}
 
 
-import jax.numpy as jnp
 from .common import (
     assert_allclose,
     make_jax_array,
     tensor_from_jax,
 )
-
 
 OPS["all_reduce_sum"] = Operation(
     "all_reduce_sum",

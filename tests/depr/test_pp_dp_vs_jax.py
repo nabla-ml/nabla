@@ -1,11 +1,12 @@
 import unittest
+
 import numpy as np
-import nabla as nb
+
 from nabla import ops
 from nabla.core import grad
 from nabla.core.sharding import DeviceMesh, DimSpec
-from nabla.transforms.vmap import vmap
 from nabla.ops import communication
+from nabla.transforms.vmap import vmap
 
 
 class TestPP_DP_vs_JAX(unittest.TestCase):
