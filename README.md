@@ -11,6 +11,38 @@
 
 ---
 
+
+## Installation
+
+Nabla requires **Modular nightly**.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install --pre --extra-index-url https://whl.modular.com/nightly/simple/ modular nabla-ml
+```
+
+**GPU Support**: 
+*   **Linux (AMD/NVIDIA)**: Supported natively via Modular MAX.
+*   **macOS (Apple Silicon)**: Requires Xcode Metal toolchain (`xcode-select --install`).
+
+---
+
+## Development Setup
+
+Installation of all dependencies (torch/jax for testing, mypy/black for linting, etc.)
+
+```bash
+git clone https://github.com/nabla-ml/nabla.git
+cd nabla
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements-dev.txt
+pip install -e ".[dev]"
+```
+
+---
+
 ## Feature Showcase
 
 <!-- ![alt text](./assets/title_image.png) -->
@@ -145,37 +177,6 @@ Nabla relies on three core principles:
     *   [Read more: Autograd Engine](nabla/core/autograd/README.md)
 3.  **Factor-Based SPMD**: Sharding is propagated using "semantic factors" (e.g., batch, heads) rather than physical mesh axes.
     *   [Read more: Sharding & Solver](nabla/core/sharding/README.md)
-
----
-
-### PyPI Install
-
-Nabla requires **Modular nightly**:
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install --pre --extra-index-url https://whl.modular.com/nightly/simple/ modular nabla-ml
-```
-
-## Development Setup
-
-### Prerequisites
-* **Python 3.12+**
-* **Modular MAX SDK** (via `requirements.txt`)
-
-### Installation
-```bash
-git clone https://github.com/nabla-ml/nabla.git
-cd nabla
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements-dev.txt
-pip install -e ".[dev]"
-```
-
-**GPU Support**: 
-*   **Linux (AMD/NVIDIA)**: Supported natively via Modular MAX.
-*   **macOS (Apple Silicon)**: Requires Xcode Metal toolchain (`xcode-select --install`).
 
 ---
 
