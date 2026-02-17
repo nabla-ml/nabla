@@ -55,38 +55,47 @@ target-version = "py310"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "N", "B", "C4", "A", "SIM", "PTH"]
 ignore = [
-    "E501",   # Line too long
-    "UP007",  # Use Union instead of | for Python 3.9 compatibility
-    "UP038",  # isinstance(x, (A, B)) style - valid Python, no functional change
-    "N806",   # Uppercase variable names in functions (math vars: A, B, J, GRAPH, Tensor)
-    "N812",   # `import functional as F` - PyTorch convention
-    "N811",   # GRAPH imported as g - intentional short alias
-    "N817",   # CamelCase imported as acronym (e.g. Tensor as T) - intentional
-    "N802",   # Function name `T` (transpose property) - intentional
-    "N803",   # Argument name `Tensor` - intentional
-    "B027",   # Empty method without abstract decorator - design choice
-    "E402",   # Module-level import not at top of file - circular import avoidance
-    "B028",   # No explicit stacklevel in warnings
-    "N999",   # Invalid module name (examples use 01_, 02_ prefixes)
-    "E731",   # Lambda assignments - common in test definitions
+    "E501",   # Line too long - formatter handles wrapping
+    "UP007",  # Use X | Y in annotations - needs Python 3.10+ at runtime without __future__.annotations
+    "UP038",  # Deprecated rule (retracted by ruff) - isinstance(x, (A, B)) can be faster than isinstance(x, A | B)
+    "N806",   # Uppercase variable in function - ML convention for matrix/dimension vars (B, K, N, W, H, etc.)
+    "N812",   # `import functional as F` - PyTorch/ML convention
+    "N811",   # Constant imported as non-constant (e.g. GRAPH as g) - intentional short aliases
+    "N817",   # CamelCase imported as acronym (e.g. Tensor as T) - intentional short aliases
+    "N802",   # Function name should be lowercase - `.T` transpose property follows NumPy/PyTorch convention
+    "B028",   # No explicit stacklevel in warnings - pedantic, only 2 occurrences
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"nabla/__init__.py" = ["A001", "A004"]  # Allow sum/max/min shadowing in public API
-"nabla/ops/__init__.py" = ["A004"]  # Allow shadowing in public API
-"nabla/ops/binary.py" = ["A001", "A004"]  # Allow intentional shadowing of built-in 'pow'
-"nabla/ops/reduce.py" = ["A001"]  # Allow intentional shadowing of built-in 'sum'
-"nabla/ops/unary.py" = ["A001"]  # Allow intentional shadowing of built-ins (abs, max, min, etc.)
-"nabla/ops/*.py" = ["A001"]  # Allow intentional shadowing of built-ins in ops modules
-"nabla/transforms/__init__.py" = ["A004"]  # Allow compile import shadowing
-"nabla/transforms/compile.py" = ["A001"]  # Allow compile shadowing
-"tests/**/test_compile*.py" = ["A004"]  # Allow compile import shadowing in tests
-"tests/depr/test_pp_dp*.py" = ["N801"]  # Allow PP_DP class naming convention
-"tests/integration/test_nested_dict_vjp.py" = ["E721"]  # Allow type comparison with == for tests
-"tests/integration/test_new_vjp.py" = ["E731"]  # Allow lambda assignments in tests
-"tests/integration/test_vjp_edge_cases.py" = ["N803", "N806"]  # Allow uppercase variable names in matrix tests
-"tests/integration/vjp_compatibility_demo.py" = ["N803", "N806"]  # Allow uppercase variable names in matrix tests
-"tests/integration/test_vjp_jax_compatibility.py" = ["F401"]  # Allow unused imports in compatibility tests
+# --- nabla library ---
+"nabla/__init__.py" = ["A001", "A004"]  # sum/max/min shadowing - NumPy/JAX-like API
+"nabla/ops/__init__.py" = ["A004"]  # Re-export shadowing
+"nabla/ops/binary.py" = ["A001", "A004"]  # pow shadowing
+"nabla/ops/reduce.py" = ["A001"]  # sum shadowing
+"nabla/ops/unary.py" = ["A001"]  # abs/max/min shadowing
+"nabla/ops/*.py" = ["A001"]  # Built-in shadowing in ops modules
+"nabla/ops/base.py" = ["E402", "B027"]  # Circular import avoidance; kernel() is optional override, not abstract
+"nabla/core/autograd/utils.py" = ["E402"]  # Circular import avoidance
+"nabla/core/graph/engine.py" = ["E402"]  # Circular import avoidance
+"nabla/core/sharding/spmd.py" = ["N803"]  # `Tensor: type` parameter - dependency injection pattern
+"nabla/transforms/__init__.py" = ["A004"]  # compile import shadowing
+"nabla/transforms/compile.py" = ["A001"]  # compile shadowing
+# --- tests ---
+"tests/**/*.py" = ["E402"]  # sys.path manipulation before imports is standard test pattern
+"tests/**/test_compile*.py" = ["A004"]  # compile import shadowing
+"tests/depr/test_pp_dp*.py" = ["N801"]  # PP_DP class naming convention
+"tests/depr/test_sharded_*.py" = ["E731"]  # Lambda assignments in test fixtures
+"tests/depr/test_gradients_vs_jax.py" = ["N803"]  # Uppercase W, W1, W2 math args
+"tests/depr/test_streaming_pipeline.py" = ["N803"]  # Uppercase W_bg arg
+"tests/depr/utils.py" = ["E731"]  # Lambda assignments in test utilities
+"tests/unit/test_unified.py" = ["E731"]  # Lambda assignments in test definitions
+"tests/integration/test_nested_dict_vjp.py" = ["E721"]  # Type comparison with ==
+"tests/integration/test_new_vjp.py" = ["E731"]  # Lambda assignments
+"tests/integration/test_vjp_edge_cases.py" = ["N803", "N806"]  # Uppercase matrix vars
+"tests/integration/vjp_compatibility_demo.py" = ["N803", "N806"]  # Uppercase matrix vars
+"tests/integration/test_vjp_jax_compatibility.py" = ["F401"]  # Unused imports in compatibility tests
+# --- examples ---
+"examples/*.py" = ["N999", "E402"]  # 01_, 02_ prefix naming; imports after setup code
 
 [tool.ruff.format]
 quote-style = "double"
