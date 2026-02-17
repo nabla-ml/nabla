@@ -37,9 +37,9 @@ fi
 echo "📚 Building documentation..."
 
 if [[ "$BUILD_MODE" == "ci" ]]; then
-    # CI build: generate API docs and build HTML
-    echo "✨ Generating API documentation from structure.json..."
-    python scripts/build_from_json.py
+    # CI build: use pre-generated .md files, just build HTML
+    echo "📄 Using pre-generated API docs from git (docs/api/*.md)"
+    echo "   (Run 'make docs' locally to regenerate if needed)"
     
     sphinx-build -b html --keep-going \
         -D autodoc_mock_imports="max,max.dtype,max.graph,max.tensor,mojo,numpy,jax,torch" \

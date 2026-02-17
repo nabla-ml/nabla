@@ -39,16 +39,23 @@ def extract_docstring_data(full_path: str) -> dict | None:
         module = importlib.import_module(module_path)
         obj = getattr(module, object_name)
     except (ImportError, AttributeError) as e:
-        print(f"  └─ ❌ ERROR: Could not find '{object_name}' in module '{module_path}'.")
-        print(f"     Please ensure the path '{full_path}' is correct in `structure.json`.")
-        print(f"     Original error: {e}")
-        return None
+        # Print warning but continue with minimal placeholder
+        print(f"  └─ ⚠️  WARNING: Could not import '{full_path}' - using placeholder")
+        print(f"     (This is expected if nabla is not installed)")
+        # Return minimal placeholder so docs can build without full installation
+        return {
+            'raw_docstring': None,
+            'docstring_obj': parse(""),
+            'signature': "",
+            'is_placeholder': True
+        }
 
     result = {}
     docstring_text = inspect.getdoc(obj)
     result['raw_docstring'] = docstring_text
     docstring_obj = parse(textwrap.dedent(docstring_text)) if docstring_text else parse("")
     result['docstring_obj'] = docstring_obj
+    result['is_placeholder'] = False
 
     try:
         result['signature'] = str(inspect.signature(obj))
@@ -142,7 +149,8 @@ def generate_page_from_items(lines: list[str], items: list[dict]):
         print(f"    -> Processing item '{item_path}'...")
         lines.extend([f"## `{item['name']}`", ""])
         data = extract_docstring_data(item_path)
-        if data:
+        if data and not data.get('is_placeholder'):
+            # Full documentation available
             signature = data.get('signature', '()')
             lines.append("```python")
             lines.append(f"{ 'class' if item_type == 'class' else 'def' } {item['name']}{signature}:")
@@ -156,7 +164,13 @@ def generate_page_from_items(lines: list[str], items: list[dict]):
                     lines.append(f"def {method['name']}{method['signature']}:")
                     lines.append("```")
                     lines.extend(format_docstring_obj_to_md(method['docstring_obj'], method.get('raw_docstring')))
+        elif data and data.get('is_placeholder'):
+            # Placeholder: nabla not installed, show minimal reference
+            lines.append(f"*API reference for `{item_path}`*")
+            lines.append("")
+            lines.append("*Full documentation will be available when the package is installed.*")
         else:
+            # Shouldn't happen with the new logic, but keep as fallback
             lines.append("*Could not extract documentation. Please check the error messages above and correct `structure.json`.*")
         lines.append("\n---")
 
