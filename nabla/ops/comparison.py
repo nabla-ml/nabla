@@ -74,6 +74,13 @@ class EqualOp(ComparisonOp):
         """VJP for comparison: None gradients (non-differentiable)."""
         return [None, None]
 
+    def jvp_rule(
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
+        from ..ops.creation import zeros_like
+
+        return [zeros_like(outputs[0])]
+
 
 class NotEqualOp(ComparisonOp):
     @property

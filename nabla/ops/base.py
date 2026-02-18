@@ -683,6 +683,8 @@ class ReduceOperation(AxisOp):
             if in_shape is not None:
                 # Normalize axis relative to the physical rank
                 norm_axis = axis if axis >= 0 else len(in_shape) + axis
+                if os.environ.get("NABLA_DEBUG_PHYS", "0") == "1":
+                    print(f"[NABLA_DEBUG_PHYS] {self.name}.compute_phys: in_shape={in_shape} axis={axis} norm={norm_axis}")
                 if keepdims:
                     out_shape = tuple(
                         1 if i == norm_axis else d for i, d in enumerate(in_shape)
@@ -907,20 +909,19 @@ class ShapeOp(Operation):
                     )
                 else:
                     global_phys = x.local_shape
-                    # Fallback if local_shape is None? Should not happen if hydrated or determined.
                     if global_phys is None:
                         global_phys = x.shape
-                        pass
-
+                    
                     if global_phys:
                         global_batch_shape = tuple(
                             int(d) for d in global_phys[:batch_dims]
                         )
                     else:
-                        # Best effort: assume standard layout
                         global_batch_shape = x.shape[:batch_dims]
-                        return kwargs
 
+                if os.environ.get("NABLA_DEBUG_PHYS", "0") == "1":
+                    print(f"[NABLA_DEBUG_PHYS] ShapeOp.adapt_kwargs: name={self.name} x.batch_dims={x.batch_dims} batch_dims={batch_dims} x.phys={x.physical_global_shape} global_batch_shape={global_batch_shape} in_shape={shape} out_shape={global_batch_shape + tuple(shape)}")
+                
                 physical_shape = global_batch_shape + tuple(shape)
                 new_kwargs = kwargs.copy()
                 new_kwargs["shape"] = physical_shape

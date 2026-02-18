@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING, Any
 
 from max.graph import ops
@@ -163,9 +164,14 @@ class SqueezeOp(AxisOp):
             if axis is None:
                 axes = [i for i, d in enumerate(s) if d == 1]
             elif isinstance(axis, int):
-                axes = [axis if axis >= 0 else len(s) + axis]
+                norm = axis if axis >= 0 else len(s) + axis
+                axes = [norm] if 0 <= norm < len(s) else []
             else:
-                axes = [a if a >= 0 else len(s) + a for a in axis]
+                axes = []
+                for a in axis:
+                    norm = a if a >= 0 else len(s) + a
+                    if 0 <= norm < len(s):
+                        axes.append(norm)
             for a in sorted(axes, reverse=True):
                 s.pop(a)
             return s
@@ -480,7 +486,7 @@ class MoveAxisOp(AxisOp):
         ).instantiate(input_shapes, output_shapes)
 
 
-class UnsqueezePhysicalOp(Operation):
+class UnsqueezePhysicalOp(AxisOp):
     @property
     def name(self) -> str:
         return "unsqueeze_physical"
@@ -546,7 +552,7 @@ class UnsqueezePhysicalOp(Operation):
         return len(input_shapes[0]) + 1
 
 
-class SqueezePhysicalOp(Operation):
+class SqueezePhysicalOp(AxisOp):
     @property
     def name(self) -> str:
         return "squeeze_physical"
@@ -564,6 +570,8 @@ class SqueezePhysicalOp(Operation):
         def _transform(s, kw):
             axis = kw.get("axis", 0)
             norm = axis if axis >= 0 else len(s) + axis
+            if os.environ.get("NABLA_DEBUG_PHYS", "0") == "1":
+                print(f"[NABLA_DEBUG_PHYS] {self.name}._transform: in_shape={s} axis={axis} norm={norm}")
             s.pop(norm)
             return s
 

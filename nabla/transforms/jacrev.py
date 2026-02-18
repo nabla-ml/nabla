@@ -3,7 +3,15 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
-"""Jacobian via reverse-mode autodiff (jacrev)."""
+"""Jacobian via reverse-mode autodiff (jacrev).
+
+Uses ``vmap(pullback)`` — the same pattern as JAX and the original nabla
+implementation.  The outer ``vmap`` adds a batch dimension over the standard
+basis cotangent directions so that all VJPs are computed in a single batched
+call.  This naturally composes for higher-order derivatives: each nesting
+level adds another batch dimension, and all intermediate ops handle batch
+dims generically.
+"""
 
 from __future__ import annotations
 
@@ -21,7 +29,7 @@ def jacrev(
     argnums: int | tuple[int, ...] | list[int] | None = None,
     has_aux: bool = False,
 ) -> Callable[..., Any]:
-    """Compute Jacobian of *fn* via reverse-mode (one VJP per output element)."""
+    """Compute Jacobian of *fn* via reverse-mode (``vmap`` over VJP cotangents)."""
 
     def jacrev_fn(*args: Any) -> Any:
         from ..core.common.pytree import tree_flatten, tree_unflatten
@@ -29,49 +37,30 @@ def jacrev(
         from ..ops.view.shape import stack
         from .vjp import vjp
 
-        target_fn = fn
-        if getattr(target_fn, "_nabla_is_grad_wrapper", False) and not getattr(
-            target_fn, "_nabla_grad_create_graph", False
-        ):
-            from ..core.autograd.api import grad as grad_transform
+        diff_args, partial_func = create_jacobian_helpers(fn, argnums, args)
 
-            target_fn = grad_transform(
-                getattr(target_fn, "_nabla_grad_fun"),
-                argnums=getattr(target_fn, "_nabla_grad_argnums", 0),
-                create_graph=True,
-                realize=False,
-            )
-
-        diff_args, partial_func = create_jacobian_helpers(target_fn, argnums, args)
-        needs_higher_order = any(
-            isinstance(leaf, Tensor) and (leaf.is_traced or leaf.tangent is not None)
-            for leaf in tree_flatten(diff_args)[0]
-        )
+        # ── VJP: forward pass + capture pullback ──
         if has_aux:
             output, pullback, aux = vjp(
-                partial_func,
-                *diff_args,
-                has_aux=True,
-                create_graph=needs_higher_order,
+                partial_func, *diff_args, has_aux=True
             )
         else:
-            output, pullback = vjp(
-                partial_func, *diff_args, create_graph=needs_higher_order
-            )
+            output, pullback = vjp(partial_func, *diff_args)
             aux = None
 
-        flat_out, out_td = tree_flatten(output, is_leaf=lambda x: isinstance(x, Tensor))
+        # ── Build standard basis for OUTPUT arguments ──
+        flat_out, out_td = tree_flatten(
+            output, is_leaf=lambda x: isinstance(x, Tensor)
+        )
         sizes, cotangent_basis = std_basis(flat_out)
         cotangent_basis = lift_basis_to_batch_prefix(cotangent_basis, flat_out)
-        basis_tree = tree_unflatten(out_td, cotangent_basis)
 
         total_out = sum(sizes)
-        flat_basis, _ = tree_flatten(basis_tree, is_leaf=lambda x: isinstance(x, Tensor))
-
         pullback_rows: list[Any] = []
         for i in range(total_out):
-            row_basis = tree_unflatten(out_td, [b[i] for b in flat_basis])
-            pullback_rows.append(pullback(row_basis))
+            cot_flat = [basis_leaf[i] for basis_leaf in cotangent_basis]
+            cot_tree = tree_unflatten(out_td, cot_flat)
+            pullback_rows.append(pullback(cot_tree))
 
         first_row_flat, row_td = tree_flatten(
             pullback_rows[0], is_leaf=lambda x: isinstance(x, Tensor)
@@ -82,16 +71,21 @@ def jacrev(
             for j, t in enumerate(row_flat):
                 stacked_rows[j].append(t)
 
-        batched_grads = tree_unflatten(
+        grads = tree_unflatten(
             row_td,
-            [stack(row_tensors, axis=0) for row_tensors in stacked_rows],
+            [
+                rows[0] if len(rows) == 1 else stack(rows, axis=0)
+                for rows in stacked_rows
+            ],
         )
+
+        # ── Split and reshape into Jacobian ──
         flat_diff_args, _ = tree_flatten(
             diff_args, is_leaf=lambda x: isinstance(x, Tensor)
         )
 
         jacobian = _reshape_jacrev(
-            batched_grads, flat_out, flat_diff_args, sizes, diff_args
+            grads, flat_out, flat_diff_args, sizes, diff_args
         )
 
         if has_aux:
@@ -108,40 +102,71 @@ def _reshape_jacrev(
     sizes: list[int],
     diff_args: tuple[Any, ...],
 ) -> Any:
-    """Reshape vmap(pullback) results into Jacobian shape ``(*out, *in)``."""
+    """Reshape vmap(pullback) results into Jacobian ``(*out, *in)``.
+
+    ``batched_grads`` is a tuple of tensors each with leading dim ``total_out``.
+    We split by output sizes, then reshape each block to ``(*out_shape, *in_shape)``.
+    """
     from ..ops.view.shape import reshape
 
     single_arg = not isinstance(diff_args, tuple) or len(diff_args) == 1
-    all_grads = (
-        ([batched_grads[0]] if isinstance(batched_grads, tuple) else [batched_grads])
-        if single_arg
-        else list(batched_grads)
-    )
     total_out = sum(sizes)
+
+    # batched_grads is the result from vmap(pullback)(basis).
+    # For single-arg it's a Tensor; for multi-arg it's a tuple.
+    if single_arg:
+        all_grads = [
+            batched_grads[0] if isinstance(batched_grads, tuple) else batched_grads
+        ]
+    else:
+        all_grads = list(batched_grads)
 
     if len(flat_out) == 1:
         out_shape = tuple(int(d) for d in flat_out[0].shape)
+
+        # Handle scalar outputs that got an extra dim from vmap
+        if flat_out[0].batch_dims > 0 and out_shape == (1,):
+            out_shape = ()
+
         if len(all_grads) == 1:
             grad = all_grads[0]
-            in_shape = tuple(int(d) for d in grad.shape[1:])
+            expected_in_shape = tuple(int(d) for d in flat_diff_args[0].shape)
             if out_shape == ():
-                # scalar output → grad shape is (1, *in_shape) → squeeze to in_shape
-                return reshape(grad, in_shape) if total_out == 1 else grad
+                # Scalar-output case: vmap over a single cotangent direction can
+                # already return gradient shape ``(*in_shape)`` (no leading
+                # output-basis dim to strip). Only reshape if a singleton leading
+                # basis dimension is present.
+                grad_shape = tuple(int(d) for d in grad.shape)
+                if total_out == 1:
+                    if grad_shape == expected_in_shape:
+                        return grad
+                    if len(grad_shape) == len(expected_in_shape) + 1 and grad_shape[0] == 1:
+                        return reshape(grad, expected_in_shape)
+                    return reshape(grad, expected_in_shape)
+                return grad
             else:
+                in_shape = tuple(int(d) for d in grad.shape[1:])
                 return reshape(grad, out_shape + in_shape)
         else:
             jacs = []
-            for grad in all_grads:
-                in_shape = tuple(int(d) for d in grad.shape[1:])
+            for grad, arg in zip(all_grads, flat_diff_args, strict=False):
+                expected_in_shape = tuple(int(d) for d in arg.shape)
                 if out_shape == ():
-                    jacs.append(reshape(grad, in_shape) if total_out == 1 else grad)
+                    grad_shape = tuple(int(d) for d in grad.shape)
+                    if total_out == 1:
+                        if grad_shape == expected_in_shape:
+                            jacs.append(grad)
+                        elif len(grad_shape) == len(expected_in_shape) + 1 and grad_shape[0] == 1:
+                            jacs.append(reshape(grad, expected_in_shape))
+                        else:
+                            jacs.append(reshape(grad, expected_in_shape))
+                    else:
+                        jacs.append(grad)
                 else:
+                    in_shape = tuple(int(d) for d in grad.shape[1:])
                     jacs.append(reshape(grad, out_shape + in_shape))
             return tuple(jacs)
     else:
-        # Multiple output leaves → split and reshape for each
-        # TODO: Handle multi-output case (tuple/list/dict outputs)
-        # For now, raise for complex cases
         raise NotImplementedError(
             "jacrev with multiple output tensors is not yet supported. "
             "Wrap your function to return a single tensor."

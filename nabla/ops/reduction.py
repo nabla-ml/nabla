@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import os
+
 from typing import TYPE_CHECKING, Any
 
 from max.graph import ops
@@ -20,7 +22,49 @@ from .view import SqueezePhysicalOp
 _squeeze_physical_op = SqueezePhysicalOp()
 
 
-class PhysicalReduceOp(Operation):
+def _debug_phys_vjp(tag: str, t: Tensor) -> None:
+    if os.environ.get("NABLA_DEBUG_PHYS_VJP", "0") not in {
+        "1",
+        "true",
+        "TRUE",
+        "True",
+    }:
+        return
+    phys = t.physical_global_shape or t.local_shape
+    print(
+        f"[NABLA_DEBUG_PHYS_VJP] {tag}: "
+        f"shape={tuple(int(d) for d in t.shape)} "
+        f"batch_dims={t.batch_dims} "
+        f"phys={tuple(int(d) for d in phys)}"
+    )
+
+
+def _physical_shape_tuple(x: Tensor) -> tuple[int, ...]:
+    return tuple(int(d) for d in (x.physical_global_shape or x.local_shape))
+
+
+def _target_with_rank_prefix(
+    like: Tensor, base_phys: tuple[int, ...]
+) -> tuple[tuple[int, ...], int]:
+    like_phys = _physical_shape_tuple(like)
+    prefix = len(like_phys) - len(base_phys)
+    if prefix <= 0:
+        return base_phys, 0
+    return tuple(int(d) for d in like_phys[:prefix]) + base_phys, prefix
+
+
+def _normalize_axis(axis: int, rank: int) -> int:
+    return axis if axis >= 0 else rank + axis
+
+
+def _normalize_physical_axis_for_tensor(axis: int, x: Tensor) -> int:
+    phys_rank = len(_physical_shape_tuple(x))
+    if axis >= 0:
+        return int(x.batch_dims) + axis
+    return phys_rank + axis
+
+
+class PhysicalReduceOp(AxisOp):
     """Base for physical reduction operations (sum, mean, max, min).
 
     Subclasses only need to define `name` and `kernel()`, and optionally
@@ -213,25 +257,51 @@ class ReduceSumPhysicalOp(PhysicalReduceOp):
     def vjp_rule(
         self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
     ) -> OpResult:
-        from ..ops.view import broadcast_to, unsqueeze_physical
+        from ..ops.view import (
+            broadcast_batch_dims,
+            broadcast_to,
+            broadcast_to_physical,
+            unsqueeze,
+        )
 
         x = primals[0]
         axis = kwargs.get("axis", 0)
         keepdims = kwargs.get("keepdims", False)
+        x_phys = _physical_shape_tuple(x)
+        _debug_phys_vjp("sum.vjp.x", x)
 
         cot = cotangents[0]
+        _debug_phys_vjp("sum.vjp.cot.in", cot)
         if not keepdims:
-            cot = unsqueeze_physical(cot, axis=axis)
+            cot = unsqueeze(cot, axis=axis)
+            _debug_phys_vjp("sum.vjp.cot.after_unsqueeze", cot)
 
-        target_logical = tuple(int(d) for d in x.shape)
-        return [broadcast_to(cot, target_logical)]
+        cot = broadcast_to(cot, tuple(int(d) for d in x.shape))
+        _debug_phys_vjp("sum.vjp.cot.after_broadcast_to", cot)
+
+        if cot.batch_dims < x.batch_dims:
+            target_batch = x_phys[: x.batch_dims]
+            cot = broadcast_batch_dims(cot, target_batch)
+            _debug_phys_vjp("sum.vjp.cot.after_broadcast_batch_dims", cot)
+
+        cot_phys = _physical_shape_tuple(cot)
+        rank_prefix = max(0, len(cot_phys) - len(x_phys))
+        target_phys = tuple(int(d) for d in cot_phys[:rank_prefix]) + x_phys
+
+        out = broadcast_to_physical(cot, target_phys)
+        _debug_phys_vjp("sum.vjp.out", out)
+        return [out]
 
     def jvp_rule(
         self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
     ) -> OpResult:
         axis = kwargs.get("axis", 0)
         keepdims = kwargs.get("keepdims", False)
-        return [reduce_sum_physical(tangents[0], axis=axis, keepdims=keepdims)]
+        return [
+            reduce_sum_physical(
+                tangents[0], axis=axis, keepdims=keepdims
+            )
+        ]
 
 
 class MeanPhysicalOp(PhysicalReduceOp):
@@ -243,6 +313,52 @@ class MeanPhysicalOp(PhysicalReduceOp):
         x = args[0]
         axis = kwargs.get("axis", 0)
         return [ops.mean(x, axis=axis)]
+
+    def vjp_rule(
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
+        """VJP for mean_physical: broadcast cotangent / reduced axis size."""
+        from ..ops.view import (
+            broadcast_batch_dims,
+            broadcast_to,
+            broadcast_to_physical,
+            unsqueeze,
+        )
+
+        x = primals[0]
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+
+        x_phys = _physical_shape_tuple(x)
+        norm_axis = _normalize_physical_axis_for_tensor(axis, x)
+        axis_size = x_phys[norm_axis]
+
+        cot = cotangents[0]
+        if not keepdims:
+            cot = unsqueeze(cot, axis=axis)
+
+        cot = broadcast_to(cot, tuple(int(d) for d in x.shape))
+
+        if cot.batch_dims < x.batch_dims:
+            target_batch = x_phys[: x.batch_dims]
+            cot = broadcast_batch_dims(cot, target_batch)
+
+        cot_phys = _physical_shape_tuple(cot)
+        rank_prefix = max(0, len(cot_phys) - len(x_phys))
+        target_phys = tuple(int(d) for d in cot_phys[:rank_prefix]) + x_phys
+
+        return [broadcast_to_physical(cot, target_phys) / axis_size]
+
+    def jvp_rule(
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+        return [
+            mean_physical(
+                tangents[0], axis=axis, keepdims=keepdims
+            )
+        ]
 
 
 class ReduceMaxPhysicalOp(PhysicalReduceOp):
@@ -258,6 +374,43 @@ class ReduceMaxPhysicalOp(PhysicalReduceOp):
         x = args[0]
         axis = kwargs.get("axis", 0)
         return [ops._reduce_max(x, axis=axis)]
+
+    def vjp_rule(
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
+        from ..ops.binary import mul
+        from ..ops.comparison import equal
+        from ..ops.view import broadcast_to_physical, unsqueeze_physical
+
+        x = primals[0]
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+
+        x_phys = _physical_shape_tuple(x)
+        norm_axis = _normalize_physical_axis_for_tensor(axis, x)
+
+        max_target, _ = _target_with_rank_prefix(outputs[0], x_phys)
+        max_broadcasted = broadcast_to_physical(outputs[0], max_target)
+        mask = equal(x, max_broadcasted)
+
+        cot = cotangents[0]
+        cot_target, rank_prefix = _target_with_rank_prefix(cot, x_phys)
+        cot_axis = rank_prefix + norm_axis
+        if not keepdims:
+            cot = unsqueeze_physical(cot, axis=cot_axis)
+        cot_broadcasted = broadcast_to_physical(cot, cot_target)
+        return [mul(cot_broadcasted, mask)]
+
+    def jvp_rule(
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+        return [
+            reduce_max_physical(
+                tangents[0], axis=axis, keepdims=keepdims
+            )
+        ]
 
 
 class ReduceMinOp(ReduceOperation):
@@ -288,6 +441,43 @@ class ReduceMinPhysicalOp(PhysicalReduceOp):
         x = args[0]
         axis = kwargs.get("axis", 0)
         return [ops._reduce_min(x, axis=axis)]
+
+    def vjp_rule(
+        self, primals: OpArgs, cotangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
+        from ..ops.binary import mul
+        from ..ops.comparison import equal
+        from ..ops.view import broadcast_to_physical, unsqueeze_physical
+
+        x = primals[0]
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+
+        x_phys = _physical_shape_tuple(x)
+        norm_axis = _normalize_physical_axis_for_tensor(axis, x)
+
+        min_target, _ = _target_with_rank_prefix(outputs[0], x_phys)
+        min_broadcasted = broadcast_to_physical(outputs[0], min_target)
+        mask = equal(x, min_broadcasted)
+
+        cot = cotangents[0]
+        cot_target, rank_prefix = _target_with_rank_prefix(cot, x_phys)
+        cot_axis = rank_prefix + norm_axis
+        if not keepdims:
+            cot = unsqueeze_physical(cot, axis=cot_axis)
+        cot_broadcasted = broadcast_to_physical(cot, cot_target)
+        return [mul(cot_broadcasted, mask)]
+
+    def jvp_rule(
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
+        axis = kwargs.get("axis", 0)
+        keepdims = kwargs.get("keepdims", False)
+        return [
+            reduce_min_physical(
+                tangents[0], axis=axis, keepdims=keepdims
+            )
+        ]
 
 
 _reduce_min_physical_op = ReduceMinPhysicalOp()
@@ -391,7 +581,42 @@ def _physical_reduce(op, x: Tensor, axis: int, keepdims: bool = False) -> Tensor
     """Shared wrapper for physical reduce operations."""
     result = op([x], {"axis": axis, "keepdims": True})[0]
     if not keepdims:
-        result = _squeeze_physical_op([result], {"axis": axis})[0]
+        squeeze_axis = None
+
+        x_phys = x.physical_global_shape or x.local_shape
+        r_phys = result.physical_global_shape or result.local_shape
+        if x_phys is not None and r_phys is not None and len(x_phys) == len(r_phys):
+            changed: list[int] = []
+            for i, (xd, rd) in enumerate(zip(x_phys, r_phys, strict=False)):
+                xi = int(xd)
+                ri = int(rd)
+                if xi != ri:
+                    changed.append(i)
+            if len(changed) == 1:
+                idx = changed[0]
+                if int(r_phys[idx]) == 1:
+                    squeeze_axis = idx
+
+        if squeeze_axis is None:
+            squeeze_axis = axis + result.batch_dims if axis >= 0 else axis
+
+            r_phys_fallback = result.physical_global_shape or result.local_shape
+            if r_phys_fallback is not None:
+                rank = len(r_phys_fallback)
+                norm = squeeze_axis if squeeze_axis >= 0 else rank + squeeze_axis
+                if 0 <= norm < rank and int(r_phys_fallback[norm]) != 1:
+                    logical_start = int(result.batch_dims)
+                    singleton_axes = [
+                        i
+                        for i in range(logical_start, rank)
+                        if int(r_phys_fallback[i]) == 1
+                    ]
+                    if singleton_axes:
+                        right_or_at = [i for i in singleton_axes if i >= norm]
+                        norm = right_or_at[0] if right_or_at else singleton_axes[-1]
+                        squeeze_axis = norm
+
+        result = _squeeze_physical_op([result], {"axis": squeeze_axis})[0]
     return result
 
 

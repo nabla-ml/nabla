@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -995,38 +996,10 @@ def stack(tensors: list[Tensor], axis: int = 0) -> Tensor:
     return concatenate(expanded, axis=axis)
 
 
-class BroadcastToPhysicalOp(Operation):
+class BroadcastToPhysicalOp(ShapeOp):
     @property
     def name(self) -> str:
         return "broadcast_to_physical"
-
-    def compute_physical_shape(
-        self, args: list, kwargs: dict, output_sharding: Any = None
-    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
-        """Infer physical shapes for broadcast_to_physical."""
-        from ...core.sharding import spec, spmd
-
-        x = args[0]
-        target_shape = kwargs.get("shape")
-
-        mesh = spmd.get_mesh_from_args(args)
-        num_shards = len(mesh.devices) if mesh else 1
-
-        if target_shape is None:
-            raise RuntimeError(f"Could not determine target shape for {self.name}")
-
-        shapes = []
-        if output_sharding and mesh:
-            for i in range(num_shards):
-                local = spec.compute_local_shape(
-                    target_shape, output_sharding, device_id=i
-                )
-                shapes.append(tuple(int(d) for d in local))
-        else:
-            shapes = [tuple(int(d) for d in target_shape)] * num_shards
-
-        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
-        return shapes, dtypes, devices
 
     def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
@@ -1045,24 +1018,28 @@ class BroadcastToPhysicalOp(Operation):
         x = args[0]
         shape = kwargs["shape"]
 
-        in_rank = (
-            len(x.global_shape) if x.global_shape else len(x.local_shape or x.shape)
-        )
-        out_rank = len(shape)
-        added_dims = max(0, out_rank - in_rank)
+        in_phys = x.physical_global_shape or x.local_shape
+        in_shape = tuple(int(d) for d in (in_phys if in_phys is not None else x.shape))
+        target_shape = tuple(int(d) for d in shape)
 
-        in_batch_dims = x.batch_dims
-        for _ in range(added_dims):
-            x = unsqueeze_physical(x, axis=in_batch_dims)
+        if os.environ.get("NABLA_DEBUG_PHYS", "0") == "1":
+            print(f"[NABLA_DEBUG_PHYS] broadcast_to_physical.call: x.shape={tuple(int(d) for d in x.shape)} x.batch_dims={x.batch_dims} in_phys={in_shape} target_phys={target_shape}")
 
-        results = super().__call__([x], {"shape": shape})
-        result = results[0]
+        # Note: target_shape here is LOGICAL for the current call level.
+        # adapt_kwargs (via ShapeOp) will prepend existing batch_dims.
+        
+        in_logical_rank = len(in_shape) - int(x.batch_dims)
+        out_logical_rank = len(target_shape)
+        added_dims = max(0, out_logical_rank - in_logical_rank)
 
         if added_dims > 0:
-            # New leading physical dims correspond to batch dims.
-            result._impl.batch_dims = x.batch_dims + added_dims
+            # We insert dimensions at the front of logical, which is at x.batch_dims physically.
+            # This matches standard numpy broadcast behavior where leading dims are added.
+            for _ in range(added_dims):
+                x = unsqueeze_physical(x, axis=int(x.batch_dims))
 
-        return [result]
+        results = super().__call__([x], {"shape": target_shape})
+        return results
 
     def infer_output_rank(
         self, input_shapes: tuple[tuple[int, ...], ...], **kwargs
@@ -1152,6 +1129,7 @@ class BroadcastToPhysicalOp(Operation):
         if target_shape is None:
             target_shape = outputs[0].physical_global_shape or outputs[0].local_shape
         target_shape = tuple(int(d) for d in target_shape)
+
         return [broadcast_to_physical(tangents[0], target_shape)]
 
     def _transform_shard_kwargs(

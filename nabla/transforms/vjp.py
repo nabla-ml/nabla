@@ -29,15 +29,20 @@ def vjp(
     fn: Callable[..., Any],
     *primals: Any,
     has_aux: bool = False,
-    create_graph: bool = False,
+    create_graph: bool = True,
 ) -> (
     tuple[Any, Callable[..., tuple[Any, ...]]]
     | tuple[Any, Callable[..., tuple[Any, ...]], Any]
 ):
-    """Compute VJP of *fn* at *primals*. Returns ``(output, vjp_fn[, aux])``."""
+    """Compute VJP of *fn* at *primals*. Returns ``(output, vjp_fn[, aux])``.
+
+    *create_graph* defaults to ``True`` so the returned pullback always
+    produces differentiable gradients, enabling nested Jacobian compositions.
+    """
     from ..core.autograd.utils import backward_on_trace
     from ..core.common import pytree
     from ..core.graph.tracing import trace as capture_trace
+    from ..core.tensor.api import Tensor
 
     _aux_box: list[Any] = []
     if has_aux:

@@ -12,6 +12,8 @@ on the abstract interface.
 
 from __future__ import annotations
 
+import os
+
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Union
 
@@ -302,14 +304,26 @@ def apply_jvp(op: Any, args: list, kwargs: dict, output: Any) -> None:
 
                 tangents_list.append(zeros_like(x))
 
-    # Second pass: save and clear tangents to prevent recursive JVP.
+    # Second pass: save and clear current-level tangents to prevent recursive JVP.
+    # For nested forward-mode, preserve one outer tangent level when available.
+    from ..transforms.jvp import (
+        get_attached_tangent_parent,
+        set_attached_tangent_parent,
+    )
+
     seen_ids: set[int] = set()
     for x in arg_leaves:
         if isinstance(x, Tensor) and x.tangent is not None:
             impl_id = id(x._impl)
             if impl_id not in seen_ids:
-                saved_tangents.append((x._impl, x.tangent))
-                x._impl.tangent = None
+                current_tangent = x.tangent
+                saved_tangents.append((x._impl, current_tangent))
+                parent_tangent = get_attached_tangent_parent(
+                    x._impl, current_tangent
+                )
+                if parent_tangent is None and current_tangent is not None:
+                    parent_tangent = current_tangent.tangent
+                x._impl.tangent = parent_tangent
                 seen_ids.add(impl_id)
         # Non-tensor args are not part of the derivative
 
@@ -321,17 +335,64 @@ def apply_jvp(op: Any, args: list, kwargs: dict, output: Any) -> None:
     else:
         outputs_list = [o for o in pytree.tree_leaves(output) if isinstance(o, Tensor)]
 
+    parent_tangents_list = []
+    has_parent_level = False
+    for p in primals_list:
+        if p.tangent is not None:
+            parent_tangents_list.append(Tensor(impl=p.tangent))
+            has_parent_level = True
+        else:
+            from ..ops.creation import zeros_like
+
+            parent_tangents_list.append(zeros_like(p))
+
+    saved_output_parent_tangents: list[tuple[Any, Any]] = []
+
     try:
+        if has_parent_level:
+            parent_output_tangents = op.jvp_rule(
+                primals_list, parent_tangents_list, outputs_list, kwargs
+            )
+            if parent_output_tangents is not None:
+                for o, t in zip(outputs_list, parent_output_tangents, strict=False):
+                    if isinstance(o, Tensor):
+                        saved_output_parent_tangents.append((o._impl, o.tangent))
+                    if isinstance(o, Tensor) and isinstance(t, Tensor):
+                        o._impl.tangent = t._impl
+
         output_tangents = op.jvp_rule(primals_list, tangents_list, outputs_list, kwargs)
     finally:
         # 2. Restore tangents on primals.
         for impl, old_tangent in saved_tangents:
             impl.tangent = old_tangent
 
+        for impl, old_tangent in saved_output_parent_tangents:
+            impl.tangent = old_tangent
+
     if output_tangents is not None:
+        parent_map = {}
+        if has_parent_level and parent_output_tangents is not None:
+            for o, pt in zip(outputs_list, parent_output_tangents, strict=False):
+                if isinstance(o, Tensor) and isinstance(pt, Tensor):
+                    parent_map[id(o._impl)] = pt._impl
+
         for o, t in zip(outputs_list, output_tangents, strict=False):
             if isinstance(o, Tensor) and isinstance(t, Tensor):
+                if os.environ.get("NABLA_DEBUG_NESTED_JVP", "0") in {
+                    "1",
+                    "true",
+                    "TRUE",
+                    "True",
+                }:
+                    print(
+                        "[NABLA_DEBUG_NESTED_JVP]",
+                        getattr(op, "name", type(op).__name__),
+                        "tangent_has_parent=",
+                        t.tangent is not None,
+                    )
                 o._impl.tangent = t._impl
+                if id(o._impl) in parent_map:
+                    set_attached_tangent_parent(o._impl, t._impl, parent_map[id(o._impl)])
 
 
 def collect_metadata(args: list[Any]) -> tuple[int, bool, bool, bool]:

@@ -13,6 +13,9 @@ from typing import Any, Literal, overload
 from .utils import split_aux
 
 
+_ATTACHED_TANGENT_PARENTS: dict[tuple[int, int], Any] = {}
+
+
 @overload
 def jvp(
     fn: Callable[..., Any],
@@ -51,11 +54,11 @@ def jvp(
             f"got {len(primals)} and {len(tangents)}"
         )
 
-    _attach_tangents(primals, tangents)
+    saved_tangents = _save_and_attach_tangents(primals, tangents)
     try:
         raw_output = fn(*primals)
     finally:
-        _detach_tangents(primals)
+        _restore_tangents(saved_tangents)
 
     output, aux = split_aux(raw_output, has_aux, name="jvp")
     output_tangents = _extract_tangents(output)
@@ -66,9 +69,13 @@ def jvp(
     return output, output_tangents
 
 
-def _attach_tangents(primals: tuple[Any, ...], tangents: tuple[Any, ...]) -> None:
+def _save_and_attach_tangents(
+    primals: tuple[Any, ...], tangents: tuple[Any, ...]
+) -> list[tuple[Any, Any, Any | None]]:
     from ..core.common import pytree
     from ..core.tensor.api import Tensor
+
+    saved: list[tuple[Any, Any, Any | None]] = []
 
     for primal, tangent in zip(primals, tangents, strict=False):
         primal_leaves = (
@@ -82,20 +89,50 @@ def _attach_tangents(primals: tuple[Any, ...], tangents: tuple[Any, ...]) -> Non
 
         for p, t in zip(primal_leaves, tangent_leaves, strict=False):
             if isinstance(p, Tensor) and isinstance(t, Tensor):
+                old_tangent = p._impl.tangent
+                attached_impl = t._impl
+                _ATTACHED_TANGENT_PARENTS[(id(p._impl), id(attached_impl))] = old_tangent
+                saved.append((p, old_tangent, attached_impl))
                 p._impl.tangent = t._impl
 
+    return saved
 
-def _detach_tangents(primals: tuple[Any, ...]) -> None:
-    from ..core.common import pytree
-    from ..core.tensor.api import Tensor
 
-    for primal in primals:
-        leaves = (
-            pytree.tree_leaves(primal) if not isinstance(primal, Tensor) else [primal]
-        )
-        for p in leaves:
-            if isinstance(p, Tensor):
-                p._impl.tangent = None
+def _restore_tangents(saved_tangents: list[tuple[Any, Any, Any | None]]) -> None:
+    for tensor, old_tangent, attached_impl in reversed(saved_tangents):
+        if attached_impl is not None:
+            _ATTACHED_TANGENT_PARENTS.pop((id(tensor._impl), id(attached_impl)), None)
+        tensor._impl.tangent = old_tangent
+
+
+def get_attached_tangent_parent(primal_impl: Any, attached_tangent_impl: Any) -> Any:
+    """Return the parent tangent that was active before *attached_tangent_impl*.
+
+    This enables nested forward-mode levels to clear only the current level,
+    while preserving an outer tangent level if present.
+    """
+    if primal_impl is None or attached_tangent_impl is None:
+        return None
+    return _ATTACHED_TANGENT_PARENTS.get((id(primal_impl), id(attached_tangent_impl)))
+
+
+def set_attached_tangent_parent(
+    primal_impl: Any, attached_tangent_impl: Any, parent_tangent_impl: Any
+) -> None:
+    """Record a parent tangent for an attached tangent.
+
+    This is used for intermediates during nested JVP to ensure all tangent
+    levels are preserved across operation boundaries.
+    """
+    if primal_impl is not None and attached_tangent_impl is not None:
+        _ATTACHED_TANGENT_PARENTS[
+            (id(primal_impl), id(attached_tangent_impl))
+        ] = parent_tangent_impl
+
+
+def _clear_jvp_cache() -> None:
+    """Clear all global JVP state. Internal use only."""
+    _ATTACHED_TANGENT_PARENTS.clear()
 
 
 def _extract_tangents(output: Any) -> Any:
@@ -125,4 +162,4 @@ def _detach_tangents_from_tree(tree: Any) -> None:
     pytree.tree_map(_clear, tree)
 
 
-__all__ = ["jvp"]
+__all__ = ["jvp", "_clear_jvp_cache"]

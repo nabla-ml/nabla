@@ -350,15 +350,20 @@ class BroadcastBatchDimsOp(Operation):
         if added <= 0:
             return [cotangents[0]]
 
-        from ..reduction import reduce_sum_physical
-        from .batch import decr_batch_dims
+        from ..reduction import reduce_sum
+        from .batch import move_axis_from_batch_dims
 
         result = cotangents[0]
         extra_prefix = max(0, result.batch_dims - outputs[0].batch_dims)
+
+        # Added output batch dims occupy physical batch axes immediately after
+        # any extra nested-AD prefix. Reduce them one-by-one by first moving the
+        # target batch axis into logical space, then applying logical reduce_sum.
         for _ in range(added):
-            result = reduce_sum_physical(result, axis=extra_prefix, keepdims=False)
-            if result.batch_dims > 0:
-                result = decr_batch_dims(result)
+            result = move_axis_from_batch_dims(
+                result, batch_axis=extra_prefix, logical_destination=0
+            )
+            result = reduce_sum(result, axis=0, keepdims=False)
         return [result]
 
     def jvp_rule(

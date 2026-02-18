@@ -194,7 +194,7 @@ from .ops.view import (
 from .transforms.compile import CompilationStats, CompiledFunction, compile
 from .transforms.jacfwd import jacfwd
 from .transforms.jacrev import jacrev
-from .transforms.jvp import jvp
+from .transforms.jvp import _clear_jvp_cache, jvp
 from .transforms.shard_map import shard_map
 from .transforms.vjp import vjp
 from .transforms.vmap import vmap
@@ -379,3 +379,4 @@ min = reduce_min
 def _clear_caches() -> None:
     """Clear all caches and state for fresh start (useful for testing)."""
     GRAPH.clear_all()
+    _clear_jvp_cache()

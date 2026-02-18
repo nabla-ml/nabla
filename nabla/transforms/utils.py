@@ -149,7 +149,6 @@ def std_basis(flat_tensors: list[Tensor]) -> tuple[list[int], list[Tensor]]:
             bp[offset] = 1.0
         else:
             bp = np.zeros((total,) + sh, dtype=np.float32)
-            bp.reshape(total, n)[range(n), range(n)] = 0.0  # init
             for j in range(n):
                 bp.reshape(total, n)[offset + j, j] = 1.0
         basis.append(Tensor.from_dlpack(bp))

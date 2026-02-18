@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import os
+
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -14,7 +16,7 @@ if TYPE_CHECKING:
     from ..tensor.impl import TensorImpl
 
 GradsMap = dict["Tensor", "Tensor"]
-CotangentMap = dict[int, "TensorImpl"]
+CotangentMap = dict["TensorImpl", "TensorImpl"]
 
 from ..tensor.api import Tensor
 
@@ -65,7 +67,7 @@ def _accumulate_cotangent(
     from ...ops.binary import add
     from ...ops.communication import all_reduce, reshard
 
-    target_id = id(target_impl)
+    target_key = target_impl
 
     # 1. Resolve Partial Sums if target is not sharded or doesn't share partial axes
     if cot_tensor.sharding and cot_tensor.sharding.partial_sum_axes:
@@ -89,12 +91,39 @@ def _accumulate_cotangent(
         )
 
     # 3. Add to existing or initialize
-    if target_id in cotangent_map:
-        existing = Tensor(impl=cotangent_map[target_id])
-        accumulated = add(existing, cot_tensor)
-        cotangent_map[target_id] = accumulated._impl
+    if target_key in cotangent_map:
+        existing = Tensor(impl=cotangent_map[target_key])
+        try:
+            accumulated = add(existing, cot_tensor)
+        except Exception:
+            if os.environ.get("NABLA_DEBUG_COT_ACCUM", "0") in {
+                "1",
+                "true",
+                "TRUE",
+                "True",
+            }:
+                target_tensor = Tensor(impl=target_impl)
+                target_phys = (
+                    target_tensor.physical_global_shape or target_tensor.local_shape
+                )
+                existing_phys = existing.physical_global_shape or existing.local_shape
+                cot_phys = cot_tensor.physical_global_shape or cot_tensor.local_shape
+                print(
+                    "[NABLA_DEBUG_COT_ACCUM] add failed: "
+                    f"target shape={tuple(int(d) for d in target_tensor.shape)} "
+                    f"batch_dims={target_tensor.batch_dims} "
+                    f"phys={tuple(int(d) for d in target_phys)} | "
+                    f"existing shape={tuple(int(d) for d in existing.shape)} "
+                    f"batch_dims={existing.batch_dims} "
+                    f"phys={tuple(int(d) for d in existing_phys)} | "
+                    f"incoming shape={tuple(int(d) for d in cot_tensor.shape)} "
+                    f"batch_dims={cot_tensor.batch_dims} "
+                    f"phys={tuple(int(d) for d in cot_phys)}"
+                )
+            raise
+        cotangent_map[target_key] = accumulated._impl
     else:
-        cotangent_map[target_id] = cot_tensor._impl
+        cotangent_map[target_key] = cot_tensor._impl
 
 
 class BackwardEngine:
@@ -112,7 +141,7 @@ class BackwardEngine:
 
         self.trace = trace
         self.create_graph = create_graph
-        self.cotangent_map: dict[int, TensorImpl] = {}
+        self.cotangent_map: dict[TensorImpl, TensorImpl] = {}
         self._original_flags: dict[int, bool] = {}
 
         # Initialize cotangent map from trace outputs
@@ -130,7 +159,7 @@ class BackwardEngine:
             )
 
         for out_impl, cot_impl in zip(output_leaves, cot_leaves, strict=True):
-            self.cotangent_map[id(out_impl)] = cot_impl
+            self.cotangent_map[out_impl] = cot_impl
 
     def _set_trace_state(self, tree: Any):
         """Suppress tracing for backward ops if create_graph=False."""
@@ -168,7 +197,7 @@ class BackwardEngine:
         active_indices = [
             i
             for i, o in enumerate(alive_outputs)
-            if o is not None and id(o) in self.cotangent_map
+            if o is not None and o in self.cotangent_map
         ]
         if not active_indices:
             return
@@ -190,8 +219,8 @@ class BackwardEngine:
         vjp_cotangents = []
         for o in alive_outputs:
             if o is not None:
-                if id(o) in self.cotangent_map:
-                    vjp_cotangents.append(Tensor(impl=self.cotangent_map[id(o)]))
+                if o in self.cotangent_map:
+                    vjp_cotangents.append(Tensor(impl=self.cotangent_map[o]))
                 else:
                     from ...ops.creation import zeros_like
 
@@ -240,6 +269,44 @@ class BackwardEngine:
             target_shape = tuple(int(d) for d in Tensor(impl=arg_impl_real).shape)
             cot_tensor = _reduce_to_shape(cot_tensor, target_shape)
 
+            if os.environ.get("NABLA_DEBUG_COT_FLOW", "0") in {
+                "1",
+                "true",
+                "TRUE",
+                "True",
+            }:
+                target_tensor = Tensor(impl=arg_impl_real)
+                target_phys = target_tensor.physical_global_shape or target_tensor.local_shape
+                cot_phys = cot_tensor.physical_global_shape or cot_tensor.local_shape
+                existing = self.cotangent_map.get(arg_impl_real)
+                if existing is None:
+                    print(
+                        "[NABLA_DEBUG_COT_FLOW] init "
+                        f"op={getattr(op, 'name', type(op).__name__)} "
+                        f"target_shape={tuple(int(d) for d in target_tensor.shape)} "
+                        f"target_batch_dims={target_tensor.batch_dims} "
+                        f"target_phys={tuple(int(d) for d in target_phys)} "
+                        f"cot_shape={tuple(int(d) for d in cot_tensor.shape)} "
+                        f"cot_batch_dims={cot_tensor.batch_dims} "
+                        f"cot_phys={tuple(int(d) for d in cot_phys)}"
+                    )
+                else:
+                    ex_t = Tensor(impl=existing)
+                    ex_phys = ex_t.physical_global_shape or ex_t.local_shape
+                    print(
+                        "[NABLA_DEBUG_COT_FLOW] add "
+                        f"op={getattr(op, 'name', type(op).__name__)} "
+                        f"target_shape={tuple(int(d) for d in target_tensor.shape)} "
+                        f"target_batch_dims={target_tensor.batch_dims} "
+                        f"target_phys={tuple(int(d) for d in target_phys)} "
+                        f"existing_shape={tuple(int(d) for d in ex_t.shape)} "
+                        f"existing_batch_dims={ex_t.batch_dims} "
+                        f"existing_phys={tuple(int(d) for d in ex_phys)} "
+                        f"incoming_shape={tuple(int(d) for d in cot_tensor.shape)} "
+                        f"incoming_batch_dims={cot_tensor.batch_dims} "
+                        f"incoming_phys={tuple(int(d) for d in cot_phys)}"
+                    )
+
             # Sharding and Addition
             _accumulate_cotangent(self.cotangent_map, arg_impl_real, cot_tensor)
 
@@ -253,9 +320,8 @@ class BackwardEngine:
         ]
 
         for inp in input_leaves:
-            inp_id = id(inp._impl)
-            if inp_id in self.cotangent_map:
-                cot_impl = self.cotangent_map[inp_id]
+            if inp._impl in self.cotangent_map:
+                cot_impl = self.cotangent_map[inp._impl]
                 grad = Tensor(impl=cot_impl)
 
                 # Double check for un-reduced partials at inputs
