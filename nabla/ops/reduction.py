@@ -405,13 +405,38 @@ class ReduceMaxPhysicalOp(PhysicalReduceOp):
     def jvp_rule(
         self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
     ) -> OpResult:
+        """JVP for reduce_max_physical: select tangent at argmax position.
+
+        d/dt max(x + t*dx) = dx[argmax(x)] = sum(dx * mask) / sum(mask)
+        where mask = (x == max(x)) along the reduced axis.
+        """
+        from ..ops.binary import mul
+        from ..ops.comparison import equal
+        from ..ops.view import broadcast_to_physical, unsqueeze_physical
+
+        x = primals[0]
         axis = kwargs.get("axis", 0)
         keepdims = kwargs.get("keepdims", False)
-        return [
-            reduce_max_physical(
-                tangents[0], axis=axis, keepdims=keepdims
-            )
-        ]
+
+        x_phys = _physical_shape_tuple(x)
+        norm_axis = _normalize_physical_axis_for_tensor(axis, x)
+
+        # Broadcast max output back to input shape, build mask
+        max_target, _ = _target_with_rank_prefix(outputs[0], x_phys)
+        max_broadcasted = broadcast_to_physical(outputs[0], max_target)
+        mask = equal(x, max_broadcasted)
+
+        # Select tangent at max positions & reduce
+        tan = tangents[0]
+        tan_target, rank_prefix = _target_with_rank_prefix(tan, x_phys)
+        tan_axis = rank_prefix + norm_axis
+        if not keepdims:
+            tan = unsqueeze_physical(tan, axis=tan_axis)
+        tan_broadcasted = broadcast_to_physical(tan, tan_target)
+
+        # masked_tangent has shape x_phys — reduce along the reduction axis
+        masked_tangent = mul(tan_broadcasted, mask)
+        return [reduce_sum_physical(masked_tangent, axis=axis, keepdims=keepdims)]
 
 
 class ReduceMinOp(ReduceOperation):
@@ -472,13 +497,38 @@ class ReduceMinPhysicalOp(PhysicalReduceOp):
     def jvp_rule(
         self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
     ) -> OpResult:
+        """JVP for reduce_min_physical: select tangent at argmin position.
+
+        d/dt min(x + t*dx) = dx[argmin(x)] = sum(dx * mask) / sum(mask)
+        where mask = (x == min(x)) along the reduced axis.
+        """
+        from ..ops.binary import mul
+        from ..ops.comparison import equal
+        from ..ops.view import broadcast_to_physical, unsqueeze_physical
+
+        x = primals[0]
         axis = kwargs.get("axis", 0)
         keepdims = kwargs.get("keepdims", False)
-        return [
-            reduce_min_physical(
-                tangents[0], axis=axis, keepdims=keepdims
-            )
-        ]
+
+        x_phys = _physical_shape_tuple(x)
+        norm_axis = _normalize_physical_axis_for_tensor(axis, x)
+
+        # Broadcast min output back to input shape, build mask
+        min_target, _ = _target_with_rank_prefix(outputs[0], x_phys)
+        min_broadcasted = broadcast_to_physical(outputs[0], min_target)
+        mask = equal(x, min_broadcasted)
+
+        # Select tangent at min positions & reduce
+        tan = tangents[0]
+        tan_target, rank_prefix = _target_with_rank_prefix(tan, x_phys)
+        tan_axis = rank_prefix + norm_axis
+        if not keepdims:
+            tan = unsqueeze_physical(tan, axis=tan_axis)
+        tan_broadcasted = broadcast_to_physical(tan, tan_target)
+
+        # masked_tangent has shape x_phys — reduce along the reduction axis
+        masked_tangent = mul(tan_broadcasted, mask)
+        return [reduce_sum_physical(masked_tangent, axis=axis, keepdims=keepdims)]
 
 
 _reduce_min_physical_op = ReduceMinPhysicalOp()

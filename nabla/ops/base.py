@@ -51,7 +51,6 @@ from .utils import (
     _make_hashable,  # noqa: F401
     adapt_and_reshard,
     apply_auto_reduction,
-    apply_jvp,
     collect_metadata,
     compute_structural_hash,
     eager_execute,
@@ -286,9 +285,10 @@ class Operation(ABC):
         # 7. Tracing Setup (store op_kwargs on output so transforms can read them)
         self._setup_output_refs(output, resharded_args, kwargs, op_hash=op_hash)
 
-        # 8. JVP tangent propagation (after output refs are set)
-        if any_has_tangent:
-            apply_jvp(self, args, kwargs, output)
+        # 8. JVP tangent propagation — REMOVED.
+        # Forward-mode AD is now handled by forward_on_trace (trace-then-forward
+        # architecture), mirroring how backward_on_trace handles reverse-mode.
+        # apply_jvp() is no longer called inline.
 
         output = apply_auto_reduction(self, output, mesh, reduce_axes)
 
