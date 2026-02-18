@@ -26,15 +26,27 @@ def jacrev(
     def jacrev_fn(*args: Any) -> Any:
         from ..core.common.pytree import tree_flatten, tree_unflatten
         from ..core.tensor.api import Tensor
+        from ..ops.view.shape import stack
         from .vjp import vjp
-        from .vmap import vmap
 
-        diff_args, partial_func = create_jacobian_helpers(fn, argnums, args)
+        target_fn = fn
+        if getattr(target_fn, "_nabla_is_grad_wrapper", False) and not getattr(
+            target_fn, "_nabla_grad_create_graph", False
+        ):
+            from ..core.autograd.api import grad as grad_transform
+
+            target_fn = grad_transform(
+                getattr(target_fn, "_nabla_grad_fun"),
+                argnums=getattr(target_fn, "_nabla_grad_argnums", 0),
+                create_graph=True,
+                realize=False,
+            )
+
+        diff_args, partial_func = create_jacobian_helpers(target_fn, argnums, args)
         needs_higher_order = any(
             isinstance(leaf, Tensor) and (leaf.is_traced or leaf.tangent is not None)
             for leaf in tree_flatten(diff_args)[0]
         )
-
         if has_aux:
             output, pullback, aux = vjp(
                 partial_func,
@@ -52,7 +64,28 @@ def jacrev(
         sizes, cotangent_basis = std_basis(flat_out)
         cotangent_basis = lift_basis_to_batch_prefix(cotangent_basis, flat_out)
         basis_tree = tree_unflatten(out_td, cotangent_basis)
-        batched_grads = vmap(pullback, in_axes=0)(basis_tree)
+
+        total_out = sum(sizes)
+        flat_basis, _ = tree_flatten(basis_tree, is_leaf=lambda x: isinstance(x, Tensor))
+
+        pullback_rows: list[Any] = []
+        for i in range(total_out):
+            row_basis = tree_unflatten(out_td, [b[i] for b in flat_basis])
+            pullback_rows.append(pullback(row_basis))
+
+        first_row_flat, row_td = tree_flatten(
+            pullback_rows[0], is_leaf=lambda x: isinstance(x, Tensor)
+        )
+        stacked_rows: list[list[Tensor]] = [[] for _ in range(len(first_row_flat))]
+        for row in pullback_rows:
+            row_flat, _ = tree_flatten(row, is_leaf=lambda x: isinstance(x, Tensor))
+            for j, t in enumerate(row_flat):
+                stacked_rows[j].append(t)
+
+        batched_grads = tree_unflatten(
+            row_td,
+            [stack(row_tensors, axis=0) for row_tensors in stacked_rows],
+        )
         flat_diff_args, _ = tree_flatten(
             diff_args, is_leaf=lambda x: isinstance(x, Tensor)
         )

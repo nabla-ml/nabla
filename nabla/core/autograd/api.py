@@ -71,6 +71,13 @@ def grad(
 
         return select_argnums(grads_struct, argnums)
 
+    # Metadata for higher-order transforms to detect and upgrade this wrapper.
+    wrapper._nabla_is_grad_wrapper = True
+    wrapper._nabla_grad_fun = fun
+    wrapper._nabla_grad_argnums = argnums
+    wrapper._nabla_grad_create_graph = create_graph
+    wrapper._nabla_grad_realize = realize
+
     return wrapper
 
 

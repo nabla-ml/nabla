@@ -451,6 +451,8 @@ class SliceUpdateOp(Operation):
 
         # Functional implementation
         rank = len(x.shape)
+        update_rank = len(update.shape)
+        prefix_rank = max(0, update_rank - rank)
         if start is not None and size is not None and len(start) < rank:
             pad = rank - len(start)
             start = (0,) * pad + tuple(start)
@@ -459,6 +461,10 @@ class SliceUpdateOp(Operation):
 
         # We need update shape for ones_like
         update_shape = []
+
+        for i in range(prefix_rank):
+            paddings.extend([0, 0])
+            update_shape.append(int(update.shape[i]))
 
         for i in range(rank):
             s = start[i]
