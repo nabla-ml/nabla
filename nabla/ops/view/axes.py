@@ -251,6 +251,13 @@ class SqueezeOp(AxisOp):
         axis = kwargs.get("axis", 0)
         from . import unsqueeze
 
+        # axis may be a tuple when multiple axes are squeezed — unsqueeze each
+        if isinstance(axis, (tuple, list)):
+            result = cotangents[0]
+            # Insert axes back in ascending order
+            for a in sorted(axis):
+                result = unsqueeze(result, axis=a)
+            return [result]
         return [unsqueeze(cotangents[0], axis=axis)]
 
     def jvp_rule(
