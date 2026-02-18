@@ -80,7 +80,10 @@ class PhysicalReduceOp(AxisOp):
 
         x = args[0]
         axis = kwargs.get("axis", 0)
-        keepdims = kwargs.get("keepdims", False)
+        # NOTE: MAX reduction ops ALWAYS produce keepdims=True output
+        # (the reduced axis becomes size 1). The kernel never squeezes.
+        # Squeezing for keepdims=False is handled at the _physical_reduce
+        # level via an explicit traced squeeze_physical call.
 
         mesh = spmd.get_mesh_from_args(args)
         num_shards = len(mesh.devices) if mesh else 1
@@ -94,12 +97,10 @@ class PhysicalReduceOp(AxisOp):
                     f"Could not determine physical shape for {self.name}"
                 )
             norm_axis = axis if axis >= 0 else len(in_shape) + axis
-            if keepdims:
-                out_shape = tuple(
-                    1 if j == norm_axis else d for j, d in enumerate(in_shape)
-                )
-            else:
-                out_shape = tuple(d for j, d in enumerate(in_shape) if j != norm_axis)
+            # Always keepdims=True to match MAX kernel output
+            out_shape = tuple(
+                1 if j == norm_axis else d for j, d in enumerate(in_shape)
+            )
             shapes.append(out_shape)
 
         dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
@@ -578,45 +579,18 @@ def reduce_max(
 
 
 def _physical_reduce(op, x: Tensor, axis: int, keepdims: bool = False) -> Tensor:
-    """Shared wrapper for physical reduce operations."""
+    """Shared wrapper for physical reduce operations.
+    
+    MAX reduction ops always produce keepdims=True output (reduced axis = 1).
+    We always pass keepdims=True to the op so compute_physical_shape matches.
+    If the user wants keepdims=False, we add an explicit traced squeeze_physical
+    call AFTER the reduction — this must be traced for autograd.
+    """
+    from .view.axes import squeeze_physical
+
     result = op([x], {"axis": axis, "keepdims": True})[0]
     if not keepdims:
-        squeeze_axis = None
-
-        x_phys = x.physical_global_shape or x.local_shape
-        r_phys = result.physical_global_shape or result.local_shape
-        if x_phys is not None and r_phys is not None and len(x_phys) == len(r_phys):
-            changed: list[int] = []
-            for i, (xd, rd) in enumerate(zip(x_phys, r_phys, strict=False)):
-                xi = int(xd)
-                ri = int(rd)
-                if xi != ri:
-                    changed.append(i)
-            if len(changed) == 1:
-                idx = changed[0]
-                if int(r_phys[idx]) == 1:
-                    squeeze_axis = idx
-
-        if squeeze_axis is None:
-            squeeze_axis = axis + result.batch_dims if axis >= 0 else axis
-
-            r_phys_fallback = result.physical_global_shape or result.local_shape
-            if r_phys_fallback is not None:
-                rank = len(r_phys_fallback)
-                norm = squeeze_axis if squeeze_axis >= 0 else rank + squeeze_axis
-                if 0 <= norm < rank and int(r_phys_fallback[norm]) != 1:
-                    logical_start = int(result.batch_dims)
-                    singleton_axes = [
-                        i
-                        for i in range(logical_start, rank)
-                        if int(r_phys_fallback[i]) == 1
-                    ]
-                    if singleton_axes:
-                        right_or_at = [i for i in singleton_axes if i >= norm]
-                        norm = right_or_at[0] if right_or_at else singleton_axes[-1]
-                        squeeze_axis = norm
-
-        result = _squeeze_physical_op([result], {"axis": squeeze_axis})[0]
+        result = squeeze_physical(result, axis=axis)
     return result
 
 

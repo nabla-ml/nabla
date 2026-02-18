@@ -1033,13 +1033,39 @@ class BroadcastToPhysicalOp(ShapeOp):
         added_dims = max(0, out_logical_rank - in_logical_rank)
 
         if added_dims > 0:
-            # We insert dimensions at the front of logical, which is at x.batch_dims physically.
-            # This matches standard numpy broadcast behavior where leading dims are added.
+            # We insert dimensions at the front of logical.
+            # Since unsqueeze_physical is an AxisOp, passing axis=0 will be 
+            # shifted by adapt_kwargs to target the correct physical index (x.batch_dims).
             for _ in range(added_dims):
-                x = unsqueeze_physical(x, axis=int(x.batch_dims))
+                x = unsqueeze_physical(x, axis=0)
 
         results = super().__call__([x], {"shape": target_shape})
         return results
+
+    def adapt_kwargs(self, args: OpArgs, kwargs: OpKwargs, batch_dims: int) -> OpKwargs:
+        # BroadcastToPhysicalOp takes a physical shape. We don't want ShapeOp 
+        # to automatically prepend batch_dims because they might already be there.
+        # Instead, we depend on the caller or JVP rule to provide the full physical shape.
+        return kwargs
+
+    def compute_physical_shape(
+        self, args: list, kwargs: dict, output_sharding: Any = None
+    ) -> tuple[list[tuple[int, ...]], list[Any], list[Any]]:
+        x = args[0]
+        shape = kwargs.get("shape")
+        if shape is None:
+             phys = x.physical_global_shape or x.local_shape
+             shape = tuple(int(d) for d in phys)
+        
+        from ...core.sharding import spmd
+        mesh = spmd.get_mesh_from_args(args)
+        num_shards = len(mesh.devices) if mesh else 1
+        
+        # Currently we assume the provided shape IS the global physical shape.
+        # Replicated fallback:
+        shapes = [tuple(int(d) for d in shape)] * num_shards
+        dtypes, devices = self._build_shard_metadata(x, mesh, num_shards)
+        return shapes, dtypes, devices
 
     def infer_output_rank(
         self, input_shapes: tuple[tuple[int, ...], ...], **kwargs
@@ -1125,12 +1151,32 @@ class BroadcastToPhysicalOp(ShapeOp):
     def jvp_rule(
         self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
     ) -> OpResult:
+        x = primals[0]
+        tx = tangents[0]
         target_shape = kwargs.get("shape")
         if target_shape is None:
             target_shape = outputs[0].physical_global_shape or outputs[0].local_shape
         target_shape = tuple(int(d) for d in target_shape)
 
-        return [broadcast_to_physical(tangents[0], target_shape)]
+        # Calculate extra batch dimensions added by AD transforms (e.g. vmap)
+        extra = int(tx.batch_dims) - int(x.batch_dims)
+        if os.environ.get("NABLA_DEBUG_PHYS", "0") == "1":
+             print(f"[NABLA_DEBUG_PHYS] broadcast_to_physical.jvp_rule: x.bd={x.batch_dims} tx.bd={tx.batch_dims} extra={extra} target_in={target_shape}")
+        
+        if extra > 0:
+            # Lift the target shape by prepending the extra batch prefix from the tangent
+            tx_phys = tx.physical_global_shape_ints
+            if tx_phys is None:
+                # Fallback to local shape if global is missing (replicated)
+                lp = tx.local_shape
+                tx_phys = tuple(int(d) for d in lp) if lp else tx.shape
+            
+            prefix = tx_phys[:extra]
+            target_shape = prefix + target_shape
+            if os.environ.get("NABLA_DEBUG_PHYS", "0") == "1":
+                 print(f"[NABLA_DEBUG_PHYS] broadcast_to_physical.jvp_rule: lifted target_shape={target_shape}")
+
+        return [broadcast_to_physical(tx, target_shape)]
 
     def _transform_shard_kwargs(
         self, kwargs: dict, output_sharding, shard_idx: int, args: list
