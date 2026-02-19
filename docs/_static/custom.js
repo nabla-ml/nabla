@@ -4,7 +4,7 @@ window.addEventListener("DOMContentLoaded", function () {
     if (themeSwitcher) themeSwitcher.remove();
 
     const pageName = window.DOCUMENTATION_OPTIONS?.pagename;
-    const isIndex  = pageName === "index";
+    const isIndex = pageName === "index";
 
     if (isIndex) {
         document.body.classList.add("home-landing");
@@ -23,7 +23,7 @@ window.addEventListener("DOMContentLoaded", function () {
         const pathParts = window.location.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
         const depth = pathParts.length > 0 ? pathParts.length - 1 : 0;
         const rootPrefix = depth > 0 ? '../'.repeat(depth) : './';
-        const homeHref   = rootPrefix + 'index.html';
+        const homeHref = rootPrefix + 'index.html';
         const searchHref = rootPrefix + 'search.html';
 
         topHeader.innerHTML = `
@@ -85,4 +85,20 @@ window.addEventListener("DOMContentLoaded", function () {
     // Hide the now-empty secondary article header bar
     const articleHeader = document.querySelector(".bd-header-article");
     if (articleHeader) articleHeader.style.display = "none";
+
+    // Uncheck the "Examples" section in the primary sidebar unless we are on an examples page
+    if (pageName && !pageName.startsWith("examples/")) {
+        const exampleLinks = document.querySelectorAll(".bd-sidebar-primary a.reference.internal");
+        for (let link of exampleLinks) {
+            if (link.href && link.href.includes("examples/index")) {
+                const li = link.closest("li");
+                if (li) {
+                    const checkbox = li.querySelector(".toctree-checkbox");
+                    if (checkbox && checkbox.checked) {
+                        checkbox.checked = false;
+                    }
+                }
+            }
+        }
+    }
 });
