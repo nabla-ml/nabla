@@ -16,7 +16,7 @@ def check_google_indexing():
     queries = [
         "site:www.nablaml.com",
         "site:www.nablaml.com/api/",
-        "site:www.nablaml.com/tutorials/",
+        "site:www.nablaml.com/examples/",
         "nabla python library gpu",
         '"nabla-ml" python',
     ]
@@ -53,7 +53,7 @@ def check_structured_data():
     test_urls = [
         "https://www.nablaml.com/",
         "https://www.nablaml.com/api/tensor.html",
-        "https://www.nablaml.com/tutorials/index.html",
+        "https://www.nablaml.com/examples/index.html",
     ]
 
     for url in test_urls:
@@ -96,7 +96,7 @@ def check_meta_tags():
     test_urls = [
         "https://www.nablaml.com/",
         "https://www.nablaml.com/api/tensor.html",
-        "https://www.nablaml.com/tutorials/index.html",
+        "https://www.nablaml.com/examples/index.html",
     ]
 
     for url in test_urls:

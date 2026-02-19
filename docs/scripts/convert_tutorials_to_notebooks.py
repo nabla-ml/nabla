@@ -20,7 +20,7 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 EXAMPLES_DIR = ROOT_DIR / "examples"
-DOCS_TUTORIALS_DIR = ROOT_DIR / "docs" / "tutorials"
+DOCS_TUTORIALS_DIR = ROOT_DIR / "docs" / "examples"
 
 ORDERED_NOTEBOOKS = [
     "01_tensors_and_ops",
@@ -259,7 +259,7 @@ def main() -> None:
 
     valid_targets = {path.stem for path in example_files}
 
-    print(f"Converting {len(example_files)} example(s) from examples/ to docs/tutorials/...\n")
+    print(f"Converting {len(example_files)} example(s) from examples/ to docs/examples/...\n")
 
     broken_links: list[str] = []
     for py_path in example_files:

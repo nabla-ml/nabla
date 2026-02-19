@@ -93,10 +93,10 @@ class SEOAuditor:
 
             # Check for important sections
             api_urls = [u for u in urls if "/api/" in u["url"]]
-            tutorial_urls = [u for u in urls if "/tutorials/" in u["url"]]
+            tutorial_urls = [u for u in urls if "/examples/" in u["url"]]
 
             self.log_success(f"Found {len(api_urls)} API documentation URLs")
-            self.log_success(f"Found {len(tutorial_urls)} tutorial URLs")
+            self.log_success(f"Found {len(tutorial_urls)} example URLs")
 
             # Check homepage priority
             homepage = next(
@@ -221,7 +221,7 @@ class SEOAuditor:
 
         # Check important sections
         important_urls = []
-        for pattern in ["/api/index.html", "/tutorials/index.html", "/api/tensor.html"]:
+        for pattern in ["/api/index.html", "/examples/index.html", "/api/tensor.html"]:
             matching_urls = [u for u in urls if pattern in u["url"]]
             important_urls.extend(matching_urls[:2])  # Max 2 per pattern
 

@@ -74,7 +74,7 @@ html_static_path = ["_static"]
 # Patterns to exclude from the build process.
 exclude_patterns = [
     "_build", "Thumbs.db", ".DS_Store", "**/gen_modules/**", "README.md", "scripts/README.md",
-    "tutorials/index.rst",
+    "examples/index.rst",
 ]
 
 # =============================================================================
@@ -173,8 +173,8 @@ nbsphinx_prolog = ""
 # Check if pandoc is available - if not, exclude notebooks
 import shutil
 if shutil.which("pandoc") is None:
-    print("⚠️  Pandoc not found - excluding notebook tutorials from build")
-    exclude_patterns.append("tutorials/*.ipynb")
+    print("⚠️  Pandoc not found - excluding notebook examples from build")
+    exclude_patterns.append("examples/*.ipynb")
 
 # Suppress common warnings
 suppress_warnings = [

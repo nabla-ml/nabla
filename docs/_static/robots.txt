@@ -6,7 +6,7 @@ Sitemap: https://www.nablaml.com/sitemap.xml
 
 # High priority content for search engines
 Allow: /api/
-Allow: /tutorials/
+Allow: /examples/
 Allow: /index.html
 
 # Allow CSS and JS for proper rendering (Google recommends this)

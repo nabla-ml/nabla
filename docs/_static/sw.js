@@ -5,7 +5,7 @@ const CACHE_NAME = 'nabla-docs-v1';
 const STATIC_CACHE = [
     '/',
     '/api/',
-    '/tutorials/',
+    '/examples/',
     '/examples/',
     '/_static/custom.css',
     '/_static/seo-advanced.css',

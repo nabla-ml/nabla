@@ -21,7 +21,7 @@ SPMD sharding API for Nabla: DeviceMesh, PartitionSpec, and automatic tensor sha
 Testing utilities for Nabla ML: assert_allclose for cross-framework numeric validation and batch_realize for pytree tensor realization.
 {%- elif 'api/' in pagename -%}
 API reference for {{ title_plain }} in the Nabla ML framework. Functions, classes, and examples for high-performance machine learning with Mojo.
-{%- elif 'tutorials/' in pagename -%}
+{%- elif 'examples/' in pagename -%}
 {{ title_plain }} — step-by-step Nabla ML tutorial with code examples for automatic differentiation, GPU training, and distributed computing.
 {%- else -%}
 {{ title_plain }} — Nabla ML high-performance framework for automatic differentiation, JIT compilation, SPMD sharding, and GPU acceleration.
@@ -35,7 +35,7 @@ Nabla ML — High-Performance Autodiff & Distributed ML in Python
 LoRA & QLoRA Fine-Tuning API — Nabla ML
 {%- elif 'api/' in pagename -%}
 {{ title_plain }} API Reference — Nabla ML
-{%- elif 'tutorials/' in pagename -%}
+{%- elif 'examples/' in pagename -%}
 {{ title_plain }} Tutorial — Nabla ML
 {%- else -%}
 {{ title_plain }} — Nabla ML
@@ -124,7 +124,7 @@ LoRA & QLoRA Fine-Tuning API — Nabla ML
   "url": "{{ base_url }}{{ pagename }}.html",
   "description": {{ page_description_plain|tojson }},
   "dateModified": "{{ build_date }}",
-  "proficiencyLevel": "{% if 'tutorials/' in pagename %}Beginner{% else %}Expert{% endif %}",
+  "proficiencyLevel": "{% if 'examples/' in pagename %}Beginner{% else %}Expert{% endif %}",
   {%- endif %}
   "author": {
     "@type": "Organization",
@@ -169,14 +169,14 @@ LoRA & QLoRA Fine-Tuning API — Nabla ML
       "item": "{{ base_url }}{{ pagename }}.html"
     }
     {% endif %}
-    {% elif 'tutorials/' in pagename %},
+    {% elif 'examples/' in pagename %},
     {
       "@type": "ListItem",
       "position": 2,
-      "name": "Tutorials",
-      "item": "{{ base_url }}tutorials/index.html"
+      "name": "Examples",
+      "item": "{{ base_url }}examples/index.html"
     }
-    {% if pagename != 'tutorials/index' %},
+    {% if pagename != 'examples/index' %},
     {
       "@type": "ListItem",
       "position": 3,

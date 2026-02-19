@@ -16,7 +16,7 @@ def get_priority(url, base_url):
         return "1.0"
     # Section index pages (high value for navigation)
     if url.endswith("/index.html"):
-        if "/api/index.html" in url or "/tutorials/index.html" in url:
+        if "/api/index.html" in url or "/examples/index.html" in url:
             return "0.9"
         # Module-level index pages (nn, ops, transforms, core)
         if any(s in url for s in ["/nn/index", "/ops/index", "/transforms/index", "/core/index"]):
@@ -24,8 +24,8 @@ def get_priority(url, base_url):
     # High-value feature pages: finetune (LoRA/QLoRA), optimizers, sharding
     if any(s in url for s in ["finetune", "nn_optim", "sharding"]):
         return "0.8"
-    # Tutorials (evergreen content, high search value)
-    if "tutorials/" in url:
+    # Examples (evergreen content, high search value)
+    if "examples/" in url:
         return "0.8"
     # API reference pages
     if "api/" in url:

@@ -1,5 +1,5 @@
-Tutorials
-=========
+Examples
+========
 
 .. toctree::
    :maxdepth: 1

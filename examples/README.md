@@ -20,7 +20,7 @@ This folder is the single source of truth for runnable example-style `.py` files
 
 ## Notes
 
-- The notebook files in `docs/tutorials/` are generated from the ordered list above.
+- The notebook files in `docs/examples/` are generated from the ordered list above.
 - Run the converter with:
 
 ```bash
