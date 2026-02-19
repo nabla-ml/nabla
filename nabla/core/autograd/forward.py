@@ -114,6 +114,10 @@ class ForwardEngine:
 
         # Build tangent list: look up each primal in tangent_map.
         # Track whether *any* input carries a non-zero tangent.
+        # Use None as placeholder for zero tangents — resolved to zeros_like
+        # ONLY after the has_active_tangent check, so that skipped nodes
+        # never create orphan zero graph ops (which can confuse the MAX
+        # compiler's MOToMGP pass).
         jvp_tangents: list[Any] = []
         has_active_tangent = False
         for a in node.op_args:
@@ -123,9 +127,7 @@ class ForwardEngine:
                     jvp_tangents.append(Tensor(impl=self.tangent_map[impl]))
                     has_active_tangent = True
                 else:
-                    from ...ops.creation import zeros_like
-
-                    jvp_tangents.append(zeros_like(Tensor(impl=impl)))
+                    jvp_tangents.append(None)  # placeholder
             else:
                 jvp_tangents.append(None)
 
@@ -134,6 +136,15 @@ class ForwardEngine:
         # the extraction code will produce zeros_like for missing entries.
         if not has_active_tangent:
             return
+
+        # Resolve None tangent placeholders → zeros_like (centrally, so
+        # individual JVP rules never see None tangents).
+        from ...ops.creation import zeros_like
+
+        jvp_tangents = [
+            t if t is not None else zeros_like(p)
+            for t, p in zip(jvp_tangents, jvp_primals)
+        ]
 
         # 2. Build output list from alive outputs.
         alive_outputs = node.get_alive_outputs()

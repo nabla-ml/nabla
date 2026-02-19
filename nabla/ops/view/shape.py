@@ -60,7 +60,11 @@ class BroadcastToOp(ShapeOp):
 
     def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
-        shape = kwargs["shape"]
+        shape = tuple(kwargs["shape"])
+        x_rank = len(x.shape)
+        if len(shape) < x_rank:
+            missing = x_rank - len(shape)
+            shape = tuple(x.shape[i] for i in range(missing)) + shape
         return [ops.broadcast_to(x, shape)]
 
     def sharding_rule(
@@ -1003,7 +1007,11 @@ class BroadcastToPhysicalOp(ShapeOp):
 
     def kernel(self, args: OpTensorValues, kwargs: OpKwargs) -> OpTensorValues:
         x = args[0]
-        shape = kwargs["shape"]
+        shape = tuple(kwargs["shape"])
+        x_rank = len(x.shape)
+        if len(shape) < x_rank:
+            missing = x_rank - len(shape)
+            shape = tuple(x.shape[i] for i in range(missing)) + shape
         return [ops.broadcast_to(x, shape)]
 
     def __call__(self, args: OpArgs, kwargs: OpKwargs) -> OpResult:
@@ -1151,31 +1159,9 @@ class BroadcastToPhysicalOp(ShapeOp):
     def jvp_rule(
         self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
     ) -> OpResult:
-        x = primals[0]
         tx = tangents[0]
-        target_shape = kwargs.get("shape")
-        if target_shape is None:
-            target_shape = outputs[0].physical_global_shape or outputs[0].local_shape
+        target_shape = outputs[0].physical_global_shape or outputs[0].local_shape
         target_shape = tuple(int(d) for d in target_shape)
-
-        # Calculate extra batch dimensions added by AD transforms (e.g. vmap)
-        extra = int(tx.batch_dims) - int(x.batch_dims)
-        if os.environ.get("NABLA_DEBUG_PHYS", "0") == "1":
-             print(f"[NABLA_DEBUG_PHYS] broadcast_to_physical.jvp_rule: x.bd={x.batch_dims} tx.bd={tx.batch_dims} extra={extra} target_in={target_shape}")
-        
-        if extra > 0:
-            # Lift the target shape by prepending the extra batch prefix from the tangent
-            tx_phys = tx.physical_global_shape_ints
-            if tx_phys is None:
-                # Fallback to local shape if global is missing (replicated)
-                lp = tx.local_shape
-                tx_phys = tuple(int(d) for d in lp) if lp else tx.shape
-            
-            prefix = tx_phys[:extra]
-            target_shape = prefix + target_shape
-            if os.environ.get("NABLA_DEBUG_PHYS", "0") == "1":
-                 print(f"[NABLA_DEBUG_PHYS] broadcast_to_physical.jvp_rule: lifted target_shape={target_shape}")
-
         return [broadcast_to_physical(tx, target_shape)]
 
     def _transform_shard_kwargs(
