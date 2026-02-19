@@ -317,7 +317,7 @@ for step in range(50):
 # All transforms compose freely with each other:
 # `compile(vmap(grad(f)))`, `jacfwd(jacrev(f))`, etc.
 #
-# **Next:** [05a_transformer_pytorch.py](05a_transformer_pytorch.py)
+# **Next:** [05a_transformer_pytorch](05a_transformer_pytorch)
 # — Building and training a Transformer.
 
 # %%

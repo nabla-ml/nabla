@@ -1,5 +1,7 @@
 {% extends "sphinx_book_theme/layout.html" %}
 
+{%- set title_plain = title|striptags|trim -%}
+
 {%- set page_description -%}
 {%- if pagename == 'index' -%}
 Nabla is a high-performance Python ML framework with automatic differentiation, JIT compilation, SPMD sharding, and GPU acceleration built on Mojo and MAX. A fast JAX alternative with LoRA/QLoRA fine-tuning support.
@@ -18,11 +20,11 @@ SPMD sharding API for Nabla: DeviceMesh, PartitionSpec, and automatic tensor sha
 {%- elif 'testing' in pagename -%}
 Testing utilities for Nabla ML: assert_allclose for cross-framework numeric validation and batch_realize for pytree tensor realization.
 {%- elif 'api/' in pagename -%}
-API reference for {{ title }} in the Nabla ML framework. Functions, classes, and examples for high-performance machine learning with Mojo.
+API reference for {{ title_plain }} in the Nabla ML framework. Functions, classes, and examples for high-performance machine learning with Mojo.
 {%- elif 'tutorials/' in pagename -%}
-{{ title }} — step-by-step Nabla ML tutorial with code examples for automatic differentiation, GPU training, and distributed computing.
+{{ title_plain }} — step-by-step Nabla ML tutorial with code examples for automatic differentiation, GPU training, and distributed computing.
 {%- else -%}
-{{ title }} — Nabla ML high-performance framework for automatic differentiation, JIT compilation, SPMD sharding, and GPU acceleration.
+{{ title_plain }} — Nabla ML high-performance framework for automatic differentiation, JIT compilation, SPMD sharding, and GPU acceleration.
 {%- endif -%}
 {%- endset -%}
 
@@ -32,26 +34,29 @@ Nabla ML — High-Performance Autodiff & Distributed ML in Python
 {%- elif 'finetune' in pagename -%}
 LoRA & QLoRA Fine-Tuning API — Nabla ML
 {%- elif 'api/' in pagename -%}
-{{ title }} API Reference — Nabla ML
+{{ title_plain }} API Reference — Nabla ML
 {%- elif 'tutorials/' in pagename -%}
-{{ title }} Tutorial — Nabla ML
+{{ title_plain }} Tutorial — Nabla ML
 {%- else -%}
-{{ title }} — Nabla ML
+{{ title_plain }} — Nabla ML
 {%- endif -%}
 {%- endset -%}
+
+{%- set page_description_plain = page_description|striptags|trim -%}
+{%- set page_title_plain = page_title|striptags|trim -%}
 
 {%- set base_url = "https://www.nablaml.com/" -%}
 
 {%- block extrahead %}
 <!-- SEO Meta Tags -->
-<meta name="description" content="{{ page_description|trim }}" />
-<meta name="keywords" content="nabla, machine learning framework, automatic differentiation, autodiff, JIT compilation, GPU computing, SPMD sharding, distributed training, deep learning, Mojo language, MAX engine, JAX alternative, PyTorch alternative, LoRA, QLoRA, fine-tuning, tensor operations, neural networks, pipeline parallelism, model parallelism, vmap, grad, {{ title|lower }}" />
+<meta name="description" content="{{ page_description_plain|e }}" />
+<meta name="keywords" content="nabla, machine learning framework, automatic differentiation, autodiff, JIT compilation, GPU computing, SPMD sharding, distributed training, deep learning, Mojo language, MAX engine, JAX alternative, PyTorch alternative, LoRA, QLoRA, fine-tuning, tensor operations, neural networks, pipeline parallelism, model parallelism, vmap, grad, {{ title_plain|lower|e }}" />
 <meta name="author" content="Nabla ML" />
 <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
 <meta name="googlebot" content="index, follow" />
 
 <!-- Open Graph Meta Tags -->
-<meta property="og:title" content="{{ page_title|trim }}" />
+<meta property="og:title" content="{{ page_title_plain|e }}" />
 <meta property="og:type" content="{% if 'api/' in pagename %}article{% else %}website{% endif %}" />
 {% if pagename == 'index' %}
 <meta property="og:url" content="{{ base_url }}" />
@@ -62,14 +67,14 @@ LoRA & QLoRA Fine-Tuning API — Nabla ML
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
 <meta property="og:image:alt" content="Nabla ML — High-Performance Machine Learning Framework" />
-<meta property="og:description" content="{{ page_description|trim }}" />
+<meta property="og:description" content="{{ page_description_plain|e }}" />
 <meta property="og:site_name" content="Nabla ML" />
 <meta property="og:locale" content="en_US" />
 
 <!-- Twitter Card Meta Tags -->
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="{{ page_title|trim }}" />
-<meta name="twitter:description" content="{{ page_description|trim }}" />
+<meta name="twitter:title" content="{{ page_title_plain|e }}" />
+<meta name="twitter:description" content="{{ page_description_plain|e }}" />
 <meta name="twitter:image" content="{{ base_url }}_static/default-image.png" />
 <meta name="twitter:site" content="@nablaml" />
 
@@ -101,7 +106,7 @@ LoRA & QLoRA Fine-Tuning API — Nabla ML
   "applicationSubCategory": "Machine Learning Framework",
   "operatingSystem": "Linux, macOS",
   "url": "{{ base_url }}",
-  "description": "{{ page_description|trim }}",
+  "description": {{ page_description_plain|tojson }},
   "softwareVersion": "{{ release }}",
   "dateModified": "{{ build_date }}",
   "license": "https://github.com/nabla-ml/nabla/blob/main/LICENSE",
@@ -115,9 +120,9 @@ LoRA & QLoRA Fine-Tuning API — Nabla ML
   },
   {%- else -%}
   "@type": "TechArticle",
-  "headline": "{{ page_title|trim }}",
+  "headline": {{ page_title_plain|tojson }},
   "url": "{{ base_url }}{{ pagename }}.html",
-  "description": "{{ page_description|trim }}",
+  "description": {{ page_description_plain|tojson }},
   "dateModified": "{{ build_date }}",
   "proficiencyLevel": "{% if 'tutorials/' in pagename %}Beginner{% else %}Expert{% endif %}",
   {%- endif %}
@@ -160,7 +165,7 @@ LoRA & QLoRA Fine-Tuning API — Nabla ML
     {
       "@type": "ListItem",
       "position": 3,
-      "name": "{{ title }}",
+      "name": "{{ title_plain|e }}",
       "item": "{{ base_url }}{{ pagename }}.html"
     }
     {% endif %}
@@ -175,7 +180,7 @@ LoRA & QLoRA Fine-Tuning API — Nabla ML
     {
       "@type": "ListItem",
       "position": 3,
-      "name": "{{ title }}",
+      "name": "{{ title_plain|e }}",
       "item": "{{ base_url }}{{ pagename }}.html"
     }
     {% endif %}

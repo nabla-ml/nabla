@@ -8,6 +8,16 @@ Demonstrates: 4-stage inference pipeline, explicit graph tracing,
 comparison with sequential NumPy reference.
 """
 
+# %% [markdown]
+# # Example 8: Pipeline Parallel Inference
+#
+# This example focuses on inference-only execution:
+# - 4-stage GPipe-style forward pipeline
+# - staged communication via `ppermute`
+# - output parity checks against sequential NumPy
+
+# %%
+
 import numpy as np
 
 import nabla as nb

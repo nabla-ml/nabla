@@ -193,7 +193,7 @@ for step in range(100):
 # Both styles are fully supported in Nabla. Choose the one that fits your
 # mental model!
 #
-# **Next:** [04_transforms_and_compile.py](04_transforms_and_compile.py)
+# **Next:** [04_transforms_and_compile](04_transforms_and_compile)
 # — Advanced transforms (vmap, jacrev, jacfwd) and `@nb.compile`.
 
 # %%

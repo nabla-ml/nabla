@@ -261,7 +261,7 @@ print("\nCompiled step executes forward + backward + optimizer in a single MAX g
 # | Cross-entropy | `nb.nn.functional.cross_entropy_loss(logits, targets)` |
 # | Compiled training | `@nb.compile` on the full train step |
 #
-# **Next:** [05b_transformer_jax.py](05b_transformer_jax.py)
+# **Next:** [05b_transformer_jax](05b_transformer_jax)
 # — The same Transformer, built in a purely functional style.
 
 # %%

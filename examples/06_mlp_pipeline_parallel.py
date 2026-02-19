@@ -8,6 +8,16 @@ Demonstrates: 4-stage pipeline, circular shifts with ppermute, vmap over stages,
 gradient computation compared against JAX reference.
 """
 
+# %% [markdown]
+# # Example 6: MLP Pipeline Parallelism (GPipe)
+#
+# This example demonstrates a minimal pipeline-parallel training setup:
+# - 4 pipeline stages and micro-batching
+# - stage-to-stage communication with `ppermute`
+# - gradient validation against a JAX reference
+
+# %%
+
 import numpy as np
 from max.dtype import DType
 

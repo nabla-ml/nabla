@@ -12,6 +12,16 @@ Trains a deep MLP on a complex sine curve. Compares:
 Demonstrates compilation speedup and performance parity with JAX.
 """
 
+# %% [markdown]
+# # Example 9: Compile vs Eager vs JAX
+#
+# This benchmark-style example compares three modes:
+# - Nabla compiled training (`@nb.compile`)
+# - Nabla eager training
+# - JAX `@jit` training (when JAX is installed)
+
+# %%
+
 import time
 
 import numpy as np

@@ -343,7 +343,7 @@ print(f"True weights:    {w_true}")
 # | `jacfwd(f)` | Any fn | Full Jacobian | Few inputs |
 # | Compose! | — | Hessians, etc. | Higher-order derivatives |
 #
-# **Next:** [03a_mlp_training_pytorch.py](03a_mlp_training_pytorch.py)
+# **Next:** [03a_mlp_training_pytorch](03a_mlp_training_pytorch)
 # — Training an MLP with Nabla's PyTorch-style API.
 
 # %%

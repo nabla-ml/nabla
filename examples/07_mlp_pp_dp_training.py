@@ -8,6 +8,16 @@ Demonstrates: 2D mesh (dp=2, pp=4), sharding weights on pp axis, sharding data o
 combined PP+DP gradient computation compared against JAX.
 """
 
+# %% [markdown]
+# # Example 7: 2D Parallel Training (PP + DP)
+#
+# This example extends pipeline parallelism with data parallelism:
+# - a 2D device mesh (`dp`, `pp`)
+# - sharded parameters and sharded batches
+# - correctness checks against a JAX baseline
+
+# %%
+
 import numpy as np
 from max.dtype import DType
 

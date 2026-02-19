@@ -8,6 +8,16 @@ This example trains only a LoRA adapter on top of a frozen linear weight and
 verifies checkpoint round-trip correctness.
 """
 
+# %% [markdown]
+# # Example 10: LoRA Fine-Tuning MVP
+#
+# This example shows a minimal parameter-efficient fine-tuning workflow:
+# - keep base weights frozen
+# - train only LoRA adapters
+# - save and reload a finetune checkpoint
+
+# %%
+
 from __future__ import annotations
 
 import shutil

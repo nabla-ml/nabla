@@ -8,6 +8,16 @@ This v1 uses NF4 quantization with uint8 index storage (unpacked) and trains
 LoRA adapters on top of frozen quantized weights.
 """
 
+# %% [markdown]
+# # Example 11: QLoRA Fine-Tuning MVP
+#
+# This example mirrors LoRA fine-tuning with quantized base weights:
+# - NF4 quantization of frozen weights
+# - LoRA adapter training on quantized weights
+# - quick quality checks (loss drop + quantization error)
+
+# %%
+
 from __future__ import annotations
 
 import numpy as np

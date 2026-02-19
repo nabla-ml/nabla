@@ -183,7 +183,7 @@ for step in range(50):
 # | Optimizer init | `opt_state = nb.nn.optim.adamw_init(model)` |
 # | Optimizer step | `model, opt_state = nb.nn.optim.adamw_update(...)` |
 #
-# **Next:** [03b_mlp_training_jax.py](03b_mlp_training_jax.py) — the same
+# **Next:** [03b_mlp_training_jax](03b_mlp_training_jax) — the same
 # MLP trained in a purely functional (JAX-like) style.
 
 # %%

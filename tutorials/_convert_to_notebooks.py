@@ -15,9 +15,22 @@ Usage:
 import json
 import re
 import sys
+import uuid
 from pathlib import Path
 
-TUTORIALS_DIR = Path(__file__).parent
+ROOT_DIR = Path(__file__).resolve().parent.parent
+EXAMPLES_DIR = ROOT_DIR / "examples"
+DOCS_TUTORIALS_DIR = ROOT_DIR / "docs" / "tutorials"
+
+ORDERED_TUTORIALS = [
+    "01_tensors_and_ops",
+    "02_autodiff",
+    "03a_mlp_training_pytorch",
+    "03b_mlp_training_jax",
+    "04_transforms_and_compile",
+    "05a_transformer_pytorch",
+    "05b_transformer_jax",
+]
 
 
 def py_to_notebook(py_path: Path) -> dict:
@@ -58,6 +71,7 @@ def py_to_notebook(py_path: Path) -> dict:
                 cells.append(
                     {
                         "cell_type": "markdown",
+                        "id": uuid.uuid4().hex[:8],
                         "metadata": {},
                         "source": source,
                     }
@@ -76,6 +90,7 @@ def py_to_notebook(py_path: Path) -> dict:
                 cells.append(
                     {
                         "cell_type": "code",
+                        "id": uuid.uuid4().hex[:8],
                         "execution_count": None,
                         "metadata": {},
                         "outputs": [],
@@ -134,17 +149,20 @@ def py_to_notebook(py_path: Path) -> dict:
 
 
 def main():
-    tutorial_files = sorted(TUTORIALS_DIR.glob("[0-9]*.py"))
+    tutorial_files = [EXAMPLES_DIR / f"{name}.py" for name in ORDERED_TUTORIALS]
+    tutorial_files = [path for path in tutorial_files if path.exists()]
 
     if not tutorial_files:
-        print("No tutorial .py files found!")
+        print("No tutorial .py files found in examples/!")
         sys.exit(1)
 
-    print(f"Converting {len(tutorial_files)} tutorial(s) to notebooks...\n")
+    DOCS_TUTORIALS_DIR.mkdir(parents=True, exist_ok=True)
+
+    print(f"Converting {len(tutorial_files)} tutorial(s) from examples/ to docs/tutorials/...\n")
 
     for py_path in tutorial_files:
         notebook = py_to_notebook(py_path)
-        nb_path = py_path.with_suffix(".ipynb")
+        nb_path = DOCS_TUTORIALS_DIR / f"{py_path.stem}.ipynb"
         nb_path.write_text(json.dumps(notebook, indent=1, ensure_ascii=False) + "\n")
         n_cells = len(notebook["cells"])
         print(f"  {py_path.name} → {nb_path.name} ({n_cells} cells)")

@@ -31,6 +31,21 @@ body,
     background-color: #000000 !important;
 }
 
+/* Slightly brighter code surfaces for readability on pure-black pages */
+html[data-theme="dark"] pre,
+html[data-theme="dark"] .highlight,
+html[data-theme="dark"] .highlight pre,
+html[data-theme="dark"] div[class*="highlight-"] {
+    background-color: #101010 !important;
+}
+
+html[data-theme="dark"] code,
+html[data-theme="dark"] tt,
+html[data-theme="dark"] kbd,
+html[data-theme="dark"] samp {
+    background-color: #151515 !important;
+}
+
 /* Hide ALL theme switcher elements */
 html .theme-switch-button,
 html .bd-theme-switch,

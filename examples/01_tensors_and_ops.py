@@ -320,7 +320,7 @@ print("Row sums:", nb.reduce_sum(probs, axis=-1))
 # All operations are **lazy** — they build a computation graph that's evaluated
 # on demand. This enables powerful optimizations when combined with `@nb.compile`.
 #
-# **Next:** [02_autodiff.py](02_autodiff.py) — Automatic differentiation with Nabla.
+# **Next:** [02_autodiff](02_autodiff) — Automatic differentiation with Nabla.
 
 # %%
 print("\n✅ Tutorial 01 completed!")
