@@ -32,6 +32,13 @@ MICRO_BATCHES = 8
 MICRO_BATCH_SIZE = 4
 DIM = 16
 
+# %% [markdown]
+# ## 1. Define Inference Pipeline Helpers
+#
+# These helpers run staged forward-only pipeline execution.
+
+# %%
+
 
 def stage_compute(x, w):
     return ops.relu(ops.matmul(x, w))
@@ -63,6 +70,14 @@ def pipeline_inference_loop(
         results.append(res)
 
     return ops.stack(results, axis=0), current_state
+
+
+# %% [markdown]
+# ## 2. Run Inference Parity Check
+#
+# Trace the pipeline graph and compare outputs to a sequential NumPy baseline.
+
+# %%
 
 
 def test_pp_inference_clean():

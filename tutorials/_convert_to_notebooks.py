@@ -22,7 +22,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 EXAMPLES_DIR = ROOT_DIR / "examples"
 DOCS_TUTORIALS_DIR = ROOT_DIR / "docs" / "tutorials"
 
-ORDERED_TUTORIALS = [
+ORDERED_NOTEBOOKS = [
     "01_tensors_and_ops",
     "02_autodiff",
     "03a_mlp_training_pytorch",
@@ -30,17 +30,99 @@ ORDERED_TUTORIALS = [
     "04_transforms_and_compile",
     "05a_transformer_pytorch",
     "05b_transformer_jax",
+    "06_mlp_pipeline_parallel",
+    "07_mlp_pp_dp_training",
+    "08_mlp_pipeline_inference",
+    "09_jax_comparison_compiled",
+    "10_lora_finetuning_mvp",
+    "11_qlora_finetuning_mvp",
 ]
 
 
-def py_to_notebook(py_path: Path) -> dict:
+def _normalize_notebook_link(target: str) -> str:
+    """Normalize internal markdown link targets to notebook-safe local links.
+
+    Example:
+    - "03a_mlp_training_pytorch.py" -> "03a_mlp_training_pytorch"
+    - "./03a_mlp_training_pytorch.ipynb#sec" -> "03a_mlp_training_pytorch#sec"
+    """
+    if not target:
+        return target
+
+    if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", target) or target.startswith("mailto:"):
+        return target
+    if target.startswith("#"):
+        return target
+
+    path_part, hash_part = (target.split("#", 1) + [""])[:2]
+    clean = Path(path_part).name
+
+    if clean.endswith(".py") or clean.endswith(".ipynb"):
+        clean = Path(clean).stem
+
+    if hash_part:
+        return f"{clean}#{hash_part}"
+    return clean
+
+
+def _normalize_and_validate_markdown_links(
+    md_lines: list[str], valid_targets: set[str], source_name: str
+) -> tuple[list[str], list[str]]:
+    """Normalize markdown links and collect broken internal links."""
+
+    broken: list[str] = []
+
+    def repl(match: re.Match[str]) -> str:
+        label = match.group(1)
+        original_target = match.group(2).strip()
+        normalized_target = _normalize_notebook_link(original_target)
+
+        # Validate only local links with concrete targets
+        if (
+            normalized_target
+            and not normalized_target.startswith("#")
+            and not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", normalized_target)
+            and not normalized_target.startswith("mailto:")
+        ):
+            local_path = normalized_target.split("#", 1)[0]
+            if local_path and local_path not in valid_targets:
+                broken.append(
+                    f"{source_name}: unresolved local link '{original_target}' -> '{normalized_target}'"
+                )
+
+        return f"[{label}]({normalized_target})"
+
+    pattern = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
+    normalized = [pattern.sub(repl, line) for line in md_lines]
+    return normalized, broken
+
+
+def _validate_python_sources(py_paths: list[Path]) -> None:
+    """Validate syntax of source files before notebook generation."""
+    errors: list[str] = []
+    for path in py_paths:
+        try:
+            source = path.read_text(encoding="utf-8")
+            compile(source, str(path), "exec")
+        except SyntaxError as exc:
+            errors.append(
+                f"{path.name}: line {exc.lineno}, col {exc.offset}: {exc.msg}"
+            )
+
+    if errors:
+        joined = "\n".join(errors)
+        raise SyntaxError(f"Python syntax validation failed:\n{joined}")
+
+
+def py_to_notebook(py_path: Path, valid_targets: set[str]) -> tuple[dict, list[str]]:
     """Convert a .py file with `# %%` markers to a Jupyter notebook dict."""
-    content = py_path.read_text()
+    content = py_path.read_text(encoding="utf-8")
     lines = content.split("\n")
 
     cells = []
     current_cell_lines: list[str] = []
     current_cell_type: str | None = None
+    broken_links: list[str] = []
 
     def flush_cell():
         nonlocal current_cell_lines, current_cell_type
@@ -64,6 +146,11 @@ def py_to_notebook(py_path: Path) -> dict:
                 md_lines.pop(0)
             while md_lines and md_lines[-1].strip() == "":
                 md_lines.pop()
+
+            md_lines, local_broken = _normalize_and_validate_markdown_links(
+                md_lines, valid_targets=valid_targets, source_name=py_path.name
+            )
+            broken_links.extend(local_broken)
 
             if md_lines:
                 source = [line + "\n" for line in md_lines]
@@ -145,11 +232,11 @@ def py_to_notebook(py_path: Path) -> dict:
         },
         "cells": cells,
     }
-    return notebook
+    return notebook, broken_links
 
 
 def main():
-    tutorial_files = [EXAMPLES_DIR / f"{name}.py" for name in ORDERED_TUTORIALS]
+    tutorial_files = [EXAMPLES_DIR / f"{name}.py" for name in ORDERED_NOTEBOOKS]
     tutorial_files = [path for path in tutorial_files if path.exists()]
 
     if not tutorial_files:
@@ -158,14 +245,42 @@ def main():
 
     DOCS_TUTORIALS_DIR.mkdir(parents=True, exist_ok=True)
 
+    # Safety checks before conversion
+    _validate_python_sources(tutorial_files)
+
+    marker_warnings: list[str] = []
+    for path in tutorial_files:
+        marker_count = sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.strip().startswith("# %%"))
+        if marker_count < 2:
+            marker_warnings.append(
+                f"{path.name}: only {marker_count} cell marker(s); consider splitting into more notebook cells"
+            )
+
+    if marker_warnings:
+        print("⚠️  Cell structure warnings:")
+        for warning in marker_warnings:
+            print(f"   - {warning}")
+        print()
+
+    valid_targets = {path.stem for path in tutorial_files}
+
     print(f"Converting {len(tutorial_files)} tutorial(s) from examples/ to docs/tutorials/...\n")
 
+    broken_links: list[str] = []
     for py_path in tutorial_files:
-        notebook = py_to_notebook(py_path)
+        notebook, file_broken_links = py_to_notebook(py_path, valid_targets=valid_targets)
+        broken_links.extend(file_broken_links)
         nb_path = DOCS_TUTORIALS_DIR / f"{py_path.stem}.ipynb"
         nb_path.write_text(json.dumps(notebook, indent=1, ensure_ascii=False) + "\n")
         n_cells = len(notebook["cells"])
         print(f"  {py_path.name} → {nb_path.name} ({n_cells} cells)")
+
+    if broken_links:
+        joined = "\n".join(f"  - {entry}" for entry in broken_links)
+        raise ValueError(
+            "Notebook conversion aborted due to broken internal links after normalization:\n"
+            f"{joined}"
+        )
 
     print(f"\nDone! {len(tutorial_files)} notebooks created.")
 

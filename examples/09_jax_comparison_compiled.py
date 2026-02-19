@@ -38,6 +38,11 @@ try:
 except ImportError:
     HAS_JAX = False
 
+# %% [markdown]
+# ## 1. Dataset and Parameter Initialization
+
+# %%
+
 np.random.seed(42)
 
 n_samples = 500
@@ -114,6 +119,12 @@ def train_step_eager(params, x, y):
         all_outputs.extend(layer_params.values())
     nb.realize_all(*all_outputs)
     return loss, new_params
+
+
+# %% [markdown]
+# ## 2. Nabla Benchmarks (Compiled vs Eager)
+
+# %%
 
 
 print("=" * 70)
@@ -213,6 +224,10 @@ else:
     print("⚠ Eager MAX Graph and compiled differ!")
 
 # Test 3: JAX JIT comparison
+# %% [markdown]
+# ## 3. JAX Comparison (Optional)
+
+# %%
 if HAS_JAX:
     print()
     print("=" * 70)
@@ -303,6 +318,10 @@ print(
 )
 
 print()
+# %% [markdown]
+# ## 4. Summary
+
+# %%
 print("=" * 70)
 print("SUMMARY")
 print("=" * 70)

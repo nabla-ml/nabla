@@ -24,6 +24,11 @@ import numpy as np
 
 import nabla as nb
 
+# %% [markdown]
+# ## 1. Synthetic Data Helper
+
+# %%
+
 
 def make_regression_data(
     n_samples: int, in_dim: int, out_dim: int
@@ -38,6 +43,12 @@ def make_regression_data(
 
     y = x @ (w_base + delta)
     return x, y.astype(np.float32), w_base.astype(np.float32)
+
+
+# %% [markdown]
+# ## 2. Train QLoRA Adapter
+
+# %%
 
 
 def main() -> None:

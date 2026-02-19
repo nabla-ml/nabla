@@ -20,7 +20,7 @@ This folder is the single source of truth for runnable tutorial-style `.py` exam
 
 ## Notes
 
-- The notebook tutorials in `docs/tutorials/` are generated from the first 7 files above.
+- The notebook files in `docs/tutorials/` are generated from the ordered list above.
 - Run the converter with:
 
 ```bash

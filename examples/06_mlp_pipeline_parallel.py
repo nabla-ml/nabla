@@ -34,6 +34,13 @@ MICRO_BATCHES = 8
 MICRO_BATCH_SIZE = 4
 DIM = 16
 
+# %% [markdown]
+# ## 1. Define Pipeline Primitives
+#
+# These helpers implement one pipeline step and the full streamed pipeline loop.
+
+# %%
+
 
 def stage_compute(x, w, b):
     return ops.relu(ops.matmul(x, w) + b)
@@ -74,6 +81,14 @@ def pipeline_loop(
         results.append(res)
 
     return ops.stack(results, axis=0), current_state
+
+
+# %% [markdown]
+# ## 2. Run Gradient Parity Check
+#
+# Build sharded tensors, compute gradients, and compare against JAX.
+
+# %%
 
 
 def test_pp_grad_with_bias():

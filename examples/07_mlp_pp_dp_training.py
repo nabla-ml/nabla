@@ -36,6 +36,13 @@ MICRO_BATCHES = 4
 MICRO_BATCH_SIZE = 4  # Total batch size per step
 DIM = 16
 
+# %% [markdown]
+# ## 1. Define 2D Pipeline Helpers
+#
+# These functions implement one pp+dp pipeline step and the loop over micro-batches.
+
+# %%
+
 
 def stage_compute(x, w, b):
     return ops.relu(ops.matmul(x, w) + b)
@@ -76,6 +83,14 @@ def pipeline_loop(
         )
         results.append(res)
     return ops.stack(results, axis=0), current_state
+
+
+# %% [markdown]
+# ## 2. Run 2D Gradient Check
+#
+# Build sharded inputs/weights and compare gradients with a JAX reference.
+
+# %%
 
 
 def test_pp_dp_grad():

@@ -13,4 +13,10 @@ Hands-on Jupyter notebooks for learning Nabla from basics to compiled training l
 04_transforms_and_compile
 05a_transformer_pytorch
 05b_transformer_jax
+06_mlp_pipeline_parallel
+07_mlp_pp_dp_training
+08_mlp_pipeline_inference
+09_jax_comparison_compiled
+10_lora_finetuning_mvp
+11_qlora_finetuning_mvp
 ```
