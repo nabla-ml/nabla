@@ -400,7 +400,7 @@ class ComputeGraph:
         memo: dict[int, int] = {}
         str_memo: dict[str, int] = {}
         per_target_fps = [_fingerprint_obj(k, memo, str_memo) for k in target_keys]
-        cache_key = tuple(sorted(per_target_fps)) if per_target_fps else None
+        cache_key = tuple(per_target_fps) if per_target_fps else None
 
         if DEBUG_LAZY_EVAL:
             fp_time = time.perf_counter() - fp_start

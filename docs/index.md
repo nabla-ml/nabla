@@ -43,6 +43,22 @@ pip install -e ".[dev]"
 
 ---
 
+## Getting Started Tutorials
+
+Start with the guided notebooks in order:
+
+1. [01 — Tensors and Ops](tutorials/01_tensors_and_ops)
+2. [02 — Autodiff](tutorials/02_autodiff)
+3. [03a — MLP Training (PyTorch-Style)](tutorials/03a_mlp_training_pytorch)
+4. [03b — MLP Training (JAX-Style)](tutorials/03b_mlp_training_jax)
+5. [04 — Transforms and Compile](tutorials/04_transforms_and_compile)
+6. [05a — Transformer (PyTorch-Style)](tutorials/05a_transformer_pytorch)
+7. [05b — Transformer (JAX-Style)](tutorials/05b_transformer_jax)
+
+Or browse the full list at [Tutorials](tutorials/index).
+
+---
+
 ## Feature Showcase
 
 ### 1. Tensors & Autodiff

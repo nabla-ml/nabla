@@ -73,7 +73,8 @@ html_static_path = ["_static"]
 
 # Patterns to exclude from the build process.
 exclude_patterns = [
-    "_build", "Thumbs.db", ".DS_Store", "**/gen_modules/**", "README.md", "scripts/README.md"
+    "_build", "Thumbs.db", ".DS_Store", "**/gen_modules/**", "README.md", "scripts/README.md",
+    "tutorials/index.rst",
 ]
 
 # =============================================================================

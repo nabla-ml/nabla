@@ -1,13 +1,16 @@
 # Tutorials
 
-Interactive Jupyter notebooks to learn Nabla's features and capabilities through hands-on examples. All notebooks are preliminary and subject to change.
+Hands-on Jupyter notebooks for learning Nabla from basics to compiled training loops.
 
 ```{toctree}
-:maxdepth: 2
-:caption: Interactive Notebooks
+:maxdepth: 1
+:caption: Tutorial Notebooks
 
-autodiff_with_nabla
-mlp_training
-transformer_training
-transforms_uncovered
+01_tensors_and_ops
+02_autodiff
+03a_mlp_training_pytorch
+03b_mlp_training_jax
+04_transforms_and_compile
+05a_transformer_pytorch
+05b_transformer_jax
 ```

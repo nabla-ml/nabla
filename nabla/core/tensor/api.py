@@ -1496,7 +1496,11 @@ def realize_all(*tensors: Tensor) -> tuple[Tensor, ...]:
         >>> b = ops.shard(b_data, mesh, spec)
         >>> w, b = nb.realize_all(w, b)  # Single compilation instead of two
     """
+    from ... import config as nabla_config
     from ..graph.engine import GRAPH
+
+    if nabla_config.EAGER_MAX_GRAPH:
+        return tensors
 
     # Filter to only unrealized tensors
     unrealized = [t for t in tensors if isinstance(t, Tensor) and not t.real]
