@@ -40,11 +40,9 @@ label[for="pst-primary-sidebar-checkbox"],
 </style>
 
 ::::{div} landing-hero
-# Nabla
-
-**High-Performance Distributed ML**
-
-Nabla is a JAX-inspired autodiff library with factor-based SPMD sharding, built on [Mojo & MAX](https://www.modular.com/max).
+<p class="landing-eyebrow">Nabla ML</p>
+<img src="_static/nabla-logo.png" alt="Nabla" class="landing-wordmark" />
+<p class="landing-subtitle">High-performance autodiff and distributed ML, inspired by JAX and powered by Mojo &amp; MAX.</p>
 
 ```bash
 pip install --pre --extra-index-url https://whl.modular.com/nightly/simple/ modular nabla-ml

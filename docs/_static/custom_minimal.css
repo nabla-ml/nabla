@@ -18,6 +18,45 @@ html[data-theme="dark"] {
     --pst-color-background: #000000;
     --pst-color-on-background: #000000;
     --pst-color-surface: #000000;
+    /* Tame all border/divider lines to a subtle dark grey */
+    --pst-color-border: #2a2a2a;
+    --pst-color-shadow: rgba(0, 0, 0, 0.5);
+}
+
+/* Footer and main-content dividers */
+footer.bd-footer-content,
+.bd-footer-content {
+    border-top: 1px solid #2a2a2a !important;
+}
+
+/* Notebook input/output cell borders */
+div.nbinput.container,
+div.nboutput.container {
+    border-color: #2a2a2a !important;
+}
+
+div.nbinput.container div.input_area,
+div.nboutput.container div.output_area {
+    border-color: #2a2a2a !important;
+}
+
+/* HR separators and table borders throughout */
+hr,
+.bd-content hr,
+table.docutils td,
+table.docutils th {
+    border-color: #2a2a2a !important;
+}
+
+/* Sidebar dividers */
+.bd-sidebar-primary .sidebar-primary-items__start {
+    border-top-color: #2a2a2a !important;
+}
+
+/* Any remaining #ccc or white-ish borders */
+html[data-theme="dark"] [style*="border"][style*="#ccc"],
+html[data-theme="dark"] [style*="border"][style*="white"] {
+    border-color: #2a2a2a !important;
 }
 
 html,
@@ -32,13 +71,24 @@ body,
 }
 
 /* Slightly brighter code surfaces for readability on pure-black pages */
-html[data-theme="dark"] pre,
-html[data-theme="dark"] .highlight,
-html[data-theme="dark"] .highlight pre,
-html[data-theme="dark"] div[class*="highlight-"] {
+html[data-theme="dark"] div.highlight {
     background-color: #1a1a1a !important;
     border: 1px solid #2f2f2f !important;
     border-radius: 8px;
+}
+
+html[data-theme="dark"] div[class^="highlight-"] {
+    background-color: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    margin-top: 1rem !important;
+    margin-bottom: 1rem !important;
+}
+
+html[data-theme="dark"] div.highlight pre {
+    background-color: transparent !important;
+    border: none !important;
+    margin: 0 !important;
 }
 
 html[data-theme="dark"] code,
@@ -58,6 +108,166 @@ html .btn-theme,
 html .theme-toggle {
     display: none !important;
     visibility: hidden !important;
+}
+
+/* Remove the notebook prompt labels (In []: / Out []:) — copy button is already inside the cell */
+div.nbinput.container div.prompt,
+div.nboutput.container div.prompt {
+    display: none !important;
+}
+
+/* Compensate: let input/output area take full width now that prompt is gone */
+div.nbinput.container div.input_area,
+div.nboutput.container div.output_area {
+    width: 100% !important;
+    flex: 1 1 100% !important;
+}
+
+/* GitHub direct-link button in topbar */
+.nabla-gh-link {
+    display: inline-flex !important;
+    align-items: center;
+    color: #e0e0e0 !important;
+    text-decoration: none !important;
+    font-size: 1.25rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: 6px;
+}
+
+.nabla-gh-link:hover {
+    color: #ffffff !important;
+    background: rgba(255,255,255,0.07) !important;
+    text-decoration: none !important;
+}
+.bd-header {
+    min-height: 58px;
+    background-color: #000000 !important;
+    border-bottom: 1px solid #1f1f1f;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 1030 !important;
+}
+
+/* Remove download, fullscreen, and secondary-sidebar toggle from header */
+.dropdown-download-buttons,
+.btn-fullscreen-button,
+.secondary-toggle,
+.sidebar-toggle.secondary-toggle {
+    display: none !important;
+}
+
+/* Remove sidebar logo (navigate home only via topbar brand) */
+.bd-sidebar-primary .navbar-brand.logo {
+    display: none !important;
+}
+
+/* Remove search field from sidebar (search is in the topbar) */
+.bd-sidebar-primary .search-button-field,
+.bd-sidebar-primary .sidebar-primary-item:has(.search-button-field) {
+    display: none !important;
+}
+
+.bd-header button.sidebar-toggle,
+.bd-header button.search-button {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    color: #e0e0e0 !important;
+    background: transparent !important;
+    border: none !important;
+}
+
+.bd-header button.sidebar-toggle:hover,
+.bd-header button.search-button:hover {
+    color: #ffffff !important;
+}
+
+.nabla-sidebar-toggle {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    color: #e0e0e0 !important;
+    background: transparent !important;
+    border: none !important;
+    font-size: 1.1rem;
+    padding: 0.35rem 0.45rem;
+    cursor: pointer;
+    border-radius: 6px;
+}
+
+.nabla-sidebar-toggle:hover {
+    color: #ffffff !important;
+    background: rgba(255,255,255,0.07) !important;
+}
+
+.nabla-search-link {
+    display: inline-flex !important;
+    align-items: center;
+    color: #e0e0e0 !important;
+    text-decoration: none !important;
+    font-size: 1.1rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: 6px;
+}
+
+.nabla-search-link:hover {
+    color: #ffffff !important;
+    background: rgba(255,255,255,0.07) !important;
+    text-decoration: none !important;
+}
+
+.nabla-topbar {
+    width: 100%;
+    max-width: 100%;
+    padding: 0.75rem 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.nabla-topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.nabla-topbar-brand {
+    font-weight: 700;
+    font-size: 1.15rem;
+    color: #ffffff !important;
+    text-decoration: none !important;
+}
+
+.nabla-topbar-brand:hover {
+    color: #cccccc !important;
+}
+
+.nabla-topbar-actions {
+    display: flex;
+    align-items: center;
+}
+
+.nabla-topbar-actions .article-header-buttons {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.nabla-topbar-actions .btn {
+    color: #e0e0e0 !important;
+}
+
+.nabla-topbar-actions .btn:hover {
+    color: #ffffff !important;
+}
+
+.bd-header-article {
+    display: none !important;
+}
+
+/* Remove logo from left sidebar */
+.bd-sidebar-primary .sidebar-primary-item .navbar-brand.logo img {
+    display: none !important;
 }
 
 /* Only essential notebook styling for Google Colab and download buttons */
@@ -133,6 +343,8 @@ html .theme-toggle {
 .home-landing .bd-main .bd-content {
     padding-left: 0 !important;
     padding-right: 0 !important;
+    position: relative;
+    z-index: 1;
 }
 
 .home-landing .bd-article-container {
@@ -140,42 +352,106 @@ html .theme-toggle {
     margin: 0 auto !important;
 }
 
+.home-landing .bd-main {
+    position: relative;
+    overflow: hidden;
+}
+
+.home-landing .bd-main::before,
+.home-landing .bd-main::after {
+    content: "";
+    position: absolute;
+    left: -18%;
+    right: -18%;
+    height: 220px;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.28;
+    background: repeating-linear-gradient(
+        100deg,
+        rgba(255, 255, 255, 0.09) 0px,
+        rgba(255, 255, 255, 0.09) 1px,
+        transparent 1px,
+        transparent 18px
+    );
+}
+
+.home-landing .bd-main::before {
+    top: 48px;
+    transform: rotate(-4deg);
+    animation: landingFlowA 18s linear infinite;
+}
+
+.home-landing .bd-main::after {
+    top: 210px;
+    transform: rotate(3deg);
+    opacity: 0.18;
+    animation: landingFlowB 24s linear infinite;
+}
+
+@keyframes landingFlowA {
+    from {
+        background-position: 0 0;
+    }
+    to {
+        background-position: 280px 0;
+    }
+}
+
+@keyframes landingFlowB {
+    from {
+        background-position: 0 0;
+    }
+    to {
+        background-position: -340px 0;
+    }
+}
+
 .landing-hero {
     text-align: center;
-    padding: 6rem 0;
-}
-
-.landing-hero h1 {
-    font-size: 5rem !important;
-    margin-top: 0 !important;
-}
-
-.landing-hero p {
-    font-size: 1.6rem !important;
+    padding: 1.4rem 0 0.8rem;
 }
 
 .landing-hero div.highlight {
-    max-width: 700px;
-    margin: 2rem auto !important;
+    width: min(940px, 96%);
+    max-width: 940px;
+    margin: 1rem auto 0.2rem !important;
 }
 
-.home-landing h1 {
-    font-size: 4rem !important;
-    font-weight: 800 !important;
-    text-align: center !important;
-    margin-top: 4rem !important;
-    margin-bottom: 0 !important;
-    background: linear-gradient(135deg, #fff 0%, #888 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+.landing-hero div.highlight pre {
+    margin: 0;
+    padding: 0.9rem 1.05rem;
+    text-align: left;
+    overflow-x: auto;
+    white-space: pre;
+    line-height: 1.45;
 }
 
-.home-landing .section p:first-of-type,
-.home-landing .bd-content p:first-of-type {
-    font-size: 1.5rem !important;
-    text-align: center !important;
-    color: #aaa !important;
-    margin-bottom: 3rem !important;
+.landing-eyebrow {
+    margin: 0 0 0.45rem;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #9f9f9f;
+    font-weight: 600;
+}
+
+.landing-wordmark {
+    display: block !important;
+    width: min(300px, 90vw) !important;
+    max-width: 300px !important;
+    min-width: min(200px, 90vw) !important;
+    height: auto !important;
+    margin: 0.1rem auto 0.65rem !important;
+}
+
+.landing-subtitle {
+    max-width: 100%;
+    margin: 0.35rem auto 2rem;
+    font-size: clamp(1.2rem, 2.5vw, 1.5rem);
+    line-height: 1.55;
+    color: #b8b8b8;
+    font-family: Georgia, "Times New Roman", Times, serif;
 }
 
 .landing-grid .sd-card {
@@ -183,6 +459,7 @@ html .theme-toggle {
     border: 1px solid #222 !important;
     border-radius: 12px !important;
     transition: transform 0.2s ease, border-color 0.2s ease !important;
+    padding: 0.15rem;
 }
 
 .landing-grid .sd-card:hover {
@@ -190,10 +467,18 @@ html .theme-toggle {
     border-color: #444 !important;
 }
 
+.landing-grid .sd-card-title,
 .landing-grid .sd-card-header {
     background-color: transparent !important;
     font-weight: 600 !important;
-    font-size: 1.25rem !important;
+    font-size: 1.06rem !important;
+    letter-spacing: 0.01em;
+}
+
+.landing-grid .sd-card-text {
+    font-size: 0.97rem;
+    color: #b3b3b3;
+    line-height: 1.55;
 }
 
 
