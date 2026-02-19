@@ -159,9 +159,37 @@ class CompiledFunction(Generic[T]):
                 tensor_sigs.append(sig)
                 tensor_counter += 1
             else:
-                static_vals.append(x)
+                static_vals.append(self._make_hashable_static(x))
 
         return _CacheKey(tuple(tensor_sigs), tuple(static_vals), treedef)
+
+    def _make_hashable_static(self, value: Any) -> Any:
+        """Convert static cache-key values to hashable form."""
+        if isinstance(value, (str, bytes, int, float, bool, type(None))):
+            return value
+
+        if isinstance(value, tuple):
+            return tuple(self._make_hashable_static(v) for v in value)
+
+        if isinstance(value, list):
+            return tuple(self._make_hashable_static(v) for v in value)
+
+        if isinstance(value, dict):
+            return tuple(
+                sorted(
+                    (self._make_hashable_static(k), self._make_hashable_static(v))
+                    for k, v in value.items()
+                )
+            )
+
+        if isinstance(value, (set, frozenset)):
+            return frozenset(self._make_hashable_static(v) for v in value)
+
+        try:
+            hash(value)
+            return value
+        except TypeError:
+            return (type(value).__qualname__, repr(value))
 
     def _tensor_signature(
         self, tensor: Tensor, arg_idx: int
@@ -263,6 +291,13 @@ class CompiledFunction(Generic[T]):
             nabla_config.EAGER_MAX_GRAPH = True  # Ops build graph during trace
             nabla_config.VERIFY_EAGER_SHAPES = False  # Skip shape checks
 
+            # Start a fresh epoch so reused tensors cannot leak stale graph values
+            # from a previously reset graph region.
+            from ..core.graph import engine as _graph_engine
+
+            _graph_engine._GRAPH_EPOCH += 1
+            GRAPH.epoch = _graph_engine._GRAPH_EPOCH
+
             # Prepare graph with input types
             input_types = (
                 self._build_input_types(flat, tensor_indices)
@@ -337,8 +372,17 @@ class CompiledFunction(Generic[T]):
 
             all_graph_values = []
             for tensor in output_tensors:
+                if tensor._impl.graph_values_epoch != GRAPH.epoch:
+                    tensor._impl._graph_values = []
+
                 if not tensor._impl._graph_values:
+                    if not tensor.is_realized:
+                        GRAPH.evaluate(tensor)
                     GRAPH.add_input(tensor)  # Pass-through
+
+                if not tensor._impl._graph_values:
+                    raise RuntimeError(f"Output tensor {id(tensor)} has no graph values")
+
                 all_graph_values.extend(tensor._impl._graph_values)
 
             seed_out = ops.random._peek_seed()

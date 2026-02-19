@@ -55,6 +55,35 @@ class _LeafMarker:
 _LEAF = _LeafMarker()
 
 
+def _freeze_hashable(value: Any) -> Any:
+    """Recursively convert a value to a hashable representation."""
+    if isinstance(value, (str, bytes, int, float, bool, type(None))):
+        return value
+
+    if isinstance(value, tuple):
+        return tuple(_freeze_hashable(v) for v in value)
+
+    if isinstance(value, list):
+        return tuple(_freeze_hashable(v) for v in value)
+
+    if isinstance(value, dict):
+        return tuple(
+            sorted(
+                (_freeze_hashable(k), _freeze_hashable(v))
+                for k, v in value.items()
+            )
+        )
+
+    if isinstance(value, (set, frozenset)):
+        return frozenset(_freeze_hashable(v) for v in value)
+
+    try:
+        hash(value)
+        return value
+    except TypeError:
+        return (type(value).__qualname__, repr(value))
+
+
 class PyTreeDef:
     """Immutable definition of a pytree's structure."""
 
@@ -96,7 +125,7 @@ class PyTreeDef:
         )
 
     def __hash__(self) -> int:
-        return hash((self._kind, self._meta, self._children))
+        return hash((self._kind, _freeze_hashable(self._meta), self._children))
 
     def unflatten(self, leaves: list[Any]) -> Any:
         """Reconstruct pytree from leaves."""

@@ -113,9 +113,9 @@ print(f"Shape: {grads.shape}")
 
 # %%
 def neural_layer(x):
-    """A simple neural network layer: tanh(Wx + b)."""
+    """A simple neural network layer: tanh(xW + b)."""
     W = nb.Tensor.from_dlpack(
-        np.array([[1.0, -0.5], [0.3, 0.8], [-0.2, 0.6]], dtype=np.float32)
+        np.array([[1.0, 0.3, -0.2], [-0.5, 0.8, 0.6]], dtype=np.float32)
     )
     b = nb.Tensor.from_dlpack(np.array([0.1, -0.1, 0.2], dtype=np.float32))
     return nb.tanh(x @ W + b)

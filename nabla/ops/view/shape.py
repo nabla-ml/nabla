@@ -401,8 +401,11 @@ class SliceUpdateOp(Operation):
         for i, s in enumerate(start):
             if s < 0:
                 s += shape[i]
-            resolved_start.append(s)
+            resolved_start.append(int(s))
         resolved_start = tuple(resolved_start)
+
+        # Normalize size to plain int (shape dims may be Dim objects)
+        size = tuple(int(sz) for sz in size)
 
         batch_dims = x.batch_dims
         slices = [slice(None)] * batch_dims
@@ -472,8 +475,8 @@ class SliceUpdateOp(Operation):
             update_shape.append(int(update.shape[i]))
 
         for i in range(rank):
-            s = start[i]
-            sz = size[i]
+            s = int(start[i])
+            sz = int(size[i])
             # Handle potential negative start (though __call__ resolves it)
             # x.shape[i] might be a Dim object. We assume it converts to int validly here if needed,
             # or ops.pad handles it.
@@ -481,8 +484,8 @@ class SliceUpdateOp(Operation):
             # Let's try to access `.value` if it's a constant Dim, or cast to int.
             dim_len = int(x.shape[i])
 
-            before = s
-            after = dim_len - (s + sz)
+            before = int(s)
+            after = int(dim_len - (s + sz))
             paddings.extend([before, after])
 
             update_shape.append(int(sz))
@@ -589,8 +592,11 @@ class SliceTensorOp(Operation):
         for i, s in enumerate(start):
             if s < 0:
                 s += shape[i]
-            resolved_start.append(s)
+            resolved_start.append(int(s))
         resolved_start = tuple(resolved_start)
+
+        # Normalize size to plain int (shape dims may be Dim objects)
+        size = tuple(int(sz) for sz in size)
 
         batch_dims = x.batch_dims
         slices = [slice(None)] * batch_dims

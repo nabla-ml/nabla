@@ -251,7 +251,7 @@ opt_state = nb.nn.optim.adamw_init(params)
 
 # Count parameters
 from nabla import tree_leaves, Tensor
-n_params = sum(p.size() for p in tree_leaves(params) if isinstance(p, Tensor) and p.requires_grad)
+n_params = sum(p.numel() for p in tree_leaves(params) if isinstance(p, Tensor) and p.requires_grad)
 print(f"Model: {num_layers} layers, d_model={d_model}, heads={num_heads}")
 print(f"Total trainable parameters: {n_params}")
 

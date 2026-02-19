@@ -174,7 +174,7 @@ model = TransformerClassifier(
 )
 model.eval()  # Disable dropout
 
-n_params = sum(p.size() for p in model.parameters())
+n_params = sum(p.numel() for p in model.parameters())
 print(f"Model: {num_layers} encoder layers, d_model={d_model}, heads={num_heads}")
 print(f"Total parameters: {n_params}")
 

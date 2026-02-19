@@ -54,7 +54,7 @@ model = MLP(4, 32, 1)
 print(f"Model architecture:")
 print(f"  fc1: Linear({model.fc1.weight.shape})")
 print(f"  fc2: Linear({model.fc2.weight.shape})")
-print(f"  Total parameters: {sum(p.size() for p in model.parameters())}")
+print(f"  Total parameters: {sum(p.numel() for p in model.parameters())}")
 
 # %% [markdown]
 # ## 2. Create Synthetic Data
@@ -156,7 +156,7 @@ for i in range(5):
 # %%
 # Reset model
 model2 = MLP(4, 32, 1)
-optimizer = nb.nn.optim.AdamW(model2.parameters(), lr=1e-2)
+optimizer = nb.nn.optim.AdamW(model2, lr=1e-2)
 
 print(f"\nStateful AdamW training:")
 print(f"{'Step':<8} {'Loss':<12}")

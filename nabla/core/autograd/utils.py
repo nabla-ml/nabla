@@ -448,9 +448,8 @@ def backward(
     grad_tensors_to_realize = []
 
     for impl in trace.gradient_leaves:
-        impl_id = id(impl)
-        if impl_id in engine.cotangent_map:
-            cot_impl = engine.cotangent_map[impl_id]
+        if impl in engine.cotangent_map:
+            cot_impl = engine.cotangent_map[impl]
             impl.cotangent = cot_impl
             grad_tensors_to_realize.append(Tensor(impl=cot_impl))
 
