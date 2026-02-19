@@ -281,15 +281,17 @@ class CompiledFunction(Generic[T]):
             )
 
         # Save/set config for tracing
-        orig_eager, orig_verify = (
+        orig_eager, orig_verify, orig_tracing = (
             nabla_config.EAGER_MAX_GRAPH,
             nabla_config.VERIFY_EAGER_SHAPES,
+            nabla_config.TRACING,
         )
         t0 = time.perf_counter()
 
         try:
             nabla_config.EAGER_MAX_GRAPH = True  # Ops build graph during trace
             nabla_config.VERIFY_EAGER_SHAPES = False  # Skip shape checks
+            nabla_config.TRACING = True  # Suppress realization during trace
 
             # Start a fresh epoch so reused tensors cannot leak stale graph values
             # from a previously reset graph region.
@@ -320,6 +322,7 @@ class CompiledFunction(Generic[T]):
         finally:
             nabla_config.EAGER_MAX_GRAPH = orig_eager
             nabla_config.VERIFY_EAGER_SHAPES = orig_verify
+            nabla_config.TRACING = orig_tracing
 
     def _register_inputs(
         self, flat: list[Any], tensor_indices: list[int], input_types: list | None

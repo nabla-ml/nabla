@@ -1499,7 +1499,10 @@ def realize_all(*tensors: Tensor) -> tuple[Tensor, ...]:
     from ... import config as nabla_config
     from ..graph.engine import GRAPH
 
-    if nabla_config.EAGER_MAX_GRAPH:
+    if nabla_config.TRACING:
+        # During a compilation trace, we must NOT trigger graph evaluation
+        # because the graph is in an incomplete state and evaluation would
+        # finalize it prematurely or cause region isolation errors.
         return tensors
 
     # Filter to only unrealized tensors

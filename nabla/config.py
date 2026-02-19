@@ -18,3 +18,7 @@ EAGER_MAX_GRAPH: bool = os.environ.get("EAGER_MAX_GRAPH", "0") == "1"
 # If True (and EAGER_MAX_GRAPH is True), verifies that computed physical shapes
 # match the actual shapes produced by eager execution.
 VERIFY_EAGER_SHAPES: bool = os.environ.get("VERIFY_EAGER_SHAPES", "0") == "1"
+
+# Internal Tracing Flag
+# Set to True during compile() or jit() trace to suppress side-effecting operations.
+TRACING: bool = False
