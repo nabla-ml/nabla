@@ -85,20 +85,4 @@ window.addEventListener("DOMContentLoaded", function () {
     // Hide the now-empty secondary article header bar
     const articleHeader = document.querySelector(".bd-header-article");
     if (articleHeader) articleHeader.style.display = "none";
-
-    // Uncheck the "Examples" section in the primary sidebar unless we are on an examples page
-    if (pageName && !pageName.startsWith("examples/")) {
-        const exampleLinks = document.querySelectorAll(".bd-sidebar-primary a.reference.internal");
-        for (let link of exampleLinks) {
-            if (link.href && link.href.includes("examples/index")) {
-                const li = link.closest("li");
-                if (li) {
-                    const checkbox = li.querySelector(".toctree-checkbox");
-                    if (checkbox && checkbox.checked) {
-                        checkbox.checked = false;
-                    }
-                }
-            }
-        }
-    }
 });
