@@ -1,6 +1,6 @@
 # Nabla Examples
 
-This folder is the single source of truth for runnable tutorial-style `.py` examples.
+This folder is the single source of truth for runnable example-style `.py` files.
 
 ## Learning path
 
@@ -24,5 +24,5 @@ This folder is the single source of truth for runnable tutorial-style `.py` exam
 - Run the converter with:
 
 ```bash
-python tutorials/_convert_to_notebooks.py
+venv/bin/python docs/scripts/convert_tutorials_to_notebooks.py
 ```

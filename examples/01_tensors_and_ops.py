@@ -1,9 +1,9 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla Tutorials - 01: Tensors and Operations
+# Nabla Examples - 01: Tensors and Operations
 # ===----------------------------------------------------------------------=== #
 """Tensors and Operations in Nabla.
 
-This tutorial covers the fundamentals of Nabla's tensor system:
+This example covers the fundamentals of Nabla's tensor system:
 - Creating tensors (from NumPy, factory functions, constants)
 - Basic arithmetic and element-wise operations
 - Matrix operations (matmul, transpose, reshape)
@@ -13,9 +13,9 @@ This tutorial covers the fundamentals of Nabla's tensor system:
 """
 
 # %% [markdown]
-# # Tutorial 1: Tensors and Operations
+# # Example 1: Tensors and Operations
 #
-# Welcome to Nabla! This tutorial introduces the core building block of
+# Welcome to Nabla! This example introduces the core building block of
 # the library: the **Tensor**. Nabla tensors are lazy by default — operations
 # build a computation graph that is evaluated only when you request the result
 # (e.g., by printing or calling `.realize()`).
@@ -310,7 +310,7 @@ print("Row sums:", nb.reduce_sum(probs, axis=-1))
 # %% [markdown]
 # ## Summary
 #
-# In this tutorial you learned how to:
+# In this example you learned how to:
 # - Create tensors from NumPy arrays, factory functions, and constants
 # - Perform arithmetic, element-wise, and matrix operations
 # - Reduce tensors along axes (sum, mean, max, min, argmax)
@@ -323,4 +323,4 @@ print("Row sums:", nb.reduce_sum(probs, axis=-1))
 # **Next:** [02_autodiff](02_autodiff) — Automatic differentiation with Nabla.
 
 # %%
-print("\n✅ Tutorial 01 completed!")
+print("\n✅ Example 01 completed!")

@@ -1,10 +1,12 @@
-# Tutorials
+# Examples
 
 Hands-on Jupyter notebooks for learning Nabla from basics to compiled training loops.
 
+All notebooks in this section are generated from the `examples/*.py` source files.
+
 ```{toctree}
 :maxdepth: 1
-:caption: Tutorial Notebooks
+:caption: Example Notebooks
 
 01_tensors_and_ops
 02_autodiff

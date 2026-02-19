@@ -1,9 +1,9 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla Tutorials - 05a: Transformer Training (PyTorch-Style)
+# Nabla Examples - 05a: Transformer Training (PyTorch-Style)
 # ===----------------------------------------------------------------------=== #
 """Transformer Training with Nabla's PyTorch-Style API.
 
-This tutorial builds and trains a Transformer encoder for sequence
+This example builds and trains a Transformer encoder for sequence
 classification using Nabla's nn.Module system:
 - Custom Transformer model with nn.MultiHeadAttention
 - Positional encoding
@@ -12,7 +12,7 @@ classification using Nabla's nn.Module system:
 """
 
 # %% [markdown]
-# # Tutorial 5a: Transformer Training (PyTorch-Style)
+# # Example 5a: Transformer Training (PyTorch-Style)
 #
 # We'll build a small Transformer encoder for a synthetic **sequence
 # classification** task: given a sequence of token embeddings, predict which
@@ -265,4 +265,4 @@ print("\nCompiled step executes forward + backward + optimizer in a single MAX g
 # — The same Transformer, built in a purely functional style.
 
 # %%
-print("\n✅ Tutorial 05a completed!")
+print("\n✅ Example 05a completed!")

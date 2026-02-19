@@ -1,9 +1,9 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla Tutorials - 02: Automatic Differentiation
+# Nabla Examples - 02: Automatic Differentiation
 # ===----------------------------------------------------------------------=== #
 """Automatic Differentiation in Nabla.
 
-This tutorial covers Nabla's composable autodiff system:
+This example covers Nabla's composable autodiff system:
 - grad and value_and_grad (reverse-mode)
 - jvp — forward-mode Jacobian-vector products
 - vjp — reverse-mode vector-Jacobian products
@@ -12,7 +12,7 @@ This tutorial covers Nabla's composable autodiff system:
 """
 
 # %% [markdown]
-# # Tutorial 2: Automatic Differentiation
+# # Example 2: Automatic Differentiation
 #
 # Nabla provides a **JAX-like functional autodiff** system built on composable
 # transforms. Every transform is a higher-order function: it takes a function
@@ -32,7 +32,7 @@ import numpy as np
 
 import nabla as nb
 
-print("Nabla autodiff tutorial")
+print("Nabla autodiff example")
 
 # %% [markdown]
 # ## 1. `grad` — Gradient of a Scalar Function
@@ -347,4 +347,4 @@ print(f"True weights:    {w_true}")
 # — Training an MLP with Nabla's PyTorch-style API.
 
 # %%
-print("\n✅ Tutorial 02 completed!")
+print("\n✅ Example 02 completed!")

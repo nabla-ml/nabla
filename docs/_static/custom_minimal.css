@@ -36,14 +36,16 @@ html[data-theme="dark"] pre,
 html[data-theme="dark"] .highlight,
 html[data-theme="dark"] .highlight pre,
 html[data-theme="dark"] div[class*="highlight-"] {
-    background-color: #101010 !important;
+    background-color: #1a1a1a !important;
+    border: 1px solid #2f2f2f !important;
+    border-radius: 8px;
 }
 
 html[data-theme="dark"] code,
 html[data-theme="dark"] tt,
 html[data-theme="dark"] kbd,
 html[data-theme="dark"] samp {
-    background-color: #151515 !important;
+    background-color: #232323 !important;
 }
 
 /* Hide ALL theme switcher elements */

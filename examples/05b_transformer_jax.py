@@ -1,9 +1,9 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla Tutorials - 05b: Transformer Training (JAX-Style)
+# Nabla Examples - 05b: Transformer Training (JAX-Style)
 # ===----------------------------------------------------------------------=== #
 """Transformer Training with Nabla's Functional (JAX-Style) API.
 
-This tutorial builds the same Transformer encoder as 05a, but in a purely
+This example builds the same Transformer encoder as 05a, but in a purely
 functional style — no nn.Module, just dicts of parameters and pure functions:
 - Explicit parameter initialization (pytree dicts)
 - Pure-function transformer layers
@@ -12,9 +12,9 @@ functional style — no nn.Module, just dicts of parameters and pure functions:
 """
 
 # %% [markdown]
-# # Tutorial 5b: Transformer Training (JAX-Style / Functional)
+# # Example 5b: Transformer Training (JAX-Style / Functional)
 #
-# This tutorial builds the same sequence classification Transformer as 05a,
+# This example builds the same sequence classification Transformer as 05a,
 # but without nn.Module — everything is **pure functions** operating on
 # **parameter dicts** (pytrees).
 #
@@ -333,9 +333,9 @@ for step in range(30):
 #
 # No mutation, no hidden state — everything flows through function arguments.
 #
-# **Congratulations!** You've completed all the Nabla tutorials. You're now
+# **Congratulations!** You've completed all the Nabla examples. You're now
 # equipped to build, train, and optimize ML models with Nabla's dual API.
 
 # %%
-print("\n✅ Tutorial 05b completed!")
-print("🎉 All tutorials complete!")
+print("\n✅ Example 05b completed!")
+print("🎉 All examples complete!")

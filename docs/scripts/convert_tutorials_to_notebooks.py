@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 # ===----------------------------------------------------------------------=== #
-# Convert tutorial .py files to Jupyter notebooks
+# Convert example .py files to Jupyter notebooks
 # ===----------------------------------------------------------------------=== #
-"""Convert tutorial Python files to Jupyter notebooks.
+"""Convert example Python files to Jupyter notebooks.
 
 Parses the `# %% [markdown]` and `# %%` cell markers to create proper
 notebook cells. Markdown cells extract content from comment blocks,
 code cells contain the executable Python code.
 
 Usage:
-    python tutorials/_convert_to_notebooks.py
+    venv/bin/python docs/scripts/convert_tutorials_to_notebooks.py
 """
 
 import json
@@ -18,7 +18,7 @@ import sys
 import uuid
 from pathlib import Path
 
-ROOT_DIR = Path(__file__).resolve().parent.parent
+ROOT_DIR = Path(__file__).resolve().parents[2]
 EXAMPLES_DIR = ROOT_DIR / "examples"
 DOCS_TUTORIALS_DIR = ROOT_DIR / "docs" / "tutorials"
 
@@ -77,7 +77,6 @@ def _normalize_and_validate_markdown_links(
         original_target = match.group(2).strip()
         normalized_target = _normalize_notebook_link(original_target)
 
-        # Validate only local links with concrete targets
         if (
             normalized_target
             and not normalized_target.startswith("#")
@@ -105,9 +104,7 @@ def _validate_python_sources(py_paths: list[Path]) -> None:
             source = path.read_text(encoding="utf-8")
             compile(source, str(path), "exec")
         except SyntaxError as exc:
-            errors.append(
-                f"{path.name}: line {exc.lineno}, col {exc.offset}: {exc.msg}"
-            )
+            errors.append(f"{path.name}: line {exc.lineno}, col {exc.offset}: {exc.msg}")
 
     if errors:
         joined = "\n".join(errors)
@@ -131,7 +128,6 @@ def py_to_notebook(py_path: Path, valid_targets: set[str]) -> tuple[dict, list[s
             return
 
         if current_cell_type == "markdown":
-            # Strip leading `# ` from markdown lines
             md_lines = []
             for line in current_cell_lines:
                 if line.startswith("# "):
@@ -141,7 +137,6 @@ def py_to_notebook(py_path: Path, valid_targets: set[str]) -> tuple[dict, list[s
                 else:
                     md_lines.append(line)
 
-            # Remove leading/trailing blank lines
             while md_lines and md_lines[0].strip() == "":
                 md_lines.pop(0)
             while md_lines and md_lines[-1].strip() == "":
@@ -165,7 +160,6 @@ def py_to_notebook(py_path: Path, valid_targets: set[str]) -> tuple[dict, list[s
                 )
 
         elif current_cell_type == "code":
-            # Remove leading/trailing blank lines
             while current_cell_lines and current_cell_lines[0].strip() == "":
                 current_cell_lines.pop(0)
             while current_cell_lines and current_cell_lines[-1].strip() == "":
@@ -188,18 +182,16 @@ def py_to_notebook(py_path: Path, valid_targets: set[str]) -> tuple[dict, list[s
         current_cell_lines = []
         current_cell_type = None
 
-    # Skip module docstring and header lines (before first cell marker)
     in_preamble = True
 
     for line in lines:
-        # Detect cell markers
         if line.strip() == "# %% [markdown]":
             if in_preamble:
                 in_preamble = False
             flush_cell()
             current_cell_type = "markdown"
             continue
-        elif line.strip() == "# %%":
+        if line.strip() == "# %%":
             if in_preamble:
                 in_preamble = False
             flush_cell()
@@ -235,22 +227,25 @@ def py_to_notebook(py_path: Path, valid_targets: set[str]) -> tuple[dict, list[s
     return notebook, broken_links
 
 
-def main():
-    tutorial_files = [EXAMPLES_DIR / f"{name}.py" for name in ORDERED_NOTEBOOKS]
-    tutorial_files = [path for path in tutorial_files if path.exists()]
+def main() -> None:
+    example_files = [EXAMPLES_DIR / f"{name}.py" for name in ORDERED_NOTEBOOKS]
+    example_files = [path for path in example_files if path.exists()]
 
-    if not tutorial_files:
-        print("No tutorial .py files found in examples/!")
+    if not example_files:
+        print("No example .py files found in examples/!")
         sys.exit(1)
 
     DOCS_TUTORIALS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Safety checks before conversion
-    _validate_python_sources(tutorial_files)
+    _validate_python_sources(example_files)
 
     marker_warnings: list[str] = []
-    for path in tutorial_files:
-        marker_count = sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.strip().startswith("# %%"))
+    for path in example_files:
+        marker_count = sum(
+            1
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip().startswith("# %%")
+        )
         if marker_count < 2:
             marker_warnings.append(
                 f"{path.name}: only {marker_count} cell marker(s); consider splitting into more notebook cells"
@@ -262,12 +257,12 @@ def main():
             print(f"   - {warning}")
         print()
 
-    valid_targets = {path.stem for path in tutorial_files}
+    valid_targets = {path.stem for path in example_files}
 
-    print(f"Converting {len(tutorial_files)} tutorial(s) from examples/ to docs/tutorials/...\n")
+    print(f"Converting {len(example_files)} example(s) from examples/ to docs/tutorials/...\n")
 
     broken_links: list[str] = []
-    for py_path in tutorial_files:
+    for py_path in example_files:
         notebook, file_broken_links = py_to_notebook(py_path, valid_targets=valid_targets)
         broken_links.extend(file_broken_links)
         nb_path = DOCS_TUTORIALS_DIR / f"{py_path.stem}.ipynb"
@@ -282,7 +277,7 @@ def main():
             f"{joined}"
         )
 
-    print(f"\nDone! {len(tutorial_files)} notebooks created.")
+    print(f"\nDone! {len(example_files)} notebooks created.")
 
 
 if __name__ == "__main__":

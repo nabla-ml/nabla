@@ -1,9 +1,9 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla Tutorials - 03a: MLP Training (PyTorch-Style)
+# Nabla Examples - 03a: MLP Training (PyTorch-Style)
 # ===----------------------------------------------------------------------=== #
 """MLP Training with Nabla's PyTorch-Style API.
 
-This tutorial shows how to train a multi-layer perceptron using Nabla's
+This example shows how to train a multi-layer perceptron using Nabla's
 nn.Module system — familiar to anyone who has used PyTorch:
 - Defining models with nb.nn.Module
 - Using nb.nn.Linear layers
@@ -12,14 +12,14 @@ nn.Module system — familiar to anyone who has used PyTorch:
 """
 
 # %% [markdown]
-# # Tutorial 3a: MLP Training (PyTorch-Style)
+# # Example 3a: MLP Training (PyTorch-Style)
 #
 # Nabla provides a **PyTorch-style** `nn.Module` API for building and training
 # neural networks. Models are defined as classes with `forward()` methods,
 # parameters are automatically tracked, and training uses functional transforms
 # (`value_and_grad`) combined with the AdamW optimizer.
 #
-# This tutorial trains a 2-layer MLP on a synthetic regression task.
+# This example trains a 2-layer MLP on a synthetic regression task.
 
 # %%
 import numpy as np
@@ -187,4 +187,4 @@ for step in range(50):
 # MLP trained in a purely functional (JAX-like) style.
 
 # %%
-print("\n✅ Tutorial 03a completed!")
+print("\n✅ Example 03a completed!")

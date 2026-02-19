@@ -6,8 +6,8 @@ Nabla is a JAX-inspired autodiff library with factor-based SPMD sharding, built 
 :maxdepth: 2
 :hidden:
 
+examples/index
 api/index
-tutorials/index
 ```
 
 ---
@@ -43,19 +43,27 @@ pip install -e ".[dev]"
 
 ---
 
-## Getting Started Tutorials
+## Getting Started Examples
 
-Start with the guided notebooks in order:
+Start with the guided example notebooks in order:
 
-1. [01 — Tensors and Ops](tutorials/01_tensors_and_ops)
-2. [02 — Autodiff](tutorials/02_autodiff)
-3. [03a — MLP Training (PyTorch-Style)](tutorials/03a_mlp_training_pytorch)
-4. [03b — MLP Training (JAX-Style)](tutorials/03b_mlp_training_jax)
-5. [04 — Transforms and Compile](tutorials/04_transforms_and_compile)
-6. [05a — Transformer (PyTorch-Style)](tutorials/05a_transformer_pytorch)
-7. [05b — Transformer (JAX-Style)](tutorials/05b_transformer_jax)
+1. [01 — Tensors and Ops](examples/01_tensors_and_ops)
+2. [02 — Autodiff](examples/02_autodiff)
+3. [03a — MLP Training (PyTorch-Style)](examples/03a_mlp_training_pytorch)
+4. [03b — MLP Training (JAX-Style)](examples/03b_mlp_training_jax)
+5. [04 — Transforms and Compile](examples/04_transforms_and_compile)
+6. [05a — Transformer (PyTorch-Style)](examples/05a_transformer_pytorch)
+7. [05b — Transformer (JAX-Style)](examples/05b_transformer_jax)
+8. [06 — MLP Pipeline Parallel](examples/06_mlp_pipeline_parallel)
+9. [07 — MLP PP + DP Training](examples/07_mlp_pp_dp_training)
+10. [08 — MLP Pipeline Inference](examples/08_mlp_pipeline_inference)
+11. [09 — Compile vs Eager vs JAX](examples/09_jax_comparison_compiled)
+12. [10 — LoRA Fine-Tuning MVP](examples/10_lora_finetuning_mvp)
+13. [11 — QLoRA Fine-Tuning MVP](examples/11_qlora_finetuning_mvp)
 
-Or browse the full list at [Tutorials](tutorials/index).
+These notebooks are generated from the Python sources in the examples module (`examples/*.py`).
+
+Or browse the full list at [Examples](examples/index).
 
 ---
 

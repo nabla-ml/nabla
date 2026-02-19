@@ -1,9 +1,9 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla Tutorials - 03b: MLP Training (JAX-Style)
+# Nabla Examples - 03b: MLP Training (JAX-Style)
 # ===----------------------------------------------------------------------=== #
 """MLP Training with Nabla's Functional (JAX-Style) API.
 
-This tutorial shows how to train the same MLP as 03a, but using a purely
+This example shows how to train the same MLP as 03a, but using a purely
 functional style — no classes, just functions and pytree parameter dicts:
 - Model as a pure function with explicit parameters
 - Parameters stored in nested dicts (pytrees)
@@ -12,13 +12,13 @@ functional style — no classes, just functions and pytree parameter dicts:
 """
 
 # %% [markdown]
-# # Tutorial 3b: MLP Training (JAX-Style / Functional)
+# # Example 3b: MLP Training (JAX-Style / Functional)
 #
 # In this style, the model is a **pure function** that takes parameters
 # explicitly. Parameters are stored in nested dicts (pytrees). This is
 # the same approach used by JAX and Flax.
 #
-# This tutorial trains the same 2-layer MLP from Tutorial 3a, but purely
+# This example trains the same 2-layer MLP from Example 3a, but purely
 # functionally.
 
 # %%
@@ -84,7 +84,7 @@ print(f"Forward pass test: input {x_test.shape} → output {y_test.shape}")
 # %% [markdown]
 # ## 3. Create Data & Define Loss
 #
-# Same synthetic dataset as Tutorial 3a: `y = sin(x0) + cos(x1) + 0.5*x2 - x3`.
+# Same synthetic dataset as Example 3a: `y = sin(x0) + cos(x1) + 0.5*x2 - x3`.
 
 # %%
 np.random.seed(42)
@@ -197,4 +197,4 @@ for step in range(100):
 # — Advanced transforms (vmap, jacrev, jacfwd) and `@nb.compile`.
 
 # %%
-print("\n✅ Tutorial 03b completed!")
+print("\n✅ Example 03b completed!")

@@ -1,9 +1,9 @@
 # ===----------------------------------------------------------------------=== #
-# Nabla Tutorials - 04: Transforms and Compile
+# Nabla Examples - 04: Transforms and Compile
 # ===----------------------------------------------------------------------=== #
 """Advanced Transforms and @nb.compile.
 
-This tutorial covers Nabla's powerful transform system:
+This example covers Nabla's powerful transform system:
 - vmap — automatic vectorization / batching
 - jacrev and jacfwd — full Jacobian computation
 - Composing transforms (vmap of grad, Hessians)
@@ -12,7 +12,7 @@ This tutorial covers Nabla's powerful transform system:
 """
 
 # %% [markdown]
-# # Tutorial 4: Transforms and `@nb.compile`
+# # Example 4: Transforms and `@nb.compile`
 #
 # Nabla's transforms are **higher-order functions** that take a function and
 # return a new function with modified behavior. They are fully composable
@@ -31,7 +31,7 @@ import numpy as np
 
 import nabla as nb
 
-print("Nabla Transforms & Compile Tutorial")
+print("Nabla Transforms & Compile Example")
 
 # %% [markdown]
 # ## 1. `vmap` — Automatic Vectorization
@@ -108,7 +108,7 @@ print(f"Shape: {grads.shape}")
 # %% [markdown]
 # ## 3. `jacrev` and `jacfwd` — Full Jacobians
 #
-# Recall from Tutorial 2: `jacrev` and `jacfwd` compute full Jacobian matrices.
+# Recall from Example 2: `jacrev` and `jacfwd` compute full Jacobian matrices.
 # Here we show them applied to a more interesting function.
 
 # %%
@@ -321,4 +321,4 @@ for step in range(50):
 # — Building and training a Transformer.
 
 # %%
-print("\n✅ Tutorial 04 completed!")
+print("\n✅ Example 04 completed!")
