@@ -63,6 +63,7 @@ extensions = [
     "sphinx.ext.mathjax",       # Render math via JavaScript
     "myst_parser",              # Parse Markdown files
     "sphinx_design",            # For UI components like cards and grids
+    "sphinx_copybutton",        # Add copy button to code blocks
     "nbsphinx",                 # For rendering Jupyter Notebooks
     "IPython.sphinxext.ipython_console_highlighting", # Better highlighting
 ]

@@ -116,4 +116,84 @@ html .theme-toggle {
     content: "↓ ";
 }
 
+/* Landing Page Customizations (homepage only) */
+.home-landing .bd-sidebar-primary,
+.home-landing .bd-sidebar-secondary,
+.home-landing .sidebar-toggle,
+.home-landing .overlay-primary,
+.home-landing .overlay-secondary {
+    display: none !important;
+}
+
+.home-landing .bd-container__inner.bd-page-width {
+    max-width: 100% !important;
+    grid-template-columns: 1fr !important;
+}
+
+.home-landing .bd-main .bd-content {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+.home-landing .bd-article-container {
+    max-width: 1200px !important;
+    margin: 0 auto !important;
+}
+
+.landing-hero {
+    text-align: center;
+    padding: 6rem 0;
+}
+
+.landing-hero h1 {
+    font-size: 5rem !important;
+    margin-top: 0 !important;
+}
+
+.landing-hero p {
+    font-size: 1.6rem !important;
+}
+
+.landing-hero div.highlight {
+    max-width: 700px;
+    margin: 2rem auto !important;
+}
+
+.home-landing h1 {
+    font-size: 4rem !important;
+    font-weight: 800 !important;
+    text-align: center !important;
+    margin-top: 4rem !important;
+    margin-bottom: 0 !important;
+    background: linear-gradient(135deg, #fff 0%, #888 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.home-landing .section p:first-of-type,
+.home-landing .bd-content p:first-of-type {
+    font-size: 1.5rem !important;
+    text-align: center !important;
+    color: #aaa !important;
+    margin-bottom: 3rem !important;
+}
+
+.landing-grid .sd-card {
+    background-color: #0a0a0a !important;
+    border: 1px solid #222 !important;
+    border-radius: 12px !important;
+    transition: transform 0.2s ease, border-color 0.2s ease !important;
+}
+
+.landing-grid .sd-card:hover {
+    transform: translateY(-5px) !important;
+    border-color: #444 !important;
+}
+
+.landing-grid .sd-card-header {
+    background-color: transparent !important;
+    font-weight: 600 !important;
+    font-size: 1.25rem !important;
+}
+
 

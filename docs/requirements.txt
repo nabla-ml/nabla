@@ -8,6 +8,7 @@ sphinx_book_theme
 
 # Extensions
 sphinx-design
+sphinx-copybutton
 sphinx_sitemap
 nbsphinx>=0.9.0
 ipython>=8.0.0
