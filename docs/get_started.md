@@ -1,4 +1,4 @@
-# Getting Started with Nabla
+# Getting Started
 
 Nabla is a JAX-inspired autodiff library with factor-based SPMD sharding, built on [Mojo & MAX](https://www.modular.com/max).
 

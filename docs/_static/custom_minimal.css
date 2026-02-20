@@ -18,6 +18,11 @@ html[data-theme="dark"] {
     --pst-color-background: #000000;
     --pst-color-on-background: #000000;
     --pst-color-surface: #000000;
+    --pst-color-primary: #ffb36b;
+    --pst-color-primary-bg: #3a2715;
+    --pst-color-primary-text: #14181e;
+    --pst-color-link: #ffb36b;
+    --pst-color-link-hover: #ffc78f;
     /* Tame all border/divider lines to a subtle dark grey */
     --pst-color-border: #2a2a2a;
     --pst-color-shadow: rgba(0, 0, 0, 0.5);
@@ -73,7 +78,7 @@ body,
 /* Slightly brighter code surfaces for readability on pure-black pages */
 html[data-theme="dark"] div.highlight {
     background-color: #1a1a1a !important;
-    border: 1px solid #2f2f2f !important;
+    border: none !important;
     border-radius: 8px;
 }
 
@@ -326,18 +331,90 @@ div.nboutput.container div.output_area {
     content: "↓ ";
 }
 
-/* Landing Page Customizations (homepage only) */
-.home-landing .bd-sidebar-primary,
-.home-landing .bd-sidebar-secondary,
-.home-landing .sidebar-toggle,
-.home-landing .overlay-primary,
-.home-landing .overlay-secondary {
+/* ============================================================
+   SIDEBAR WIDTHS — both sidebars locked to 18rem
+   PST controls right sidebar via width:var(--pst-sidebar-secondary),
+   so we MUST override the variable with a rem value, not %.
+   ============================================================ */
+
+/* Override PST's sidebar variable so the right sidebar is 13rem */
+:root {
+    --pst-sidebar-secondary: 13rem !important;
+}
+
+@media (min-width: 960px) {
+    /* Left sidebar: 13rem, matching the right */
+    .bd-sidebar-primary {
+        flex: 0 0 13rem !important;
+        width: 13rem !important;
+        min-width: 13rem !important;
+        max-width: 13rem !important;
+        margin: 0 !important;
+        padding-left: 0.15rem !important;
+        padding-right: 0.65rem !important;
+    }
+
+    /* Right sidebar: 13rem — override PST's width:var(--pst-sidebar-secondary) */
+    .bd-sidebar-secondary {
+        flex: 0 0 13rem !important;
+        width: 13rem !important;
+        min-width: 13rem !important;
+        max-width: 13rem !important;
+        margin: 0 !important;
+        padding: 0 1rem !important;
+    }
+
+    input#pst-primary-sidebar-checkbox:checked ~ .bd-container .bd-sidebar-primary {
+        margin-left: -13rem !important;
+    }
+
+    .bd-sidebar-primary nav.bd-links {
+        margin-right: 0 !important;
+        margin-left: 0 !important;
+        padding-left: 0 !important;
+    }
+
+    .bd-sidebar-primary nav.bd-links ul ul {
+        padding-left: 0.8rem !important;
+    }
+
+    .bd-sidebar-primary nav.bd-links li > a {
+        margin-right: 0 !important;
+        padding-left: 0.35rem !important;
+        padding-right: 0.8rem !important;
+    }
+
+    .bd-sidebar-primary li.has-children .caption,
+    .bd-sidebar-primary li.has-children > .reference {
+        margin-right: calc(25px + 0.4rem) !important;
+    }
+
+    .bd-sidebar-primary li.has-children > details > summary .toctree-toggle {
+        right: 0.5rem !important;
+    }
+}
+
+/* ============================================================
+   SECONDARY SIDEBAR — always show the element (spacing),
+   but on the home page hide its inner content items.
+   PST injects an inline <style> block in index.html that does
+   .bd-sidebar-secondary { display:none !important } — we beat
+   it with a higher-specificity selector.
+   ============================================================ */
+html body .bd-sidebar-secondary {
+    display: flex !important;
+    visibility: visible !important;
+}
+
+/* Home page: keep the spacer div but show nothing inside it */
+.home-landing .bd-sidebar-secondary .sidebar-secondary-items {
     display: none !important;
 }
 
-.home-landing .bd-container__inner.bd-page-width {
-    max-width: 100% !important;
-    grid-template-columns: 1fr !important;
+/* Landing Page: hide overlays and sidebar toggle overlay */
+.home-landing .overlay-primary,
+.home-landing .overlay-secondary {
+    display: none !important;
 }
 
 .home-landing .bd-main .bd-content {
@@ -409,13 +486,13 @@ div.nboutput.container div.output_area {
 
 .landing-hero {
     text-align: center;
-    padding: 1.4rem 0 0.8rem;
+    padding: 2rem 0 1rem;
 }
 
 .landing-hero div.highlight {
-    width: min(940px, 96%);
+    width: min(940px, 100%);
     max-width: 940px;
-    margin: 1rem auto 0.2rem !important;
+    margin: 0.7rem auto 0.2rem !important;
 }
 
 .landing-hero div.highlight pre {
@@ -427,58 +504,138 @@ div.nboutput.container div.output_area {
     line-height: 1.45;
 }
 
-.landing-eyebrow {
-    margin: 0 0 0.45rem;
-    font-size: 0.82rem;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: #9f9f9f;
-    font-weight: 600;
-}
-
-.landing-wordmark {
-    display: block !important;
-    width: min(300px, 90vw) !important;
-    max-width: 300px !important;
-    min-width: min(200px, 90vw) !important;
-    height: auto !important;
-    margin: 0.1rem auto 0.65rem !important;
+.landing-title {
+    margin: 0 auto 0.85rem;
+    max-width: 980px;
+    color: #ffffff;
+    font-size: clamp(1.9rem, 4.4vw, 3.4rem);
+    line-height: 1.08;
+    letter-spacing: -0.02em;
+    font-weight: 680;
 }
 
 .landing-subtitle {
-    max-width: 100%;
-    margin: 0.35rem auto 2rem;
-    font-size: clamp(1.2rem, 2.5vw, 1.5rem);
-    line-height: 1.55;
+    max-width: 920px;
+    margin: 0.25rem auto 1.4rem;
+    font-size: clamp(1.03rem, 2vw, 1.28rem);
+    line-height: 1.6;
     color: #b8b8b8;
-    font-family: Georgia, "Times New Roman", Times, serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
-.landing-grid .sd-card {
-    background-color: #0a0a0a !important;
-    border: 1px solid #222 !important;
-    border-radius: 12px !important;
-    transition: transform 0.2s ease, border-color 0.2s ease !important;
-    padding: 0.15rem;
+.landing-install {
+    width: min(940px, 100%);
+    margin: 0.2rem auto 0;
 }
 
-.landing-grid .sd-card:hover {
-    transform: translateY(-5px) !important;
-    border-color: #444 !important;
+/* Modern Modular Grid */
+.landing-grid-modular {
+    margin-top: 2.8rem;
+    max-width: 1100px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
-.landing-grid .sd-card-title,
-.landing-grid .sd-card-header {
+.landing-grid-modular .sd-card {
     background-color: transparent !important;
-    font-weight: 600 !important;
-    font-size: 1.06rem !important;
-    letter-spacing: 0.01em;
+    border: none !important;
+    padding: 0 !important;
+    transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1) !important;
 }
 
-.landing-grid .sd-card-text {
-    font-size: 0.97rem;
+.landing-grid-modular .sd-card:hover {
+    transform: translateY(-8px) !important;
+}
+
+.landing-grid-modular .sd-card .sd-card-body {
+    padding: 0 !important;
+}
+
+.home-nav-card .sd-card-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.card-media {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 80px !important;
+    margin-bottom: 1rem;
+    position: relative;
+    overflow: hidden;
+    background-color: #1a1a1a;
+    border: none !important;
+    object-fit: cover;
+    display: block !important;
+}
+
+.card-title-bottom {
+    font-size: 1.24rem;
+    font-weight: 640;
+    color: #ffffff !important;
+    text-align: left;
+    margin: 0 0 0.35rem;
+    letter-spacing: -0.01em;
+}
+
+.card-subtitle {
+    color: #b3b3b3;
+    font-size: 0.96rem;
+    line-height: 1.5;
+    margin-bottom: 0.45rem;
+}
+
+.card-image-note {
+    margin-top: 0.8rem;
+    color: #8f8f8f;
+    font-size: 0.9rem;
+}
+
+.info-card {
+    background: #080808 !important;
+    border: none !important;
+    border-radius: 14px !important;
+}
+
+.info-card .sd-card-title {
+    font-size: 1.05rem !important;
+    color: #ffffff !important;
+}
+
+.info-card .sd-card-text {
     color: #b3b3b3;
     line-height: 1.55;
+    overflow-wrap: anywhere;
+}
+
+.info-card code {
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.featured-example,
+.blog-slot {
+    margin-top: 1.8rem;
+    border: none;
+    border-radius: 14px;
+    padding: 1rem 1.2rem;
+    background: #080808;
+}
+
+.featured-example h3,
+.blog-slot h3 {
+    margin: 0 0 0.35rem;
+}
+
+@media (max-width: 768px) {
+    .landing-title {
+        line-height: 1.15;
+    }
+
+    .landing-grid-modular {
+        margin-top: 2rem;
+    }
 }
 
 

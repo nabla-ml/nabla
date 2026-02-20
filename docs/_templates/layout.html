@@ -48,6 +48,15 @@ LoRA & QLoRA Fine-Tuning API — Nabla ML
 {%- set base_url = "https://www.nablaml.com/" -%}
 
 {%- block extrahead %}
+{% if pagename == 'index' %}
+<style>
+  .bd-sidebar-secondary,
+  #pst-secondary-sidebar,
+  .sidebar-secondary-items {
+    display: none !important;
+  }
+</style>
+{% endif %}
 <!-- SEO Meta Tags -->
 <meta name="description" content="{{ page_description_plain|e }}" />
 <meta name="keywords" content="nabla, machine learning framework, automatic differentiation, autodiff, JIT compilation, GPU computing, SPMD sharding, distributed training, deep learning, Mojo language, MAX engine, JAX alternative, PyTorch alternative, LoRA, QLoRA, fine-tuning, tensor operations, neural networks, pipeline parallelism, model parallelism, vmap, grad, {{ title_plain|lower|e }}" />

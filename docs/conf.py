@@ -105,8 +105,8 @@ html_theme_options = {
     "use_repository_button": True,
     "use_issues_button": True,
     "use_edit_page_button": True,
-    "show_navbar_depth": 2,
-    "show_toc_level": 2,
+    "show_navbar_depth": 1,
+    "show_toc_level": 1,
     "navigation_with_keys": True,
     "logo": {
         "image_light": "_static/nabla-logo.png",
