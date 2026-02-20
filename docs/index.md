@@ -63,7 +63,7 @@ pip install --pre --extra-index-url https://whl.modular.com/nightly/simple/ modu
 :::
 ::::
 
-# Why Nabla
+## Why Nabla
 
 ::::{grid} 1 1 2 2
 :gutter: 3

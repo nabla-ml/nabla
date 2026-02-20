@@ -24,6 +24,7 @@
 html[data-theme="dark"],
 html[data-theme="light"],
 html {
+    --nabla-header-height:     58px;
     --pst-color-background:    #000000;
     --pst-color-on-background: #000000;
     --pst-color-surface:       #000000;
@@ -74,7 +75,7 @@ table.docutils th {
    ============================================================ */
 
 .bd-header {
-    min-height: 58px;
+    min-height: var(--nabla-header-height);
     background-color: #000000 !important;
     border-bottom: 1px solid #1f1f1f;
     position: sticky !important;
@@ -188,6 +189,9 @@ button[title*="Theme"],
         width: 13rem !important;
         min-width: 13rem !important;
         max-width: 13rem !important;
+        top: var(--nabla-header-height) !important;
+        height: calc(100vh - var(--nabla-header-height)) !important;
+        max-height: calc(100vh - var(--nabla-header-height)) !important;
         margin: 0 !important;
         padding-left: 1rem !important;
         padding-right: 0.65rem !important;
@@ -229,6 +233,9 @@ button[title*="Theme"],
         width: 13rem !important;
         min-width: 13rem !important;
         max-width: 13rem !important;
+        top: var(--nabla-header-height) !important;
+        height: calc(100vh - var(--nabla-header-height)) !important;
+        max-height: calc(100vh - var(--nabla-header-height)) !important;
         margin: 0 !important;
         padding: 0 1rem !important;
     }
@@ -250,10 +257,18 @@ html.home-landing .bd-content section {
     margin-top: 2.2rem !important;
 }
 
-html.home-landing h2,
-html.home-landing h3 {
+html.home-landing .bd-article > section > h1,
+html.home-landing .bd-article > section > h2,
+html.home-landing .bd-article > section > h3 {
     margin-top: 0 !important;
     margin-bottom: 1.5rem !important;
+    font-size: clamp(1.7rem, 2.4vw, 2rem) !important;
+}
+
+html.home-landing .bd-article > section > h4 {
+    margin-top: 0 !important;
+    margin-bottom: 1.25rem !important;
+    font-size: clamp(1.25rem, 1.8vw, 1.4rem) !important;
 }
 
 
@@ -273,7 +288,7 @@ html.home-landing h3 {
     max-width: 980px;
     width: 100%;
     color: #ffffff;
-    font-size: clamp(2rem, 5vw, 3.5rem);
+    font-size: clamp(2.4rem, 5vw, 3.5rem);
     line-height: 1.1;
     letter-spacing: -0.02em;
     font-weight: 680;
