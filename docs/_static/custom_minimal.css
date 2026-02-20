@@ -1,68 +1,47 @@
-/* Minimal Custom CSS for Nabla Documentation */
-/* Using default Sphinx Book Theme styling for everything */
-/* DARK MODE ONLY - Force dark theme */
+/* ============================================================
+   Nabla Documentation — custom_minimal.css
+   Sphinx Book Theme, dark-mode-only site.
 
-/* Force dark mode on the root element */
-:root {
-    --color-mode: dark;
-}
+   Sections:
+   1.  CSS Variables (colour tokens)
+   2.  Global structural (backgrounds, borders)
+   3.  Header & navigation chrome
+   4.  Sidebar widths  (SBT breakpoints: primary 992px, secondary 1200px)
+   5.  Homepage         (html.home-landing — class set by <script> in <head>)
+   6.  Hero section
+   7.  Card grid
+   8.  Code blocks
+   9.  Notebook cells
+   10. Mobile (≤768px)
+   ============================================================ */
 
-html[data-theme="dark"], 
-html[data-theme="light"], 
+
+/* ============================================================
+   1. CSS VARIABLES
+   ============================================================ */
+
+/* Force dark palette for both themes (site is dark-only) */
+html[data-theme="dark"],
+html[data-theme="light"],
 html {
-    --color-mode: dark;
-}
-
-/* Force true black background across Sphinx Book Theme surfaces */
-html[data-theme="dark"] {
-    --pst-color-background: #000000;
+    --pst-color-background:    #000000;
     --pst-color-on-background: #000000;
-    --pst-color-surface: #000000;
-    --pst-color-primary: #ffcc99;
-    --pst-color-primary-bg: #3a2715;
-    --pst-color-primary-text: #14181e;
-    --pst-color-link: #ffcc99;
-    --pst-color-link-hover: #ffe6cc;
-    /* Tame all border/divider lines to a subtle dark grey */
-    --pst-color-border: #2a2a2a;
-    --pst-color-shadow: rgba(0, 0, 0, 0.5);
+    --pst-color-surface:       #000000;
+    --pst-color-primary:       #ffcc99;
+    --pst-color-primary-bg:    #3a2715;
+    --pst-color-primary-text:  #14181e;
+    --pst-color-link:          #ffcc99;
+    --pst-color-link-hover:    #ffe6cc;
+    --pst-color-border:        #2a2a2a;
+    --pst-color-shadow:        rgba(0, 0, 0, 0.5);
+    /* Secondary sidebar width — no !important (ignored on custom props) */
+    --pst-sidebar-secondary:   13rem;
 }
 
-/* Footer and main-content dividers */
-footer.bd-footer-content,
-.bd-footer-content {
-    border-top: 1px solid #2a2a2a !important;
-}
 
-/* Notebook input/output cell borders */
-div.nbinput.container,
-div.nboutput.container {
-    border-color: #2a2a2a !important;
-}
-
-div.nbinput.container div.input_area,
-div.nboutput.container div.output_area {
-    border-color: #2a2a2a !important;
-}
-
-/* HR separators and table borders throughout */
-hr,
-.bd-content hr,
-table.docutils td,
-table.docutils th {
-    border-color: #2a2a2a !important;
-}
-
-/* Sidebar dividers */
-.bd-sidebar-primary .sidebar-primary-items__start {
-    border-top-color: #2a2a2a !important;
-}
-
-/* Any remaining #ccc or white-ish borders */
-html[data-theme="dark"] [style*="border"][style*="#ccc"],
-html[data-theme="dark"] [style*="border"][style*="white"] {
-    border-color: #2a2a2a !important;
-}
+/* ============================================================
+   2. GLOBAL STRUCTURAL
+   ============================================================ */
 
 html,
 body,
@@ -75,75 +54,25 @@ body,
     background-color: #000000 !important;
 }
 
-/* Slightly brighter code surfaces for readability on pure-black pages */
-html[data-theme="dark"] div.highlight {
-    background-color: #1a1a1a !important;
-    border: none !important;
-    border-radius: 8px;
+footer.bd-footer-content {
+    border-top: 1px solid #2a2a2a !important;
 }
 
-html[data-theme="dark"] div[class^="highlight-"] {
-    background-color: transparent !important;
-    border: none !important;
-    padding: 0 !important;
-    margin-top: 1rem !important;
-    margin-bottom: 1rem !important;
+hr,
+table.docutils td,
+table.docutils th {
+    border-color: #2a2a2a !important;
 }
 
-html[data-theme="dark"] div.highlight pre {
-    background-color: transparent !important;
-    border: none !important;
-    margin: 0 !important;
+.bd-sidebar-primary .sidebar-primary-items__start {
+    border-top-color: #2a2a2a !important;
 }
 
-html[data-theme="dark"] code,
-html[data-theme="dark"] tt,
-html[data-theme="dark"] kbd,
-html[data-theme="dark"] samp {
-    background-color: #232323 !important;
-}
 
-/* Hide ALL theme switcher elements */
-html .theme-switch-button,
-html .bd-theme-switch,
-html .theme-switcher,
-html button[title*="theme"],
-html button[title*="Theme"],
-html .btn-theme,
-html .theme-toggle {
-    display: none !important;
-    visibility: hidden !important;
-}
+/* ============================================================
+   3. HEADER & NAVIGATION CHROME
+   ============================================================ */
 
-/* Remove the notebook prompt labels (In []: / Out []:) — copy button is already inside the cell */
-div.nbinput.container div.prompt,
-div.nboutput.container div.prompt {
-    display: none !important;
-}
-
-/* Compensate: let input/output area take full width now that prompt is gone */
-div.nbinput.container div.input_area,
-div.nboutput.container div.output_area {
-    width: 100% !important;
-    flex: 1 1 100% !important;
-}
-
-/* GitHub direct-link button in topbar */
-.nabla-gh-link {
-    display: inline-flex !important;
-    align-items: center;
-    color: #e0e0e0 !important;
-    text-decoration: none !important;
-    font-size: 1.25rem;
-    padding: 0.35rem 0.5rem;
-    border-radius: 6px;
-}
-
-.nabla-gh-link:hover {
-    color: #ffffff !important;
-    background: rgba(255,255,255,0.07) !important;
-    text-decoration: none !important;
-}
 .bd-header {
     min-height: 58px;
     background-color: #000000 !important;
@@ -153,25 +82,26 @@ div.nboutput.container div.output_area {
     z-index: 1030 !important;
 }
 
-/* Remove download, fullscreen, and secondary-sidebar toggle from header */
+/* Hide: theme switcher, download/fullscreen, per-article header */
+.theme-switch-button,
+.bd-theme-switch,
+button[title*="theme"],
+button[title*="Theme"],
 .dropdown-download-buttons,
 .btn-fullscreen-button,
 .secondary-toggle,
-.sidebar-toggle.secondary-toggle {
+.bd-header-article {
     display: none !important;
 }
 
-/* Remove sidebar logo (navigate home only via topbar brand) */
-.bd-sidebar-primary .navbar-brand.logo {
-    display: none !important;
-}
-
-/* Remove search field from sidebar (search is in the topbar) */
+/* Hide sidebar logo & inline search (topbar has both) */
+.bd-sidebar-primary .navbar-brand.logo,
 .bd-sidebar-primary .search-button-field,
 .bd-sidebar-primary .sidebar-primary-item:has(.search-button-field) {
     display: none !important;
 }
 
+/* Keep sidebar-toggle and search buttons in topbar */
 .bd-header button.sidebar-toggle,
 .bd-header button.search-button {
     display: inline-flex !important;
@@ -182,48 +112,10 @@ div.nboutput.container div.output_area {
     border: none !important;
 }
 
-.bd-header button.sidebar-toggle:hover,
-.bd-header button.search-button:hover {
-    color: #ffffff !important;
-}
-
-.nabla-sidebar-toggle {
-    display: inline-flex !important;
-    align-items: center;
-    justify-content: center;
-    color: #e0e0e0 !important;
-    background: transparent !important;
-    border: none !important;
-    font-size: 1.1rem;
-    padding: 0.35rem 0.45rem;
-    cursor: pointer;
-    border-radius: 6px;
-}
-
-.nabla-sidebar-toggle:hover {
-    color: #ffffff !important;
-    background: rgba(255,255,255,0.07) !important;
-}
-
-.nabla-search-link {
-    display: inline-flex !important;
-    align-items: center;
-    color: #e0e0e0 !important;
-    text-decoration: none !important;
-    font-size: 1.1rem;
-    padding: 0.35rem 0.5rem;
-    border-radius: 6px;
-}
-
-.nabla-search-link:hover {
-    color: #ffffff !important;
-    background: rgba(255,255,255,0.07) !important;
-    text-decoration: none !important;
-}
+/* ── Custom topbar component styles ───────────────────────── */
 
 .nabla-topbar {
     width: 100%;
-    max-width: 100%;
     padding: 0.75rem 1.25rem;
     display: flex;
     align-items: center;
@@ -242,135 +134,72 @@ div.nboutput.container div.output_area {
     color: #ffffff !important;
     text-decoration: none !important;
 }
-
-.nabla-topbar-brand:hover {
-    color: #cccccc !important;
-}
+.nabla-topbar-brand:hover { color: #cccccc !important; }
 
 .nabla-topbar-actions {
     display: flex;
     align-items: center;
 }
 
-.nabla-topbar-actions .article-header-buttons {
-    display: flex;
+.nabla-gh-link {
+    display: inline-flex !important;
     align-items: center;
-    gap: 0.35rem;
-}
-
-.nabla-topbar-actions .btn {
     color: #e0e0e0 !important;
+    text-decoration: none !important;
+    font-size: 1.25rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: 6px;
 }
-
-.nabla-topbar-actions .btn:hover {
+.nabla-gh-link:hover {
     color: #ffffff !important;
+    background: rgba(255, 255, 255, 0.07) !important;
+    text-decoration: none !important;
 }
 
-.bd-header-article {
-    display: none !important;
+.nabla-sidebar-toggle,
+.nabla-search-link {
+    display: inline-flex !important;
+    align-items: center;
+    color: #e0e0e0 !important;
+    background: transparent !important;
+    border: none !important;
+    font-size: 1.1rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: 6px;
+    text-decoration: none !important;
+    cursor: pointer;
+}
+.nabla-sidebar-toggle:hover,
+.nabla-search-link:hover {
+    color: #ffffff !important;
+    background: rgba(255, 255, 255, 0.07) !important;
 }
 
-/* Remove logo from left sidebar */
-.bd-sidebar-primary .sidebar-primary-item .navbar-brand.logo img {
-    display: none !important;
-}
-
-/* Only essential notebook styling for Google Colab and download buttons */
-.notebook-buttons {
-    margin: 1rem 0;
-    text-align: left;
-}
-
-.colab-button {
-    display: inline-block;
-    background-color: #404040;
-    color: #e0e0e0;
-    border: 1px solid #606060;
-    padding: 8px 16px;
-    border-radius: 4px;
-    text-decoration: none;
-    font-weight: 400;
-    margin: 0.5rem 0.5rem 0.5rem 0;
-    transition: all 0.2s;
-    font-size: 0.9rem;
-}
-
-.colab-button:hover {
-    background-color: #505050;
-    border-color: #707070;
-    text-decoration: none;
-    color: #f0f0f0;
-}
-
-.colab-button:before {
-    content: "🚀 ";
-}
-
-.notebook-download {
-    display: inline-block;
-    background-color: #404040;
-    color: #e0e0e0;
-    border: 1px solid #606060;
-    padding: 8px 16px;
-    border-radius: 4px;
-    text-decoration: none;
-    font-weight: 400;
-    margin: 0.5rem 0.5rem 0.5rem 0;
-    transition: all 0.2s;
-    font-size: 0.9rem;
-}
-
-.notebook-download:hover {
-    background-color: #505050;
-    border-color: #707070;
-    text-decoration: none;
-    color: #f0f0f0;
-}
-
-.notebook-download:before {
-    content: "↓ ";
-}
 
 /* ============================================================
-   SIDEBAR WIDTHS — both sidebars locked to 18rem
-   PST controls right sidebar via width:var(--pst-sidebar-secondary),
-   so we MUST override the variable with a rem value, not %.
+   4. SIDEBAR WIDTHS
+   SBT breakpoints: left sidebar appears at 992px,
+                    right sidebar appears at 1200px.
    ============================================================ */
 
-/* Override PST's sidebar variable so the right sidebar is 13rem */
-:root {
-    --pst-sidebar-secondary: 13rem !important;
-}
-
-@media (min-width: 960px) {
-    /* Left sidebar: 13rem, matching the right */
+@media (min-width: 992px) {
     .bd-sidebar-primary {
         flex: 0 0 13rem !important;
         width: 13rem !important;
         min-width: 13rem !important;
         max-width: 13rem !important;
         margin: 0 !important;
-        padding-left: 0.15rem !important;
+        padding-left: 1rem !important;
         padding-right: 0.65rem !important;
     }
 
-    /* Right sidebar: 13rem — override PST's width:var(--pst-sidebar-secondary) */
-    .bd-sidebar-secondary {
-        flex: 0 0 13rem !important;
-        width: 13rem !important;
-        min-width: 13rem !important;
-        max-width: 13rem !important;
-        margin: 0 !important;
-        padding: 0 1rem !important;
-    }
-
-    input#pst-primary-sidebar-checkbox:checked ~ .bd-container .bd-sidebar-primary {
+    input#pst-primary-sidebar-checkbox:checked
+        ~ .bd-container .bd-sidebar-primary {
         margin-left: -13rem !important;
     }
 
     .bd-sidebar-primary nav.bd-links {
-        margin-right: 0 !important;
-        margin-left: 0 !important;
+        margin: 0 !important;
         padding-left: 0 !important;
     }
 
@@ -394,146 +223,107 @@ div.nboutput.container div.output_area {
     }
 }
 
+@media (min-width: 1200px) {
+    .bd-sidebar-secondary {
+        flex: 0 0 13rem !important;
+        width: 13rem !important;
+        min-width: 13rem !important;
+        max-width: 13rem !important;
+        margin: 0 !important;
+        padding: 0 1rem !important;
+    }
+}
+
+
 /* ============================================================
-   SECONDARY SIDEBAR — always show the element (spacing),
-   but on the home page hide its inner content items.
-   PST injects an inline <style> block in index.html that does
-   .bd-sidebar-secondary { display:none !important } — we beat
-   it with a higher-specificity selector.
+   5. HOMEPAGE  (html.home-landing)
+   Class is stamped synchronously on <html> by an inline <script>
+   injected in the <head> by layout.html (pagename == 'index').
    ============================================================ */
-html body .bd-sidebar-secondary {
-    display: flex !important;
-    visibility: visible !important;
-}
 
-/* Home page: keep the spacer div but show nothing inside it */
-.home-landing .bd-sidebar-secondary .sidebar-secondary-items {
-    display: none !important;
-}
-
-/* Landing Page: hide overlays and sidebar toggle overlay */
-.home-landing .overlay-primary,
-.home-landing .overlay-secondary {
-    display: none !important;
-}
-
-.home-landing .bd-main .bd-content {
+html.home-landing .bd-main .bd-content {
     padding-left: 0 !important;
     padding-right: 0 !important;
-    position: relative;
-    z-index: 1;
 }
 
-.home-landing .bd-article-container {
-    max-width: 1200px !important;
-    margin: 0 auto !important;
+html.home-landing .bd-content section {
+    margin-top: 2.2rem !important;
 }
 
-.home-landing .bd-main {
-    position: relative;
-    overflow: hidden;
+html.home-landing h2,
+html.home-landing h3 {
+    margin-top: 0 !important;
+    margin-bottom: 1.5rem !important;
 }
 
-.home-landing .bd-main::before,
-.home-landing .bd-main::after {
-    content: "";
-    position: absolute;
-    left: -18%;
-    right: -18%;
-    height: 220px;
-    pointer-events: none;
-    z-index: 0;
-    opacity: 0.28;
-    background: repeating-linear-gradient(
-        100deg,
-        rgba(255, 255, 255, 0.09) 0px,
-        rgba(255, 255, 255, 0.09) 1px,
-        transparent 1px,
-        transparent 18px
-    );
-}
 
-.home-landing .bd-main::before {
-    top: 48px;
-    transform: rotate(-4deg);
-    animation: landingFlowA 18s linear infinite;
-}
-
-.home-landing .bd-main::after {
-    top: 210px;
-    transform: rotate(3deg);
-    opacity: 0.18;
-    animation: landingFlowB 24s linear infinite;
-}
-
-@keyframes landingFlowA {
-    from {
-        background-position: 0 0;
-    }
-    to {
-        background-position: 280px 0;
-    }
-}
-
-@keyframes landingFlowB {
-    from {
-        background-position: 0 0;
-    }
-    to {
-        background-position: -340px 0;
-    }
-}
+/* ============================================================
+   6. HERO SECTION
+   ============================================================ */
 
 .landing-hero {
     text-align: left;
-    padding: 1.5rem 0 0;
+    padding: clamp(1rem, 3vw, 2.5rem) 0 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.landing-title {
+    margin: 0 0 clamp(1.5rem, 4vw, 3.5rem) !important;
+    max-width: 980px;
+    width: 100%;
+    color: #ffffff;
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    font-weight: 680;
+    box-sizing: border-box;
+}
+
+.landing-subtitle {
+    max-width: 820px;
+    width: 100%;
+    margin: 0 0 clamp(1.5rem, 3vw, 2.5rem) !important;
+    font-size: clamp(1rem, 2vw, 1.1rem);
+    line-height: 1.6;
+    color: #b8b8b8;
+    box-sizing: border-box;
+}
+
+.landing-install {
+    width: 100%;
+    max-width: 940px;
+    margin: 0 0 clamp(1.5rem, 3vw, 2.5rem) !important;
+    box-sizing: border-box;
 }
 
 .landing-hero div.highlight {
-    width: min(940px, 100%);
+    width: 100%;
     max-width: 940px;
-    margin: 0 0 2.2rem !important;
+    margin: 0 0 clamp(1.5rem, 3vw, 2.2rem) !important;
+    box-sizing: border-box;
 }
 
 .landing-hero div.highlight pre {
     margin: 0;
-    padding: 0.9rem 1.05rem;
-    text-align: left;
+    padding: clamp(0.7rem, 2vw, 0.9rem) clamp(0.8rem, 2vw, 1.05rem);
     overflow-x: auto;
     white-space: pre;
     line-height: 1.45;
 }
 
-.landing-title {
-    margin: 0 0 3.5rem !important;
-    max-width: 980px;
-    color: #ffffff;
-    font-size: clamp(2rem, 4.4vw, 3.5rem);
-    line-height: 1.08;
-    letter-spacing: -0.02em;
-    font-weight: 680;
-}
 
-.landing-subtitle {
-    max-width: 820px;
-    margin: 0 0 2.5rem !important;
-    font-size: 1.1rem;
-    line-height: 1.6;
-    color: #b8b8b8;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-}
+/* ============================================================
+   7. CARD GRID
+   ============================================================ */
 
-.landing-install {
-    width: min(940px, 100%);
-    margin: 0 0 1.5rem !important;
-}
-
-/* Modern Modular Grid */
 .landing-grid-modular {
-    margin-top: 1.5rem !important;
+    margin-top: clamp(1.5rem, 3vw, 2.5rem) !important;
     max-width: 1100px;
+    width: 100%;
     margin-left: 0;
     margin-right: auto;
+    box-sizing: border-box;
 }
 
 .landing-grid-modular .sd-card {
@@ -542,11 +332,7 @@ html body .bd-sidebar-secondary {
     padding: 0 !important;
 }
 
-.landing-grid-modular .sd-card:hover {
-    transform: none !important;
-    box-shadow: none !important;
-}
-
+.landing-grid-modular .sd-card-body,
 .landing-grid-modular .sd-card .sd-card-body {
     padding: 0 !important;
 }
@@ -564,8 +350,6 @@ html body .bd-sidebar-secondary {
     position: relative;
     overflow: hidden;
     background-color: #1a1a1a;
-    border: none !important;
-    transform: none !important;
 }
 
 .card-media {
@@ -594,12 +378,6 @@ html body .bd-sidebar-secondary {
     font-size: 0.96rem;
     line-height: 1.5;
     margin-bottom: 0.45rem;
-}
-
-.card-image-note {
-    margin-top: 0.8rem;
-    color: #8f8f8f;
-    font-size: 0.9rem;
 }
 
 .info-card {
@@ -634,25 +412,101 @@ html body .bd-sidebar-secondary {
     background: #080808;
 }
 
-.home-landing .bd-content section {
-    margin-top: 2.2rem !important;
+
+/* ============================================================
+   8. CODE BLOCKS
+   ============================================================ */
+
+html[data-theme="dark"] div.highlight {
+    background-color: #1a1a1a !important;
+    border: none !important;
+    border-radius: 8px;
 }
 
-.home-landing h1,
-.home-landing h2,
-.home-landing h3 {
-    margin-top: 0 !important;
-    margin-bottom: 1.5rem !important;
+html[data-theme="dark"] div[class^="highlight-"] {
+    background-color: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    margin-top: 1rem !important;
+    margin-bottom: 1rem !important;
 }
+
+html[data-theme="dark"] div.highlight pre {
+    background-color: transparent !important;
+    border: none !important;
+    margin: 0 !important;
+}
+
+html[data-theme="dark"] code,
+html[data-theme="dark"] tt,
+html[data-theme="dark"] kbd,
+html[data-theme="dark"] samp {
+    background-color: #232323 !important;
+}
+
+
+/* ============================================================
+   9. NOTEBOOK CELLS
+   ============================================================ */
+
+div.nbinput.container,
+div.nboutput.container {
+    border-color: #2a2a2a !important;
+}
+
+/* Remove In[]/Out[] prompt labels */
+div.nbinput.container div.prompt,
+div.nboutput.container div.prompt {
+    display: none !important;
+}
+
+/* Full-width cells now that prompts are gone */
+div.nbinput.container div.input_area,
+div.nboutput.container div.output_area {
+    width: 100% !important;
+    flex: 1 1 100% !important;
+    border-color: #2a2a2a !important;
+}
+
+/* Notebook action buttons (Colab, download) */
+.notebook-buttons {
+    margin: 1rem 0;
+}
+
+.colab-button,
+.notebook-download {
+    display: inline-block;
+    background-color: #404040;
+    color: #e0e0e0;
+    border: 1px solid #606060;
+    padding: 8px 16px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-weight: 400;
+    margin: 0.5rem 0.5rem 0.5rem 0;
+    transition: all 0.2s;
+    font-size: 0.9rem;
+}
+
+.colab-button:hover,
+.notebook-download:hover {
+    background-color: #505050;
+    border-color: #707070;
+    text-decoration: none;
+    color: #f0f0f0;
+}
+
+.colab-button::before  { content: "🚀 "; }
+.notebook-download::before { content: "↓ "; }
+
+
+/* ============================================================
+   10. MOBILE (≤768px)
+   ============================================================ */
 
 @media (max-width: 768px) {
-    .landing-title {
-        line-height: 1.15;
-    }
-
-    .landing-grid-modular {
-        margin-top: 2rem;
-    }
+    .landing-title        { line-height: 1.15; }
+    .landing-hero         { padding: 1rem 0 0; }
+    .landing-grid-modular { margin-top: 1.5rem !important; }
+    .card-image-container { margin-bottom: 0.8rem; }
 }
-
-

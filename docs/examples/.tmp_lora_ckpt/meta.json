@@ -1,0 +1,16 @@
+{
+  "has_optimizer": true,
+  "step": 120,
+  "tensor_keys": [
+    "lora.A",
+    "lora.B",
+    "opt_m.A",
+    "opt_m.B",
+    "opt_v.A",
+    "opt_v.B"
+  ],
+  "user_metadata": {
+    "alpha": 16.0,
+    "rank": 8
+  }
+}
