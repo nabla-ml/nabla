@@ -18,11 +18,11 @@ html[data-theme="dark"] {
     --pst-color-background: #000000;
     --pst-color-on-background: #000000;
     --pst-color-surface: #000000;
-    --pst-color-primary: #ffb36b;
+    --pst-color-primary: #ffcc99;
     --pst-color-primary-bg: #3a2715;
     --pst-color-primary-text: #14181e;
-    --pst-color-link: #ffb36b;
-    --pst-color-link-hover: #ffc78f;
+    --pst-color-link: #ffcc99;
+    --pst-color-link-hover: #ffe6cc;
     /* Tame all border/divider lines to a subtle dark grey */
     --pst-color-border: #2a2a2a;
     --pst-color-shadow: rgba(0, 0, 0, 0.5);
@@ -486,7 +486,7 @@ html body .bd-sidebar-secondary {
 
 .landing-hero {
     text-align: left;
-    padding: 2.5rem 0 0;
+    padding: 1.5rem 0 0;
 }
 
 .landing-hero div.highlight {
@@ -505,7 +505,7 @@ html body .bd-sidebar-secondary {
 }
 
 .landing-title {
-    margin: 0 0 2.2rem;
+    margin: 0 0 3.5rem !important;
     max-width: 980px;
     color: #ffffff;
     font-size: clamp(2rem, 4.4vw, 3.5rem);
@@ -516,7 +516,7 @@ html body .bd-sidebar-secondary {
 
 .landing-subtitle {
     max-width: 820px;
-    margin: 0 0 2.2rem;
+    margin: 0 0 2.5rem !important;
     font-size: 1.1rem;
     line-height: 1.6;
     color: #b8b8b8;
@@ -525,12 +525,12 @@ html body .bd-sidebar-secondary {
 
 .landing-install {
     width: min(940px, 100%);
-    margin: 0 0 2.2rem;
+    margin: 0 0 1.5rem !important;
 }
 
 /* Modern Modular Grid */
 .landing-grid-modular {
-    margin-top: 2.2rem;
+    margin-top: 1.5rem !important;
     max-width: 1100px;
     margin-left: 0;
     margin-right: auto;
