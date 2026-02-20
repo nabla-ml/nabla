@@ -31,7 +31,9 @@ pip install --pre --extra-index-url https://whl.modular.com/nightly/simple/ modu
 :link-type: doc
 :class-card: home-nav-card
 
-<img src="_static/images/cards/get-started.png" alt="Get started in Nabla" class="card-media" />
+<div class="card-image-container">
+    <img src="_static/images/cards/get-started.png" alt="Get started in Nabla" class="card-media" />
+</div>
 <div class="card-title-bottom">Getting Started</div>
 <div class="card-subtitle">Setup, first tensors, autodiff, and your first training loop.</div>
 :::
@@ -41,7 +43,9 @@ pip install --pre --extra-index-url https://whl.modular.com/nightly/simple/ modu
 :link-type: doc
 :class-card: home-nav-card
 
-<img src="_static/images/cards/api.png" alt="Nabla API reference" class="card-media" />
+<div class="card-image-container">
+    <img src="_static/images/cards/api.png" alt="Nabla API reference" class="card-media" />
+</div>
 <div class="card-title-bottom">API Reference</div>
 <div class="card-subtitle">Core tensors, transforms, ops, and neural-network primitives.</div>
 :::
@@ -51,7 +55,9 @@ pip install --pre --extra-index-url https://whl.modular.com/nightly/simple/ modu
 :link-type: doc
 :class-card: home-nav-card
 
-<img src="_static/images/cards/examples.png" alt="Nabla examples and tutorials" class="card-media" />
+<div class="card-image-container">
+    <img src="_static/images/cards/examples.png" alt="Nabla examples and tutorials" class="card-media" />
+</div>
 <div class="card-title-bottom">Examples</div>
 <div class="card-subtitle">Guided notebooks across MLPs, transformers, and fine-tuning.</div>
 :::

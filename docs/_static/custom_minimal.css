@@ -485,14 +485,14 @@ html body .bd-sidebar-secondary {
 }
 
 .landing-hero {
-    text-align: center;
-    padding: 2rem 0 1rem;
+    text-align: left;
+    padding: 2.5rem 0 0;
 }
 
 .landing-hero div.highlight {
     width: min(940px, 100%);
     max-width: 940px;
-    margin: 0.7rem auto 0.2rem !important;
+    margin: 0 0 2.2rem !important;
 }
 
 .landing-hero div.highlight pre {
@@ -505,19 +505,19 @@ html body .bd-sidebar-secondary {
 }
 
 .landing-title {
-    margin: 0 auto 0.85rem;
+    margin: 0 0 2.2rem;
     max-width: 980px;
     color: #ffffff;
-    font-size: clamp(1.9rem, 4.4vw, 3.4rem);
+    font-size: clamp(2rem, 4.4vw, 3.5rem);
     line-height: 1.08;
     letter-spacing: -0.02em;
     font-weight: 680;
 }
 
 .landing-subtitle {
-    max-width: 920px;
-    margin: 0.25rem auto 1.4rem;
-    font-size: clamp(1.03rem, 2vw, 1.28rem);
+    max-width: 820px;
+    margin: 0 0 2.2rem;
+    font-size: 1.1rem;
     line-height: 1.6;
     color: #b8b8b8;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -525,14 +525,14 @@ html body .bd-sidebar-secondary {
 
 .landing-install {
     width: min(940px, 100%);
-    margin: 0.2rem auto 0;
+    margin: 0 0 2.2rem;
 }
 
 /* Modern Modular Grid */
 .landing-grid-modular {
-    margin-top: 2.8rem;
+    margin-top: 2.2rem;
     max-width: 1100px;
-    margin-left: auto;
+    margin-left: 0;
     margin-right: auto;
 }
 
@@ -540,11 +540,11 @@ html body .bd-sidebar-secondary {
     background-color: transparent !important;
     border: none !important;
     padding: 0 !important;
-    transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1) !important;
 }
 
 .landing-grid-modular .sd-card:hover {
-    transform: translateY(-8px) !important;
+    transform: none !important;
+    box-shadow: none !important;
 }
 
 .landing-grid-modular .sd-card .sd-card-body {
@@ -556,17 +556,28 @@ html body .bd-sidebar-secondary {
     flex-direction: column;
 }
 
-.card-media {
+.card-image-container {
     width: 100%;
     aspect-ratio: 1 / 1;
-    border-radius: 80px !important;
-    margin-bottom: 1rem;
+    border-radius: 12px !important;
+    margin-bottom: 1.1rem;
     position: relative;
     overflow: hidden;
     background-color: #1a1a1a;
     border: none !important;
-    object-fit: cover;
+    transform: none !important;
+}
+
+.card-media {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
     display: block !important;
+    transition: transform 0.6s cubic-bezier(0.2, 0, 0, 1) !important;
+}
+
+.home-nav-card:hover .card-media {
+    transform: scale(1.08) !important;
 }
 
 .card-title-bottom {
@@ -616,16 +627,22 @@ html body .bd-sidebar-secondary {
 
 .featured-example,
 .blog-slot {
-    margin-top: 1.8rem;
+    margin-top: 2.22rem;
     border: none;
     border-radius: 14px;
     padding: 1rem 1.2rem;
     background: #080808;
 }
 
-.featured-example h3,
-.blog-slot h3 {
-    margin: 0 0 0.35rem;
+.home-landing .bd-content section {
+    margin-top: 2.2rem !important;
+}
+
+.home-landing h1,
+.home-landing h2,
+.home-landing h3 {
+    margin-top: 0 !important;
+    margin-bottom: 1.5rem !important;
 }
 
 @media (max-width: 768px) {
