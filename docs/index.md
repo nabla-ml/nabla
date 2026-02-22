@@ -60,12 +60,6 @@ api/index
 
 ::::
 
-::::{div} landing-install
-```bash
-pip install --pre --extra-index-url https://whl.modular.com/nightly/simple/ modular nabla-ml
-```
-::::
-
 ## Why Nabla
 
 ::::{grid} 1 1 2 2
