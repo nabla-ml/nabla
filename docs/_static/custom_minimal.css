@@ -28,11 +28,11 @@ html {
     --pst-color-background: #000000;
     --pst-color-on-background: #000000;
     --pst-color-surface: #000000;
-    --pst-color-primary: #ffcc99;
+    --pst-color-primary: #ffe6cc;
     --pst-color-primary-bg: #3a2715;
     --pst-color-primary-text: #14181e;
-    --pst-color-link: #ffcc99;
-    --pst-color-link-hover: #ffe6cc;
+    --pst-color-link: #ffe6cc;
+    --pst-color-link-hover: #fff5e6;
     --pst-color-border: #2a2a2a;
     --pst-color-shadow: rgba(0, 0, 0, 0.5);
     /* Secondary sidebar width — no !important (ignored on custom props) */
