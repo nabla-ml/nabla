@@ -764,7 +764,7 @@ def call_custom_kernel(
     for p in kernel_path:
         path_obj = Path(p).resolve()
         resolved_paths.append(path_obj)
-    GRAPH.graph._kernel_library.load_paths(GRAPH.graph._context, resolved_paths)
+    GRAPH.graph._kernel_library.load_paths(resolved_paths)
 
     results = ops.custom(
         name=func_name,

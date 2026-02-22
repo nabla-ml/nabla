@@ -147,7 +147,7 @@ loss, grads = nb.value_and_grad(loss_fn)(lora_params, x, y)
 
 ::::{div} featured-example
 ### Featured Example
-[LoRA fine-tuning MVP →](examples/10_lora_finetuning_mvp)
+[LoRA fine-tuning MVP →](examples/11_lora_finetuning)
 
 See a compact end-to-end fine-tuning flow in the examples collection.
 ::::
