@@ -6,8 +6,6 @@
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from max.graph import TensorValue
-
 from nabla.ops import UnaryOperation, call_custom_kernel
 
 if TYPE_CHECKING:
@@ -15,16 +13,20 @@ if TYPE_CHECKING:
 
 
 class AddOneCustomOp(UnaryOperation):
-    name = "my_kernel"
+    @property
+    def name(self) -> str:
+        return "my_kernel"
 
-    def kernel(self, x: TensorValue, **kwargs: Any) -> TensorValue:
+    def kernel(self, args: list[Any], kwargs: dict[str, Any]) -> list[Any]:
         """Invokes the custom Mojo kernel."""
         # Path relative to this file: ./kernels/
         kernel_dir = Path(__file__).parent / "kernels"
+        x = args[0]
 
-        return call_custom_kernel("my_kernel", kernel_dir, x, x.type)
+        result = call_custom_kernel("my_kernel", kernel_dir, x, x.type)
+        return [result]
 
 
 def add_one_custom(x: "Tensor") -> "Tensor":
     """Custom op that adds one to each element using a Mojo kernel."""
-    return AddOneCustomOp()(x)
+    return AddOneCustomOp()([x], {})[0]
