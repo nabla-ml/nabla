@@ -94,7 +94,7 @@ html_favicon = "_static/nabla-logo.svg"
 html_extra_path = ["_static/robots.txt"]
 
 # Custom CSS and JavaScript files.
-html_css_files = ["custom_minimal.css", "seo-advanced.css"]
+html_css_files = ["custom_minimal.css", "seo-advanced.css", "vscode_dark.css"]
 html_js_files = ["performance.js", "custom.js"]
 
 # Theme-specific options for the Sphinx Book Theme.
@@ -139,8 +139,8 @@ myst_fence_as_directive = []
 myst_highlight_code_blocks = True
 
 # Configure code block styling
-pygments_style = 'sphinx'
-pygments_dark_style = 'monokai'
+pygments_style = 'one-dark'
+pygments_dark_style = 'one-dark'
 
 # -- Napoleon (Docstrings) --
 napoleon_google_docstring = True

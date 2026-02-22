@@ -24,19 +24,19 @@
 html[data-theme="dark"],
 html[data-theme="light"],
 html {
-    --nabla-header-height:     58px;
-    --pst-color-background:    #000000;
+    --nabla-header-height: 58px;
+    --pst-color-background: #000000;
     --pst-color-on-background: #000000;
-    --pst-color-surface:       #000000;
-    --pst-color-primary:       #ffcc99;
-    --pst-color-primary-bg:    #3a2715;
-    --pst-color-primary-text:  #14181e;
-    --pst-color-link:          #ffcc99;
-    --pst-color-link-hover:    #ffe6cc;
-    --pst-color-border:        #2a2a2a;
-    --pst-color-shadow:        rgba(0, 0, 0, 0.5);
+    --pst-color-surface: #000000;
+    --pst-color-primary: #ffcc99;
+    --pst-color-primary-bg: #3a2715;
+    --pst-color-primary-text: #14181e;
+    --pst-color-link: #ffcc99;
+    --pst-color-link-hover: #ffe6cc;
+    --pst-color-border: #2a2a2a;
+    --pst-color-shadow: rgba(0, 0, 0, 0.5);
     /* Secondary sidebar width — no !important (ignored on custom props) */
-    --pst-sidebar-secondary:   13rem;
+    --pst-sidebar-secondary: 13rem;
 }
 
 
@@ -135,7 +135,10 @@ button[title*="Theme"],
     color: #ffffff !important;
     text-decoration: none !important;
 }
-.nabla-topbar-brand:hover { color: #cccccc !important; }
+
+.nabla-topbar-brand:hover {
+    color: #cccccc !important;
+}
 
 .nabla-topbar-actions {
     display: flex;
@@ -151,6 +154,7 @@ button[title*="Theme"],
     padding: 0.35rem 0.5rem;
     border-radius: 6px;
 }
+
 .nabla-gh-link:hover {
     color: #ffffff !important;
     background: rgba(255, 255, 255, 0.07) !important;
@@ -170,6 +174,7 @@ button[title*="Theme"],
     text-decoration: none !important;
     cursor: pointer;
 }
+
 .nabla-sidebar-toggle:hover,
 .nabla-search-link:hover {
     color: #ffffff !important;
@@ -197,8 +202,7 @@ button[title*="Theme"],
         padding-right: 0.65rem !important;
     }
 
-    input#pst-primary-sidebar-checkbox:checked
-        ~ .bd-container .bd-sidebar-primary {
+    input#pst-primary-sidebar-checkbox:checked~.bd-container .bd-sidebar-primary {
         margin-left: -13rem !important;
     }
 
@@ -211,18 +215,18 @@ button[title*="Theme"],
         padding-left: 0.8rem !important;
     }
 
-    .bd-sidebar-primary nav.bd-links li > a {
+    .bd-sidebar-primary nav.bd-links li>a {
         margin-right: 0 !important;
         padding-left: 0.35rem !important;
         padding-right: 0.8rem !important;
     }
 
     .bd-sidebar-primary li.has-children .caption,
-    .bd-sidebar-primary li.has-children > .reference {
+    .bd-sidebar-primary li.has-children>.reference {
         margin-right: calc(25px + 0.4rem) !important;
     }
 
-    .bd-sidebar-primary li.has-children > details > summary .toctree-toggle {
+    .bd-sidebar-primary li.has-children>details>summary .toctree-toggle {
         right: 0.5rem !important;
     }
 }
@@ -257,15 +261,15 @@ html.home-landing .bd-content section {
     margin-top: 2.2rem !important;
 }
 
-html.home-landing .bd-article > section > h1,
-html.home-landing .bd-article > section > h2,
-html.home-landing .bd-article > section > h3 {
+html.home-landing .bd-article>section>h1,
+html.home-landing .bd-article>section>h2,
+html.home-landing .bd-article>section>h3 {
     margin-top: 0 !important;
     margin-bottom: 1.5rem !important;
     font-size: clamp(1.7rem, 2.4vw, 2rem) !important;
 }
 
-html.home-landing .bd-article > section > h4 {
+html.home-landing .bd-article>section>h4 {
     margin-top: 0 !important;
     margin-bottom: 1.25rem !important;
     font-size: clamp(1.25rem, 1.8vw, 1.4rem) !important;
@@ -433,7 +437,7 @@ html.home-landing .bd-article > section > h4 {
    ============================================================ */
 
 html[data-theme="dark"] div.highlight {
-    background-color: #1a1a1a !important;
+    background-color: #1e1e1e !important;
     border: none !important;
     border-radius: 8px;
 }
@@ -464,9 +468,18 @@ html[data-theme="dark"] samp {
    9. NOTEBOOK CELLS
    ============================================================ */
 
+/* Outer container completely black, no borders */
 div.nbinput.container,
 div.nboutput.container {
-    border-color: #2a2a2a !important;
+    background-color: #000000 !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+div.nboutput.container {
+    margin-top: 12px !important;
+    margin-bottom: 24px !important;
 }
 
 /* Remove In[]/Out[] prompt labels */
@@ -480,7 +493,33 @@ div.nbinput.container div.input_area,
 div.nboutput.container div.output_area {
     width: 100% !important;
     flex: 1 1 100% !important;
-    border-color: #2a2a2a !important;
+    border: none !important;
+    background-color: transparent !important;
+    padding: 0 !important;
+}
+
+/* Inner Code Input Background */
+div.nbinput.container div.highlight {
+    background-color: #1e1e1e !important;
+    border: none !important;
+    border-radius: 8px;
+    padding: 1.1rem !important;
+}
+
+/* Inner Code Output Background (almost black) */
+div.nboutput.container div.output_area div.highlight {
+    background-color: #0f0f0f !important;
+    border: none !important;
+    border-radius: 8px;
+    padding: 1.1rem !important;
+    margin: 0 !important;
+}
+
+div.nboutput.container div.output_area pre {
+    background-color: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
 }
 
 /* Notebook action buttons (Colab, download) */
@@ -511,8 +550,13 @@ div.nboutput.container div.output_area {
     color: #f0f0f0;
 }
 
-.colab-button::before  { content: "🚀 "; }
-.notebook-download::before { content: "↓ "; }
+.colab-button::before {
+    content: "🚀 ";
+}
+
+.notebook-download::before {
+    content: "↓ ";
+}
 
 
 /* ============================================================
@@ -520,8 +564,19 @@ div.nboutput.container div.output_area {
    ============================================================ */
 
 @media (max-width: 768px) {
-    .landing-title        { line-height: 1.15; }
-    .landing-hero         { padding: 1rem 0 0; }
-    .landing-grid-modular { margin-top: 1.5rem !important; }
-    .card-image-container { margin-bottom: 0.8rem; }
+    .landing-title {
+        line-height: 1.15;
+    }
+
+    .landing-hero {
+        padding: 1rem 0 0;
+    }
+
+    .landing-grid-modular {
+        margin-top: 1.5rem !important;
+    }
+
+    .card-image-container {
+        margin-bottom: 0.8rem;
+    }
 }
