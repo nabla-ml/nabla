@@ -85,7 +85,7 @@ exclude_patterns = [
 # Settings that control the look and feel of the final HTML website.
 #
 html_theme = "sphinx_book_theme"
-html_title = "Nabla - High-Performance ML Computing"
+html_title = "Nabla - High-Performance Scientific Computing"
 html_short_title = "Nabla"
 html_favicon = "_static/nabla-logo.svg"
 

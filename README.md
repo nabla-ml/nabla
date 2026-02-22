@@ -1,4 +1,4 @@
-# Nabla: High-Performance Distributed ML
+# Nabla: High-Performance Scientific Computing
 
 > **A JAX-inspired autodiff library with factor-based SPMD sharding, built on [Mojo & MAX](https://www.modular.com/max).**
 
