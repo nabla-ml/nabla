@@ -4,56 +4,41 @@
 
 {%- set page_description -%}
 {%- if pagename == 'index' -%}
-Nabla is a high-performance Python ML framework with automatic differentiation, JIT compilation, SPMD sharding, and GPU
-acceleration built on Mojo and MAX. A fast JAX alternative with LoRA/QLoRA fine-tuning support.
+Nabla is a high-performance Python ML framework with automatic differentiation, JIT compilation, SPMD sharding, and GPU acceleration built on Mojo and MAX. A fast JAX alternative with LoRA/QLoRA fine-tuning support.
 {%- elif 'finetune' in pagename -%}
-LoRA and QLoRA fine-tuning API reference for Nabla. Parameter-efficient fine-tuning with NF4 quantization, adapter
-merging, and checkpoint management.
+LoRA and QLoRA fine-tuning API reference for Nabla ML. Parameter-efficient fine-tuning with NF4 quantization, adapter merging, and checkpoint management.
 {%- elif 'nn_optim' in pagename or 'optim' in pagename -%}
-Optimizer API reference for Nabla: AdamW, SGD, and functional optimizer APIs for distributed training with automatic
-differentiation.
+Optimizer API reference for Nabla ML: AdamW, SGD, and functional optimizer APIs for distributed training with automatic differentiation.
 {%- elif 'nn_modules' in pagename or 'modules' in pagename -%}
-Neural network modules for Nabla: Linear, LayerNorm, MultiHeadAttention, Transformer layers, and more. PyTorch-like API
-with Mojo acceleration.
+Neural network modules for Nabla ML: Linear, LayerNorm, MultiHeadAttention, Transformer layers, and more. PyTorch-like API with Mojo acceleration.
 {%- elif 'nn_functional' in pagename -%}
-Functional neural network API for Nabla: stateless layer functions, loss functions (cross-entropy, MSE), and weight
-initialization (Xavier, He).
+Functional neural network API for Nabla: stateless layer functions, loss functions (cross-entropy, MSE), and weight initialization (Xavier, He).
 {%- elif 'transforms' in pagename -%}
-Function transformations in Nabla: grad, vmap, JIT compile, vjp, jvp, jacrev, jacfwd, and shard_map for distributed SPMD
-computation.
+Function transformations in Nabla: grad, vmap, JIT compile, vjp, jvp, jacrev, jacfwd, and shard_map for distributed SPMD computation.
 {%- elif 'sharding' in pagename -%}
-SPMD sharding API for Nabla: DeviceMesh, PartitionSpec, and automatic tensor sharding for distributed multi-GPU
-training.
+SPMD sharding API for Nabla: DeviceMesh, PartitionSpec, and automatic tensor sharding for distributed multi-GPU training.
 {%- elif 'testing' in pagename -%}
-Testing utilities for Nabla: assert_allclose for cross-framework numeric validation and batch_realize for pytree tensor
-realization.
+Testing utilities for Nabla ML: assert_allclose for cross-framework numeric validation and batch_realize for pytree tensor realization.
 {%- elif 'api/' in pagename -%}
-API reference for {{ title_plain }} in the Nabla framework. Functions, classes, and examples for high-performance
-machine learning with Mojo.
+API reference for {{ title_plain }} in the Nabla ML framework. Functions, classes, and examples for high-performance machine learning with Mojo.
 {%- elif 'examples/' in pagename -%}
-{{ title_plain }} — step-by-step Nabla tutorial with code examples for automatic differentiation, GPU training, and
-distributed computing.
+{{ title_plain }} — step-by-step Nabla ML tutorial with code examples for automatic differentiation, GPU training, and distributed computing.
 {%- else -%}
-{{ title_plain }} — Nabla high-performance framework for automatic differentiation, JIT compilation, SPMD sharding, and
-GPU acceleration.
+{{ title_plain }} — Nabla ML high-performance framework for automatic differentiation, JIT compilation, SPMD sharding, and GPU acceleration.
 {%- endif -%}
 {%- endset -%}
 
 {%- set page_title -%}
 {%- if pagename == 'index' -%}
-Nabla — High-Performance Scientific Computing
+Nabla ML — High-Performance Autodiff & Distributed ML in Python
 {%- elif 'finetune' in pagename -%}
-LoRA & QLoRA Fine-Tuning API — Nabla
-{%- elif 'api/index' in pagename -%}
-API Reference — Nabla
+LoRA & QLoRA Fine-Tuning API — Nabla ML
 {%- elif 'api/' in pagename -%}
-{{ title_plain }} API Reference — Nabla
-{%- elif 'examples/index' in pagename -%}
-Examples & Tutorials — Nabla
+{{ title_plain }} API Reference — Nabla ML
 {%- elif 'examples/' in pagename -%}
-{{ title_plain }} Tutorial — Nabla
+{{ title_plain }} Tutorial — Nabla ML
 {%- else -%}
-{{ title_plain }} — Nabla
+{{ title_plain }} — Nabla ML
 {%- endif -%}
 {%- endset -%}
 
@@ -64,12 +49,11 @@ Examples & Tutorials — Nabla
 
 {%- block extrahead %}
 {% if pagename == 'index' %}
-<script>(function () { document.documentElement.classList.add('home-landing'); })();</script>
+<script>(function(){document.documentElement.classList.add('home-landing');})();</script>
 {% endif %}
 <!-- SEO Meta Tags -->
 <meta name="description" content="{{ page_description_plain|e }}" />
-<meta name="keywords"
-  content="nabla, machine learning framework, automatic differentiation, autodiff, JIT compilation, GPU computing, SPMD sharding, distributed training, deep learning, Mojo language, MAX engine, JAX alternative, PyTorch alternative, LoRA, QLoRA, fine-tuning, tensor operations, neural networks, pipeline parallelism, model parallelism, vmap, grad, {{ title_plain|lower|e }}" />
+<meta name="keywords" content="nabla, machine learning framework, automatic differentiation, autodiff, JIT compilation, GPU computing, SPMD sharding, distributed training, deep learning, Mojo language, MAX engine, JAX alternative, PyTorch alternative, LoRA, QLoRA, fine-tuning, tensor operations, neural networks, pipeline parallelism, model parallelism, vmap, grad, {{ title_plain|lower|e }}" />
 <meta name="author" content="Nabla ML" />
 <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
 <meta name="googlebot" content="index, follow" />
@@ -85,9 +69,9 @@ Examples & Tutorials — Nabla
 <meta property="og:image" content="{{ base_url }}_static/default-image.png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
-<meta property="og:image:alt" content="Nabla — High-Performance Machine Learning Framework" />
+<meta property="og:image:alt" content="Nabla ML — High-Performance Machine Learning Framework" />
 <meta property="og:description" content="{{ page_description_plain|e }}" />
-<meta property="og:site_name" content="Nabla" />
+<meta property="og:site_name" content="Nabla ML" />
 <meta property="og:locale" content="en_US" />
 
 <!-- Twitter Card Meta Tags -->
@@ -103,7 +87,7 @@ Examples & Tutorials — Nabla
 {
   "@context": "https://schema.org",
   "@type": "WebSite",
-  "name": "Nabla Documentation",
+  "name": "Nabla ML Documentation",
   "url": "{{ base_url }}",
   "potentialAction": {
     "@type": "SearchAction",
@@ -120,7 +104,7 @@ Examples & Tutorials — Nabla
   "@context": "https://schema.org",
   {% if pagename == 'index' -%}
   "@type": "SoftwareApplication",
-  "name": "Nabla",
+  "name": "Nabla ML",
   "applicationCategory": "DeveloperApplication",
   "applicationSubCategory": "Machine Learning Framework",
   "operatingSystem": "Linux, macOS",
