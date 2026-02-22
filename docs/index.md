@@ -14,13 +14,8 @@ api/index
 
 ::::{div} landing-hero
 <h1 class="landing-title">PyTorch Ease. JAX Scale. Mojo Speed.</h1>
-<p class="landing-subtitle">Nabla is a modular scientific computing and machine learning framework combining imperative and functional APIs. Seamlessly drop custom Mojo kernels into the autodiff engine and automatically shard distributed workloads.</p>
+<p class="landing-subtitle">Nabla is a high-performance scientific computing and machine learning framework combining imperative and functional APIs. Seamlessly drop custom Mojo kernels into the autodiff engine and automatically shard distributed workloads.</p>
 
-::::{div} landing-install
-```bash
-pip install --pre --extra-index-url https://whl.modular.com/nightly/simple/ modular nabla-ml
-```
-::::
 ::::
 
 ::::{grid} 1 1 3 3
@@ -62,6 +57,13 @@ pip install --pre --extra-index-url https://whl.modular.com/nightly/simple/ modu
 <div class="card-title-bottom">Examples</div>
 <div class="card-subtitle">Guided notebooks across MLPs, transformers, and fine-tuning.</div>
 :::
+
+::::
+
+::::{div} landing-install
+```bash
+pip install --pre --extra-index-url https://whl.modular.com/nightly/simple/ modular nabla-ml
+```
 ::::
 
 ## Why Nabla
