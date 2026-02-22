@@ -1,5 +1,14 @@
-# PyTree Utilities
+# PyTrees
 
+## `PyTreeDef`
+
+```python
+class PyTreeDef(kind: 'int', meta: 'Any', children: 'tuple[PyTreeDef, ...]', num_leaves: 'int') -> 'None':
+```
+Immutable definition of a pytree's structure.
+
+
+---
 ## `tree_flatten`
 
 ```python
@@ -42,15 +51,6 @@ Get all leaves from a pytree (optimized version - doesn't build treedef).
 def tree_structure(tree: 'Any', is_leaf: 'Callable[[Any], bool] | None' = None) -> 'PyTreeDef':
 ```
 Get structure info from a pytree.
-
-
----
-## `PyTreeDef`
-
-```python
-class PyTreeDef(kind: 'int', meta: 'Any', children: 'tuple[PyTreeDef, ...]', num_leaves: 'int') -> 'None':
-```
-Immutable definition of a pytree's structure.
 
 
 ---

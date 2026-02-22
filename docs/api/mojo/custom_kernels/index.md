@@ -1,6 +1,4 @@
-# Utilities
-
-Custom kernel integration and other utility functions.
+# Custom Kernels
 
 ## `call_custom_kernel`
 

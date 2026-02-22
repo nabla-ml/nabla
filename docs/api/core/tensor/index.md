@@ -1,4 +1,4 @@
-# Tensors
+# Tensor
 
 ## `Tensor`
 

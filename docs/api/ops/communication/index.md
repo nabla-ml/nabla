@@ -1,4 +1,4 @@
-# Distributed Communication
+# Communication
 
 ## `shard`
 

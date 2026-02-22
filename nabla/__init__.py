@@ -46,6 +46,7 @@ from .core import (
     with_batch_dims,
 )
 from .core.autograd.backward import backward
+from .core.autograd import forward
 from .core.sharding.spec import (
     DeviceMesh,
     DimSpec,
@@ -319,6 +320,7 @@ __all__ = [
     "grad",
     "value_and_grad",
     "backward",
+    "forward",
     "vjp",
     "jvp",
     "jacrev",

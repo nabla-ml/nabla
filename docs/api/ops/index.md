@@ -1,6 +1,6 @@
 # Operations
 
-A comprehensive library of tensor operations.
+Tensor operations grouped by semantics.
 
 ```{toctree}
 :maxdepth: 1

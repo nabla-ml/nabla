@@ -1,4 +1,4 @@
-# Types & Device
+# Types & Devices
 
 ## `DType`
 

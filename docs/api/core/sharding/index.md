@@ -1,4 +1,4 @@
-# SPMD Sharding
+# Sharding
 
 ## `DeviceMesh`
 
@@ -17,10 +17,19 @@ Logical multi-dimensional view of devices: @name = <["axis1"=size1, ...]>.
 
 
 ---
-## `PartitionSpec (P)`
+## `PartitionSpec`
 
 ```python
-class PartitionSpec (P)(*args):
+class PartitionSpec(*args):
+```
+JAX-compatible PartitionSpec.
+
+
+---
+## `P`
+
+```python
+class P(*args):
 ```
 JAX-compatible PartitionSpec.
 

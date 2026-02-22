@@ -47,6 +47,8 @@ if [[ "$BUILD_MODE" == "ci" ]]; then
 else
     # Local build: try to generate API docs if nabla is available
     if python -c "import nabla" 2>/dev/null; then
+        echo "🧹 Cleaning generated API docs..."
+        rm -rf api
         echo "✨ Generating API documentation from structure.json..."
         python scripts/build_from_json.py
         sphinx-build -b html --keep-going . _build/html

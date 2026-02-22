@@ -1,4 +1,4 @@
-# Optimizers (nabla.nn.optim)
+# Optim
 
 ## `Optimizer`
 

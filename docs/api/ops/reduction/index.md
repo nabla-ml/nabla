@@ -21,6 +21,27 @@ def reduce_min(x: 'Tensor', *, axis: 'int | tuple[int, ...] | list[int] | None' 
 ```
 
 ---
+## `sum`
+
+```python
+def sum(x: 'Tensor', *, axis: 'int | tuple[int, ...] | list[int] | None' = None, keepdims: 'bool' = False) -> 'Tensor':
+```
+
+---
+## `max`
+
+```python
+def max(x: 'Tensor', *, axis: 'int | tuple[int, ...] | list[int] | None' = None, keepdims: 'bool' = False) -> 'Tensor':
+```
+
+---
+## `min`
+
+```python
+def min(x: 'Tensor', *, axis: 'int | tuple[int, ...] | list[int] | None' = None, keepdims: 'bool' = False) -> 'Tensor':
+```
+
+---
 ## `mean`
 
 ```python

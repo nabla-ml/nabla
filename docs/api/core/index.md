@@ -1,14 +1,14 @@
 # Core
 
-The fundamental building blocks of Nabla.
+Core tensor types, runtime defaults, autograd entrypoints, pytrees, and sharding primitives.
 
 ```{toctree}
 :maxdepth: 1
 
 tensor/index
-sharding/index
-autograd/index
 context/index
-types/index
+autograd/index
 pytree/index
+sharding/index
+types/index
 ```

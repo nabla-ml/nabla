@@ -1,4 +1,4 @@
-# Automatic Differentiation
+# Autograd Runtime
 
 ## `backward`
 
@@ -14,6 +14,27 @@ This function:
 2. Runs VJP on the trace.
 3. Populates .grad attributes on the collected gradient leaves.
 4. Batch-realizes all gradients for efficiency.
+
+
+---
+## `forward`
+
+```python
+def forward(trace: 'Trace', tangents: 'Any', *, create_graph: 'bool' = True) -> 'TangentMap':
+```
+Pure-function forward-mode AD on a Trace.
+
+Analogous to backward_on_trace but propagates tangents forward.
+
+**Parameters**
+
+- **`trace`** – Captured computation trace.
+- **`tangents`** – Tangent vectors for trace inputs (same pytree structure).
+- **`create_graph`** – If True, tangent ops are traced for higher-order AD.
+
+**Returns**
+
+`TangentMap` – dict mapping output TensorImpl → tangent TensorImpl.
 
 
 ---

@@ -1,6 +1,6 @@
-# Function Transformations
+# Transforms
 
-Purely functional, composable transformations for differentiation, vectorization, compilation, and sharding.
+Composable function transformations for differentiation, vectorization, compilation, and SPMD execution.
 
 ```{toctree}
 :maxdepth: 1

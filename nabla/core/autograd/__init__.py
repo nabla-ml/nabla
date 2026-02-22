@@ -8,4 +8,6 @@
 from .backward import backward, backward_on_trace
 from .forward import forward_on_trace
 
-__all__ = ["backward_on_trace", "backward", "forward_on_trace"]
+forward = forward_on_trace
+
+__all__ = ["backward_on_trace", "backward", "forward", "forward_on_trace"]
