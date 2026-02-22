@@ -148,7 +148,7 @@ def test_pp_grad_with_bias():
         return ops.mean(diff * diff)
 
     print("Computing Gradients...")
-    from nabla.core.autograd import grad
+    from nabla.transforms import grad
 
     grad_fn = grad(pipeline_loss, argnums=(0, 1, 2), realize=False)
     x_grad_sharded, w_grad_sharded, b_grad_sharded = grad_fn(

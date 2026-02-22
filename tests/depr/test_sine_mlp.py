@@ -54,7 +54,7 @@ def main():
     lr = 0.01
     epochs = 100
 
-    from nabla.core.autograd import value_and_grad
+    from nabla.transforms import value_and_grad
 
     def loss_fn(params, x, y):
         preds = mlp(x, params)

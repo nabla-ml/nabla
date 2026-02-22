@@ -30,7 +30,7 @@ def test_dp_simple():
         diff = pred - y
         return ops.mean(diff * diff)
 
-    from nabla.core.autograd import grad
+    from nabla.transforms import grad
 
     grad_fn = grad(loss_fn, argnums=1)
 

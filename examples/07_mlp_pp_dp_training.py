@@ -154,7 +154,7 @@ def test_pp_dp_grad():
         return ops.mean(diff * diff)
 
     print("Computing 2D Parallel Gradients...")
-    from nabla.core.autograd import value_and_grad
+    from nabla.transforms import value_and_grad
 
     grad_fn = value_and_grad(pipeline_loss, argnums=(1, 2))
     (loss_nb, (w_grad, b_grad)) = grad_fn(

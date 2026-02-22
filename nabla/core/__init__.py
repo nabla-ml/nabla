@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
-from .autograd import grad, value_and_grad
+
 from .common import (
     PyTreeDef,
     _in_running_loop,  # noqa: F401
@@ -66,8 +66,5 @@ __all__ = [
     "print_trace_graph",
     "apply_to_operations",
     "Trace",
-    "trace",
-    "grad",
-    "value_and_grad",
     "realize_all",
 ]

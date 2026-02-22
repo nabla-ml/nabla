@@ -4,6 +4,7 @@
 # ===----------------------------------------------------------------------=== #
 
 from .compile import CompilationStats, CompiledFunction, compile
+from .grad import grad, value_and_grad
 from .jacfwd import jacfwd
 from .jacrev import jacrev
 from .jvp import jvp
@@ -21,4 +22,6 @@ __all__ = [
     "compile",
     "CompiledFunction",
     "CompilationStats",
+    "grad",
+    "value_and_grad",
 ]

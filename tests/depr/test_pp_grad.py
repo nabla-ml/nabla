@@ -120,7 +120,7 @@ def test_pp_grad_clean():
 
     # 5. Compute Gradients
     print("Computing Gradients...")
-    from nabla.core.autograd import grad
+    from nabla.transforms import grad
 
     grad_fn = grad(pipeline_loss, argnums=1)  # weights is second argument
 

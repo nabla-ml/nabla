@@ -45,8 +45,7 @@ from .core import (
     untraced,
     with_batch_dims,
 )
-from .core.autograd.api import grad, value_and_grad
-from .core.autograd.utils import backward
+from .core.autograd.backward import backward
 from .core.sharding.spec import (
     DeviceMesh,
     DimSpec,

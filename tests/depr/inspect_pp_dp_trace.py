@@ -1,7 +1,7 @@
 import numpy as np
 
 from nabla import ops
-from nabla.core import grad
+from nabla.transforms import grad
 from nabla.core.graph.tracing import trace
 from nabla.core.sharding import DeviceMesh, DimSpec
 from nabla.ops import communication

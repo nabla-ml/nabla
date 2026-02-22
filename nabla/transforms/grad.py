@@ -8,10 +8,10 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from ..common import pytree
-from ..graph.tracing import trace
-from ..tensor.api import Tensor
-from .utils import backward_on_trace
+from ..core.common import pytree
+from ..core.graph.tracing import trace
+from ..core.tensor.api import Tensor
+from ..core.autograd.backward import backward_on_trace
 
 if TYPE_CHECKING:
     from ..graph.tracing import Trace
@@ -32,8 +32,8 @@ def grad(
     """
 
     def wrapper(*args: Any, **kwargs: Any) -> Any:
-        from ...ops.creation import ones_like
-        from ..tensor.api import Tensor
+        from ..ops.creation import ones_like
+        from ..core.tensor.api import Tensor
 
         t: Trace = trace(fun, *args, **kwargs)
         output = t.outputs
@@ -62,7 +62,7 @@ def grad(
                 g for g in grad_leaves if isinstance(g, Tensor) and not g.real
             ]
             if non_none_grads:
-                from ..graph.engine import GRAPH
+                from ..core.graph.engine import GRAPH
 
                 if len(non_none_grads) > 1:
                     GRAPH.evaluate(non_none_grads[0], *non_none_grads[1:])
@@ -70,7 +70,7 @@ def grad(
                     GRAPH.evaluate(non_none_grads[0])
 
         grads_struct = pytree.tree_unflatten(pytree.tree_structure(args), grad_leaves)
-        from ...transforms.utils import select_argnums
+        from .utils import select_argnums
 
         return select_argnums(grads_struct, argnums)
 
@@ -89,8 +89,8 @@ def value_and_grad(
     """
 
     def wrapper(*args: Any, **kwargs: Any) -> tuple[Any, Any]:
-        from ...ops.creation import ones_like
-        from ..tensor.api import Tensor
+        from ..ops.creation import ones_like
+        from ..core.tensor.api import Tensor
 
         t: Trace = trace(fun, *args, **kwargs)
         output = t.outputs
@@ -121,8 +121,8 @@ def value_and_grad(
                 [g for g in grad_leaves if isinstance(g, Tensor) and not g.real]
             )
             if all_targets:
-                from ... import config as nabla_config
-                from ..graph.engine import GRAPH
+                from .. import config as nabla_config
+                from ..core.graph.engine import GRAPH
 
                 if not nabla_config.EAGER_MAX_GRAPH:
                     if len(all_targets) > 1:
@@ -131,7 +131,7 @@ def value_and_grad(
                         GRAPH.evaluate(all_targets[0])
 
         grads_struct = pytree.tree_unflatten(pytree.tree_structure(args), grad_leaves)
-        from ...transforms.utils import select_argnums
+        from .utils import select_argnums
 
         return output, select_argnums(grads_struct, argnums)
 

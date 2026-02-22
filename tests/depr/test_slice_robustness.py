@@ -53,7 +53,7 @@ def test_slice_update_vjp():
         return ops.reduce_sum(y)
 
     try:
-        from nabla.core.autograd import grad
+        from nabla.transforms import grad
 
         g_fn = grad(loss_fn, argnums=(0, 1))
         dx, du = g_fn(x, u)

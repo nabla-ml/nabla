@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 
 from nabla import ops
-from nabla.core.autograd import grad
+from nabla.transforms import grad
 from nabla.core.sharding import DeviceMesh, DimSpec
 from nabla.transforms.vmap import vmap
 
