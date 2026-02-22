@@ -94,7 +94,7 @@ Use `nb.nn.Module` and `nb.nn.functional` side-by-side. Nabla supports imperativ
 :::
 ::::
 
-## Try It Quickly
+## Quick Examples
 
 ::::{tab-set}
 :::{tab-item} Imperative style (PyTorch-like)

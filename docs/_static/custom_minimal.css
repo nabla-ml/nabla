@@ -560,7 +560,31 @@ div.nboutput.container div.output_area pre {
 
 
 /* ============================================================
-   10. MOBILE (≤768px)
+   10. COPY BUTTON
+   ============================================================ */
+
+button.copybtn {
+    opacity: 1 !important;
+    background-color: #212121 !important;
+    border: 1px solid #333333 !important;
+    color: #888888 !important;
+    transition: all 0.2s ease-in-out !important;
+}
+
+button.copybtn:hover {
+    background-color: #383838 !important;
+    color: #f0f0f0 !important;
+    border-color: #555555 !important;
+}
+
+button.copybtn.success {
+    background-color: #1b4e28 !important;
+    color: #6db37f !important;
+    border-color: #1b4e28 !important;
+}
+
+/* ============================================================
+   11. MOBILE (≤768px)
    ============================================================ */
 
 @media (max-width: 768px) {
