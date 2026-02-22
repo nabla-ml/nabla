@@ -39,7 +39,7 @@ def vjp(
     *create_graph* defaults to ``True`` so the returned pullback always
     produces differentiable gradients, enabling nested Jacobian compositions.
     """
-    from ..core.autograd.backward import backward_on_trace
+    from ..core.autograd.utils import backward_on_trace
     from ..core.common import pytree
     from ..core.graph.tracing import trace as capture_trace
     from ..core.tensor.api import Tensor
