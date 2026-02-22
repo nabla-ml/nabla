@@ -191,6 +191,7 @@ from .ops.view import (
     view_as_real_interleaved,
 )
 from .transforms.compile import CompilationStats, CompiledFunction, compile
+from .transforms.grad import grad, value_and_grad
 from .transforms.jacfwd import jacfwd
 from .transforms.jacrev import jacrev
 from .transforms.jvp import _clear_jvp_cache, jvp
