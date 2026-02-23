@@ -62,7 +62,7 @@ class Optimizer(ABC):
         }
 
     @abstractmethod
-    def step(self, grads: Any) -> Any:
+    def step(self, grads: Any = None) -> Any:
         raise NotImplementedError
 
 
@@ -87,7 +87,12 @@ class AdamW(Optimizer):
         self.m = tree_map(lambda p: zeros_like(p) if is_tensor(p) else None, params)
         self.v = tree_map(lambda p: zeros_like(p) if is_tensor(p) else None, params)
 
-    def step(self, grads: Any) -> Any:
+    def step(self, grads: Any = None) -> Any:
+        if grads is None:
+            # PyTorch-style: collect gradients stored in .grad attributes
+            grads = tree_map(
+                lambda p: p.grad if is_tensor(p) else None, self.params
+            )
         old_params = self.params
         self.step_count += 1
 
@@ -167,7 +172,12 @@ class SGD(Optimizer):
         else:
             self.bufs = tree_map(lambda p: None, params)
 
-    def step(self, grads: Any) -> Any:
+    def step(self, grads: Any = None) -> Any:
+        if grads is None:
+            # PyTorch-style: collect gradients stored in .grad attributes
+            grads = tree_map(
+                lambda p: p.grad if is_tensor(p) else None, self.params
+            )
         old_params = self.params
 
         def _apply(p: Any, g: Any, buf: Any):

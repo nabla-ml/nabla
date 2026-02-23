@@ -301,7 +301,7 @@ class Tensor(DLPackArray, HasTensorValue):
             >>> y.backward()
             >>> print(x.grad)  # [2.0, 4.0, 6.0]
         """
-        from ..autograd.utils import backward
+        from ..autograd.backward import backward
 
         backward(self, cotangents=gradient, create_graph=create_graph)
 
