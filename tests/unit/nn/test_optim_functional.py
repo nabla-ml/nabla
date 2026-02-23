@@ -214,3 +214,40 @@ class TestAdamWFunctionalPytree:
         nb.testing.assert_allclose(
             p_stateful["b"], p_functional["b"], rtol=1e-5, atol=1e-6
         )
+
+    def test_compiled_adamw_cache_reuse_with_tensor_step(self):
+        """Compiled functional training should compile once then hit cache.
+
+        Regression guard for static int optimizer step causing per-step cache misses.
+        """
+        rng = np.random.default_rng(1234)
+        x_np = rng.normal(size=(24, 4)).astype(np.float32)
+        y_np = rng.normal(size=(24, 2)).astype(np.float32)
+
+        x = nb.Tensor.from_dlpack(x_np)
+        y = nb.Tensor.from_dlpack(y_np)
+
+        params = {
+            "w": nb.Tensor.from_dlpack(rng.normal(size=(4, 2)).astype(np.float32)),
+            "b": nb.zeros((1, 2)),
+        }
+        params["w"].requires_grad = True
+        params["b"].requires_grad = True
+
+        opt = nb.nn.optim.adamw_init(params)
+
+        def loss_fn(p, x_in, y_in):
+            pred = x_in @ p["w"] + p["b"]
+            return nb.nn.functional.mse_loss(pred, y_in)
+
+        @nb.compile
+        def train_step(p, s, x_in, y_in):
+            loss, grads = nb.value_and_grad(loss_fn, argnums=0)(p, x_in, y_in)
+            p, s = nb.nn.optim.adamw_update(p, grads, s, lr=1e-3)
+            return p, s, loss
+
+        for _ in range(6):
+            params, opt, _ = train_step(params, opt, x, y)
+
+        assert train_step.stats.misses == 1
+        assert train_step.stats.hits >= 5

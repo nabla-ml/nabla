@@ -10,7 +10,6 @@ from typing import Any
 
 from ...core import Tensor, is_tensor, realize_all, tree_leaves, tree_map
 from ...ops.creation import zeros_like
-from ...ops.unary import sqrt
 from .functional import adamw_step, sgd_step
 
 
@@ -237,42 +236,41 @@ def adamw_update(
 ) -> tuple[Any, dict[str, Any]]:
     """Functional AdamW update on pytrees.
 
-    Kept for compatibility and reused by finetuning workloads.
+    Delegates per-leaf math to :func:`adamw_step` so the update logic
+    lives in one place.  Handles both scalar and tensor ``step`` (the
+    latter is produced by ``_normalize_optimizer_state_for_compile``
+    inside ``@nb.compile``).
     """
-    step = int(state["step"]) + 1
-
-    def _update_m(m: Any, g: Any) -> Any:
-        if is_tensor(m) and is_tensor(g):
-            return m * beta1 + g * (1.0 - beta1)
-        return m
-
-    def _update_v(v: Any, g: Any) -> Any:
-        if is_tensor(v) and is_tensor(g):
-            return v * beta2 + (g * g) * (1.0 - beta2)
-        return v
-
-    m = tree_map(_update_m, state["m"], grads)
-    v = tree_map(_update_v, state["v"], grads)
-
-    if bias_correction:
-        bias_c1 = 1.0 - (beta1**step)
-        bias_c2 = 1.0 - (beta2**step)
+    prev_step = state["step"]
+    if is_tensor(prev_step):
+        step = prev_step + 1.0
     else:
-        bias_c1 = 1.0
-        bias_c2 = 1.0
+        step = int(prev_step) + 1
 
     def _apply(p: Any, g: Any, m_t: Any, v_t: Any) -> Any:
         if is_tensor(p) and is_tensor(g) and is_tensor(m_t) and is_tensor(v_t):
-            m_hat = m_t / bias_c1
-            v_hat = v_t / bias_c2
-            update = m_hat / (sqrt(v_hat) + eps)
-            if weight_decay != 0.0:
-                update = update + p * weight_decay
-            return p - update * lr
-        return p
+            return adamw_step(
+                p, g, m_t, v_t, step,
+                lr=lr, beta1=beta1, beta2=beta2, eps=eps,
+                weight_decay=weight_decay, bias_correction=bias_correction,
+            )
+        return p, m_t, v_t
 
-    new_params = tree_map(_apply, params, grads, m, v)
-    new_state = {"m": m, "v": v, "step": step}
+    triples = tree_map(_apply, params, grads, state["m"], state["v"])
+
+    def _is_triplet(x: Any) -> bool:
+        return (
+            isinstance(x, tuple)
+            and len(x) == 3
+            and is_tensor(x[0])
+            and is_tensor(x[1])
+            and is_tensor(x[2])
+        )
+
+    new_params = tree_map(lambda t: t[0], triples, is_leaf=_is_triplet)
+    new_m = tree_map(lambda t: t[1], triples, is_leaf=_is_triplet)
+    new_v = tree_map(lambda t: t[2], triples, is_leaf=_is_triplet)
+    new_state = {"m": new_m, "v": new_v, "step": step}
 
     should_realize = (
         Optimizer._AUTO_REALIZE_UPDATED_PARAMS if realize is None else bool(realize)
@@ -281,8 +279,8 @@ def adamw_update(
         to_realize: list[Tensor] = []
         to_realize.extend(_unrealized_tensors(new_params))
         if Optimizer._AUTO_REALIZE_UPDATED_STATE:
-            to_realize.extend(_unrealized_tensors(new_state["m"]))
-            to_realize.extend(_unrealized_tensors(new_state["v"]))
+            to_realize.extend(_unrealized_tensors(new_m))
+            to_realize.extend(_unrealized_tensors(new_v))
         if to_realize:
             realize_all(*to_realize)
 

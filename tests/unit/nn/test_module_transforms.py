@@ -81,6 +81,35 @@ class TestCompileWithModule:
         assert compiled.stats.misses == 1
         assert compiled.stats.hits >= 1
 
+    def test_compile_training_step_cache_reuse_with_tensor_step_state(self):
+        """Compiled training should hit cache across optimizer steps.
+
+        Regression guard: if optimizer step is a Python int static leaf,
+        compile cache misses can grow each iteration (retrace/recompile loop).
+        """
+        rng = make_rng(777)
+        model = nb.nn.Linear(4, 3)
+        x = nb.Tensor.from_dlpack(rng.normal(size=(16, 4)).astype(np.float32))
+        y = nb.Tensor.from_dlpack(rng.normal(size=(16, 3)).astype(np.float32))
+
+        opt_state = nb.nn.optim.adamw_init(model)
+
+        def loss_fn(m, x_in, y_in):
+            return nb.nn.functional.mse_loss(m(x_in), y_in)
+
+        @nb.compile
+        def train_step(m, state, x_in, y_in):
+            loss, grads = nb.value_and_grad(loss_fn, argnums=0)(m, x_in, y_in)
+            m, state = nb.nn.optim.adamw_update(m, grads, state, lr=1e-3)
+            return m, state, loss
+
+        # Warmup+steps with stable input signature should compile once then hit cache.
+        for _ in range(5):
+            model, opt_state, _ = train_step(model, opt_state, x, y)
+
+        assert train_step.stats.misses == 1
+        assert train_step.stats.hits >= 4
+
 
 # ===----------------------------------------------------------------------=== #
 # value_and_grad + training loop

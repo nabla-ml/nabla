@@ -26,6 +26,7 @@ from max.graph.dim import SymbolicDim
 
 from ..core import GRAPH, tree_flatten, tree_unflatten
 from ..core.tensor.api import Tensor
+from ..ops.creation import full
 
 if TYPE_CHECKING:
     from max.graph.model import CompiledModel
@@ -115,8 +116,47 @@ class CompiledFunction(Generic[T]):
     def clear_cache(self) -> None:
         self._cache.clear()
 
+    def _normalize_optimizer_state_for_compile(self, value: Any) -> Any:
+        """Convert optimizer step scalars to tensor leaves for compiled calls.
+
+        Functional optimizer states often store "step" as a Python scalar.
+        In compiled mode this scalar becomes part of static cache keys and can
+        trigger retracing every iteration as it changes. For optimizer-like
+        dicts, convert scalar step to a 0-D tensor so it becomes a runtime
+        tensor input instead of static metadata.
+        """
+        if isinstance(value, dict):
+            normalized = {
+                k: self._normalize_optimizer_state_for_compile(v)
+                for k, v in value.items()
+            }
+            has_optimizer_state = (
+                ("m" in normalized and "v" in normalized)
+                or "momentum_buffers" in normalized
+            )
+            if (
+                has_optimizer_state
+                and "step" in normalized
+                and isinstance(normalized["step"], (int, float))
+            ):
+                normalized["step"] = full((), float(normalized["step"]))
+            return normalized
+
+        if isinstance(value, tuple):
+            return tuple(self._normalize_optimizer_state_for_compile(v) for v in value)
+
+        if isinstance(value, list):
+            return [self._normalize_optimizer_state_for_compile(v) for v in value]
+
+        return value
+
     def __call__(self, *args: Any, **kwargs: Any) -> T:
         """Main entry: check cache, trace if miss, execute."""
+        args = tuple(self._normalize_optimizer_state_for_compile(arg) for arg in args)
+        kwargs = {
+            k: self._normalize_optimizer_state_for_compile(v)
+            for k, v in kwargs.items()
+        }
         flat, treedef = tree_flatten((args, kwargs))
 
         # Fast path: reuse structure from last cached call

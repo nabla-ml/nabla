@@ -118,20 +118,38 @@ def adamw_step(
     grad: Tensor,
     m: Tensor,
     v: Tensor,
-    step: int,
+    step: int | float | Tensor,
     *,
     lr: float,
     beta1: float = 0.9,
     beta2: float = 0.999,
     eps: float = 1e-8,
     weight_decay: float = 0.0,
+    bias_correction: bool = True,
 ) -> tuple[Tensor, Tensor, Tensor]:
-    """Single-tensor AdamW update."""
+    """Single-tensor AdamW update.
+
+    Handles both scalar and tensor ``step`` (the latter is needed inside
+    ``@nb.compile`` where the step counter lives as a 0-D tensor).
+    """
+    import math
+
+    from ...core import is_tensor
+    from ...ops.unary import exp
+
     m_t = m * beta1 + grad * (1.0 - beta1)
     v_t = v * beta2 + (grad * grad) * (1.0 - beta2)
 
-    bias_c1 = 1.0 - (beta1**step)
-    bias_c2 = 1.0 - (beta2**step)
+    if bias_correction:
+        if is_tensor(step):
+            bias_c1 = 1.0 - exp(step * math.log(beta1))
+            bias_c2 = 1.0 - exp(step * math.log(beta2))
+        else:
+            bias_c1 = 1.0 - (beta1 ** step)
+            bias_c2 = 1.0 - (beta2 ** step)
+    else:
+        bias_c1 = 1.0
+        bias_c2 = 1.0
 
     m_hat = m_t / bias_c1
     v_hat = v_t / bias_c2
