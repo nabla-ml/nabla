@@ -18,3 +18,4 @@ Examples
    10_jax_comparison_compiled.ipynb
    11_lora_finetuning.ipynb
    12_custom_mojo_kernels.ipynb
+   13_cnn_training.ipynb

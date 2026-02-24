@@ -47,6 +47,8 @@ from .comparison import (
     logical_xor,
     not_equal,
 )
+from .convolution import conv2d, conv2d_transpose
+from .pooling import avg_pool2d, max_pool2d
 from .control_flow import cond, scan, where, while_loop
 from .creation import (
     arange,
@@ -167,6 +169,10 @@ __all__ = [
     "mod",
     "pow",
     "outer",
+    "conv2d",
+    "conv2d_transpose",
+    "avg_pool2d",
+    "max_pool2d",
     "relu",
     "sigmoid",
     "tanh",

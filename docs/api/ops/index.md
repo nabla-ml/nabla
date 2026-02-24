@@ -7,6 +7,7 @@ Tensor operations grouped by semantics.
 
 creation/index
 binary/index
+vision/index
 unary/index
 reduction/index
 comparison/index

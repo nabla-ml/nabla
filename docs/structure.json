@@ -163,6 +163,16 @@
               ]
             },
             {
+              "id": "vision",
+              "title": "Convolution & Pooling",
+              "items": [
+                {"name": "conv2d", "type": "function", "path": "nabla.conv2d"},
+                {"name": "conv2d_transpose", "type": "function", "path": "nabla.conv2d_transpose"},
+                {"name": "avg_pool2d", "type": "function", "path": "nabla.avg_pool2d"},
+                {"name": "max_pool2d", "type": "function", "path": "nabla.max_pool2d"}
+              ]
+            },
+            {
               "id": "unary",
               "title": "Unary & Activations",
               "items": [

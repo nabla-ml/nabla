@@ -100,6 +100,8 @@ from .ops.comparison import (
     logical_xor,
     not_equal,
 )
+from .ops.convolution import conv2d, conv2d_transpose
+from .ops.pooling import avg_pool2d, max_pool2d
 from .ops.control_flow import cond, scan, where, while_loop
 from .ops.creation import (
     arange,
@@ -222,6 +224,10 @@ __all__ = [
     "mod",
     "pow",
     "outer",
+    "conv2d",
+    "conv2d_transpose",
+    "avg_pool2d",
+    "max_pool2d",
     "reduce_sum",
     "reduce_max",
     "reduce_min",

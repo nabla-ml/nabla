@@ -36,6 +36,11 @@ _GRAPH_CACHE: dict[
 import os
 
 DEBUG_LAZY_EVAL: bool = os.environ.get("NABLA_DEBUG", "0") == "1"
+DEBUG_CACHE_EVAL: bool = os.environ.get("NABLA_DEBUG_CACHE", "0") == "1"
+
+_CACHE_HITS: int = 0
+_CACHE_MISSES: int = 0
+_CACHE_INVALIDATIONS: int = 0
 
 
 def _debug_eval(msg: str) -> None:
@@ -45,6 +50,31 @@ def _debug_eval(msg: str) -> None:
 
     ts = time.strftime("%H:%M:%S")
     print(f"[NABLA_DEBUG {ts}] {msg}", flush=True)
+
+
+def _debug_cache(msg: str) -> None:
+    if not DEBUG_CACHE_EVAL:
+        return
+    import time
+
+    ts = time.strftime("%H:%M:%S")
+    print(f"[NABLA_CACHE {ts}] {msg}", flush=True)
+
+
+def get_cache_stats() -> dict[str, int]:
+    return {
+        "hits": _CACHE_HITS,
+        "misses": _CACHE_MISSES,
+        "invalidations": _CACHE_INVALIDATIONS,
+        "size": len(_GRAPH_CACHE),
+    }
+
+
+def reset_cache_stats() -> None:
+    global _CACHE_HITS, _CACHE_MISSES, _CACHE_INVALIDATIONS
+    _CACHE_HITS = 0
+    _CACHE_MISSES = 0
+    _CACHE_INVALIDATIONS = 0
 
 
 def seed() -> Tensor:
@@ -146,6 +176,7 @@ class ComputeGraph:
         _GRAPH_EPOCH += 1
         self.epoch = _GRAPH_EPOCH
         _GRAPH_CACHE.clear()
+        reset_cache_stats()
         self._reset(None, 0)
 
         # gc.collect()  # Removed: too expensive for hot paths
@@ -261,6 +292,7 @@ class ComputeGraph:
         return_model: bool = False,
     ) -> tuple[CompiledModel, list[driver.Buffer]] | None:
         """Main entry point: Evaluates specific tensors and their dependencies."""
+        global _CACHE_HITS, _CACHE_MISSES, _CACHE_INVALIDATIONS
 
         from ..common.pytree import tree_leaves
         from ..tensor.api import Tensor
@@ -456,6 +488,7 @@ class ComputeGraph:
                     cached_model, kept_indices, input_signatures = entry
                 if DEBUG_LAZY_EVAL:
                     _debug_eval("cache: HIT")
+                _CACHE_HITS += 1
 
                 # Gather ALL candidate buffers from the trace in the order they would be added.
                 # Since we don't have a fresh graph yet, we simulate the input ordering.
@@ -480,6 +513,7 @@ class ComputeGraph:
                             _debug_eval("[CACHE] REMAP mode=signature")
                     if remapped_inputs is None:
                         _GRAPH_CACHE.pop(cache_key, None)
+                        _CACHE_INVALIDATIONS += 1
                 else:
                     remapped_inputs = [all_buffers[i] for i in kept_indices]
 
@@ -516,9 +550,19 @@ class ComputeGraph:
                     self._finalize_evaluation(seed_value=seed_val.item())
                     self._cleanup_trace(targets)
                     _debug_eval("cache: cached execution complete")
+                    if DEBUG_CACHE_EVAL:
+                        total = _CACHE_HITS + _CACHE_MISSES
+                        hit_rate = (_CACHE_HITS / total) if total else 0.0
+                        _debug_cache(
+                            "eval complete mode=cache-hit "
+                            f"hits={_CACHE_HITS} misses={_CACHE_MISSES} "
+                            f"invalidations={_CACHE_INVALIDATIONS} size={len(_GRAPH_CACHE)} "
+                            f"hit_rate={hit_rate:.3f}"
+                        )
                     return (cached_model, inputs) if return_model else None
 
         # === CACHE MISS - Build and compile graph ===
+        _CACHE_MISSES += 1
         if DEBUG_LAZY_EVAL:
             _debug_eval("cache: MISS")
 
@@ -676,6 +720,15 @@ class ComputeGraph:
         self._finalize_evaluation(seed_value=seed_val.item())
         self._cleanup_trace(targets)
         _debug_eval("miss: evaluation complete")
+        if DEBUG_CACHE_EVAL:
+            total = _CACHE_HITS + _CACHE_MISSES
+            hit_rate = (_CACHE_HITS / total) if total else 0.0
+            _debug_cache(
+                "eval complete mode=cache-miss "
+                f"hits={_CACHE_HITS} misses={_CACHE_MISSES} "
+                f"invalidations={_CACHE_INVALIDATIONS} size={len(_GRAPH_CACHE)} "
+                f"hit_rate={hit_rate:.3f}"
+            )
         return (model, inputs) if return_model else None
 
     def _cleanup_trace(self, targets: list[Tensor]) -> None:

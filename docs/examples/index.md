@@ -20,4 +20,5 @@ Hands-on Jupyter notebooks for learning Nabla from basics to distributed trainin
 10_jax_comparison_compiled
 11_lora_finetuning
 12_custom_mojo_kernels
+13_cnn_training
 ```

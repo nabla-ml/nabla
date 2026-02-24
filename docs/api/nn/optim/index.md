@@ -12,7 +12,7 @@ Base class for stateful optimizers backed by pure functional steps.
 
 #### `step`
 ```python
-def step(self, grads: 'Any') -> 'Any':
+def step(self, grads: 'Any' = None) -> 'Any':
 ```
 
 ---
@@ -33,7 +33,7 @@ Usage::
 
 #### `step`
 ```python
-def step(self, grads: 'Any') -> 'Any':
+def step(self, grads: 'Any' = None) -> 'Any':
 ```
 
 ---
@@ -49,7 +49,7 @@ Base class for stateful optimizers backed by pure functional steps.
 
 #### `step`
 ```python
-def step(self, grads: 'Any') -> 'Any':
+def step(self, grads: 'Any' = None) -> 'Any':
 ```
 
 ---
@@ -67,9 +67,12 @@ Returns ``(new_param, new_momentum_buffer)``.
 ## `adamw_step`
 
 ```python
-def adamw_step(param: 'Tensor', grad: 'Tensor', m: 'Tensor', v: 'Tensor', step: 'int', *, lr: 'float', beta1: 'float' = 0.9, beta2: 'float' = 0.999, eps: 'float' = 1e-08, weight_decay: 'float' = 0.0) -> 'tuple[Tensor, Tensor, Tensor]':
+def adamw_step(param: 'Tensor', grad: 'Tensor', m: 'Tensor', v: 'Tensor', step: 'int | float | Tensor', *, lr: 'float', beta1: 'float' = 0.9, beta2: 'float' = 0.999, eps: 'float' = 1e-08, weight_decay: 'float' = 0.0, bias_correction: 'bool' = True) -> 'tuple[Tensor, Tensor, Tensor]':
 ```
 Single-tensor AdamW update.
+
+Handles both scalar and tensor ``step`` (the latter is needed inside
+``@nb.compile`` where the step counter lives as a 0-D tensor).
 
 
 ---
@@ -111,7 +114,10 @@ def adamw_update(params: 'Any', grads: 'Any', state: 'dict[str, Any]', *, lr: 'f
 ```
 Functional AdamW update on pytrees.
 
-Kept for compatibility and reused by finetuning workloads.
+Delegates per-leaf math to :func:`adamw_step` so the update logic
+lives in one place.  Handles both scalar and tensor ``step`` (the
+latter is produced by ``_normalize_optimizer_state_for_compile``
+inside ``@nb.compile``).
 
 
 ---
