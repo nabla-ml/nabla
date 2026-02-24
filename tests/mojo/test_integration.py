@@ -3,11 +3,21 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
+import sys
+from pathlib import Path
+
 import numpy as np
 
 import nabla as nb
 from nabla.core.sharding import DeviceMesh
-from tests.mojo.op import add_one_custom
+
+if __package__:
+    from .op import add_one_custom
+else:
+    SCRIPT_DIR = Path(__file__).resolve().parent
+    if str(SCRIPT_DIR) not in sys.path:
+        sys.path.insert(0, str(SCRIPT_DIR))
+    from op import add_one_custom
 
 
 def test_add_one_custom_unsharded():
