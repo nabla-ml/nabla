@@ -291,30 +291,48 @@ _matmul_op = MatmulOp()
 
 
 def add(x: Tensor, y: Tensor | float | int) -> Tensor:
+    """Add *x* and *y* element-wise, with broadcasting."""
     from .base import ensure_tensor
 
     return _add_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
 def mul(x: Tensor, y: Tensor | float | int) -> Tensor:
+    """Multiply *x* and *y* element-wise, with broadcasting."""
     from .base import ensure_tensor
 
     return _mul_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
 def sub(x: Tensor, y: Tensor | float | int) -> Tensor:
+    """Subtract *y* from *x* element-wise, with broadcasting."""
     from .base import ensure_tensor
 
     return _sub_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
 def div(x: Tensor, y: Tensor | float | int) -> Tensor:
+    """Divide *x* by *y* element-wise, with broadcasting."""
     from .base import ensure_tensor
 
     return _div_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
 def matmul(x: Tensor, y: Tensor) -> Tensor:
+    """Matrix multiplication of *x* and *y*.
+
+    Supports batched inputs with arbitrary-rank batch prefixes.
+    1-D inputs are automatically promoted: a vector of shape ``(N,)`` becomes
+    ``(1, N)`` or ``(N, 1)`` for the left/right operand respectively, and the
+    added dimension is squeezed from the result.
+
+    Args:
+        x: Tensor of shape ``(*, M, K)`` or ``(K,)``.
+        y: Tensor of shape ``(*, K, N)`` or ``(K,)``.
+
+    Returns:
+        Tensor of shape ``(*, M, N)`` (or scalar for vector \u00d7 vector).
+    """
     from .base import ensure_tensor
 
     return _matmul_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
@@ -493,18 +511,32 @@ _outer_op = OuterOp()
 
 
 def mod(x: Tensor, y: Tensor | float | int) -> Tensor:
+    """Compute the element-wise remainder ``x % y``, with broadcasting."""
     from .base import ensure_tensor
 
     return _mod_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
 def pow(x: Tensor, y: Tensor | float | int) -> Tensor:
+    """Compute the element-wise power ``x ** y``, with broadcasting."""
     from .base import ensure_tensor
 
     return _pow_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
 def outer(x: Tensor, y: Tensor) -> Tensor:
+    """Compute the outer product of vectors *x* and *y*.
+
+    For 1-D inputs of shapes ``(M,)`` and ``(N,)``, returns an ``(M, N)``
+    matrix. Under ``vmap``, operates on the non-batched trailing dimensions.
+
+    Args:
+        x: Vector of shape ``(M,)``.
+        y: Vector of shape ``(N,)``.
+
+    Returns:
+        Tensor of shape ``(M, N)``.
+    """
     from .base import ensure_tensor
 
     return _outer_op([ensure_tensor(x), ensure_tensor(y)], {})[0]

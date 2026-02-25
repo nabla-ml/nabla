@@ -5,9 +5,27 @@
 ```python
 class Module() -> 'None':
 ```
-Base class for imperative neural-network modules.
+Base class for all neural-network modules.
 
-Modules are registered as pytree nodes, enabling direct use with transforms.
+Subclasses must override :meth:`forward`. Parameters (tensors with
+``requires_grad=True``) assigned to attributes are automatically
+tracked and yielded by :meth:`parameters`. Submodules assigned to
+attributes are recursively tracked by :meth:`modules`.
+
+Modules are registered as PyTree nodes, so they can be passed
+directly to transforms like :func:`~nabla.vmap`, :func:`~nabla.grad`,
+and :func:`~nabla.compile` without any special wrapping.
+
+Example::
+
+    class MLP(nabla.nn.Module):
+        def __init__(self, in_dim, out_dim):
+            super().__init__()
+            self.fc1 = nabla.nn.Linear(in_dim, 64)
+            self.fc2 = nabla.nn.Linear(64, out_dim)
+
+        def forward(self, x):
+            return self.fc2(nabla.relu(self.fc1(x)))
 
 
 ### Methods
@@ -92,7 +110,14 @@ def zero_grad(self) -> 'None':
 ```python
 class Linear(in_features: 'int', out_features: 'int', bias: 'bool' = True, *, dtype: 'DType' = float32) -> 'None':
 ```
-Applies y = x @ W + b.
+Apply a linear transformation: ``y = x @ W.T + b``.
+
+**Parameters**
+
+- **`in_features`** – Number of input features.
+- **`out_features`** – Number of output features.
+- **`bias`** – If ``True`` (default), adds a learnable bias term.
+- **`dtype`** – Dtype for weight and bias. Default: ``float32``.
 
 
 ### Methods
@@ -113,7 +138,22 @@ def forward(self, x: 'Tensor') -> 'Tensor':
 ```python
 class LayerNorm(normalized_shape: 'int | tuple[int, ...]', eps: 'float' = 1e-05, elementwise_affine: 'bool' = True, *, dtype: 'DType' = float32) -> 'None':
 ```
-Applies layer normalization over the last `normalized_shape` dims.
+Apply layer normalization over the last ``len(normalized_shape)`` dimensions.
+
+Normalises inputs as ``(x - mean) / sqrt(var + eps)`` and then applies
+a learnable per-element affine transform when *elementwise_affine* is
+``True``.
+
+**Parameters**
+
+- **`normalized_shape`** – Input shape from an expected input of size
+``(*, normalized_shape[0], ..., normalized_shape[-1])``.
+Can be an ``int`` for the common last-dimension case.
+- **`eps`** – Value added to the denominator for numerical stability.
+Default: ``1e-5``.
+- **`elementwise_affine`** – If ``True`` (default), learnable ``weight``
+(initialized to 1) and ``bias`` (initialized to 0) are added.
+- **`dtype`** – Dtype for weight and bias. Default: ``float32``.
 
 
 ### Methods
@@ -134,9 +174,15 @@ def forward(self, x: 'Tensor') -> 'Tensor':
 ```python
 class Dropout(p: 'float' = 0.5) -> 'None':
 ```
-Applies dropout during training.
+Randomly zero elements of the input with probability *p* (Bernoulli dropout).
 
-Uses inverted-dropout scaling so no adjustment is needed at test time.
+Elements that are not zeroed are scaled by ``1 / (1 - p)`` (inverted dropout)
+so that the expected value of each element is unchanged. Set to ``eval()``
+mode to disable dropout during inference.
+
+**Parameters**
+
+- **`p`** – Probability of an element being zeroed. Default: ``0.5``.
 
 
 ---
@@ -279,9 +325,27 @@ A sequential container of Modules.
 ```python
 class ReLU() -> 'None':
 ```
-Base class for imperative neural-network modules.
+Base class for all neural-network modules.
 
-Modules are registered as pytree nodes, enabling direct use with transforms.
+Subclasses must override :meth:`forward`. Parameters (tensors with
+``requires_grad=True``) assigned to attributes are automatically
+tracked and yielded by :meth:`parameters`. Submodules assigned to
+attributes are recursively tracked by :meth:`modules`.
+
+Modules are registered as PyTree nodes, so they can be passed
+directly to transforms like :func:`~nabla.vmap`, :func:`~nabla.grad`,
+and :func:`~nabla.compile` without any special wrapping.
+
+Example::
+
+    class MLP(nabla.nn.Module):
+        def __init__(self, in_dim, out_dim):
+            super().__init__()
+            self.fc1 = nabla.nn.Linear(in_dim, 64)
+            self.fc2 = nabla.nn.Linear(64, out_dim)
+
+        def forward(self, x):
+            return self.fc2(nabla.relu(self.fc1(x)))
 
 
 ---
@@ -290,9 +354,27 @@ Modules are registered as pytree nodes, enabling direct use with transforms.
 ```python
 class GELU() -> 'None':
 ```
-Base class for imperative neural-network modules.
+Base class for all neural-network modules.
 
-Modules are registered as pytree nodes, enabling direct use with transforms.
+Subclasses must override :meth:`forward`. Parameters (tensors with
+``requires_grad=True``) assigned to attributes are automatically
+tracked and yielded by :meth:`parameters`. Submodules assigned to
+attributes are recursively tracked by :meth:`modules`.
+
+Modules are registered as PyTree nodes, so they can be passed
+directly to transforms like :func:`~nabla.vmap`, :func:`~nabla.grad`,
+and :func:`~nabla.compile` without any special wrapping.
+
+Example::
+
+    class MLP(nabla.nn.Module):
+        def __init__(self, in_dim, out_dim):
+            super().__init__()
+            self.fc1 = nabla.nn.Linear(in_dim, 64)
+            self.fc2 = nabla.nn.Linear(64, out_dim)
+
+        def forward(self, x):
+            return self.fc2(nabla.relu(self.fc1(x)))
 
 
 ---
@@ -301,9 +383,27 @@ Modules are registered as pytree nodes, enabling direct use with transforms.
 ```python
 class Sigmoid() -> 'None':
 ```
-Base class for imperative neural-network modules.
+Base class for all neural-network modules.
 
-Modules are registered as pytree nodes, enabling direct use with transforms.
+Subclasses must override :meth:`forward`. Parameters (tensors with
+``requires_grad=True``) assigned to attributes are automatically
+tracked and yielded by :meth:`parameters`. Submodules assigned to
+attributes are recursively tracked by :meth:`modules`.
+
+Modules are registered as PyTree nodes, so they can be passed
+directly to transforms like :func:`~nabla.vmap`, :func:`~nabla.grad`,
+and :func:`~nabla.compile` without any special wrapping.
+
+Example::
+
+    class MLP(nabla.nn.Module):
+        def __init__(self, in_dim, out_dim):
+            super().__init__()
+            self.fc1 = nabla.nn.Linear(in_dim, 64)
+            self.fc2 = nabla.nn.Linear(64, out_dim)
+
+        def forward(self, x):
+            return self.fc2(nabla.relu(self.fc1(x)))
 
 
 ---
@@ -312,9 +412,27 @@ Modules are registered as pytree nodes, enabling direct use with transforms.
 ```python
 class Tanh() -> 'None':
 ```
-Base class for imperative neural-network modules.
+Base class for all neural-network modules.
 
-Modules are registered as pytree nodes, enabling direct use with transforms.
+Subclasses must override :meth:`forward`. Parameters (tensors with
+``requires_grad=True``) assigned to attributes are automatically
+tracked and yielded by :meth:`parameters`. Submodules assigned to
+attributes are recursively tracked by :meth:`modules`.
+
+Modules are registered as PyTree nodes, so they can be passed
+directly to transforms like :func:`~nabla.vmap`, :func:`~nabla.grad`,
+and :func:`~nabla.compile` without any special wrapping.
+
+Example::
+
+    class MLP(nabla.nn.Module):
+        def __init__(self, in_dim, out_dim):
+            super().__init__()
+            self.fc1 = nabla.nn.Linear(in_dim, 64)
+            self.fc2 = nabla.nn.Linear(64, out_dim)
+
+        def forward(self, x):
+            return self.fc2(nabla.relu(self.fc1(x)))
 
 
 ---
@@ -323,9 +441,27 @@ Modules are registered as pytree nodes, enabling direct use with transforms.
 ```python
 class SiLU() -> 'None':
 ```
-Base class for imperative neural-network modules.
+Base class for all neural-network modules.
 
-Modules are registered as pytree nodes, enabling direct use with transforms.
+Subclasses must override :meth:`forward`. Parameters (tensors with
+``requires_grad=True``) assigned to attributes are automatically
+tracked and yielded by :meth:`parameters`. Submodules assigned to
+attributes are recursively tracked by :meth:`modules`.
+
+Modules are registered as PyTree nodes, so they can be passed
+directly to transforms like :func:`~nabla.vmap`, :func:`~nabla.grad`,
+and :func:`~nabla.compile` without any special wrapping.
+
+Example::
+
+    class MLP(nabla.nn.Module):
+        def __init__(self, in_dim, out_dim):
+            super().__init__()
+            self.fc1 = nabla.nn.Linear(in_dim, 64)
+            self.fc2 = nabla.nn.Linear(64, out_dim)
+
+        def forward(self, x):
+            return self.fc2(nabla.relu(self.fc1(x)))
 
 
 ---

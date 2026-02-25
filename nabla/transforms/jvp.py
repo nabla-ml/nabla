@@ -51,12 +51,25 @@ def jvp(
     has_aux: bool = False,
     create_graph: bool = True,
 ) -> tuple[Any, Any] | tuple[Any, Any, Any]:
-    """Compute JVP of *fn* at *primals* with *tangents*.
+    """Compute the Jacobian-Vector Product (JVP) of *fn* at *primals*.
 
-    Returns ``(output, tangent_out)`` or ``(output, tangent_out, aux)``
-    when *has_aux* is True.
+    Pushes *tangents* through the computation graph via forward-mode AD.
+    Analogous to JAX's ``jax.jvp``.
 
-    Uses a trace-then-forward architecture mirroring VJP's trace-then-backward.
+    Args:
+        fn: Differentiable function to differentiate.
+        primals: Input values at which to evaluate *fn*. Must be a tuple.
+        tangents: Tangent vectors aligned with *primals*. Must be a tuple
+            of the same length and structure.
+        has_aux: If ``True``, *fn* must return ``(output, aux)``. The
+            auxiliary data is excluded from differentiation and returned
+            as the third element.
+        create_graph: If ``True`` (default), the output tangents are
+            differentiable, enabling higher-order forward/reverse mixes.
+
+    Returns:
+        - ``(output, tangent_out)`` when *has_aux* is ``False``.
+        - ``(output, tangent_out, aux)`` when *has_aux* is ``True``.
     """
     from ..core.autograd.forward import forward_on_trace
     from ..core.common import pytree

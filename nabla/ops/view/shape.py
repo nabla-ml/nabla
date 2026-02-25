@@ -951,6 +951,18 @@ _concatenate_op = ConcatenateOp()
 
 
 def broadcast_to(x: Tensor, shape: tuple[int, ...]) -> Tensor:
+    """Broadcast *x* to a new *shape*.
+
+    Leading dimensions are added as needed (NumPy-style broadcasting).
+    Size-1 dimensions in *x* are expanded to match *shape*.
+
+    Args:
+        x: Input tensor.
+        shape: Target output shape. Must be broadcast-compatible with ``x.shape``.
+
+    Returns:
+        Tensor of the given *shape* sharing data with *x* where possible.
+    """
     in_logical_rank = len(x.shape)
     out_logical_rank = len(shape)
 
@@ -962,6 +974,18 @@ def broadcast_to(x: Tensor, shape: tuple[int, ...]) -> Tensor:
 
 
 def reshape(x: Tensor, shape: tuple[int, ...]) -> Tensor:
+    """Return a tensor with the same data as *x* reshaped to *shape*.
+
+    The total number of elements must be preserved. A single ``-1``
+    in *shape* is automatically inferred.
+
+    Args:
+        x: Input tensor.
+        shape: Target shape.
+
+    Returns:
+        Tensor with the same data and new shape.
+    """
     return _reshape_op([x], {"shape": shape})[0]
 
 
@@ -969,11 +993,34 @@ _slice_update_op = SliceUpdateOp()
 
 
 def slice_tensor(x: Tensor, start: Any, size: Any) -> Tensor:
+    """Extract a rectangular slice from *x*.
+
+    Args:
+        x: Input tensor.
+        start: Sequence of per-dimension start indices (supports negative).
+        size: Sequence of per-dimension slice sizes.
+
+    Returns:
+        Tensor of shape *size* containing the requested slice.
+    """
     return _slice_tensor_op([x], {"start": start, "size": size})[0]
 
 
 def slice_update(x: Tensor, update: Tensor, start: Any, size: Any) -> Tensor:
-    """Update a slice of x with new values."""
+    """Return *x* with a rectangular region replaced by *update*.
+
+    This is a functional (out-of-place) operation. The original *x* is not
+    modified. Supports autograd.
+
+    Args:
+        x: Base tensor to update.
+        update: Values to write into *x*. Must have shape *size*.
+        start: Sequence of per-dimension start indices.
+        size: Sequence of per-dimension region sizes.
+
+    Returns:
+        New tensor equal to *x* except at the specified slice.
+    """
     from ..base import ensure_tensor
 
     x = ensure_tensor(x)
@@ -997,11 +1044,33 @@ def slice_update_inplace(x: Tensor, update: Tensor, start: Any, size: Any) -> Te
 
 
 def concatenate(tensors: Sequence[Tensor], axis: int = 0) -> Tensor:
+    """Concatenate a sequence of tensors along an existing *axis*.
+
+    Args:
+        tensors: Non-empty sequence of tensors with the same shape except
+            along *axis*.
+        axis: Axis along which to concatenate. Default: ``0``.
+
+    Returns:
+        Tensor whose *axis* dimension is the sum of the inputs'.
+    """
     return _concatenate_op(list(tensors), {"axis": axis})[0]
 
 
 def stack(tensors: list[Tensor], axis: int = 0) -> Tensor:
-    """Stack tensors along a new axis."""
+    """Stack a sequence of tensors along a **new** *axis*.
+
+    All tensors must have the same shape. The result has one more dimension
+    than the inputs.
+
+    Args:
+        tensors: List of tensors with identical shapes.
+        axis: Position of the new dimension in the output. Default: ``0``.
+
+    Returns:
+        Tensor of shape ``tensors[0].shape[:axis] + (N,) + tensors[0].shape[axis:]``
+        where *N* is the number of input tensors.
+    """
     expanded = [unsqueeze(t, axis=axis) for t in tensors]
     return concatenate(expanded, axis=axis)
 
@@ -1300,11 +1369,35 @@ _broadcast_to_physical_op = BroadcastToPhysicalOp()
 
 
 def broadcast_to_physical(x: Tensor, shape: tuple[int, ...]) -> Tensor:
+    """Broadcast *x* to *shape* in the physical tensor layout.
+
+    Unlike :func:`broadcast_to`, this operates on the physical shape
+    (including batch dimensions added by ``vmap``). Used internally by
+    transforms and physical gradient rules.
+
+    Args:
+        x: Input tensor.
+        shape: Target **physical** shape.
+
+    Returns:
+        Tensor broadcast to the given physical shape.
+    """
     return _broadcast_to_physical_op([x], {"shape": shape})[0]
 
 
 def flatten(x: Tensor, start_dim: int = 0, end_dim: int = -1) -> Tensor:
-    """Flatten a range of dimensions into a single dimension using reshape."""
+    """Flatten a contiguous range of dimensions into one.
+
+    Args:
+        x: Input tensor.
+        start_dim: First dimension to flatten (inclusive). Default: ``0``.
+        end_dim: Last dimension to flatten (inclusive). Default: ``-1``
+            (last dimension).
+
+    Returns:
+        Tensor with dimensions ``start_dim`` through ``end_dim`` collapsed
+        into a single dimension.
+    """
     shape = x.shape
     rank = len(shape)
     if start_dim < 0:
@@ -1326,6 +1419,18 @@ def flatten(x: Tensor, start_dim: int = 0, end_dim: int = -1) -> Tensor:
 
 
 def rebind(x: Tensor, shape: tuple[int, ...], **kwargs) -> Tensor:
+    """Rebind a tensor to a new symbolic shape without changing the data.
+
+    Used to introduce or update shape constraints known at compile time.
+    Has no gradient — the cotangent is passed through unchanged.
+
+    Args:
+        x: Input tensor.
+        shape: New shape annotation (can include symbolic dimensions).
+
+    Returns:
+        Tensor with updated shape metadata.
+    """
     return _rebind_op([x], {"shape": shape, **kwargs})[0]
 
 
@@ -1336,6 +1441,19 @@ def pad(
     value: float = 0.0,
     **kwargs,
 ) -> Tensor:
+    """Pad a tensor with a constant value (or a specific padding mode).
+
+    Args:
+        x: Input tensor.
+        paddings: List of ``(before, after)`` tuples, one per logical dimension.
+            Also accepted via the ``pad_width`` keyword alias.
+        mode: Padding mode. Currently only ``"constant"`` is supported.
+        value: Fill value for constant padding. Default: ``0.0``.
+
+    Returns:
+        Padded tensor. Each dimension *i* grows by
+        ``paddings[i][0] + paddings[i][1]`` elements.
+    """
     paddings = paddings if paddings is not None else kwargs.get("pad_width")
     if paddings is None:
         raise ValueError("pad() requires paddings or pad_width")

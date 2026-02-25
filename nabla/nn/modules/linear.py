@@ -14,7 +14,18 @@ from .base import Module
 
 
 class Linear(Module):
-    """Applies y = x @ W + b."""
+    """Apply a linear transformation: ``y = x @ W.T + b``.
+
+    Args:
+        in_features: Number of input features.
+        out_features: Number of output features.
+        bias: If ``True`` (default), adds a learnable bias term.
+        dtype: Dtype for weight and bias. Default: ``float32``.
+
+    Shape:
+        - Input: ``(*, in_features)``
+        - Output: ``(*, out_features)``
+    """
 
     def __init__(
         self,

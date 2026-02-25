@@ -42,7 +42,19 @@ def step(self, grads: 'Any' = None) -> 'Any':
 ```python
 class AdamW(params: 'Any', *, lr: 'float', betas: 'tuple[float, float]' = (0.9, 0.999), eps: 'float' = 1e-08, weight_decay: 'float' = 0.0) -> 'None':
 ```
-Base class for stateful optimizers backed by pure functional steps.
+Stateful AdamW optimizer with decoupled weight decay.
+
+Implements the Adam algorithm with decoupled weight decay regularisation
+from Loshchilov & Hutter (2019).
+
+**Parameters**
+
+- **`params`** – Model parameters (a tensor or pytree of tensors).
+- **`lr`** – Learning rate.
+- **`betas`** – Coefficients for computing running averages of gradient
+and its square. Default: ``(0.9, 0.999)``.
+- **`eps`** – Small constant for numerical stability. Default: ``1e-8``.
+- **`weight_decay`** – Decoupled weight decay coefficient. Default: ``0.0``.
 
 
 ### Methods

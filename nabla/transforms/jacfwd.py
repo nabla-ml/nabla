@@ -34,7 +34,28 @@ def jacfwd(
     argnums: int | tuple[int, ...] | list[int] | None = None,
     has_aux: bool = False,
 ) -> Callable[..., Any]:
-    """Compute Jacobian of *fn* via forward-mode (``vmap`` over JVP directions)."""
+    """Compute the Jacobian of *fn* using forward-mode autodiff.
+
+    Internally uses ``vmap`` over JVP tangent directions, following the
+    same pattern as JAX. More efficient than :func:`jacrev` when the number
+    of input elements is smaller than the number of output elements.
+
+    Args:
+        fn: Differentiable function to differentiate.
+        argnums: Index or list of indices of arguments to differentiate
+            with respect to. ``None`` differentiates all tensor arguments.
+        has_aux: If ``True``, *fn* must return ``(output, aux)`` where
+            *aux* is not differentiated.
+
+    Returns:
+        A callable that returns the Jacobian (or a tuple of Jacobians
+        when *argnums* selects multiple arguments). Shape of each Jacobian
+        is ``(*out_shape, *in_shape)``.
+
+    Example::
+
+        J = nabla.jacfwd(f)(x)  # shape (*f(x).shape, *x.shape)
+    """
 
     def jacfwd_fn(*args: Any) -> Any:
         from ..core.common.pytree import tree_flatten, tree_unflatten

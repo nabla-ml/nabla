@@ -193,60 +193,70 @@ _logical_xor_op = LogicalXorOp()
 
 
 def equal(x: Tensor, y: Tensor | float | int) -> Tensor:
+    """Return a boolean tensor: ``True`` where ``x == y`` (element-wise)."""
     from .base import ensure_tensor
 
     return _equal_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
 def not_equal(x: Tensor, y: Tensor | float | int) -> Tensor:
+    """Return a boolean tensor: ``True`` where ``x != y`` (element-wise)."""
     from .base import ensure_tensor
 
     return _not_equal_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
 def greater(x: Tensor, y: Tensor | float | int) -> Tensor:
+    """Return a boolean tensor: ``True`` where ``x > y`` (element-wise)."""
     from .base import ensure_tensor
 
     return _greater_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
 def greater_equal(x: Tensor, y: Tensor | float | int) -> Tensor:
+    """Return a boolean tensor: ``True`` where ``x >= y`` (element-wise)."""
     from .base import ensure_tensor
 
     return _greater_equal_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
 def less(x: Tensor, y: Tensor | float | int) -> Tensor:
+    """Return a boolean tensor: ``True`` where ``x < y`` (element-wise)."""
     from .base import ensure_tensor
 
     return _less_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
 def less_equal(x: Tensor, y: Tensor | float | int) -> Tensor:
+    """Return a boolean tensor: ``True`` where ``x <= y`` (element-wise)."""
     from .base import ensure_tensor
 
     return _less_equal_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
 def logical_and(x: Tensor, y: Tensor) -> Tensor:
+    """Compute element-wise logical AND. Both inputs are treated as boolean."""
     from .base import ensure_tensor
 
     return _logical_and_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
 def logical_or(x: Tensor, y: Tensor) -> Tensor:
+    """Compute element-wise logical OR. Both inputs are treated as boolean."""
     from .base import ensure_tensor
 
     return _logical_or_op([ensure_tensor(x), ensure_tensor(y)], {})[0]
 
 
 def logical_not(x: Tensor) -> Tensor:
+    """Compute element-wise logical NOT. Returns ``True`` where *x* is falsy."""
     from .base import ensure_tensor
 
     return _logical_not_op([ensure_tensor(x)], {})[0]
 
 
 def logical_xor(x: Tensor, y: Tensor) -> Tensor:
+    """Compute element-wise logical XOR. Returns ``True`` where exactly one input is truthy."""
     from .base import ensure_tensor
 
     return _logical_xor_op([ensure_tensor(x), ensure_tensor(y)], {})[0]

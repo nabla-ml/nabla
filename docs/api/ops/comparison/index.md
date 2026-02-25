@@ -5,6 +5,8 @@
 ```python
 def equal(x: 'Tensor', y: 'Tensor | float | int') -> 'Tensor':
 ```
+Return a boolean tensor: ``True`` where ``x == y`` (element-wise).
+
 
 ---
 ## `not_equal`
@@ -12,6 +14,8 @@ def equal(x: 'Tensor', y: 'Tensor | float | int') -> 'Tensor':
 ```python
 def not_equal(x: 'Tensor', y: 'Tensor | float | int') -> 'Tensor':
 ```
+Return a boolean tensor: ``True`` where ``x != y`` (element-wise).
+
 
 ---
 ## `greater`
@@ -19,6 +23,8 @@ def not_equal(x: 'Tensor', y: 'Tensor | float | int') -> 'Tensor':
 ```python
 def greater(x: 'Tensor', y: 'Tensor | float | int') -> 'Tensor':
 ```
+Return a boolean tensor: ``True`` where ``x > y`` (element-wise).
+
 
 ---
 ## `greater_equal`
@@ -26,6 +32,8 @@ def greater(x: 'Tensor', y: 'Tensor | float | int') -> 'Tensor':
 ```python
 def greater_equal(x: 'Tensor', y: 'Tensor | float | int') -> 'Tensor':
 ```
+Return a boolean tensor: ``True`` where ``x >= y`` (element-wise).
+
 
 ---
 ## `less`
@@ -33,6 +41,8 @@ def greater_equal(x: 'Tensor', y: 'Tensor | float | int') -> 'Tensor':
 ```python
 def less(x: 'Tensor', y: 'Tensor | float | int') -> 'Tensor':
 ```
+Return a boolean tensor: ``True`` where ``x < y`` (element-wise).
+
 
 ---
 ## `less_equal`
@@ -40,6 +50,8 @@ def less(x: 'Tensor', y: 'Tensor | float | int') -> 'Tensor':
 ```python
 def less_equal(x: 'Tensor', y: 'Tensor | float | int') -> 'Tensor':
 ```
+Return a boolean tensor: ``True`` where ``x <= y`` (element-wise).
+
 
 ---
 ## `logical_and`
@@ -47,6 +59,8 @@ def less_equal(x: 'Tensor', y: 'Tensor | float | int') -> 'Tensor':
 ```python
 def logical_and(x: 'Tensor', y: 'Tensor') -> 'Tensor':
 ```
+Compute element-wise logical AND. Both inputs are treated as boolean.
+
 
 ---
 ## `logical_or`
@@ -54,6 +68,8 @@ def logical_and(x: 'Tensor', y: 'Tensor') -> 'Tensor':
 ```python
 def logical_or(x: 'Tensor', y: 'Tensor') -> 'Tensor':
 ```
+Compute element-wise logical OR. Both inputs are treated as boolean.
+
 
 ---
 ## `logical_xor`
@@ -61,6 +77,8 @@ def logical_or(x: 'Tensor', y: 'Tensor') -> 'Tensor':
 ```python
 def logical_xor(x: 'Tensor', y: 'Tensor') -> 'Tensor':
 ```
+Compute element-wise logical XOR. Returns ``True`` where exactly one input is truthy.
+
 
 ---
 ## `logical_not`
@@ -68,5 +86,7 @@ def logical_xor(x: 'Tensor', y: 'Tensor') -> 'Tensor':
 ```python
 def logical_not(x: 'Tensor') -> 'Tensor':
 ```
+Compute element-wise logical NOT. Returns ``True`` where *x* is falsy.
+
 
 ---

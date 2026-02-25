@@ -104,9 +104,27 @@ def _module_tree_unflatten(
 
 
 class Module:
-    """Base class for imperative neural-network modules.
+    """Base class for all neural-network modules.
 
-    Modules are registered as pytree nodes, enabling direct use with transforms.
+    Subclasses must override :meth:`forward`. Parameters (tensors with
+    ``requires_grad=True``) assigned to attributes are automatically
+    tracked and yielded by :meth:`parameters`. Submodules assigned to
+    attributes are recursively tracked by :meth:`modules`.
+
+    Modules are registered as PyTree nodes, so they can be passed
+    directly to transforms like :func:`~nabla.vmap`, :func:`~nabla.grad`,
+    and :func:`~nabla.compile` without any special wrapping.
+
+    Example::
+
+        class MLP(nabla.nn.Module):
+            def __init__(self, in_dim, out_dim):
+                super().__init__()
+                self.fc1 = nabla.nn.Linear(in_dim, 64)
+                self.fc2 = nabla.nn.Linear(64, out_dim)
+
+            def forward(self, x):
+                return self.fc2(nabla.relu(self.fc1(x)))
     """
 
     _PYTREE_REGISTERED: ClassVar[bool] = False

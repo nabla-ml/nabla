@@ -29,7 +29,27 @@ def jacrev(
     argnums: int | tuple[int, ...] | list[int] | None = None,
     has_aux: bool = False,
 ) -> Callable[..., Any]:
-    """Compute Jacobian of *fn* via reverse-mode (``vmap`` over VJP cotangents)."""
+    """Compute the Jacobian of *fn* using reverse-mode autodiff.
+
+    Internally uses ``vmap`` over VJP cotangent directions, following the
+    same pattern as JAX. Composes naturally with other transforms.
+
+    Args:
+        fn: Differentiable function to differentiate.
+        argnums: Index or list of indices of arguments to differentiate
+            with respect to. ``None`` differentiates all tensor arguments.
+        has_aux: If ``True``, *fn* must return ``(output, aux)`` where
+            *aux* is not differentiated.
+
+    Returns:
+        A callable that returns the Jacobian (or a tuple of Jacobians
+        when *argnums* selects multiple arguments). Shape of each Jacobian
+        is ``(*out_shape, *in_shape)``.
+
+    Example::
+
+        J = nabla.jacrev(f)(x)  # shape (*f(x).shape, *x.shape)
+    """
 
     def jacrev_fn(*args: Any) -> Any:
         from ..core.common.pytree import tree_flatten, tree_unflatten

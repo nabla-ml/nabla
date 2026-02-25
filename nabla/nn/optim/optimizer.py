@@ -66,6 +66,24 @@ class Optimizer(ABC):
 
 
 class AdamW(Optimizer):
+    """Stateful AdamW optimizer with decoupled weight decay.
+
+    Implements the Adam algorithm with decoupled weight decay regularisation
+    from Loshchilov & Hutter (2019).
+
+    Args:
+        params: Model parameters (a tensor or pytree of tensors).
+        lr: Learning rate.
+        betas: Coefficients for computing running averages of gradient
+            and its square. Default: ``(0.9, 0.999)``.
+        eps: Small constant for numerical stability. Default: ``1e-8``.
+        weight_decay: Decoupled weight decay coefficient. Default: ``0.0``.
+
+    Example::
+
+        optimizer = AdamW(model.parameters(), lr=1e-3, weight_decay=0.01)
+        new_params = optimizer.step(grads)
+    """
     def __init__(
         self,
         params: Any,

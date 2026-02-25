@@ -276,34 +276,45 @@ _softmax_native = _SoftmaxNativeOp()
 
 
 def relu(x: Tensor) -> Tensor:
+    """Apply the Rectified Linear Unit (ReLU) activation element-wise: ``max(0, x)``."""
     return _relu_op([x], {})[0]
 
 
 def sigmoid(x: Tensor) -> Tensor:
+    """Apply the sigmoid activation element-wise: ``1 / (1 + exp(-x))``."""
     return _sigmoid_op([x], {})[0]
 
 
 def tanh(x: Tensor) -> Tensor:
+    """Apply the hyperbolic tangent activation element-wise."""
     return _tanh_op([x], {})[0]
 
 
 def exp(x: Tensor) -> Tensor:
+    """Compute the element-wise natural exponential ``e^x``."""
     return _exp_op([x], {})[0]
 
 
 def neg(x: Tensor) -> Tensor:
+    """Negate each element: ``-x``."""
     return _neg_op([x], {})[0]
 
 
 def abs(x: Tensor) -> Tensor:
+    """Compute the element-wise absolute value ``|x|``."""
     return _abs_op([x], {})[0]
 
 
 def log(x: Tensor) -> Tensor:
+    """Compute the element-wise natural logarithm ``log(x)``.
+
+    Returns ``-inf`` for zero and ``nan`` for negative inputs.
+    """
     return _log_op([x], {})[0]
 
 
 def sqrt(x: Tensor) -> Tensor:
+    """Compute the element-wise square root ``sqrt(x)``."""
     return _sqrt_op([x], {})[0]
 
 
@@ -693,62 +704,89 @@ _logsoftmax_native = _LogSoftmaxNativeOp()
 
 
 def acos(x: Tensor) -> Tensor:
+    """Compute the element-wise arccosine ``acos(x)``, returning ``nan`` for ``|x| > 1``."""
     return _acos_op([x], {})[0]
 
 
 def atanh(x: Tensor) -> Tensor:
+    """Compute the element-wise inverse hyperbolic tangent ``atanh(x)``."""
     return _atanh_op([x], {})[0]
 
 
 def cos(x: Tensor) -> Tensor:
+    """Compute the element-wise cosine ``cos(x)`` (radians)."""
     return _cos_op([x], {})[0]
 
 
 def erf(x: Tensor) -> Tensor:
+    """Compute the element-wise Gauss error function ``erf(x)``."""
     return _erf_op([x], {})[0]
 
 
 def floor(x: Tensor) -> Tensor:
+    """Round each element down to the nearest integer (towards ``-inf``)."""
     return _floor_op([x], {})[0]
 
 
 def is_inf(x: Tensor) -> Tensor:
+    """Return a boolean tensor that is ``True`` where *x* is infinite."""
     return _is_inf_op([x], {})[0]
 
 
 def is_nan(x: Tensor) -> Tensor:
+    """Return a boolean tensor that is ``True`` where *x* is NaN."""
     return _is_nan_op([x], {})[0]
 
 
 def log1p(x: Tensor) -> Tensor:
+    """Compute ``log(1 + x)`` element-wise, numerically stable near ``x = 0``."""
     return _log1p_op([x], {})[0]
 
 
 def rsqrt(x: Tensor) -> Tensor:
+    """Compute the reciprocal square root ``1 / sqrt(x)`` element-wise."""
     return _rsqrt_op([x], {})[0]
 
 
 def silu(x: Tensor) -> Tensor:
+    """Apply the SiLU (Swish) activation element-wise: ``x * sigmoid(x)``."""
     return _silu_op([x], {})[0]
 
 
 def sin(x: Tensor) -> Tensor:
+    """Compute the element-wise sine ``sin(x)`` (radians)."""
     return _sin_op([x], {})[0]
 
 
 def trunc(x: Tensor) -> Tensor:
+    """Round each element towards zero (truncation)."""
     return _trunc_op([x], {})[0]
 
 
 def gelu(x: Tensor) -> Tensor:
+    """Apply the Gaussian Error Linear Unit (GELU) activation element-wise.
+
+    Uses the exact formulation: ``x * Φ(x)`` where ``Φ`` is the standard
+    normal CDF.
+    """
     return _gelu_op([x], {})[0]
 
 
 def round(x: Tensor) -> Tensor:
+    """Round each element to the nearest integer (half-to-even / banker's rounding)."""
     return _round_op([x], {})[0]
 
 
 def cast(x: Tensor, dtype: DType | None = None) -> Tensor:
+    """Cast *x* to a different data type.
+
+    Args:
+        x: Input tensor.
+        dtype: Target :class:`DType`. If ``None``, the tensor is returned unchanged.
+
+    Returns:
+        Tensor with elements reinterpreted as *dtype*.
+    """
     return _cast_op([x], {"dtype": dtype})[0]
 
 
@@ -768,7 +806,18 @@ def _is_reduction_axis_sharded(x: Tensor, axis: int) -> bool:
 
 
 def logsoftmax(x: Tensor, axis: int = -1) -> Tensor:
-    """LogSoftmax implementation with sharding support."""
+    """Compute log-softmax along *axis*: ``log(exp(x) / sum(exp(x)))``.
+
+    Numerically stable via the log-sum-exp trick. When the reduction axis
+    is sharded across devices, an all-reduce is automatically inserted.
+
+    Args:
+        x: Input tensor.
+        axis: Dimension along which to compute. Default: ``-1``.
+
+    Returns:
+        Tensor of the same shape as *x* with log-probabilities.
+    """
     from ..ops.binary import sub
     from ..ops.reduction import reduce_max, reduce_sum
     from ..ops.unary import exp, log
@@ -784,7 +833,18 @@ def logsoftmax(x: Tensor, axis: int = -1) -> Tensor:
 
 
 def softmax(x: Tensor, axis: int = -1) -> Tensor:
-    """A composition of existing nabla ops"""
+    """Compute softmax probabilities along *axis*: ``exp(x) / sum(exp(x))``.
+
+    Numerically stable. When the reduction axis is sharded across devices,
+    an all-reduce is automatically inserted.
+
+    Args:
+        x: Input tensor.
+        axis: Dimension along which to compute. Default: ``-1``.
+
+    Returns:
+        Tensor of the same shape as *x* with non-negative values summing to 1.
+    """
     from ..ops.binary import div, sub
     from ..ops.reduction import reduce_max, reduce_sum
     from ..ops.unary import exp

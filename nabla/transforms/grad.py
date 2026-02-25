@@ -24,11 +24,31 @@ def grad(
     create_graph: bool = True,
     realize: bool = True,
 ) -> Callable:
-    """Return a function computing the gradient of *fun* (must return a scalar).
+    """Return a function that computes the gradient of *fun*.
 
-    *create_graph* defaults to ``True`` so that gradients are always
-    differentiable, enabling higher-order compositions like
-    ``jacrev(grad(f))`` or ``jacfwd(grad(f))`` out of the box.
+    *fun* must return a scalar tensor. The returned callable accepts the same
+    arguments as *fun* and returns the gradient with respect to the inputs
+    specified by *argnums*.
+
+    Args:
+        fun: Scalar-valued function to differentiate.
+        argnums: Index or tuple of indices of positional arguments to
+            differentiate with respect to. Default: ``0`` (first argument).
+        create_graph: If ``True`` (default), the gradient is itself
+            differentiable, enabling higher-order derivatives such as
+            ``jacrev(grad(f))``.
+        realize: If ``True`` and *create_graph* is ``False``, eagerly
+            materialise the gradient tensors before returning.
+
+    Returns:
+        A callable with the same signature as *fun* that returns the gradient
+        (or a tuple of gradients when *argnums* is a tuple).
+
+    Example::
+
+        f = lambda x: nabla.reduce_sum(x ** 2)
+        df = nabla.grad(f)
+        gradient = df(x)  # shape == x.shape
     """
 
     def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -83,9 +103,23 @@ def value_and_grad(
     create_graph: bool = True,
     realize: bool = True,
 ) -> Callable:
-    """Return a function computing ``(value, grad)`` of *fun*.
+    """Return a function that evaluates *fun* and its gradient simultaneously.
 
-    See :func:`grad` for *create_graph* semantics.
+    More efficient than calling *fun* and :func:`grad` separately because
+    the forward pass is shared.
+
+    Args:
+        fun: Scalar-valued function to differentiate.
+        argnums: Index or tuple of indices of positional arguments to
+            differentiate with respect to. Default: ``0``.
+        create_graph: If ``True`` (default), the gradient is differentiable.
+        realize: If ``True`` and *create_graph* is ``False``, eagerly
+            materialise outputs before returning.
+
+    Returns:
+        A callable with the same signature as *fun* that returns
+        ``(value, gradient)`` where *value* is the scalar output of *fun*
+        and *gradient* is its gradient.
     """
 
     def wrapper(*args: Any, **kwargs: Any) -> tuple[Any, Any]:

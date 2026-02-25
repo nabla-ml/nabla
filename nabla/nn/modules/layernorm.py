@@ -14,7 +14,22 @@ from .base import Module
 
 
 class LayerNorm(Module):
-    """Applies layer normalization over the last `normalized_shape` dims."""
+    """Apply layer normalization over the last ``len(normalized_shape)`` dimensions.
+
+    Normalises inputs as ``(x - mean) / sqrt(var + eps)`` and then applies
+    a learnable per-element affine transform when *elementwise_affine* is
+    ``True``.
+
+    Args:
+        normalized_shape: Input shape from an expected input of size
+            ``(*, normalized_shape[0], ..., normalized_shape[-1])``.
+            Can be an ``int`` for the common last-dimension case.
+        eps: Value added to the denominator for numerical stability.
+            Default: ``1e-5``.
+        elementwise_affine: If ``True`` (default), learnable ``weight``
+            (initialized to 1) and ``bias`` (initialized to 0) are added.
+        dtype: Dtype for weight and bias. Default: ``float32``.
+    """
 
     def __init__(
         self,

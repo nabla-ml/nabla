@@ -385,14 +385,44 @@ __all__ = [
 
 
 def unsqueeze(x: Tensor, axis: int = 0) -> Tensor:
+    """Insert a size-1 dimension at *axis* into *x*'s shape.
+
+    Args:
+        x: Input tensor.
+        axis: Position at which to insert the new dimension.
+            Supports negative indexing.
+
+    Returns:
+        Tensor with one additional dimension of size 1.
+    """
     return _unsqueeze_op([x], {"axis": axis})[0]
 
 
 def squeeze(x: Tensor, axis: int = 0) -> Tensor:
+    """Remove the size-1 dimension at *axis* from *x*'s shape.
+
+    Args:
+        x: Input tensor. The dimension at *axis* must be 1.
+        axis: Dimension to remove. Supports negative indexing.
+            Pass ``None`` to squeeze all size-1 dimensions.
+
+    Returns:
+        Tensor with the specified dimension removed.
+    """
     return _squeeze_op([x], {"axis": axis})[0]
 
 
 def swap_axes(x: Tensor, axis1: int, axis2: int) -> Tensor:
+    """Swap (transpose) two dimensions of *x*.
+
+    Args:
+        x: Input tensor.
+        axis1: First axis. Supports negative indexing.
+        axis2: Second axis. Supports negative indexing.
+
+    Returns:
+        View with *axis1* and *axis2* swapped.
+    """
     return _swap_axes_op([x], {"axis1": axis1, "axis2": axis2})[0]
 
 
@@ -626,14 +656,34 @@ _squeeze_physical_op = SqueezePhysicalOp()
 
 
 def moveaxis(x: Tensor, source: int, destination: int) -> Tensor:
+    """Move axis *source* to position *destination*.
+
+    Args:
+        x: Input tensor.
+        source: Original axis position. Supports negative indexing.
+        destination: Target axis position. Supports negative indexing.
+
+    Returns:
+        Tensor with the axis at *source* moved to *destination*.
+    """
     return _moveaxis_op([x], {"source": source, "destination": destination})[0]
 
 
 def unsqueeze_physical(x: Tensor, axis: int = 0) -> Tensor:
+    """Insert a size-1 dimension at *axis* in the **physical** tensor layout.
+
+    Unlike :func:`unsqueeze`, this operates on the physical shape (which
+    includes batch dimensions added by ``vmap``). Used internally by
+    transforms that manipulate the physical layout directly.
+    """
     return _unsqueeze_physical_op([x], {"axis": axis})[0]
 
 
 def squeeze_physical(x: Tensor, axis: int = 0) -> Tensor:
+    """Remove the size-1 dimension at *axis* in the **physical** tensor layout.
+
+    Counterpart to :func:`unsqueeze_physical`. Used internally by transforms.
+    """
     return _squeeze_physical_op([x], {"axis": axis})[0]
 
 
@@ -768,8 +818,27 @@ _permute_op = PermuteOp()
 
 
 def flip(x: Tensor, axis: int) -> Tensor:
+    """Reverse the elements of *x* along the specified axis.
+
+    Args:
+        x: Input tensor.
+        axis: The axis along which to reverse. Supports negative indexing.
+
+    Returns:
+        Tensor with elements reversed along *axis*. Shape is unchanged.
+    """
     return _flip_op([x], {"axis": axis})[0]
 
 
 def permute(x: Tensor, order: tuple[int, ...]) -> Tensor:
+    """Reorder the dimensions of *x* according to *order*.
+
+    Args:
+        x: Input tensor of rank ``N``.
+        order: A permutation of ``(0, 1, ..., N-1)`` giving the new dimension
+            ordering. Equivalent to NumPy's ``transpose(axes=order)``.
+
+    Returns:
+        Tensor with dimensions reordered as specified.
+    """
     return _permute_op([x], {"order": order})[0]

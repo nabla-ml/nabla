@@ -34,10 +34,28 @@ def vjp(
     tuple[Any, Callable[..., tuple[Any, ...]]]
     | tuple[Any, Callable[..., tuple[Any, ...]], Any]
 ):
-    """Compute VJP of *fn* at *primals*. Returns ``(output, vjp_fn[, aux])``.
+    """Compute the Vector-Jacobian Product (VJP) of *fn* at *primals*.
 
-    *create_graph* defaults to ``True`` so the returned pullback always
-    produces differentiable gradients, enabling nested Jacobian compositions.
+    Evaluates *fn* and returns a pullback function that multiplies a
+    cotangent vector by the Jacobian. This is the fundamental building
+    block for reverse-mode automatic differentiation.
+
+    Args:
+        fn: Differentiable function to differentiate.
+        *primals: Input values at which to evaluate *fn* and the VJP.
+        has_aux: If ``True``, *fn* must return ``(output, aux)``.
+            The auxiliary data *aux* is returned as a third element and
+            excluded from differentiation.
+        create_graph: If ``True`` (default), the pullback is
+            differentiable, enabling higher-order AD.
+
+    Returns:
+        - ``(output, pullback)`` when *has_aux* is ``False``.
+        - ``(output, pullback, aux)`` when *has_aux* is ``True``.
+
+        The returned *pullback* is a function that takes a cotangent
+        vector (with the same structure as *output*) and returns
+        a tuple of input cotangents.
     """
     from ..core.autograd.backward import backward_on_trace
     from ..core.common import pytree

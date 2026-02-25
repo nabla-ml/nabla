@@ -11,9 +11,14 @@ from .base import Module
 
 
 class Dropout(Module):
-    """Applies dropout during training.
+    """Randomly zero elements of the input with probability *p* (Bernoulli dropout).
 
-    Uses inverted-dropout scaling so no adjustment is needed at test time.
+    Elements that are not zeroed are scaled by ``1 / (1 - p)`` (inverted dropout)
+    so that the expected value of each element is unchanged. Set to ``eval()``
+    mode to disable dropout during inference.
+
+    Args:
+        p: Probability of an element being zeroed. Default: ``0.5``.
     """
 
     def __init__(self, p: float = 0.5) -> None:
