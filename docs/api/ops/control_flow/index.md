@@ -18,7 +18,7 @@ NumPy-style broadcasting across all three operands.
 
 **Returns**
 
- – Tensor with the same shape as the broadcast of *condition*, *x*, *y*.
+Tensor with the same shape as the broadcast of *condition*, *x*, *y*.
 
 
 ---
@@ -42,7 +42,7 @@ otherwise *false_fn*.
 
 **Returns**
 
- – Output of the selected branch.
+Output of the selected branch.
 
 
 ---
@@ -62,7 +62,7 @@ Must have the same output structure and shapes as *init_val*.
 
 **Returns**
 
- – The final loop state after *cond_fn* first returns ``False``.
+The final loop state after *cond_fn* first returns ``False``.
 
 
 ---
@@ -87,7 +87,7 @@ when ``None``.
 
 **Returns**
 
- – ``(final_carry, stacked_ys)`` where *stacked_ys* has an extra
+``(final_carry, stacked_ys)`` where *stacked_ys* has an extra
 leading dimension of size *length*.
 
 

@@ -15,4 +15,5 @@ control_flow/index
 multi_output/index
 view/index
 communication/index
+custom/index
 ```

@@ -12,7 +12,21 @@ from .base import Module
 
 
 class Sequential(Module):
-    """A sequential container of Modules."""
+    """Chain modules sequentially — output of each becomes input to the next.
+
+    Args:
+        *args: Either a flat sequence of :class:`Module` instances, or a
+            single :class:`OrderedDict` mapping string names to modules.
+
+    Example::
+
+        model = Sequential(
+            Linear(784, 128),
+            ReLU(),
+            Linear(128, 10),
+        )
+        out = model(x)
+    """
 
     def __init__(self, *args: Any) -> None:
         super().__init__()

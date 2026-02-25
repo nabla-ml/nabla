@@ -15,7 +15,7 @@ Sum elements of *x* over the given axis (or axes).
 
 **Returns**
 
- – Reduced tensor. When *axis* is ``None`` and *keepdims* is ``False``,
+Reduced tensor. When *axis* is ``None`` and *keepdims* is ``False``,
 a scalar tensor is returned.
 
 
@@ -35,7 +35,7 @@ Return the maximum value of *x* along the given axis (or axes).
 
 **Returns**
 
- – Tensor with maximum values.
+Tensor with maximum values.
 
 
 ---
@@ -54,7 +54,7 @@ Return the minimum value of *x* along the given axis (or axes).
 
 **Returns**
 
- – Tensor with minimum values.
+Tensor with minimum values.
 
 
 ---
@@ -73,7 +73,7 @@ Sum elements of *x* over the given axis (or axes).
 
 **Returns**
 
- – Reduced tensor. When *axis* is ``None`` and *keepdims* is ``False``,
+Reduced tensor. When *axis* is ``None`` and *keepdims* is ``False``,
 a scalar tensor is returned.
 
 
@@ -93,7 +93,7 @@ Return the maximum value of *x* along the given axis (or axes).
 
 **Returns**
 
- – Tensor with maximum values.
+Tensor with maximum values.
 
 
 ---
@@ -112,7 +112,7 @@ Return the minimum value of *x* along the given axis (or axes).
 
 **Returns**
 
- – Tensor with minimum values.
+Tensor with minimum values.
 
 
 ---
@@ -134,7 +134,7 @@ the reduced axis sizes. This ensures correct results across sharded tensors.
 
 **Returns**
 
- – Tensor with the mean values.
+Tensor with the mean values.
 
 
 ---
@@ -153,7 +153,7 @@ Return the indices of the maximum values along *axis*.
 
 **Returns**
 
- – Integer tensor of dtype ``int64`` with the argmax indices.
+Integer tensor of dtype ``int64`` with the argmax indices.
 
 
 ---
@@ -172,7 +172,7 @@ Return the indices of the minimum values along *axis*.
 
 **Returns**
 
- – Integer tensor of dtype ``int64`` with the argmin indices.
+Integer tensor of dtype ``int64`` with the argmin indices.
 
 
 ---
@@ -193,7 +193,7 @@ elements (the first output element is ``0``).
 
 **Returns**
 
- – Tensor of the same shape as *x* with cumulative sums.
+Tensor of the same shape as *x* with cumulative sums.
 
 
 ---
@@ -216,7 +216,7 @@ transforms that need fine-grained control over the reduction axis.
 
 **Returns**
 
- – Physically-reduced tensor.
+Physically-reduced tensor.
 
 
 ---
@@ -238,7 +238,7 @@ Used internally by transforms operating on the physical layout.
 
 **Returns**
 
- – Physically-averaged tensor.
+Physically-averaged tensor.
 
 
 ---

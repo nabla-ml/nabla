@@ -479,22 +479,61 @@ _minmax_op = MinMaxOp()
 
 
 def split(x: Tensor, num_splits: int, axis: int = 0) -> list:
-    """Split a tensor into multiple equal chunks along an axis."""
+    """Split a tensor into *num_splits* equal chunks along *axis*.
+
+    Args:
+        x: Input tensor. The size along *axis* must be divisible by *num_splits*.
+        num_splits: Number of equal parts to split into.
+        axis: Axis along which to split. Default: ``0``.
+
+    Returns:
+        List of *num_splits* tensors each with size ``x.shape[axis] // num_splits``
+        along *axis* and the same size as *x* in all other dimensions.
+    """
     return _split_op([x], {"num_splits": num_splits, "axis": axis})
 
 
 def chunk(x: Tensor, chunks: int, axis: int = 0) -> list:
-    """Split a tensor into a specified number of chunks."""
+    """Split a tensor into *chunks* chunks along *axis*.
+
+    The last chunk may be smaller if the axis size is not divisible by *chunks*.
+
+    Args:
+        x: Input tensor.
+        chunks: Number of chunks to split into.
+        axis: Axis along which to split. Default: ``0``.
+
+    Returns:
+        List of tensors. All chunks except possibly the last have size
+        ``ceil(x.shape[axis] / chunks)`` along *axis*.
+    """
     return _chunk_op([x], {"chunks": chunks, "axis": axis})
 
 
 def unbind(x: Tensor, axis: int = 0) -> list:
-    """Remove a dimension and return list of slices."""
+    """Remove *axis* and return a list of slices along that dimension.
+
+    Analogous to Python's ``list(x)`` applied along *axis*.
+
+    Args:
+        x: Input tensor.
+        axis: Axis to remove. Default: ``0``.
+
+    Returns:
+        List of ``x.shape[axis]`` tensors, each with rank one less than *x*.
+    """
     return _unbind_op([x], {"axis": axis})
 
 
 def minmax(x: Tensor) -> dict[str, Tensor]:
-    """Return both min and max of a tensor as a dict with 'min' and 'max' keys."""
+    """Compute both the global minimum and maximum of *x*.
+
+    Args:
+        x: Input tensor of any shape.
+
+    Returns:
+        ``{'min': scalar_min, 'max': scalar_max}`` — both are scalar tensors.
+    """
     result = _minmax_op([x], {})
     return {"min": result[0], "max": result[1]}
 

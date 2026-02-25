@@ -352,7 +352,15 @@ _shard_op = ShardOp()
 
 
 def create_replicated_spec(mesh: DeviceMesh, rank: int) -> ShardingSpec:
-    """Create a fully replicated sharding spec."""
+    """Create a fully-replicated sharding spec for a *rank*-D tensor on *mesh*.
+
+    Args:
+        mesh: Target device mesh.
+        rank: Number of tensor dimensions.
+
+    Returns:
+        :class:`ShardingSpec` with replicated (empty) ``DimSpec`` for each axis.
+    """
     from ...core.sharding.spec import DimSpec, ShardingSpec
 
     return ShardingSpec(mesh, [DimSpec([]) for _ in range(rank)])
@@ -365,12 +373,26 @@ def shard(
     replicated_axes: set[str] | None = None,
     **kwargs,
 ):
-    """Shard a tensor according to the given mesh and dimension specs.
+    """Shard a tensor across a device mesh according to the given dimension specs.
 
-    This operation is "smart":
-    1. If the input is already sharded differently, it inserts necessary
-       communication (AllGather, AllReduce) to transition to the valid state.
-    2. Then it applies the physical slicing (ShardOp) to reach the target distribution.
+    This is the primary API for distributing a tensor across devices. It
+    handles transitions between different sharding layouts transparently:
+
+    1. If the input is already sharded in a different way, collects via
+       ``all_gather`` or ``all_reduce`` as necessary before reslicing.
+    2. Applies physical slicing (``ShardOp``) to reach the target distribution.
+
+    Args:
+        x: Input tensor or pytree of tensors to shard.
+        mesh: Target :class:`DeviceMesh`.
+        dim_specs: Per-dimension sharding specification, one :class:`DimSpec`
+            per logical dimension.
+        replicated_axes: Set of mesh axis names that are replicated (not
+            sharded). Default: ``None`` (no replicated axes).
+        **kwargs: Additional keyword arguments forwarded to the underlying op.
+
+    Returns:
+        Sharded tensor distributed as specified by *dim_specs* on *mesh*.
     """
     from ...core import Tensor
     from ...core.sharding.spec import DimSpec, ShardingSpec, needs_reshard
@@ -471,10 +493,21 @@ def shard(
 
 
 def broadcast(x, mesh: DeviceMesh = None, root: int = 0):
-    """Replicate a tensor across all devices in a mesh (Collective).
+    """Replicate a tensor across all devices in *mesh*.
 
-    If the tensor is already sharded, this will perform the necessary
-    AllGather operations to replicate it.
+    If the tensor is already sharded, the necessary communication
+    (``all_gather``) is performed first to reconstruct the global tensor
+    before broadcasting.
+
+    Args:
+        x: Input tensor to replicate. May be sharded or replicated.
+        mesh: Target :class:`DeviceMesh`. If ``None``, inferred from *x* or
+            the current context.
+        root: Source device index for broadcast (currently unused / for
+            future multi-root support). Default: ``0``.
+
+    Returns:
+        Tensor replicated on all devices in *mesh*.
     """
     from ...core import Tensor
     from ...core.sharding.spec import DimSpec

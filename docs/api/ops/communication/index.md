@@ -5,12 +5,28 @@
 ```python
 def shard(x, mesh: 'DeviceMesh', dim_specs: 'list[DimSpec]', replicated_axes: 'set[str] | None' = None, **kwargs):
 ```
-Shard a tensor according to the given mesh and dimension specs.
+Shard a tensor across a device mesh according to the given dimension specs.
 
-This operation is "smart":
-1. If the input is already sharded differently, it inserts necessary
-   communication (AllGather, AllReduce) to transition to the valid state.
-2. Then it applies the physical slicing (ShardOp) to reach the target distribution.
+This is the primary API for distributing a tensor across devices. It
+handles transitions between different sharding layouts transparently:
+
+1. If the input is already sharded in a different way, collects via
+   ``all_gather`` or ``all_reduce`` as necessary before reslicing.
+2. Applies physical slicing (``ShardOp``) to reach the target distribution.
+
+**Parameters**
+
+- **`x`** – Input tensor or pytree of tensors to shard.
+- **`mesh`** – Target :class:`DeviceMesh`.
+- **`dim_specs`** – Per-dimension sharding specification, one :class:`DimSpec`
+per logical dimension.
+- **`replicated_axes`** – Set of mesh axis names that are replicated (not
+sharded). Default: ``None`` (no replicated axes).
+- **`**kwargs`** – Additional keyword arguments forwarded to the underlying op.
+
+**Returns**
+
+Sharded tensor distributed as specified by *dim_specs* on *mesh*.
 
 
 ---
@@ -31,9 +47,22 @@ smart resharding transitions (AllGather/AllReduce) automatically.
 ```python
 def all_reduce(sharded_tensor, **kwargs):
 ```
-Sum-reduce across all shards.
+All-reduce a sharded tensor across all shards.
 
-Note: MAX only supports sum reduction natively.
+Each shard applies a commutative reduction (default: sum) over the
+values held on all participating devices and replaces its local value
+with the global result, so every shard ends up with the same value.
+
+**Parameters**
+
+- **`sharded_tensor`** – Sharded input tensor.
+- **`**kwargs`** – Optional keyword args forwarded to the backend, including
+``reduce_op`` (``'sum'``, ``'max'``, ``'min'``, ``'prod'``) and
+``reduce_axes`` to restrict reduction to a subset of mesh axes.
+
+**Returns**
+
+Tensor with shard-local values replaced by the global reduction result.
 
 
 ---
@@ -42,7 +71,22 @@ Note: MAX only supports sum reduction natively.
 ```python
 def all_gather(sharded_tensor, axis: 'int' = None, **kwargs):
 ```
-Gather all shards to produce a replicated tensor.
+Gather shards along *axis* to produce a locally-replicated full tensor.
+
+Each device receives a copy of the full concatenated tensor.
+
+**Parameters**
+
+- **`sharded_tensor`** – Sharded input tensor, distributed along *axis*.
+- **`axis`** – Logical axis along which to gather. If ``None``, the sharding
+metadata is used to determine the gather dimension.
+- **`**kwargs`** – Additional keyword arguments forwarded to the backend
+(e.g., ``physical_axis``).
+
+**Returns**
+
+Tensor with the same shape as the global (unsharded) tensor,
+replicated on every device.
 
 
 ---
@@ -108,7 +152,7 @@ returns x as-is if already on a device, otherwise moves to default device.
 
 **Returns**
 
- – Tensor on the target device or with target sharding
+Tensor on the target device or with target sharding
 
 **Examples**
 
@@ -139,7 +183,7 @@ returns x as-is if already on a device, otherwise moves to default device.
 
 **Returns**
 
- – Tensor on the target device or with target sharding
+Tensor on the target device or with target sharding
 
 **Examples**
 
@@ -161,7 +205,7 @@ Convenience function for `to_device(x, CPU())`.
 
 **Returns**
 
- – Tensor on CPU
+Tensor on CPU
 
 
 ---
@@ -180,7 +224,7 @@ Convenience function for `to_device(x, Accelerator())`.
 
 **Returns**
 
- – Tensor on GPU/Accelerator
+Tensor on GPU/Accelerator
 
 
 ---
@@ -198,7 +242,7 @@ Transfer tensor to specific accelerator device.
 
 **Returns**
 
- – Tensor on specified accelerator
+Tensor on specified accelerator
 
 
 ---

@@ -249,7 +249,7 @@ Run multi-head attention.
 
 **Returns**
 
-`Tensor ``(batch, seq_q, d_model)``` – None
+**`Tensor ``(batch, seq_q, d_model)```** – 
 
 
 ---
@@ -316,7 +316,12 @@ def forward(self, tgt: 'Tensor', memory: 'Tensor', tgt_mask: 'Tensor | None' = N
 ```python
 class Sequential(*args: 'Any') -> 'None':
 ```
-A sequential container of Modules.
+Chain modules sequentially — output of each becomes input to the next.
+
+**Parameters**
+
+- **`*args`** – Either a flat sequence of :class:`Module` instances, or a
+single :class:`OrderedDict` mapping string names to modules.
 
 
 ---
@@ -325,27 +330,7 @@ A sequential container of Modules.
 ```python
 class ReLU() -> 'None':
 ```
-Base class for all neural-network modules.
-
-Subclasses must override :meth:`forward`. Parameters (tensors with
-``requires_grad=True``) assigned to attributes are automatically
-tracked and yielded by :meth:`parameters`. Submodules assigned to
-attributes are recursively tracked by :meth:`modules`.
-
-Modules are registered as PyTree nodes, so they can be passed
-directly to transforms like :func:`~nabla.vmap`, :func:`~nabla.grad`,
-and :func:`~nabla.compile` without any special wrapping.
-
-Example::
-
-    class MLP(nabla.nn.Module):
-        def __init__(self, in_dim, out_dim):
-            super().__init__()
-            self.fc1 = nabla.nn.Linear(in_dim, 64)
-            self.fc2 = nabla.nn.Linear(64, out_dim)
-
-        def forward(self, x):
-            return self.fc2(nabla.relu(self.fc1(x)))
+Apply the Rectified Linear Unit activation: ``max(0, x)``.
 
 
 ---
@@ -354,27 +339,7 @@ Example::
 ```python
 class GELU() -> 'None':
 ```
-Base class for all neural-network modules.
-
-Subclasses must override :meth:`forward`. Parameters (tensors with
-``requires_grad=True``) assigned to attributes are automatically
-tracked and yielded by :meth:`parameters`. Submodules assigned to
-attributes are recursively tracked by :meth:`modules`.
-
-Modules are registered as PyTree nodes, so they can be passed
-directly to transforms like :func:`~nabla.vmap`, :func:`~nabla.grad`,
-and :func:`~nabla.compile` without any special wrapping.
-
-Example::
-
-    class MLP(nabla.nn.Module):
-        def __init__(self, in_dim, out_dim):
-            super().__init__()
-            self.fc1 = nabla.nn.Linear(in_dim, 64)
-            self.fc2 = nabla.nn.Linear(64, out_dim)
-
-        def forward(self, x):
-            return self.fc2(nabla.relu(self.fc1(x)))
+Apply the Gaussian Error Linear Unit activation.
 
 
 ---
@@ -383,27 +348,7 @@ Example::
 ```python
 class Sigmoid() -> 'None':
 ```
-Base class for all neural-network modules.
-
-Subclasses must override :meth:`forward`. Parameters (tensors with
-``requires_grad=True``) assigned to attributes are automatically
-tracked and yielded by :meth:`parameters`. Submodules assigned to
-attributes are recursively tracked by :meth:`modules`.
-
-Modules are registered as PyTree nodes, so they can be passed
-directly to transforms like :func:`~nabla.vmap`, :func:`~nabla.grad`,
-and :func:`~nabla.compile` without any special wrapping.
-
-Example::
-
-    class MLP(nabla.nn.Module):
-        def __init__(self, in_dim, out_dim):
-            super().__init__()
-            self.fc1 = nabla.nn.Linear(in_dim, 64)
-            self.fc2 = nabla.nn.Linear(64, out_dim)
-
-        def forward(self, x):
-            return self.fc2(nabla.relu(self.fc1(x)))
+Apply the sigmoid activation: ``1 / (1 + exp(-x))``.
 
 
 ---
@@ -412,27 +357,7 @@ Example::
 ```python
 class Tanh() -> 'None':
 ```
-Base class for all neural-network modules.
-
-Subclasses must override :meth:`forward`. Parameters (tensors with
-``requires_grad=True``) assigned to attributes are automatically
-tracked and yielded by :meth:`parameters`. Submodules assigned to
-attributes are recursively tracked by :meth:`modules`.
-
-Modules are registered as PyTree nodes, so they can be passed
-directly to transforms like :func:`~nabla.vmap`, :func:`~nabla.grad`,
-and :func:`~nabla.compile` without any special wrapping.
-
-Example::
-
-    class MLP(nabla.nn.Module):
-        def __init__(self, in_dim, out_dim):
-            super().__init__()
-            self.fc1 = nabla.nn.Linear(in_dim, 64)
-            self.fc2 = nabla.nn.Linear(64, out_dim)
-
-        def forward(self, x):
-            return self.fc2(nabla.relu(self.fc1(x)))
+Apply the hyperbolic tangent activation: ``tanh(x)``.
 
 
 ---
@@ -441,27 +366,7 @@ Example::
 ```python
 class SiLU() -> 'None':
 ```
-Base class for all neural-network modules.
-
-Subclasses must override :meth:`forward`. Parameters (tensors with
-``requires_grad=True``) assigned to attributes are automatically
-tracked and yielded by :meth:`parameters`. Submodules assigned to
-attributes are recursively tracked by :meth:`modules`.
-
-Modules are registered as PyTree nodes, so they can be passed
-directly to transforms like :func:`~nabla.vmap`, :func:`~nabla.grad`,
-and :func:`~nabla.compile` without any special wrapping.
-
-Example::
-
-    class MLP(nabla.nn.Module):
-        def __init__(self, in_dim, out_dim):
-            super().__init__()
-            self.fc1 = nabla.nn.Linear(in_dim, 64)
-            self.fc2 = nabla.nn.Linear(64, out_dim)
-
-        def forward(self, x):
-            return self.fc2(nabla.relu(self.fc1(x)))
+Apply the Sigmoid Linear Unit (Swish) activation: ``x * sigmoid(x)``.
 
 
 ---

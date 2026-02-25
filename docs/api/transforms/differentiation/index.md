@@ -24,7 +24,7 @@ materialise the gradient tensors before returning.
 
 **Returns**
 
- – A callable with the same signature as *fun* that returns the gradient
+A callable with the same signature as *fun* that returns the gradient
 (or a tuple of gradients when *argnums* is a tuple).
 
 
@@ -50,7 +50,7 @@ materialise outputs before returning.
 
 **Returns**
 
- – A callable with the same signature as *fun* that returns
+A callable with the same signature as *fun* that returns
 ``(value, gradient)`` where *value* is the scalar output of *fun*
 and *gradient* is its gradient.
 
@@ -79,7 +79,7 @@ differentiable, enabling higher-order AD.
 
 **Returns**
 
- – - ``(output, pullback)`` when *has_aux* is ``False``.
+- ``(output, pullback)`` when *has_aux* is ``False``.
 - ``(output, pullback, aux)`` when *has_aux* is ``True``.
 
 The returned *pullback* is a function that takes a cotangent
@@ -112,7 +112,7 @@ differentiable, enabling higher-order forward/reverse mixes.
 
 **Returns**
 
- – - ``(output, tangent_out)`` when *has_aux* is ``False``.
+- ``(output, tangent_out)`` when *has_aux* is ``False``.
 - ``(output, tangent_out, aux)`` when *has_aux* is ``True``.
 
 
@@ -137,7 +137,7 @@ with respect to. ``None`` differentiates all tensor arguments.
 
 **Returns**
 
- – A callable that returns the Jacobian (or a tuple of Jacobians
+A callable that returns the Jacobian (or a tuple of Jacobians
 when *argnums* selects multiple arguments). Shape of each Jacobian
 is ``(*out_shape, *in_shape)``.
 
@@ -164,7 +164,7 @@ with respect to. ``None`` differentiates all tensor arguments.
 
 **Returns**
 
- – A callable that returns the Jacobian (or a tuple of Jacobians
+A callable that returns the Jacobian (or a tuple of Jacobians
 when *argnums* selects multiple arguments). Shape of each Jacobian
 is ``(*out_shape, *in_shape)``.
 

@@ -145,6 +145,24 @@ def avg_pool2d(
     padding: int | tuple[int, int] | tuple[int, int, int, int] = 0,
     dilation: int | tuple[int, int] = (1, 1),
 ) -> "Tensor":
+    """Apply 2D average pooling over an NHWC input tensor.
+
+    Divides the input into non-overlapping (or strided) windows of size
+    *kernel_size* and computes the mean of each window.
+
+    Args:
+        x: Input tensor of shape ``(N, H, W, C)``.
+        kernel_size: Size of the pooling window as ``(k_h, k_w)`` or a
+            single int.
+        stride: Stride of the pooling window. Defaults to *kernel_size*
+            (non-overlapping).
+        padding: Implicit zero-padding added to the input before pooling.
+            Same format as :func:`~nabla.conv2d`. Default: ``0``.
+        dilation: Currently only ``(1, 1)`` is supported. Default: ``(1, 1)``.
+
+    Returns:
+        Pooled tensor of shape ``(N, H_out, W_out, C)``.
+    """
     x = ensure_tensor(x)
     return _pool2d_impl(
         x,
@@ -164,6 +182,24 @@ def max_pool2d(
     padding: int | tuple[int, int] | tuple[int, int, int, int] = 0,
     dilation: int | tuple[int, int] = (1, 1),
 ) -> "Tensor":
+    """Apply 2D max pooling over an NHWC input tensor.
+
+    Divides the input into windows of size *kernel_size* and computes the
+    maximum of each window.
+
+    Args:
+        x: Input tensor of shape ``(N, H, W, C)``.
+        kernel_size: Size of the pooling window as ``(k_h, k_w)`` or a
+            single int.
+        stride: Stride of the pooling window. Defaults to *kernel_size*
+            (non-overlapping).
+        padding: Implicit zero-padding added to the input before pooling.
+            Same format as :func:`~nabla.conv2d`. Default: ``0``.
+        dilation: Currently only ``(1, 1)`` is supported. Default: ``(1, 1)``.
+
+    Returns:
+        Pooled tensor of shape ``(N, H_out, W_out, C)``.
+    """
     x = ensure_tensor(x)
     return _pool2d_impl(
         x,

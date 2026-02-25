@@ -11,26 +11,36 @@ from .base import Module
 
 
 class ReLU(Module):
+    """Apply the Rectified Linear Unit activation: ``max(0, x)``."""
+
     def forward(self, x: Tensor) -> Tensor:
         return F.relu(x)
 
 
 class GELU(Module):
+    """Apply the Gaussian Error Linear Unit activation."""
+
     def forward(self, x: Tensor) -> Tensor:
         return F.gelu(x)
 
 
 class Sigmoid(Module):
+    """Apply the sigmoid activation: ``1 / (1 + exp(-x))``."""
+
     def forward(self, x: Tensor) -> Tensor:
         return F.sigmoid(x)
 
 
 class Tanh(Module):
+    """Apply the hyperbolic tangent activation: ``tanh(x)``."""
+
     def forward(self, x: Tensor) -> Tensor:
         return F.tanh(x)
 
 
 class SiLU(Module):
+    """Apply the Sigmoid Linear Unit (Swish) activation: ``x * sigmoid(x)``."""
+
     def forward(self, x: Tensor) -> Tensor:
         return F.silu(x)
 

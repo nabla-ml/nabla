@@ -55,7 +55,7 @@ added dimension is squeezed from the result.
 
 **Returns**
 
- – Tensor of shape ``(*, M, N)`` (or scalar for vector × vector).
+Tensor of shape ``(*, M, N)`` (or scalar for vector × vector).
 
 
 ---
@@ -94,7 +94,7 @@ matrix. Under ``vmap``, operates on the non-batched trailing dimensions.
 
 **Returns**
 
- – Tensor of shape ``(M, N)``.
+Tensor of shape ``(M, N)``.
 
 
 ---

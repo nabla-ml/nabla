@@ -151,7 +151,7 @@ Cast *x* to a different data type.
 
 **Returns**
 
- – Tensor with elements reinterpreted as *dtype*.
+Tensor with elements reinterpreted as *dtype*.
 
 
 ---
@@ -238,7 +238,7 @@ an all-reduce is automatically inserted.
 
 **Returns**
 
- – Tensor of the same shape as *x* with non-negative values summing to 1.
+Tensor of the same shape as *x* with non-negative values summing to 1.
 
 
 ---
@@ -259,7 +259,7 @@ is sharded across devices, an all-reduce is automatically inserted.
 
 **Returns**
 
- – Tensor of the same shape as *x* with log-probabilities.
+Tensor of the same shape as *x* with log-probabilities.
 
 
 ---

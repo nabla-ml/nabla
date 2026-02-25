@@ -44,7 +44,7 @@ Look up rows of *weight* by integer *indices*.
 
 **Returns**
 
-`Tensor of shape ``(*, embedding_dim)``.` – None
+**`Tensor of shape ``(*, embedding_dim)``.`** – 
 
 
 ---
@@ -67,7 +67,7 @@ Scaled dot-product attention (functional).
 
 **Returns**
 
-`Tensor of shape ``(..., seq_q, d_v)``` – None
+**`Tensor of shape ``(..., seq_q, d_v)```** – 
 
 
 ---

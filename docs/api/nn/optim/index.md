@@ -105,7 +105,7 @@ If *None* a fresh state is created.
 
 **Returns**
 
-`tuple` – Updated parameters and optimizer state, with tensors realized
+**`tuple`** – Updated parameters and optimizer state, with tensors realized
 according to the global ``Optimizer`` execution policy.
 
 

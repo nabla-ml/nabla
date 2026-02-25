@@ -79,7 +79,7 @@ on CPU, otherwise creates a new tensor on CPU.
 
 **Returns**
 
- – Tensor on CPU with all data gathered.
+Tensor on CPU with all data gathered.
 
 
 #### `cuda`
@@ -410,7 +410,7 @@ as it combines all gather and realize operations into a single compilation.
 
 **Returns**
 
- – Tuple of numpy arrays, one per input tensor.
+Tuple of numpy arrays, one per input tensor.
 
 
 #### `tolist`
@@ -487,7 +487,7 @@ as it combines all pending computations into a single graph compilation.
 
 **Returns**
 
- – Tuple of realized tensors (same tensors, now with computed values).
+Tuple of realized tensors (same tensors, now with computed values).
 
 
 ---

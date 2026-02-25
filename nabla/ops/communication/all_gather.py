@@ -441,10 +441,35 @@ _gather_all_axes_op = GatherAllAxesOp()
 
 
 def all_gather(sharded_tensor, axis: int = None, **kwargs):
-    """Gather all shards to produce a replicated tensor."""
+    """Gather shards along *axis* to produce a locally-replicated full tensor.
+
+    Each device receives a copy of the full concatenated tensor.
+
+    Args:
+        sharded_tensor: Sharded input tensor, distributed along *axis*.
+        axis: Logical axis along which to gather. If ``None``, the sharding
+            metadata is used to determine the gather dimension.
+        **kwargs: Additional keyword arguments forwarded to the backend
+            (e.g., ``physical_axis``).
+
+    Returns:
+        Tensor with the same shape as the global (unsharded) tensor,
+        replicated on every device.
+    """
     return _all_gather_op([sharded_tensor], {"axis": axis, **kwargs})[0]
 
 
 def gather_all_axes(sharded_tensor):
-    """Gather all sharded axes to produce a fully replicated tensor."""
+    """Fully reconstruct a multi-dimensionally sharded tensor on every device.
+
+    Performs hierarchical concatenation to handle tensors sharded across
+    multiple mesh axes simultaneously.
+
+    Args:
+        sharded_tensor: Sharded input tensor, potentially sharded along
+            multiple dimensions.
+
+    Returns:
+        Fully replicated tensor whose shape equals the original global shape.
+    """
     return _gather_all_axes_op([sharded_tensor], {})[0]

@@ -28,7 +28,7 @@ dimension with this name (SPMD mode).
 
 **Returns**
 
- – A wrapped function with the same signature as *func* that
+A wrapped function with the same signature as *func* that
 accepts an extra batch dimension on each (batched) input.
 
 

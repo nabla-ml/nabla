@@ -333,17 +333,37 @@ _pmean_op = PMeanOp()
 
 
 def all_reduce(sharded_tensor, **kwargs):
-    """Sum-reduce across all shards.
+    """All-reduce a sharded tensor across all shards.
 
-    Note: MAX only supports sum reduction natively.
+    Each shard applies a commutative reduction (default: sum) over the
+    values held on all participating devices and replaces its local value
+    with the global result, so every shard ends up with the same value.
+
+    Args:
+        sharded_tensor: Sharded input tensor.
+        **kwargs: Optional keyword args forwarded to the backend, including
+            ``reduce_op`` (``'sum'``, ``'max'``, ``'min'``, ``'prod'``) and
+            ``reduce_axes`` to restrict reduction to a subset of mesh axes.
+
+    Returns:
+        Tensor with shard-local values replaced by the global reduction result.
     """
     return _all_reduce_op([sharded_tensor], kwargs)[0]
 
 
 def pmean(sharded_tensor, axis_name: str = None):
-    """Compute mean across all shards.
+    """Compute the mean of a sharded tensor across all (or named) mesh shards.
 
-    Equivalent to psum(x) / axis_size.
+    Equivalent to :func:`all_reduce` followed by division by the axis size.
+
+    Args:
+        sharded_tensor: Sharded input tensor.
+        axis_name: If provided, reduce only along the named mesh axis.
+            Divides by the size of that axis. If ``None``, reduces across
+            all shards.
+
+    Returns:
+        Tensor where each shard contains the global average.
     """
     return _pmean_op([sharded_tensor], {"axis_name": axis_name})[0]
 

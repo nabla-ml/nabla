@@ -48,7 +48,19 @@ def _get_utils_core():
 
 
 def ensure_tensor(x: Any) -> Tensor:
-    """Convert scalar or array-like to Tensor."""
+    """Convert a scalar or array-like value to a :class:`Tensor`.
+
+    Useful inside custom operation implementations that need to accept
+    Python scalars, NumPy arrays, or existing tensors uniformly.
+
+    Args:
+        x: Value to wrap. If already a :class:`Tensor`, returned unchanged.
+            Otherwise, a new constant :class:`Tensor` is created via
+            :meth:`Tensor.constant`.
+
+    Returns:
+        A :class:`Tensor` wrapping *x*.
+    """
     if _Tensor is None:
         _get_utils_core()
     Tensor = _Tensor

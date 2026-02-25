@@ -78,8 +78,25 @@ _view_as_real_interleaved_op = ViewAsRealInterleavedOp()
 
 
 def as_interleaved_complex(x: Tensor) -> Tensor:
+    """Reinterpret a real tensor with last dim 2 as a complex tensor.
+
+    Args:
+        x: Real tensor of shape ``(..., 2)``.
+
+    Returns:
+        Complex-valued tensor of shape ``(...)``.
+    """
     return _as_interleaved_complex_op([x], {})[0]
 
 
 def view_as_real_interleaved(x: Tensor) -> Tensor:
+    """Reinterpret a complex tensor as a real tensor with an extra trailing 2-dim.
+
+    Args:
+        x: Complex tensor of shape ``(...)``.
+
+    Returns:
+        Real tensor of shape ``(..., 2)`` where the last axis contains
+        ``[real, imag]`` components.
+    """
     return _view_as_real_interleaved_op([x], {})[0]

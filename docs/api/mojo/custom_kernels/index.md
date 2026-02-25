@@ -18,7 +18,7 @@ Helper to invoke a custom Mojo kernel, handling library loading automatically.
 
 **Returns**
 
- – Result TensorValue(s).
+Result TensorValue(s).
 
 
 ---

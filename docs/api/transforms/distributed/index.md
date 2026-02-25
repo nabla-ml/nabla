@@ -28,7 +28,7 @@ determine optimal intermediate shardings.
 
 **Returns**
 
- – A wrapped function with the same signature as *func*.
+A wrapped function with the same signature as *func*.
 
 
 ---

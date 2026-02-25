@@ -443,7 +443,19 @@ _scatter_op = ScatterOp()
 
 
 def gather(x: Tensor, indices: Tensor, axis: int = 0) -> Tensor:
-    """Gather elements from x along axis using indices."""
+    """Gather elements from *x* along *axis* using *indices*.
+
+    Equivalent to ``x.take(indices, axis=axis)`` in NumPy.
+
+    Args:
+        x: Source tensor.
+        indices: Integer tensor of indices. Shape can differ from *x*.
+        axis: Axis along which to index *x*. Default: ``0``.
+
+    Returns:
+        Tensor with the same dtype as *x* and shape
+        ``x.shape[:axis] + indices.shape + x.shape[axis+1:]``.
+    """
     from ..base import ensure_tensor
 
     indices = ensure_tensor(indices)
@@ -451,7 +463,21 @@ def gather(x: Tensor, indices: Tensor, axis: int = 0) -> Tensor:
 
 
 def scatter(x: Tensor, indices: Tensor, updates: Tensor, axis: int = 0) -> Tensor:
-    """Scatter updates into x at indices along axis."""
+    """Scatter *updates* into *x* at *indices* along *axis*.
+
+    Functional (out-of-place). Equivalent to
+    ``out = x.copy(); out[indices] = updates`` along *axis*.
+
+    Args:
+        x: Base tensor that receives the scattered values.
+        indices: Integer index tensor specifying where to write.
+        updates: Values to write into *x*. Must be compatible with
+            ``x.shape[:axis] + indices.shape + x.shape[axis+1:]``.
+        axis: Axis along which to scatter. Default: ``0``.
+
+    Returns:
+        New tensor equal to *x* except at positions specified by *indices*.
+    """
     from ..base import ensure_tensor
 
     x = ensure_tensor(x)

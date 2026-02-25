@@ -19,7 +19,20 @@ def init_lora_adapter(
     init_std: float = 0.01,
     dtype: DType | None = None,
 ) -> dict[str, Tensor]:
-    """Initialize LoRA adapter matrices for a 2D linear weight."""
+    """Initialise LoRA adapter matrices ``A`` and ``B`` for a 2D weight.
+
+    Following Hu et al. (2021), ``A`` is initialised with Gaussian noise and
+    ``B`` is zero-initialised so the adapter adds zero at the start of training.
+
+    Args:
+        weight: The frozen 2D weight tensor to adapt. Shape ``(in, out)``.
+        rank: Intrinsic rank of the low-rank decomposition. Must be > 0.
+        init_std: Standard deviation for initialising ``A``. Default: ``0.01``.
+        dtype: Optional dtype override. Defaults to *weight*'s dtype.
+
+    Returns:
+        ``{'A': Tensor(in, rank), 'B': Tensor(rank, out)}``
+    """
     if len(weight.shape) != 2:
         raise ValueError("init_lora_adapter expects a 2D weight tensor")
     if rank <= 0:
@@ -40,7 +53,15 @@ def init_lora_adapter(
 
 
 def lora_delta(adapter: dict[str, Tensor], alpha: float = 1.0) -> Tensor:
-    """Compute scaled LoRA low-rank delta: (alpha / rank) * (A @ B)."""
+    """Compute the scaled LoRA weight update: ``(alpha / rank) * A @ B``.
+
+    Args:
+        adapter: Dict with keys ``'A'`` ``(in, rank)`` and ``'B'`` ``(rank, out)``.
+        alpha: Scaling factor. Default: ``1.0``.
+
+    Returns:
+        Delta tensor of shape ``(in, out)``.
+    """
     A = adapter["A"]
     B = adapter["B"]
     rank = int(A.shape[1])
@@ -61,14 +82,32 @@ def lora_linear(
 def merge_lora_weight(
     frozen_weight: Tensor, adapter: dict[str, Tensor], alpha: float = 1.0
 ) -> Tensor:
-    """Return merged weight: W + (alpha/r) * A @ B."""
+    """Merge the LoRA adapter into the frozen weight: ``W_merged = W + delta``.
+
+    Args:
+        frozen_weight: Original frozen weight tensor.
+        adapter: LoRA adapter dict (see :func:`init_lora_adapter`).
+        alpha: Scaling factor for the adapter. Default: ``1.0``.
+
+    Returns:
+        Merged weight tensor with the same shape as *frozen_weight*.
+    """
     return frozen_weight + lora_delta(adapter, alpha=alpha)
 
 
 def unmerge_lora_weight(
     merged_weight: Tensor, adapter: dict[str, Tensor], alpha: float = 1.0
 ) -> Tensor:
-    """Recover frozen weight from merged weight and adapter."""
+    """Recover the original frozen weight by subtracting the LoRA delta.
+
+    Args:
+        merged_weight: Previously merged weight tensor.
+        adapter: LoRA adapter dict used during merging.
+        alpha: Scaling factor used during merging. Default: ``1.0``.
+
+    Returns:
+        Recovered frozen weight tensor.
+    """
     return merged_weight - lora_delta(adapter, alpha=alpha)
 
 

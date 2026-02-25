@@ -107,8 +107,14 @@ def format_docstring_obj_to_md(docstring_obj, raw_docstring: str | None) -> list
 
     if docstring_obj.returns:
         md_lines.extend(["**Returns**", ""])
-        type_info = f"`{docstring_obj.returns.type_name}`" if docstring_obj.returns.type_name else ""
-        line = f"{type_info} – {docstring_obj.returns.description}"
+        ret_type = docstring_obj.returns.type_name
+        ret_desc = docstring_obj.returns.description or ""
+        if ret_type:
+            # Type available: "**`Tensor`** – description"
+            line = f"**`{ret_type}`** \u2013 {ret_desc}"
+        else:
+            # No type: just the description as a plain sentence
+            line = ret_desc
         md_lines.append(line)
         md_lines.append("")
 

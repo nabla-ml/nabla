@@ -15,7 +15,7 @@ Return a tensor of *shape* filled with zeros.
 
 **Returns**
 
- – Zero-valued tensor of the given shape and dtype.
+Zero-valued tensor of the given shape and dtype.
 
 
 ---
@@ -34,7 +34,7 @@ Return a tensor of *shape* filled with ones.
 
 **Returns**
 
- – One-valued tensor of the given shape and dtype.
+One-valued tensor of the given shape and dtype.
 
 
 ---
@@ -54,7 +54,7 @@ Return a tensor of *shape* filled with *value*.
 
 **Returns**
 
- – Tensor with all elements equal to *value*.
+Tensor with all elements equal to *value*.
 
 
 ---
@@ -77,7 +77,7 @@ via DLPack without copying.
 
 **Returns**
 
- – A realized ``Tensor`` wrapping *value*.
+A realized ``Tensor`` wrapping *value*.
 
 
 ---
@@ -102,7 +102,7 @@ used as *stop* and start becomes ``0``.
 
 **Returns**
 
- – 1-D tensor of length ``ceil((stop - start) / step)``.
+1-D tensor of length ``ceil((stop - start) / step)``.
 
 
 ---
@@ -123,7 +123,7 @@ Return a tensor of *shape* with values sampled from U(*low*, *high*).
 
 **Returns**
 
- – Tensor with elements drawn uniformly at random from [*low*, *high*).
+Tensor with elements drawn uniformly at random from [*low*, *high*).
 
 
 ---
@@ -146,7 +146,7 @@ Also accessible as ``nabla.normal``.
 
 **Returns**
 
- – Tensor with elements drawn from a normal distribution.
+Tensor with elements drawn from a normal distribution.
 
 
 ---
@@ -169,7 +169,7 @@ Also accessible as ``nabla.normal``.
 
 **Returns**
 
- – Tensor with elements drawn from a normal distribution.
+Tensor with elements drawn from a normal distribution.
 
 
 ---
@@ -194,7 +194,7 @@ window.
 
 **Returns**
 
- – 1-D Tensor of shape ``(window_length,)``.
+1-D Tensor of shape ``(window_length,)``.
 
 
 ---
@@ -215,7 +215,7 @@ Elements below the *k*-th diagonal are zeroed out.
 
 **Returns**
 
- – Tensor of the same shape as *x* with the lower triangle zeroed.
+Tensor of the same shape as *x* with the lower triangle zeroed.
 
 
 ---
@@ -236,7 +236,7 @@ Elements above the *k*-th diagonal are zeroed out.
 
 **Returns**
 
- – Tensor of the same shape as *x* with the upper triangle zeroed.
+Tensor of the same shape as *x* with the upper triangle zeroed.
 
 
 ---
@@ -253,7 +253,7 @@ Return a zero tensor with the same shape, dtype, device, and sharding as *x*.
 
 **Returns**
 
- – Tensor of zeros matching all metadata of *x*.
+Tensor of zeros matching all metadata of *x*.
 
 
 ---
@@ -270,7 +270,7 @@ Return a ones tensor with the same shape, dtype, device, and sharding as *x*.
 
 **Returns**
 
- – Tensor of ones matching all metadata of *x*.
+Tensor of ones matching all metadata of *x*.
 
 
 ---
@@ -288,7 +288,7 @@ Return a tensor filled with *value*, matching *x*'s shape, dtype, device, and sh
 
 **Returns**
 
- – Tensor filled with *value*, with the same metadata as *x*.
+Tensor filled with *value*, with the same metadata as *x*.
 
 
 ---

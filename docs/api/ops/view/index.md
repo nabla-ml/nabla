@@ -17,7 +17,7 @@ in *shape* is automatically inferred.
 
 **Returns**
 
- – Tensor with the same data and new shape.
+Tensor with the same data and new shape.
 
 
 ---
@@ -36,7 +36,7 @@ Swap (transpose) two dimensions of *x*.
 
 **Returns**
 
- – View with *axis1* and *axis2* swapped.
+View with *axis1* and *axis2* swapped.
 
 
 ---
@@ -55,7 +55,7 @@ ordering. Equivalent to NumPy's ``transpose(axes=order)``.
 
 **Returns**
 
- – Tensor with dimensions reordered as specified.
+Tensor with dimensions reordered as specified.
 
 
 ---
@@ -74,7 +74,7 @@ Supports negative indexing.
 
 **Returns**
 
- – Tensor with one additional dimension of size 1.
+Tensor with one additional dimension of size 1.
 
 
 ---
@@ -93,7 +93,7 @@ Pass ``None`` to squeeze all size-1 dimensions.
 
 **Returns**
 
- – Tensor with the specified dimension removed.
+Tensor with the specified dimension removed.
 
 
 ---
@@ -113,7 +113,7 @@ Flatten a contiguous range of dimensions into one.
 
 **Returns**
 
- – Tensor with dimensions ``start_dim`` through ``end_dim`` collapsed
+Tensor with dimensions ``start_dim`` through ``end_dim`` collapsed
 into a single dimension.
 
 
@@ -135,7 +135,7 @@ Size-1 dimensions in *x* are expanded to match *shape*.
 
 **Returns**
 
- – Tensor of the given *shape* sharing data with *x* where possible.
+Tensor of the given *shape* sharing data with *x* where possible.
 
 
 ---
@@ -154,7 +154,7 @@ along *axis*.
 
 **Returns**
 
- – Tensor whose *axis* dimension is the sum of the inputs'.
+Tensor whose *axis* dimension is the sum of the inputs'.
 
 
 ---
@@ -175,7 +175,7 @@ than the inputs.
 
 **Returns**
 
- – Tensor of shape ``tensors[0].shape[:axis] + (N,) + tensors[0].shape[axis:]``
+Tensor of shape ``tensors[0].shape[:axis] + (N,) + tensors[0].shape[axis:]``
 where *N* is the number of input tensors.
 
 
@@ -185,7 +185,20 @@ where *N* is the number of input tensors.
 ```python
 def gather(x: 'Tensor', indices: 'Tensor', axis: 'int' = 0) -> 'Tensor':
 ```
-Gather elements from x along axis using indices.
+Gather elements from *x* along *axis* using *indices*.
+
+Equivalent to ``x.take(indices, axis=axis)`` in NumPy.
+
+**Parameters**
+
+- **`x`** – Source tensor.
+- **`indices`** – Integer tensor of indices. Shape can differ from *x*.
+- **`axis`** – Axis along which to index *x*. Default: ``0``.
+
+**Returns**
+
+Tensor with the same dtype as *x* and shape
+``x.shape[:axis] + indices.shape + x.shape[axis+1:]``.
 
 
 ---
@@ -194,7 +207,22 @@ Gather elements from x along axis using indices.
 ```python
 def scatter(x: 'Tensor', indices: 'Tensor', updates: 'Tensor', axis: 'int' = 0) -> 'Tensor':
 ```
-Scatter updates into x at indices along axis.
+Scatter *updates* into *x* at *indices* along *axis*.
+
+Functional (out-of-place). Equivalent to
+``out = x.copy(); out[indices] = updates`` along *axis*.
+
+**Parameters**
+
+- **`x`** – Base tensor that receives the scattered values.
+- **`indices`** – Integer index tensor specifying where to write.
+- **`updates`** – Values to write into *x*. Must be compatible with
+``x.shape[:axis] + indices.shape + x.shape[axis+1:]``.
+- **`axis`** – Axis along which to scatter. Default: ``0``.
+
+**Returns**
+
+New tensor equal to *x* except at positions specified by *indices*.
 
 
 ---
@@ -213,7 +241,7 @@ Extract a rectangular slice from *x*.
 
 **Returns**
 
- – Tensor of shape *size* containing the requested slice.
+Tensor of shape *size* containing the requested slice.
 
 
 ---
@@ -236,7 +264,7 @@ modified. Supports autograd.
 
 **Returns**
 
- – New tensor equal to *x* except at the specified slice.
+New tensor equal to *x* except at the specified slice.
 
 
 ---
@@ -255,7 +283,7 @@ Move axis *source* to position *destination*.
 
 **Returns**
 
- – Tensor with the axis at *source* moved to *destination*.
+Tensor with the axis at *source* moved to *destination*.
 
 
 ---
@@ -274,7 +302,7 @@ Swap (transpose) two dimensions of *x*.
 
 **Returns**
 
- – View with *axis1* and *axis2* swapped.
+View with *axis1* and *axis2* swapped.
 
 
 ---
@@ -292,7 +320,7 @@ Reverse the elements of *x* along the specified axis.
 
 **Returns**
 
- – Tensor with elements reversed along *axis*. Shape is unchanged.
+Tensor with elements reversed along *axis*. Shape is unchanged.
 
 
 ---
@@ -313,7 +341,7 @@ Also accepted via the ``pad_width`` keyword alias.
 
 **Returns**
 
- – Padded tensor. Each dimension *i* grows by
+Padded tensor. Each dimension *i* grows by
 ``paddings[i][0] + paddings[i][1]`` elements.
 
 
@@ -335,7 +363,7 @@ Has no gradient — the cotangent is passed through unchanged.
 
 **Returns**
 
- – Tensor with updated shape metadata.
+Tensor with updated shape metadata.
 
 
 ---
@@ -344,6 +372,16 @@ Has no gradient — the cotangent is passed through unchanged.
 ```python
 def as_interleaved_complex(x: 'Tensor') -> 'Tensor':
 ```
+Reinterpret a real tensor with last dim 2 as a complex tensor.
+
+**Parameters**
+
+- **`x`** – Real tensor of shape ``(..., 2)``.
+
+**Returns**
+
+Complex-valued tensor of shape ``(...)``.
+
 
 ---
 ## `view_as_real_interleaved`
@@ -351,6 +389,17 @@ def as_interleaved_complex(x: 'Tensor') -> 'Tensor':
 ```python
 def view_as_real_interleaved(x: 'Tensor') -> 'Tensor':
 ```
+Reinterpret a complex tensor as a real tensor with an extra trailing 2-dim.
+
+**Parameters**
+
+- **`x`** – Complex tensor of shape ``(...)``.
+
+**Returns**
+
+Real tensor of shape ``(..., 2)`` where the last axis contains
+``[real, imag]`` components.
+
 
 ---
 ## `broadcast_to_physical`
@@ -371,7 +420,7 @@ transforms and physical gradient rules.
 
 **Returns**
 
- – Tensor broadcast to the given physical shape.
+Tensor broadcast to the given physical shape.
 
 
 ---

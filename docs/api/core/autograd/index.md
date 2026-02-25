@@ -34,7 +34,7 @@ Analogous to backward_on_trace but propagates tangents forward.
 
 **Returns**
 
-`TangentMap` – dict mapping output TensorImpl → tangent TensorImpl.
+**`TangentMap`** – dict mapping output TensorImpl → tangent TensorImpl.
 
 
 ---
