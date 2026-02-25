@@ -14,9 +14,16 @@ if TYPE_CHECKING:
 
 
 class CollectiveOperation(Operation):
-    """Base class for collective communication operations.
+    """Base class for distributed cross-mesh communication operations.
 
-    Handles value hydration, graph execution (kernel), and output wrapping/sharding update.
+    **What this automates:**
+     - **Physical Shape Tracking:** Automates ``compute_physical_shape``, distinguishing between operations that preserve the global shape (like ``all_reduce``) and operations that slice/gather it.
+     - **Cost Analysis:** Provides specialized ``communication_cost`` estimation methods based on mesh bandwidth and ring-reduction models.
+
+    **What you must implement:**
+     - ``name``
+     - ``kernel(args, kwargs)``: The low-level distributed routine (e.g. hooking into MAX's distributed ops).
+     - ``vjp_rule(...)`` and ``jvp_rule(...)``
     """
 
     def _compute_local_preserved_shapes(

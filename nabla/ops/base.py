@@ -89,13 +89,28 @@ def _get_core():
 
 
 class Operation(ABC):
-    """Base class for all operations.
+    """Base class for all differentiable operations.
 
-    Operations are stateless singletons used purely for dispatch. All context
-    needed by a method is passed as parameters — no mutable state on self.
+    ``Operation`` is the fundamental scaffolding for all tensor routines in Nabla.
+    It manages the entire execution lifecycle: validating and adapting arguments,
+    handling SPMD sharding rules, maintaining structural hash caches, and
+    dispatching to either Eager or Trace tracking contexts.
 
-    Classes serve as namespace + inheritance for shared logic; instances carry
-    only class-level constants (name, flags, axis_arg_names, etc.).
+    Operations are stateless singletons used purely for dispatch. All necessary
+    execution context is passed as parameters — subclasses must not maintain
+    mutable states on ``self``.
+
+    **What this automates:**
+     - Argument validation and metadata collection.
+     - Interaction with ``SPMD`` infrastructure (sharding propagation and resharding).
+     - Construction of computational graph ``OpNode``s for Tracing/Autograd.
+     - Caching for repeated eager calls.
+
+    **What you must implement:**
+     - ``name``: A property returning the string name of the op.
+     - ``kernel(args, kwargs)``: The low-level execution logic (e.g., calling MAX ops).
+     - ``compute_physical_shape(args, kwargs, output_sharding)``: Determines the physical per-shard shape, dtype, and device.
+     - ``vjp_rule(...)`` and ``jvp_rule(...)``: Reverse- and Forward-mode autodiff rules.
     """
 
     _infer_output_sharding: bool = True
@@ -477,7 +492,18 @@ class Operation(ABC):
 
 
 class BinaryOperation(Operation):
-    """Base for binary element-wise ops with batch_dims-aware broadcasting."""
+    """Base class for binary element-wise operations (e.g. add, mul).
+
+    **What this automates:**
+     - **Broadcasting:** Automatically resolves logical broadcasting of mismatched input shapes before dispatching to the kernel.
+     - **Batch dimension alignment:** Within a ``vmap``, ensures that both operands are broadcasted to share identical batch dimensions.
+     - **Physical shape inference:** Automatically implements ``compute_physical_shape`` by assuming outputs share the physical shape of the broadcasted inputs.
+
+    **What you must implement:**
+     - ``name``
+     - ``kernel(args, kwargs)``: Execute the element-wise operation.
+     - ``vjp_rule(...)`` and ``jvp_rule(...)``
+    """
 
     def compute_physical_shape(
         self,
@@ -590,9 +616,13 @@ class BinaryOperation(Operation):
 
 
 class AxisOp(Operation):
-    """Base for ops that take LOGICAL axis/axes kwargs.
+    """Base class for operations accepting logical axis/dimension keyword arguments.
 
-    Translates integer kwargs by batch_dims offset.
+    **What this automates:**
+     - **Batch dimension translation:** When an operation is executed inside ``vmap``, tensors gain implicit batch dimensions (always placed at the front/axis 0). ``AxisOp`` conceptually intercepts any ``axis`` or ``dim`` kwarg and automatically offsets it by the tensor's ``batch_dims`` count before the low-level ``kernel`` sees it.
+     - **Sharding Rules:** Provides default SPMD rules that track axes being preserved or removed.
+
+    *Note: Subclass this if your op uses an axis but is NOT a reduction (e.g., concatenate, slice).*
     """
 
     axis_offset_for_insert: bool = False
@@ -655,7 +685,19 @@ class AxisOp(Operation):
 
 
 class ReduceOperation(AxisOp):
-    """Base for reduction operations (sum, mean, max, min, etc.)."""
+    """Base class for reduction operations (e.g., sum, mean, max).
+
+    **What this automates:**
+     - **Axis Offsetting:** Inherits from ``AxisOp`` to manage ``vmap`` batch dimensions.
+     - **Shape Inference:** Automates ``compute_physical_shape``, safely stripping or preserving dimensions based on the ``keepdims`` kwarg.
+     - **Cross-Shard Coordination:** Interacts with SPMD propagation to automatically apply secondary distributed reductions (like ``all_reduce``) if the tensor is sharded across the reduction axis.
+
+    **What you must implement:**
+     - ``name``
+     - ``kernel(args, kwargs)``: Execute the local intra-shard reduction.
+     - ``vjp_rule(...)`` and ``jvp_rule(...)``
+     - (Optional) ``collective_reduce_type``: Defaults to `"sum"`. Set to `"max"` or `"min"` if necessary.
+    """
 
     def compute_physical_shape(
         self,
@@ -778,7 +820,17 @@ class ReduceOperation(AxisOp):
 
 
 class UnaryOperation(Operation):
-    """Base for unary element-wise operations."""
+    """Base class for unary element-wise operations (e.g., exp, sin, relu).
+
+    **What this automates:**
+     - **Shape Inference:** Automates ``compute_physical_shape`` under the assumption that the output precisely matches the input shape, dtype, and device.
+     - **Autodiff Simplification:** Automatically provides ``vjp_rule`` and ``jvp_rule`` by relying on a single analytical derivative method, handling the chain rule multiplication for you.
+
+    **What you must implement:**
+     - ``name``
+     - ``kernel(args, kwargs)``: The element-wise application logic.
+     - ``_derivative(primal_tensor, output_tensor)``: Must return a tensor representing the element-wise partial derivative ``d(output) / d(primal)``. (Alternatively, return ``NotImplemented`` and override ``vjp_rule``/``jvp_rule`` manually).
+    """
 
     _infer_output_sharding: bool = False
     _cost_multiplier: float = 1.0
@@ -860,7 +912,17 @@ class UnaryOperation(Operation):
 
 
 class ShapeOp(Operation):
-    """Base for ops that take LOGICAL shape kwargs."""
+    """Base class for pure structural view operations (e.g., reshape, broadcast_to).
+
+    **What this automates:**
+     - **Batch Dimension Integration:** Intercepts the logical ``shape`` kwarg and automatically prepends implicit ``vmap`` batch dimensions, presenting the correct *physical* target shape to the ``kernel``.
+     - **Shape inference:** Automatically deduces the output's local runtime physical shape by cross-referencing the modified global shape with the output sharding spec.
+
+    **What you must implement:**
+     - ``name``
+     - ``kernel(args, kwargs)``: Applying the shape/stride transformations.
+     - ``vjp_rule(...)`` and ``jvp_rule(...)``
+    """
 
     _infer_output_sharding: bool = False
 
@@ -951,10 +1013,16 @@ class ShapeOp(Operation):
 
 
 class CreationOperation(Operation):
-    """Base for operations that create new tensors (e.g. zeros, ones, random).
+    """Base class for ops creating independent new tensors (e.g., zeros, uniform).
 
-    Creation operations don't follow the standard element-wise sharding;
-    instead, they generate data directly on each shard.
+    **What this automates:**
+     - **Physical Allocation:** Automates ``compute_physical_shape``, deciphering output shapes, dtypes, and devices from the provided kwargs cleanly.
+     - **Per-Shard Replication:** Automatically invokes the kernel across multiple distributed shards without requiring input dependency traversal.
+     - **Autodiff Termination:** Provides a default ``vjp_rule`` that safely returns ``None`` for all gradients, as creation operations act as leaves/sources in the autodiff graph.
+
+    **What you must implement:**
+     - ``name``
+     - ``kernel(args, kwargs)``: The initialization allocation routine.
     """
 
     def compute_physical_shape(
