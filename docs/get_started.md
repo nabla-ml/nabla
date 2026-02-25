@@ -7,8 +7,8 @@ Nabla is a JAX-inspired autodiff library with factor-based SPMD sharding, built 
 Nabla requires **Modular nightly**.
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
+python -m venv venv
+source venv/bin/activate
 pip install --pre --extra-index-url https://whl.modular.com/nightly/simple/ modular nabla-ml
 ```
 
