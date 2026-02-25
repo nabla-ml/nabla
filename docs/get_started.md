@@ -51,10 +51,7 @@ Start with the guided example notebooks in order:
 12. [10 — Compile vs Eager vs JAX](examples/10_jax_comparison_compiled)
 13. [11 — LoRA Fine-Tuning](examples/11_lora_finetuning)
 14. [12 — Custom Mojo Kernels](examples/12_custom_mojo_kernels)
-
-These notebooks are generated from the Python sources in the examples module (`examples/*.py`).
-
-Or browse the full list at [Examples](examples/index).
+15. [13 — CNN Training](examples/13_cnn_training)
 
 ---
 
