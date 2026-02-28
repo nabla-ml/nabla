@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 from ..common.context import _session
 
-_GRAPH_EPOCH: int = 0
+_GRAPH_EPOCH: ContextVar[int] = ContextVar("_GRAPH_EPOCH", default=0)
 _SEED: ContextVar[Tensor | None] = ContextVar("_SEED", default=None)
 _GRAPH_CACHE: dict[
     tuple[Any, ...], tuple[CompiledModel, list[int]]
@@ -133,9 +133,9 @@ class ComputeGraph:
     _debug_constant_add_buffers: int
 
     def __init__(self, context: mlir.Context | None = None, seed: int = 0):
-        global _GRAPH_EPOCH
-        _GRAPH_EPOCH += 1
-        self.epoch = _GRAPH_EPOCH
+        new_epoch = _GRAPH_EPOCH.get() + 1
+        _GRAPH_EPOCH.set(new_epoch)
+        self.epoch = new_epoch
         self._input_refs = []
         self._skip_finalize = False
         self._reset(context, seed)
@@ -172,9 +172,10 @@ class ComputeGraph:
 
     def clear_all(self) -> None:
         """Clears tracing state and compiled model cache for fresh start."""
-        global _GRAPH_EPOCH, _GRAPH_CACHE
-        _GRAPH_EPOCH += 1
-        self.epoch = _GRAPH_EPOCH
+        global _GRAPH_CACHE
+        new_epoch = _GRAPH_EPOCH.get() + 1
+        _GRAPH_EPOCH.set(new_epoch)
+        self.epoch = new_epoch
         _GRAPH_CACHE.clear()
         reset_cache_stats()
         self._reset(None, 0)
@@ -292,7 +293,7 @@ class ComputeGraph:
         return_model: bool = False,
     ) -> tuple[CompiledModel, list[driver.Buffer]] | None:
         """Main entry point: Evaluates specific tensors and their dependencies."""
-        global _CACHE_HITS, _CACHE_MISSES, _CACHE_INVALIDATIONS
+        global _CACHE_HITS, _CACHE_MISSES, _CACHE_INVALIDATIONS  # cache stats stay global
 
         from ..common.pytree import tree_leaves
         from ..tensor.api import Tensor
@@ -567,9 +568,9 @@ class ComputeGraph:
             _debug_eval("cache: MISS")
 
         # Bump epoch and create fresh MAX graph
-        global _GRAPH_EPOCH
-        _GRAPH_EPOCH += 1
-        self.epoch = _GRAPH_EPOCH
+        new_epoch = _GRAPH_EPOCH.get() + 1
+        _GRAPH_EPOCH.set(new_epoch)
+        self.epoch = new_epoch
 
         self.graph = graph.Graph("main", input_types=[], context=self.context)
         self.sources = {}
@@ -885,9 +886,9 @@ class ComputeGraph:
 
     def _finalize_evaluation(self, seed_value: int) -> None:
         """Prepares the graph for the next epoch."""
-        global _GRAPH_EPOCH
-        _GRAPH_EPOCH += 1
-        self.epoch = _GRAPH_EPOCH
+        new_epoch = _GRAPH_EPOCH.get() + 1
+        _GRAPH_EPOCH.set(new_epoch)
+        self.epoch = new_epoch
         self._reset(None, seed_value)
 
     def _get_input_tensors_ordered(self, targets: list[Tensor]) -> list[TensorImpl]:
@@ -916,4 +917,96 @@ class ComputeGraph:
         return ordered_inputs
 
 
-GRAPH = ComputeGraph()
+# --- ContextVar-backed GRAPH singleton ---
+
+_CURRENT_GRAPH: ContextVar[ComputeGraph | None] = ContextVar(
+    "_CURRENT_GRAPH", default=None
+)
+
+
+def _get_current_graph() -> ComputeGraph:
+    """Return the ComputeGraph for the current context, creating one lazily."""
+    g = _CURRENT_GRAPH.get()
+    if g is None:
+        g = ComputeGraph()
+        _CURRENT_GRAPH.set(g)
+    return g
+
+
+class _GraphProxy:
+    """Transparent proxy that delegates attribute access to the current
+    context's ``ComputeGraph``.
+
+    This allows the existing ``from engine import GRAPH; GRAPH.evaluate(...)``
+    pattern to keep working unchanged while each async task / thread gets
+    its own isolated ``ComputeGraph`` instance via ``ContextVar``.
+    """
+
+    __slots__ = ()
+
+    # Fast-path the most commonly accessed attributes so they don't go
+    # through the generic __getattr__ (saves one dict lookup per access).
+
+    @property
+    def graph(self) -> graph.Graph:
+        return _get_current_graph().graph
+
+    @graph.setter
+    def graph(self, value: graph.Graph) -> None:
+        _get_current_graph().graph = value
+
+    @property
+    def epoch(self) -> int:
+        return _get_current_graph().epoch
+
+    @epoch.setter
+    def epoch(self, value: int) -> None:
+        _get_current_graph().epoch = value
+
+    @property
+    def sources(self) -> dict:
+        return _get_current_graph().sources
+
+    @sources.setter
+    def sources(self, value: dict) -> None:
+        _get_current_graph().sources = value
+
+    @property
+    def context(self) -> mlir.Context:
+        return _get_current_graph().context
+
+    @property
+    def unrealized(self) -> weakref.WeakValueDictionary:
+        return _get_current_graph().unrealized
+
+    @unrealized.setter
+    def unrealized(self, value: weakref.WeakValueDictionary) -> None:
+        _get_current_graph().unrealized = value
+
+    @property
+    def _input_refs(self) -> list:
+        return _get_current_graph()._input_refs
+
+    @_input_refs.setter
+    def _input_refs(self, value: list) -> None:
+        _get_current_graph()._input_refs = value
+
+    @property
+    def _skip_finalize(self) -> bool:
+        return _get_current_graph()._skip_finalize
+
+    @_skip_finalize.setter
+    def _skip_finalize(self, value: bool) -> None:
+        _get_current_graph()._skip_finalize = value
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(_get_current_graph(), name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        setattr(_get_current_graph(), name, value)
+
+    def __repr__(self) -> str:
+        return f"_GraphProxy(current={_get_current_graph()!r})"
+
+
+GRAPH = _GraphProxy()

@@ -5,14 +5,14 @@
 
 from __future__ import annotations
 
-import threading
 from collections import OrderedDict
 from collections.abc import Iterator
+from contextvars import ContextVar
 from typing import Any, ClassVar
 
 from ...core import Tensor, is_tensor, realize_all, register_pytree_node, tree_leaves
 
-_MODULE_CALL_STATE = threading.local()
+_MODULE_CALL_DEPTH: ContextVar[int] = ContextVar("_MODULE_CALL_DEPTH", default=0)
 
 
 def _module_tree_flatten(
@@ -202,12 +202,12 @@ class Module:
         raise NotImplementedError(f"{self.__class__.__name__} must implement forward()")
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        depth = int(getattr(_MODULE_CALL_STATE, "depth", 0))
-        _MODULE_CALL_STATE.depth = depth + 1
+        depth = _MODULE_CALL_DEPTH.get()
+        token = _MODULE_CALL_DEPTH.set(depth + 1)
         try:
             out = self.forward(*args, **kwargs)
         finally:
-            _MODULE_CALL_STATE.depth = depth
+            _MODULE_CALL_DEPTH.reset(token)
 
         is_toplevel_user_call = depth == 0
         if is_toplevel_user_call and self._AUTO_REALIZE_TOPLEVEL_FORWARD:

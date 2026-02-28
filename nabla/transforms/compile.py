@@ -331,7 +331,12 @@ class CompiledFunction(Generic[T]):
         treedef: PyTreeDef,
     ) -> T:
         """Trace function and compile to MAX graph."""
-        from .. import config as nabla_config
+        from ..core.graph import engine as _graph_engine
+        from ..config import (
+            _EAGER_MAX_GRAPH,
+            _VERIFY_EAGER_SHAPES,
+            _TRACING,
+        )
 
         # Validate: no sharded + dynamic dims yet
         if self.dynamic_dims and any(flat[i].is_sharded for i in tensor_indices):
@@ -339,25 +344,19 @@ class CompiledFunction(Generic[T]):
                 "Compilation of sharded tensors with dynamic dimensions is not yet supported."
             )
 
-        # Save/set config for tracing
-        orig_eager, orig_verify, orig_tracing = (
-            nabla_config.EAGER_MAX_GRAPH,
-            nabla_config.VERIFY_EAGER_SHAPES,
-            nabla_config.TRACING,
-        )
         t0 = time.perf_counter()
 
-        try:
-            nabla_config.EAGER_MAX_GRAPH = True  # Ops build graph during trace
-            nabla_config.VERIFY_EAGER_SHAPES = False  # Skip shape checks
-            nabla_config.TRACING = True  # Suppress realization during trace
+        # Use ContextVar tokens for safe, exception-proof save/restore
+        token_eager = _EAGER_MAX_GRAPH.set(True)  # Ops build graph during trace
+        token_verify = _VERIFY_EAGER_SHAPES.set(False)  # Skip shape checks
+        token_tracing = _TRACING.set(True)  # Suppress realization during trace
 
+        try:
             # Start a fresh epoch so reused tensors cannot leak stale graph values
             # from a previously reset graph region.
-            from ..core.graph import engine as _graph_engine
-
-            _graph_engine._GRAPH_EPOCH += 1
-            GRAPH.epoch = _graph_engine._GRAPH_EPOCH
+            new_epoch = _graph_engine._GRAPH_EPOCH.get() + 1
+            _graph_engine._GRAPH_EPOCH.set(new_epoch)
+            GRAPH.epoch = new_epoch
 
             # Prepare graph with input types
             input_types = (
@@ -379,9 +378,9 @@ class CompiledFunction(Generic[T]):
             )
 
         finally:
-            nabla_config.EAGER_MAX_GRAPH = orig_eager
-            nabla_config.VERIFY_EAGER_SHAPES = orig_verify
-            nabla_config.TRACING = orig_tracing
+            _EAGER_MAX_GRAPH.reset(token_eager)
+            _VERIFY_EAGER_SHAPES.reset(token_verify)
+            _TRACING.reset(token_tracing)
 
     def _register_inputs(
         self, flat: list[Any], tensor_indices: list[int], input_types: list | None
