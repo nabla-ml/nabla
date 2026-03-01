@@ -10,7 +10,6 @@
 
 ---
 
-
 ## Installation
 
 Nabla requires **Modular nightly**.
