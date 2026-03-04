@@ -1,6 +1,6 @@
 # Nabla - High-Performance Scientific Computing
 
-> Nabla is a high-performance scientific computing and machine learning framework combining imperative and functional APIs. Seamlessly drop custom Mojo kernels into the autodiff engine and automatically shard distributed workloads, built on [Mojo & MAX](https://www.modular.com/max).
+> Nabla is a high-performance scientific computing and machine learning framework combining imperative and functional APIs. You can seamlessly drop custom Mojo kernels into the autodiff engine and automatically shard distributed workloads, built on [Mojo & MAX](https://www.modular.com/max).
 
 > **Active Development**: This is the `main` development branch with distributed SPMD execution and a refined lazy, MAX-native execution model. Read the docs: [https://nablaml.com](https://nablaml.com).
 
