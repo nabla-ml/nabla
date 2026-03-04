@@ -473,6 +473,35 @@ def adapt_and_reshard(
         op, args_with_specs, mesh, adapted_kwargs or {}
     )
 
+    # Input-side reduction: non-linear ops must reduce partial inputs BEFORE
+    # the op, because f(reduce(x)) ≠ reduce(f(x)) for non-linear f.
+    # Only fires when inputs actually carry partial_sum_axes matching
+    # reduce_axes (otherwise it's output-side AllReduce, e.g. reduce_sum).
+    if reduce_axes and isinstance(reduce_axes, set):
+        from ..core import pytree
+        from ..core.tensor import Tensor
+        from .communication.all_reduce import all_reduce
+
+        _axes = set(reduce_axes)
+        _did_reduce = False
+
+        def _maybe_reduce(x):
+            nonlocal _did_reduce
+            if not isinstance(x, Tensor) or not x.sharding:
+                return x
+            overlap = x.sharding.partial_sum_axes & _axes
+            if not overlap:
+                return x
+            _did_reduce = True
+            return all_reduce(
+                x, mesh=mesh, reduce_axes=overlap,
+                reduce_op=op.collective_reduce_type,
+            )
+
+        args_with_specs = pytree.tree_map(_maybe_reduce, args_with_specs)
+        if _did_reduce:
+            reduce_axes = set()  # already reduced on inputs; don't double-reduce
+
     # Perform the data movement (Logical Adaptation)
     resharded_args = spmd.reshard_inputs(args_with_specs, input_shardings, mesh)
 

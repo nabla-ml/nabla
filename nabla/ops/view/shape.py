@@ -55,6 +55,10 @@ def _force_replicated_sharding(args: OpArgs, mesh: DeviceMesh | None) -> None:
 
 class BroadcastToOp(ShapeOp):
     @property
+    def allows_partial_passthrough(self) -> bool:
+        return True
+
+    @property
     def name(self) -> str:
         return "broadcast_to"
 
@@ -155,6 +159,10 @@ class BroadcastToOp(ShapeOp):
 
 
 class ReshapeOp(ShapeOp):
+    @property
+    def allows_partial_passthrough(self) -> bool:
+        return True
+
     @property
     def name(self) -> str:
         return "reshape"
@@ -801,6 +809,10 @@ class SliceTensorOp(Operation):
 
 class ConcatenateOp(AxisOp):
     """Concatenate tensors along an axis."""
+
+    @property
+    def allows_partial_passthrough(self) -> bool:
+        return True
 
     @property
     def name(self) -> str:

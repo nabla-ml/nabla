@@ -44,6 +44,10 @@ class UnsqueezeOp(AxisOp):
     axis_offset_for_insert = True
 
     @property
+    def allows_partial_passthrough(self) -> bool:
+        return True
+
+    @property
     def name(self) -> str:
         return "unsqueeze"
 
@@ -134,6 +138,10 @@ class UnsqueezeOp(AxisOp):
 
 class SqueezeOp(AxisOp):
     axis_offset_for_insert = False
+
+    @property
+    def allows_partial_passthrough(self) -> bool:
+        return True
 
     @property
     def name(self) -> str:
@@ -278,6 +286,10 @@ class SqueezeOp(AxisOp):
 
 class SwapAxesOp(AxisOp):
     axis_arg_names = ("axis1", "axis2")
+
+    @property
+    def allows_partial_passthrough(self) -> bool:
+        return True
 
     @property
     def name(self) -> str:
@@ -431,6 +443,10 @@ transpose = swap_axes
 
 class MoveAxisOp(AxisOp):
     axis_arg_names = ("source", "destination")
+
+    @property
+    def allows_partial_passthrough(self) -> bool:
+        return True
 
     @property
     def name(self) -> str:
@@ -691,6 +707,10 @@ class FlipOp(AxisOp):
     """Flip a tensor along a specified axis."""
 
     @property
+    def allows_partial_passthrough(self) -> bool:
+        return True
+
+    @property
     def name(self) -> str:
         return "flip"
 
@@ -741,6 +761,10 @@ class FlipOp(AxisOp):
 
 class PermuteOp(Operation):
     """Permute the dimensions of a tensor according to a given order."""
+
+    @property
+    def allows_partial_passthrough(self) -> bool:
+        return True
 
     @property
     def name(self) -> str:

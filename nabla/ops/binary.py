@@ -17,6 +17,10 @@ if TYPE_CHECKING:
 
 class AddOp(BinaryOperation):
     @property
+    def allows_partial_passthrough(self) -> bool:
+        return True
+
+    @property
     def name(self) -> str:
         return "add"
 
@@ -39,6 +43,10 @@ class AddOp(BinaryOperation):
 
 
 class MulOp(BinaryOperation):
+    @property
+    def allows_partial_passthrough(self) -> bool:
+        return True
+
     @property
     def name(self) -> str:
         return "mul"
@@ -66,6 +74,10 @@ class MulOp(BinaryOperation):
 
 
 class SubOp(BinaryOperation):
+    @property
+    def allows_partial_passthrough(self) -> bool:
+        return True
+
     @property
     def name(self) -> str:
         return "sub"
@@ -124,6 +136,10 @@ class DivOp(BinaryOperation):
 
 class MatmulOp(Operation):
     """Matmul with 1D promotion handling."""
+
+    @property
+    def allows_partial_passthrough(self) -> bool:
+        return True
 
     @property
     def name(self) -> str:

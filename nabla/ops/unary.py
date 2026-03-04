@@ -114,6 +114,10 @@ class NegOp(UnaryOperation):
     """Negation: -x."""
 
     @property
+    def allows_partial_passthrough(self) -> bool:
+        return True
+
+    @property
     def name(self) -> str:
         return "neg"
 
@@ -655,6 +659,10 @@ class RoundOp(UnaryOperation):
 
 class CastOp(UnaryOperation):
     """Cast a tensor to a different data type."""
+
+    @property
+    def allows_partial_passthrough(self) -> bool:
+        return True
 
     @property
     def name(self) -> str:

@@ -137,6 +137,15 @@ class Operation(ABC):
         ...
 
     @property
+    def allows_partial_passthrough(self) -> bool:
+        """Whether this op may defer AllReduce on Partial tensors.
+
+        Override to return ``True`` for linear/distributive ops where
+        ``f(P0+P1) = f(P0)+f(P1)`` (e.g. add, mul, neg, matmul).
+        """
+        return False
+
+    @property
     def collective_reduce_type(self) -> str:
         """Type of reduction to use for cross-shard communication (sum, max, min, prod)."""
         return "sum"

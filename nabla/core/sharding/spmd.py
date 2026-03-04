@@ -161,6 +161,17 @@ def infer_output_sharding(
         if not input_partial_axes:
             return None, input_specs, False
 
+        # Only linear/distributive ops may defer reduction on Partial tensors.
+        # Non-linear ops (relu, exp, softmax, ...) MUST reduce first because
+        # f(P0+P1) ≠ f(P0)+f(P1).
+        if not op.allows_partial_passthrough:
+            output_rank = op.infer_output_rank(input_shapes, **(kwargs or {}))
+            output_spec = ShardingSpec(
+                mesh,
+                [DimSpec([], is_open=False) for _ in range(output_rank)],
+            )
+            return output_spec, input_specs, input_partial_axes
+
         output_rank = op.infer_output_rank(input_shapes, **(kwargs or {}))
         output_spec = ShardingSpec(
             mesh,
@@ -196,7 +207,16 @@ def infer_output_sharding(
         mesh, [DimSpec([], is_open=True) for _ in range(output_rank)]
     )
 
+    # Save dims on multi-input contracting factors before propagation
+    # resolves conflicts by clearing them (e.g. matmul k-dim: sharded
+    # vs replicated → propagation picks replicated, erasing the info).
+    saved_dims = _save_multi_input_contracting_dims(rule, input_specs)
+
     propagate_sharding(rule, input_specs, [output_spec])
+
+    # Restore dims that propagation cleared — prevents reshard_inputs
+    # from inserting all_gather; the op produces Partial output instead.
+    restored_axes = _restore_cleared_contracting_dims(input_specs, saved_dims)
 
     input_partial_axes = set()
     for spec in input_specs:
@@ -207,6 +227,14 @@ def infer_output_sharding(
     reduce_axes, ghost_axes = _check_contracting_factors_sharded(
         rule, input_specs, output_spec
     )
+
+    # Restored axes become ghost (Partial output) instead of triggering
+    # immediate AllReduce. Non-restored reduce_axes (e.g. reduce_sum on
+    # a sharded dim) fire AllReduce normally.
+    for ax in restored_axes:
+        if ax in reduce_axes:
+            reduce_axes.discard(ax)
+            ghost_axes.add(ax)
 
     for ax in ghost_axes:
         sharded_in_dim = False
@@ -234,6 +262,67 @@ def infer_output_sharding(
         dim.is_open = False
 
     return output_spec, input_specs, reduce_axes
+
+
+def _save_multi_input_contracting_dims(
+    rule: OpShardingRule,
+    input_specs: list[ShardingSpec],
+) -> dict[tuple[int, int], list[str]]:
+    """Snapshot sharding on dims that carry multi-input contracting factors.
+
+    A "multi-input" contracting factor appears in 2+ input tensors (e.g. "k"
+    in matmul: A[m,k] @ B[k,n]).  ``propagate_sharding`` may clear their
+    sharding when resolving conflicts, but we need the original info to
+    produce Partial output instead of inserting all_gather.
+
+    Single-input contracting factors (e.g. reduced dims in reduce_sum) are
+    left alone — they keep the default all_gather + local reduce behaviour.
+    """
+    contracting = rule.get_contracting_factors()
+    if not contracting:
+        return {}
+
+    # Which contracting factors appear in 2+ input tensors?
+    multi = set()
+    for f in contracting:
+        count = sum(
+            1
+            for m in rule.input_mappings
+            if any(f in facs for facs in m.values())
+        )
+        if count >= 2:
+            multi.add(f)
+    if not multi:
+        return {}
+
+    saved: dict[tuple[int, int], list[str]] = {}
+    for t_idx, spec in enumerate(input_specs):
+        if t_idx >= len(rule.input_mappings):
+            continue
+        for dim_idx, factors in rule.input_mappings[t_idx].items():
+            if dim_idx < len(spec.dim_specs):
+                ds = spec.dim_specs[dim_idx]
+                if ds.axes and any(f in multi for f in factors):
+                    saved[(t_idx, dim_idx)] = list(ds.axes)
+    return saved
+
+
+def _restore_cleared_contracting_dims(
+    input_specs: list[ShardingSpec],
+    saved: dict[tuple[int, int], list[str]],
+) -> set[str]:
+    """Restore dims that ``propagate_sharding`` cleared due to conflicts.
+
+    Returns the set of restored mesh axis names.
+    """
+    restored: set[str] = set()
+    for (t_idx, dim_idx), orig_axes in saved.items():
+        dim = input_specs[t_idx].dim_specs[dim_idx]
+        if not dim.axes:  # propagation cleared it
+            dim.axes = orig_axes
+            dim.is_open = False
+            restored.update(orig_axes)
+    return restored
 
 
 def _check_contracting_factors_sharded(
