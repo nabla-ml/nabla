@@ -48,6 +48,7 @@ from .core import (
 from .core.graph.tracing import trace
 from .core.autograd.backward import backward
 from .core.autograd import forward
+# --- SPMD & Sharded Communication ---
 from .core.sharding.spec import (
     DeviceMesh,
     DimSpec,
@@ -57,6 +58,22 @@ from .core.sharding.spec import (
     compute_local_shape,
     get_num_shards,
 )
+from .ops.communication import (
+    accelerator,
+    all_gather,
+    all_reduce,
+    all_to_all,
+    cpu,
+    distributed_broadcast,
+    gpu,
+    ppermute,
+    reduce_scatter,
+    reshard,
+    shard,
+    to_device,
+    transfer_to,
+)
+from .transforms.shard_map import shard_map
 from .ops.base import (
     BinaryOperation,
     CreationOperation,
@@ -73,21 +90,6 @@ from .ops.binary import (
     outer,
     pow,
     sub,
-)
-from .ops.communication import (
-    accelerator,
-    all_gather,
-    all_reduce,
-    all_to_all,
-    cpu,
-    distributed_broadcast,
-    gpu,
-    ppermute,
-    reduce_scatter,
-    reshard,
-    shard,
-    to_device,
-    transfer_to,
 )
 from .ops.comparison import (
     equal,
@@ -173,7 +175,6 @@ from .ops.view import (
     decr_batch_dims,
     flatten,
     flip,
-    gather,
     incr_batch_dims,
     move_axis_from_batch_dims,
     move_axis_to_batch_dims,
@@ -194,6 +195,7 @@ from .ops.view import (
     unsqueeze_physical,
     view_as_real_interleaved,
 )
+from .ops import gather, take
 from .transforms.compile import CompilationStats, CompiledFunction, compile
 from .transforms.grad import grad, value_and_grad
 from .transforms.jacfwd import jacfwd

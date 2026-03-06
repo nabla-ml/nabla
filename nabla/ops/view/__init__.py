@@ -30,6 +30,7 @@ from .complex import (
 from .indexing import (
     gather,
     scatter,
+    take,
 )
 from .shape import (
     broadcast_to,
@@ -58,6 +59,7 @@ __all__ = [
     "concatenate",
     "stack",
     "gather",
+    "take",
     "scatter",
     "flatten",
     "rebind",

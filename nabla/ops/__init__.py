@@ -132,6 +132,7 @@ from .view import (
     squeeze,
     stack,
     swap_axes,
+    take,
     unsqueeze,
     view_as_real_interleaved,
 )
@@ -245,6 +246,7 @@ __all__ = [
     "view_as_real_interleaved",
     "slice_tensor",
     "gather",
+    "take",
     "scatter",
     "slice_update",
     "stack",

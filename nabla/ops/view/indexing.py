@@ -451,24 +451,33 @@ _gather_op = GatherOp()
 _scatter_op = ScatterOp()
 
 
-def gather(x: Tensor, indices: Tensor, axis: int = 0) -> Tensor:
-    """Gather elements from *x* along *axis* using *indices*.
+def gather(x: Tensor, indices: Tensor | None = None, axis: int = 0) -> Tensor:
+    """Gather elements from *x* along *axis* using *indices*, or collect shards.
 
-    Equivalent to ``x.take(indices, axis=axis)`` in NumPy.
+    If *indices* is provided, this performs an indexed selection (equivalent to
+    ``numpy.take``). If *indices* is None, it collects all shards from a
+    distributed tensor into a single replicated tensor (functional collector).
 
     Args:
         x: Source tensor.
-        indices: Integer tensor of indices. Shape can differ from *x*.
+        indices: Integer tensor of indices, or None for shard collection.
         axis: Axis along which to index *x*. Default: ``0``.
 
     Returns:
-        Tensor with the same dtype as *x* and shape
-        ``x.shape[:axis] + indices.shape + x.shape[axis+1:]``.
+        The gathered/collected tensor.
     """
+    if indices is None:
+        if hasattr(x, "gather"):
+            return x.gather()
+        return x
+
     from ..base import ensure_tensor
 
     indices = ensure_tensor(indices)
     return _gather_op([x, indices], {"axis": axis})[0]
+
+
+take = gather
 
 
 def scatter(x: Tensor, indices: Tensor, updates: Tensor, axis: int = 0) -> Tensor:
