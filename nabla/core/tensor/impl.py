@@ -388,9 +388,6 @@ class TensorImpl:
         factors: list[str] = []
         if hasattr(sharding, "dim_specs"):
             for dim in sharding.dim_specs:
-                if getattr(dim, "partial", False):
-                    all_partial_axes.update(dim.axes)
-
                 if not dim.axes:
                     factors.append("*")
                 else:

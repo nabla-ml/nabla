@@ -453,7 +453,7 @@ def shard(
 
     result = x
 
-    # 1. Expansion (AllGather)
+    # 1. Expansion (AllGather) — only for dimensional sharding.
     for dim in range(len(from_spec.dim_specs)):
         from_axes = (
             set(from_spec.dim_specs[dim].axes)
@@ -464,17 +464,6 @@ def shard(
             set(to_spec.dim_specs[dim].axes) if dim < len(to_spec.dim_specs) else set()
         )
         axes_to_remove = from_axes - to_axes
-
-        # Handle partial sums
-        if from_spec.dim_specs[dim].partial:
-            from .all_reduce import all_reduce
-
-            target_is_partial = (
-                dim < len(to_spec.dim_specs) and to_spec.dim_specs[dim].partial
-            )
-            if not target_is_partial:
-                result = all_reduce(result)
-                continue
 
         if axes_to_remove:
             from .all_gather import all_gather

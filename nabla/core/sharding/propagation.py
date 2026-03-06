@@ -3,219 +3,40 @@
 # SPDX-License-Identifier: Apache-2.0
 # ===----------------------------------------------------------------------=== #
 
+"""Sharding propagation: per-op sharding inference from einsum-like rules.
+
+The key abstractions are:
+
+- ``OpShardingRuleTemplate``: a declarative, einsum-like specification of how
+  an op's dimensions relate (e.g. ``"... m k, ... k n -> ... m n"``).  Ops
+  define one via their ``sharding_rule()`` method.
+
+- ``OpShardingRule``: a template instantiated with concrete shapes, giving
+  factor sizes.
+
+- ``infer_from_rule()``: given input ``ShardingSpec``s and a rule, produces
+  the output ``ShardingSpec`` (including ``partial_sum_axes``) and the set of
+  axes that need AllReduce.  This is the single entry point used by
+  ``spmd.infer_output_sharding``.
+
+The factor representation is kept because it is the natural input for future
+graph-level auto-sharding (ALPA-style strategy enumeration / ILP).
+"""
+
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from enum import IntEnum
 from typing import TYPE_CHECKING, Any
 
-from .spec import DeviceMesh, DimSpec, ShardingSpec
+from .spec import DimSpec, ShardingSpec
 
 if TYPE_CHECKING:
-    from .spec import DeviceMesh, ShardingSpec
+    from .spec import DeviceMesh
 
 
-class OpPriority(IntEnum):
-    """Operation-based priority for propagation ordering (lower = higher priority)."""
-
-    PASSTHROUGH = 0
-    CONTRACTION = 1
-    REDUCTION = 2
-    COMMUNICATION = 3
-
-
-class PropagationStrategy(IntEnum):
-    """Conflict resolution strategy (BASIC = no conflicts, AGGRESSIVE = resolve conflicts)."""
-
-    BASIC = 0
-    AGGRESSIVE = 1
-
-
-@dataclass
-class FactorSharding:
-    """Sharding state for a single factor during propagation.
-
-    Attributes:
-        axes: Assigned mesh axes (major-to-minor).
-        priority: 0=Strongest, 999=Weakest.
-        is_open: If True, can accept more sharding.
-        partial: If True, factor holds partial sums.
-    """
-
-    axes: list[str] = field(default_factory=list)
-    priority: int = 999
-    is_open: bool = True
-    partial: bool = False
-
-    @property
-    def is_explicit_replication(self) -> bool:
-        """True if this represents an explicit replication constraint (empty + closed)."""
-        return not self.axes and not self.is_open
-
-    @property
-    def is_receptive(self) -> bool:
-        """True if this factor can receive sharding from others (empty + open)."""
-        return not self.axes and self.is_open
-
-    @property
-    def has_sharding(self) -> bool:
-        """True if this factor has actual sharding axes."""
-        return bool(self.axes)
-
-    def copy(self) -> "FactorSharding":
-        return FactorSharding(
-            axes=list(self.axes),
-            priority=self.priority,
-            is_open=self.is_open,
-            partial=self.partial,
-        )
-
-    def __repr__(self) -> str:
-        axes_str = ",".join(self.axes) if self.axes else "∅"
-        status = (
-            "open"
-            if self.is_open
-            else ("repl" if self.is_explicit_replication else "closed")
-        )
-        partial_str = "!" if self.partial else ""
-        return f"FactorSharding({axes_str}, p{self.priority}, {status}{partial_str})"
-
-
-@dataclass
-class FactorShardingState:
-    """
-    Complete factor sharding state for an operation during propagation.
-    Holds the sharding state for all factors in an OpShardingRule.
-    """
-
-    factors: dict[str, FactorSharding] = field(default_factory=dict)
-
-    def get_or_create(self, factor_name: str) -> FactorSharding:
-        if factor_name not in self.factors:
-            self.factors[factor_name] = FactorSharding()
-        return self.factors[factor_name]
-
-    def get(self, factor_name: str) -> FactorSharding | None:
-        return self.factors.get(factor_name)
-
-    def merge(
-        self,
-        factor_name: str,
-        new_axes: list[str],
-        new_priority: int,
-        new_is_open: bool,
-        new_partial: bool,
-        mesh: DeviceMesh,
-        strategy: PropagationStrategy | None = None,
-    ) -> None:
-        """Merge new sharding information with Shardy conflict resolution."""
-        if strategy is None:
-            strategy = PropagationStrategy.BASIC
-
-        factor = self.get_or_create(factor_name)
-
-        has_new = bool(new_axes)
-        has_existing = factor.has_sharding
-        new_is_receptive = not has_new and new_is_open
-        new_is_explicit_repl = not has_new and not new_is_open
-
-        factor.partial = factor.partial or new_partial
-
-        if new_is_receptive:
-            return
-
-        if factor.is_explicit_replication and new_priority >= factor.priority:
-            return
-
-        if new_is_explicit_repl and new_priority < factor.priority:
-            factor.axes = []
-            factor.priority = new_priority
-            factor.is_open = False
-            return
-
-        if new_is_explicit_repl and new_priority == factor.priority:
-            factor.axes = []
-            factor.is_open = False
-            return
-
-        if has_new and not has_existing and factor.is_open:
-            factor.axes = list(new_axes)
-            factor.priority = new_priority
-            factor.is_open = new_is_open
-            return
-
-        if has_new and has_existing:
-            if new_priority < factor.priority:
-                factor.axes = list(new_axes)
-                factor.priority = new_priority
-                factor.is_open = new_is_open
-            elif new_priority == factor.priority:
-                if strategy == PropagationStrategy.AGGRESSIVE:
-                    old_par = self._get_parallelism(factor.axes, mesh)
-                    new_par = self._get_parallelism(new_axes, mesh)
-                    if new_par > old_par:
-                        factor.axes = list(new_axes)
-                        factor.is_open = new_is_open
-                else:
-                    # If one is a prefix of the other, take the longer one (alignment)
-                    if (
-                        len(new_axes) > len(factor.axes)
-                        and new_axes[: len(factor.axes)] == factor.axes
-                    ):
-                        factor.axes = list(new_axes)
-                    elif (
-                        len(factor.axes) >= len(new_axes)
-                        and factor.axes[: len(new_axes)] == new_axes
-                    ):
-                        # factor.axes already contains new_axes as prefix, keep it
-                        pass
-                    else:
-                        # Real conflict, take common prefix
-                        common = self._longest_common_prefix(factor.axes, new_axes)
-                        factor.axes = common
-                        # If we lost axes, it might become open if either was open
-                        factor.is_open = factor.is_open or new_is_open
-            return
-
-        if has_new and not has_existing:
-            # Replication matches anything if it's a prefix, but sharding is more specific.
-            # If factor was already replicated (closed or open), and new is sharded.
-            if new_priority <= factor.priority:
-                factor.axes = list(new_axes)
-                factor.priority = new_priority
-                factor.is_open = new_is_open
-            return
-
-        if has_new and new_priority > factor.priority:
-            return
-
-        if has_new:
-            factor.axes = list(new_axes)
-            factor.priority = new_priority
-            factor.is_open = new_is_open
-
-    @staticmethod
-    def _longest_common_prefix(list1: list[str], list2: list[str]) -> list[str]:
-        common = []
-        for x, y in zip(list1, list2, strict=False):
-            if x == y:
-                common.append(x)
-            else:
-                break
-        return common
-
-    @staticmethod
-    def _get_parallelism(axes: list[str], mesh: DeviceMesh) -> int:
-        if not axes:
-            return 1
-        total = 1
-        for ax in axes:
-            total *= mesh.get_axis_size(ax)
-        return total
-
-    def __repr__(self) -> str:
-        lines = ["FactorShardingState:"]
-        for name, fs in sorted(self.factors.items()):
-            lines.append(f"  {name}: {fs}")
-        return "\n".join(lines)
+# ---------------------------------------------------------------------------
+#  OpShardingRule  /  OpShardingRuleTemplate  (kept unchanged)
+# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -309,10 +130,7 @@ class OpShardingRuleTemplate:
 
                 if len(factors) == 1:
                     f = factors[0]
-                    if f in factor_sizes:
-                        if factor_sizes[f] != dim_size:
-                            pass
-                    else:
+                    if f not in factor_sizes:
                         factor_sizes[f] = dim_size
 
         for mapping, shape in pairs:
@@ -330,9 +148,7 @@ class OpShardingRuleTemplate:
                     else:
                         unknown_factors.append(f)
 
-                if not unknown_factors:
-                    pass
-                elif len(unknown_factors) == 1 and dim_size % known_product == 0:
+                if len(unknown_factors) == 1 and dim_size % known_product == 0:
                     factor_sizes[unknown_factors[0]] = dim_size // known_product
 
         return OpShardingRule(self.input_mappings, self.output_mappings, factor_sizes)
@@ -400,319 +216,109 @@ class OpShardingRuleTemplate:
         return cls(input_mappings, output_mappings)
 
 
-def _expand_axes_for_factors(
-    axes: list[str],
-    factors: list[str],
-    factor_sizes: dict[str, int],
-    mesh: "DeviceMesh",
-) -> list[str]:
-    """Expand axes into sub-axes when one axis covers multiple factors."""
-    if not axes or not factors:
-        return axes
-
-    expanded = []
-    curr_ax_idx = 0
-
-    while curr_ax_idx < len(axes) and len(expanded) < len(factors):
-        ax = axes[curr_ax_idx]
-        ax_size = mesh.get_axis_size(ax)
-
-        remaining_factors = factors[len(expanded) :]
-        if not remaining_factors:
-            break
-
-        cum_prod = 1
-        sub_factors = []
-        found_split = False
-
-        for f in remaining_factors:
-            f_size = factor_sizes.get(f, 1)
-            cum_prod *= f_size
-            sub_factors.append((f, f_size))
-
-            if cum_prod == ax_size and len(sub_factors) > 1:
-                pre_size = 1
-                for _, f_size in sub_factors:
-                    expanded.append(f"{ax}:({pre_size}){f_size}")
-                    pre_size *= f_size
-
-                curr_ax_idx += 1
-                found_split = True
-                break
-
-            if cum_prod > ax_size:
-                break
-
-        if not found_split:
-            expanded.append(ax)
-            curr_ax_idx += 1
-
-    return expanded
+# ---------------------------------------------------------------------------
+#  infer_from_rule  —  the simple, eager-mode sharding inference
+# ---------------------------------------------------------------------------
 
 
-def _collect_to_factors(
-    specs: list["ShardingSpec"],
-    mappings: list[dict[int, list[str]]],
+def infer_from_rule(
     rule: OpShardingRule,
+    input_specs: list[ShardingSpec],
     mesh: "DeviceMesh",
-    state: FactorShardingState,
-    strategy: PropagationStrategy,
-    max_priority: int | None,
-) -> None:
-    """Phase 1: Project dimension shardings to factor shardings (COLLECT)."""
-    for t_idx, spec in enumerate(specs):
-        if t_idx >= len(mappings):
-            continue
-        mapping = mappings[t_idx]
+) -> tuple[ShardingSpec, set[str]]:
+    """Infer output sharding from input shardings and an op's factor rule.
 
+    This is the single entry point replacing the old ``propagate_sharding``
+    + ``ghost_axes`` + ``save/restore`` machinery.  It answers a simple
+    question: given input shardings and a factor rule, what is the output
+    sharding (including ``partial_sum_axes``) and which axes need AllReduce?
+
+    Algorithm:
+        1. Build a factor→axes map from all input dimensions.
+        2. For each output dimension, look up its factors and copy across the
+           sharding axes.
+        3. Identify *contracting* factors (in inputs but NOT in any output).
+           If a contracting factor is sharded, the corresponding axis becomes
+           a candidate for ``partial_sum_axes`` (deferred reduction).
+        4. Axis conflicts (same axis on two different output dims) are resolved
+           by giving it to the first dim that claims it.
+
+    Returns:
+        (output_spec, contraction_partial_axes)
+        - ``output_spec`` has dimensional sharding + ``partial_sum_axes`` from
+          contracting factors.
+        - ``contraction_partial_axes`` is the set of axes that became partial
+          due to contracting over a sharded dimension.
+    """
+    # --- Step 1: collect factor → axes from inputs --------------------------
+    factor_axes: dict[str, list[str]] = {}
+
+    for t_idx, spec in enumerate(input_specs):
+        if t_idx >= len(rule.input_mappings):
+            continue
+        mapping = rule.input_mappings[t_idx]
         for dim_idx, factors in mapping.items():
             if dim_idx >= len(spec.dim_specs):
                 continue
             dim_spec = spec.dim_specs[dim_idx]
-
-            if max_priority is not None and dim_spec.priority > max_priority:
+            if not dim_spec.axes:
                 continue
-
-            expanded_axes = _expand_axes_for_factors(
-                dim_spec.axes, factors, rule.factor_sizes, mesh
-            )
-
-            available_axes = list(expanded_axes)
-
             for f in factors:
-                axes_for_f = []
-                if available_axes:
-                    proposed_axis = available_axes.pop(0)
-                    if proposed_axis not in spec.replicated_axes:
-                        axes_for_f = [proposed_axis]
-
-                if not axes_for_f and not dim_spec.is_open:
-                    # Explicit replication: merge it to ensure priority/closed status is seen
+                if f not in factor_axes:
+                    factor_axes[f] = list(dim_spec.axes)
+                else:
+                    # Conflict: two inputs disagree on a factor's sharding.
+                    # Keep the existing one (first-come wins — simple heuristic).
                     pass
 
-                state.merge(
-                    f,
-                    axes_for_f,
-                    dim_spec.priority,
-                    dim_spec.is_open,
-                    dim_spec.partial,
-                    mesh,
-                    strategy,
-                )
+    # --- Step 2: build output dim specs from factors ------------------------
+    contracting = rule.get_contracting_factors()
+    output_mapping = rule.output_mappings[0] if rule.output_mappings else {}
+    output_rank = max(output_mapping.keys(), default=-1) + 1
 
+    used_axes: set[str] = set()
+    output_dim_specs: list[DimSpec] = []
 
-def _should_update_dim(
-    current: DimSpec,
-    proposed_axes: list[str],
-    proposed_priority: int,
-) -> bool:
-    """Determine if a dimension should be updated based on conflicts."""
+    for dim_idx in range(output_rank):
+        factors = output_mapping.get(dim_idx, [])
+        dim_axes: list[str] = []
+        for f in factors:
+            for ax in factor_axes.get(f, []):
+                if ax not in used_axes:
+                    dim_axes.append(ax)
+                    used_axes.add(ax)
+        output_dim_specs.append(DimSpec(axes=dim_axes, is_open=False))
 
-    if proposed_priority < current.priority:
-        return True
+    # --- Step 3: identify contraction-produced partial axes -----------------
+    contraction_partial_axes: set[str] = set()
+    for f in contracting:
+        for ax in factor_axes.get(f, []):
+            contraction_partial_axes.add(ax)
 
-    if proposed_priority == current.priority:
-        # If current is empty but proposed has sharding, adopt it (upgrade from replication)
-        if not current.axes and proposed_axes:
-            return True
-
-        if current.is_open:
-            if not current.axes and proposed_axes:
-                return True
-            if (
-                len(proposed_axes) > len(current.axes)
-                and proposed_axes[: len(current.axes)] == current.axes
-            ):
-                return True
-
-        if (
-            current.axes
-            and (not proposed_axes or len(proposed_axes) < len(current.axes))
-            and (
-                not proposed_axes or current.axes[: len(proposed_axes)] == proposed_axes
-            )
-        ):
-            return True
-
-    return (
-        proposed_priority > current.priority
-        and current.is_open
-        and not current.axes
-        and proposed_axes
+    # --- Step 4: build output spec ------------------------------------------
+    output_spec = ShardingSpec(
+        mesh,
+        output_dim_specs,
+        partial_sum_axes=set(contraction_partial_axes),
     )
 
-
-def _update_from_factors(
-    specs: list[ShardingSpec],
-    mappings: list[dict[int, list[str]]],
-    state: FactorShardingState,
-) -> bool:
-    """Phase 3: Project factor shardings back to dimension shardings (UPDATE)."""
-    did_change = False
-
-    for t_idx, spec in enumerate(specs):
-        if t_idx >= len(mappings):
-            continue
-        mapping = mappings[t_idx]
-        new_dim_specs = []
-        spec_dirty = False
-
-        used_axes_in_tensor: set[str] = set()
-
-        for dim_idx, current_dim in enumerate(spec.dim_specs):
-            factors = mapping.get(dim_idx, [])
-
-            if not factors:
-                used_axes_in_tensor.update(current_dim.axes)
-                new_dim_specs.append(current_dim)
-                continue
-
-            proposed_axes = []
-            proposed_prio = 999
-            _proposed_open = current_dim.is_open
-            proposed_partial = False
-            has_factor_info = False
-
-            for f in factors:
-                f_state = state.get(f)
-                if f_state is not None:
-                    valid_axes = [
-                        ax for ax in f_state.axes if ax not in used_axes_in_tensor
-                    ]
-
-                    proposed_axes.extend(valid_axes)
-                    proposed_prio = min(proposed_prio, f_state.priority)
-
-                    proposed_partial = proposed_partial or f_state.partial
-                    has_factor_info = True
-
-            if not has_factor_info:
-                used_axes_in_tensor.update(current_dim.axes)
-                new_dim_specs.append(current_dim)
-                continue
-
-            should_update = _should_update_dim(
-                current_dim, proposed_axes, proposed_prio
-            ) or (proposed_partial != current_dim.partial)
-
-            if should_update:
-                used_axes_in_tensor.update(proposed_axes)
-                new_dim_specs.append(
-                    DimSpec(
-                        axes=proposed_axes,
-                        is_open=current_dim.is_open,
-                        priority=proposed_prio,
-                        partial=proposed_partial,
-                    )
-                )
-                spec_dirty = True
-            else:
-                used_axes_in_tensor.update(current_dim.axes)
-                new_dim_specs.append(current_dim)
-
-        if spec_dirty:
-            spec.dim_specs = new_dim_specs
-            did_change = True
-
-    return did_change
+    return output_spec, contraction_partial_axes
 
 
-def propagate_sharding(
-    rule: OpShardingRule,
-    input_specs: list["ShardingSpec"],
-    output_specs: list["ShardingSpec"],
-    strategy: PropagationStrategy = PropagationStrategy.BASIC,
-    max_priority: int | None = None,
-) -> bool:
-    """Propagate shardings between inputs/outputs. Returns True if changed."""
-    if not input_specs and not output_specs:
+# ---------------------------------------------------------------------------
+#  Backward-compat aliases (kept so __init__.py and other imports don't break)
+# ---------------------------------------------------------------------------
+
+# Legacy: kept as no-op stubs so existing imports don't fail at import time.
+# These should be removed once downstream code is fully migrated.
+def propagate_sharding(rule, input_specs, output_specs, **_kw):
+    """Legacy stub — use ``infer_from_rule`` instead."""
+    if not input_specs:
         return False
-
-    mesh = input_specs[0].mesh if input_specs else output_specs[0].mesh
-
-    state = FactorShardingState()
-    _collect_to_factors(
-        input_specs, rule.input_mappings, rule, mesh, state, strategy, max_priority
-    )
-    _collect_to_factors(
-        output_specs, rule.output_mappings, rule, mesh, state, strategy, max_priority
-    )
-
-    changed = False
-    if _update_from_factors(output_specs, rule.output_mappings, state):
-        changed = True
-    if _update_from_factors(input_specs, rule.input_mappings, state):
-        changed = True
-
-    # Infer Partial Sums for outputs
-    contracting_factors = rule.get_contracting_factors()
-    partial_axes = set()
-    for f in contracting_factors:
-        f_state = state.get(f)
-        if f_state and f_state.axes:
-            partial_axes.update(f_state.axes)
-
-    if partial_axes:
-        for out_spec in output_specs:
-            if not partial_axes.issubset(out_spec.partial_sum_axes):
-                out_spec.partial_sum_axes.update(partial_axes)
-                changed = True
-
-    return changed
-
-
-def run_hierarchical_propagation_pass(
-    operations_with_rules: list[
-        tuple[Any, OpShardingRule, list["ShardingSpec"], list["ShardingSpec"]]
-    ],
-    max_user_priority: int = 10,
-    max_iterations: int = 100,
-) -> int:
-    """Run hierarchical sharding propagation (User -> Op Priority -> Strategy)."""
-    total_changes = 0
-
-    for user_priority in range(max_user_priority + 1):
-        for op_priority in [
-            OpPriority.PASSTHROUGH,
-            OpPriority.CONTRACTION,
-            OpPriority.REDUCTION,
-            OpPriority.COMMUNICATION,
-        ]:
-            for strategy in [PropagationStrategy.AGGRESSIVE, PropagationStrategy.BASIC]:
-                iteration = 0
-                while iteration < max_iterations:
-                    changed_this_iter = False
-
-                    for op, rule, input_specs, output_specs in operations_with_rules:
-                        op_prio = getattr(op, "op_priority", OpPriority.CONTRACTION)
-                        if op_prio != op_priority:
-                            continue
-
-                        changed = propagate_sharding(
-                            rule,
-                            input_specs,
-                            output_specs,
-                            strategy=strategy,
-                            max_priority=user_priority,
-                        )
-
-                        if changed:
-                            changed_this_iter = True
-                            total_changes += 1
-
-                    if not changed_this_iter:
-                        break
-
-                    iteration += 1
-
-                    if iteration >= max_iterations:
-                        import warnings
-
-                        warnings.warn(
-                            f"Propagation did not converge after {max_iterations} iterations "
-                            f"at user_priority={user_priority}, op_priority={op_priority}, "
-                            f"strategy={strategy}"
-                        )
-                        break
-
-    return total_changes
+    mesh = input_specs[0].mesh
+    out_spec, _ = infer_from_rule(rule, input_specs, mesh)
+    if output_specs:
+        target = output_specs[0]
+        target.dim_specs = out_spec.dim_specs
+        target.partial_sum_axes = out_spec.partial_sum_axes
+    return True

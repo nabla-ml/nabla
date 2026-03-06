@@ -116,7 +116,7 @@ def _make_hashable(obj: Any) -> Any:
             dim_specs_list = sharding.dim_specs
             if dim_specs_list:
                 dim_specs = tuple(
-                    (tuple(ds.axes) if ds.axes else (), bool(ds.partial))
+                    (tuple(ds.axes) if ds.axes else (),)
                     for ds in dim_specs_list
                 )
             else:

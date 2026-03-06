@@ -716,16 +716,20 @@ class Tensor(DLPackArray, HasTensorValue):
 
     def gather(self) -> Tensor:
         """Gather shards into a single global tensor if needed (lazy)."""
-        if (
-            self._impl.is_sharded
-            and self._impl.sharding
-            and not self._impl.sharding.is_fully_replicated()
-        ):
-            from ...ops.communication import gather_all_axes
+        res = self
+        if res._impl.is_sharded and res._impl.sharding:
+            # 1. Resolve any deferred partial sums first.
+            if res._impl.sharding.partial_sum_axes:
+                from ...ops.communication import all_reduce
 
-            gathered = gather_all_axes(self)
-            return gathered
-        return self
+                res = all_reduce(res)
+
+            # 2. Reconstruct along dimension-split axes.
+            if not res._impl.sharding.is_fully_replicated():
+                from ...ops.communication import gather_all_axes
+
+                res = gather_all_axes(res)
+        return res
 
     def realize(self) -> Tensor:
         """Force immediate realization (blocking)."""

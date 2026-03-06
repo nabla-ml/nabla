@@ -265,7 +265,6 @@ class DimSpec:
     axes: list[str] = field(default_factory=list)
     is_open: bool = False
     priority: int = 0
-    partial: bool = False
 
     def __post_init__(self) -> None:
         if not self.axes and not self.is_open and self.priority != 0:
@@ -307,7 +306,6 @@ class DimSpec:
             axes=list(self.axes),
             is_open=self.is_open,
             priority=self.priority,
-            partial=self.partial,
         )
 
     @staticmethod
@@ -424,17 +422,8 @@ class ShardingSpec:
         return result
 
     def all_partial_axes(self) -> set[str]:
-        """Return every mesh axis carrying a deferred reduction effect.
-
-        This includes both:
-        - free partial axes tracked in ``partial_sum_axes``; and
-        - attached partial axes represented by ``DimSpec.partial``.
-        """
-        axes = set(self.partial_sum_axes)
-        for dim in self.dim_specs:
-            if dim.partial:
-                axes.update(dim.axes)
-        return axes
+        """Return every mesh axis carrying a deferred reduction effect."""
+        return set(self.partial_sum_axes)
 
     def effect_signature(self) -> tuple[Any, ...]:
         """Return a stable hashable signature for sharding + reduction effects.
@@ -450,7 +439,6 @@ class ShardingSpec:
         dim_specs_key = tuple(
             (
                 tuple(dim.axes) if dim.axes else (),
-                bool(dim.partial),
                 bool(dim.is_open),
                 int(dim.priority),
             )
@@ -482,7 +470,6 @@ class ShardingSpec:
         return (
             all(dim.is_replicated() for dim in self.dim_specs)
             and not self.partial_sum_axes
-            and not any(dim.partial for dim in self.dim_specs)
         )
 
     @property
@@ -580,7 +567,7 @@ def compute_global_shape(
 
         for i in range(rank):
             dim_spec = sharding.dim_specs[i] if i < len(sharding.dim_specs) else None
-            if not dim_spec or not dim_spec.axes or dim_spec.partial:
+            if not dim_spec or not dim_spec.axes:
                 global_shape.append(int(local_shape[i]))
             else:
                 total_shards = dim_spec.get_total_shards(mesh)
@@ -599,7 +586,7 @@ def compute_global_shape(
 
     result = [int(d) for d in local_shape]
     for i, dim_spec in enumerate(sharding.dim_specs[: len(result)]):
-        if dim_spec.axes and not dim_spec.partial:
+        if dim_spec.axes:
             result[i] *= dim_spec.get_total_shards(sharding.mesh)
 
     return tuple(result)
@@ -614,7 +601,7 @@ def needs_reshard(from_spec: ShardingSpec | None, to_spec: ShardingSpec | None) 
     if len(from_spec.dim_specs) != len(to_spec.dim_specs):
         return True
     return any(
-        f.axes != t.axes or f.partial != t.partial
+        f.axes != t.axes
         for f, t in zip(from_spec.dim_specs, to_spec.dim_specs, strict=False)
     ) or (from_spec.partial_sum_axes != to_spec.partial_sum_axes)
 

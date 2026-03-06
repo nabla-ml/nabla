@@ -280,8 +280,6 @@ class AllReduceOp(CollectiveOperation):
 
         for ds in new_spec.dim_specs:
             ds.axes = tuple(ax for ax in ds.axes if ax not in reduce_axes)
-            if not ds.axes:
-                ds.partial = False
 
         return new_spec
 
@@ -372,9 +370,6 @@ class PMeanOp(CollectiveOperation):
 
         new_spec = input_tensor.sharding.clone()
         new_spec.partial_sum_axes.clear()
-        for ds in new_spec.dim_specs:
-            ds.partial = False
-
         return new_spec
 
     def jvp_rule(

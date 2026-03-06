@@ -177,7 +177,12 @@ class Operation(ABC):
         The predicate receives ``(axis_name, input_specs)`` and should return
         ``True`` when the deferred reduction effect is safe to preserve.
         """
-        candidate = self.partial_passthrough_axes(input_specs, kwargs)
+        # Collect candidates directly from input partial_sum_axes — do NOT
+        # call self.partial_passthrough_axes() here, as that would recurse
+        # for subclasses that override it by calling _partial_passthrough_at_most_n_inputs.
+        candidate: set[str] = set()
+        for spec in input_specs:
+            candidate.update(spec.partial_sum_axes)
         if not candidate:
             return set()
         return {ax for ax in candidate if predicate(ax, input_specs)}

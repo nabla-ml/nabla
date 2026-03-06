@@ -5,11 +5,10 @@
 
 from . import spmd
 from .propagation import (
-    FactorSharding,
-    OpPriority,
     OpShardingRule,
     OpShardingRuleTemplate,
-    PropagationStrategy,
+    infer_from_rule,
+    propagate_sharding,
 )
 from .spec import (
     DeviceMesh,
@@ -31,9 +30,7 @@ __all__ = [
     "get_num_shards",
     "OpShardingRule",
     "OpShardingRuleTemplate",
-    "PropagationStrategy",
-    "OpPriority",
-    "FactorSharding",
-    "FactorSharding",
+    "infer_from_rule",
+    "propagate_sharding",
     "spmd",
 ]
