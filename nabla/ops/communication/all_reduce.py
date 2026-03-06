@@ -200,6 +200,56 @@ class AllReduceOp(CollectiveOperation):
             )
         ]
 
+    def jvp_rule(
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
+        """JVP for ``all_reduce``.
+
+        ``all_reduce(sum)`` is linear, so its tangent is the same collective
+        applied to the input tangent. For currently unsupported reduction kinds,
+        raise explicitly rather than silently returning an incorrect result.
+        """
+        tangent = tangents[0]
+        reduce_op = kwargs.get("reduce_op", "sum")
+
+        if tangent is None:
+            return [None]
+
+        if reduce_op != "sum":
+            raise NotImplementedError(
+                f"all_reduce jvp_rule currently supports only reduce_op='sum' "
+                f"(got {reduce_op!r})"
+            )
+
+        if not primals[0].sharding:
+            return [tangent]
+
+        reduce_axes = self._get_reduce_axes(primals[0], kwargs)
+        primal_partials = primals[0].sharding.partial_sum_axes
+
+        # When the primal all_reduce is materializing an already-deferred
+        # partial effect, the tangent that reaches this node is already in the
+        # materialized output space. Re-applying the collective would double
+        # count it. In that case, just preserve/reshard to the output layout.
+        if reduce_axes and primal_partials and set(reduce_axes).issubset(primal_partials):
+            out = outputs[0] if outputs else None
+            if out is None or out.sharding is None or tangent.sharding == out.sharding:
+                return [tangent]
+
+            from .reshard import reshard
+
+            return [
+                reshard(
+                    tangent,
+                    out.sharding.mesh,
+                    out.sharding.dim_specs,
+                    replicated_axes=out.sharding.replicated_axes,
+                    global_shape=out.physical_global_shape,
+                )
+            ]
+
+        return [all_reduce(tangent, **kwargs)]
+
     def _compute_output_spec(
         self, input_tensor, results, input_sharding=None, **kwargs
     ):
@@ -326,6 +376,15 @@ class PMeanOp(CollectiveOperation):
             ds.partial = False
 
         return new_spec
+
+    def jvp_rule(
+        self, primals: OpArgs, tangents: OpArgs, outputs: OpArgs, kwargs: OpKwargs
+    ) -> OpResult:
+        """JVP for ``pmean`` is ``pmean`` of the tangent."""
+        tangent = tangents[0]
+        if tangent is None:
+            return [None]
+        return [pmean(tangent, axis_name=kwargs.get("axis_name"))]
 
 
 _all_reduce_op = AllReduceOp()

@@ -178,6 +178,14 @@ class CompiledFunction(Generic[T]):
         }
         flat, treedef = tree_flatten((args, kwargs))
 
+        tensor_indices = [i for i, x in enumerate(flat) if isinstance(x, Tensor)]
+
+        # Cached execution still requires concrete buffers. Realize any lazy
+        # tensors before attempting either the fast or slow cache path.
+        unrealized = [flat[i] for i in tensor_indices if not flat[i].is_realized]
+        if unrealized:
+            GRAPH.evaluate(*unrealized)
+
         # Fast path: reuse structure from last cached call
         if self._cache:
             last_cached = next(reversed(self._cache.values()))
@@ -186,14 +194,6 @@ class CompiledFunction(Generic[T]):
                 if key in self._cache:
                     self._cache.move_to_end(key)
                     return self._execute_cached_fast(self._cache[key], flat)
-
-        # Slow path: discover tensor positions
-        tensor_indices = [i for i, x in enumerate(flat) if isinstance(x, Tensor)]
-
-        # Realize unrealized tensors before caching
-        unrealized = [flat[i] for i in tensor_indices if not flat[i].is_realized]
-        if unrealized:
-            GRAPH.evaluate(*unrealized)
 
         # Build key and check cache
         key = self._build_cache_key(flat, tensor_indices, treedef)
@@ -269,30 +269,9 @@ class CompiledFunction(Generic[T]):
 
     def _extract_sharding_key(self, sharding: ShardingSpec | None) -> Any:
         """Extract hashable sharding info."""
-        mesh = getattr(sharding, "mesh", None)
-        mesh_key = None
-        if mesh is not None:
-            mesh_key = (
-                getattr(mesh, "name", None),
-                tuple(mesh.shape) if hasattr(mesh, "shape") and mesh.shape else (),
-                (
-                    tuple(mesh.axis_names)
-                    if hasattr(mesh, "axis_names") and mesh.axis_names
-                    else ()
-                ),
-            )
-
-        dim_specs = getattr(sharding, "dim_specs", [])
-        dim_specs_key = (
-            tuple(
-                (tuple(ds.axes) if ds.axes else (), bool(ds.partial))
-                for ds in dim_specs
-            )
-            if dim_specs
-            else ()
-        )
-
-        return (mesh_key, dim_specs_key)
+        if sharding is None:
+            return None
+        return sharding.effect_signature()
 
     def _build_input_types(self, flat: list[Any], tensor_indices: list[int]) -> list:
         """Build TensorType list for graph with symbolic dims where specified."""

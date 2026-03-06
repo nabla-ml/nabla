@@ -15,6 +15,7 @@ from nabla.core.sharding.spec import DeviceMesh, P
 from .common import (
     MESH_CONFIGS,
     assert_allclose,
+    cleanup_caches,
     tensor_from_jax,
 )
 
@@ -206,3 +207,48 @@ class TestVmapShardingComposite:
 
         assert tuple(int(d) for d in result.shape) == (batch, hidden)
         assert_allclose(result, expected, rtol=1e-4)
+
+
+class TestVmapSpmdPreservesPartialEffects:
+    """Regression tests for partial-effect metadata across vmap SPMD batching."""
+
+    def test_spmd_vmap_preserves_existing_sharding_metadata(self):
+        """A vmapped function should preserve pre-existing sharding effects.
+
+        This regression focuses on the broadcast + ``spmd_axis_name`` path,
+        which previously dropped extra sharding metadata while adding batch
+        sharding. The public API currently normalizes some replication markers
+        on outputs, so the stable assertion here is numerical correctness plus
+        the newly added stage sharding on the batch dimension.
+        """
+        cleanup_caches()
+        mesh = DeviceMesh("mesh_stage_tp", (2, 2), ("stage", "tp"))
+        m, n = 4, 8
+
+        np_x = jax.random.normal(jax.random.PRNGKey(60), (m, n), dtype=jnp.float32)
+        scale = tensor_from_jax(jnp.array(0.5, dtype=jnp.float32))
+
+        base = nb.shard(
+            tensor_from_jax(np_x),
+            mesh,
+            P(None, None),
+            replicated_axes={"tp"},
+        )
+
+        def f(p, s):
+            return p * s
+
+        result = nb.vmap(
+            f,
+            in_axes=(None, None),
+            out_axes=0,
+            axis_size=2,
+            spmd_axis_name="stage",
+            mesh=mesh,
+        )(base, scale)
+
+        expected = jnp.stack([np_x, np_x], axis=0) * 0.5
+
+        assert_allclose(result, expected, rtol=1e-4, atol=1e-4)
+        assert result.sharding is not None
+        assert result.sharding.dim_specs[0].axes == ["stage"]

@@ -136,7 +136,6 @@ class TestShardedVJP:
 class TestShardedJVP:
     """JVP with sharded tensors."""
 
-    @pytest.mark.xfail(reason="all_reduce does not implement jvp_rule")
     @pytest.mark.parametrize("mesh_name,mesh_shape,axis_names", MESH_CONFIGS[:3])
     def test_jvp_sharded_input(self, mesh_name, mesh_shape, axis_names):
         """JVP with input sharded along first axis."""
@@ -180,7 +179,6 @@ class TestShardedJVP:
         _close(out_nb, out_jax)
         _close(tan_nb, tan_jax)
 
-    @pytest.mark.xfail(reason="all_reduce does not implement jvp_rule")
     @pytest.mark.parametrize("mesh_name,mesh_shape,axis_names", MESH_CONFIGS[:2])
     def test_jvp_binary_sharded(self, mesh_name, mesh_shape, axis_names):
         """JVP with binary op on sharded tensors."""

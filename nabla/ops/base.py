@@ -145,6 +145,68 @@ class Operation(ABC):
         """
         return False
 
+    def partial_passthrough_axes(
+        self,
+        input_specs: list[ShardingSpec],
+        kwargs: dict[str, Any] | None = None,
+    ) -> set[str]:
+        """Axes whose Partial state may be deferred for this op.
+
+        Default behavior preserves legacy ``allows_partial_passthrough``:
+        - ``False``: reduce all partial axes before/at this op.
+        - ``True``: defer all partial axes.
+
+        Subclasses can override with axis-wise logic based on operand patterns.
+        """
+        partial_axes: set[str] = set()
+        for spec in input_specs:
+            partial_axes.update(spec.partial_sum_axes)
+
+        if not self.allows_partial_passthrough:
+            return set()
+        return partial_axes
+
+    def _partial_passthrough_where(
+        self,
+        input_specs: list[ShardingSpec],
+        predicate: Any,
+        kwargs: dict[str, Any] | None = None,
+    ) -> set[str]:
+        """Filter candidate passthrough axes with an axis-local predicate.
+
+        The predicate receives ``(axis_name, input_specs)`` and should return
+        ``True`` when the deferred reduction effect is safe to preserve.
+        """
+        candidate = self.partial_passthrough_axes(input_specs, kwargs)
+        if not candidate:
+            return set()
+        return {ax for ax in candidate if predicate(ax, input_specs)}
+
+    def _partial_passthrough_all_inputs(
+        self,
+        input_specs: list[ShardingSpec],
+        kwargs: dict[str, Any] | None = None,
+    ) -> set[str]:
+        """Preserve only axes carried by every input."""
+        return self._partial_passthrough_where(
+            input_specs,
+            lambda ax, specs: all(ax in spec.partial_sum_axes for spec in specs),
+            kwargs,
+        )
+
+    def _partial_passthrough_at_most_n_inputs(
+        self,
+        input_specs: list[ShardingSpec],
+        n: int,
+        kwargs: dict[str, Any] | None = None,
+    ) -> set[str]:
+        """Preserve axes carried by at most ``n`` inputs."""
+        return self._partial_passthrough_where(
+            input_specs,
+            lambda ax, specs: sum(ax in spec.partial_sum_axes for spec in specs) <= n,
+            kwargs,
+        )
+
     @property
     def collective_reduce_type(self) -> str:
         """Type of reduction to use for cross-shard communication (sum, max, min, prod)."""

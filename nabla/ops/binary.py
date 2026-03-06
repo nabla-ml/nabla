@@ -20,6 +20,9 @@ class AddOp(BinaryOperation):
     def allows_partial_passthrough(self) -> bool:
         return True
 
+    def partial_passthrough_axes(self, input_specs, kwargs=None) -> set[str]:
+        return self._partial_passthrough_all_inputs(input_specs, kwargs)
+
     @property
     def name(self) -> str:
         return "add"
@@ -46,6 +49,9 @@ class MulOp(BinaryOperation):
     @property
     def allows_partial_passthrough(self) -> bool:
         return True
+
+    def partial_passthrough_axes(self, input_specs, kwargs=None) -> set[str]:
+        return self._partial_passthrough_at_most_n_inputs(input_specs, 1, kwargs)
 
     @property
     def name(self) -> str:
@@ -78,6 +84,9 @@ class SubOp(BinaryOperation):
     def allows_partial_passthrough(self) -> bool:
         return True
 
+    def partial_passthrough_axes(self, input_specs, kwargs=None) -> set[str]:
+        return self._partial_passthrough_all_inputs(input_specs, kwargs)
+
     @property
     def name(self) -> str:
         return "sub"
@@ -103,6 +112,19 @@ class SubOp(BinaryOperation):
 
 
 class DivOp(BinaryOperation):
+    @property
+    def allows_partial_passthrough(self) -> bool:
+        return True
+
+    def partial_passthrough_axes(self, input_specs, kwargs=None) -> set[str]:
+        candidate = super().partial_passthrough_axes(input_specs, kwargs)
+        if not candidate or len(input_specs) < 2:
+            return set()
+
+        numer = input_specs[0].partial_sum_axes
+        denom = input_specs[1].partial_sum_axes
+        return {ax for ax in candidate if (ax in numer and ax not in denom)}
+
     @property
     def name(self) -> str:
         return "div"
@@ -140,6 +162,9 @@ class MatmulOp(Operation):
     @property
     def allows_partial_passthrough(self) -> bool:
         return True
+
+    def partial_passthrough_axes(self, input_specs, kwargs=None) -> set[str]:
+        return self._partial_passthrough_at_most_n_inputs(input_specs, 1, kwargs)
 
     @property
     def name(self) -> str:
@@ -430,6 +455,13 @@ class PowOp(BinaryOperation):
 
 class OuterOp(BinaryOperation):
     """Outer product of two vectors."""
+
+    @property
+    def allows_partial_passthrough(self) -> bool:
+        return True
+
+    def partial_passthrough_axes(self, input_specs, kwargs=None) -> set[str]:
+        return self._partial_passthrough_at_most_n_inputs(input_specs, 1, kwargs)
 
     @property
     def name(self) -> str:

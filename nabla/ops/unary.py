@@ -658,11 +658,15 @@ class RoundOp(UnaryOperation):
 
 
 class CastOp(UnaryOperation):
-    """Cast a tensor to a different data type."""
+    """Cast a tensor to a different data type.
 
-    @property
-    def allows_partial_passthrough(self) -> bool:
-        return True
+    NOTE: ``allows_partial_passthrough`` is intentionally **False** (the safe
+    default).  Cast is only distributive for lossless-widening dtypes
+    (e.g. int8 → int32, float16 → float32), but NOT for narrowing casts
+    (e.g. float32 → float16, float32 → int8) where truncation/overflow breaks
+    additivity: ``cast(p0 + p1, int8) ≠ cast(p0, int8) + cast(p1, int8)``.
+    Forcing an all_reduce before cast is always numerically correct.
+    """
 
     @property
     def name(self) -> str:

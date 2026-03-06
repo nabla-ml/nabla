@@ -378,25 +378,26 @@ class ShardingSpec:
         dims_str = ", ".join(str(d) for d in self.dim_specs)
         rep_str = ""
         if self.replicated_axes:
-            ordered_rep = self._order_replicated_axes(self.replicated_axes)
+            ordered_rep = self.ordered_axes(self.replicated_axes)
             rep_str = ", replicated={" + ", ".join(f"'{a}'" for a in ordered_rep) + "}"
 
-        all_partial_axes = set(self.partial_sum_axes)
-        for dim in self.dim_specs:
-            if dim.partial:
-                all_partial_axes.update(dim.axes)
+        all_partial_axes = self.all_partial_axes()
 
         partial_str = ""
         if all_partial_axes:
-            ordered_partial = self._order_replicated_axes(all_partial_axes)
+            ordered_partial = self.ordered_axes(all_partial_axes)
             partial_str = (
                 ", partial={" + ", ".join(f"'{a}'" for a in ordered_partial) + "}"
             )
 
         return f"sharding<@{self.mesh.name}, [{dims_str}]{rep_str}{partial_str}>"
 
-    def _order_replicated_axes(self, axes_set: set[str]) -> list[str]:
-        """Order axes: mesh order, sub-axes by pre-size."""
+    def ordered_axes(self, axes_set: set[str]) -> list[str]:
+        """Return mesh axes in stable display/cache order.
+
+        Ordering follows mesh-axis order, with sub-axes grouped under their
+        parent axis and ordered by ``pre_size``.
+        """
         full_axes = []
         sub_axes_by_parent: dict[str, list[tuple[str, int, int]]] = {}
 
@@ -421,6 +422,46 @@ class ShardingSpec:
                 result.extend(ax_str for ax_str, _, _ in sorted_subs)
 
         return result
+
+    def all_partial_axes(self) -> set[str]:
+        """Return every mesh axis carrying a deferred reduction effect.
+
+        This includes both:
+        - free partial axes tracked in ``partial_sum_axes``; and
+        - attached partial axes represented by ``DimSpec.partial``.
+        """
+        axes = set(self.partial_sum_axes)
+        for dim in self.dim_specs:
+            if dim.partial:
+                axes.update(dim.axes)
+        return axes
+
+    def effect_signature(self) -> tuple[Any, ...]:
+        """Return a stable hashable signature for sharding + reduction effects.
+
+        This is intended for caches and transform boundaries that need the full
+        sharding identity, including deferred reduction metadata.
+        """
+        mesh_key = (
+            getattr(self.mesh, "name", None),
+            tuple(self.mesh.shape) if getattr(self.mesh, "shape", None) else (),
+            tuple(self.mesh.axis_names) if getattr(self.mesh, "axis_names", None) else (),
+        )
+        dim_specs_key = tuple(
+            (
+                tuple(dim.axes) if dim.axes else (),
+                bool(dim.partial),
+                bool(dim.is_open),
+                int(dim.priority),
+            )
+            for dim in self.dim_specs
+        )
+        return (
+            mesh_key,
+            dim_specs_key,
+            tuple(self.ordered_axes(set(self.replicated_axes))),
+            tuple(self.ordered_axes(set(self.partial_sum_axes))),
+        )
 
     def get_implicitly_replicated_axes(self) -> set[str]:
         """Get axes not used in sharding or explicitly replicated."""

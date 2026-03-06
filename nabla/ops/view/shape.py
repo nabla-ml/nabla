@@ -584,6 +584,17 @@ class SliceUpdateOp(Operation):
 
 
 class SliceTensorOp(Operation):
+    """Slice a sub-tensor from a tensor.
+
+    Slicing is distributive over partial sums:
+        slice(p0 + p1) = slice(p0) + slice(p1)
+    so the all_reduce can safely be deferred past a slice.
+    """
+
+    @property
+    def allows_partial_passthrough(self) -> bool:
+        return True
+
     @property
     def name(self) -> str:
         return "slice_tensor"
@@ -813,6 +824,18 @@ class ConcatenateOp(AxisOp):
     @property
     def allows_partial_passthrough(self) -> bool:
         return True
+
+    def partial_passthrough_axes(self, input_specs, kwargs=None) -> set[str]:
+        """Only defer an axis when ALL inputs are partial on it.
+
+        concat([partial_A, replicated_B]) is NOT safe to defer because
+        the replicated B would be counted twice after all_reduce:
+            concat([A0+A1, B]) ≠ concat([A0, B]) + concat([A1, B])
+        Only when all inputs carry the same partial axis is the deferral
+        algebraically correct:
+            concat([A0+A1, B0+B1]) = concat([A0, B0]) + concat([A1, B1])  ✓
+        """
+        return self._partial_passthrough_all_inputs(input_specs, kwargs)
 
     @property
     def name(self) -> str:

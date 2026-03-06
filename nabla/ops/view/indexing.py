@@ -25,7 +25,16 @@ def _adapt_axis_kwargs(kwargs: OpKwargs, batch_dims: int) -> OpKwargs:
 
 
 class GatherOp(Operation):
-    """Gather elements from data tensor along an axis using indices."""
+    """Gather elements from data tensor along an axis using indices.
+
+    Gather is distributive over partial sums:
+        gather(p0 + p1, indices) = gather(p0, indices) + gather(p1, indices)
+    so the all_reduce can safely be deferred past a gather.
+    """
+
+    @property
+    def allows_partial_passthrough(self) -> bool:
+        return True
 
     @property
     def name(self) -> str:

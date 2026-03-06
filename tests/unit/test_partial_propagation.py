@@ -11,6 +11,7 @@ Run:
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from max.dtype import DType
 
 import nabla as nb
@@ -63,6 +64,11 @@ X_a = shard_with_specs(
     make_tensor((4, 8), seed=1),
     [DimSpec([], is_open=False), DimSpec(["tp"], is_open=False)],  # shard k on tp
 )
+@pytest.fixture(scope="module")
+def mesh_2d() -> DeviceMesh:
+    return DeviceMesh("2d", shape=(2, 2), axis_names=("tp", "dp"))
+
+
 W_a = shard_with_specs(
     make_tensor((8, 4), seed=2),
     [DimSpec([], is_open=False), DimSpec([], is_open=False)],  # replicated

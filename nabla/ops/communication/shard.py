@@ -44,6 +44,7 @@ class ShardOp(Operation):
                 x.sharding.mesh,
                 x.sharding.dim_specs,
                 replicated_axes=x.sharding.replicated_axes,
+                partial_sum_axes=x.sharding.partial_sum_axes,
             )
         ]
 
@@ -58,6 +59,7 @@ class ShardOp(Operation):
                     mesh,
                     kwargs["dim_specs"],
                     replicated_axes=kwargs.get("replicated_axes") or set(),
+                    partial_sum_axes=kwargs.get("partial_sum_axes") or set(),
                 )
             else:
                 # Should we raise? Or return defaults?
@@ -371,6 +373,7 @@ def shard(
     mesh: DeviceMesh,
     dim_specs: list[DimSpec],
     replicated_axes: set[str] | None = None,
+    partial_sum_axes: set[str] | None = None,
     **kwargs,
 ):
     """Shard a tensor across a device mesh according to the given dimension specs.
@@ -389,6 +392,8 @@ def shard(
             per logical dimension.
         replicated_axes: Set of mesh axis names that are replicated (not
             sharded). Default: ``None`` (no replicated axes).
+        partial_sum_axes: Set of mesh axis names whose deferred reductions must
+            be preserved on the target spec. Default: ``None``.
         **kwargs: Additional keyword arguments forwarded to the underlying op.
 
     Returns:
@@ -411,7 +416,10 @@ def shard(
             dim_specs = batch_specs + list(dim_specs)
 
     target_spec = ShardingSpec(
-        mesh, dim_specs, replicated_axes=replicated_axes or set()
+        mesh,
+        dim_specs,
+        replicated_axes=replicated_axes or set(),
+        partial_sum_axes=partial_sum_axes or set(),
     )
 
     if not isinstance(x, Tensor) or not x.sharding:
@@ -422,6 +430,7 @@ def shard(
                 "mesh": mesh,
                 "dim_specs": dim_specs,
                 "replicated_axes": replicated_axes,
+                "partial_sum_axes": partial_sum_axes,
                 **kwargs,
             },
         )[0]
@@ -437,6 +446,7 @@ def shard(
                 "mesh": mesh,
                 "dim_specs": dim_specs,
                 "replicated_axes": replicated_axes,
+                "partial_sum_axes": partial_sum_axes,
                 **kwargs,
             },
         )[0]
@@ -487,6 +497,7 @@ def shard(
             "mesh": mesh,
             "dim_specs": dim_specs,
             "replicated_axes": replicated_axes,
+            "partial_sum_axes": partial_sum_axes,
             **kwargs,
         },
     )[0]

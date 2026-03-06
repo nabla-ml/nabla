@@ -161,24 +161,17 @@ def infer_output_sharding(
         if not input_partial_axes:
             return None, input_specs, False
 
-        # Only linear/distributive ops may defer reduction on Partial tensors.
-        # Non-linear ops (relu, exp, softmax, ...) MUST reduce first because
-        # f(P0+P1) ≠ f(P0)+f(P1).
-        if not op.allows_partial_passthrough:
-            output_rank = op.infer_output_rank(input_shapes, **(kwargs or {}))
-            output_spec = ShardingSpec(
-                mesh,
-                [DimSpec([], is_open=False) for _ in range(output_rank)],
-            )
-            return output_spec, input_specs, input_partial_axes
+        defer_axes = op.partial_passthrough_axes(input_specs, kwargs)
+        defer_axes = defer_axes & input_partial_axes
+        reduce_axes = input_partial_axes - defer_axes
 
         output_rank = op.infer_output_rank(input_shapes, **(kwargs or {}))
         output_spec = ShardingSpec(
             mesh,
             [DimSpec([], is_open=False) for _ in range(output_rank)],
-            partial_sum_axes=input_partial_axes,
+            partial_sum_axes=defer_axes,
         )
-        return output_spec, input_specs, set()
+        return output_spec, input_specs, reduce_axes
 
     try:
         output_rank = op.infer_output_rank(input_shapes, **(kwargs or {}))

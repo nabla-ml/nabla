@@ -228,24 +228,34 @@ def _apply_shard(
     from ..core.sharding.spec import DimSpec
     from ..ops import communication as comm_ops
 
+    source_sharding = source.sharding if source.sharding else target.sharding
+    replicated_axes = set(source_sharding.replicated_axes) if source_sharding else set()
+    partial_sum_axes = set(source_sharding.partial_sum_axes) if source_sharding else set()
+
     if broadcast:
         pr = bd_offset + 1 + len(target.shape)
         specs = [DimSpec([]) for _ in range(pr)]
-        if source.sharding:
-            for i in range(len(source.sharding.dim_specs)):
+        if source_sharding:
+            for i in range(len(source_sharding.dim_specs)):
                 if i + 1 < len(specs):
-                    specs[i + 1] = source.sharding.dim_specs[i].clone()
+                    specs[i + 1] = source_sharding.dim_specs[i].clone()
         specs[0] = DimSpec([axis_name])
     else:
         lr = len(target.shape)
         pr = bd_offset + lr
         specs = [DimSpec([]) for _ in range(pr)]
-        if target.sharding:
-            for i in range(min(pr, len(target.sharding.dim_specs))):
-                specs[i] = target.sharding.dim_specs[i].clone()
+        if source_sharding:
+            for i in range(min(pr, len(source_sharding.dim_specs))):
+                specs[i] = source_sharding.dim_specs[i].clone()
         specs[bd_offset] = DimSpec([axis_name])
 
-    return comm_ops.shard(target, mesh=mesh, dim_specs=specs)
+    return comm_ops.shard(
+        target,
+        mesh=mesh,
+        dim_specs=specs,
+        replicated_axes=replicated_axes,
+        partial_sum_axes=partial_sum_axes,
+    )
 
 
 def _unbatch_tensor(

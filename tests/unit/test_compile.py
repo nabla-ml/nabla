@@ -9,7 +9,9 @@ import pytest
 import nabla as nb
 from nabla.core.sharding import DeviceMesh
 from nabla.core.sharding import PartitionSpec as P
+from nabla.core.sharding.spec import DimSpec, ShardingSpec
 from nabla.ops import shard
+from nabla.transforms.compile import CompiledFunction
 from nabla.transforms import compile
 
 
@@ -164,6 +166,30 @@ def test_compile_complex_ops_sharded():
         _y = complex_f(x)
 
     print("Complex ops sharded validation check passed!")
+
+
+def test_compile_cache_distinguishes_partial_inputs():
+    """Compiled cache keys must include deferred-reduction metadata."""
+    try:
+        mesh = DeviceMesh("compile_partial_mesh", (2,), ("tp",))
+    except Exception as e:
+        pytest.skip(f"Skipping partial compile test: {e}")
+        return
+
+    compiled = CompiledFunction(lambda x: x)
+
+    base_dims = [DimSpec([]), DimSpec([])]
+    replicated = ShardingSpec(mesh, base_dims)
+    partial = ShardingSpec(mesh, base_dims, partial_sum_axes={"tp"})
+    explicit_replicated = ShardingSpec(mesh, base_dims, replicated_axes={"tp"})
+
+    replicated_key = compiled._extract_sharding_key(replicated)
+    partial_key = compiled._extract_sharding_key(partial)
+    explicit_rep_key = compiled._extract_sharding_key(explicit_replicated)
+
+    assert replicated_key != partial_key
+    assert replicated_key != explicit_rep_key
+    assert partial_key != explicit_rep_key
 
 
 if __name__ == "__main__":

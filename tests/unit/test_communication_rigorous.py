@@ -16,6 +16,24 @@ from .common import assert_allclose, tensor_from_jax
 
 
 class TestCommunicationRigorous:
+    def test_all_reduce_sum_jvp_simple(self):
+        """JVP of ``all_reduce(sum)`` on sharded inputs is linear."""
+        h = 4
+        mesh = DeviceMesh("mesh_ar_jvp", (2,), ("tp",))
+
+        np_u = jax.random.normal(jax.random.PRNGKey(41), (h,), dtype=jnp.float32)
+        np_t = jnp.ones_like(np_u)
+        u = tensor_from_jax(np_u).shard(mesh, P("tp"))
+        t = tensor_from_jax(np_t).shard(mesh, P("tp"))
+
+        primal, tangent = nb.jvp(all_reduce, (u,), (t,))
+
+        expected_primal = np_u[: h // 2] + np_u[h // 2 :]
+        expected_tangent = np_t[: h // 2] + np_t[h // 2 :]
+
+        assert_allclose(primal, expected_primal)
+        assert_allclose(tangent, expected_tangent)
+
     def test_nested_vmap_all_reduce_grad(self):
         """Gradient of nested vmap(vmap(all_reduce))."""
         B1, B2, H = 2, 2, 4
