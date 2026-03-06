@@ -45,6 +45,7 @@ from .core import (
     untraced,
     with_batch_dims,
 )
+from .core.graph.tracing import trace
 from .core.autograd.backward import backward
 from .core.autograd import forward
 from .core.sharding.spec import (
@@ -340,6 +341,7 @@ __all__ = [
     "is_tensor",
     "register_pytree_node",
     "tensor_leaves",
+    "trace",
     "traced",
     "tree_flatten",
     "tree_leaves",

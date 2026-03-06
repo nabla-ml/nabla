@@ -64,6 +64,10 @@ class TestNumericalCorrectnessPartialPropagation:
             # pow is non-linear: compiler must all_reduce FIRST, then pow
             return nb.pow(x @ w, e)
 
+        print("\n--- POW TRACE (Expect ALLREDUCE BEFORE POW) ---")
+        print(nb.trace(f, x_sharded, w_sharded, e_replicated))
+        print("-----------------------------------------------")
+
         result = f(x_sharded, w_sharded, e_replicated)
         expected = jnp.power(x_jax @ w_jax, e_jax)
 
@@ -125,7 +129,12 @@ class TestNumericalCorrectnessPartialPropagation:
 
         def f(x, w, s):
             # Partial * replicated scalar defers: still correct at realization
-            return (x @ w) * s
+            # We call .gather() here purely so nb.trace() explicitly records the deferred all_reduce
+            return ((x @ w) * s).gather()
+
+        print("\n--- SCALAR MUL TRACE (Expect MUL BEFORE ALLREDUCE) ---")
+        print(nb.trace(f, x_sharded, w_sharded, s_replicated))
+        print("------------------------------------------------------")
 
         result = f(x_sharded, w_sharded, s_replicated)
         expected = (x_jax @ w_jax) * s_jax
@@ -134,6 +143,47 @@ class TestNumericalCorrectnessPartialPropagation:
         print(f"\n[scalar_mul] nabla result (first row): {nabla_vals[0]}")
         print(f"[scalar_mul] jax   result (first row): {expected[0]}")
         print(f"[scalar_mul] max abs diff: {float(np.max(np.abs(nabla_vals - expected))):.2e}")
+        assert_allclose(result, expected, rtol=1e-4, atol=1e-4)
+
+    def test_row_parallel_matmul_then_add_both_partial_defers(self):
+        """Row-parallel: R1 = x@w1 and R2 = x@w2 are both partial on 'tp'.
+        Adding two partial sums is distributive: (A0+A1) + (B0+B1) = (A0+B0) + (A1+B1).
+        The engine should properly defer the all_reduce through the `add` operation.
+        """
+        cleanup_caches()
+        M, K, N = 4, 8, 4
+        mesh = DeviceMesh("tp_add", (2,), ("tp",))
+
+        x_jax = make_jax_array(M, K, seed=9)
+        w1_jax = make_jax_array(K, N, seed=10)
+        w2_jax = make_jax_array(K, N, seed=11)
+
+        x_nb = tensor_from_jax(x_jax)
+        w1_nb = tensor_from_jax(w1_jax)
+        w2_nb = tensor_from_jax(w2_jax)
+
+        x_sharded = shard_on_axis(x_nb, mesh, axis=1, mesh_axis=0)
+        w1_sharded = shard_on_axis(w1_nb, mesh, axis=0, mesh_axis=0)
+        w2_sharded = shard_on_axis(w2_nb, mesh, axis=0, mesh_axis=0)
+
+        def f(x, w1, w2):
+            r1 = x @ w1  # partial on tp
+            r2 = x @ w2  # partial on tp
+            # addition of two identically partial tensors should defer
+            # we call `.gather()` at the end so nb.trace explicitly shows the final required all_reduce
+            return (r1 + r2).gather()
+
+        print("\n--- ADD TRACE (Expect ADD BEFORE ALLREDUCE, both inputs partial) ---")
+        print(nb.trace(f, x_sharded, w1_sharded, w2_sharded))
+        print("----------------------------------------------------------------------")
+
+        result = f(x_sharded, w1_sharded, w2_sharded)
+        expected = (x_jax @ w1_jax) + (x_jax @ w2_jax)
+
+        nabla_vals = to_jax(result)
+        print(f"\n[add_partial] nabla result (first row): {nabla_vals[0]}")
+        print(f"[add_partial] jax   result (first row): {expected[0]}")
+        print(f"[add_partial] max abs diff: {float(np.max(np.abs(nabla_vals - expected))):.2e}")
         assert_allclose(result, expected, rtol=1e-4, atol=1e-4)
 
     def test_megatron_column_relu_row(self):
